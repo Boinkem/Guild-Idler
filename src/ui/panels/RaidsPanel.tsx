@@ -98,24 +98,35 @@ function raidBannerSrc(raidId: string, banner?: RaidDef['banner']) {
  * `banner` is the raid's optional DevTool-assigned override + focus point
  * (RaidDef.banner) -- unset falls all the way back to the original
  * id-convention path at dead-center focus, exactly as before this existed.
+ *
+ * `icon`/`useIcon` (patch 0270) -- when `useIcon` is true AND the raid has
+ * a real `icon.path` assigned, this renders that dedicated icon instead of
+ * cropping `banner`. `useIcon` true with no `icon.path` set falls straight
+ * back to the exact same `banner`-crop behavior as before this existed --
+ * see RaidDef.icon's own comment in types.ts for why there's no further
+ * guessed-convention fallback. Only ever passed `true` at the collapsed
+ * `.raid-card-thumb` call sites; every other usage (modal, active-raid
+ * strip) omits it and keeps showing the full banner exactly as always.
  */
 export function RaidBanner({
-  raidId, banner, className,
-}: { raidId: string; banner?: RaidDef['banner']; className: string }) {
-  const src = raidBannerSrc(raidId, banner);
+  raidId, banner, icon, useIcon, className,
+}: { raidId: string; banner?: RaidDef['banner']; icon?: RaidDef['icon']; useIcon?: boolean; className: string }) {
+  const showIcon = !!(useIcon && icon?.path);
+  const src = showIcon ? `./lore/${icon!.path}` : raidBannerSrc(raidId, banner);
+  const active = showIcon ? icon : banner;
   return (
     <div
       aria-hidden="true"
       className={className}
       style={{
         backgroundImage: `url(${src})`,
-        backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
+        backgroundPosition: `${active?.focusX ?? 50}% ${active?.focusY ?? 50}%`,
         // Every className this renders with (.raid-card-thumb,
         // .raid-active-banner, and the plain-strip detail-modal usage)
         // already sets `background-size: cover` in app.css -- only
         // overridden inline when an actual zoom (patch 0164) has been set
         // via the DevTool, same pattern as QuestTagBanner in QuestPanel.tsx.
-        ...(banner?.scale && banner.scale !== 100 ? { backgroundSize: `${banner.scale}%` } : {}),
+        ...(active?.scale && active.scale !== 100 ? { backgroundSize: `${active.scale}%` } : {}),
       }}
     />
   );
@@ -735,7 +746,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
       ?? 'Complete the previous raid to reveal this one.';
     return (
       <div className="card raid-card locked" title={lockReason}>
-        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
+        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
         <div className="raid-card-body">
           <div className="raid-card-name">{raid.name}</div>
           <p className="tiny muted" style={{ margin: '2px 0 0' }}>
@@ -755,7 +766,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
+        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
         <div className="raid-card-body">
           <div className="raid-card-name">{raid.name}</div>
           <div className="raid-card-meta">

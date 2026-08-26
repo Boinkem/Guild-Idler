@@ -21476,3 +21476,98 @@ component styled once" convention.
 Electron sub-builds, main and preload) all pass clean against the real,
 freshly-cloned repo. `node --check` passes on both `tools/devtool/
 server.mjs` and `tools/devtool/public/app.js`.
+
+### Separate collapsed-card icons for raids, quest chains, and quest tags -- distinct from their banner art (patch 0270)
+```discord-update
+Dev Update | Card Icons
+
+- Raid cards, chain cards, and quest cards can now have their own dedicated icon, separate from their banner artwork
+- Until a real icon is set, cards keep showing exactly what they show today -- a crop of the banner
+- DevTools' image pickers now support this new icon field the same way they already support banners
+```
+
+Direct report, with screenshots: the collapsed card icon (`.raid-card-thumb`,
+56x56) was never its own image -- it's always been a cropped slice of the
+same wide `banner` strip the detail modal shows in full, so a card's
+"icon" reads as an arbitrary sliver of a much bigger picture rather than
+a real thumbnail. Fix: a genuinely separate `icon` field, editable
+independently of `banner`, on every content type that has this pattern --
+not just raids, per the direct "any other similar functions, ie. quest
+chains" ask. Ended up touching three: `RaidDef`, `ChainDef`, and
+`QuestTagDef` (a standard, non-chain quest offer's card thumb uses its
+tag's own banner as a stand-in the exact same way, so leaving that one
+out would've fixed two of the three places this bug actually shows up).
+
+**`RaidDef.icon` / `ChainDef.icon` / `QuestTagDef.icon`** (types.ts,
+quests.ts) -- identical shape to each type's existing `banner` field
+(`{path?, focusX?, focusY?, scale?}`), all optional. Reuses the DevTool's
+existing generic `bannerImage` field type wholesale for the new field --
+confirmed that mechanism already supports more than one instance per
+schema (each keyed by its own field name in the DOM, `f_banner` vs
+`f_icon`, not a singleton), so this needed zero new field-type code in
+`server.mjs`/`app.js`, just a second field declaration per schema.
+
+**Deliberately NOT falling back to a guessed convention path the way
+`banner` does.** `banner` unset falls back to `<folder>/<id>.jpg`
+(`raids/<id>.jpg`, `chains/<id>.jpg`, etc.) because those files already
+exist -- that convention predates DevTool support for banners at all.
+`icon` has no such history: no icon art exists anywhere yet, so blindly
+guessing `raids-icons/<id>.jpg` and rendering whatever's there (or isn't)
+would blank out every single existing card's thumb the instant this patch
+landed. Instead, `icon` unset means "keep doing exactly what every card
+already does today" -- fall back to the same `banner` crop as before this
+field existed. Nothing changes visually anywhere until someone
+deliberately assigns a real icon in DevTools, then only that one card
+switches over. New `chainIconSrc`/`questTagIconSrc` helpers (QuestPanel.tsx)
+express this fallback explicitly, mirroring the existing `chainBannerSrc`/
+`questTagBannerSrc` they're built on.
+
+**Component changes, one new prop pair each, old behavior fully
+preserved.** `RaidBanner` (RaidsPanel.tsx) and `ChainBanner` (LorePanel.tsx)
+both gained `icon`/`useIcon` props: `useIcon` true + a real `icon.path`
+renders that dedicated icon; `useIcon` true with no icon set falls
+straight back to the exact same banner-crop rendering as before; `useIcon`
+omitted (every existing call site that didn't explicitly opt in) behaves
+completely unchanged. Only the six actual collapsed-card thumb call sites
+were switched to pass `useIcon`:
+
+- `RaidsPanel.tsx`'s `RaidCard` -- both the locked and unlocked variants.
+- `LorePanel.tsx`'s own raid list (2 call sites) and its `ChainCard`.
+- `QuestPanel.tsx`'s `QuestRow` and `DiscoveredQuestsPanel.tsx`'s
+  `ChainRow`, via the new `chainIconSrc`/`questTagIconSrc` helpers (these
+  two build their thumb's `backgroundImage` inline rather than through a
+  shared banner component, so they call the resolver functions directly
+  instead of a prop).
+
+**Every detail-view/modal/strip usage was deliberately left untouched** --
+`RaidDetailModal`'s `.raid-detail-banner`, `ActiveRaidCard`'s
+`.raid-active-banner`, `ChainQuestBanner` (used by both `ChainDetailModal`
+and `QuestDetailModal`), and `ChainReplayDetailModal` all keep showing the
+full `banner` exactly as before, per the direct ask ("on click, shows the
+banner image") -- clicking through to any of these always reveals the
+real banner regardless of whether a dedicated icon exists for the
+collapsed card.
+
+**DevTools.** New `icon` field added right alongside the existing
+`banner` field on all three schemas (`quest-chains`, `quest-tags`,
+`raids`), same `bannerImage` type, its own dedicated folder
+(`chains-icons`/`quest-tags-icons`/`raids-icons` under `public/lore/`, the
+same shared `BANNERS_DIR` root every banner folder already lives under --
+no new static route needed) and a square `previewAspect: '1/1'` matching
+the real 56x56 box it renders into, with a `previewSize: '~256x256px'`
+caption (patch 0269's own size-label feature) so an artist gets a real
+target resolution, not just the crop shape. The DevTool's own "Using
+default: raids-icons/<id>.jpg" preview caption is accurate as a naming
+convention worth dropping a file into -- it's just not what the game
+actually falls back to at runtime while unset (see above), a small,
+deliberate, documented gap between the editor's advisory text and the
+live fallback behavior, favored over the alternative of blanking every
+card's art out of the gate.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
+sub-builds included) pass clean. `node --check` passes on both
+`tools/devtool/server.mjs` and `tools/devtool/public/app.js`. Confirmed
+`app.js`'s `wireBannerFields`/`renderBannerField` already iterate every
+`.banner-field` in a schema's editor via `querySelectorAll`, not a single
+lookup -- multiple `bannerImage` fields on one entry render and save
+correctly with zero changes to that code.

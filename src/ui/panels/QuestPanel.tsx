@@ -22,6 +22,22 @@ export function chainBannerSrc(chainId: string, banner?: ChainDef['banner']): st
   return banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
 }
 
+/**
+ * Patch 0270. The collapsed-card version of chainBannerSrc above -- used
+ * ONLY by ChainRow's own `.raid-card-thumb` (this file's QuestRow, and
+ * DiscoveredQuestsPanel's ChainRow), never by ChainQuestBanner or any
+ * modal, both of which keep showing the full banner exactly as before.
+ * Prefers the chain's dedicated `icon` when one has actually been
+ * assigned; falls back to chainBannerSrc's own banner-crop result
+ * otherwise -- deliberately not a guessed `chains-icons/<id>.jpg`
+ * convention path, since no icon art exists anywhere yet and guessing
+ * would blank out every existing chain card's thumb at once. See
+ * ChainDef.icon's own comment in quests.ts for the full reasoning.
+ */
+export function chainIconSrc(chainId: string, icon?: ChainDef['icon'], banner?: ChainDef['banner']): string {
+  return icon?.path ? `./lore/${icon.path}` : chainBannerSrc(chainId, banner);
+}
+
 /** Banner strip for a chain's quest-board entry, matching ChainBanner in
  *  LorePanel and RaidBanner in RaidsPanel exactly -- same asset, same
  *  "missing file just fails to paint" convention, so a chain's art shows
@@ -30,7 +46,10 @@ export function chainBannerSrc(chainId: string, banner?: ChainDef['banner']): st
  *  reads (ChainDef.banner) -- see its own comment in LorePanel.tsx.
  *  `height`/`className` default to the original 70px inline-card strip;
  *  ChainDetailModal passes its own 90px height to match RaidDetailModal's
- *  own banner strip instead of introducing a third size. */
+ *  own banner strip instead of introducing a third size. Always shows the
+ *  full banner, never the collapsed-card `icon` (patch 0270) -- every call
+ *  site of this component is already a detail/board strip, not a
+ *  collapsed card thumb. */
 export function ChainQuestBanner({
   chainId, banner, height = 70, className,
 }: { chainId: string; banner?: ChainDef['banner']; height?: number; className?: string }) {
@@ -70,6 +89,20 @@ export function questTagBannerSrc(tag: Offer['tag']): string | undefined {
 }
 
 /**
+ * Patch 0270. The collapsed-card version of questTagBannerSrc above --
+ * used ONLY by QuestRow's own `.raid-card-thumb` for a standard (non-chain)
+ * offer, never by QuestDetailModal, which keeps showing the full banner
+ * exactly as before. Same "prefer the dedicated icon, fall back to the
+ * banner crop, never guess a convention path" reasoning as chainIconSrc
+ * above -- see QuestTagDef.icon's own comment in quests.ts.
+ */
+export function questTagIconSrc(tag: Offer['tag']): string | undefined {
+  const def = QUEST_TAG_BY_ID[tag];
+  if (def?.icon?.path) return `./lore/${def.icon.path}`;
+  return questTagBannerSrc(tag);
+}
+
+/**
  * Collapsed row -- same shape as RaidsPanel's own .raid-card (thumbnail +
  * name/meta + chevron) and DiscoveredQuestsPanel's ChainRow, reusing that
  * exact class family rather than inventing a parallel one. A chain offer's
@@ -89,8 +122,8 @@ export function QuestRow({
   const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
   const chance = QuestManager.previewSuccess(state, hero, offer, hero.equippedConsumables ?? [], now);
   const thumbSrc = offer.chain
-    ? chainBannerSrc(offer.chain.chainId, chain?.banner)
-    : questTagBannerSrc(offer.tag);
+    ? chainIconSrc(offer.chain.chainId, chain?.icon, chain?.banner)
+    : questTagIconSrc(offer.tag);
 
   return (
     <div

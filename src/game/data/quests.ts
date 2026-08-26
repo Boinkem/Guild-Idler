@@ -226,6 +226,15 @@ export interface QuestTagDef {
   // banner used before this field existed, see QuestTagBanner's own
   // comment in QuestPanel.tsx.
   banner?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+  /**
+   * Patch 0270. Same "separate, deliberately independent icon" story as
+   * RaidDef.icon (see that comment in types.ts) -- a standard quest
+   * offer's card thumb (QuestRow's `.raid-card-thumb`) has always used
+   * this tag's own `banner` crop as a stand-in icon. Falls back to
+   * `banner` when unset, same reasoning: no icon art exists yet, so
+   * guessing a convention path would blank out every existing card.
+   */
+  icon?: { path?: string; focusX?: number; focusY?: number; scale?: number };
 }
 
 import questTagsJson from './json/quest-tags.json';
@@ -339,6 +348,16 @@ export interface ChainDef {
    * before this existed. Same shape as RaidDef.banner in types.ts.
    */
   banner?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+  /**
+   * Patch 0270. Same "separate, deliberately independent icon" story as
+   * RaidDef.icon in types.ts -- the collapsed chain card thumb (ChainCard
+   * in LorePanel.tsx, ChainRow in DiscoveredQuestsPanel.tsx) has always
+   * used this chain's own `banner` crop as a stand-in icon. Falls back to
+   * `banner` when unset, same reasoning: no icon art exists yet, so
+   * guessing a convention path would blank out every existing chain
+   * card's thumb at once.
+   */
+  icon?: { path?: string; focusX?: number; focusY?: number; scale?: number };
 }
 
 /**

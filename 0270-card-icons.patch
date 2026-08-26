@@ -1,0 +1,452 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index b2deef0..3bf8694 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -21476,3 +21476,98 @@ component styled once" convention.
+ Electron sub-builds, main and preload) all pass clean against the real,
+ freshly-cloned repo. `node --check` passes on both `tools/devtool/
+ server.mjs` and `tools/devtool/public/app.js`.
++
++### Separate collapsed-card icons for raids, quest chains, and quest tags -- distinct from their banner art (patch 0270)
++```discord-update
++Dev Update | Card Icons
++
++- Raid cards, chain cards, and quest cards can now have their own dedicated icon, separate from their banner artwork
++- Until a real icon is set, cards keep showing exactly what they show today -- a crop of the banner
++- DevTools' image pickers now support this new icon field the same way they already support banners
++```
++
++Direct report, with screenshots: the collapsed card icon (`.raid-card-thumb`,
++56x56) was never its own image -- it's always been a cropped slice of the
++same wide `banner` strip the detail modal shows in full, so a card's
++"icon" reads as an arbitrary sliver of a much bigger picture rather than
++a real thumbnail. Fix: a genuinely separate `icon` field, editable
++independently of `banner`, on every content type that has this pattern --
++not just raids, per the direct "any other similar functions, ie. quest
++chains" ask. Ended up touching three: `RaidDef`, `ChainDef`, and
++`QuestTagDef` (a standard, non-chain quest offer's card thumb uses its
++tag's own banner as a stand-in the exact same way, so leaving that one
++out would've fixed two of the three places this bug actually shows up).
++
++**`RaidDef.icon` / `ChainDef.icon` / `QuestTagDef.icon`** (types.ts,
++quests.ts) -- identical shape to each type's existing `banner` field
++(`{path?, focusX?, focusY?, scale?}`), all optional. Reuses the DevTool's
++existing generic `bannerImage` field type wholesale for the new field --
++confirmed that mechanism already supports more than one instance per
++schema (each keyed by its own field name in the DOM, `f_banner` vs
++`f_icon`, not a singleton), so this needed zero new field-type code in
++`server.mjs`/`app.js`, just a second field declaration per schema.
++
++**Deliberately NOT falling back to a guessed convention path the way
++`banner` does.** `banner` unset falls back to `<folder>/<id>.jpg`
++(`raids/<id>.jpg`, `chains/<id>.jpg`, etc.) because those files already
++exist -- that convention predates DevTool support for banners at all.
++`icon` has no such history: no icon art exists anywhere yet, so blindly
++guessing `raids-icons/<id>.jpg` and rendering whatever's there (or isn't)
++would blank out every single existing card's thumb the instant this patch
++landed. Instead, `icon` unset means "keep doing exactly what every card
++already does today" -- fall back to the same `banner` crop as before this
++field existed. Nothing changes visually anywhere until someone
++deliberately assigns a real icon in DevTools, then only that one card
++switches over. New `chainIconSrc`/`questTagIconSrc` helpers (QuestPanel.tsx)
++express this fallback explicitly, mirroring the existing `chainBannerSrc`/
++`questTagBannerSrc` they're built on.
++
++**Component changes, one new prop pair each, old behavior fully
++preserved.** `RaidBanner` (RaidsPanel.tsx) and `ChainBanner` (LorePanel.tsx)
++both gained `icon`/`useIcon` props: `useIcon` true + a real `icon.path`
++renders that dedicated icon; `useIcon` true with no icon set falls
++straight back to the exact same banner-crop rendering as before; `useIcon`
++omitted (every existing call site that didn't explicitly opt in) behaves
++completely unchanged. Only the six actual collapsed-card thumb call sites
++were switched to pass `useIcon`:
++
++- `RaidsPanel.tsx`'s `RaidCard` -- both the locked and unlocked variants.
++- `LorePanel.tsx`'s own raid list (2 call sites) and its `ChainCard`.
++- `QuestPanel.tsx`'s `QuestRow` and `DiscoveredQuestsPanel.tsx`'s
++  `ChainRow`, via the new `chainIconSrc`/`questTagIconSrc` helpers (these
++  two build their thumb's `backgroundImage` inline rather than through a
++  shared banner component, so they call the resolver functions directly
++  instead of a prop).
++
++**Every detail-view/modal/strip usage was deliberately left untouched** --
++`RaidDetailModal`'s `.raid-detail-banner`, `ActiveRaidCard`'s
++`.raid-active-banner`, `ChainQuestBanner` (used by both `ChainDetailModal`
++and `QuestDetailModal`), and `ChainReplayDetailModal` all keep showing the
++full `banner` exactly as before, per the direct ask ("on click, shows the
++banner image") -- clicking through to any of these always reveals the
++real banner regardless of whether a dedicated icon exists for the
++collapsed card.
++
++**DevTools.** New `icon` field added right alongside the existing
++`banner` field on all three schemas (`quest-chains`, `quest-tags`,
++`raids`), same `bannerImage` type, its own dedicated folder
++(`chains-icons`/`quest-tags-icons`/`raids-icons` under `public/lore/`, the
++same shared `BANNERS_DIR` root every banner folder already lives under --
++no new static route needed) and a square `previewAspect: '1/1'` matching
++the real 56x56 box it renders into, with a `previewSize: '~256x256px'`
++caption (patch 0269's own size-label feature) so an artist gets a real
++target resolution, not just the crop shape. The DevTool's own "Using
++default: raids-icons/<id>.jpg" preview caption is accurate as a naming
++convention worth dropping a file into -- it's just not what the game
++actually falls back to at runtime while unset (see above), a small,
++deliberate, documented gap between the editor's advisory text and the
++live fallback behavior, favored over the alternative of blanking every
++card's art out of the gate.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
++sub-builds included) pass clean. `node --check` passes on both
++`tools/devtool/server.mjs` and `tools/devtool/public/app.js`. Confirmed
++`app.js`'s `wireBannerFields`/`renderBannerField` already iterate every
++`.banner-field` in a schema's editor via `querySelectorAll`, not a single
++lookup -- multiple `bannerImage` fields on one entry render and save
++correctly with zero changes to that code.
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 02d9fb9..14718a7 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -226,6 +226,15 @@ export interface QuestTagDef {
+   // banner used before this field existed, see QuestTagBanner's own
+   // comment in QuestPanel.tsx.
+   banner?: { path?: string; focusX?: number; focusY?: number; scale?: number };
++  /**
++   * Patch 0270. Same "separate, deliberately independent icon" story as
++   * RaidDef.icon (see that comment in types.ts) -- a standard quest
++   * offer's card thumb (QuestRow's `.raid-card-thumb`) has always used
++   * this tag's own `banner` crop as a stand-in icon. Falls back to
++   * `banner` when unset, same reasoning: no icon art exists yet, so
++   * guessing a convention path would blank out every existing card.
++   */
++  icon?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+ }
+ 
+ import questTagsJson from './json/quest-tags.json';
+@@ -339,6 +348,16 @@ export interface ChainDef {
+    * before this existed. Same shape as RaidDef.banner in types.ts.
+    */
+   banner?: { path?: string; focusX?: number; focusY?: number; scale?: number };
++  /**
++   * Patch 0270. Same "separate, deliberately independent icon" story as
++   * RaidDef.icon in types.ts -- the collapsed chain card thumb (ChainCard
++   * in LorePanel.tsx, ChainRow in DiscoveredQuestsPanel.tsx) has always
++   * used this chain's own `banner` crop as a stand-in icon. Falls back to
++   * `banner` when unset, same reasoning: no icon art exists yet, so
++   * guessing a convention path would blank out every existing chain
++   * card's thumb at once.
++   */
++  icon?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+ }
+ 
+ /**
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 3865e72..879bdab 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1248,6 +1248,27 @@ export interface RaidDef {
+    * before this existed.
+    */
+   banner?: { path?: string; focusX?: number; focusY?: number; scale?: number };
++  /**
++   * Patch 0270. A separate, deliberately independent icon for the
++   * COLLAPSED raid card thumb (RaidsPanel.tsx's `.raid-card-thumb`,
++   * LorePanel.tsx's own raid list) -- before this, that thumb was just a
++   * cropped section of `banner` above, so every card's "icon" looked like
++   * an arbitrary sliver of the same wide strip the detail modal shows in
++   * full. Same shape/DevTool machinery as `banner` (editable via the same
++   * generic `bannerImage` field type, just its own field/folder), so it
++   * gets the identical focus-point + zoom picker for free.
++   *
++   * Deliberately NOT falling back to a guessed `<folder>-icons/<id>.jpg`
++   * convention path the way `banner` falls back to `raids/<id>.jpg` --
++   * unlike banner's convention (which had real files in place from the
++   * start), no icon art exists anywhere yet the moment this field ships,
++   * so guessing a path would blank out every existing raid card's thumb
++   * at once. Instead, `icon` unset means "keep using `banner`'s own crop,
++   * exactly as before this field existed" -- see raidCardIconProps in
++   * RaidsPanel.tsx. Rolls out per-raid exactly like banner did: nothing
++   * changes until someone deliberately assigns a real icon in DevTools.
++   */
++  icon?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+   /**
+    * Flat percentage points added directly to every encounter's success
+    * chance in this raid, independent of RAID_DIFFICULTIES' Normal/Heroic/
+diff --git a/src/ui/panels/DiscoveredQuestsPanel.tsx b/src/ui/panels/DiscoveredQuestsPanel.tsx
+index 6cac5ec..481e33e 100644
+--- a/src/ui/panels/DiscoveredQuestsPanel.tsx
++++ b/src/ui/panels/DiscoveredQuestsPanel.tsx
+@@ -1,7 +1,7 @@
+ import { useEffect, useMemo, useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import {
+-  HeroTab, ChainQuestBanner, chainBannerSrc, Offer,
++  HeroTab, ChainQuestBanner, chainIconSrc, Offer,
+ } from './QuestPanel';
+ import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+@@ -227,7 +227,7 @@ function ChainRow({
+     >
+       <div
+         className="raid-card-thumb"
+-        style={{ backgroundImage: `url(${chainBannerSrc(offer.chain?.chainId ?? '', chain?.banner)})` }}
++        style={{ backgroundImage: `url(${chainIconSrc(offer.chain?.chainId ?? '', chain?.icon, chain?.banner)})` }}
+       />
+       <div className="raid-card-body">
+         <div className="raid-card-name">{offer.name}</div>
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index e1da9d3..29b01b1 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -24,19 +24,25 @@ import { useEngine } from '../useEngine';
+  * which case this falls all the way back to the original id-convention
+  * path at dead-center focus, exactly as before this existed. Missing art
+  * simply fails to paint, same convention as raids' own banners.
++ *
++ * `icon`/`useIcon` (patch 0270) -- same "separate collapsed-card icon,
++ * falls back to the banner crop when unset" story as RaidBanner's own
++ * matching props. See that component's own comment in RaidsPanel.tsx.
+  */
+ function ChainBanner({
+-  chainId, banner, className,
+-}: { chainId: string; banner?: ChainDef['banner']; className: string }) {
+-  const src = banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
++  chainId, banner, icon, useIcon, className,
++}: { chainId: string; banner?: ChainDef['banner']; icon?: ChainDef['icon']; useIcon?: boolean; className: string }) {
++  const showIcon = !!(useIcon && icon?.path);
++  const src = showIcon ? `./lore/${icon!.path}` : (banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`);
++  const active = showIcon ? icon : banner;
+   return (
+     <div
+       aria-hidden="true"
+       className={className}
+       style={{
+         backgroundImage: `url(${src})`,
+-        backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
+-        ...(banner?.scale && banner.scale !== 100 ? { backgroundSize: `${banner.scale}%` } : {}),
++        backgroundPosition: `${active?.focusX ?? 50}% ${active?.focusY ?? 50}%`,
++        ...(active?.scale && active.scale !== 100 ? { backgroundSize: `${active.scale}%` } : {}),
+       }}
+     />
+   );
+@@ -203,7 +209,7 @@ function ChainCard({
+         tabIndex={0}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+       >
+-        <ChainBanner chainId={chain.id} banner={chain.banner} className="raid-card-thumb" />
++        <ChainBanner chainId={chain.id} banner={chain.banner} icon={chain.icon} useIcon className="raid-card-thumb" />
+         <div className="raid-card-body">
+           <div className="raid-card-name">{chain.name}</div>
+           <div className="raid-card-meta">
+@@ -347,7 +353,7 @@ function RaidCompletedEntry({ raidId }: { raidId: string }) {
+         tabIndex={0}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+       >
+-        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
++        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
+         <div className="raid-card-body">
+           <div className="raid-card-name">{raid.name}</div>
+           <div className="raid-card-meta">
+@@ -378,7 +384,7 @@ function RaidInProgressEntry() {
+         tabIndex={0}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+       >
+-        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
++        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
+         <div className="raid-card-body">
+           <div className="raid-card-name">{raid.name}</div>
+           <div className="raid-card-meta">
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 18a5657..b470a32 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -22,6 +22,22 @@ export function chainBannerSrc(chainId: string, banner?: ChainDef['banner']): st
+   return banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
+ }
+ 
++/**
++ * Patch 0270. The collapsed-card version of chainBannerSrc above -- used
++ * ONLY by ChainRow's own `.raid-card-thumb` (this file's QuestRow, and
++ * DiscoveredQuestsPanel's ChainRow), never by ChainQuestBanner or any
++ * modal, both of which keep showing the full banner exactly as before.
++ * Prefers the chain's dedicated `icon` when one has actually been
++ * assigned; falls back to chainBannerSrc's own banner-crop result
++ * otherwise -- deliberately not a guessed `chains-icons/<id>.jpg`
++ * convention path, since no icon art exists anywhere yet and guessing
++ * would blank out every existing chain card's thumb at once. See
++ * ChainDef.icon's own comment in quests.ts for the full reasoning.
++ */
++export function chainIconSrc(chainId: string, icon?: ChainDef['icon'], banner?: ChainDef['banner']): string {
++  return icon?.path ? `./lore/${icon.path}` : chainBannerSrc(chainId, banner);
++}
++
+ /** Banner strip for a chain's quest-board entry, matching ChainBanner in
+  *  LorePanel and RaidBanner in RaidsPanel exactly -- same asset, same
+  *  "missing file just fails to paint" convention, so a chain's art shows
+@@ -30,7 +46,10 @@ export function chainBannerSrc(chainId: string, banner?: ChainDef['banner']): st
+  *  reads (ChainDef.banner) -- see its own comment in LorePanel.tsx.
+  *  `height`/`className` default to the original 70px inline-card strip;
+  *  ChainDetailModal passes its own 90px height to match RaidDetailModal's
+- *  own banner strip instead of introducing a third size. */
++ *  own banner strip instead of introducing a third size. Always shows the
++ *  full banner, never the collapsed-card `icon` (patch 0270) -- every call
++ *  site of this component is already a detail/board strip, not a
++ *  collapsed card thumb. */
+ export function ChainQuestBanner({
+   chainId, banner, height = 70, className,
+ }: { chainId: string; banner?: ChainDef['banner']; height?: number; className?: string }) {
+@@ -69,6 +88,20 @@ export function questTagBannerSrc(tag: Offer['tag']): string | undefined {
+   return def.banner.path ? `./lore/${def.banner.path}` : `./lore/quest-tags/${tag}.jpg`;
+ }
+ 
++/**
++ * Patch 0270. The collapsed-card version of questTagBannerSrc above --
++ * used ONLY by QuestRow's own `.raid-card-thumb` for a standard (non-chain)
++ * offer, never by QuestDetailModal, which keeps showing the full banner
++ * exactly as before. Same "prefer the dedicated icon, fall back to the
++ * banner crop, never guess a convention path" reasoning as chainIconSrc
++ * above -- see QuestTagDef.icon's own comment in quests.ts.
++ */
++export function questTagIconSrc(tag: Offer['tag']): string | undefined {
++  const def = QUEST_TAG_BY_ID[tag];
++  if (def?.icon?.path) return `./lore/${def.icon.path}`;
++  return questTagBannerSrc(tag);
++}
++
+ /**
+  * Collapsed row -- same shape as RaidsPanel's own .raid-card (thumbnail +
+  * name/meta + chevron) and DiscoveredQuestsPanel's ChainRow, reusing that
+@@ -89,8 +122,8 @@ export function QuestRow({
+   const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
+   const chance = QuestManager.previewSuccess(state, hero, offer, hero.equippedConsumables ?? [], now);
+   const thumbSrc = offer.chain
+-    ? chainBannerSrc(offer.chain.chainId, chain?.banner)
+-    : questTagBannerSrc(offer.tag);
++    ? chainIconSrc(offer.chain.chainId, chain?.icon, chain?.banner)
++    : questTagIconSrc(offer.tag);
+ 
+   return (
+     <div
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 2f7b132..d448472 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -98,24 +98,35 @@ function raidBannerSrc(raidId: string, banner?: RaidDef['banner']) {
+  * `banner` is the raid's optional DevTool-assigned override + focus point
+  * (RaidDef.banner) -- unset falls all the way back to the original
+  * id-convention path at dead-center focus, exactly as before this existed.
++ *
++ * `icon`/`useIcon` (patch 0270) -- when `useIcon` is true AND the raid has
++ * a real `icon.path` assigned, this renders that dedicated icon instead of
++ * cropping `banner`. `useIcon` true with no `icon.path` set falls straight
++ * back to the exact same `banner`-crop behavior as before this existed --
++ * see RaidDef.icon's own comment in types.ts for why there's no further
++ * guessed-convention fallback. Only ever passed `true` at the collapsed
++ * `.raid-card-thumb` call sites; every other usage (modal, active-raid
++ * strip) omits it and keeps showing the full banner exactly as always.
+  */
+ export function RaidBanner({
+-  raidId, banner, className,
+-}: { raidId: string; banner?: RaidDef['banner']; className: string }) {
+-  const src = raidBannerSrc(raidId, banner);
++  raidId, banner, icon, useIcon, className,
++}: { raidId: string; banner?: RaidDef['banner']; icon?: RaidDef['icon']; useIcon?: boolean; className: string }) {
++  const showIcon = !!(useIcon && icon?.path);
++  const src = showIcon ? `./lore/${icon!.path}` : raidBannerSrc(raidId, banner);
++  const active = showIcon ? icon : banner;
+   return (
+     <div
+       aria-hidden="true"
+       className={className}
+       style={{
+         backgroundImage: `url(${src})`,
+-        backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
++        backgroundPosition: `${active?.focusX ?? 50}% ${active?.focusY ?? 50}%`,
+         // Every className this renders with (.raid-card-thumb,
+         // .raid-active-banner, and the plain-strip detail-modal usage)
+         // already sets `background-size: cover` in app.css -- only
+         // overridden inline when an actual zoom (patch 0164) has been set
+         // via the DevTool, same pattern as QuestTagBanner in QuestPanel.tsx.
+-        ...(banner?.scale && banner.scale !== 100 ? { backgroundSize: `${banner.scale}%` } : {}),
++        ...(active?.scale && active.scale !== 100 ? { backgroundSize: `${active.scale}%` } : {}),
+       }}
+     />
+   );
+@@ -735,7 +746,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+       ?? 'Complete the previous raid to reveal this one.';
+     return (
+       <div className="card raid-card locked" title={lockReason}>
+-        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
++        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
+         <div className="raid-card-body">
+           <div className="raid-card-name">{raid.name}</div>
+           <p className="tiny muted" style={{ margin: '2px 0 0' }}>
+@@ -755,7 +766,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+         tabIndex={0}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+       >
+-        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
++        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
+         <div className="raid-card-body">
+           <div className="raid-card-name">{raid.name}</div>
+           <div className="raid-card-meta">
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 7cddd22..d233943 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -520,6 +520,24 @@ const SCHEMAS = {
+       // image still uploads and crops fine regardless of its real
+       // dimensions, same as before this field existed.
+       banner: { type: 'bannerImage', required: false, defaultFolder: 'chains', previewAspect: '8/1', previewSize: '~1600x200px' },
++      // Patch 0270. A SEPARATE icon for this chain's collapsed card thumb
++      // (LorePanel.tsx's ChainCard, DiscoveredQuestsPanel.tsx's ChainRow)
++      // -- before this, that thumb was just a cropped section of `banner`
++      // above. Same `bannerImage` field type as banner (multiple instances
++      // of this type on one schema already work fine -- each is keyed by
++      // its own field name, `banner` vs `icon`, not a singleton), just its
++      // own folder and a square 1/1 aspect matching the real 56x56
++      // `.raid-card-thumb` box it actually renders into. Unset falls back
++      // to `banner`'s own crop at runtime (see ChainDef.icon's comment in
++      // quests.ts) -- deliberately NOT the usual guessed
++      // `chains-icons/<id>.jpg` convention, since no icon art exists
++      // anywhere yet and guessing would blank out every existing chain
++      // card at once. The DevTool's own "Using default: chains-icons/
++      // <id>.jpg" caption (from the shared bannerDefaultPath() logic) is
++      // still accurate as a naming CONVENTION an artist could drop a file
++      // into -- it just isn't what actually renders until this field is
++      // deliberately given a real value.
++      icon: { type: 'bannerImage', required: false, defaultFolder: 'chains-icons', previewAspect: '1/1', previewSize: '~256x256px' },
+       stages: { type: 'chainStages', required: true },
+     },
+   },
+@@ -545,6 +563,14 @@ const SCHEMAS = {
+       // approximates the typical card shape closely enough to preview
+       // meaningfully, which is still far closer than the old generic box.
+       banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags', previewAspect: '3/1', previewSize: '~900x300px' },
++      // Patch 0270. Same separate-collapsed-card-icon story as quest-
++      // chains' own `icon` field just above -- a standard (non-chain)
++      // quest offer's card thumb (QuestPanel.tsx's QuestRow) has always
++      // used this tag's own `banner` crop as a stand-in icon. Unset falls
++      // back to `banner` at runtime, same reasoning: no icon art exists
++      // yet, so guessing a convention path would blank every existing
++      // card's thumb at once.
++      icon: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags-icons', previewAspect: '1/1', previewSize: '~256x256px' },
+     },
+   },
+   'difficulties': {
+@@ -1116,6 +1142,17 @@ const SCHEMAS = {
+       // accuracy improvement over the old generic 420x130 box for the
+       // context players see most (the detail modal).
+       banner: { type: 'bannerImage', required: false, defaultFolder: 'raids', previewAspect: '5/1', previewSize: '~1500x300px' },
++      // Patch 0270. A SEPARATE icon for this raid's collapsed card thumb
++      // (.raid-card-thumb, 56x56 -- RaidsPanel.tsx's RaidCard, LorePanel.
++      // tsx's own raid list) -- before this, that thumb was just a cropped
++      // section of `banner` above, same fixed-ratio strip the detail modal
++      // shows in full. Same `bannerImage` field type, its own folder, a
++      // square 1/1 aspect matching the real thumb box. Unset falls back to
++      // `banner`'s own crop at runtime (see RaidDef.icon's comment in
++      // types.ts) -- deliberately not a guessed `raids-icons/<id>.jpg`
++      // convention, since no icon art exists anywhere yet and guessing
++      // would blank out every existing raid card's thumb at once.
++      icon: { type: 'bannerImage', required: false, defaultFolder: 'raids-icons', previewAspect: '1/1', previewSize: '~256x256px' },
+       // Mirrors quest-chains' own `title` field -- granted to every hero
+       // in the clearing party on a full clear, rather than a single
+       // hero, since a raid is a party effort. See RaidDef.title's own

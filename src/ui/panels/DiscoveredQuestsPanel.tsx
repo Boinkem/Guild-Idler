@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import {
-  HeroTab, ChainQuestBanner, chainBannerSrc, Offer,
+  HeroTab, ChainQuestBanner, chainIconSrc, Offer,
 } from './QuestPanel';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
@@ -227,7 +227,7 @@ function ChainRow({
     >
       <div
         className="raid-card-thumb"
-        style={{ backgroundImage: `url(${chainBannerSrc(offer.chain?.chainId ?? '', chain?.banner)})` }}
+        style={{ backgroundImage: `url(${chainIconSrc(offer.chain?.chainId ?? '', chain?.icon, chain?.banner)})` }}
       />
       <div className="raid-card-body">
         <div className="raid-card-name">{offer.name}</div>

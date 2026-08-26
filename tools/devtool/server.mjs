@@ -520,6 +520,24 @@ const SCHEMAS = {
       // image still uploads and crops fine regardless of its real
       // dimensions, same as before this field existed.
       banner: { type: 'bannerImage', required: false, defaultFolder: 'chains', previewAspect: '8/1', previewSize: '~1600x200px' },
+      // Patch 0270. A SEPARATE icon for this chain's collapsed card thumb
+      // (LorePanel.tsx's ChainCard, DiscoveredQuestsPanel.tsx's ChainRow)
+      // -- before this, that thumb was just a cropped section of `banner`
+      // above. Same `bannerImage` field type as banner (multiple instances
+      // of this type on one schema already work fine -- each is keyed by
+      // its own field name, `banner` vs `icon`, not a singleton), just its
+      // own folder and a square 1/1 aspect matching the real 56x56
+      // `.raid-card-thumb` box it actually renders into. Unset falls back
+      // to `banner`'s own crop at runtime (see ChainDef.icon's comment in
+      // quests.ts) -- deliberately NOT the usual guessed
+      // `chains-icons/<id>.jpg` convention, since no icon art exists
+      // anywhere yet and guessing would blank out every existing chain
+      // card at once. The DevTool's own "Using default: chains-icons/
+      // <id>.jpg" caption (from the shared bannerDefaultPath() logic) is
+      // still accurate as a naming CONVENTION an artist could drop a file
+      // into -- it just isn't what actually renders until this field is
+      // deliberately given a real value.
+      icon: { type: 'bannerImage', required: false, defaultFolder: 'chains-icons', previewAspect: '1/1', previewSize: '~256x256px' },
       stages: { type: 'chainStages', required: true },
     },
   },
@@ -545,6 +563,14 @@ const SCHEMAS = {
       // approximates the typical card shape closely enough to preview
       // meaningfully, which is still far closer than the old generic box.
       banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags', previewAspect: '3/1', previewSize: '~900x300px' },
+      // Patch 0270. Same separate-collapsed-card-icon story as quest-
+      // chains' own `icon` field just above -- a standard (non-chain)
+      // quest offer's card thumb (QuestPanel.tsx's QuestRow) has always
+      // used this tag's own `banner` crop as a stand-in icon. Unset falls
+      // back to `banner` at runtime, same reasoning: no icon art exists
+      // yet, so guessing a convention path would blank every existing
+      // card's thumb at once.
+      icon: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags-icons', previewAspect: '1/1', previewSize: '~256x256px' },
     },
   },
   'difficulties': {
@@ -1116,6 +1142,17 @@ const SCHEMAS = {
       // accuracy improvement over the old generic 420x130 box for the
       // context players see most (the detail modal).
       banner: { type: 'bannerImage', required: false, defaultFolder: 'raids', previewAspect: '5/1', previewSize: '~1500x300px' },
+      // Patch 0270. A SEPARATE icon for this raid's collapsed card thumb
+      // (.raid-card-thumb, 56x56 -- RaidsPanel.tsx's RaidCard, LorePanel.
+      // tsx's own raid list) -- before this, that thumb was just a cropped
+      // section of `banner` above, same fixed-ratio strip the detail modal
+      // shows in full. Same `bannerImage` field type, its own folder, a
+      // square 1/1 aspect matching the real thumb box. Unset falls back to
+      // `banner`'s own crop at runtime (see RaidDef.icon's comment in
+      // types.ts) -- deliberately not a guessed `raids-icons/<id>.jpg`
+      // convention, since no icon art exists anywhere yet and guessing
+      // would blank out every existing raid card's thumb at once.
+      icon: { type: 'bannerImage', required: false, defaultFolder: 'raids-icons', previewAspect: '1/1', previewSize: '~256x256px' },
       // Mirrors quest-chains' own `title` field -- granted to every hero
       // in the clearing party on a full clear, rather than a single
       // hero, since a raid is a party effort. See RaidDef.title's own

@@ -1249,6 +1249,27 @@ export interface RaidDef {
    */
   banner?: { path?: string; focusX?: number; focusY?: number; scale?: number };
   /**
+   * Patch 0270. A separate, deliberately independent icon for the
+   * COLLAPSED raid card thumb (RaidsPanel.tsx's `.raid-card-thumb`,
+   * LorePanel.tsx's own raid list) -- before this, that thumb was just a
+   * cropped section of `banner` above, so every card's "icon" looked like
+   * an arbitrary sliver of the same wide strip the detail modal shows in
+   * full. Same shape/DevTool machinery as `banner` (editable via the same
+   * generic `bannerImage` field type, just its own field/folder), so it
+   * gets the identical focus-point + zoom picker for free.
+   *
+   * Deliberately NOT falling back to a guessed `<folder>-icons/<id>.jpg`
+   * convention path the way `banner` falls back to `raids/<id>.jpg` --
+   * unlike banner's convention (which had real files in place from the
+   * start), no icon art exists anywhere yet the moment this field ships,
+   * so guessing a path would blank out every existing raid card's thumb
+   * at once. Instead, `icon` unset means "keep using `banner`'s own crop,
+   * exactly as before this field existed" -- see raidCardIconProps in
+   * RaidsPanel.tsx. Rolls out per-raid exactly like banner did: nothing
+   * changes until someone deliberately assigns a real icon in DevTools.
+   */
+  icon?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+  /**
    * Flat percentage points added directly to every encounter's success
    * chance in this raid, independent of RAID_DIFFICULTIES' Normal/Heroic/
    * Legendary tiers -- a raid-level knob for "this specific raid should read

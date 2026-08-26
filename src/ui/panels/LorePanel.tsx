@@ -24,19 +24,25 @@ import { useEngine } from '../useEngine';
  * which case this falls all the way back to the original id-convention
  * path at dead-center focus, exactly as before this existed. Missing art
  * simply fails to paint, same convention as raids' own banners.
+ *
+ * `icon`/`useIcon` (patch 0270) -- same "separate collapsed-card icon,
+ * falls back to the banner crop when unset" story as RaidBanner's own
+ * matching props. See that component's own comment in RaidsPanel.tsx.
  */
 function ChainBanner({
-  chainId, banner, className,
-}: { chainId: string; banner?: ChainDef['banner']; className: string }) {
-  const src = banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
+  chainId, banner, icon, useIcon, className,
+}: { chainId: string; banner?: ChainDef['banner']; icon?: ChainDef['icon']; useIcon?: boolean; className: string }) {
+  const showIcon = !!(useIcon && icon?.path);
+  const src = showIcon ? `./lore/${icon!.path}` : (banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`);
+  const active = showIcon ? icon : banner;
   return (
     <div
       aria-hidden="true"
       className={className}
       style={{
         backgroundImage: `url(${src})`,
-        backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
-        ...(banner?.scale && banner.scale !== 100 ? { backgroundSize: `${banner.scale}%` } : {}),
+        backgroundPosition: `${active?.focusX ?? 50}% ${active?.focusY ?? 50}%`,
+        ...(active?.scale && active.scale !== 100 ? { backgroundSize: `${active.scale}%` } : {}),
       }}
     />
   );
@@ -203,7 +209,7 @@ function ChainCard({
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <ChainBanner chainId={chain.id} banner={chain.banner} className="raid-card-thumb" />
+        <ChainBanner chainId={chain.id} banner={chain.banner} icon={chain.icon} useIcon className="raid-card-thumb" />
         <div className="raid-card-body">
           <div className="raid-card-name">{chain.name}</div>
           <div className="raid-card-meta">
@@ -347,7 +353,7 @@ function RaidCompletedEntry({ raidId }: { raidId: string }) {
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
+        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
         <div className="raid-card-body">
           <div className="raid-card-name">{raid.name}</div>
           <div className="raid-card-meta">
@@ -378,7 +384,7 @@ function RaidInProgressEntry() {
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
+        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
         <div className="raid-card-body">
           <div className="raid-card-name">{raid.name}</div>
           <div className="raid-card-meta">
