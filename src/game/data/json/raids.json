@@ -15,6 +15,9 @@
     "banner": {
       "path": "Raidcard1.png"
     },
+    "icon": {
+      "path": "raids-icons/Keep.png"
+    },
     "title": "Siegebreaker"
   },
   {
@@ -23,15 +26,19 @@
     "description": "Something has been raising the dead again, not one or two this time but by the vaultful, row after row of them. Whatever is sealed inside is worth enough that a company of risen guards still defends it centuries later, without pay, without rest, and without ever questioning the order. This is not a job for one hero. Bring the whole guild.",
     "epilogue": "The vault held, in the end, for whoever the guild turned out to be. What was raised here has gone quiet again, for now. Whatever tore open a road between the dead and the living to make this happen is still out there somewhere, and none of this slowed it down.",
     "reqLevel": 22,
-    "requiredRoles": {
-      "caster": 1
-    },
     "encounterIds": [
       "bonewrought_outer_wardens",
       "bonewrought_choir_of_bones",
       "bonewrought_vault_keeper"
     ],
-    "title": "Vault-Breaker"
+    "successModifier": 0,
+    "icon": {
+      "path": "raids-icons/Bonerwought.png"
+    },
+    "title": "Vault-Breaker",
+    "requiredRoles": {
+      "caster": 1
+    }
   },
   {
     "id": "requiem_last_god",
@@ -52,6 +59,9 @@
       "focusY": 62,
       "scale": 200
     },
+    "icon": {
+      "path": "raids-icons/ReqLast.png"
+    },
     "title": "Last Mile Walker",
     "requiredRoles": {
       "melee": 2,
@@ -65,16 +75,20 @@
     "description": "Something has been nesting in the high passes for longer than anyone noticed, long enough to stop being one dragon and start being a brood. The watch that used to look for avalanches now looks for wings, and lately there have been considerably more wings than before.",
     "epilogue": "The brood is gone, and the ice it nested in is already creeping back over what remains, a tidier ending than Emberfell got. Nothing sings about a mountain that quietly stops being a problem. It just stops.",
     "reqLevel": 18,
-    "requiredRoles": {
-      "ranged": 1
-    },
     "encounterIds": [
       "wyrmkeep_hatchling_brood",
       "wyrmkeep_wyrm_keepers",
       "wyrmkeep_frozen_wyrm"
     ],
     "unlocksRaidId": "bonewrought_vault",
-    "title": "Wyrmbrood's Bane"
+    "successModifier": 0,
+    "icon": {
+      "path": "raids-icons/Frost.png"
+    },
+    "title": "Wyrmbrood's Bane",
+    "requiredRoles": {
+      "ranged": 1
+    }
   },
   {
     "id": "what_got_out",
@@ -82,17 +96,21 @@
     "description": "The demon lord is gone, but the fortress he held still stands empty, its gate broken and its wards down with nobody left to guard whatever else might want it. Word reached the guild slowly that something else moved in behind him during the confusion. It is not interested in ruling anything. It is using the ruin exactly as it always wanted, as somewhere quiet enough to finish a working nobody has stopped it from starting.",
     "epilogue": "The breach did not open, not all the way, not this time. What was trying to open it scattered the moment the guild reached the chamber. Either it was never as unified as it looked, or whatever is on the other side is not done trying. Either way, the fortress is finally, actually empty. The guild is not taking bets on how long that lasts.",
     "reqLevel": 26,
-    "requiredRoles": {
-      "melee": 1,
-      "caster": 1
-    },
     "encounterIds": [
       "gotout_trail_gone_cold",
       "gotout_the_last_loyal",
       "gotout_cornered"
     ],
     "requiresChainId": "demon_fortress",
-    "title": "Breach-Sealer"
+    "successModifier": 0,
+    "icon": {
+      "path": "raids-icons/GotOut.png"
+    },
+    "title": "Breach-Sealer",
+    "requiredRoles": {
+      "melee": 1,
+      "caster": 1
+    }
   },
   {
     "id": "black_dragon_nest",
@@ -111,6 +129,9 @@
       "focusX": 55,
       "focusY": 69.8
     },
+    "icon": {
+      "path": "raids-icons/Black.png"
+    },
     "title": "Nest-Breaker",
     "requiredRoles": {
       "melee": 1,
@@ -123,16 +144,20 @@
     "description": "The ossuary the guild traced the lich to is not a hideout so much as a workshop. Generations of the dead lie sorted, stored, and put to use, all in service of a ritual that was never about raising an army in the first place.",
     "epilogue": "The lich is gone, his phylactery in pieces, and whatever he was trying to reach on the other side of that ritual did not get through, not this time. The guild is treating this as a delay, not an ending. Something was listening on the other end of that ritual, and it is unlikely to have forgotten the attempt.",
     "reqLevel": 41,
-    "requiredRoles": {
-      "caster": 2
-    },
-    "requiresChainId": "hunt_a_lich",
     "encounterIds": [
       "hob_the_marrow_eater",
       "hob_the_phylactery",
       "hob_the_lich"
     ],
-    "title": "Marrow-Ender"
+    "requiresChainId": "hunt_a_lich",
+    "successModifier": 0,
+    "icon": {
+      "path": "raids-icons/Lich.png"
+    },
+    "title": "Marrow-Ender",
+    "requiredRoles": {
+      "caster": 2
+    }
   },
   {
     "id": "silence_the_loom",
@@ -140,16 +165,20 @@
     "description": "There is no approach, no outer ring of guards, and no lesser threat to clear first. There is only a long walk down into the dark, and at the end of it, the thing itself, already aware the guild is coming and entirely unbothered by the fact.",
     "epilogue": "The Loom does not scream when it finally comes apart. It just goes quiet, one borrowed voice at a time, until nothing is left speaking through Millbrook. The town will need a long time to remember how to answer a question honestly again. That is a problem for people who are not the guild to solve now.",
     "reqLevel": 43,
+    "encounterIds": [
+      "loom_the_presiding_intelligence"
+    ],
+    "requiresChainId": "the_loom_beneath",
+    "successModifier": -8,
+    "icon": {
+      "path": "raids-icons/Loom.png",
+      "focusY": 71.6
+    },
+    "title": "Loom-Silencer",
     "requiredRoles": {
       "melee": 1,
       "ranged": 1,
       "caster": 1
-    },
-    "requiresChainId": "the_loom_beneath",
-    "encounterIds": [
-      "loom_the_presiding_intelligence"
-    ],
-    "successModifier": -8,
-    "title": "Loom-Silencer"
+    }
   }
 ]

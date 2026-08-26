@@ -3,7 +3,7 @@
     "id": "adventurer",
     "name": "Adventurer",
     "color": "#8c8172",
-    "icon": "",
+    "icon": "Heroes/Icon.png",
     "blurb": "No banner, no order, just grit and a willingness to go first. The guild starts here.",
     "baseStats": {
       "strength": 6,
@@ -49,13 +49,14 @@
       "melee": "No banner, no order, just grit, a borrowed blade, and a willingness to stand where the steel meets.",
       "ranged": "Reads the land like a second language, then picks fights from a distance no one saw coming.",
       "caster": "Magic pieced together from half-remembered lessons and whatever actually worked, cast with more nerve than training."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "knight",
     "name": "Knight",
     "color": "#3f6fb0",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy.png",
     "blurb": "Sworn, drilled, and reliable in a way freelancers rarely are. Cheap for what it brings.",
     "baseStats": {
       "strength": 6,
@@ -98,13 +99,14 @@
       "melee": "Sworn to an order, drilled since childhood, and first through the door every time, shield raised before the fear catches up.",
       "ranged": "Trades the shield wall for a crossbow, discipline unshaken, aim as steady as any oath.",
       "caster": "Etches battle-runes into steel rather than trusting open air, magic bound to armor like a second vow."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "dwarf",
     "name": "Dwarf Warrior",
     "color": "#b06a2c",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (2).png",
     "blurb": "A wall with an axe. Almost impossible to put down, in no particular hurry.",
     "baseStats": {
       "strength": 7,
@@ -147,13 +149,14 @@
       "melee": "A wall of scarred stone and stubbornness, axe in hand, in absolutely no hurry to move for anything living.",
       "ranged": "Throws whatever's heavy enough to matter rather than carry it all the way into melee.",
       "caster": "Magic hammered, not spoken, forge-song and rune-carved stone in the old dwarven way."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "gladiator",
     "name": "Gladiator",
     "color": "#a83232",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (3).png",
     "blurb": "Sword, net, and a bow for the ones that run. Fast and greedy for spoils.",
     "baseStats": {
       "strength": 7,
@@ -196,13 +199,14 @@
       "melee": "Sword and net, arena-bred, built for a fight the crowd remembers because it ended in one exchange.",
       "ranged": "Bow in hand and a showman's grin for the ones smart enough to run.",
       "caster": "Arena tricks dressed up with whatever charm coin could buy, half showmanship, half genuine spellcraft."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "samurai",
     "name": "Samurai",
     "color": "#5b4a9c",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (4).png",
     "blurb": "One clean strike. Prizes a perfect kill and the rare blade it earns.",
     "baseStats": {
       "strength": 9,
@@ -244,13 +248,14 @@
       "melee": "Trained for one clean strike, a single breath of stillness before the blade, prizing the perfect kill over the messy one.",
       "ranged": "Trades the blade for a bow, the same unbroken patience behind the string.",
       "caster": "Wards and rites learned alongside the sword, not instead of it, prayer and steel drawn in the same breath."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "witch",
     "name": "Witch",
     "color": "#8e3f9c",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (5).png",
     "blurb": "Hexes, bargains, and a nose for what a ruin is really worth. Fragile.",
     "baseStats": {
       "strength": 3,
@@ -295,13 +300,14 @@
       "melee": "A blade wrapped in a whispered curse, kept close for when the hex alone isn't fast enough.",
       "ranged": "Flings hexbolts from a safe distance, wary of a body this easily broken.",
       "caster": "Hexes bent toward guarding as often as harming, binding wards and bargained protection struck in the dark."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "lizardman",
     "name": "Lizardman",
     "color": "#4d7a3a",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (6).png",
     "blurb": "Scales, claws, and a swamp-born refusal to die. Little sense for coin.",
     "baseStats": {
       "strength": 8,
@@ -345,13 +351,14 @@
       "melee": "Scales, claws, and a swamp-born refusal to die, patient as the mud that raised it.",
       "ranged": "Hunts from range the patient way its swamp taught it, still as reeds until the strike.",
       "caster": "Old swamp magic, murky and older by far than the guild that hired it."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "pyromancer",
     "name": "Pyromancer",
     "color": "#d9662b",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (7).png",
     "blurb": "Answers every problem with fire. Devastating, and made of paper.",
     "baseStats": {
       "strength": 4,
@@ -394,13 +401,14 @@
       "melee": "A blade kept burning, for when fire alone won't close the distance fast enough.",
       "ranged": "Flings raw firebolts at range, blunt and immediate, no finesse required.",
       "caster": "Wreathes allies in guardian embers and blinding cinder-clouds as readily as it burns the enemy down."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "wizard",
     "name": "Wizard",
     "color": "#6a4fc4",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (8).png",
     "blurb": "Decades of study in a pointed hat. Unmatched on anything arcane.",
     "baseStats": {
       "strength": 3,
@@ -445,13 +453,14 @@
       "melee": "A blade steadied by decades of study it never expected to need, arcane theory over a sword grip.",
       "ranged": "Trades ritual for reflex, hurling raw arcane bolts wherever the staff used to point.",
       "caster": "Decades of study spent as much on arcane barriers to shield allies as on unleashing the arcane itself."
-    }
+    },
+    "milestoneGoldCost": 0
   },
   {
     "id": "huge_knight",
     "name": "Huge Knight",
     "color": "#5c5347",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (9).png",
     "blurb": "Bigger than the armor should allow, and somehow still moving. Nothing gets past him twice.",
     "baseStats": {
       "strength": 10,
@@ -503,7 +512,7 @@
     "id": "kobold",
     "name": "Kobold Warrior",
     "color": "#8a9a3a",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (10).png",
     "blurb": "Small, fast, and armed with three separate ways to be somewhere else by the time you notice him.",
     "baseStats": {
       "strength": 6,
@@ -555,7 +564,7 @@
     "id": "minotaur",
     "name": "Minotaur",
     "color": "#7a3b2e",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (11).png",
     "blurb": "One very large axe and a complete unwillingness to plan past the first swing.",
     "baseStats": {
       "strength": 14,
@@ -565,7 +574,7 @@
     },
     "growth": {
       "strength": 1.9,
-      "endurance": 1.0,
+      "endurance": 1,
       "luck": 0.3,
       "wisdom": 0.3
     },
@@ -607,7 +616,7 @@
     "id": "werewolf",
     "name": "Werewolf",
     "color": "#5a6b7a",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (12).png",
     "blurb": "Kept his mind when the change should have taken it. Still working out what that costs him.",
     "baseStats": {
       "strength": 10,
@@ -617,7 +626,7 @@
     },
     "growth": {
       "strength": 1.5,
-      "endurance": 1.0,
+      "endurance": 1,
       "luck": 0.6,
       "wisdom": 0.4
     },
