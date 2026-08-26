@@ -246,6 +246,18 @@ export function StatsPanel() {
     ['Gold earned', formatGold(stats.goldEarned)],
     ['Gold spent', formatGold(stats.goldSpent)],
     ['Highest single reward', formatGold(stats.highestReward)],
+    // Per-source gold breakdown (patch 0268) -- a second, independent view
+    // of the same overall gold flow above, split into where it actually
+    // came from. Doesn't need to sum to `goldEarned`: that flat counter
+    // has only ever tracked ordinary quest reward gold (see QuestManager.
+    // resolve's own comment), never chain-completion bonus gold, raids,
+    // or Grimsby, so this breakdown is deliberately the more complete
+    // picture, not a re-slicing of the same total.
+    ['Gold from quests', formatGold(stats.goldBySource.quests)],
+    ['Gold from raids', formatGold(stats.goldBySource.raids)],
+    ['Gold from selling items', formatGold(stats.goldBySource.sellingItems)],
+    ['Gold from selling materials', formatGold(stats.goldBySource.sellingMaterials)],
+    ['Gold from Grimsby', formatGold(stats.goldBySource.grimsby)],
     // Grimsby-specific -- reads its own dedicated counters (peddlerGoldSpent/
     // peddlerBusts, patch 0197) rather than deriving from the general
     // totals above, which mix in every other gold sink/loss in the game.

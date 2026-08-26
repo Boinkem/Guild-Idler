@@ -402,6 +402,7 @@ export const ShopManager = {
     state.stash = state.stash.filter((i) => i.uid !== itemUid);
     state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + value);
     state.stats.goldEarned += value;
+    state.stats.goldBySource.sellingItems += value;
     // Recorded for the buyback list -- the exact item (uid, durability,
     // plus, customMods, enchantStats, everything), not just its defId, so
     // buying it back later hands back precisely what was sold rather than
@@ -490,6 +491,7 @@ export const ShopManager = {
     state.stash = state.stash.filter((i) => !sellUids.has(i.uid));
     state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + gold);
     state.stats.goldEarned += gold;
+    state.stats.goldBySource.sellingItems += gold;
     for (const item of toSell) {
       state.buyback.unshift({ item, soldFor: EquipmentManager.sellValue(item), soldAt: now });
     }

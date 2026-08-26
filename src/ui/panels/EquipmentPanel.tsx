@@ -955,12 +955,6 @@ export function EquipmentPanel() {
           </Row>
         )}
         <Row
-          label="Auto-equip loot"
-          hint="A quest reward that beats what the hero who found it is already wearing equips immediately, instead of sitting in the stash."
-        >
-          <Toggle value={state.autoEquipOnLoot} onChange={(v) => engine.setAutoEquipOnLoot(v)} />
-        </Row>
-        <Row
           label="Auto-fill consumables on send"
           hint="Any empty consumable slot fills with the best available potion right before a hero departs -- covers a slot left empty after its last potion ran out, without displacing anything already equipped."
         >

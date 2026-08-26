@@ -402,6 +402,7 @@ export const PeddlerManager = {
     if (rebate > 0) {
       const storage = ModifierManager.goldStorage(state);
       state.gold = Math.min(storage, state.gold + rebate);
+      state.stats.goldBySource.grimsby += rebate;
     }
 
     // Achievement-supporting counters -- see Statistics.peddlerFlips'
@@ -450,13 +451,16 @@ export const PeddlerManager = {
         break;
       case 'goldFlat': {
         const storage = ModifierManager.goldStorage(state);
-        state.gold = Math.min(storage, state.gold + (outcome.goldAmount ?? 0) * multiplier);
+        const amount = (outcome.goldAmount ?? 0) * multiplier;
+        state.gold = Math.min(storage, state.gold + amount);
+        state.stats.goldBySource.grimsby += amount;
         break;
       }
       case 'goldRefund': {
         const storage = ModifierManager.goldStorage(state);
         const amt = Math.floor((feePaid * (outcome.refundPercent ?? 0)) / 100);
         state.gold = Math.min(storage, state.gold + amt);
+        state.stats.goldBySource.grimsby += amt;
         break;
       }
       case 'material': {
@@ -542,6 +546,7 @@ export const PeddlerManager = {
     if (totalPayout > 0) {
       const storage = ModifierManager.goldStorage(state);
       state.gold = Math.min(storage, state.gold + totalPayout);
+      state.stats.goldBySource.grimsby += totalPayout;
     }
 
     // Grimsby-wide counters, not Dice-specific ones -- see peddlerJackpots/
@@ -612,6 +617,7 @@ export const PeddlerManager = {
     if (totalPayout > 0) {
       const storage = ModifierManager.goldStorage(state);
       state.gold = Math.min(storage, state.gold + totalPayout);
+      state.stats.goldBySource.grimsby += totalPayout;
     }
 
     // Same shared Grimsby-wide counters rollDice's own comment explains
@@ -686,6 +692,7 @@ export const PeddlerManager = {
     if (rebate > 0) {
       const storage = ModifierManager.goldStorage(state);
       state.gold = Math.min(storage, state.gold + rebate);
+      state.stats.goldBySource.grimsby += rebate;
     }
 
     state.peddlerTab = { tier, round: 1, value: buyIn };
@@ -714,6 +721,7 @@ export const PeddlerManager = {
     if (rebate > 0) {
       const storage = ModifierManager.goldStorage(state);
       state.gold = Math.min(storage, state.gold + rebate);
+      state.stats.goldBySource.grimsby += rebate;
     }
 
     const nextRound = tab.round + 1;
@@ -745,6 +753,7 @@ export const PeddlerManager = {
     if (!tab) return null;
     const storage = ModifierManager.goldStorage(state);
     state.gold = Math.min(storage, state.gold + tab.value);
+    state.stats.goldBySource.grimsby += tab.value;
     if (tab.round >= Tuning.get('peddler.tab.jackpotRound')) {
       state.stats.peddlerJackpots += 1;
       state.stats.peddlerTabJackpots += 1;

@@ -1,0 +1,811 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index c13b292..116237b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -21071,3 +21071,193 @@ already screenshot-verified in patch 0265 (this patch touched zero CSS
+ -- same styles, same visual result, just a different parent component
+ rendering them), so a fresh screenshot wasn't necessary to re-confirm
+ what didn't change.
++
++### Trade Route sell-price taper, Auto-equip-loot removed, gold-by-source stats (patch 0268)
++
++```discord-update
++Dev Update | Patch 0268
++
++- Changed: Trade Route (Harvest material selling) now tapers its price the more you sell in a stretch, recovering on its own the longer you hold off -- material farming shouldn't out-earn actual questing per hour, and by a wide margin it was
++- Removed: the automated "Auto-equip loot" toggle -- a quest drop that beats what's worn no longer equips itself; the manual Equip Best Gear button is unaffected
++- Added: a Gold earned breakdown by source (quests, raids, selling items, selling materials, Grimsby) on the Stats tab
++```
++
++Three changes bundled into one patch: a tester-flagged economy imbalance
++(material selling badly out-earning questing), a requested automation
++removal, and new stat tracking to support diagnosing exactly this kind
++of imbalance going forward.
++
++**The imbalance, confirmed with real numbers before touching anything.**
++Pulled live tuning values directly (`harvest.sellPricePerUnit` = 4 flat,
++same for all four materials; `harvest.baseSpawnIntervalMs` = 45s;
++`harvest.baseYieldPerCatch` = 0.5; 12% chance of a 3x glint) against
++`balance.ts`'s own `expectedRatePerHour` (the same formula the
++burst-quest cap already uses). A zero-investment, level-1 hero manually
++clicking ONE Harvest node nets roughly 200 gold/hr -- comfortably above
++even Legendary questing's ~69-103 gold/hr (using DIFFICULTIES' range
++midpoints, upper end with Treasury maxed), and Harvest has 4 independent
++nodes a player can work in parallel. Fully upgraded (tools maxed,
++Overseer maxed at 75% passive rescue), a single node alone clears
++upward of 9,000 gold/hr, a meaningful chunk of it entirely passive. The
++tester's "getting lots of gold from selling materials" comment was an
++accurate read of the actual math, not a misimpression.
++
++**The fix: a continuously-decaying sell-price taper, not a flat nerf.**
++A flat price cut alone would still let unlimited node-multitasking blow
++past questing at scale; a diminishing curve alone would still let a
++lightly-upgraded player massively outearn questing on the very first
++sale of a session. Both together close both gaps:
++
++- **`HarvestManager.sellGoldPerHourTarget(state)`** -- the taper's
++  target isn't a hand-picked number, it's exactly what a hero currently
++  earns at the guild's own best-unlocked quest tier, reusing
++  `bestUnlockedTier`/`expectedRatePerHour` from `balance.ts` (the same
++  formula `fastQuestCapsPerHour` already built the burst-quest cap on).
++  Self-corrects automatically if `DIFFICULTIES` or the guild's level
++  ever changes -- nothing here to re-tune by hand if quest rewards are
++  rebalanced again later.
++- **`HarvestManager.decayedSellRate(state, now)`** -- a continuously-
++  decaying accumulator (`GameState.harvestSellDecayValue`/
++  `harvestSellDecayAt`), exponential decay with a 1-hour time constant
++  (`harvest.sellDecayTimeConstantMs`), deliberately NOT a fixed rolling
++  window that resets on the hour. A sale made right now weighs fully;
++  the same sale an hour ago has decayed to ~37% of its original weight,
++  two hours ago ~14% -- smooth in both directions, nothing to game by
++  waiting for a reset instant.
++- **`HarvestManager.sellPriceMultiplier(state, now)`** -- full price
++  below 50% of the target (`harvest.sellTaperStartFraction`), half price
++  (`harvest.sellTaperMidMultiplier`) up to 85% of it
++  (`harvest.sellTaperHeavyFraction`), a steep 15% cut
++  (`harvest.sellTaperHeavyMultiplier`) beyond that -- never zero, so a
++  big dump still earns something. All five numbers are new
++  devtool-editable tuning entries (category `harvest`), not literals.
++- **`HarvestManager.sell()`** evaluates the multiplier ONCE off the
++  pre-sale decayed rate and applies it to the whole batch -- a known,
++  accepted simplification (same shape as the burst-quest cap applying
++  per-quest rather than continuously mid-quest). A single very large
++  sale prices at whatever tier it started in rather than tapering
++  partway through; selling in smaller batches tracks the taper more
++  precisely, and the UI's own live price label (see below) shows the
++  same pre-sale multiplier before the player commits, so nothing here
++  is a hidden surprise.
++
++**Verified the recovery curve by hand, not just the formula in
++isolation.** A standalone simulation of the exact math (target ~21
++gold/hr, a burst of Sell-10 clicks a few seconds apart) confirmed the
++taper does what it's supposed to -- first sale full price, next sale
++already at the 15% floor -- but also surfaced a real consequence worth
++calling out rather than quietly shipping: once the accumulator has
++built up from a genuine farming session, it can take on the order of
++3-4 real hours to decay back under the heavy threshold at the default
++1-hour time constant, since the threshold itself (a fraction of a
++fairly small quest gold/hr number) is tiny relative to how much a single
++big sale can push the accumulator. This is the intended shape for a
++sustained farmer, but it also means a player who logs in once, sells a
++whole day's worth of afk-accumulated materials in one sitting, and
++never touches Harvest again will see discounted prices for hours
++afterward even though they've stopped selling. Not fixed further here
++since it's a values question, not a mechanism bug -- every number above
++(`harvest.sellDecayTimeConstantMs` and the four taper fractions/
++multipliers) is already devtool-tunable, so this can be dialed in
++empirically in-game without another patch if the recovery time feels
++too punishing in practice.
++
++**UI.** `HarvestPanel.tsx`'s Trade Route card no longer states a flat
++"4 gold per unit" -- it shows the live per-unit price and a
++`useNow(2000)`-driven tier label ("Full price" / "Half price -- the
++market is filling up" / "Steeply discounted -- the market is flooded"),
++recomputed every render off the current clock so it visibly recovers on
++its own between sales, not just immediately after one.
++
++### Auto-equip loot removed -- built
++Direct request: remove the automated part of "Auto-equip loot"
++specifically -- the opt-in `GameState.autoEquipOnLoot` preference that
++silently equipped a quest drop onto the hero who earned it if it beat
++what they were already wearing (patch ~0230-era, "Auto-repair +
++auto-equip"). The manual bulk-equip button (`engine.equipBestGear`,
++"Equip Best Gear") is a completely separate code path and is untouched
++-- a player can still equip everything at once by hand, they just no
++longer get it done for them automatically the moment loot drops.
++
++`autoEquipConsumablesOnSend` (the similarly-named but functionally
++unrelated "top up empty potion slots before a hero departs"
++preference) is also untouched -- different system, different toggle,
++never part of this ask.
++
++**What actually changed:** the field itself is gone from `GameState`
++(`types.ts`); `QuestManager.resolve`'s loot loop no longer branches on
++it -- every drop unconditionally lands in the stash now, same as it did
++before this automation ever existed; the now-dead `gearScoreForInstance`
++upgrade-comparison and its unused import were removed from
++`QuestManager.ts` along with it; `engine.setAutoEquipOnLoot` is gone;
++the "Auto-equip loot" toggle row is gone from `EquipmentPanel.tsx`'s
++automation-preferences card; `SaveManager.createInitialState` no longer
++seeds a default for it. No migration needed for the removal itself -- a
++stale `autoEquipOnLoot` key sitting in an old save's JSON is simply
++never read again, harmless dead weight rather than something that needs
++cleaning up.
++
++### Gold-earned breakdown by source -- built
++New ask, landed alongside the two changes above: `Statistics` gains a
++`goldBySource` breakdown (`quests`/`raids`/`sellingItems`/
++`sellingMaterials`/`grimsby`), tracked at every real gold-crediting call
++site rather than derived after the fact --
++
++- **quests**: `QuestManager.resolve`'s main reward-gold credit, plus
++  chain-completion bonus gold separately (the flat `goldEarned` counter
++  has never counted the chain bonus at all -- a pre-existing gap, not
++  something retroactively fixed by folding it in here; `goldBySource`
++  is deliberately the more complete picture of the two).
++- **raids**: `RaidManager`'s pooled raid-clear gold credit. Also a
++  pre-existing gap closed incidentally: raid gold was never counted
++  toward the flat `goldEarned` stat at all before this (only each
++  hero's own `goldEarnedLifetime`) -- left as-is per the same
++  "don't silently redefine an existing counter's meaning as a side
++  effect of an unrelated ask" reasoning as the quests bucket above;
++  `goldBySource.raids` is the only place this total now exists.
++- **sellingItems**: both `ShopManager.sell` (single item) and
++  `sellBelowRarity` (bulk "Sell Junk") -- both already fed the flat
++  `goldEarned` counter, this just adds the same value to the new
++  bucket alongside it.
++- **sellingMaterials**: the new `HarvestManager.sell` taper logic above,
++  crediting the actual post-taper value, not the pre-taper sticker
++  price.
++- **grimsby**: every real payout across all four of Grimsby's games --
++  Cards' rebate and both its `goldFlat`/`goldRefund` outcome kinds,
++  Dice's payout, High/Low's payout, and the Tab's two rebate points
++  (open, push) plus its settle-and-bank payout. Eight separate call
++  sites in `PeddlerManager.ts` in total. Like raids, Grimsby winnings
++  were never counted toward the flat `goldEarned` stat before this --
++  `goldBySource.grimsby` is the first place a player can see it.
++
++**Deliberately did NOT touch the existing flat `goldEarned` counter's
++behavior** anywhere -- it keeps meaning exactly what it always has
++(quest reward gold only), so nothing that already reads it (no
++achievement currently does, confirmed by checking `achievements.ts`)
++changes shape. `goldBySource`'s five buckets don't sum to `goldEarned`
++as a result, and don't need to -- they're a second, independent,
++more-complete view of the same underlying gold flow, not a re-slicing
++of the same total.
++
++New `SAVE_VERSION` migration (52->53) backfills `goldBySource` (all
++zero -- same "undiscovered content stays undiscovered" limitation every
++prior Statistics addition here has accepted; there's no way to
++retroactively split an existing flat total back into per-source
++buckets) and the new `harvestSellDecayValue`/`harvestSellDecayAt` pair
++(0 and "now" respectively, correct for an existing save too -- nobody's
++prior selling history should count against them the moment this patch
++lands).
++
++**Surfaced on `StatsPanel.tsx`** as five new rows ("Gold from quests" /
++"...raids" / "...selling items" / "...selling materials" / "...Grimsby")
++directly under the existing Gold earned/Gold spent/Highest single
++reward rows, using the same `formatGold` formatting those already use.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` both pass
++clean. A standalone Node simulation of the sell-taper math (see above)
++confirmed the multiplier tiers and decay behavior match the formulas
++as designed, including the multi-hour recovery tail flagged above.
++Every new gold-crediting call site was checked by hand against the
++existing `state.gold = Math.min(storage, ...)` pattern at that exact
++line, not grepped-and-assumed -- all eight Grimsby sites, both raid and
++both quest sites, and both Shop sell paths.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 070c1a5..ffc95cb 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -491,6 +491,55 @@
+     "min": 0,
+     "description": "Flat gold per material unit sold, once Trade Route is unlocked."
+   },
++  {
++    "id": "harvest.sellDecayTimeConstantMs",
++    "label": "Harvest: sell-rate decay time constant (ms)",
++    "category": "harvest",
++    "value": 3600000,
++    "default": 3600000,
++    "min": 60000,
++    "description": "How fast Trade Route's recent-selling accumulator decays -- an exponential time constant, not a fixed window. At the default (1hr), a sale's weight drops to ~37% after 1hr, ~14% after 2hr."
++  },
++  {
++    "id": "harvest.sellTaperStartFraction",
++    "label": "Harvest: sell taper start (fraction of quest gold/hr)",
++    "category": "harvest",
++    "value": 0.5,
++    "default": 0.5,
++    "min": 0,
++    "max": 1,
++    "description": "Below this fraction of the live quest-gold/hr target, Trade Route sells at full price."
++  },
++  {
++    "id": "harvest.sellTaperHeavyFraction",
++    "label": "Harvest: sell taper heavy threshold (fraction of quest gold/hr)",
++    "category": "harvest",
++    "value": 0.85,
++    "default": 0.85,
++    "min": 0,
++    "max": 1,
++    "description": "Above this fraction of the live quest-gold/hr target, Trade Route sells drop to the heavy taper multiplier."
++  },
++  {
++    "id": "harvest.sellTaperMidMultiplier",
++    "label": "Harvest: sell price multiplier, mid taper",
++    "category": "harvest",
++    "value": 0.5,
++    "default": 0.5,
++    "min": 0,
++    "max": 1,
++    "description": "Price multiplier applied between the start and heavy taper thresholds."
++  },
++  {
++    "id": "harvest.sellTaperHeavyMultiplier",
++    "label": "Harvest: sell price multiplier, heavy taper",
++    "category": "harvest",
++    "value": 0.15,
++    "default": 0.15,
++    "min": 0,
++    "max": 1,
++    "description": "Price multiplier once the decayed sell rate passes the heavy taper threshold -- never 0, so a big dump still earns something."
++  },
+   {
+     "id": "harvest.baseWarehouseCapacity",
+     "label": "Harvest: base warehouse capacity",
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index d680367..d28749d 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1732,8 +1732,8 @@ export class GameEngine {
+    *  so autoEquipConsumablesOnSend (see startQuest/sendAllIdle) can reuse
+    *  it silently -- a toast every single automatic send would be far
+    *  noisier than the opt-in itself is worth, same reasoning as every
+-   *  other automation preference (autoRepairEnabled, autoEquipOnLoot) not
+-   *  narrating its own routine upkeep. */
++   *  other automation preference (autoRepairEnabled) not narrating its
++   *  own routine upkeep. */
+   private fillEmptyConsumableSlots(heroId: string): number {
+     const hero = this.hero(heroId);
+     if (!hero) return 0;
+@@ -1890,11 +1890,6 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
+-  setAutoEquipOnLoot(enabled: boolean) {
+-    this.state.autoEquipOnLoot = enabled;
+-    void this.saveNow();
+-  }
+-
+   upgradeItem(itemUid: string) {
+     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+     if (!found) return;
+@@ -1934,7 +1929,7 @@ export class GameEngine {
+    * field (e.g. the floor dropdown) doesn't need to know or resend the
+    * other. Only ever meaningful once the upgrade is owned -- the settings
+    * object can still be written before then (harmless, just inert),
+-   * matching how autoRepairEnabled/autoEquipOnLoot etc. are
++   * matching how autoRepairEnabled/autoEquipConsumablesOnSend etc. are
+    * always-present preferences rather than gated fields. No toast, same
+    * quiet-settings-change treatment toggleItemLock above already uses.
+    * A change here only affects streaks rolled AFTER this call -- an
+diff --git a/src/game/managers/HarvestManager.ts b/src/game/managers/HarvestManager.ts
+index c6b642a..c5357b8 100644
+--- a/src/game/managers/HarvestManager.ts
++++ b/src/game/managers/HarvestManager.ts
+@@ -6,6 +6,8 @@ import {
+   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseCapacity, warehouseUpgradeCost,
+ } from '../data/harvestUpgrades';
+ import { Tuning } from '../data/tuning';
++import { DIFFICULTIES } from '../data/quests';
++import { bestUnlockedTier, expectedRatePerHour } from '../data/balance';
+ 
+ export const HarvestManager = {
+   idleHeroCount(state: GameState): number {
+@@ -114,13 +116,83 @@ export const HarvestManager = {
+     return { gained, bonus };
+   },
+ 
+-  sell(state: GameState, materialId: MaterialId, amount: number): string | null {
++  /**
++   * Target gold/hr Trade Route selling tapers toward -- exactly what a
++   * hero currently earns at the guild's own best-unlocked quest tier
++   * (same expectedRatePerHour/bestUnlockedTier formula balance.ts's
++   * fastQuestCapsPerHour already reuses for the burst-quest cap), not a
++   * separate hand-picked number. Self-corrects automatically if
++   * DIFFICULTIES or the guild's own level ever changes -- no curve here
++   * to re-tune by hand if quest rewards are rebalanced again later.
++   */
++  sellGoldPerHourTarget(state: GameState): number {
++    const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
++    const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
++    const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
++    return expectedRatePerHour(tier, 'gold', topLevel);
++  },
++
++  /**
++   * Continuously-decaying estimate of gold/hr currently coming out of
++   * Trade Route sales -- an exponential decay toward 0 with a
++   * `harvest.sellDecayTimeConstantMs` time constant (1 hour by default),
++   * deliberately NOT a fixed rolling window that resets on the hour. A
++   * sale made right now weighs fully; the same sale an hour ago has
++   * decayed to ~37% of its original weight, two hours ago ~14%, and so
++   * on -- smooth in both directions, with no "wait for the reset" cliff
++   * to game. Read-only; sell() below is what actually advances
++   * `harvestSellDecayAt` and folds a new sale's value in.
++   */
++  decayedSellRate(state: GameState, now: number): number {
++    const elapsed = Math.max(0, now - state.harvestSellDecayAt);
++    const decayMs = Tuning.get('harvest.sellDecayTimeConstantMs');
++    return state.harvestSellDecayValue * Math.exp(-elapsed / decayMs);
++  },
++
++  /**
++   * Sell-price multiplier for the NEXT sale, given how hot the decayed
++   * sell rate above already is relative to sellGoldPerHourTarget: full
++   * price below half the target, half price from there up to 85% of it,
++   * and a steep (but never zero -- an occasional big dump still feels
++   * like *something*) cut beyond that. Exposed separately from sell()
++   * itself so the UI can show a player what they're about to get before
++   * they commit to a sale, not just after.
++   */
++  sellPriceMultiplier(state: GameState, now: number): number {
++    const target = HarvestManager.sellGoldPerHourTarget(state);
++    const decayed = HarvestManager.decayedSellRate(state, now);
++    const midThreshold = target * Tuning.get('harvest.sellTaperStartFraction');
++    const heavyThreshold = target * Tuning.get('harvest.sellTaperHeavyFraction');
++    if (decayed <= midThreshold) return 1;
++    if (decayed <= heavyThreshold) return Tuning.get('harvest.sellTaperMidMultiplier');
++    return Tuning.get('harvest.sellTaperHeavyMultiplier');
++  },
++
++  /**
++   * Sells `amount` of one material at Trade Route. The multiplier is
++   * evaluated ONCE, off the pre-sale decayed rate, and applied to the
++   * whole batch -- a known, accepted simplification (same shape as the
++   * burst-quest cap applying per-quest rather than continuously mid-
++   * quest): a single very large sale gets priced at whatever tier it
++   * started in rather than tapering partway through it. Selling in
++   * smaller batches lets the taper track more precisely, which is a
++   * reasonable, visible incentive rather than a hidden trap -- the UI's
++   * own price-tier label (HarvestPanel.tsx) reflects the same
++   * pre-sale multiplier this uses, so nothing here surprises a player
++   * who checked it first.
++   */
++  sell(state: GameState, materialId: MaterialId, amount: number, now = Date.now()): string | null {
+     if (!state.tradeRouteUnlocked) return 'The Trade Route hasn\u2019t been opened yet.';
+     if (amount <= 0) return null;
+     if (state.materials[materialId] < amount) return 'Not enough in stock.';
++    const decayed = HarvestManager.decayedSellRate(state, now);
++    const multiplier = HarvestManager.sellPriceMultiplier(state, now);
+     state.materials[materialId] -= amount;
+-    const value = amount * Tuning.get('harvest.sellPricePerUnit');
++    const value = Math.max(1, Math.floor(amount * Tuning.get('harvest.sellPricePerUnit') * multiplier));
+     state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + value);
++    state.stats.goldBySource.sellingMaterials += value;
++    state.harvestSellDecayValue = decayed + value;
++    state.harvestSellDecayAt = now;
+     return null;
+   },
+ 
+diff --git a/src/game/managers/PeddlerManager.ts b/src/game/managers/PeddlerManager.ts
+index a1d3ddb..06f7927 100644
+--- a/src/game/managers/PeddlerManager.ts
++++ b/src/game/managers/PeddlerManager.ts
+@@ -402,6 +402,7 @@ export const PeddlerManager = {
+     if (rebate > 0) {
+       const storage = ModifierManager.goldStorage(state);
+       state.gold = Math.min(storage, state.gold + rebate);
++      state.stats.goldBySource.grimsby += rebate;
+     }
+ 
+     // Achievement-supporting counters -- see Statistics.peddlerFlips'
+@@ -450,13 +451,16 @@ export const PeddlerManager = {
+         break;
+       case 'goldFlat': {
+         const storage = ModifierManager.goldStorage(state);
+-        state.gold = Math.min(storage, state.gold + (outcome.goldAmount ?? 0) * multiplier);
++        const amount = (outcome.goldAmount ?? 0) * multiplier;
++        state.gold = Math.min(storage, state.gold + amount);
++        state.stats.goldBySource.grimsby += amount;
+         break;
+       }
+       case 'goldRefund': {
+         const storage = ModifierManager.goldStorage(state);
+         const amt = Math.floor((feePaid * (outcome.refundPercent ?? 0)) / 100);
+         state.gold = Math.min(storage, state.gold + amt);
++        state.stats.goldBySource.grimsby += amt;
+         break;
+       }
+       case 'material': {
+@@ -542,6 +546,7 @@ export const PeddlerManager = {
+     if (totalPayout > 0) {
+       const storage = ModifierManager.goldStorage(state);
+       state.gold = Math.min(storage, state.gold + totalPayout);
++      state.stats.goldBySource.grimsby += totalPayout;
+     }
+ 
+     // Grimsby-wide counters, not Dice-specific ones -- see peddlerJackpots/
+@@ -612,6 +617,7 @@ export const PeddlerManager = {
+     if (totalPayout > 0) {
+       const storage = ModifierManager.goldStorage(state);
+       state.gold = Math.min(storage, state.gold + totalPayout);
++      state.stats.goldBySource.grimsby += totalPayout;
+     }
+ 
+     // Same shared Grimsby-wide counters rollDice's own comment explains
+@@ -686,6 +692,7 @@ export const PeddlerManager = {
+     if (rebate > 0) {
+       const storage = ModifierManager.goldStorage(state);
+       state.gold = Math.min(storage, state.gold + rebate);
++      state.stats.goldBySource.grimsby += rebate;
+     }
+ 
+     state.peddlerTab = { tier, round: 1, value: buyIn };
+@@ -714,6 +721,7 @@ export const PeddlerManager = {
+     if (rebate > 0) {
+       const storage = ModifierManager.goldStorage(state);
+       state.gold = Math.min(storage, state.gold + rebate);
++      state.stats.goldBySource.grimsby += rebate;
+     }
+ 
+     const nextRound = tab.round + 1;
+@@ -745,6 +753,7 @@ export const PeddlerManager = {
+     if (!tab) return null;
+     const storage = ModifierManager.goldStorage(state);
+     state.gold = Math.min(storage, state.gold + tab.value);
++    state.stats.goldBySource.grimsby += tab.value;
+     if (tab.round >= Tuning.get('peddler.tab.jackpotRound')) {
+       state.stats.peddlerJackpots += 1;
+       state.stats.peddlerTabJackpots += 1;
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 45c48da..35e776f 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -1,4 +1,4 @@
+-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForInstance, itemDisplayName } from '../data/equipment';
++import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, itemDisplayName } from '../data/equipment';
+ import {
+   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
+ } from '../data/quests';
+@@ -1211,33 +1211,13 @@ export const QuestManager = {
+     for (let dropIndex = 0; dropIndex < loot.length; dropIndex++) {
+       const drop = loot[dropIndex];
+       const item = lootItems[dropIndex];
++      // Loot always lands in the stash -- the automated "equip it straight
++      // onto the earning hero if it's an upgrade" behavior (GameState.
++      // autoEquipOnLoot) has been removed. The manual "Equip Best Gear"
++      // bulk-equip button (engine.equipBestGear) is untouched; a player
++      // who wants an item worn still has to actually choose to wear it.
+       if (item) {
+-        // Auto-equip on loot -- opt-in (GameState.autoEquipOnLoot), only
+-        // for the hero who actually earned the drop, same gearScoreForInstance
+-        // comparison engine.equipBestGear already uses for its own manual
+-        // bulk-equip (patch 0263 -- was gearScoreForItem, a def-only
+-        // comparison that couldn't see a fresh drop's or an already-worn
+-        // item's actual rolled power; see that function's own comment in
+-        // data/equipment.ts), so "beats what's worn" means the same thing
+-        // in both places, and a badly-rolled fresh drop can no longer
+-        // silently replace a superbly-rolled item already worn just for
+-        // being a higher rarity tier on paper. EquipmentManager.equip
+-        // handles the displaced item landing back in the stash itself --
+-        // no separate push needed on that path. Falls through to the
+-        // ordinary stash push when the setting is off, hero is missing
+-        // (shouldn't happen but guarded same as the durability block
+-        // above), or the drop simply isn't an upgrade.
+-        const def = EQUIPMENT_BY_ID[item.defId];
+-        const currentItem = def && hero ? hero.equipment[def.slot] : undefined;
+-        const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
+-        const currentScore = currentItem && currentDef ? gearScoreForInstance(currentItem, currentDef) : -1;
+-        const newScore = def ? gearScoreForInstance(item, def) : -1;
+-        const isUpgrade = !!def && !!hero && newScore > currentScore && hero.level >= def.reqLevel;
+-        if (state.autoEquipOnLoot && isUpgrade && hero) {
+-          EquipmentManager.equip(state, hero, item);
+-        } else {
+-          state.stash.push(item);
+-        }
++        state.stash.push(item);
+       }
+       if (!state.discoveredItems.includes(drop.defId)) state.discoveredItems.push(drop.defId);
+       state.stats.itemsFound += 1;
+@@ -1333,6 +1313,7 @@ export const QuestManager = {
+         if (completed) {
+           const chain = CHAIN_BY_ID[chainId];
+           state.gold = Math.min(storage, state.gold + chain.rewardGold);
++          state.stats.goldBySource.quests += chain.rewardGold;
+           state.renown += chain.rewardRenown;
+           for (const defId of chain.rewardItems) {
+             const item = EquipmentManager.instantiate(defId);
+@@ -1395,6 +1376,7 @@ export const QuestManager = {
+     state.stats.totalQuests += 1;
+     state.stats[success ? 'successes' : 'failures'] += 1;
+     state.stats.goldEarned += gold;
++    state.stats.goldBySource.quests += gold;
+     state.stats.highestReward = Math.max(state.stats.highestReward, gold);
+     if (injury) state.stats.injuriesSuffered += 1;
+     state.stats.itemsBroken += broken.length;
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 9e85998..e42478b 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -440,6 +440,7 @@ export const RaidManager = {
+     }
+     const storage = ModifierManager.goldStorage(state);
+     state.gold = Math.min(storage, state.gold + gold);
++    state.stats.goldBySource.raids += gold;
+ 
+     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
+       state.completedRaids.push(raid.id);
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index e4a2fcd..c32c640 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -157,6 +157,7 @@ export function createInitialState(now = Date.now()): GameState {
+       lowestSuccessfulChance: null, blackMarketPurchases: 0, firstPlayedAt: now,
+       peddlerFlips: 0, peddlerJackpots: 0, peddlerHighRollerJackpots: 0,
+       peddlerGoldSpent: 0, peddlerBusts: 0, peddlerTabJackpots: 0,
++      goldBySource: { quests: 0, raids: 0, sellingItems: 0, sellingMaterials: 0, grimsby: 0 },
+     },
+     log: [],
+     discoveredItems: [],
+@@ -195,6 +196,8 @@ export function createInitialState(now = Date.now()): GameState {
+     harvestUnlocked: false,
+     pendingHarvestSpotlight: false,
+     overseerLevel: 0,
++    harvestSellDecayValue: 0,
++    harvestSellDecayAt: now,
+     scrap: 0,
+     gems: {},
+     resistGems: {},
+@@ -206,7 +209,6 @@ export function createInitialState(now = Date.now()): GameState {
+     pets: [],
+     autoRepairEnabled: false,
+     autoRepairThresholdPercent: 50,
+-    autoEquipOnLoot: false,
+     autoEquipConsumablesOnSend: false,
+     pendingHatchReadyNotice: false,
+     peddlerUnlocked: false,
+@@ -1112,6 +1114,46 @@ const MIGRATIONS: Record<number, Migration> = {
+       chainReplayCompletions: (save.chainReplayCompletions as Record<string, string[]> | undefined) ?? {},
+     };
+   },
++  52: (save) => {
++    // Patch 0268: three unrelated changes bundled into one migration step
++    // since none of them need their own.
++    //
++    // 1) Removed the "Auto-equip loot" automation entirely (autoEquipOnLoot
++    // is gone from GameState) -- nothing to migrate, a stale `save.
++    // autoEquipOnLoot` key from an old save is simply never read again.
++    //
++    // 2) New goldBySource stats breakdown -- same "migrate wipes an
++    // unlisted field back to the fresh default's shape" trap every prior
++    // Statistics addition in this file has needed its own explicit
++    // deep-merge for (see peddlerGoldSpent/peddlerTabJackpots above):
++    // `migrate` only ever shallow-merges `save.stats` over the fresh
++    // default, so a stats object that exists but is missing this one
++    // field would otherwise come back undefined rather than falling back
++    // to zero. Starts every bucket at 0 regardless of the save's real
++    // lifetime totals -- same "undiscovered content stays undiscovered"
++    // limitation every other new-counter migration here already accepts;
++    // there's no way to retroactively split the existing flat goldEarned
++    // total back into per-source buckets after the fact.
++    //
++    // 3) Trade Route's new sell-price taper needs a starting point for
++    // its continuous-decay accumulator -- 0 (no recent selling to weigh
++    // in) and `now` are exactly the fresh-save defaults, correct for an
++    // existing save too: nobody's prior selling history should count
++    // against them the moment this patch lands.
++    const stats = (save.stats as Record<string, unknown> | undefined) ?? {};
++    const now = Date.now();
++    return {
++      ...save,
++      version: 53,
++      stats: {
++        ...stats,
++        goldBySource: (stats.goldBySource as GameState['stats']['goldBySource'] | undefined)
++          ?? { quests: 0, raids: 0, sellingItems: 0, sellingMaterials: 0, grimsby: 0 },
++      },
++      harvestSellDecayValue: (save.harvestSellDecayValue as number | undefined) ?? 0,
++      harvestSellDecayAt: (save.harvestSellDecayAt as number | undefined) ?? now,
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index 1b78ff4..e9a1bb2 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -402,6 +402,7 @@ export const ShopManager = {
+     state.stash = state.stash.filter((i) => i.uid !== itemUid);
+     state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + value);
+     state.stats.goldEarned += value;
++    state.stats.goldBySource.sellingItems += value;
+     // Recorded for the buyback list -- the exact item (uid, durability,
+     // plus, customMods, enchantStats, everything), not just its defId, so
+     // buying it back later hands back precisely what was sold rather than
+@@ -490,6 +491,7 @@ export const ShopManager = {
+     state.stash = state.stash.filter((i) => !sellUids.has(i.uid));
+     state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + gold);
+     state.stats.goldEarned += gold;
++    state.stats.goldBySource.sellingItems += gold;
+     for (const item of toSell) {
+       state.buyback.unshift({ item, soldFor: EquipmentManager.sellValue(item), soldAt: now });
+     }
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 0e7e4e2..3865e72 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 52;
++export const SAVE_VERSION = 53;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -1690,6 +1690,30 @@ export interface Statistics {
+    * peddlerHighRollerJackpots already established.
+    */
+   peddlerTabJackpots: number;
++  /**
++   * Granular gold-earned breakdown by source, added alongside (not
++   * instead of) the flat `goldEarned` above -- `goldEarned` keeps meaning
++   * exactly what it always has (quest reward gold only; see
++   * QuestManager.resolve's own increment), so nothing that already reads
++   * it needs to change. This is a second, independent view of the same
++   * underlying gold flow, split into the five real "gold enters the
++   * guild" events the game has: quests (including chain-completion
++   * bonus gold, which `goldEarned` itself has never counted -- a
++   * pre-existing gap, not something this patch is fixing retroactively),
++   * raids, selling equipment (single-item Sell and bulk Sell Junk both),
++   * selling Harvest materials (Trade Route), and Grimsby (every payout
++   * across Cards/Dice/High-Low/Tab, rebates included). Each bucket is
++   * incremented at its own real gold-crediting call site, same
++   * "own counter, not derived" pattern peddlerGoldSpent already
++   * established for Grimsby's spend side.
++   */
++  goldBySource: {
++    quests: number;
++    raids: number;
++    sellingItems: number;
++    sellingMaterials: number;
++    grimsby: number;
++  };
+ }
+ 
+ export interface GameState {
+@@ -2198,6 +2222,23 @@ export interface GameState {
+    * a purely-manual node has nothing sensible to simulate while closed.
+    */
+   overseerLevel: number;
++  /**
++   * Continuously-decaying accumulator behind Trade Route's sell-price
++   * taper (HarvestManager.sell/decayedSellRate) -- an exponentially
++   * weighted running total of recent gold earned from selling materials,
++   * NOT a fixed-window counter that resets on the hour. Every sale adds
++   * its own gold value to whatever this has decayed to by that moment,
++   * then re-stamps `harvestSellDecayAt` to now; every read first decays
++   * the stored value by elapsed time (`Math.exp(-elapsed / decayConstant)`,
++   * `harvest.sellDecayTimeConstantMs`) before comparing it against the
++   * live quest-gold/hr target. This is what lets sustained selling taper
++   * the price down while a small or occasional sale stays at full price
++   * -- see HarvestManager.sellGoldPerHourTarget's own comment for what
++   * the target itself is anchored to. Zero and "now" respectively are
++   * the correct fresh-save defaults (no prior selling to weigh in).
++   */
++  harvestSellDecayValue: number;
++  harvestSellDecayAt: number;
+ 
+   /* --------------------------- Elemental infusion --------------------------- */
+   /**
+@@ -2291,16 +2332,6 @@ export interface GameState {
+    *  100 would repair on every single point of wear, spending gold
+    *  constantly for no real benefit. */
+   autoRepairThresholdPercent: number;
+-  /** When true, QuestManager.resolve auto-equips a loot drop straight onto
+-   *  the hero who earned it if it beats what they're already wearing in
+-   *  that slot (same gearScoreForInstance comparison engine.equipBestGear
+-   *  already uses for its own manual bulk-equip) instead of the drop
+-   *  always landing in the stash. Only ever checked against the earning
+-   *  hero, never the whole roster -- a stash drop had no "which hero"
+-   *  context before this, and inventing one (e.g. "whoever it helps most")
+-   *  would be a much bigger, more surprising behavior change than "the
+-   *  hero who found it gets first look at it." */
+-  autoEquipOnLoot: boolean;
+   /** When true, GameEngine.startQuest/sendAllIdle silently fill each sent
+    *  hero's EMPTY consumable slots (never swapping out something already
+    *  slotted) via the same highest-cost-first logic the manual "Equip
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 3114a58..ce58667 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -954,12 +954,6 @@ export function EquipmentPanel() {
+             <span className="tiny muted" style={{ marginLeft: 8 }}>{state.autoRepairThresholdPercent}%</span>
+           </Row>
+         )}
+-        <Row
+-          label="Auto-equip loot"
+-          hint="A quest reward that beats what the hero who found it is already wearing equips immediately, instead of sitting in the stash."
+-        >
+-          <Toggle value={state.autoEquipOnLoot} onChange={(v) => engine.setAutoEquipOnLoot(v)} />
+-        </Row>
+         <Row
+           label="Auto-fill consumables on send"
+           hint="Any empty consumable slot fills with the best available potion right before a hero departs -- covers a slot left empty after its last potion ran out, without displacing anything already equipped."
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index 3b91467..fef6c7c 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -8,6 +8,7 @@ import {
+   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseUpgradeCost,
+ } from '../../game/data/harvestUpgrades';
+ import { HarvestManager } from '../../game/managers/HarvestManager';
++import { Tuning } from '../../game/data/tuning';
+ import { MaterialId } from '../../game/types';
+ import { formatGold, formatMaterial } from '../../game/util';
+ import { isTabUnread } from '../../game/attention';
+@@ -575,6 +576,7 @@ function OverseerCard() {
+ function TradeRouteCard() {
+   const engine = useEngine();
+   const state = engine.state;
++  const now = useNow(2000);
+ 
+   if (!state.tradeRouteUnlocked) {
+     return (
+@@ -591,10 +593,27 @@ function TradeRouteCard() {
+     );
+   }
+ 
++  // Live price tier -- see HarvestManager.sellPriceMultiplier's own
++  // comment. Recomputed every render off the current clock (useNow ticks
++  // this component every 2s) so the label decays back toward "Full
++  // price" on its own as time passes, not just right after a sale.
++  const multiplier = HarvestManager.sellPriceMultiplier(state, now);
++  const unitPrice = Math.max(1, Math.floor(Tuning.get('harvest.sellPricePerUnit') * multiplier));
++  const tierLabel = multiplier >= 1
++    ? 'Full price'
++    : multiplier > Tuning.get('harvest.sellTaperHeavyMultiplier')
++      ? 'Half price -- the market is filling up'
++      : 'Steeply discounted -- the market is flooded';
++  const tierClass = multiplier >= 1 ? 'muted' : 'bad';
++
+   return (
+     <div className="card" style={{ marginBottom: 12 }}>
+       <div className="card-title">Trade Route</div>
+-      <p className="card-flavour">Sell surplus materials for gold, 4 gold per unit.</p>
++      <p className="card-flavour">
++        Sell surplus materials for gold, currently {unitPrice} per unit. Selling steadily tapers the price down
++        toward a fair rate; it recovers on its own the longer you hold off.
++      </p>
++      <p className={`tiny ${tierClass}`} style={{ marginTop: -4, marginBottom: 8 }}>{tierLabel}</p>
+       <div className="row wrap" style={{ gap: 6 }}>
+         {MATERIALS.map((m) => (
+           <button
+diff --git a/src/ui/panels/StatsPanel.tsx b/src/ui/panels/StatsPanel.tsx
+index e3de810..eb6ed8c 100644
+--- a/src/ui/panels/StatsPanel.tsx
++++ b/src/ui/panels/StatsPanel.tsx
+@@ -246,6 +246,18 @@ export function StatsPanel() {
+     ['Gold earned', formatGold(stats.goldEarned)],
+     ['Gold spent', formatGold(stats.goldSpent)],
+     ['Highest single reward', formatGold(stats.highestReward)],
++    // Per-source gold breakdown (patch 0268) -- a second, independent view
++    // of the same overall gold flow above, split into where it actually
++    // came from. Doesn't need to sum to `goldEarned`: that flat counter
++    // has only ever tracked ordinary quest reward gold (see QuestManager.
++    // resolve's own comment), never chain-completion bonus gold, raids,
++    // or Grimsby, so this breakdown is deliberately the more complete
++    // picture, not a re-slicing of the same total.
++    ['Gold from quests', formatGold(stats.goldBySource.quests)],
++    ['Gold from raids', formatGold(stats.goldBySource.raids)],
++    ['Gold from selling items', formatGold(stats.goldBySource.sellingItems)],
++    ['Gold from selling materials', formatGold(stats.goldBySource.sellingMaterials)],
++    ['Gold from Grimsby', formatGold(stats.goldBySource.grimsby)],
+     // Grimsby-specific -- reads its own dedicated counters (peddlerGoldSpent/
+     // peddlerBusts, patch 0197) rather than deriving from the general
+     // totals above, which mix in every other gold sink/loss in the game.

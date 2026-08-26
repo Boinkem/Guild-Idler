@@ -157,6 +157,7 @@ export function createInitialState(now = Date.now()): GameState {
       lowestSuccessfulChance: null, blackMarketPurchases: 0, firstPlayedAt: now,
       peddlerFlips: 0, peddlerJackpots: 0, peddlerHighRollerJackpots: 0,
       peddlerGoldSpent: 0, peddlerBusts: 0, peddlerTabJackpots: 0,
+      goldBySource: { quests: 0, raids: 0, sellingItems: 0, sellingMaterials: 0, grimsby: 0 },
     },
     log: [],
     discoveredItems: [],
@@ -195,6 +196,8 @@ export function createInitialState(now = Date.now()): GameState {
     harvestUnlocked: false,
     pendingHarvestSpotlight: false,
     overseerLevel: 0,
+    harvestSellDecayValue: 0,
+    harvestSellDecayAt: now,
     scrap: 0,
     gems: {},
     resistGems: {},
@@ -206,7 +209,6 @@ export function createInitialState(now = Date.now()): GameState {
     pets: [],
     autoRepairEnabled: false,
     autoRepairThresholdPercent: 50,
-    autoEquipOnLoot: false,
     autoEquipConsumablesOnSend: false,
     pendingHatchReadyNotice: false,
     peddlerUnlocked: false,
@@ -1110,6 +1112,46 @@ const MIGRATIONS: Record<number, Migration> = {
       ...save,
       version: 52,
       chainReplayCompletions: (save.chainReplayCompletions as Record<string, string[]> | undefined) ?? {},
+    };
+  },
+  52: (save) => {
+    // Patch 0268: three unrelated changes bundled into one migration step
+    // since none of them need their own.
+    //
+    // 1) Removed the "Auto-equip loot" automation entirely (autoEquipOnLoot
+    // is gone from GameState) -- nothing to migrate, a stale `save.
+    // autoEquipOnLoot` key from an old save is simply never read again.
+    //
+    // 2) New goldBySource stats breakdown -- same "migrate wipes an
+    // unlisted field back to the fresh default's shape" trap every prior
+    // Statistics addition in this file has needed its own explicit
+    // deep-merge for (see peddlerGoldSpent/peddlerTabJackpots above):
+    // `migrate` only ever shallow-merges `save.stats` over the fresh
+    // default, so a stats object that exists but is missing this one
+    // field would otherwise come back undefined rather than falling back
+    // to zero. Starts every bucket at 0 regardless of the save's real
+    // lifetime totals -- same "undiscovered content stays undiscovered"
+    // limitation every other new-counter migration here already accepts;
+    // there's no way to retroactively split the existing flat goldEarned
+    // total back into per-source buckets after the fact.
+    //
+    // 3) Trade Route's new sell-price taper needs a starting point for
+    // its continuous-decay accumulator -- 0 (no recent selling to weigh
+    // in) and `now` are exactly the fresh-save defaults, correct for an
+    // existing save too: nobody's prior selling history should count
+    // against them the moment this patch lands.
+    const stats = (save.stats as Record<string, unknown> | undefined) ?? {};
+    const now = Date.now();
+    return {
+      ...save,
+      version: 53,
+      stats: {
+        ...stats,
+        goldBySource: (stats.goldBySource as GameState['stats']['goldBySource'] | undefined)
+          ?? { quests: 0, raids: 0, sellingItems: 0, sellingMaterials: 0, grimsby: 0 },
+      },
+      harvestSellDecayValue: (save.harvestSellDecayValue as number | undefined) ?? 0,
+      harvestSellDecayAt: (save.harvestSellDecayAt as number | undefined) ?? now,
     };
   },
 };

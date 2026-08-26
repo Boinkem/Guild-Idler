@@ -8,6 +8,7 @@ import {
   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseUpgradeCost,
 } from '../../game/data/harvestUpgrades';
 import { HarvestManager } from '../../game/managers/HarvestManager';
+import { Tuning } from '../../game/data/tuning';
 import { MaterialId } from '../../game/types';
 import { formatGold, formatMaterial } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
@@ -575,6 +576,7 @@ function OverseerCard() {
 function TradeRouteCard() {
   const engine = useEngine();
   const state = engine.state;
+  const now = useNow(2000);
 
   if (!state.tradeRouteUnlocked) {
     return (
@@ -591,10 +593,27 @@ function TradeRouteCard() {
     );
   }
 
+  // Live price tier -- see HarvestManager.sellPriceMultiplier's own
+  // comment. Recomputed every render off the current clock (useNow ticks
+  // this component every 2s) so the label decays back toward "Full
+  // price" on its own as time passes, not just right after a sale.
+  const multiplier = HarvestManager.sellPriceMultiplier(state, now);
+  const unitPrice = Math.max(1, Math.floor(Tuning.get('harvest.sellPricePerUnit') * multiplier));
+  const tierLabel = multiplier >= 1
+    ? 'Full price'
+    : multiplier > Tuning.get('harvest.sellTaperHeavyMultiplier')
+      ? 'Half price -- the market is filling up'
+      : 'Steeply discounted -- the market is flooded';
+  const tierClass = multiplier >= 1 ? 'muted' : 'bad';
+
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <div className="card-title">Trade Route</div>
-      <p className="card-flavour">Sell surplus materials for gold, 4 gold per unit.</p>
+      <p className="card-flavour">
+        Sell surplus materials for gold, currently {unitPrice} per unit. Selling steadily tapers the price down
+        toward a fair rate; it recovers on its own the longer you hold off.
+      </p>
+      <p className={`tiny ${tierClass}`} style={{ marginTop: -4, marginBottom: 8 }}>{tierLabel}</p>
       <div className="row wrap" style={{ gap: 6 }}>
         {MATERIALS.map((m) => (
           <button

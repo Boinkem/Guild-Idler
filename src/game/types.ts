@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 52;
+export const SAVE_VERSION = 53;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1690,6 +1690,30 @@ export interface Statistics {
    * peddlerHighRollerJackpots already established.
    */
   peddlerTabJackpots: number;
+  /**
+   * Granular gold-earned breakdown by source, added alongside (not
+   * instead of) the flat `goldEarned` above -- `goldEarned` keeps meaning
+   * exactly what it always has (quest reward gold only; see
+   * QuestManager.resolve's own increment), so nothing that already reads
+   * it needs to change. This is a second, independent view of the same
+   * underlying gold flow, split into the five real "gold enters the
+   * guild" events the game has: quests (including chain-completion
+   * bonus gold, which `goldEarned` itself has never counted -- a
+   * pre-existing gap, not something this patch is fixing retroactively),
+   * raids, selling equipment (single-item Sell and bulk Sell Junk both),
+   * selling Harvest materials (Trade Route), and Grimsby (every payout
+   * across Cards/Dice/High-Low/Tab, rebates included). Each bucket is
+   * incremented at its own real gold-crediting call site, same
+   * "own counter, not derived" pattern peddlerGoldSpent already
+   * established for Grimsby's spend side.
+   */
+  goldBySource: {
+    quests: number;
+    raids: number;
+    sellingItems: number;
+    sellingMaterials: number;
+    grimsby: number;
+  };
 }
 
 export interface GameState {
@@ -2198,6 +2222,23 @@ export interface GameState {
    * a purely-manual node has nothing sensible to simulate while closed.
    */
   overseerLevel: number;
+  /**
+   * Continuously-decaying accumulator behind Trade Route's sell-price
+   * taper (HarvestManager.sell/decayedSellRate) -- an exponentially
+   * weighted running total of recent gold earned from selling materials,
+   * NOT a fixed-window counter that resets on the hour. Every sale adds
+   * its own gold value to whatever this has decayed to by that moment,
+   * then re-stamps `harvestSellDecayAt` to now; every read first decays
+   * the stored value by elapsed time (`Math.exp(-elapsed / decayConstant)`,
+   * `harvest.sellDecayTimeConstantMs`) before comparing it against the
+   * live quest-gold/hr target. This is what lets sustained selling taper
+   * the price down while a small or occasional sale stays at full price
+   * -- see HarvestManager.sellGoldPerHourTarget's own comment for what
+   * the target itself is anchored to. Zero and "now" respectively are
+   * the correct fresh-save defaults (no prior selling to weigh in).
+   */
+  harvestSellDecayValue: number;
+  harvestSellDecayAt: number;
 
   /* --------------------------- Elemental infusion --------------------------- */
   /**
@@ -2291,16 +2332,6 @@ export interface GameState {
    *  100 would repair on every single point of wear, spending gold
    *  constantly for no real benefit. */
   autoRepairThresholdPercent: number;
-  /** When true, QuestManager.resolve auto-equips a loot drop straight onto
-   *  the hero who earned it if it beats what they're already wearing in
-   *  that slot (same gearScoreForInstance comparison engine.equipBestGear
-   *  already uses for its own manual bulk-equip) instead of the drop
-   *  always landing in the stash. Only ever checked against the earning
-   *  hero, never the whole roster -- a stash drop had no "which hero"
-   *  context before this, and inventing one (e.g. "whoever it helps most")
-   *  would be a much bigger, more surprising behavior change than "the
-   *  hero who found it gets first look at it." */
-  autoEquipOnLoot: boolean;
   /** When true, GameEngine.startQuest/sendAllIdle silently fill each sent
    *  hero's EMPTY consumable slots (never swapping out something already
    *  slotted) via the same highest-cost-first logic the manual "Equip

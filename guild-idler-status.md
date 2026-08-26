@@ -21071,3 +21071,193 @@ already screenshot-verified in patch 0265 (this patch touched zero CSS
 -- same styles, same visual result, just a different parent component
 rendering them), so a fresh screenshot wasn't necessary to re-confirm
 what didn't change.
+
+### Trade Route sell-price taper, Auto-equip-loot removed, gold-by-source stats (patch 0268)
+
+```discord-update
+Dev Update | Patch 0268
+
+- Changed: Trade Route (Harvest material selling) now tapers its price the more you sell in a stretch, recovering on its own the longer you hold off -- material farming shouldn't out-earn actual questing per hour, and by a wide margin it was
+- Removed: the automated "Auto-equip loot" toggle -- a quest drop that beats what's worn no longer equips itself; the manual Equip Best Gear button is unaffected
+- Added: a Gold earned breakdown by source (quests, raids, selling items, selling materials, Grimsby) on the Stats tab
+```
+
+Three changes bundled into one patch: a tester-flagged economy imbalance
+(material selling badly out-earning questing), a requested automation
+removal, and new stat tracking to support diagnosing exactly this kind
+of imbalance going forward.
+
+**The imbalance, confirmed with real numbers before touching anything.**
+Pulled live tuning values directly (`harvest.sellPricePerUnit` = 4 flat,
+same for all four materials; `harvest.baseSpawnIntervalMs` = 45s;
+`harvest.baseYieldPerCatch` = 0.5; 12% chance of a 3x glint) against
+`balance.ts`'s own `expectedRatePerHour` (the same formula the
+burst-quest cap already uses). A zero-investment, level-1 hero manually
+clicking ONE Harvest node nets roughly 200 gold/hr -- comfortably above
+even Legendary questing's ~69-103 gold/hr (using DIFFICULTIES' range
+midpoints, upper end with Treasury maxed), and Harvest has 4 independent
+nodes a player can work in parallel. Fully upgraded (tools maxed,
+Overseer maxed at 75% passive rescue), a single node alone clears
+upward of 9,000 gold/hr, a meaningful chunk of it entirely passive. The
+tester's "getting lots of gold from selling materials" comment was an
+accurate read of the actual math, not a misimpression.
+
+**The fix: a continuously-decaying sell-price taper, not a flat nerf.**
+A flat price cut alone would still let unlimited node-multitasking blow
+past questing at scale; a diminishing curve alone would still let a
+lightly-upgraded player massively outearn questing on the very first
+sale of a session. Both together close both gaps:
+
+- **`HarvestManager.sellGoldPerHourTarget(state)`** -- the taper's
+  target isn't a hand-picked number, it's exactly what a hero currently
+  earns at the guild's own best-unlocked quest tier, reusing
+  `bestUnlockedTier`/`expectedRatePerHour` from `balance.ts` (the same
+  formula `fastQuestCapsPerHour` already built the burst-quest cap on).
+  Self-corrects automatically if `DIFFICULTIES` or the guild's level
+  ever changes -- nothing here to re-tune by hand if quest rewards are
+  rebalanced again later.
+- **`HarvestManager.decayedSellRate(state, now)`** -- a continuously-
+  decaying accumulator (`GameState.harvestSellDecayValue`/
+  `harvestSellDecayAt`), exponential decay with a 1-hour time constant
+  (`harvest.sellDecayTimeConstantMs`), deliberately NOT a fixed rolling
+  window that resets on the hour. A sale made right now weighs fully;
+  the same sale an hour ago has decayed to ~37% of its original weight,
+  two hours ago ~14% -- smooth in both directions, nothing to game by
+  waiting for a reset instant.
+- **`HarvestManager.sellPriceMultiplier(state, now)`** -- full price
+  below 50% of the target (`harvest.sellTaperStartFraction`), half price
+  (`harvest.sellTaperMidMultiplier`) up to 85% of it
+  (`harvest.sellTaperHeavyFraction`), a steep 15% cut
+  (`harvest.sellTaperHeavyMultiplier`) beyond that -- never zero, so a
+  big dump still earns something. All five numbers are new
+  devtool-editable tuning entries (category `harvest`), not literals.
+- **`HarvestManager.sell()`** evaluates the multiplier ONCE off the
+  pre-sale decayed rate and applies it to the whole batch -- a known,
+  accepted simplification (same shape as the burst-quest cap applying
+  per-quest rather than continuously mid-quest). A single very large
+  sale prices at whatever tier it started in rather than tapering
+  partway through; selling in smaller batches tracks the taper more
+  precisely, and the UI's own live price label (see below) shows the
+  same pre-sale multiplier before the player commits, so nothing here
+  is a hidden surprise.
+
+**Verified the recovery curve by hand, not just the formula in
+isolation.** A standalone simulation of the exact math (target ~21
+gold/hr, a burst of Sell-10 clicks a few seconds apart) confirmed the
+taper does what it's supposed to -- first sale full price, next sale
+already at the 15% floor -- but also surfaced a real consequence worth
+calling out rather than quietly shipping: once the accumulator has
+built up from a genuine farming session, it can take on the order of
+3-4 real hours to decay back under the heavy threshold at the default
+1-hour time constant, since the threshold itself (a fraction of a
+fairly small quest gold/hr number) is tiny relative to how much a single
+big sale can push the accumulator. This is the intended shape for a
+sustained farmer, but it also means a player who logs in once, sells a
+whole day's worth of afk-accumulated materials in one sitting, and
+never touches Harvest again will see discounted prices for hours
+afterward even though they've stopped selling. Not fixed further here
+since it's a values question, not a mechanism bug -- every number above
+(`harvest.sellDecayTimeConstantMs` and the four taper fractions/
+multipliers) is already devtool-tunable, so this can be dialed in
+empirically in-game without another patch if the recovery time feels
+too punishing in practice.
+
+**UI.** `HarvestPanel.tsx`'s Trade Route card no longer states a flat
+"4 gold per unit" -- it shows the live per-unit price and a
+`useNow(2000)`-driven tier label ("Full price" / "Half price -- the
+market is filling up" / "Steeply discounted -- the market is flooded"),
+recomputed every render off the current clock so it visibly recovers on
+its own between sales, not just immediately after one.
+
+### Auto-equip loot removed -- built
+Direct request: remove the automated part of "Auto-equip loot"
+specifically -- the opt-in `GameState.autoEquipOnLoot` preference that
+silently equipped a quest drop onto the hero who earned it if it beat
+what they were already wearing (patch ~0230-era, "Auto-repair +
+auto-equip"). The manual bulk-equip button (`engine.equipBestGear`,
+"Equip Best Gear") is a completely separate code path and is untouched
+-- a player can still equip everything at once by hand, they just no
+longer get it done for them automatically the moment loot drops.
+
+`autoEquipConsumablesOnSend` (the similarly-named but functionally
+unrelated "top up empty potion slots before a hero departs"
+preference) is also untouched -- different system, different toggle,
+never part of this ask.
+
+**What actually changed:** the field itself is gone from `GameState`
+(`types.ts`); `QuestManager.resolve`'s loot loop no longer branches on
+it -- every drop unconditionally lands in the stash now, same as it did
+before this automation ever existed; the now-dead `gearScoreForInstance`
+upgrade-comparison and its unused import were removed from
+`QuestManager.ts` along with it; `engine.setAutoEquipOnLoot` is gone;
+the "Auto-equip loot" toggle row is gone from `EquipmentPanel.tsx`'s
+automation-preferences card; `SaveManager.createInitialState` no longer
+seeds a default for it. No migration needed for the removal itself -- a
+stale `autoEquipOnLoot` key sitting in an old save's JSON is simply
+never read again, harmless dead weight rather than something that needs
+cleaning up.
+
+### Gold-earned breakdown by source -- built
+New ask, landed alongside the two changes above: `Statistics` gains a
+`goldBySource` breakdown (`quests`/`raids`/`sellingItems`/
+`sellingMaterials`/`grimsby`), tracked at every real gold-crediting call
+site rather than derived after the fact --
+
+- **quests**: `QuestManager.resolve`'s main reward-gold credit, plus
+  chain-completion bonus gold separately (the flat `goldEarned` counter
+  has never counted the chain bonus at all -- a pre-existing gap, not
+  something retroactively fixed by folding it in here; `goldBySource`
+  is deliberately the more complete picture of the two).
+- **raids**: `RaidManager`'s pooled raid-clear gold credit. Also a
+  pre-existing gap closed incidentally: raid gold was never counted
+  toward the flat `goldEarned` stat at all before this (only each
+  hero's own `goldEarnedLifetime`) -- left as-is per the same
+  "don't silently redefine an existing counter's meaning as a side
+  effect of an unrelated ask" reasoning as the quests bucket above;
+  `goldBySource.raids` is the only place this total now exists.
+- **sellingItems**: both `ShopManager.sell` (single item) and
+  `sellBelowRarity` (bulk "Sell Junk") -- both already fed the flat
+  `goldEarned` counter, this just adds the same value to the new
+  bucket alongside it.
+- **sellingMaterials**: the new `HarvestManager.sell` taper logic above,
+  crediting the actual post-taper value, not the pre-taper sticker
+  price.
+- **grimsby**: every real payout across all four of Grimsby's games --
+  Cards' rebate and both its `goldFlat`/`goldRefund` outcome kinds,
+  Dice's payout, High/Low's payout, and the Tab's two rebate points
+  (open, push) plus its settle-and-bank payout. Eight separate call
+  sites in `PeddlerManager.ts` in total. Like raids, Grimsby winnings
+  were never counted toward the flat `goldEarned` stat before this --
+  `goldBySource.grimsby` is the first place a player can see it.
+
+**Deliberately did NOT touch the existing flat `goldEarned` counter's
+behavior** anywhere -- it keeps meaning exactly what it always has
+(quest reward gold only), so nothing that already reads it (no
+achievement currently does, confirmed by checking `achievements.ts`)
+changes shape. `goldBySource`'s five buckets don't sum to `goldEarned`
+as a result, and don't need to -- they're a second, independent,
+more-complete view of the same underlying gold flow, not a re-slicing
+of the same total.
+
+New `SAVE_VERSION` migration (52->53) backfills `goldBySource` (all
+zero -- same "undiscovered content stays undiscovered" limitation every
+prior Statistics addition here has accepted; there's no way to
+retroactively split an existing flat total back into per-source
+buckets) and the new `harvestSellDecayValue`/`harvestSellDecayAt` pair
+(0 and "now" respectively, correct for an existing save too -- nobody's
+prior selling history should count against them the moment this patch
+lands).
+
+**Surfaced on `StatsPanel.tsx`** as five new rows ("Gold from quests" /
+"...raids" / "...selling items" / "...selling materials" / "...Grimsby")
+directly under the existing Gold earned/Gold spent/Highest single
+reward rows, using the same `formatGold` formatting those already use.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` both pass
+clean. A standalone Node simulation of the sell-taper math (see above)
+confirmed the multiplier tiers and decay behavior match the formulas
+as designed, including the multi-hour recovery tail flagged above.
+Every new gold-crediting call site was checked by hand against the
+existing `state.gold = Math.min(storage, ...)` pattern at that exact
+line, not grepped-and-assumed -- all eight Grimsby sites, both raid and
+both quest sites, and both Shop sell paths.

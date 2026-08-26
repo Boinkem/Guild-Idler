@@ -440,6 +440,7 @@ export const RaidManager = {
     }
     const storage = ModifierManager.goldStorage(state);
     state.gold = Math.min(storage, state.gold + gold);
+    state.stats.goldBySource.raids += gold;
 
     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
       state.completedRaids.push(raid.id);

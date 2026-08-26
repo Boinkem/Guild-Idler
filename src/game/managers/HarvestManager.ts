@@ -6,6 +6,8 @@ import {
   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseCapacity, warehouseUpgradeCost,
 } from '../data/harvestUpgrades';
 import { Tuning } from '../data/tuning';
+import { DIFFICULTIES } from '../data/quests';
+import { bestUnlockedTier, expectedRatePerHour } from '../data/balance';
 
 export const HarvestManager = {
   idleHeroCount(state: GameState): number {
@@ -114,13 +116,83 @@ export const HarvestManager = {
     return { gained, bonus };
   },
 
-  sell(state: GameState, materialId: MaterialId, amount: number): string | null {
+  /**
+   * Target gold/hr Trade Route selling tapers toward -- exactly what a
+   * hero currently earns at the guild's own best-unlocked quest tier
+   * (same expectedRatePerHour/bestUnlockedTier formula balance.ts's
+   * fastQuestCapsPerHour already reuses for the burst-quest cap), not a
+   * separate hand-picked number. Self-corrects automatically if
+   * DIFFICULTIES or the guild's own level ever changes -- no curve here
+   * to re-tune by hand if quest rewards are rebalanced again later.
+   */
+  sellGoldPerHourTarget(state: GameState): number {
+    const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
+    const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
+    const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
+    return expectedRatePerHour(tier, 'gold', topLevel);
+  },
+
+  /**
+   * Continuously-decaying estimate of gold/hr currently coming out of
+   * Trade Route sales -- an exponential decay toward 0 with a
+   * `harvest.sellDecayTimeConstantMs` time constant (1 hour by default),
+   * deliberately NOT a fixed rolling window that resets on the hour. A
+   * sale made right now weighs fully; the same sale an hour ago has
+   * decayed to ~37% of its original weight, two hours ago ~14%, and so
+   * on -- smooth in both directions, with no "wait for the reset" cliff
+   * to game. Read-only; sell() below is what actually advances
+   * `harvestSellDecayAt` and folds a new sale's value in.
+   */
+  decayedSellRate(state: GameState, now: number): number {
+    const elapsed = Math.max(0, now - state.harvestSellDecayAt);
+    const decayMs = Tuning.get('harvest.sellDecayTimeConstantMs');
+    return state.harvestSellDecayValue * Math.exp(-elapsed / decayMs);
+  },
+
+  /**
+   * Sell-price multiplier for the NEXT sale, given how hot the decayed
+   * sell rate above already is relative to sellGoldPerHourTarget: full
+   * price below half the target, half price from there up to 85% of it,
+   * and a steep (but never zero -- an occasional big dump still feels
+   * like *something*) cut beyond that. Exposed separately from sell()
+   * itself so the UI can show a player what they're about to get before
+   * they commit to a sale, not just after.
+   */
+  sellPriceMultiplier(state: GameState, now: number): number {
+    const target = HarvestManager.sellGoldPerHourTarget(state);
+    const decayed = HarvestManager.decayedSellRate(state, now);
+    const midThreshold = target * Tuning.get('harvest.sellTaperStartFraction');
+    const heavyThreshold = target * Tuning.get('harvest.sellTaperHeavyFraction');
+    if (decayed <= midThreshold) return 1;
+    if (decayed <= heavyThreshold) return Tuning.get('harvest.sellTaperMidMultiplier');
+    return Tuning.get('harvest.sellTaperHeavyMultiplier');
+  },
+
+  /**
+   * Sells `amount` of one material at Trade Route. The multiplier is
+   * evaluated ONCE, off the pre-sale decayed rate, and applied to the
+   * whole batch -- a known, accepted simplification (same shape as the
+   * burst-quest cap applying per-quest rather than continuously mid-
+   * quest): a single very large sale gets priced at whatever tier it
+   * started in rather than tapering partway through it. Selling in
+   * smaller batches lets the taper track more precisely, which is a
+   * reasonable, visible incentive rather than a hidden trap -- the UI's
+   * own price-tier label (HarvestPanel.tsx) reflects the same
+   * pre-sale multiplier this uses, so nothing here surprises a player
+   * who checked it first.
+   */
+  sell(state: GameState, materialId: MaterialId, amount: number, now = Date.now()): string | null {
     if (!state.tradeRouteUnlocked) return 'The Trade Route hasn\u2019t been opened yet.';
     if (amount <= 0) return null;
     if (state.materials[materialId] < amount) return 'Not enough in stock.';
+    const decayed = HarvestManager.decayedSellRate(state, now);
+    const multiplier = HarvestManager.sellPriceMultiplier(state, now);
     state.materials[materialId] -= amount;
-    const value = amount * Tuning.get('harvest.sellPricePerUnit');
+    const value = Math.max(1, Math.floor(amount * Tuning.get('harvest.sellPricePerUnit') * multiplier));
     state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + value);
+    state.stats.goldBySource.sellingMaterials += value;
+    state.harvestSellDecayValue = decayed + value;
+    state.harvestSellDecayAt = now;
     return null;
   },
 

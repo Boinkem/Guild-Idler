@@ -1,4 +1,4 @@
-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForInstance, itemDisplayName } from '../data/equipment';
+import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, itemDisplayName } from '../data/equipment';
 import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
 } from '../data/quests';
@@ -1211,33 +1211,13 @@ export const QuestManager = {
     for (let dropIndex = 0; dropIndex < loot.length; dropIndex++) {
       const drop = loot[dropIndex];
       const item = lootItems[dropIndex];
+      // Loot always lands in the stash -- the automated "equip it straight
+      // onto the earning hero if it's an upgrade" behavior (GameState.
+      // autoEquipOnLoot) has been removed. The manual "Equip Best Gear"
+      // bulk-equip button (engine.equipBestGear) is untouched; a player
+      // who wants an item worn still has to actually choose to wear it.
       if (item) {
-        // Auto-equip on loot -- opt-in (GameState.autoEquipOnLoot), only
-        // for the hero who actually earned the drop, same gearScoreForInstance
-        // comparison engine.equipBestGear already uses for its own manual
-        // bulk-equip (patch 0263 -- was gearScoreForItem, a def-only
-        // comparison that couldn't see a fresh drop's or an already-worn
-        // item's actual rolled power; see that function's own comment in
-        // data/equipment.ts), so "beats what's worn" means the same thing
-        // in both places, and a badly-rolled fresh drop can no longer
-        // silently replace a superbly-rolled item already worn just for
-        // being a higher rarity tier on paper. EquipmentManager.equip
-        // handles the displaced item landing back in the stash itself --
-        // no separate push needed on that path. Falls through to the
-        // ordinary stash push when the setting is off, hero is missing
-        // (shouldn't happen but guarded same as the durability block
-        // above), or the drop simply isn't an upgrade.
-        const def = EQUIPMENT_BY_ID[item.defId];
-        const currentItem = def && hero ? hero.equipment[def.slot] : undefined;
-        const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
-        const currentScore = currentItem && currentDef ? gearScoreForInstance(currentItem, currentDef) : -1;
-        const newScore = def ? gearScoreForInstance(item, def) : -1;
-        const isUpgrade = !!def && !!hero && newScore > currentScore && hero.level >= def.reqLevel;
-        if (state.autoEquipOnLoot && isUpgrade && hero) {
-          EquipmentManager.equip(state, hero, item);
-        } else {
-          state.stash.push(item);
-        }
+        state.stash.push(item);
       }
       if (!state.discoveredItems.includes(drop.defId)) state.discoveredItems.push(drop.defId);
       state.stats.itemsFound += 1;
@@ -1333,6 +1313,7 @@ export const QuestManager = {
         if (completed) {
           const chain = CHAIN_BY_ID[chainId];
           state.gold = Math.min(storage, state.gold + chain.rewardGold);
+          state.stats.goldBySource.quests += chain.rewardGold;
           state.renown += chain.rewardRenown;
           for (const defId of chain.rewardItems) {
             const item = EquipmentManager.instantiate(defId);
@@ -1395,6 +1376,7 @@ export const QuestManager = {
     state.stats.totalQuests += 1;
     state.stats[success ? 'successes' : 'failures'] += 1;
     state.stats.goldEarned += gold;
+    state.stats.goldBySource.quests += gold;
     state.stats.highestReward = Math.max(state.stats.highestReward, gold);
     if (injury) state.stats.injuriesSuffered += 1;
     state.stats.itemsBroken += broken.length;

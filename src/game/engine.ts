@@ -1732,8 +1732,8 @@ export class GameEngine {
    *  so autoEquipConsumablesOnSend (see startQuest/sendAllIdle) can reuse
    *  it silently -- a toast every single automatic send would be far
    *  noisier than the opt-in itself is worth, same reasoning as every
-   *  other automation preference (autoRepairEnabled, autoEquipOnLoot) not
-   *  narrating its own routine upkeep. */
+   *  other automation preference (autoRepairEnabled) not narrating its
+   *  own routine upkeep. */
   private fillEmptyConsumableSlots(heroId: string): number {
     const hero = this.hero(heroId);
     if (!hero) return 0;
@@ -1890,11 +1890,6 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  setAutoEquipOnLoot(enabled: boolean) {
-    this.state.autoEquipOnLoot = enabled;
-    void this.saveNow();
-  }
-
   upgradeItem(itemUid: string) {
     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
     if (!found) return;
@@ -1934,7 +1929,7 @@ export class GameEngine {
    * field (e.g. the floor dropdown) doesn't need to know or resend the
    * other. Only ever meaningful once the upgrade is owned -- the settings
    * object can still be written before then (harmless, just inert),
-   * matching how autoRepairEnabled/autoEquipOnLoot etc. are
+   * matching how autoRepairEnabled/autoEquipConsumablesOnSend etc. are
    * always-present preferences rather than gated fields. No toast, same
    * quiet-settings-change treatment toggleItemLock above already uses.
    * A change here only affects streaks rolled AFTER this call -- an
