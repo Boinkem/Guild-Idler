@@ -386,6 +386,57 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
     });
   };
 
+  /**
+   * Patch 0277. Sell Junk, direct request -- moved here from the
+   * Inventory tab wholesale, same bulk-sell mechanics that page had
+   * (defaults to Common, the safest threshold; the preview mirrors
+   * ShopManager.sellBelowRarity's own filter exactly -- enchanted always
+   * skipped, crafted only skipped above Common, locked always excluded --
+   * so the count and gold shown are exactly what pressing it will do).
+   * Its own separate rarity dropdown (`junkRarity`, not shared with
+   * `scrapRarity` above) since a player may well want a different
+   * threshold for "sell this" versus "scrap this."
+   *
+   * Runs as a staggered per-item sequence calling `engine.sellItem`
+   * directly, not a single `engine.sellJunk(rarity)` call -- same
+   * "capture positions before anything moves, animate each card
+   * individually" shape `runScrapAll` above already established, so bulk
+   * selling gets the identical per-card gold-fly burst treatment bulk
+   * scrapping already has, not one silent lump-sum change.
+   */
+  const [junkRarity, setJunkRarity] = useState<Rarity>('common');
+  const junkMaxIndex = RARITY_ORDER.indexOf(junkRarity);
+  const junkPreview = state.stash.filter((item) => {
+    if (item.locked) return false;
+    if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
+    const def = EQUIPMENT_BY_ID[item.defId];
+    if (!def) return false;
+    if (item.customMods && def.rarity !== 'common') return false;
+    return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
+  });
+  const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
+  const [pendingJunkSell, setPendingJunkSell] = useState(false);
+  const runSellJunk = () => {
+    if (junkPreview.length === 0) return;
+    const targets = junkPreview.map((item) => {
+      const el = document.querySelector(`[data-stash-uid="${item.uid}"]`);
+      const rect = el?.getBoundingClientRect();
+      return {
+        uid: item.uid,
+        gained: EquipmentManager.sellValue(item),
+        x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+        y: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
+      };
+    });
+    targets.forEach((t, i) => {
+      window.setTimeout(() => {
+        engine.sellItem(t.uid);
+        pushGoldFlight(t.x, t.y, t.gained);
+      }, i * STAGGER_MS);
+    });
+  };
+
+
   return (
     <>
       <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
@@ -414,7 +465,32 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
       </div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare to sell.</p>}
       {state.stash.length > 0 && (
-        <div className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 8 }}>
+        <div className="row wrap" style={{ gap: 6, alignItems: 'center', marginBottom: 8 }}>
+          {/* Patch 0277: Sell Junk, its own rarity threshold separate from
+              Scrap All's -- see runSellJunk's own comment above for why
+              this stayed a distinct dropdown rather than sharing
+              scrapRarity. */}
+          <select
+            value={junkRarity}
+            onChange={(e) => setJunkRarity(e.target.value as Rarity)}
+            style={{
+              background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+              color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+            }}
+          >
+            {RARITY_ORDER.map((r) => (
+              <option key={r} value={r}>{r} and below</option>
+            ))}
+          </select>
+          <button
+            className="btn-green"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            onClick={() => setPendingJunkSell(true)}
+            disabled={junkPreview.length === 0}
+            title="Crafted, enchanted, and Vault-locked items are never swept up by this, regardless of rarity"
+          >
+            Sell Junk ({junkPreview.length}) · {formatGold(junkGold)}
+          </button>
           <select
             value={scrapRarity}
             onChange={(e) => setScrapRarity(e.target.value as Rarity)}
@@ -517,6 +593,15 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           confirmLabel="Scrap"
           onConfirm={() => { runScrapAll(); setPendingScrapAll(false); }}
           onCancel={() => setPendingScrapAll(false)}
+        />
+      )}
+      {pendingJunkSell && (
+        <ConfirmModal
+          title="Sell junk"
+          message={`Sell ${junkPreview.length} item${junkPreview.length === 1 ? '' : 's'} (${junkRarity} and below) for ${formatGold(junkGold)}?`}
+          confirmLabel="Sell"
+          onConfirm={() => { runSellJunk(); setPendingJunkSell(false); }}
+          onCancel={() => setPendingJunkSell(false)}
         />
       )}
     </>

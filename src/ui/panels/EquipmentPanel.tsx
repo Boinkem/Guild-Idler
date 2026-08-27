@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useEngine } from '../useEngine';
-import { useSettings } from '../useSettings';
 import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
@@ -11,11 +10,10 @@ import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, Cons
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
-import { describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, MAIN_STAT_TOOLTIP } from '../../game/util';
+import { describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_COLOR, MAIN_STAT_TOOLTIP } from '../../game/util';
 import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
-import { ConfirmModal } from '../ConfirmModal';
 
 const SLOTS = EQUIP_SLOTS;
 
@@ -731,17 +729,26 @@ function SlotCard({
 
 /** A single stash item, same collapsed-card pattern as SlotCard. */
 /** A single stash item -- same overlay-modal treatment as SlotCard above,
- *  replacing the previous inline expand. */
+ *  replacing the previous inline expand.
+ *
+ *  Patch 0277: no Sell button here anymore -- direct request, selling
+ *  moved entirely to the Blacksmith's own "Sell from the stash" section
+ *  (VendorsPanel.tsx's ArmourStock), alongside Scrap, which already lived
+ *  there since patch 0267. This card is purely for viewing, equipping,
+ *  and locking now, matching the panel's own subtitle ("Buying and
+ *  selling both happen in the Shop -- this is just what you have"),
+ *  which was already true for the Shop side and is now true for Sell
+ *  too. `confirmSell` dropped from the props for the same reason -- with
+ *  no Sell action left in this component, there's nothing left for it to
+ *  gate. */
 function StashCard({
-  item, hero, confirmSell, engine,
-}: { item: EquipmentItem; hero: Hero; confirmSell: boolean; engine: GameEngine }) {
+  item, hero, engine,
+}: { item: EquipmentItem; hero: Hero; engine: GameEngine }) {
   const [open, setOpen] = useState(false);
-  const [pendingSell, setPendingSell] = useState(false);
   const def = EQUIPMENT_BY_ID[item.defId];
   if (!def) return null;
   const canEquip = EquipmentManager.canEquip(hero, item);
   const isUpgrade = isGearUpgrade(hero, item, def);
-  const doSell = () => { engine.sellItem(item.uid); setPendingSell(false); setOpen(false); };
 
   return (
     <>
@@ -835,29 +842,10 @@ function StashCard({
                 >
                   {item.locked ? `${'\uD83D\uDD13'} Unlock` : `${'\uD83D\uDD12'} Lock in Vault`}
                 </button>
-                <button
-                  disabled={item.locked}
-                  title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
-                  onClick={() => {
-                    if (!confirmSell) doSell(); else setPendingSell(true);
-                  }}
-                >
-                  Sell {formatGold(EquipmentManager.sellValue(item))}
-                </button>
               </div>
             </div>
           </div>
         </div>
-      )}
-
-      {pendingSell && (
-        <ConfirmModal
-          title="Sell item"
-          message={`Sell ${def.name} for ${formatGold(EquipmentManager.sellValue(item))}?`}
-          confirmLabel="Sell"
-          onConfirm={doSell}
-          onCancel={() => setPendingSell(false)}
-        />
       )}
     </>
   );
@@ -865,7 +853,6 @@ function StashCard({
 
 export function EquipmentPanel() {
   const engine = useEngine();
-  const { settings } = useSettings();
   const state = engine.state;
   const workshop = state.guild.workshop ?? 0;
   const [heroId, setHeroId] = useState(state.heroes[0].id);
@@ -874,38 +861,11 @@ export function EquipmentPanel() {
   const repairBill = EquipmentManager.allItems(state)
     .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop, ModifierManager.global(state).repairDiscount ?? 0), 0);
 
-  // Sell Junk -- bulk-sells everything in the stash at or below a chosen
-  // rarity (see ShopManager.sellBelowRarity). Defaults to Common, the
-  // safest threshold, rather than defaulting to whatever was last picked
-  // or something broader -- a bulk sell is higher-stakes than selling one
-  // item at a time, so the default shouldn't be able to surprise anyone.
-  // The preview below mirrors sellBelowRarity's own filter exactly
-  // (enchanted items always skipped; crafted items only skipped above
-  // Common, patch 0230) so the count and gold shown on the button are
-  // exactly what pressing it will do, not an approximation.
-  const [junkRarity, setJunkRarity] = useState<Rarity>('common');
-  const junkMaxIndex = RARITY_ORDER.indexOf(junkRarity);
-  const junkPreview = state.stash.filter((item) => {
-    if (item.locked) return false;
-    if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
-    const def = EQUIPMENT_BY_ID[item.defId];
-    if (!def) return false;
-    if (item.customMods && def.rarity !== 'common') return false;
-    return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
-  });
-  const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
-  const [pendingJunkSell, setPendingJunkSell] = useState(false);
-  const sellJunk = () => {
-    if (junkPreview.length === 0) return;
-    if (!settings.confirmSell) engine.sellJunk(junkRarity);
-    else setPendingJunkSell(true);
-  };
   const curiosOwned = CurioManager.owned(state);
 
   // Gear-type filter -- sorts the Stash grid down to one slot at a time
-  // (Weapon/Helmet/etc.), same shape as junkRarity above but purely a
-  // display filter, doesn't touch Sell Junk's own selection at all.
-  // 'all' is the default so nothing changes for anyone who never touches it.
+  // (Weapon/Helmet/etc.), purely a display filter. 'all' is the default
+  // so nothing changes for anyone who never touches it.
   const [stashSlotFilter, setStashSlotFilter] = useState<EquipSlot | 'all'>('all');
   const stashCapacity = ModifierManager.stashCapacity(state);
   const filteredStash = state.stash.filter((item) => {
@@ -1099,27 +1059,6 @@ export function EquipmentPanel() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            <select
-              value={junkRarity}
-              onChange={(e) => setJunkRarity(e.target.value as Rarity)}
-              style={{
-                background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-                color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
-              }}
-            >
-              {RARITY_ORDER.map((r) => (
-                <option key={r} value={r}>{r} and below</option>
-              ))}
-            </select>
-            <button
-              className="btn-green"
-              style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
-              onClick={sellJunk}
-              disabled={junkPreview.length === 0}
-              title="Crafted, enchanted, and Vault-locked items are never swept up by this, regardless of rarity"
-            >
-              Sell Junk ({junkPreview.length}) · {formatGold(junkGold)}
-            </button>
           </div>
         )}
       </div>
@@ -1129,16 +1068,14 @@ export function EquipmentPanel() {
       )}
       <div className="item-card-grid">
         {filteredStash.map((item) => (
-          <StashCard key={item.uid} item={item} hero={hero} confirmSell={settings.confirmSell} engine={engine} />
+          <StashCard key={item.uid} item={item} hero={hero} engine={engine} />
         ))}
       </div>
 
       {/* Sellable odds-and-ends -- see CurioDef's own doc comment in
-          types.ts. No per-item "confirm sell" the Stash grid's own
-          settings.confirmSell gates -- a curio has no equip/durability/
-          rarity stakes attached, so there's nothing a misclick here could
-          cost beyond the sale itself, same reasoning Sell Junk's own
-          bulk action doesn't gate per-item either. */}
+          types.ts. No confirm-sell gate on this bulk action -- a curio
+          has no equip/durability/rarity stakes attached, so there's
+          nothing a misclick here could cost beyond the sale itself. */}
       {curiosOwned.length > 0 && (
         <>
           <div className="spread" style={{ alignItems: 'center' }}>
@@ -1158,16 +1095,6 @@ export function EquipmentPanel() {
             ))}
           </div>
         </>
-      )}
-
-      {pendingJunkSell && (
-        <ConfirmModal
-          title="Sell junk"
-          message={`Sell ${junkPreview.length} item${junkPreview.length === 1 ? '' : 's'} (${junkRarity} and below) for ${formatGold(junkGold)}?`}
-          confirmLabel="Sell"
-          onConfirm={() => { engine.sellJunk(junkRarity); setPendingJunkSell(false); }}
-          onCancel={() => setPendingJunkSell(false)}
-        />
       )}
       </div>
     </div>

@@ -21833,3 +21833,72 @@ fixes in this project: actual sprite alignment inside a real OS window
 can't be exercised headlessly in this environment, so this is a direct,
 traceable fix to the exact CSS/estimate mechanism the screenshot points
 to, not something empirically re-run and watched here.
+
+### Sell + Sell Junk moved from Inventory to the Blacksmith, alongside Scrap (patch 0277)
+```discord-update
+Dev Update | Inventory / Vendors
+
+- Moved: individual item Sell and the bulk "Sell Junk" action now live on the Blacksmith's own "Sell from the stash" section, right next to Scrap and Scrap All
+- Inventory is now purely for viewing, equipping, and locking gear -- no selling happens there anymore
+- Bulk selling gets the same staggered gold-fly animation Scrap All already has, one burst per item as it sells
+```
+
+Direct request, part 1 of a larger animation/economy-polish ask. Individual
+Sell and Scrap already sat side by side on the Blacksmith's "Sell from the
+stash" section since patch 0267 -- but that patch only moved the card
+redesign itself, not the older bulk "Sell Junk" control or the individual
+Sell button Inventory's own StashCard modal had kept since the 0267
+revert. Both still lived on Inventory, duplicating what the Blacksmith
+already offered per-item. This patch finishes the move: Inventory loses
+Sell entirely, the Blacksmith gains bulk Sell Junk to match its existing
+bulk Scrap All.
+
+**`EquipmentPanel.tsx` (Inventory): `StashCard`'s detail modal lost its
+Sell button**, and the confirm-sell flow (`pendingSell`/`doSell`) along
+with it -- the modal footer is now just Close/Equip/Lock, matching the
+panel's own subtitle ("Buying and selling both happen in the Shop -- this
+is just what you have"), which was already true for buying and is now
+true for selling too. The whole "Sell Junk" bulk-sell block (rarity
+dropdown, preview calc, confirm modal) was removed outright, not just
+hidden. `confirmSell` dropped from `StashCard`'s props entirely -- with
+no Sell action left in the component, there's nothing left for it to
+gate. Curios' own separate "Sell All" was deliberately left exactly
+where it is -- a different item category with no equip/durability/rarity
+stakes and no relationship to the Blacksmith (an armour vendor, not
+somewhere that would buy random curios), so moving it there would've
+been a thematically wrong consolidation, not a cleanup.
+
+**`VendorsPanel.tsx` (Blacksmith): new Sell Junk control**, same shape as
+the existing Scrap All right next to it -- own rarity-threshold dropdown
+(kept separate from Scrap All's own `scrapRarity`, since a player may
+reasonably want a different cutoff for "sell this" versus "scrap this"),
+same preview-matches-exactly-what-pressing-it-does math ported straight
+from Inventory's old version (`ShopManager.sellBelowRarity`'s own filter:
+locked/enchanted always excluded, crafted only excluded above Common),
+one confirm dialog for the whole batch.
+
+**Bulk selling now animates per-item, not as one silent lump sum.** The
+old Inventory "Sell Junk" made a single `engine.sellJunk(rarity)` call
+with no animation at all. The new Blacksmith version runs the identical
+staggered-per-card pattern `runScrapAll` already established in patch
+0265/0267: every matching card's on-screen position captured up front
+(before any item is removed, so a mid-batch grid reflow can't stale the
+snapshot), then each item sold individually via `engine.sellItem` on a
+140ms stagger, each popping its own gold-fly burst as it goes -- both the
+local pop-and-fade and the long-distance flight to the header's gold
+total, the exact same `pushGoldFlight`/`flyTarget.ts` mechanism
+individual Sell already uses on this same page.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
+sub-builds included) pass clean. Confirmed via grep that `EquipmentPanel.
+tsx` carries zero remaining references to Sell/Sell Junk state
+(`pendingSell`, `doSell`, `junkRarity`, `junkPreview`, `pendingJunkSell`,
+`sellJunk`) and that every import that state alone required
+(`useSettings`, `ConfirmModal`, `RARITY_ORDER`) was actually removed, not
+left dangling unused.
+
+**Still open from the original request, tracked as follow-up work:**
+a gold-fly animation for Grimsby settle/refund outcomes, confirming Sell's
+existing animation reads consistently after this move, a gold+XP fly-up
+when closing the quest result card, and an equivalent for Harvest. Not
+in this patch.
