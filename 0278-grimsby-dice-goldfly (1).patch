@@ -1,0 +1,224 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f635182..17d7a24 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -21902,3 +21902,61 @@ a gold-fly animation for Grimsby settle/refund outcomes, confirming Sell's
+ existing animation reads consistently after this move, a gold+XP fly-up
+ when closing the quest result card, and an equivalent for Harvest. Not
+ in this patch.
++
++### Grimsby's dice games get the gold-fly animation Settle and card-flip already had (patch 0278)
++```discord-update
++Dev Update | Grimsby
++
++- Both of Grimsby's dice games (Call a Number, High or Low) now fly gold toward your total on a win, matching Settle and the card-flip game
++```
++
++Direct request: "anything in Grimsby that gives gold back" should fly a
++gold burst toward the header, matching the flourish Settle and a
++card-flip refund already have. Checked all three of Grimsby's games
++before touching anything, rather than assuming none of them had this --
++Settle (`PeddlerTabModal.tsx`) and every card-flip outcome including a
++partial refund (`PeddlerCardModal.tsx`) already had the full
++burst-and-flight treatment via the shared `measureFlyOffset`/
++`RewardGlowParticle` mechanism. The actual gap was Grimsby's dice cart
++(`PeddlerDiceModal.tsx`) -- both Call a Number and High or Low only ever
++showed their payout as plain "+N gold back" text, no animation at all.
++
++**Added the same treatment to both dice games**, anchored to each game's
++own dice-roll button (there's no card-reveal element to anchor to the
++way `PeddlerCardModal` has, so the button itself stands in as "where the
++moment of reveal happens on screen," same reasoning, different anchor).
++Fires once a roll settles with a real payout, skipped entirely on a bust
++(nothing won, nothing to fly) -- same graceful no-op-if-target-isn't-
++mounted convention every other flight in this game already follows.
++
++**Particle counts scaled to what each game actually has**, not a flat
++number copied from the other two games: Call a Number has three real
++outcomes (bust/partial/jackpot) -- 1 particle for a partial (half back),
++3 for a jackpot (triple), roughly matching `PeddlerCardModal`'s own
++partial-to-jackpot flourish scale. High or Low only ever has two
++outcomes (bust/win, no partial tier exists there) -- a flat 2 particles
++on any win, sitting between the other game's own partial and jackpot
++counts since there's no separate "modest win" tier to size it against.
++
++**Confirmed the other two asks from the same request were already true,
++not new work needed:** individual Sell (Blacksmith) and Scrap
++(Blacksmith) both already have this exact gold/scrap-fly treatment,
++unaffected by patch 0277's move of Sell Junk -- Sell's own animation was
++never touched by that move, just relocated alongside it.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
++sub-builds included) pass clean.
++
++**Re-delivered after the first attempt failed to apply.** The original
++0278 patch was generated against a clone taken before patch 0277 landed
++-- once 0277's own status-doc entry was committed, the line numbers that
++patch's context expected no longer matched, so `git apply` correctly
++refused the whole file rather than silently applying it wrong. Confirmed
++via a fresh clone that the code side (`PeddlerDiceModal.tsx`) genuinely
++never landed either -- `git apply`'s default all-or-nothing behavior
++means a failed hunk anywhere blocks the entire patch, not just the
++conflicting file. Rebuilt from scratch against the actual current
++`main`, not just re-diffed against stale content.
++
++**Still open from the original request:** a gold+XP fly-up when closing
++the quest result card, and an equivalent for Harvest. Not in this patch.
+diff --git a/src/ui/PeddlerDiceModal.tsx b/src/ui/PeddlerDiceModal.tsx
+index b770fd6..7069aa2 100644
+--- a/src/ui/PeddlerDiceModal.tsx
++++ b/src/ui/PeddlerDiceModal.tsx
+@@ -8,6 +8,8 @@ import { GrimsbySprite } from './sprites/GrimsbySprite';
+ import { DiceSprite } from './sprites/DiceSprite';
+ import { DicePickerFace } from './sprites/DicePickerFace';
+ import { GrimsbyBustCard } from './GrimsbyBustCard';
++import { measureFlyOffset } from './flyTarget';
++import { RewardGlowParticle } from './RewardGlowParticle';
+ 
+ const FACES: DiceFace[] = [1, 2, 3, 4, 5, 6];
+ 
+@@ -24,6 +26,23 @@ const OUTCOME_LABEL: Record<'jackpot' | 'partial' | 'bust', string> = {
+ 
+ const HIGH_LOW_LABEL: Record<HighLowCall, string> = { under: 'Under', middle: 'Middle', over: 'Over' };
+ 
++/**
++ * Patch 0278, direct request ("anything in Grimsby that gives gold back"
++ * should fly gold toward the header, same as Settle and a card-flip
++ * refund already do). Both dice games only ever showed their payout as
++ * plain "+N gold back" text before this -- no burst, no flight. Particle
++ * counts loosely mirror PeddlerCardModal's own BURST_PARTICLE_COUNT
++ * scale (more flourish for a better pull), sized to what each game
++ * actually has to work with: Call a Number has three real outcomes
++ * (bust/partial/jackpot), High or Low only ever has two (bust/win), so
++ * there's no equivalent "modest" middle tier to give a middle count to.
++ */
++function diceBurstCount(outcome: 'jackpot' | 'partial' | 'bust'): number {
++  if (outcome === 'jackpot') return 3;
++  if (outcome === 'partial') return 1;
++  return 0; // bust -- nothing won, nothing to fly
++}
++
+ /**
+  * Grimsby's dice cart -- two games sharing one modal shell, switched by
+  * an internal sub-tab (direct request off two separate mockups, folded
+@@ -79,6 +98,19 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+   const hlRollTimer = useRef<number | null>(null);
+   const [hlBustPending, setHlBustPending] = useState(false);
+ 
++  // Patch 0278: gold-fly burst on a payout, one ref/state pair per game
++  // since they roll and resolve fully independently (see this file's own
++  // top comment on why). Anchored to each game's own dice-roll button --
++  // that's where the reveal actually happens on screen, the same "origin
++  // is wherever the moment of reveal is" reasoning PeddlerCardModal's own
++  // burstOriginRef already uses, just a button ref here instead of a
++  // wrapping div since there's no equivalent card-reveal element to
++  // anchor to.
++  const diceButtonRef = useRef<HTMLButtonElement>(null);
++  const [diceBurst, setDiceBurst] = useState<{ x: number; y: number; dx: number; dy: number; delay: number }[] | null>(null);
++  const hlDiceButtonRef = useRef<HTMLButtonElement>(null);
++  const [hlDiceBurst, setHlDiceBurst] = useState<{ x: number; y: number; dx: number; dy: number; delay: number }[] | null>(null);
++
+   useEffect(() => () => {
+     if (rollTimer.current !== null) window.clearTimeout(rollTimer.current);
+     if (hlRollTimer.current !== null) window.clearTimeout(hlRollTimer.current);
+@@ -94,6 +126,38 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+     if (hlResult && !hlRolling && !hlResult.win) setHlBustPending(true);
+   }, [hlResult, hlRolling]);
+ 
++  // Patch 0278: the actual gold-fly trigger, one per game -- fires once
++  // a roll settles with a real payout (guarded by `!diceBurst`/
++  // `!hlDiceBurst` so it only ever fires once per result, same shape
++  // PeddlerCardModal's own reveal-triggered burst effect already uses,
++  // not re-derived from scratch). Skipped entirely on a bust
++  // (diceBurstCount returns 0, nothing to render) since there's nothing
++  // won to fly.
++  useEffect(() => {
++    if (!result || rolling || diceBurst || !diceButtonRef.current) return;
++    if (result.payout <= 0) return;
++    const offset = measureFlyOffset(diceButtonRef.current, 'gold');
++    if (!offset) return; // target not currently mounted -- skip gracefully, same as every other flight in this game
++    const rect = diceButtonRef.current.getBoundingClientRect();
++    const origin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
++    const count = diceBurstCount(result.outcome);
++    if (count === 0) return;
++    setDiceBurst(Array.from({ length: count }, (_, i) => ({ ...origin, dx: offset.dx, dy: offset.dy, delay: i * 90 })));
++  }, [result, rolling, diceBurst]);
++
++  useEffect(() => {
++    if (!hlResult || hlRolling || hlDiceBurst || !hlDiceButtonRef.current) return;
++    if (hlResult.payout <= 0) return;
++    const offset = measureFlyOffset(hlDiceButtonRef.current, 'gold');
++    if (!offset) return;
++    const rect = hlDiceButtonRef.current.getBoundingClientRect();
++    const origin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
++    // Only ever win/bust here (no partial tier for High or Low), so a
++    // landed win always gets the same, single flourish level -- 2
++    // particles, between Call a Number's own partial (1) and jackpot (3).
++    setHlDiceBurst(Array.from({ length: 2 }, (_, i) => ({ ...origin, dx: offset.dx, dy: offset.dy, delay: i * 90 })));
++  }, [hlResult, hlRolling, hlDiceBurst]);
++
+   const wager = Math.floor(Number(wagerText));
+   const validWager = Number.isFinite(wager) && wager > 0;
+   const canAfford = validWager && state.gold >= wager;
+@@ -111,6 +175,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+   const handleRoll = () => {
+     if (!canRoll) return;
+     if (result) engine.dismissGrimsbyDiceResult();
++    setDiceBurst(null);
+     setRolling(true);
+     rollTimer.current = window.setTimeout(() => {
+       engine.rollGrimsbyDice(wager, chosen);
+@@ -122,6 +187,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+   const handleHlRoll = () => {
+     if (!hlCanRoll) return;
+     if (hlResult) engine.dismissGrimsbyHighLowResult();
++    setHlDiceBurst(null);
+     setHlRolling(true);
+     hlRollTimer.current = window.setTimeout(() => {
+       engine.rollGrimsbyHighLow(hlWager, hlCall, hlHighRoller);
+@@ -192,6 +258,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+             ) : (
+               <>
+                 <button
++                  ref={diceButtonRef}
+                   type="button"
+                   className="dice-roll-button"
+                   onClick={handleRoll}
+@@ -241,6 +308,14 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+                 </div>
+               </>
+             )}
++            {diceBurst && diceBurst.map((p, i) => (
++              <RewardGlowParticle
++                key={i}
++                x={p.x} y={p.y} dx={p.dx} dy={p.dy}
++                color="var(--brass)" delay={p.delay}
++                durationMs={700}
++              />
++            ))}
+           </div>
+         ) : (
+           <div className="peddler-modal-body">
+@@ -298,6 +373,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+                 </div>
+ 
+                 <button
++                  ref={hlDiceButtonRef}
+                   type="button"
+                   className="dice-roll-button"
+                   onClick={handleHlRoll}
+@@ -334,6 +410,14 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+                 </div>
+               </>
+             )}
++            {hlDiceBurst && hlDiceBurst.map((p, i) => (
++              <RewardGlowParticle
++                key={i}
++                x={p.x} y={p.y} dx={p.dx} dy={p.dy}
++                color="var(--brass)" delay={p.delay}
++                durationMs={700}
++              />
++            ))}
+           </div>
+         )}
+ 

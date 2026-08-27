@@ -21902,3 +21902,61 @@ a gold-fly animation for Grimsby settle/refund outcomes, confirming Sell's
 existing animation reads consistently after this move, a gold+XP fly-up
 when closing the quest result card, and an equivalent for Harvest. Not
 in this patch.
+
+### Grimsby's dice games get the gold-fly animation Settle and card-flip already had (patch 0278)
+```discord-update
+Dev Update | Grimsby
+
+- Both of Grimsby's dice games (Call a Number, High or Low) now fly gold toward your total on a win, matching Settle and the card-flip game
+```
+
+Direct request: "anything in Grimsby that gives gold back" should fly a
+gold burst toward the header, matching the flourish Settle and a
+card-flip refund already have. Checked all three of Grimsby's games
+before touching anything, rather than assuming none of them had this --
+Settle (`PeddlerTabModal.tsx`) and every card-flip outcome including a
+partial refund (`PeddlerCardModal.tsx`) already had the full
+burst-and-flight treatment via the shared `measureFlyOffset`/
+`RewardGlowParticle` mechanism. The actual gap was Grimsby's dice cart
+(`PeddlerDiceModal.tsx`) -- both Call a Number and High or Low only ever
+showed their payout as plain "+N gold back" text, no animation at all.
+
+**Added the same treatment to both dice games**, anchored to each game's
+own dice-roll button (there's no card-reveal element to anchor to the
+way `PeddlerCardModal` has, so the button itself stands in as "where the
+moment of reveal happens on screen," same reasoning, different anchor).
+Fires once a roll settles with a real payout, skipped entirely on a bust
+(nothing won, nothing to fly) -- same graceful no-op-if-target-isn't-
+mounted convention every other flight in this game already follows.
+
+**Particle counts scaled to what each game actually has**, not a flat
+number copied from the other two games: Call a Number has three real
+outcomes (bust/partial/jackpot) -- 1 particle for a partial (half back),
+3 for a jackpot (triple), roughly matching `PeddlerCardModal`'s own
+partial-to-jackpot flourish scale. High or Low only ever has two
+outcomes (bust/win, no partial tier exists there) -- a flat 2 particles
+on any win, sitting between the other game's own partial and jackpot
+counts since there's no separate "modest win" tier to size it against.
+
+**Confirmed the other two asks from the same request were already true,
+not new work needed:** individual Sell (Blacksmith) and Scrap
+(Blacksmith) both already have this exact gold/scrap-fly treatment,
+unaffected by patch 0277's move of Sell Junk -- Sell's own animation was
+never touched by that move, just relocated alongside it.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
+sub-builds included) pass clean.
+
+**Re-delivered after the first attempt failed to apply.** The original
+0278 patch was generated against a clone taken before patch 0277 landed
+-- once 0277's own status-doc entry was committed, the line numbers that
+patch's context expected no longer matched, so `git apply` correctly
+refused the whole file rather than silently applying it wrong. Confirmed
+via a fresh clone that the code side (`PeddlerDiceModal.tsx`) genuinely
+never landed either -- `git apply`'s default all-or-nothing behavior
+means a failed hunk anywhere blocks the entire patch, not just the
+conflicting file. Rebuilt from scratch against the actual current
+`main`, not just re-diffed against stale content.
+
+**Still open from the original request:** a gold+XP fly-up when closing
+the quest result card, and an equivalent for Harvest. Not in this patch.
