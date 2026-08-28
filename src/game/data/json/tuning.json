@@ -835,19 +835,28 @@
     "id": "pets.baseBonusValueMin",
     "label": "Pets: bonus roll, minimum",
     "category": "pets",
-    "value": 2,
-    "default": 2,
+    "value": 1,
+    "default": 1,
     "min": 0,
-    "description": "Lower bound of a freshly-hatched pet's random baseBonusValue, in the same units as the rolled Modifiers key (flat points for success/loot, % multiplier for gold/xp)."
+    "description": "Lower bound of a freshly-hatched COMMON-rarity pet's random baseBonusValue -- halved from the old flat (rarity-blind) 2 as the new Common baseline; see pets.rarityBonusStepPerTier for how higher rarities build up from here. Same units as the rolled Modifiers key (flat points for success/loot, % multiplier for gold/xp)."
   },
   {
     "id": "pets.baseBonusValueMax",
     "label": "Pets: bonus roll, maximum",
     "category": "pets",
-    "value": 6,
-    "default": 6,
+    "value": 3,
+    "default": 3,
     "min": 0,
-    "description": "Upper bound of a freshly-hatched pet's random baseBonusValue."
+    "description": "Upper bound of a freshly-hatched COMMON-rarity pet's random baseBonusValue -- halved from the old flat 6 as the new Common baseline; see pets.rarityBonusStepPerTier for how higher rarities build up from here."
+  },
+  {
+    "id": "pets.rarityBonusStepPerTier",
+    "label": "Pets: bonus roll, +per rarity tier above Common",
+    "category": "pets",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Flat amount added to BOTH baseBonusValueMin and baseBonusValueMax per rarity step above Common (RARITY_ORDER index), same flat-additive shape as bonusGrowthPerLevel. At the defaults this gives Common 1-3, Uncommon 2-4, Rare 3-5, Epic 4-6, Legendary 5-7 -- Rare lands on the old flat range's original midpoint (4), Legendary now genuinely exceeds the old flat ceiling (6) instead of rarity being purely cosmetic for a pet's actual power."
   },
   {
     "id": "pets.xpPerLevel",
@@ -929,51 +938,51 @@
     "id": "pets.questEggDropChance.easy",
     "label": "Pets: egg drop chance, Easy quests (%)",
     "category": "pets",
-    "value": 0.15,
-    "default": 0.15,
+    "value": 15,
+    "default": 15,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Easy-tier quest drops an ordinary egg into storage (Uncommon rarity). Deliberately very low -- a genuine rare find, not a routine drop."
+    "description": "Flat % chance a successful Easy-tier quest drops an ordinary egg into storage (Uncommon rarity). Was authored as 0.15 (a 0-1 fraction) but rng.chance() reads its argument on a 0-100 scale, same convention every other *Chance/*Percent tuning entry in this file uses -- the actual drop rate was 0.15%, not the intended 15%, a 100x unit bug. Fixed here to the value this description (and every sibling in this table) was always describing."
   },
   {
     "id": "pets.questEggDropChance.normal",
     "label": "Pets: egg drop chance, Normal quests (%)",
     "category": "pets",
-    "value": 0.2,
-    "default": 0.2,
+    "value": 20,
+    "default": 20,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Normal-tier quest drops an ordinary egg (Rare rarity). Deliberately very low."
+    "description": "Flat % chance a successful Normal-tier quest drops an ordinary egg (Rare rarity). Same 100x unit bug as easy/hard/epic/legendary -- was 0.2, is now the intended 20."
   },
   {
     "id": "pets.questEggDropChance.hard",
     "label": "Pets: egg drop chance, Hard quests (%)",
     "category": "pets",
-    "value": 0.3,
-    "default": 0.3,
+    "value": 30,
+    "default": 30,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Hard-tier quest drops an ordinary egg (Epic rarity). Deliberately very low."
+    "description": "Flat % chance a successful Hard-tier quest drops an ordinary egg (Epic rarity). Same 100x unit bug as easy/normal/epic/legendary -- was 0.3, is now the intended 30."
   },
   {
     "id": "pets.questEggDropChance.epic",
     "label": "Pets: egg drop chance, Epic quests (%)",
     "category": "pets",
-    "value": 0.4,
-    "default": 0.4,
+    "value": 40,
+    "default": 40,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Epic-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
+    "description": "Flat % chance a successful Epic-tier quest drops an ordinary egg (Legendary rarity). Same 100x unit bug as easy/normal/hard/legendary -- was 0.4, is now the intended 40."
   },
   {
     "id": "pets.questEggDropChance.legendary",
     "label": "Pets: egg drop chance, Legendary quests (%)",
     "category": "pets",
-    "value": 0.5,
-    "default": 0.5,
+    "value": 50,
+    "default": 50,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
+    "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity). Same 100x unit bug as easy/normal/hard/epic -- was 0.5, is now the intended 50."
   },
   {
     "id": "quest.curioDropChance.easy",

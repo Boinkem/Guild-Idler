@@ -97,23 +97,35 @@ export const PetManager = {
     return PetManager.hatch(state, egg, now);
   },
 
-  /** Rolls a species and a bonus, and adds the resulting Pet to state.pets. */
+  /** Rolls a species, a rarity-scaled bonus, and adds the resulting Pet to state.pets. */
   hatch(state: GameState, egg: EggInstance, now: number): Pet {
     const defId = pickHatchedPetDefId(egg.dedicatedPetId);
     const def = PET_BY_ID[defId];
     const bonusTypes: PetBonusType[] = ['success', 'gold', 'xp', 'loot'];
     const bonusType = bonusTypes[Math.floor(Math.random() * bonusTypes.length)];
-    const min = Tuning.get('pets.baseBonusValueMin');
-    const max = Tuning.get('pets.baseBonusValueMax');
-    const baseBonusValue = Math.round((min + Math.random() * (max - min)) * 10) / 10;
     // PetDef.minRarity (Mimic, patch 0250) floors the DISPLAYED rarity of
     // the hatched Pet only -- the egg's own rarity (already fixed at grant
     // time, drives hatchXpThreshold, unrelated to which species eventually
     // rolls) is left untouched. Never lowers: a Legendary egg that happens
-    // to roll a min-rarity species still hatches Legendary.
+    // to roll a min-rarity species still hatches Legendary. Computed here,
+    // before the bonus roll below, so a Mimic-floored rarity also floors
+    // the bonus range it rolls against -- a min-rarity species shouldn't
+    // roll Common-tier power just because the egg it came from was.
     const rarity = (def?.minRarity && RARITY_ORDER.indexOf(egg.rarity) < RARITY_ORDER.indexOf(def.minRarity))
       ? def.minRarity
       : egg.rarity;
+    // Rarity-scaled bonus roll (patch 0280) -- baseBonusValueMin/Max are
+    // the Common baseline; each rarity step above Common adds a flat
+    // rarityBonusStepPerTier to BOTH ends, same additive shape
+    // bonusGrowthPerLevel already uses per level. Before this, every pet
+    // rolled from the exact same flat range regardless of rarity --
+    // rarity was purely cosmetic for a pet's actual power. See
+    // pets.rarityBonusStepPerTier's own tuning description for the
+    // resulting Common-to-Legendary spread.
+    const rarityStep = RARITY_ORDER.indexOf(rarity) * Tuning.get('pets.rarityBonusStepPerTier');
+    const min = Tuning.get('pets.baseBonusValueMin') + rarityStep;
+    const max = Tuning.get('pets.baseBonusValueMax') + rarityStep;
+    const baseBonusValue = Math.round((min + Math.random() * (max - min)) * 10) / 10;
     const pet: Pet = {
       uid: uid('pet'),
       defId,

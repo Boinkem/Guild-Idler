@@ -25,7 +25,16 @@
       "silenced_bell@6"
     ],
     "eggLoot": [
-      "epic:skelly@6"
+      "rare:skelly@6",
+      "epic:skelly@2"
+    ],
+    "eggLootHeroic": [
+      "epic:skelly@6",
+      "legendary:skelly@2"
+    ],
+    "eggLootLegendary": [
+      "epic:skelly@8",
+      "legendary:skelly@4"
     ]
   },
   {
@@ -40,9 +49,6 @@
       "dragon_helm@4",
       "gravewatchers_band@5",
       "choir_mask@5"
-    ],
-    "eggLoot": [
-      "rare:skeleton_warrior@10"
     ]
   },
   {
@@ -221,7 +227,16 @@
       "desperate_ends_crown@4"
     ],
     "eggLoot": [
-      "rare:imp@10"
+      "uncommon:imp@10",
+      "rare:imp@3"
+    ],
+    "eggLootHeroic": [
+      "rare:imp@10",
+      "epic:imp@3"
+    ],
+    "eggLootLegendary": [
+      "epic:imp@10",
+      "legendary:imp@3"
     ]
   },
   {
@@ -275,10 +290,12 @@
       "broodmothers_crown@4"
     ],
     "eggLootHeroic": [
-      "epic:dragonling@8"
+      "epic:dragonling@8",
+      "legendary:dragonling@2"
     ],
     "eggLootLegendary": [
-      "epic:dragonling@8"
+      "epic:dragonling@6",
+      "legendary:dragonling@4"
     ],
     "vulnerableTo": [
       "frost"
@@ -288,6 +305,10 @@
     ],
     "immuneTo": [
       "fire"
+    ],
+    "eggLoot": [
+      "rare:dragonling@6",
+      "epic:dragonling@2"
     ]
   },
   {
@@ -327,6 +348,18 @@
     "loot": [
       "lichbound_diadem@5",
       "grimward_amulet@4"
+    ],
+    "eggLoot": [
+      "uncommon:skeleton_warrior@10",
+      "rare:skeleton_warrior@3"
+    ],
+    "eggLootHeroic": [
+      "rare:skeleton_warrior@10",
+      "epic:skeleton_warrior@3"
+    ],
+    "eggLootLegendary": [
+      "epic:skeleton_warrior@10",
+      "legendary:skeleton_warrior@3"
     ]
   },
   {

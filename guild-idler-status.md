@@ -22079,3 +22079,128 @@ the applied patch against a fresh clone of the actual current `main`
 Harvest, though patch 0277 relocated Sell/Sell Junk to the Blacksmith,
 confirmed not to affect this patch's own `goldBySource.sellingItems`
 tracking from 0268, which survived that move intact).
+
+### Bug Fix: quest egg drops were 100x rarer than intended; pet rarity now actually matters; Rattles gets a real second source (patch 0280)
+
+```discord-update
+Dev Update | Pets & Eggs
+
+- Fixed: ordinary quest egg drops were rolling at 100x lower than their intended chance -- a unit mismatch, not bad luck. Easy through Legendary quests now actually drop eggs at their real 15-50% rates
+- Changed: a pet's rarity now genuinely affects its power, not just its color -- Common pets roll a lower bonus range, Legendary pets roll noticeably higher than any pet could reach before
+- Changed: Skelly, Rattles (renamed from "Skeleton Warrior"), Imp, and Dragonling can now drop at a range of rarities depending on raid difficulty, instead of always the exact same fixed rarity
+- Changed: Rattles moved to a raid of its own (House of Bones, the Lich himself) -- it and Skelly used to drop from two bosses in the very same raid, so a single lucky clear could net both
+```
+
+Three separate investigations from the same conversation, bundled into
+one patch since none of them touch code the others don't also touch.
+
+**1) The quest egg-drop bug -- confirmed, not bad luck.** A tester
+reported 0 egg drops across 100+ hours of play. Traced the actual roll:
+`rng.chance(percent)` reads its argument on a 0-100 scale
+(`next() * 100 < percent`, same convention as every other
+`*Chance`/`*Percent` tuning entry in the file -- cross-checked against
+`quest.curioDropChance.*`, the literal sibling mechanic rolled right
+next to eggs in the same function, which correctly uses 4-8). But
+`pets.questEggDropChance.*` were authored as `0.15, 0.2, 0.3, 0.4, 0.5`
+-- plain 0-1 fractions, fed straight into `rng.chance()` with nothing
+in between to rescale them. Actual drop rate: 0.15% at Easy, 0.5% at
+Legendary -- 100x lower than the 15-50% the values were clearly meant
+to read as. Found the likely root cause of the mix-up too:
+`peddler.tab.baseSuccessChance` genuinely IS a legitimate 0-1 fraction
+elsewhere in this same file, just consumed by `Math.random() < chance`
+instead -- two real conventions in this codebase, wired into the wrong
+one here. A back-of-envelope check supports this as the actual
+explanation for the tester's report: a modest roster running
+multi-hour quests over 100 hours might complete on the order of
+100-150 successful quests; at the broken ~0.15-0.5% rates the odds of
+seeing literally zero drops across that many attempts land around
+50-70%, versus effectively 0% at the real 15-50% rates.
+
+Fixed: all five `pets.questEggDropChance.*` values corrected from
+`0.15/0.2/0.3/0.4/0.5` to `15/20/30/40/50`. Scope confirmed narrow --
+chain-reward eggs are guaranteed (never chance-gated), raid egg-loot
+percentages were already correctly scaled (6/8/10-style values,
+untouched by this bug), and Grimsby's egg card is a weighted-tier
+pick, not this function at all. Only the ordinary per-quest path was
+ever affected.
+
+**2) Pet rarity now actually affects power, not just color.** Checked
+what rarity actually did for a pet's stats before this patch: nothing
+-- `baseBonusValue` rolled from the same flat 2.0-6.0 range regardless
+of whether the pet was Common or Legendary. Rarity was purely cosmetic
+(which `/pets/{species}/{rarity}/` sprite folder gets used), which
+undercut the raid-tier work in (3) below -- a "higher tier" reward for
+clearing harder content would have been a reskin, not an upgrade.
+
+`pets.baseBonusValueMin`/`Max` halved (2/6 -> 1/3) as the new Common
+baseline, and a new `pets.rarityBonusStepPerTier` (default 1) adds
+that flat amount, per `RARITY_ORDER` index, to both ends per rarity
+step above Common -- same flat-additive shape `pets.
+bonusGrowthPerLevel` already uses per hero level, not a new curve
+style. Resulting spread: Common 1-3, Uncommon 2-4, Rare 3-5 (lands
+exactly on the OLD flat range's original midpoint), Epic 4-6,
+Legendary 5-7 (genuinely exceeds the old flat ceiling of 6, instead of
+capping at it). `PetManager.hatch` reordered so the final rarity
+(after Mimic's own `minRarity` floor, patch 0250) is resolved BEFORE
+the bonus roll, not after -- a Mimic hatched from a low-rarity egg now
+correctly rolls its floored rarity's bonus range too, not the egg's
+original lower one.
+
+**3) Raid eggs: a spread of rarities per difficulty, not one fixed
+rarity.** Before this patch, each of the 4 dedicated-species raid
+drops (Skelly, Skeleton Warrior, Imp, Dragonling) dropped at exactly
+one hardcoded rarity no matter which of the 3 raid difficulties
+(Normal/Heroic/Legendary -- global account unlocks, available on any
+raid once owned) the encounter was cleared at. Reworked to mirror how
+equipment loot already works here: each difficulty now rolls against
+TWO possible rarities for that species, each independently, so a lucky
+Normal-tier clear can occasionally punch above its weight instead of
+every difficulty being flatly identical:
+
+| Species | Normal | Heroic | Legendary |
+|---|---|---|---|
+| Skelly | Rare 6% / Epic 2% | Epic 6% / Legendary 2% | Epic 8% / Legendary 4% |
+| Imp | Uncommon 10% / Rare 3% | Rare 10% / Epic 3% | Epic 10% / Legendary 3% |
+| Dragonling | Rare 6% / Epic 2% | Epic 8% / Legendary 2% | Epic 6% / Legendary 4% |
+| Rattles | Uncommon 10% / Rare 3% | Rare 10% / Epic 3% | Epic 10% / Legendary 3% |
+
+Dragonling previously only dropped at Heroic/Legendary at all (no
+Normal-tier chance whatsoever) -- now drops at all 3 tiers like the
+other three, closing that gap.
+
+Uses the exact data shape the raid loot system already had
+(`eggLoot`/`eggLootHeroic`/`eggLootLegendary`, each a list of
+independently-rolled `rarity:pet@chance` tokens, confirmed via
+`eggLootForDifficulty` that Heroic/Legendary each read ONLY their own
+tiered list, never falling back to also include the base `eggLoot`) --
+no new mechanism, just more entries authored per encounter.
+
+**"Skeleton Warrior" renamed to Rattles, and given a raid of its own.**
+Direct request while reviewing (2): Skelly (Vault-Breaker -- The Choir
+of Bones) and the old "Skeleton Warrior" (Vault-Breaker -- The
+Vault-Keeper) turned out to be two different BOSSES in the SAME raid,
+not two separate sources at all -- one lucky clear could net both eggs
+in a single run. Skeleton Warrior's dedicated drop removed from
+Vault-Breaker entirely and moved to House of Bones (Marrow-Ender, req.
+level 41, additionally gated behind the "Hunt a Lich" quest chain --
+both real, meaningfully later barriers than Vault-Breaker's level 22,
+not just a reshuffle) -- specifically **The Lich**, confirmed as that
+raid's actual final encounter (`encounterIds` order: Marrow Eater ->
+Phylactery -> Lich, matching the raid's own epilogue text). Pet
+renamed from the generic "Skeleton Warrior" to **Rattles** in
+`pets.json` (`name` field only -- `id` stays `skeleton_warrior` for
+stability, since every `dedicatedPetId` token referencing it across
+`eggLoot` entries would otherwise all need updating too for no
+functional gain).
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` both pass
+clean against a fresh clone of current `main` (`SAVE_VERSION` still 54,
+confirming nothing landed upstream since patch 0279 that touches
+pets/eggs). A standalone script confirmed the rarity-bonus math lands
+exactly on the designed Common-1-3-through-Legendary-5-7 spread.
+`eggLootForDifficulty`'s tier-isolation (no base-tier fallback once a
+tier-specific list is set) was read directly rather than assumed,
+since getting that wrong would have silently doubled some difficulty's
+drop pool. No `SAVE_VERSION` bump needed -- every change here is
+content/tuning data and drop-roll math, nothing in `GameState`'s own
+shape changed.
