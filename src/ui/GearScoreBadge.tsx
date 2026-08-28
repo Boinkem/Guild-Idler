@@ -18,6 +18,16 @@ export function GearScoreBadge({
 }: {
   score: number; size?: 'small' | 'normal'; showProgress?: boolean;
 }) {
+  // Patch 0287: gearScoreForInstance's own /6 conversion and +N multiplier
+  // (see its doc comment in data/equipment.ts) mean the raw sum handed in
+  // here is essentially never a whole number -- every caller was passing
+  // it straight through unrounded, so this badge could show something like
+  // "⛨ 29.2123213" instead of a clean "⛨ 29". Rounded once, here, rather
+  // than at each of the three call sites (EquipmentPanel/HeroesPanel x2) --
+  // tier/nextTier/progress below are still computed off the exact raw
+  // `score` so the progress bar and tier-crossing flash stay precise; only
+  // the number actually shown to the player is rounded.
+  const displayScore = Math.round(score);
   const tier = gearScoreTier(score);
   const nextTier = GEAR_SCORE_TIERS[tier.index + 1];
   const prevIndexRef = useRef<number | null>(null);
@@ -44,12 +54,12 @@ export function GearScoreBadge({
       <span
         className={`gear-score-badge ${size === 'small' ? 'gear-score-badge-small' : ''} ${flashing ? 'gear-score-tierup' : ''}`}
         style={{ '--gear-score-color': tier.color } as React.CSSProperties}
-        title={`Gear Score ${score}, ${tier.name}${nextTier ? ` (${nextTier.min - score} to ${nextTier.name})` : ' (max tier)'}`}
+        title={`Gear Score ${displayScore}, ${tier.name}${nextTier ? ` (${Math.ceil(nextTier.min - score)} to ${nextTier.name})` : ' (max tier)'}`}
       >
-        ⛨ {score}
+        ⛨ {displayScore}
       </span>
       {showProgress && (
-        <div className="bar gear-score-bar" title={nextTier ? `${nextTier.min - score} more to ${nextTier.name}` : 'Max tier reached'}>
+        <div className="bar gear-score-bar" title={nextTier ? `${Math.ceil(nextTier.min - score)} more to ${nextTier.name}` : 'Max tier reached'}>
           <span style={{ width: `${progress * 100}%`, background: tier.color }} />
         </div>
       )}

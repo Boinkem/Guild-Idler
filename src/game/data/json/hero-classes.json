@@ -37,7 +37,12 @@
       "Robin",
       "Cade",
       "Briar",
-      "Wren Ashfield"
+      "Wren Ashfield",
+      "Tam",
+      "Sable",
+      "Perrin",
+      "Nash",
+      "Quill Hardwick"
     ],
     "role": "melee",
     "roleFlavors": {
@@ -87,7 +92,12 @@
       "Sir Bramble",
       "Dame Orla",
       "Sir Corwin",
-      "Dame Wren"
+      "Dame Wren",
+      "Sir Aldric",
+      "Dame Isolde",
+      "Sir Rowan",
+      "Dame Elowen",
+      "Sir Gavric"
     ],
     "role": "melee",
     "roleFlavors": {
@@ -137,7 +147,12 @@
       "Durgan",
       "Thora",
       "Balin",
-      "Greta Stoneheel"
+      "Greta Stoneheel",
+      "Borin",
+      "Freya Ironbrow",
+      "Dagna",
+      "Torvik",
+      "Old Hilde"
     ],
     "role": "melee",
     "roleFlavors": {
@@ -187,7 +202,12 @@
       "Livia",
       "Crixus",
       "Vela",
-      "Otho the Swift"
+      "Otho the Swift",
+      "Servius",
+      "Junia",
+      "Titus",
+      "Maro",
+      "Decima the Bold"
     ],
     "role": "ranged",
     "roleFlavors": {
@@ -236,7 +256,12 @@
       "Hiroshi",
       "Ayame",
       "Takeshi",
-      "Rin of the Reed"
+      "Rin of the Reed",
+      "Sora",
+      "Kenji",
+      "Yuki",
+      "Daichi",
+      "Haruto of the Storm"
     ],
     "role": "melee",
     "roleFlavors": {
@@ -288,7 +313,12 @@
       "Hazel",
       "Sybil",
       "Nettle",
-      "Old Agatha"
+      "Old Agatha",
+      "Thistle",
+      "Maren",
+      "Vesper",
+      "Old Prudence",
+      "Iris Nightshade"
     ],
     "role": "caster",
     "roleFlavors": {
@@ -339,7 +369,12 @@
       "Vorak",
       "Xala",
       "Threelk",
-      "Marsh-King Ozz"
+      "Marsh-King Ozz",
+      "Krissa",
+      "Vessk",
+      "Thallow",
+      "Ryzik",
+      "Swamp-Mother Essa"
     ],
     "role": "melee",
     "roleFlavors": {
@@ -389,7 +424,12 @@
       "Cinder",
       "Ravan",
       "Ember",
-      "Lord Vaylen"
+      "Lord Vaylen",
+      "Pyra",
+      "Ashen",
+      "Kindle",
+      "Scorch",
+      "Lady Emberlyn"
     ],
     "role": "caster",
     "roleFlavors": {
@@ -441,7 +481,12 @@
       "Merewyn",
       "Cassius",
       "Elspeth",
-      "Grand Magus Vorn"
+      "Grand Magus Vorn",
+      "Thaddeus",
+      "Rosalind",
+      "Percival",
+      "Wilhelmina",
+      "Archmage Coraline"
     ],
     "role": "caster",
     "roleFlavors": {
@@ -492,7 +537,12 @@
       "Bors",
       "Aldous",
       "Thrain",
-      "Sir Colborne the Immovable"
+      "Sir Colborne the Immovable",
+      "Magnus",
+      "Rurik",
+      "Cormac",
+      "Old Brannoc",
+      "Sir Halden the Unbroken"
     ],
     "role": "melee",
     "roleFlavors": {
@@ -544,7 +594,12 @@
       "Grix",
       "Nab",
       "Fessik",
-      "Warchief Yarrick"
+      "Warchief Yarrick",
+      "Tikk",
+      "Vrass",
+      "Mudge",
+      "Snarl",
+      "Chief Ratchet"
     ],
     "role": "ranged",
     "roleFlavors": {
@@ -596,7 +651,12 @@
       "Karnos",
       "Ux",
       "Old Redhorn",
-      "The Cairnbreaker"
+      "The Cairnbreaker",
+      "Taurek",
+      "Grommash",
+      "Ossa",
+      "Iron-Hoof Bael",
+      "The Hollow-Horn"
     ],
     "role": "melee",
     "roleFlavors": {
@@ -647,7 +707,12 @@
       "Mireille",
       "Halric",
       "Corwin",
-      "Bitten-and-Bound Talia"
+      "Bitten-and-Bound Talia",
+      "Fenwick",
+      "Selwyn",
+      "Mabel",
+      "Old Greymuzzle",
+      "Howling Innes"
     ],
     "role": "melee",
     "roleFlavors": {

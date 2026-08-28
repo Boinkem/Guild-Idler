@@ -53,6 +53,35 @@ export const HeroManager = {
   },
 
   /**
+   * Rerolls a hero's name from their own class's `names` pool (the exact
+   * same array `create()` draws from above) -- direct request, free and
+   * purely cosmetic, same "wearing a skin" shape `GameEngine.setHeroSkin`
+   * already uses for a no-cost cosmetic change. Only 5 names per class
+   * before patch 0287's pool expansion meant two heroes of the same class
+   * collided often (confirmed directly: a level 22 and a level 23 "Sir
+   * Corwin" on the same roster) with no way to fix one short of retiring
+   * it -- this is that escape hatch.
+   *
+   * Excludes the hero's own current name from the pick whenever the pool
+   * has more than one entry, so rerolling always visibly changes
+   * something rather than a 1-in-N chance of silently doing nothing
+   * (mirrors the same "never a no-op" shape curveInvestment/successBaselineLevel
+   * elsewhere in this codebase apply to their own edge cases). Falls back
+   * to the full pool if excluding the current name would leave it empty
+   * (a class with only one authored name, though none currently has
+   * fewer than five). Mutates `hero.name` directly and returns the new
+   * name, same "mutate + return what changed" shape used elsewhere in
+   * this file (e.g. grantXp's level-up return).
+   */
+  rerollName(hero: Hero, rng: Rng): string {
+    const def = HERO_CLASSES[hero.heroClass];
+    const pool = def.names.filter((n) => n !== hero.name);
+    const candidates = pool.length > 0 ? pool : def.names;
+    hero.name = rng.pick(candidates);
+    return hero.name;
+  },
+
+  /**
    * The stats a hero of this class would have at a given level with zero
    * investment -- no equipment, no bonusStats, no spent stat points. Same
    * automatic per-level growth math create()/grantXp already apply, just

@@ -975,9 +975,21 @@ export const QuestManager = {
     const hero = state.heroes.find((h) => h.id === quest.heroId);
     const heroName = hero?.name ?? 'A hero';
 
+    // Tutorial quest: guaranteed success, hidden from the player -- the card
+    // still shows whatever previewSuccess honestly computed at send time
+    // (typically well under 100% for a level-1 hero in starter gear), but
+    // the actual roll below is skipped entirely so this specific quest can
+    // never come back a failure. Hoisted up from the forced-injury check
+    // further down (same tutorialQuestOffer doc comment in quests.ts covers
+    // both overrides) so it can also gate the success roll itself, not just
+    // the injury one. Same short-circuit convention that check already
+    // uses: `rng.chance` is never called for the tutorial quest, so this
+    // doesn't consume a draw off the seeded rng stream either.
+    const isTutorialQuest = quest.offer.id === TUTORIAL_QUEST_ID;
+
     const events = EventManager.roll(quest, rng);
     const finalSuccess = clamp(quest.finalSuccess + events.successDelta, MIN_SUCCESS, MAX_SUCCESS);
-    const success = rng.chance(finalSuccess);
+    const success = isTutorialQuest || rng.chance(finalSuccess);
 
     const cfg = DIFFICULTIES[quest.offer.difficulty];
     let gold = 0;
@@ -1154,7 +1166,9 @@ export const QuestManager = {
     // equipped before this send) -- forcing the LESSON isn't the same as
     // overriding a player's own deliberate choice on the rare chance
     // they've already found their way to a Protection Charm by quest one.
-    const isTutorialQuest = quest.offer.id === TUTORIAL_QUEST_ID;
+    // `isTutorialQuest` itself is now hoisted above (see the guaranteed-
+    // success override just above the finalSuccess roll) -- reused here
+    // unchanged, not recomputed.
     if (!quest.injuryImmune && (isTutorialQuest || rng.chance(injuryRisk))) {
       injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());

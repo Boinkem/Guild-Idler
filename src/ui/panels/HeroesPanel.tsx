@@ -343,15 +343,29 @@ export function HeroesPanel() {
 
             {isOpen && (
               <div className="hero-card-details">
-                <button
-                  className={`chip ${showingOnDesktop ? 'on' : ''}`}
-                  style={{ marginBottom: 8 }}
-                  onClick={() => engine.setFocusedHero(hero.id)}
-                  disabled={showingOnDesktop}
-                  title="Shows this hero on the desktop companion"
-                >
-                  {showingOnDesktop ? '● Showing on desktop' : 'Show on desktop'}
-                </button>
+                <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <button
+                    className={`chip ${showingOnDesktop ? 'on' : ''}`}
+                    onClick={() => engine.setFocusedHero(hero.id)}
+                    disabled={showingOnDesktop}
+                    title="Shows this hero on the desktop companion"
+                  >
+                    {showingOnDesktop ? '● Showing on desktop' : 'Show on desktop'}
+                  </button>
+                  {/* Patch 0287, direct request -- free cosmetic reroll from
+                      the hero's own class name pool, same "no confirmation
+                      needed, nothing lost" shape as the skin picker below.
+                      Exists mainly to fix same-class name collisions (each
+                      class only had 5 names before this patch's pool
+                      expansion) without having to retire a hero over it. */}
+                  <button
+                    className="chip"
+                    onClick={() => engine.rerollHeroName(hero.id)}
+                    title="Rerolls this hero's name from their class's name pool"
+                  >
+                    ⟲ Reroll Name
+                  </button>
+                </div>
                 <p className="card-flavour">{classDef.blurb}</p>
 
                 {hero.titles.length > 0 && (

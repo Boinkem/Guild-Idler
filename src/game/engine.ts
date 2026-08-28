@@ -2689,6 +2689,21 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /**
+   * Rerolls a hero's name from their own class's name pool -- see
+   * HeroManager.rerollName's own doc comment for the full reasoning.
+   * Free, cosmetic, no confirmation needed (unlike retire/prestige,
+   * nothing is lost -- the old name was never anything but flavor text).
+   */
+  rerollHeroName(heroId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const rng = createRng(uid('rerollName'));
+    HeroManager.rerollName(hero, rng);
+    this.notify();
+    void this.saveNow();
+  }
+
   /** Applies an owned skin to one hero. Free once unlocked. */
   setHeroSkin(heroId: string, skinId: string) {
     const hero = this.hero(heroId);

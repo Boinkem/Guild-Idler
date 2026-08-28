@@ -295,7 +295,13 @@ export function GuildPanel() {
       ...describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>),
       ...(def.storagePerLevel ? [<span key="storage">+{formatGold(def.storagePerLevel)} storage per level</span>] : []),
       ...(def.heroSlotsPerLevel ? [<span key="hero-slots" className="gold-text">+1 hero slot per level</span>] : []),
-      ...(def.healTimeReductionMinutesPerLevel ? [<span key="heal-time">-{def.healTimeReductionMinutesPerLevel} min heal time per level</span>] : []),
+      // Patch 0287: "-10 min heal time per level" read as cryptic shorthand
+      // (10 minutes off WHAT, exactly?) -- reworded to say plainly what the
+      // stat actually does, matching the plain-verb phrasing every other
+      // line in this list already uses.
+      ...(def.healTimeReductionMinutesPerLevel
+        ? [<span key="heal-time">Auto heal time decreased by {def.healTimeReductionMinutesPerLevel} minutes per level</span>]
+        : []),
       ...(def.freeHealsPerLevel ? [<span key="free-heals">+{def.freeHealsPerLevel} free Treat per day, per level</span>] : []),
       ...(def.freeRepairsPerLevel ? [<span key="free-repairs">+{def.freeRepairsPerLevel} free Repair per day, per level</span>] : []),
     ];
@@ -343,8 +349,16 @@ export function GuildPanel() {
       </div>
       <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
         <div className="guild-storage-plaque" style={{ margin: 0 }}>
-          <span className="guild-storage-label">Gold Storage</span>
-          <span className="guild-storage-amount">{formatGold(ModifierManager.goldStorage(state))}</span>
+          {/* Patch 0287: was a single bare number ("Gold Storage 10.0k") --
+              read by a player as "the guild starts with 10.0k gold," not as
+              the storage cap it actually is. Now labeled "Cap" explicitly
+              and shown as current/cap, same "X / Y" shape the topbar's own
+              gold readout (MenuWindow.tsx) already uses for the identical
+              number, so this plaque can't be misread as a balance. */}
+          <span className="guild-storage-label">Gold Storage Cap</span>
+          <span className="guild-storage-amount">
+            {formatGold(state.gold)} / {formatGold(ModifierManager.goldStorage(state))}
+          </span>
         </div>
         {/* "Fund the Guild" -- patch 0220, direct request. An open-ended
             gold sink with no catalog and no max level: opens a modal to
