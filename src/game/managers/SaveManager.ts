@@ -201,6 +201,7 @@ export function createInitialState(now = Date.now()): GameState {
     tradeRouteUnlocked: false,
     harvestUnlocked: false,
     pendingHarvestSpotlight: false,
+    pendingBurstQuestSpotlight: false,
     overseerLevel: 0,
     harvestTraderGold: 0,
     harvestTraderGoldAt: now,
@@ -1190,6 +1191,19 @@ const MIGRATIONS: Record<number, Migration> = {
       harvestTraderGoldAt: (save.harvestTraderGoldAt as number | undefined) ?? Date.now(),
     };
   },
+  54: (save) => ({
+    ...save,
+    version: 55,
+    // Patch 0288. New "try a burst quest next" card shimmer -- see
+    // GameState.pendingBurstQuestSpotlight's own comment. Defaults false
+    // for every existing save, same as a brand-new one: this is a one-time
+    // new-player nudge, not something a save that's already well past the
+    // tutorial quest needs retroactively (that quest itself is a one-time
+    // hardcoded offer only ever placed on a fresh guild's starter board --
+    // see tutorialQuestOffer's own comment in quests.ts -- so an existing
+    // save has nothing left for this flag to even fire from).
+    pendingBurstQuestSpotlight: (save.pendingBurstQuestSpotlight as boolean | undefined) ?? false,
+  }),
 };
 
 export const SaveManager = {

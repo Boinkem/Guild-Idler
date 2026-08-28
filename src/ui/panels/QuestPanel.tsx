@@ -3,7 +3,7 @@ import { useEngine, useNow } from '../useEngine';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import {
-  DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID,
+  DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
 } from '../../game/data/quests';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { QuestOffer, Hero, AutoChainWeightBy } from '../../game/types';
@@ -124,10 +124,20 @@ export function QuestRow({
   const thumbSrc = offer.chain
     ? chainIconSrc(offer.chain.chainId, chain?.icon, chain?.banner)
     : questTagIconSrc(offer.tag);
+  // Patch 0288: the same rotating gold-ring shimmer a nav tab gets when it
+  // has something unread (.nav-tab-unread in app.css), reused here as a
+  // "do this next" nudge on specific quest cards -- the scripted tutorial
+  // quest itself (always the only offer on a fresh guild's board, see
+  // tutorialQuestOffer), then every burst-mode offer once
+  // pendingBurstQuestSpotlight arms (see that field's own comment in
+  // types.ts for why it targets the whole burst category rather than one
+  // specific offer instance).
+  const isSpotlighted = offer.id === TUTORIAL_QUEST_ID
+    || (state.pendingBurstQuestSpotlight && QuestManager.isBurstOffer(offer));
 
   return (
     <div
-      className="card raid-card"
+      className={`card raid-card${isSpotlighted ? ' quest-card-spotlight' : ''}`}
       onClick={onOpen}
       role="button"
       tabIndex={0}

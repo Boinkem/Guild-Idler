@@ -1278,6 +1278,41 @@ button:focus-visible, [tabindex]:focus-visible {
   to { --nav-tab-shimmer-angle: 360deg; }
 }
 
+/* Quest card spotlight (patch 0288): the identical rotating gold ring
+   above, reused on a quest CARD instead of a nav tab button -- the
+   scripted tutorial quest, then (once GameState.pendingBurstQuestSpotlight
+   arms) the first burst-mode offer(s) after it, nudging a new player
+   toward what to try next. Shares --nav-tab-shimmer-angle and the
+   nav-tab-shimmer-rotate keyframe with .nav-tab-unread above rather than
+   redeclaring either -- same rotation, same gradient stops, so it reads
+   as the same visual language rather than a second, subtly-different
+   shimmer effect. Only the ring's own thickness and corner radius change,
+   sized for a much bigger card instead of a small square tab button --
+   `border-radius: inherit` picks up whatever `.card`'s own `var(--radius)`
+   already is, rather than hardcoding a value here that could drift out of
+   sync with it. `.card` already sets `position: relative`, so no need to
+   repeat it here. */
+.raid-card.quest-card-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--nav-tab-shimmer-angle),
+    transparent 0%,
+    var(--brass) 10%,
+    #fff8 16%,
+    var(--brass) 22%,
+    transparent 32%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: nav-tab-shimmer-rotate 2.6s linear infinite;
+  pointer-events: none;
+}
+
 /* Sub-tab unread dot (patch 0191): a small pulsing dot in a sub-tab
    button's corner, matching isTabUnread(state, tab, subTab) -- e.g.
    Vendors' Enchanter button, once a notification's targetSubTab points

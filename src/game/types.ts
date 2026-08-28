@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 54;
+export const SAVE_VERSION = 55;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2253,6 +2253,31 @@ export interface GameState {
    *  OnboardingTour that pendingHatcherySpotlight/pendingPeddlerSpotlight
    *  already do. */
   pendingHarvestSpotlight: boolean;
+  /**
+   * Patch 0288. A different kind of spotlight from pendingHarvestSpotlight/
+   * pendingHatcherySpotlight/pendingPeddlerSpotlight just above -- those
+   * three fire a one-shot OnboardingTour arrow pointing at a whole nav
+   * tab; this one instead puts the same rotating gold-ring shimmer the
+   * nav bar already uses for an unread tab (`.nav-tab-unread` in
+   * app.css) directly onto specific quest CARDS on the board, as a
+   * "try this next" nudge rather than a tour step.
+   *
+   * Set true the moment the scripted tutorial quest (see
+   * quests.ts's tutorialQuestOffer) resolves -- see QuestManager.resolve's
+   * own tutorial-completion comment. While true, `QuestRow` (QuestPanel.
+   * tsx) adds the shimmer to every burst-mode offer currently on the
+   * board (via QuestManager.isBurstOffer), not just one specific offer
+   * instance -- a board refresh can replace any given offer before the
+   * player notices it, so the hint targets the whole burst *category*
+   * until acted on, the same way `.nav-tab-unread` highlights a whole tab
+   * rather than one specific notification.
+   *
+   * Cleared the moment a hero is actually sent on any burst-mode offer
+   * (QuestManager.start) -- the hint has done its job once the player's
+   * tried a burst quest at all, whether or not it was the exact instance
+   * that happened to be shimmering.
+   */
+  pendingBurstQuestSpotlight: boolean;
   /**
    * Levels bought in the Overseer upgrade (0-3), Warehouse sub-tab. Each
    * level gives every node a chance to auto-catch a spawn that would

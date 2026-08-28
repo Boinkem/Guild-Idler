@@ -864,6 +864,28 @@ export const QuestManager = {
   },
 
   /**
+   * Whether `offer` is a burst-mode roll. QuestOffer carries no explicit
+   * "which mode generated this" field (generateOffer's own comment: not
+   * worth adding just to remember it) -- so this infers it the same way
+   * three previously-independent inline checks already did: only a
+   * difficulty tier with its own `burstMaxDuration` can ever roll burst at
+   * all (currently just 'easy', see difficulties.json), and a real burst
+   * roll's duration always lands inside that tier's own burst window,
+   * which never overlaps its ordinary or medium ranges (burst tops out at
+   * 8 minutes on Easy; medium starts at 20). Patch 0288 pulled this out
+   * into one shared helper -- resolve()'s own dailyBurstBonus check and
+   * its Grimsby-cooldown `isBurstQuest` check both used to compute this
+   * independently inline, and the new burst-quest-spotlight check
+   * (QuestRow in QuestPanel.tsx, and QuestManager.start below) needed the
+   * identical definition a third time, which is what actually prompted
+   * pulling it out rather than copying it a third time.
+   */
+  isBurstOffer(offer: QuestOffer): boolean {
+    const cfg = DIFFICULTIES[offer.difficulty];
+    return cfg.burstMaxDuration !== undefined && offer.duration <= cfg.burstMaxDuration;
+  },
+
+  /**
    * Direct player feedback: running out of same-level quests between board
    * refreshes (especially likely right after a couple of short burst
    * quests clear) left a hero simply idle with nothing to do. Rather than
@@ -884,6 +906,16 @@ export const QuestManager = {
   ): { quest?: ActiveQuest; error?: string } {
     if (hero.status === 'questing') return { error: `${hero.name} is already out.` };
     if (hero.status === 'fallen') return { error: `${hero.name} is Fallen and needs to be revived first.` };
+
+    // Patch 0288: the "try a burst quest next" card shimmer has done its
+    // job the moment the player actually sends a hero on any burst-mode
+    // offer -- see GameState.pendingBurstQuestSpotlight's own comment.
+    // Cleared here (on send) rather than in resolve() (on completion) so
+    // the shimmer disappears from every other still-shimmering burst
+    // card on the very next render, not just after this one finishes.
+    if (state.pendingBurstQuestSpotlight && QuestManager.isBurstOffer(offer)) {
+      state.pendingBurstQuestSpotlight = false;
+    }
 
     // A hero's equipped consumable slots can end up pointing at an item the
     // guild no longer actually has -- the previous version of this hard-
@@ -1131,12 +1163,13 @@ export const QuestManager = {
     // or outcome was, the first burst of the day always pays out at
     // least this much. Regardless of duration within the burst range --
     // simplest possible rule: first burst-mode quest this hero finishes
-    // each day, full stop. Burst-mode is identified the same way
-    // generateOffer's own useBurst check would have (duration within the
-    // tier's own burst range), rather than adding a field to QuestOffer
-    // just to remember which mode generated it.
+    // each day, full stop. Burst-mode is identified via the shared
+    // QuestManager.isBurstOffer helper -- the same "duration within the
+    // tier's own burst range" signal generateOffer's own useBurst check
+    // rolls against, rather than adding a field to QuestOffer just to
+    // remember which mode generated it.
     let dailyBurstBonus = false;
-    if (hero && cfg.burstMaxDuration !== undefined && quest.offer.duration <= cfg.burstMaxDuration) {
+    if (hero && QuestManager.isBurstOffer(quest.offer)) {
       const today = rerollDay(resolvedAt);
       if (hero.lastBurstBonusDay !== today) {
         hero.lastBurstBonusDay = today;
@@ -1262,13 +1295,29 @@ export const QuestManager = {
     const newlyReadyEggs = PetManager.addHatchXp(state, xp);
     if (newlyReadyEggs.length > 0) state.pendingHatchReadyNotice = true;
 
+    // Patch 0288: the moment the scripted tutorial quest resolves (always
+    // a guaranteed win, see this function's own isTutorialQuest override
+    // above), arm the "try a burst quest next" card shimmer -- see
+    // GameState.pendingBurstQuestSpotlight's own comment for the full
+    // reasoning and how QuestRow/QuestManager.start use it. Set
+    // unconditionally rather than inside the `if (hero)` block above:
+    // this is account-wide UI state, not something that should silently
+    // fail to arm on the one-in-a-million chance `hero` went missing
+    // mid-resolve.
+    if (isTutorialQuest) {
+      state.pendingBurstQuestSpotlight = true;
+    }
+
     // Grimsby's cooldown counter, same account-wide shape -- doesn't care
     // which hero completed the quest, only whether it was burst-mode
-    // (excluded) or not. Identified the same way this function's own
-    // dailyBurstBonus check already does (duration within the tier's own
-    // burst range), computed independently here since dailyBurstBonus's
-    // own check is gated on `hero` existing and this isn't.
-    const isBurstQuest = cfg.burstMaxDuration !== undefined && quest.offer.duration <= cfg.burstMaxDuration;
+    // (excluded) or not. Identified via the shared QuestManager.isBurstOffer
+    // helper (patch 0288 pulled this out of its own standalone inline
+    // check here, and out of dailyBurstBonus's identical inline check
+    // above, into one place -- both used to compute the exact same
+    // "duration within the tier's own burst range" condition
+    // independently, since dailyBurstBonus's own check is gated on
+    // `hero` existing and this one isn't).
+    const isBurstQuest = QuestManager.isBurstOffer(quest.offer);
     const grimsbyWasPresent = PeddlerManager.isPresent(state);
     PeddlerManager.registerQuestCompletion(state, isBurstQuest, resolvedAt);
     const grimsbyArrived = !grimsbyWasPresent && PeddlerManager.isPresent(state);
