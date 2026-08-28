@@ -21,58 +21,6 @@
     "title": "Siegebreaker"
   },
   {
-    "id": "bonewrought_vault",
-    "name": "The Bonewrought Vault",
-    "description": "Something has been raising the dead again, not one or two this time but by the vaultful, row after row of them. Whatever is sealed inside is worth enough that a company of risen guards still defends it centuries later, without pay, without rest, and without ever questioning the order. This is not a job for one hero. Bring the whole guild.",
-    "epilogue": "The vault held, in the end, for whoever the guild turned out to be. What was raised here has gone quiet again, for now. Whatever tore open a road between the dead and the living to make this happen is still out there somewhere, and none of this slowed it down.",
-    "reqLevel": 22,
-    "encounterIds": [
-      "bonewrought_outer_wardens",
-      "bonewrought_choir_of_bones",
-      "bonewrought_vault_keeper"
-    ],
-    "successModifier": 0,
-    "icon": {
-      "path": "raids-icons/Bonerwought.png"
-    },
-    "title": "Vault-Breaker",
-    "requiredRoles": {
-      "caster": 1
-    },
-    "banner": {
-      "path": "raids/bonewrought_vault.png"
-    }
-  },
-  {
-    "id": "requiem_last_god",
-    "name": "Requiem for the Last God",
-    "description": "The road the archive described has no fixed heading and never did. It opens for whoever means to walk it in a dying pilgrim's place, and closes the moment they stop meaning it. It has opened for this guild. Every guild that made this same walk before left something behind to prove it: banners, hulls, and ritual circles abandoned mid-rite, scattered across a shore that should not exist on any chart. Whatever waits at the end of that walk has not been walked to in a very long time, and does not entirely remember why anyone stopped.",
-    "epilogue": "There is a difference between winning and being the one left standing when it is over. What the guild did at the end of that road was not a fight in the way every other fight has been. It was the last mile, walked the hard way, for something too far gone to make it easy. The guild is still deciding what to call that.",
-    "reqLevel": 55,
-    "encounterIds": [
-      "last_god_field_of_failed_guilds",
-      "last_god_silence_where_prayer_used_to_work",
-      "last_god_what_is_left_of_it"
-    ],
-    "requiresChainId": "last_pilgrimage",
-    "successModifier": 0,
-    "banner": {
-      "path": "raids/requiem_last_god.png",
-      "focusX": 44.4,
-      "focusY": 62,
-      "scale": 200
-    },
-    "icon": {
-      "path": "raids-icons/ReqLast.png"
-    },
-    "title": "Last Mile Walker",
-    "requiredRoles": {
-      "melee": 2,
-      "ranged": 2,
-      "caster": 2
-    }
-  },
-  {
     "id": "frozen_wyrmkeep",
     "name": "The Frozen Wyrmkeep",
     "description": "Something has been nesting in the high passes for longer than anyone noticed, long enough to stop being one dragon and start being a brood. The watch that used to look for avalanches now looks for wings, and lately there have been considerably more wings than before.",
@@ -94,6 +42,29 @@
     },
     "banner": {
       "path": "raids/frozen_wyrmkeep.png"
+    }
+  },
+  {
+    "id": "bonewrought_vault",
+    "name": "The Bonewrought Vault",
+    "description": "Something has been raising the dead again, not one or two this time but by the vaultful, row after row of them. Whatever is sealed inside is worth enough that a company of risen guards still defends it centuries later, without pay, without rest, and without ever questioning the order. This is not a job for one hero. Bring the whole guild.",
+    "epilogue": "The vault held, in the end, for whoever the guild turned out to be. What was raised here has gone quiet again, for now. Whatever tore open a road between the dead and the living to make this happen is still out there somewhere, and none of this slowed it down.",
+    "reqLevel": 22,
+    "encounterIds": [
+      "bonewrought_outer_wardens",
+      "bonewrought_choir_of_bones",
+      "bonewrought_vault_keeper"
+    ],
+    "successModifier": 0,
+    "icon": {
+      "path": "raids-icons/Bonerwought.png"
+    },
+    "title": "Vault-Breaker",
+    "requiredRoles": {
+      "caster": 1
+    },
+    "banner": {
+      "path": "raids/bonewrought_vault.png"
     }
   },
   {
@@ -194,6 +165,35 @@
     },
     "banner": {
       "path": "raids/silence_the_loom.png"
+    }
+  },
+  {
+    "id": "requiem_last_god",
+    "name": "Requiem for the Last God",
+    "description": "The road the archive described has no fixed heading and never did. It opens for whoever means to walk it in a dying pilgrim's place, and closes the moment they stop meaning it. It has opened for this guild. Every guild that made this same walk before left something behind to prove it: banners, hulls, and ritual circles abandoned mid-rite, scattered across a shore that should not exist on any chart. Whatever waits at the end of that walk has not been walked to in a very long time, and does not entirely remember why anyone stopped.",
+    "epilogue": "There is a difference between winning and being the one left standing when it is over. What the guild did at the end of that road was not a fight in the way every other fight has been. It was the last mile, walked the hard way, for something too far gone to make it easy. The guild is still deciding what to call that.",
+    "reqLevel": 55,
+    "encounterIds": [
+      "last_god_field_of_failed_guilds",
+      "last_god_silence_where_prayer_used_to_work",
+      "last_god_what_is_left_of_it"
+    ],
+    "requiresChainId": "last_pilgrimage",
+    "successModifier": 0,
+    "banner": {
+      "path": "raids/requiem_last_god.png",
+      "focusX": 44.4,
+      "focusY": 62,
+      "scale": 200
+    },
+    "icon": {
+      "path": "raids-icons/ReqLast.png"
+    },
+    "title": "Last Mile Walker",
+    "requiredRoles": {
+      "melee": 2,
+      "ranged": 2,
+      "caster": 2
     }
   }
 ]

@@ -745,6 +745,40 @@ export const QuestManager = {
    * offer.reqLevel specifically) is kept alongside it rather than folded
    * away entirely -- same shape as before, it's just naturally tiny now
    * that the two levels it compares are always close together.
+   *
+   * `chainSuccessReqLevel` (patch 0286): the "reqLevel always rolls near
+   * hero.level" guarantee two paragraphs up is true for an ordinary board
+   * offer (rollReqLevel) and for a chain replay (chainReplayOffer already
+   * bakes `Math.max(chain.reqLevel, heroLevel)` into its own reqLevel at
+   * generation, per patch 0259) -- but NOT for a chain's first-clear
+   * offer (QuestManager.chainOffer). That one still stores the chain's
+   * permanently fixed `chain.reqLevel`, set once whenever the chain was
+   * originally discovered, and never re-rolled while the stages sit on
+   * the board waiting to be picked up. A hero who's leveled up well past
+   * that fixed value before actually working through the chain hits
+   * exactly the unbounded levelGapBonus climb patch 0259 fixed for raids
+   * and replays -- reported directly: a level 22 hero's story-chain
+   * stages sitting at a flat 95% (MAX_SUCCESS) regardless of difficulty,
+   * while ordinary board contracts at the same level/gear showed the
+   * expected 60-85% spread. Confirmed by reading the chain data: these
+   * stages' `chain.reqLevel` was still down in single digits.
+   *
+   * Fixed the same way patch 0259 fixed it, applied here instead of at
+   * chainOffer's own generation site so it also covers a chain stage's
+   * live UI preview (previewSuccess is called fresh every render, not
+   * just at commit) without needing offer.reqLevel itself touched --
+   * that field still has to stay the chain's real authored reqLevel
+   * everywhere else (DiscoveredQuestsPanel's own `hero.level >=
+   * offer.reqLevel` eligibility filter, and the loot itemLevel roll in
+   * `resolve()`), so mutating it here instead of re-baselining locally
+   * would have gated out lower-level heroes from stages they should
+   * still see, and inflated chain loot rarity as an unintended side
+   * effect. Only ever raised, never lowered -- an at-or-under-level hero
+   * still faces the chain's originally-authored difficulty, unchanged.
+   * Applies uniformly to every `offer.chain` (first-clear and replay
+   * alike): for a replay, offer.reqLevel is already at-or-above
+   * hero.level by the time this runs, so the `Math.max` here is a no-op;
+   * for a first-clear stage, it's the actual fix.
    */
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
     const loadout = InventoryManager.loadoutEffects(state, consumables);
@@ -757,13 +791,20 @@ export const QuestManager = {
     // is actually about.
     const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
 
+    // Chain stages re-baseline against the hero's current level the same
+    // way raids and chain replays already do (patch 0259) -- see this
+    // function's own `chainSuccessReqLevel` comment above for the full
+    // reasoning. Every other offer keeps using its own reqLevel exactly
+    // as before.
+    const successReqLevel = offer.chain ? Math.max(offer.reqLevel, hero.level) : offer.reqLevel;
+
     // Split the hero's stat-derived success into the automatic half (zero
     // gear/points spent, same shape baselineStats already computes for a
     // quest's own reqLevel -- just evaluated at the hero's OWN level too)
     // and the invested half (gear + spent stat points on top of that).
     // Only the invested half is curved below.
     const autoGrowthStats = HeroManager.baselineStats(hero.heroClass, hero.level);
-    const baselineStats = HeroManager.baselineStats(hero.heroClass, offer.reqLevel);
+    const baselineStats = HeroManager.baselineStats(hero.heroClass, successReqLevel);
     const autoGrowthSuccess = HeroManager.statMods(autoGrowthStats).success ?? 0;
     const baselineSuccess = HeroManager.statMods(baselineStats).success ?? 0;
     const totalStatSuccess = HeroManager.statMods(HeroManager.totalStats(hero)).success ?? 0;
@@ -783,7 +824,7 @@ export const QuestManager = {
     const investmentRaw = investedStatSuccess + (investedMods.success ?? 0) + elemental;
     const investmentCurved = QuestManager.curveInvestment(investmentRaw);
 
-    const levelGapBonus = (hero.level - offer.reqLevel) * Tuning.get('quest_reqlevel.levelGapSuccessCoefficient');
+    const levelGapBonus = (hero.level - successReqLevel) * Tuning.get('quest_reqlevel.levelGapSuccessCoefficient');
 
     return clamp(
       offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus,
