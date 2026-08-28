@@ -1,0 +1,158 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index fc81517..89ec1ba 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -567,7 +567,11 @@ a colored avatar circle on the new roster/companion "Status bars" views
+ 
+ **Equipment** — rarities, set bonuses, repair/refine, shop + black market
+ rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
+-longer appear in either shop's stock).
++longer appear in either shop's stock). Sell price now scales with an
++item's rolled level (`rolledItemLevel`), not just its bone-stock
++template value -- see "Bug Fix: gear sell price ignored level scaling
++entirely" below. Workshop `upgradeCost` has the identical unscaled-value
++gap, noted but not yet fixed -- see Cleanup items.
+ 
+ **Guild facilities & Permanent Upgrades** — vendor-style upgrade trees,
+ guild-wide bonuses, gold storage. 8 facilities total, the newest being
+@@ -3930,6 +3934,15 @@ correctly-named, correctly-stacked variant via the existing custom-mod
+ crafting pipeline. `npx tsc --noEmit` and `vite build` both pass clean.
+ 
+ ### Cleanup items
++- **Workshop `upgradeCost` still prices off the flat, unscaled
++  `def.value`** -- same shape of bug `sellValue` had before patch 0281,
++  found while fixing that one but deliberately left alone since the
++  original ask was scoped to sell value specifically. A high-level
++  procedural or dedicated-scaled item's Workshop refine cost is
++  currently underpriced relative to its real rolled power, mirroring
++  how sell price used to overpay-low before this patch. Same fix shape
++  should apply: route through `sellReferenceValue` (or an equivalent)
++  instead of bare `def.value` whenever `rolledItemLevel` is set.
+ - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
+   encounter with loot now has all three difficulty tiers.
+ - ~~A hidden achievement for clearing the Last God raid~~ -- done
+@@ -22204,3 +22217,70 @@ since getting that wrong would have silently doubled some difficulty's
+ drop pool. No `SAVE_VERSION` bump needed -- every change here is
+ content/tuning data and drop-roll math, nothing in `GameState`'s own
+ shape changed.
++
++### Bug Fix: gear sell price ignored level scaling entirely (patch 0281)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed: selling a piece of gear now actually pays out for how strong it rolled, not just its bone-stock template price
++- A high-level or Heroic/Legendary-tier drop that used to sell for pocket change now sells for something in line with what it'd cost to replace
++```
++
++Direct request: a full review of equipment sell values, prompted by
++gear now scaling with level (patch 0214's procedural rolls, patch
++0258's dedicated chain-replay/raid rewards) while sell price stayed
++completely blind to that. Audited every item in `equipment.json` (141
++total): 34 are blank procedural templates and 39 more are hand-authored
++chain/raid-exclusive rewards eligible for `scaleDedicatedItem`'s level
++scaling -- 73 items, over half the roster, whose real power can swing
++far above their authored `value` once dropped high-level, and every one
++of them was selling off that same low, stale number regardless.
++
++**Root cause, confirmed in `EquipmentManager.sellValue`:** it priced
++strictly off `def.value` -- the template's own low, unscaled authored
++number (a `wooden_sword`'s `value` is 2 gold) -- with no reference to
++`item.rolledItemLevel` at all. `shopPrice` got the equivalent fix back
++in patch 0241 for procedural templates specifically; sell price was
++never brought in line, and dedicated scaled items (patch 0258) never
++got it on either side.
++
++**Fix:** new `EquipmentManager.sellReferenceValue(item, def)` computes
++the "what's this worth new" baseline sellValue prices against --
++`shopPrice`'s own `shop.baseValuePerLevel * RARITY_PRICE_MULT[rarity] *
++(1 + rolledItemLevel * shop.valueGrowthPerLevelPercent / 100)` curve
++whenever `item.rolledItemLevel` is set, falling back to the item's
++plain authored `def.value` when it isn't (an ordinary fixed-power item,
++or a first-clear chain/raid grant with no roll info -- those were never
++stale to begin with). Deliberately keyed on `rolledItemLevel` being
++present rather than on `isProceduralTemplate` the way `shopPrice` is --
++gear scales via two separate mechanisms now, and a dedicated raid Set
++piece scaled up by `scaleDedicatedItem` deserves the same treatment as
++a procedural roll at the same level, not a worse deal for having come
++from the other path. `sellValue` itself is otherwise unchanged --
++condition (0.4-1.0 off current/max durability) and the existing
++`+plus` bonus (`1 + plus * 0.25`) still apply on top of the corrected
++reference, and the overall sell-vs-shop-price ratio (~30%) stays the
++same as before, it's just now anchored to the item's real worth instead
++of its template's.
++
++Every call site (`ShopManager.sell`, `ShopManager.sellBelowRarity`'s
++preview and batch, the Blacksmith's per-item Sell button/confirm text)
++already routes through `EquipmentManager.sellValue` with no duplicated
++math anywhere in the UI layer, so this one function change is the
++entire fix -- nothing else needed touching.
++
++**Noted but deliberately not touched in this patch:** `upgradeCost` has
++the identical shape of bug (`def.value * 0.6 * pow(1.65, plus)`, same
++blindness to `rolledItemLevel`), meaning Workshop upgrade cost on a
++high-level scaled item is currently underpriced the same way sell price
++was overpriced-low. Out of scope here since the ask was specifically
++about sell value -- flagged in Cleanup items below as a real follow-up,
++not forgotten.
++
++**Verified:** `npx tsc --noEmit` passes clean against a fresh clone of
++current `main`. Confirmed via a standalone script that a level-50
++procedural Legendary template (e.g. a rolled Legendary sword) now sells
++for roughly what its shop-price curve says it should be worth at that
++level, instead of the few gold its unscaled template `value` used to
++yield. No `SAVE_VERSION` bump needed -- pricing math only, no change to
++`GameState`'s shape.
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index 00b740d..a20f39d 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -142,11 +142,48 @@ export const EquipmentManager = {
+     return Math.ceil(base * discount);
+   },
+ 
++  /**
++   * The "what's this actually worth new" reference sellValue prices
++   * against. Mirrors shopPrice's own level+rarity curve (patch 0241),
++   * but keyed on `rolledItemLevel` being present rather than on
++   * `isProceduralTemplate` -- gear now scales with level via TWO
++   * mechanisms (rollProceduralItem's blank templates, patch 0214, AND
++   * scaleDedicatedItem's chain-replay/raid dedicated rewards, patch
++   * 0258), and a player cashing an item in shouldn't get a worse deal
++   * just because their drop happened to come from the dedicated path
++   * instead of the procedural one. def.value (a template's own low,
++   * unscaled authored number -- a wooden_sword's `value` is 2 gold no
++   * matter what it actually rolls at) stays the reference for anything
++   * with no `rolledItemLevel` at all: an ordinary hand-authored
++   * fixed-power item, or a first-clear chain/raid grant with no roll
++   * info, where the authored value already reflects the item's real
++   * power and was never stale in the first place.
++   */
++  sellReferenceValue(item: EquipmentItem, def: EquipmentDef): number {
++    if (item.rolledItemLevel != null) {
++      return Tuning.get('shop.baseValuePerLevel') * RARITY_PRICE_MULT[def.rarity]
++        * (1 + item.rolledItemLevel * Tuning.get('shop.valueGrowthPerLevelPercent') / 100);
++    }
++    return def.value;
++  },
++
++  /**
++   * Patch 0281: previously priced every item off the flat, unscaled
++   * `def.value` regardless of how it actually rolled -- meaning a
++   * level-50 procedural Legendary or a Legendary-tier raid replay drop
++   * sold for the same pocket change as its bone-stock template, since
++   * `def.value` on a blank template is anchored to its low base reqLevel
++   * and a dedicated item's authored `value` never moved even after
++   * scaleDedicatedItem scaled its actual stats up. Now routes through
++   * sellReferenceValue so a scaled item's sell price tracks the level it
++   * actually rolled at, same as its shop price already has since 0241.
++   */
+   sellValue(item: EquipmentItem): number {
+     const def = EQUIPMENT_BY_ID[item.defId];
+     if (!def) return 0;
+     const condition = 0.4 + 0.6 * (item.durability / EquipmentManager.maxDurability(item));
+-    return Math.max(1, Math.floor(def.value * 0.35 * condition * (1 + item.plus * 0.25)));
++    const reference = EquipmentManager.sellReferenceValue(item, def);
++    return Math.max(1, Math.floor(reference * 0.35 * condition * (1 + item.plus * 0.25)));
+   },
+ 
+   /**

@@ -142,11 +142,48 @@ export const EquipmentManager = {
     return Math.ceil(base * discount);
   },
 
+  /**
+   * The "what's this actually worth new" reference sellValue prices
+   * against. Mirrors shopPrice's own level+rarity curve (patch 0241),
+   * but keyed on `rolledItemLevel` being present rather than on
+   * `isProceduralTemplate` -- gear now scales with level via TWO
+   * mechanisms (rollProceduralItem's blank templates, patch 0214, AND
+   * scaleDedicatedItem's chain-replay/raid dedicated rewards, patch
+   * 0258), and a player cashing an item in shouldn't get a worse deal
+   * just because their drop happened to come from the dedicated path
+   * instead of the procedural one. def.value (a template's own low,
+   * unscaled authored number -- a wooden_sword's `value` is 2 gold no
+   * matter what it actually rolls at) stays the reference for anything
+   * with no `rolledItemLevel` at all: an ordinary hand-authored
+   * fixed-power item, or a first-clear chain/raid grant with no roll
+   * info, where the authored value already reflects the item's real
+   * power and was never stale in the first place.
+   */
+  sellReferenceValue(item: EquipmentItem, def: EquipmentDef): number {
+    if (item.rolledItemLevel != null) {
+      return Tuning.get('shop.baseValuePerLevel') * RARITY_PRICE_MULT[def.rarity]
+        * (1 + item.rolledItemLevel * Tuning.get('shop.valueGrowthPerLevelPercent') / 100);
+    }
+    return def.value;
+  },
+
+  /**
+   * Patch 0281: previously priced every item off the flat, unscaled
+   * `def.value` regardless of how it actually rolled -- meaning a
+   * level-50 procedural Legendary or a Legendary-tier raid replay drop
+   * sold for the same pocket change as its bone-stock template, since
+   * `def.value` on a blank template is anchored to its low base reqLevel
+   * and a dedicated item's authored `value` never moved even after
+   * scaleDedicatedItem scaled its actual stats up. Now routes through
+   * sellReferenceValue so a scaled item's sell price tracks the level it
+   * actually rolled at, same as its shop price already has since 0241.
+   */
   sellValue(item: EquipmentItem): number {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return 0;
     const condition = 0.4 + 0.6 * (item.durability / EquipmentManager.maxDurability(item));
-    return Math.max(1, Math.floor(def.value * 0.35 * condition * (1 + item.plus * 0.25)));
+    const reference = EquipmentManager.sellReferenceValue(item, def);
+    return Math.max(1, Math.floor(reference * 0.35 * condition * (1 + item.plus * 0.25)));
   },
 
   /**
