@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 53;
+export const SAVE_VERSION = 54;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2258,22 +2258,25 @@ export interface GameState {
    */
   overseerLevel: number;
   /**
-   * Continuously-decaying accumulator behind Trade Route's sell-price
-   * taper (HarvestManager.sell/decayedSellRate) -- an exponentially
-   * weighted running total of recent gold earned from selling materials,
-   * NOT a fixed-window counter that resets on the hour. Every sale adds
-   * its own gold value to whatever this has decayed to by that moment,
-   * then re-stamps `harvestSellDecayAt` to now; every read first decays
-   * the stored value by elapsed time (`Math.exp(-elapsed / decayConstant)`,
-   * `harvest.sellDecayTimeConstantMs`) before comparing it against the
-   * live quest-gold/hr target. This is what lets sustained selling taper
-   * the price down while a small or occasional sale stays at full price
-   * -- see HarvestManager.sellGoldPerHourTarget's own comment for what
-   * the target itself is anchored to. Zero and "now" respectively are
-   * the correct fresh-save defaults (no prior selling to weigh in).
+   * The Trade Route trader's current spendable gold reserve, and when it
+   * was last computed -- HarvestManager.currentTraderGold reads both to
+   * derive the live value (linear regen, `harvest.traderRegenTimeMs` to
+   * fill from empty to a full reserve of sellGoldPerHourTarget), sell()
+   * is what actually spends it down and re-stamps the timestamp. This
+   * replaced patch 0268's exponential-decay "recent selling" accumulator
+   * (`harvestSellDecayValue`/`harvestSellDecayAt`, now removed) -- that
+   * approach taxed a percentage off whatever a sale was already worth,
+   * which scaled up right along with tool/hero investment instead of
+   * actually capping it; a literal spending limit on the trader's own
+   * gold caps at the SAME target regardless of how much material a
+   * sale would otherwise be worth. Zero and "now" are the correct
+   * fresh-save defaults; HarvestManager.unlockTradeRoute primes this to
+   * a full reserve at the moment Trade Route is actually opened, so a
+   * player's first sale is never blocked by an empty reserve they never
+   * had a chance to fill.
    */
-  harvestSellDecayValue: number;
-  harvestSellDecayAt: number;
+  harvestTraderGold: number;
+  harvestTraderGoldAt: number;
 
   /* --------------------------- Elemental infusion --------------------------- */
   /**

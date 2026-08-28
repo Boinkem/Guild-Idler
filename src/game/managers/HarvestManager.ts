@@ -8,6 +8,7 @@ import {
 import { Tuning } from '../data/tuning';
 import { DIFFICULTIES } from '../data/quests';
 import { bestUnlockedTier, expectedRatePerHour } from '../data/balance';
+import { formatDuration } from '../util';
 
 export const HarvestManager = {
   idleHeroCount(state: GameState): number {
@@ -117,13 +118,16 @@ export const HarvestManager = {
   },
 
   /**
-   * Target gold/hr Trade Route selling tapers toward -- exactly what a
+   * Target gold/hr Trade Route selling is capped toward -- exactly what a
    * hero currently earns at the guild's own best-unlocked quest tier
    * (same expectedRatePerHour/bestUnlockedTier formula balance.ts's
    * fastQuestCapsPerHour already reuses for the burst-quest cap), not a
    * separate hand-picked number. Self-corrects automatically if
    * DIFFICULTIES or the guild's own level ever changes -- no curve here
-   * to re-tune by hand if quest rewards are rebalanced again later.
+   * to re-tune by hand if quest rewards are rebalanced again later. This
+   * is also the trader's maximum gold reserve (see currentTraderGold) --
+   * "the trader has up to about an hour's worth of quest-tier gold on
+   * hand" is the plain-language version of the whole mechanic.
    */
   sellGoldPerHourTarget(state: GameState): number {
     const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
@@ -133,75 +137,88 @@ export const HarvestManager = {
   },
 
   /**
-   * Continuously-decaying estimate of gold/hr currently coming out of
-   * Trade Route sales -- an exponential decay toward 0 with a
-   * `harvest.sellDecayTimeConstantMs` time constant (1 hour by default),
-   * deliberately NOT a fixed rolling window that resets on the hour. A
-   * sale made right now weighs fully; the same sale an hour ago has
-   * decayed to ~37% of its original weight, two hours ago ~14%, and so
-   * on -- smooth in both directions, with no "wait for the reset" cliff
-   * to game. Read-only; sell() below is what actually advances
-   * `harvestSellDecayAt` and folds a new sale's value in.
+   * Patch 0268 shipped a percentage taper (full/half/15%-floor price
+   * depending on recent selling) anchored to this same target. Turned out
+   * a fixed floor can never actually cap total earnings near the target
+   * once raw production scales with tool/hero investment -- 15% of a
+   * small number lands near the target, but 15% of a much larger number
+   * (heavily-tooled, multi-node farming) is still a much larger number.
+   * There's no single percentage that works at every investment level.
+   * Replaced here with a genuine hard cap instead: the trader has a
+   * gold reserve, capped at sellGoldPerHourTarget, that regenerates
+   * continuously (linearly, filling from empty to full over
+   * harvest.traderRegenTimeMs) and is spent down gold-for-gold by every
+   * sale. A sale that would exceed the remaining reserve is blocked
+   * outright rather than paid out at a reduced rate -- see sell() below.
+   * This holds at ANY production rate, not just the ones it happened to
+   * be tuned against, because it isn't a percentage of raw output at
+   * all; it's a literal spending limit independent of how much material
+   * a sale would have consumed.
    */
-  decayedSellRate(state: GameState, now: number): number {
-    const elapsed = Math.max(0, now - state.harvestSellDecayAt);
-    const decayMs = Tuning.get('harvest.sellDecayTimeConstantMs');
-    return state.harvestSellDecayValue * Math.exp(-elapsed / decayMs);
+  currentTraderGold(state: GameState, now: number): number {
+    const max = HarvestManager.sellGoldPerHourTarget(state);
+    const elapsed = Math.max(0, now - state.harvestTraderGoldAt);
+    const regenPerMs = max / Tuning.get('harvest.traderRegenTimeMs');
+    return Math.min(max, state.harvestTraderGold + elapsed * regenPerMs);
   },
 
   /**
-   * Sell-price multiplier for the NEXT sale, given how hot the decayed
-   * sell rate above already is relative to sellGoldPerHourTarget: full
-   * price below half the target, half price from there up to 85% of it,
-   * and a steep (but never zero -- an occasional big dump still feels
-   * like *something*) cut beyond that. Exposed separately from sell()
-   * itself so the UI can show a player what they're about to get before
-   * they commit to a sale, not just after.
+   * Milliseconds until the trader's reserve regenerates enough to afford
+   * `cost` gold worth of selling, given its current level. 0 if it can
+   * already afford it right now. Shared by sell()'s own "check back
+   * later" error message and HarvestPanel.tsx's live reserve display, so
+   * the two can never drift out of sync with each other.
    */
-  sellPriceMultiplier(state: GameState, now: number): number {
-    const target = HarvestManager.sellGoldPerHourTarget(state);
-    const decayed = HarvestManager.decayedSellRate(state, now);
-    const midThreshold = target * Tuning.get('harvest.sellTaperStartFraction');
-    const heavyThreshold = target * Tuning.get('harvest.sellTaperHeavyFraction');
-    if (decayed <= midThreshold) return 1;
-    if (decayed <= heavyThreshold) return Tuning.get('harvest.sellTaperMidMultiplier');
-    return Tuning.get('harvest.sellTaperHeavyMultiplier');
+  timeUntilAffordable(state: GameState, now: number, cost: number): number {
+    const reserve = HarvestManager.currentTraderGold(state, now);
+    if (cost <= reserve) return 0;
+    const max = HarvestManager.sellGoldPerHourTarget(state);
+    const regenPerMs = max / Tuning.get('harvest.traderRegenTimeMs');
+    return (cost - reserve) / regenPerMs;
   },
 
   /**
-   * Sells `amount` of one material at Trade Route. The multiplier is
-   * evaluated ONCE, off the pre-sale decayed rate, and applied to the
-   * whole batch -- a known, accepted simplification (same shape as the
-   * burst-quest cap applying per-quest rather than continuously mid-
-   * quest): a single very large sale gets priced at whatever tier it
-   * started in rather than tapering partway through it. Selling in
-   * smaller batches lets the taper track more precisely, which is a
-   * reasonable, visible incentive rather than a hidden trap -- the UI's
-   * own price-tier label (HarvestPanel.tsx) reflects the same
-   * pre-sale multiplier this uses, so nothing here surprises a player
-   * who checked it first.
+   * Sells `amount` of one material at Trade Route -- flat
+   * harvest.sellPricePerUnit (0.1 by default; materials are cheap
+   * individually on purpose, selling excess is meant to be a minor
+   * convenience next to actually questing, not a competing income
+   * source). Blocks the ENTIRE sale, materials untouched, if the
+   * trader's current reserve can't cover it -- no partial fill, no
+   * discounted fallback price, so a player always knows exactly what a
+   * sale is worth going in rather than discovering it was quietly
+   * devalued. The returned message includes a real ETA (formatDuration
+   * against the reserve's own linear regen rate) for when there'll be
+   * enough back to afford this same sale.
    */
   sell(state: GameState, materialId: MaterialId, amount: number, now = Date.now()): string | null {
     if (!state.tradeRouteUnlocked) return 'The Trade Route hasn\u2019t been opened yet.';
     if (amount <= 0) return null;
     if (state.materials[materialId] < amount) return 'Not enough in stock.';
-    const decayed = HarvestManager.decayedSellRate(state, now);
-    const multiplier = HarvestManager.sellPriceMultiplier(state, now);
+    const value = Math.max(1, Math.floor(amount * Tuning.get('harvest.sellPricePerUnit')));
+    const reserve = HarvestManager.currentTraderGold(state, now);
+    if (value > reserve) {
+      const etaMs = HarvestManager.timeUntilAffordable(state, now, value);
+      return `The trader\u2019s short on coin for that right now -- check back in ${formatDuration(etaMs)}.`;
+    }
     state.materials[materialId] -= amount;
-    const value = Math.max(1, Math.floor(amount * Tuning.get('harvest.sellPricePerUnit') * multiplier));
     state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + value);
     state.stats.goldBySource.sellingMaterials += value;
-    state.harvestSellDecayValue = decayed + value;
-    state.harvestSellDecayAt = now;
+    state.harvestTraderGold = reserve - value;
+    state.harvestTraderGoldAt = now;
     return null;
   },
 
-  unlockTradeRoute(state: GameState): string | null {
+  unlockTradeRoute(state: GameState, now = Date.now()): string | null {
     if (state.tradeRouteUnlocked) return 'Already unlocked.';
     if (state.gold < TRADE_ROUTE_COST) return 'Not enough gold.';
     state.gold -= TRADE_ROUTE_COST;
     state.stats.goldSpent += TRADE_ROUTE_COST;
     state.tradeRouteUnlocked = true;
+    // Starts the trader's reserve full rather than empty -- a player who
+    // just spent 5000 gold to open the Trade Route shouldn't immediately
+    // hit "check back later" on their very first sale.
+    state.harvestTraderGold = HarvestManager.sellGoldPerHourTarget(state);
+    state.harvestTraderGoldAt = now;
     return null;
   },
 

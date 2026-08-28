@@ -486,59 +486,19 @@
     "id": "harvest.sellPricePerUnit",
     "label": "Harvest: sell price per unit",
     "category": "harvest",
-    "value": 4,
-    "default": 4,
+    "value": 0.1,
+    "default": 0.1,
     "min": 0,
-    "description": "Flat gold per material unit sold, once Trade Route is unlocked."
+    "description": "Flat gold per material unit sold, once Trade Route is unlocked. Deliberately cheap -- selling is a minor top-up for excess, capped hard by harvest.traderRegenTimeMs, not meant to compete with questing."
   },
   {
-    "id": "harvest.sellDecayTimeConstantMs",
-    "label": "Harvest: sell-rate decay time constant (ms)",
+    "id": "harvest.traderRegenTimeMs",
+    "label": "Harvest: trader gold reserve regen time (ms)",
     "category": "harvest",
     "value": 3600000,
     "default": 3600000,
     "min": 60000,
-    "description": "How fast Trade Route's recent-selling accumulator decays -- an exponential time constant, not a fixed window. At the default (1hr), a sale's weight drops to ~37% after 1hr, ~14% after 2hr."
-  },
-  {
-    "id": "harvest.sellTaperStartFraction",
-    "label": "Harvest: sell taper start (fraction of quest gold/hr)",
-    "category": "harvest",
-    "value": 0.5,
-    "default": 0.5,
-    "min": 0,
-    "max": 1,
-    "description": "Below this fraction of the live quest-gold/hr target, Trade Route sells at full price."
-  },
-  {
-    "id": "harvest.sellTaperHeavyFraction",
-    "label": "Harvest: sell taper heavy threshold (fraction of quest gold/hr)",
-    "category": "harvest",
-    "value": 0.85,
-    "default": 0.85,
-    "min": 0,
-    "max": 1,
-    "description": "Above this fraction of the live quest-gold/hr target, Trade Route sells drop to the heavy taper multiplier."
-  },
-  {
-    "id": "harvest.sellTaperMidMultiplier",
-    "label": "Harvest: sell price multiplier, mid taper",
-    "category": "harvest",
-    "value": 0.5,
-    "default": 0.5,
-    "min": 0,
-    "max": 1,
-    "description": "Price multiplier applied between the start and heavy taper thresholds."
-  },
-  {
-    "id": "harvest.sellTaperHeavyMultiplier",
-    "label": "Harvest: sell price multiplier, heavy taper",
-    "category": "harvest",
-    "value": 0.15,
-    "default": 0.15,
-    "min": 0,
-    "max": 1,
-    "description": "Price multiplier once the decayed sell rate passes the heavy taper threshold -- never 0, so a big dump still earns something."
+    "description": "Time for the Trade Route trader's gold reserve to regenerate from empty to full (full = the live quest-gold/hr target). Selling spends the reserve down gold-for-gold; a sale that would exceed it is blocked outright until enough regenerates."
   },
   {
     "id": "harvest.baseWarehouseCapacity",

@@ -21960,3 +21960,122 @@ conflicting file. Rebuilt from scratch against the actual current
 
 **Still open from the original request:** a gold+XP fly-up when closing
 the quest result card, and an equivalent for Harvest. Not in this patch.
+
+### Trade Route reworked again: hard-capped regenerating trader gold, price cut to 0.1g/unit (patch 0279)
+
+```discord-update
+Dev Update | Trade Route
+
+- Changed: Trade Route's sell price is down to 0.1 gold per unit (10 units for 1 gold) -- selling materials is meant to be a small top-up for what you don't need, not a real income source
+- Changed: the trader now has a limited, slowly-regenerating gold reserve instead of a sliding price -- once it's spent, selling that material pauses with a "check back in X" message until it refills
+- Fixed: patch 0268's sliding sell price could still be blown past by a wide margin with enough Harvest investment; the new reserve holds firm at roughly quest-tier gold/hr no matter how much gear is put into gathering
+```
+
+Direct follow-up to patch 0268, replacing that patch's mechanism outright
+rather than retuning it -- confirmed by calculation that no retuning of
+a percentage-based taper could actually work.
+
+**Why patch 0268's approach couldn't be salvaged.** That patch capped
+selling with a percentage floor (100% -> 50% -> 15% of raw value,
+depending on recent selling). Modeled the steady-state math this
+session: under sustained selling, actual gold/hr converges to
+`floor% * raw_gold/hr`. Raw production scales roughly 250x across
+realistic investment levels (a single unupgraded node vs. maxed tools
+across all four nodes) -- so whatever floor% correctly capped a
+baseline player near quest-tier income was, by definition, wildly too
+generous for a heavily-tooled one, and vice versa. Confirmed with real
+numbers against a live scenario: at a 15% floor, a baseline player
+landed close to parity (~36g/hr vs. a ~14-21g/hr quest benchmark), but
+a maxed, multi-node farmer still cleared **10,000+ gold/hr, over
+400x quest income** -- the taper simply couldn't hold at every
+investment level with one fixed percentage, no matter how that
+percentage was tuned.
+
+**The fix: a spending limit instead of a sliding price.** The trader
+has a gold reserve, capped at the same live `sellGoldPerHourTarget`
+patch 0268 already anchored to (whatever a hero currently earns at the
+guild's own best-unlocked quest tier -- self-correcting, no
+hand-picked number), regenerating linearly from empty to full over
+`harvest.traderRegenTimeMs` (1 hour by default). Every sale spends the
+reserve down gold-for-gold. A sale that would exceed what's left is
+**blocked outright** -- materials untouched, no reduced fallback price
+-- with a message stating exactly when there'll be enough back
+(`formatDuration` against the reserve's own regen rate). This holds at
+literally any production rate, because it isn't a percentage of raw
+output at all -- it's a hard number the trader either has or doesn't,
+completely decoupled from how much material a sale would have
+consumed. Verified against the same scenarios patch 0268's own analysis
+used: baseline, mid-tool, and fully-maxed multi-node farming all now
+converge on essentially the *same* number (~target gold/hr), not a
+multiple of it that grows with investment.
+
+**Price cut to 0.1 gold/unit (`harvest.sellPricePerUnit`, was 4 at
+launch, briefly 1 mid-discussion) on top of the cap, for a specific
+reason beyond "cheaper is safer":** the cap alone doesn't create any
+sense of scale -- at a higher per-unit price, even a completely
+untouched node already blows past the cap on the very first click, so
+heroes/tools stop mattering for Harvest gold the instant a player
+starts at all. At 0.1g/unit, a genuinely unfettered zero-investment
+node produces well under the cap, so early tool/hero investment still
+visibly moves the needle for a while before flattening out once the
+cap takes over -- confirmed by walking the actual breakeven point
+tool-level by tool-level before landing on this number. Also keeps the
+mental math clean end-to-end: 10 units (one "Sell 10" click) = 1 gold,
+matching the existing fixed-batch-of-10 sell button exactly (every
+real sell in the game already goes through that button; `Math.max(1,
+Math.floor(...))` in `sell()` is a floor-of-1 safety net for any future
+non-10 sell path, not something the current UI can actually trigger).
+
+**Mechanism swap in `HarvestManager.ts`:** `decayedSellRate`/
+`sellPriceMultiplier` (0268's percentage-taper machinery) removed
+entirely. New `currentTraderGold(state, now)` reads the live regenerating
+reserve (capped at `sellGoldPerHourTarget`); new
+`timeUntilAffordable(state, now, cost)` is the ETA math, shared between
+`sell()`'s own blocked-sale error message and `HarvestPanel.tsx`'s live
+gauge so the two can never drift apart. `sell()` itself now blocks the
+whole sale rather than paying a discounted amount.
+`unlockTradeRoute(state, now)` primes the reserve to a full tank the
+moment Trade Route is actually opened -- a player who just spent 5000
+gold on it shouldn't hit "check back later" on their very first sale.
+
+**Save data (`GameState`):** `harvestSellDecayValue`/
+`harvestSellDecayAt` (0268) replaced with `harvestTraderGold`/
+`harvestTraderGoldAt`. `SAVE_VERSION` 53 -> 54; new migration primes
+an already-Trade-Route-unlocked save's reserve to full (same "don't
+immediately block a returning player" reasoning as the fresh-unlock
+path) rather than 0, and leaves the old decay fields in place unread --
+same "stale key, harmless dead weight" treatment every prior field
+removal in this file has used, no cleanup migration needed for the
+removal itself.
+
+**Tuning (`tuning.json`, category `harvest`):** the five taper-specific
+entries from patch 0268 (`sellDecayTimeConstantMs`,
+`sellTaperStartFraction`/`HeavyFraction`,
+`sellTaperMidMultiplier`/`HeavyMultiplier`) removed -- nothing in the
+new mechanism reads them. New `harvest.traderRegenTimeMs` (default
+3,600,000ms / 1 hour) added in their place. `sellPricePerUnit` changed
+from 4 to 0.1.
+
+**UI (`HarvestPanel.tsx`):** the Trade Route card's price-tier label
+("Full price"/"Half price"/"Steeply discounted") replaced with a live
+reserve gauge ("Trader has X of Y gold to spend"), `useNow(2000)`-driven
+so it visibly refills between sales rather than only updating right
+after one. Every "Sell 10" button disables once the reserve can't cover
+its own 1-gold cost, alongside the existing "not enough material"
+disable condition, with the card's subtext switching to the "check back
+in X" ETA message in that state.
+
+**Verified:** a standalone Node simulation against the exact live
+formulas confirmed the reserve depletes 1 gold per real sale, blocks
+cleanly with an accurate ETA once exhausted, refills correctly after
+waiting, and that sustained selling (a sale every 5 minutes for 5
+straight hours) converges to within a small discretization margin of
+the target rate (12.2g/hr realized vs. a 14g/hr target, the gap being
+an artifact of selling in fixed 1-gold chunks rather than a mechanism
+issue). `npx tsc --noEmit` and a full `vite build` both pass clean on
+the applied patch against a fresh clone of the actual current `main`
+(confirmed at HEAD before starting, after 10 unrelated patches --
+0269 through 0278 -- had landed since patch 0268; none of them touched
+Harvest, though patch 0277 relocated Sell/Sell Junk to the Blacksmith,
+confirmed not to affect this patch's own `goldBySource.sellingItems`
+tracking from 0268, which survived that move intact).

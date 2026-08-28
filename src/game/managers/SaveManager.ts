@@ -8,6 +8,7 @@ import { ACHIEVEMENT_BY_ID } from '../data/achievements';
 import { NODE_ORDER } from '../data/materials';
 import { Tuning } from '../data/tuning';
 import { PeddlerManager } from './PeddlerManager';
+import { HarvestManager } from './HarvestManager';
 import { EquipmentManager } from './EquipmentManager';
 import { tutorialQuestOffer } from '../data/quests';
 
@@ -201,8 +202,8 @@ export function createInitialState(now = Date.now()): GameState {
     harvestUnlocked: false,
     pendingHarvestSpotlight: false,
     overseerLevel: 0,
-    harvestSellDecayValue: 0,
-    harvestSellDecayAt: now,
+    harvestTraderGold: 0,
+    harvestTraderGoldAt: now,
     scrap: 0,
     gems: {},
     resistGems: {},
@@ -1157,6 +1158,36 @@ const MIGRATIONS: Record<number, Migration> = {
       },
       harvestSellDecayValue: (save.harvestSellDecayValue as number | undefined) ?? 0,
       harvestSellDecayAt: (save.harvestSellDecayAt as number | undefined) ?? now,
+    };
+  },
+  53: (save) => {
+    // Patch 0279: replaced the patch-0268 percentage-taper sell mechanism
+    // (harvestSellDecayValue/harvestSellDecayAt, exponential decay of
+    // recent selling) with a hard-capped, regenerating trader gold
+    // reserve (harvestTraderGold/harvestTraderGoldAt, linear regen) --
+    // see HarvestManager.currentTraderGold's own comment for why the
+    // percentage approach couldn't actually hold a cap across every
+    // investment level. The old fields are simply left in place and
+    // never read again, same "stale key, harmless dead weight" treatment
+    // every prior field removal in this file has used.
+    //
+    // For a save that already has Trade Route unlocked, priming the new
+    // reserve to 0 would mean every returning player's very first sale
+    // after updating hits "the trader's out of coin" immediately, which
+    // reads as broken rather than intentional -- the same reasoning
+    // HarvestManager.unlockTradeRoute already uses for a FRESH unlock.
+    // Priming to a full reserve here treats "already had Trade Route"
+    // the same way as "just unlocked it" for this one-time transition.
+    // A save that hasn't unlocked Trade Route yet gets 0 -- harmless,
+    // since unlockTradeRoute overwrites it with a full reserve anyway
+    // the moment that actually happens.
+    const state = { ...save } as unknown as GameState;
+    const primedGold = state.tradeRouteUnlocked ? HarvestManager.sellGoldPerHourTarget(state) : 0;
+    return {
+      ...save,
+      version: 54,
+      harvestTraderGold: (save.harvestTraderGold as number | undefined) ?? primedGold,
+      harvestTraderGoldAt: (save.harvestTraderGoldAt as number | undefined) ?? Date.now(),
     };
   },
 };

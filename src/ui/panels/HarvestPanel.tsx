@@ -10,7 +10,7 @@ import {
 import { HarvestManager } from '../../game/managers/HarvestManager';
 import { Tuning } from '../../game/data/tuning';
 import { MaterialId } from '../../game/types';
-import { formatGold, formatMaterial } from '../../game/util';
+import { formatDuration, formatGold, formatMaterial } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
 import { Ring } from './DashboardPanel';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
@@ -593,34 +593,36 @@ function TradeRouteCard() {
     );
   }
 
-  // Live price tier -- see HarvestManager.sellPriceMultiplier's own
+  // Live trader reserve -- see HarvestManager.currentTraderGold's own
   // comment. Recomputed every render off the current clock (useNow ticks
-  // this component every 2s) so the label decays back toward "Full
-  // price" on its own as time passes, not just right after a sale.
-  const multiplier = HarvestManager.sellPriceMultiplier(state, now);
-  const unitPrice = Math.max(1, Math.floor(Tuning.get('harvest.sellPricePerUnit') * multiplier));
-  const tierLabel = multiplier >= 1
-    ? 'Full price'
-    : multiplier > Tuning.get('harvest.sellTaperHeavyMultiplier')
-      ? 'Half price -- the market is filling up'
-      : 'Steeply discounted -- the market is flooded';
-  const tierClass = multiplier >= 1 ? 'muted' : 'bad';
+  // this component every 2s) so the gauge visibly refills on its own
+  // between sales, not just right after one.
+  const reserve = HarvestManager.currentTraderGold(state, now);
+  const maxReserve = HarvestManager.sellGoldPerHourTarget(state);
+  const unitPrice = Tuning.get('harvest.sellPricePerUnit');
+  const costPerSale = Math.max(1, Math.floor(10 * unitPrice));
+  const canAfford = reserve >= costPerSale;
+  const etaMs = HarvestManager.timeUntilAffordable(state, now, costPerSale);
 
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <div className="card-title">Trade Route</div>
       <p className="card-flavour">
-        Sell surplus materials for gold, currently {unitPrice} per unit. Selling steadily tapers the price down
-        toward a fair rate; it recovers on its own the longer you hold off.
+        Sell surplus materials for a little gold -- 10 units nets {costPerSale}. The trader only has so much to
+        spend at once; it&rsquo;s meant as a top-up for what you don&rsquo;t need, not a strategy on its own.
       </p>
-      <p className={`tiny ${tierClass}`} style={{ marginTop: -4, marginBottom: 8 }}>{tierLabel}</p>
+      <p className={`tiny ${canAfford ? 'muted' : 'bad'}`} style={{ marginTop: -4, marginBottom: 8 }}>
+        {canAfford
+          ? `Trader has ${Math.floor(reserve)} of ${Math.floor(maxReserve)} gold to spend`
+          : `The trader is out of coin -- check back in ${formatDuration(etaMs)}`}
+      </p>
       <div className="row wrap" style={{ gap: 6 }}>
         {MATERIALS.map((m) => (
           <button
             key={m.id}
             className="btn-ghost"
             style={{ minHeight: 26 }}
-            disabled={state.materials[m.id] < 10}
+            disabled={state.materials[m.id] < 10 || !canAfford}
             onClick={() => engine.sellMaterial(m.id, 10)}
           >
             Sell 10 {m.name}
