@@ -1,5 +1,5 @@
 import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
-import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Stats } from '../types';
+import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Rarity, Stats } from '../types';
 import { uid, Rng } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
@@ -7,6 +7,22 @@ import { matchBonusForTier } from '../data/elements';
 import { isProceduralTemplate, rollProceduralItem, scaleDedicatedItem, LootSourceTag } from '../data/proceduralLoot';
 
 export const MAX_PLUS = 10;
+
+/**
+ * Patch 0283: the one level+rarity value curve shopPrice, sellValue
+ * (via referenceValue), and upgradeCost (via referenceValue) all share --
+ * pulled out standalone so the three stop each re-deriving the same
+ * `shop.baseValuePerLevel * RARITY_PRICE_MULT * (1 + level *
+ * shop.valueGrowthPerLevelPercent / 100)` formula independently and
+ * risking drift. Takes a plain `level` rather than an item, since the
+ * three callers each source that level differently (a shop roll's
+ * `itemLevel`, an item's own `rolledItemLevel`, or a dedicated reward's
+ * `reqLevel` -- see referenceValue's own comment for why the last one).
+ */
+function scaledValueCurve(rarity: Rarity, level: number): number {
+  return Tuning.get('shop.baseValuePerLevel') * RARITY_PRICE_MULT[rarity]
+    * (1 + level * Tuning.get('shop.valueGrowthPerLevelPercent') / 100);
+}
 
 export const EquipmentManager = {
   /**
@@ -156,27 +172,50 @@ export const EquipmentManager = {
   },
 
   /**
-   * The "what's this actually worth new" reference both sellValue
-   * (patch 0281) and upgradeCost (patch 0282) price against. Mirrors
-   * shopPrice's own level+rarity curve (patch 0241), but keyed on
-   * `rolledItemLevel` being present rather than on `isProceduralTemplate`
-   * -- gear now scales with level via TWO mechanisms (rollProceduralItem's
-   * blank templates, patch 0214, AND scaleDedicatedItem's chain-replay/
-   * raid dedicated rewards, patch 0258), and neither selling nor
-   * upgrading an item should treat it differently just because its drop
-   * happened to come from the dedicated path instead of the procedural
-   * one. def.value (a template's own low, unscaled authored number -- a
-   * wooden_sword's `value` is 2 gold no matter what it actually rolls
-   * at) stays the reference for anything with no `rolledItemLevel` at
-   * all: an ordinary hand-authored fixed-power item, or a first-clear
-   * chain/raid grant with no roll info, where the authored value already
-   * reflects the item's real power and was never stale in the first
-   * place.
+   * The "what's this actually worth new" reference sellValue (patch
+   * 0281), upgradeCost (patch 0282), and shopPrice (patch 0283) all
+   * price against. Mirrors shopPrice's own level+rarity curve (patch
+   * 0241, now shared via scaledValueCurve), but keyed on `rolledItemLevel`
+   * being present rather than on `isProceduralTemplate` -- gear now
+   * scales with level via TWO mechanisms (rollProceduralItem's blank
+   * templates, patch 0214, AND scaleDedicatedItem's chain-replay/raid
+   * dedicated rewards, patch 0258), and neither selling nor upgrading an
+   * item should treat it differently just because its drop happened to
+   * come from the dedicated path instead of the procedural one.
+   *
+   * Patch 0283: a SECOND case now also routes through the curve --
+   * `def.raidExclusive`/`def.chainExclusive` items with no
+   * `rolledItemLevel` at all (a first-clear chain/raid grant, never
+   * replayed/re-rolled). These are exactly the items reviewed directly
+   * with the user and found badly out of line with their procedural
+   * counterparts (e.g. The Last Ember, a level-55 Legendary amulet whose
+   * own authored stat total matches a max-level procedural roll
+   * exactly, was selling for 14,000g against a same-level procedural
+   * roll's 4,130g -- a 3.4x gap for equal power, worse at lower
+   * comparison levels). Scaled against `def.reqLevel` rather than any
+   * live roll, since these items' actual granted power never varies by
+   * level in the first place (ShopManager.purchaseRoll's sourceTag is
+   * always 'normal', never one of scaleDedicatedItem's four dedicated
+   * tags, so a shop-bought dedicated item's stats are always its fixed
+   * `def.stats` regardless of any itemLevel a stock slot happened to
+   * roll) -- reqLevel is the one number that actually describes how
+   * powerful the design intends this specific item to be.
+   *
+   * Ordinary hand-authored non-exclusive gear (starter armor sets like
+   * `leather`/`steel`/`thief`, crafted bases) deliberately keeps pricing
+   * off flat `def.value` unchanged -- these were never flagged as part
+   * of the reviewed disproportion, their authored values already track
+   * reasonably with rarity/reqLevel, and routing every hand-authored
+   * item through the curve indiscriminately risked reshuffling balance
+   * nobody asked to touch. `def.value` remains the reference only for
+   * this narrower "ordinary, non-exclusive, unscaled" case now.
    */
   referenceValue(item: EquipmentItem, def: EquipmentDef): number {
     if (item.rolledItemLevel != null) {
-      return Tuning.get('shop.baseValuePerLevel') * RARITY_PRICE_MULT[def.rarity]
-        * (1 + item.rolledItemLevel * Tuning.get('shop.valueGrowthPerLevelPercent') / 100);
+      return scaledValueCurve(def.rarity, item.rolledItemLevel);
+    }
+    if (def.raidExclusive || def.chainExclusive) {
+      return scaledValueCurve(def.rarity, def.reqLevel);
     }
     return def.value;
   },
@@ -225,26 +264,44 @@ export const EquipmentManager = {
   /**
    * `itemLevel`, patch 0241 -- the target power level this Shop/Black
    * Market slot was rolled against (see ShopManager.rollEquipment/
-   * refreshBlackMarket). Only changes anything for a procedural template
-   * (isProceduralTemplate(def)): its own authored `value` is anchored to
-   * its low base reqLevel (a wooden_sword's `value` is 2 gold), so once
-   * itemLevel decouples the item's real rolled power from that base --
-   * the whole point of rolling it fresh rather than selling the bare
-   * template -- pricing off the stale base value would badly undersell
-   * it. Priced instead off a level+rarity baseline
-   * (shop.baseValuePerLevel * RARITY_PRICE_MULT * a per-level growth
-   * curve) that tracks the actual rolled power, ignoring `value`
-   * entirely for this case. A hand-authored fixed-stat item (or any call
-   * with no itemLevel, e.g. sell/repair pricing elsewhere reusing this
-   * same function) is completely unaffected -- its power never moves, so
-   * its existing authored `value` stays the only signal that matters,
-   * same formula as before this patch.
+   * refreshBlackMarket). Only changed anything for a procedural template
+   * (isProceduralTemplate(def)) originally: its own authored `value` is
+   * anchored to its low base reqLevel (a wooden_sword's `value` is 2
+   * gold), so once itemLevel decouples the item's real rolled power from
+   * that base -- the whole point of rolling it fresh rather than selling
+   * the bare template -- pricing off the stale base value would badly
+   * undersell it. Priced instead off scaledValueCurve, ignoring `value`
+   * entirely for this case.
+   *
+   * Patch 0283: a second branch now covers `raidExclusive`/
+   * `chainExclusive` hand-authored items the same way sellValue's
+   * referenceValue does -- these are excluded from both
+   * ShopManager.rollEquipment's basePool and refreshBlackMarket's
+   * eligible list by design, so in practice this branch should never
+   * actually fire through either real call site. It's here anyway as
+   * the buy-side half of the same fix: a missing exclusivity flag (the
+   * Requiem set, fixed alongside this in equipment.json, had none at
+   * all and could have surfaced for direct purchase) should degrade to
+   * a proportionate price if it ever happens again, not silently sell a
+   * level-55 Legendary at a flat, level-blind number the way this would
+   * have before. Scaled against `def.reqLevel`, same reasoning as
+   * referenceValue's own comment -- keeps buy and sell price moving
+   * together off the same curve, preserving the sell-vs-buy ratio every
+   * other item in the game already has, rather than sellValue's fix
+   * alone quietly shrinking that ratio for exactly this item category.
+   *
+   * An ordinary hand-authored fixed-stat item (or any call with no
+   * itemLevel, e.g. sell/repair pricing elsewhere reusing this same
+   * function) is completely unaffected -- its power never moves, so its
+   * existing authored `value` stays the only signal that matters, same
+   * as before this patch.
    */
   shopPrice(def: EquipmentDef, itemLevel?: number): number {
     if (itemLevel !== undefined && isProceduralTemplate(def)) {
-      const base = Tuning.get('shop.baseValuePerLevel') * RARITY_PRICE_MULT[def.rarity]
-        * (1 + itemLevel * Tuning.get('shop.valueGrowthPerLevelPercent') / 100);
-      return Math.ceil(base * 1.15);
+      return Math.ceil(scaledValueCurve(def.rarity, itemLevel) * 1.15);
+    }
+    if (def.raidExclusive || def.chainExclusive) {
+      return Math.ceil(scaledValueCurve(def.rarity, def.reqLevel) * 1.15);
     }
     return Math.ceil(def.value * 1.15);
   },

@@ -567,11 +567,18 @@ a colored avatar circle on the new roster/companion "Status bars" views
 
 **Equipment** — rarities, set bonuses, repair/refine, shop + black market
 rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
-longer appear in either shop's stock). Sell price and Workshop refine
-cost both now scale with an item's rolled level (`rolledItemLevel`),
-not just its bone-stock template value -- see "Bug Fix: gear sell price
-ignored level scaling entirely" (patch 0281) and "Bug Fix: Workshop
-refine cost ignored level scaling too" (patch 0282) below.
+longer appear in either shop's stock). Sell price, Workshop refine cost,
+AND buy price now all scale with level -- rolled level
+(`rolledItemLevel`) for procedural drops, `reqLevel` for raid/chain-
+exclusive dedicated rewards with no roll of their own -- rather than a
+flat, unscaled `def.value`. See "Bug Fix: gear sell price ignored level
+scaling entirely" (patch 0281), "Bug Fix: Workshop refine cost ignored
+level scaling too" (patch 0282), and "Dedicated reward pricing brought
+in line with procedural gear; Requiem set closed off from the shop"
+(patch 0283) below. The entire Requiem set (the Last God raid's reward
+set) was found with neither `raidExclusive` nor `chainExclusive` set at
+all, meaning nothing stopped it from surfacing in ordinary shop/black
+market rolls -- fixed alongside the pricing pass.
 
 **Guild facilities & Permanent Upgrades** — vendor-style upgrade trees,
 guild-wide bonuses, gold storage. 8 facilities total, the newest being
@@ -22335,4 +22342,99 @@ authored Legendary Set piece's refine cost, instead of the roughly
 changes -- it already just displays whatever the function returns. No
 `SAVE_VERSION` bump needed -- pricing math only, no change to
 `GameState`'s shape.
+
+### Dedicated reward pricing brought in line with procedural gear; Requiem set closed off from the shop (patch 0283)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: raid/chain reward gear that never got rescaled now prices closer to its procedural equivalent -- a top-tier reward no longer sells (or costs to buy) wildly out of step with an ordinary drop of the same power
+- Fixed: the Requiem set (the Last God raid's own reward gear) was missing its "raid-only" flag and could occasionally turn up for direct purchase in the Blacksmith or Black Market -- it's raid loot only now
+```
+
+Direct follow-up requested after reviewing the sell-value table from
+patch 0281: a full audit found hand-authored raid/chain-exclusive
+reward items granted on **first clear** (no `rolledItemLevel` at all,
+since they're never rescaled the way a replay/Heroic/Legendary drop is)
+were still pricing off their flat authored `value` -- unaffected by
+0281/0282's fixes, which only touched items that DO carry a
+`rolledItemLevel`. Concretely: **The Last Ember** (level-55 Legendary,
+the Last God raid's own reward) has a raw stat total identical to a
+max-level procedural Legendary roll -- same power, by design -- but was
+selling for 14,000g against a max-level procedural roll's 4,130g (3.4x),
+and against a mid-level (20) procedural Legendary's 1,680g, nearly 8.3x.
+That's the disproportion flagged directly ("a random raid piece selling
+for 10X the highest quest piece is a bit much").
+
+**Fix, agreed approach (Option 1 from the review):** `referenceValue`
+gets a second branch -- any `def.raidExclusive`/`def.chainExclusive`
+item with no `rolledItemLevel` now routes through the same
+`scaledValueCurve` (pulled out of `shopPrice`'s existing formula into
+its own shared helper) keyed on `def.reqLevel` instead of a live roll,
+since these items' granted power never actually depends on a roll in
+the first place (`ShopManager.purchaseRoll`'s sourceTag is always
+`'normal'`, never one of `scaleDedicatedItem`'s four dedicated tags, so
+a shop-bought dedicated item always gets its fixed `def.stats`
+regardless of any itemLevel a stock slot rolled) -- `reqLevel` is the
+one number that actually reflects how powerful the item is meant to be.
+Ordinary hand-authored non-exclusive gear (starter sets like
+`leather`/`steel`/`thief`, crafted bases) is untouched -- those weren't
+part of the reviewed disproportion and keep pricing off flat `value` as
+before.
+
+**Buy price fixed too, not just sell -- checked before patching, per
+direct request.** Confirmed procedural buy price already scales
+correctly (patch 0241): 1,150g at itemLevel 1 up to 13,570g at itemLevel
+55 for a Legendary template. Hand-authored items' buy price did NOT --
+`shopPrice` returned flat `def.value * 1.15` regardless of level, the
+exact same bug shape sell/refine cost had. Fixing sell alone (0281's
+approach, extended to this category) without also fixing buy would have
+made things WORSE for this item category specifically: buy price
+staying flat at ~46,000g for The Last Ember while sell dropped to the
+new scaled ~4,130g would have collapsed its sell/buy ratio to under 10%,
+versus the ~30% ratio every other item in the game holds. `shopPrice`
+now gets the identical `raidExclusive`/`chainExclusive` branch, keyed on
+`reqLevel` the same way, so buy and sell move together -- confirmed the
+ratio holds at 0.30 for every dedicated item checked post-fix, same as
+procedural gear's own sell-vs-shop ratio.
+
+**Requiem set flag gap, found while reviewing why buy-side fixes even
+mattered here.** All 7 Requiem items (`the_last_ember`, `requiem_blade`,
+`requiem_crown`, `requiem_plate`, `requiem_signet`, `requiem_grips`,
+`requiem_striders`) had `raidExclusive: false` and no `chainExclusive`
+at all -- confirmed via `raid-encounters.json` that their only real
+source is Normal-tier loot on 3 of the Last God raid's own encounters,
+not a chain reward and not meant to be Heroic/Legendary-tiered loot
+either. Nothing in `ShopManager.rollEquipment`'s `basePool` filter or
+`refreshBlackMarket`'s `eligible` filter excludes an unflagged item, so
+these 7 -- the highest-value gear in the entire game -- were eligible to
+turn up for direct purchase at any time, undercutting the raid being
+their intended source. Every other raid Set in the data has at least
+some pieces properly flagged; Requiem was the one gap. All 7 flipped to
+`raidExclusive: true` in `equipment.json`. Confirmed this fully removes
+them from both `rollEquipment` and `refreshBlackMarket`'s eligible
+pools -- `shopPrice`'s new dedicated-item branch above should now never
+actually fire through either real call site for these 7 specifically
+(it's still correct defensively, in case a future item repeats this
+same flagging mistake).
+
+**Also verified while in here:** `relevelCost` (Blacksmith re-leveling)
+still deliberately reads `def.value` directly, per its own existing
+comment -- that one's correct as-is, not part of this fix, since
+re-leveling is the mechanism that RAISES `rolledItemLevel`, so anchoring
+its own cost to the current rolled level would compound backwards.
+Re-confirmed by re-reading that comment rather than assuming, same as
+patch 0282 already did.
+
+**Verified:** `npx tsc --noEmit` passes clean against a fresh clone of
+current `main` (patches 0281/0282 already applied). Confirmed via a
+standalone script across all 46 `raidExclusive`/`chainExclusive`
+dedicated items that post-fix sell/buy prices track the same
+`scaledValueCurve` procedural gear already uses, holding the 0.30
+sell-vs-buy ratio uniformly; spot-checked early-level dedicated items
+(e.g. a level-4 Uncommon) to confirm the change doesn't meaningfully
+disturb already-reasonable low-level pricing, only the previously
+out-of-line high-value cases. Confirmed via `equipment.json` re-parse
+that all 7 Requiem items now carry `raidExclusive: true` and the file
+remains valid JSON. No `SAVE_VERSION` bump needed -- pricing math and
+equipment data only, no change to `GameState`'s shape.
 

@@ -696,7 +696,7 @@
     },
     "setId": "requiem",
     "icon": "misc/Misc_27.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false
   },
   {
@@ -980,7 +980,7 @@
     },
     "setId": "requiem",
     "icon": "weapons/Weapon_62.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false
   },
   {
@@ -998,7 +998,7 @@
     },
     "setId": "requiem",
     "icon": "armor/Armor_36.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false
   },
   {
@@ -1019,7 +1019,7 @@
     },
     "setId": "requiem",
     "icon": "armor/Armor_01.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false
   },
   {
@@ -1036,7 +1036,7 @@
     },
     "setId": "requiem",
     "icon": "accessories/Accessory_05.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false
   },
   {
@@ -1053,7 +1053,7 @@
     },
     "setId": "requiem",
     "icon": "armor/Armor_71.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false
   },
   {
@@ -1070,7 +1070,7 @@
     },
     "setId": "requiem",
     "icon": "armor/Armor_50.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false
   },
   {
