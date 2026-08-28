@@ -235,15 +235,19 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
         style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="peddler-modal-topbar">
+          <span>Grimsby's Dice</span>
+          <span className="peddler-modal-topbar-gold">{'\u25c6'} {formatGold(state.gold)} on hand</span>
+        </div>
         <div className="peddler-modal-header">
           <GrimsbySprite animation="idle" height={140} />
         </div>
 
-        <div className="dice-tab-row">
-          <button className={`btn-subtab ${tab === 'exact' ? 'on' : ''}`} onClick={() => setTab('exact')}>
+        <div className="grimsby-subtab-row">
+          <button className={`grimsby-subtab ${tab === 'exact' ? 'on' : ''}`} onClick={() => setTab('exact')}>
             Call a Number
           </button>
-          <button className={`btn-subtab ${tab === 'highlow' ? 'on' : ''}`} onClick={() => setTab('highlow')}>
+          <button className={`grimsby-subtab ${tab === 'highlow' ? 'on' : ''}`} onClick={() => setTab('highlow')}>
             High or Low
           </button>
         </div>
@@ -296,10 +300,8 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
                     disabled={rolling}
                     onChange={(e) => setWagerText(e.target.value)}
                     placeholder="Gold"
-                    style={{
-                      width: 90, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-                      color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.75rem',
-                    }}
+                    className="input"
+                    style={{ width: 90, fontSize: '0.75rem' }}
                   />
                   <button type="button" className="btn-ghost" disabled={rolling} onClick={setMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
                     Max
@@ -398,10 +400,8 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
                     disabled={hlRolling}
                     onChange={(e) => setHlWagerText(e.target.value)}
                     placeholder="Gold"
-                    style={{
-                      width: 90, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-                      color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.75rem',
-                    }}
+                    className="input"
+                    style={{ width: 90, fontSize: '0.75rem' }}
                   />
                   <button type="button" className="btn-ghost" disabled={hlRolling} onClick={setHlMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
                     Max

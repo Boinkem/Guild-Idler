@@ -3610,9 +3610,197 @@ button.harvest-item:hover {
 
 /* ------------------------------ Grimsby / the peddler ------------------------------ */
 
-/* Tab presentation reuses .vendor-card as-is (no new class needed) --
-   see PeddlerPanel.tsx's own comment for why this replaced the earlier
-   full-scene background treatment. */
+/* Patch 0284 (Claude Design handoff, direct request) -- replaced the old
+   "reuse .vendor-card as-is, one card per game, GrimsbySprite repeated
+   on all four" tab layout (previously read as one screenshot repeated
+   four times) with a ruled, numbered game grid and no sprite anywhere
+   on this screen -- Grimsby still appears, animated, inside each game's
+   own modal below, untouched. See PeddlerPanel.tsx's own top comment. */
+
+.grimsby-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 55%, var(--edge));
+  margin-bottom: 14px;
+}
+.grimsby-kicker {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.grimsby-header-subtitle { max-width: 560px; margin: 0; }
+
+.grimsby-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 55%, var(--edge));
+}
+.grimsby-status-cell:not(:first-child) {
+  border-left: 1px solid color-mix(in srgb, var(--brass-dim) 25%, var(--edge));
+  padding-left: 16px;
+}
+.grimsby-status-label {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.grimsby-status-value {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--parchment);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.grimsby-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.grimsby-status-dot.on { background: var(--moss); box-shadow: 0 0 5px color-mix(in srgb, var(--moss) 70%, transparent); }
+.grimsby-status-rep { color: var(--brass); }
+.grimsby-status-rep-detail { font-size: 0.6875rem; font-weight: 400; color: var(--muted); }
+
+.grimsby-game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.grimsby-game-card {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(90deg, rgba(217, 164, 65, 0.08), transparent 60%), color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brass-dim) 40%, var(--edge));
+  border-left: 3px solid var(--brass);
+  border-radius: var(--radius);
+  box-shadow: var(--bevel);
+  padding: 12px 14px 14px;
+}
+.grimsby-game-card.locked {
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  border-style: dashed;
+  border-left-color: color-mix(in srgb, var(--brass-dim) 35%, var(--edge));
+  opacity: 0.9;
+}
+.grimsby-game-card.locked .grimsby-game-card-title,
+.grimsby-game-card.locked .grimsby-status-value { color: var(--muted); }
+
+.grimsby-game-card-header { display: flex; justify-content: space-between; align-items: center; }
+.grimsby-game-card-index {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.grimsby-game-card-state {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.grimsby-game-card-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--parchment);
+  margin: 4px 0 0;
+}
+.grimsby-game-card-flavour { margin: 6px 0 0; }
+
+.grimsby-game-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--brass-dim) 25%, var(--edge));
+}
+.grimsby-game-stat {
+  padding: 0 10px;
+}
+.grimsby-game-stat:first-child { padding-left: 0; }
+.grimsby-game-stat:not(:first-child) {
+  border-left: 1px solid color-mix(in srgb, var(--brass-dim) 20%, var(--edge));
+}
+.grimsby-game-stat-value {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--parchment);
+}
+
+.grimsby-game-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+/* Reusable text input, added here first (the Dice modal's wager fields,
+   patch 0284) but not tied to Grimsby specifically -- anything else that
+   needs a plain themed number/text field going forward should use this
+   instead of its own inline style block. */
+.input {
+  background: var(--panel-2);
+  border: 1px solid var(--panel-3);
+  border-radius: 4px;
+  padding: 5px 8px;
+  color: var(--parchment);
+  font-family: var(--font-body);
+}
+.input:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+
+/* Dice modal's Call-a-Number / High-or-Low switcher, restyled as
+   underlined tabs (patch 0284, direct request) rather than the shared
+   .btn-subtab pill-button family every other sub-tabbed panel uses --
+   deliberately a one-off here, not a change to .btn-subtab itself. */
+.grimsby-subtab-row {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 55%, var(--edge));
+  margin-bottom: 10px;
+}
+.grimsby-subtab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 8px 14px;
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.grimsby-subtab:hover:not(:disabled) { color: var(--parchment); background: transparent; }
+.grimsby-subtab.on { color: var(--brass); border-bottom-color: var(--brass); }
+
+/* Two-column label/value facts grid -- Card modal's fee/tiers/rebate
+   summary, Dice modal's odds list -- shared here rather than each modal
+   inventing its own row markup. */
+.peddler-facts-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 16px;
+  font-size: 0.625rem;
+}
+.peddler-facts-grid dt { color: var(--muted); }
+.peddler-facts-grid dd { margin: 0; text-align: right; color: var(--parchment); }
 
 /* The card-game modal -- own background image (a tabletop scene, not
    yet supplied as of this patch), same "missing file just fails to
@@ -3694,6 +3882,24 @@ button.harvest-item:hover {
   gap: 8px;
   margin-bottom: 12px;
 }
+/* Title + gold-on-hand bar above the sprite band (patch 0284, Claude
+   Design handoff) -- .peddler-modal-header below it stays exactly as
+   before (the animated sprite + High Roller badge), this is purely an
+   added row on top of it. */
+.peddler-modal-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 55%, var(--edge));
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--parchment);
+}
+.peddler-modal-topbar-gold { font-size: 0.625rem; color: var(--brass); font-weight: 700; }
+
 /* Grimsby's own card game already has a purple button (btn-purple);
    High Roller gets its own brass/gold treatment throughout -- this
    badge, and the btn-primary color on its trigger button in
@@ -3737,7 +3943,11 @@ button.harvest-item:hover {
 .peddler-card {
   width: 110px; height: 150px;
   border-radius: 4px;
-  background-color: var(--panel);
+  /* patch 0284: var(--panel-2), not the plain --panel this used before
+     -- brought in line with the same "art backing" shade the redesign
+     uses for the wager .input fields, so every dark-backed art element
+     on this tab draws from one consistent panel tone. */
+  background-color: var(--panel-2);
 }
 /* No CSS border/outline on the face-down card at all -- removed per
    direct request. The card-back art already paints its own gold frame
@@ -3994,10 +4204,9 @@ button.harvest-item:hover {
 .dice-roll-button:disabled { opacity: 0.6; cursor: default; }
 
 /* Sub-tab switcher inside PeddlerDiceModal (Call a Number / High or
-   Low) -- same .btn-subtab family every other sub-tabbed panel uses,
-   just centered since this modal has no left-aligned page chrome to
-   anchor against. */
-.dice-tab-row { display: flex; justify-content: center; gap: 6px; margin-bottom: 10px; }
+   Low) -- patch 0284, restyled from .btn-subtab pill buttons to
+   underlined tabs; see .grimsby-subtab/.grimsby-subtab-row further up
+   for the current rule. */
 
 /* Shared BUST interstitial (GrimsbyBustCard.tsx, patch 0261) -- solid
    black card, bold oversized red text, direct request ("Bold, large red
@@ -4014,24 +4223,64 @@ button.harvest-item:hover {
   gap: 14px;
   width: 220px;
   min-height: 150px;
-  padding: 24px 20px;
-  background: #0a0a0a;
-  border: 2px solid var(--blood);
+  padding: 20px 18px;
+  /* Filled plate, patch 0284 (Claude Design handoff) -- was a flat
+     near-black panel with a glow; now a top-to-bottom blood-red
+     gradient into --panel-2, same "sits in the game's own palette
+     rather than an isolated pure-black/pure-red pair" reasoning the
+     redesign applied everywhere else on this tab. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--blood) 80%, var(--panel-2)), color-mix(in srgb, var(--blood) 45%, var(--panel-2)));
+  border: 1px solid var(--blood);
   border-radius: var(--radius);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--blood) 45%, transparent);
+  box-shadow: var(--bevel);
 }
 .grimsby-bust-card-label {
-  font-size: 2.4rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  color: #ff3b3b;
-  text-shadow: 0 0 12px color-mix(in srgb, #ff3b3b 60%, transparent);
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff8e6;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 .grimsby-bust-card-subtitle {
-  color: var(--muted);
+  color: #f7e4de;
   text-align: center;
+  max-width: 44ch;
   margin: 0;
 }
+
+/* Patch 0284 (Claude Design handoff) -- replaced the old ad-hoc stacked
+   "Round n / value" rows inside a plain .card with a real 3-column
+   ledger grid (Round / Push / On the tab). Past rounds' own historical
+   value was never actually stored (only the live tab.value is tracked),
+   so those cells show an em dash rather than a fabricated number --
+   same "0 for every non-current round" limitation the old version had,
+   just not pretending to be a real value now. */
+.peddler-tab-ledger {
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+  font-size: 0.6875rem;
+}
+.peddler-tab-ledger-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 8px;
+  padding: 7px 0 7px 20px;
+}
+.peddler-tab-ledger-header {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 45%, var(--edge));
+  padding-bottom: 4px;
+}
+.peddler-tab-ledger-row:not(.peddler-tab-ledger-header) {
+  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 18%, var(--edge));
+}
+.peddler-tab-ledger-row.past { color: var(--muted); }
+.peddler-tab-ledger-row.current { color: var(--parchment); }
+.peddler-tab-ledger-row.peddler-tab-ledger-next { color: var(--muted); opacity: 0.6; }
 
 /* The Tab game's own running pot value -- direct request to make this
    bigger than the round-history rows around it (which stay .tiny/

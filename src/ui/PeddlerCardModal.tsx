@@ -12,6 +12,7 @@ import { EggIcon } from './EggIcon';
 import { measureFlyOffset } from './flyTarget';
 import { RewardGlowParticle } from './RewardGlowParticle';
 import { GrimsbyBustCard } from './GrimsbyBustCard';
+import { vendorRepPercent } from '../game/data/vendorRep';
 
 /**
  * Random one-liners Grimsby fires off the moment the cards spawn --
@@ -404,6 +405,10 @@ export function PeddlerCardModal({
         style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="peddler-modal-topbar">
+          <span>{highRoller ? 'High Roller' : 'Pick Your Card'}</span>
+          <span className="peddler-modal-topbar-gold">{'\u25c6'} {formatGold(engine.state.gold)} on hand</span>
+        </div>
         <div className="peddler-modal-header">
           <GrimsbySprite
             animation={headerAnimation}
@@ -504,7 +509,18 @@ export function PeddlerCardModal({
           )}
         </div>
 
-        <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+        <dl className="peddler-facts-grid" style={{ marginBottom: 8, paddingTop: 8, borderTop: '1px solid color-mix(in srgb, var(--brass-dim) 25%, var(--edge))' }}>
+          <dt>Fee at 1x</dt>
+          <dd style={{ color: 'var(--brass)' }}>{formatGold(PeddlerManager.feeCost(engine.state))} gold</dd>
+          <dt>Outcome tiers</dt>
+          <dd>
+            Nothing {'\u00b7'} Partial Refund {'\u00b7'} Modest Find {'\u00b7'} Good Find {'\u00b7'} <span style={{ color: 'var(--brass)' }}>JACKPOT</span>
+          </dd>
+          <dt>Loyalty rebate</dt>
+          <dd>{vendorRepPercent(engine.state.stats.peddlerGoldSpent)}%</dd>
+        </dl>
+
+        <div className="row end" style={{ marginTop: 0, gap: 8 }}>
           {revealStage === 'settled' && pickedCard?.outcome.tier !== 'bust' && (
             <button
               className="btn-purple"

@@ -22542,3 +22542,104 @@ immediately before starting (three unrelated pricing patches, 0281-
 before editing). No `SAVE_VERSION` bump needed -- `RaidResult.
 heroesLeveledUp` is a result-object field, not persisted `GameState`
 shape.
+
+### Grimsby tab redesign -- Claude Design handoff (patch 0285)
+```discord-update
+Dev Update | Grimsby's Tab, Redesign
+
+- Changed: the Grimsby tab no longer shows his sprite four times in a row -- one ruled, numbered grid instead, with a new status strip up top (cart status, time left, gold on hand, vendor rep)
+- Changed: High Roller is now its own card in that grid instead of a separate unlock box plus a second button bolted onto the card game
+- Changed: card, dice, and tab game windows all got a visual polish pass -- new header bar, underlined game tabs, a real round-by-round ledger for the Tab, restyled BUST card
+- No mechanic, payout, odds, or cost changed anywhere in this patch -- chrome only
+```
+
+Direct request: a Claude Design handoff (`Guild_Idler_Grimsby_Redesign.
+zip` -- two `.dc.html` prototypes + a detailed README spec) redesigning
+`PeddlerPanel.tsx` and doing a "polish/uniformity" pass on its four
+sub-modals. The core problem the handoff was solving: all four of
+Grimsby's game cards (Cards/Dice/Tab/High Roller) put the SAME animated
+`GrimsbySprite` at 144px side by side, which read as one screenshot
+repeated four times once there were four separate offerings instead of
+one. Explicitly scoped as chrome-only -- "no mechanic, engine call,
+sprite, animation, backdrop or particle effect is removed."
+
+**Confirmed zero overlap with patch 0284**, which landed mid-session:
+diffed every file this patch touches
+(`PeddlerPanel.tsx`/`PeddlerCardModal.tsx`/`PeddlerDiceModal.tsx`/
+`PeddlerTabModal.tsx`/`GrimsbyBustCard.tsx`/`app.css`/
+`PeddlerManager.ts`) against a fresh clone taken after 0284 was live --
+byte-identical across all seven before this patch's own edits, since
+0284's changes lived entirely in `RaidManager.ts`/tuning data. Rebased
+onto the post-0284 tree before finalizing rather than risk silently
+reverting its Tab-rebalance tuning change.
+
+**`PeddlerPanel.tsx` -- full rewrite.** New header (kicker + title +
+subtitle), a 4-column status strip (Status / Leaves in / Gold on hand /
+Vendor rep -- the last reusing the existing `ReputationRing` plus
+`vendorRepLevel`/`vendorRepPercent`, both already exported from
+`vendorRep.ts`, nothing new computed), and the four-card
+`.grimsby-game-grid` (numbered `01/CARDS` through `04/HIGH ROLLER`,
+index label + state word per card, a 3-cell stat row, actions pinned to
+the card's bottom). Every handler, guard, and piece of copy from the
+pre-redesign version carried over unchanged --
+`pickPeddlerCard`/`usePeddlerCharm`/`unlockHighRoller`/
+`unlockGrimsbyPermanentSpot`, the stake selector and its
+`PeddlerManager.STAKE_OPTIONS` map, every `canAfford*`/`title` tooltip
+guard -- only the JSX they're hung on changed. High Roller's old shape
+(a separate `.locked-upgrade` unlock box PLUS a second `btn-primary`
+button crammed onto the Cards vendor-card once unlocked) is now one
+card that just changes state: locked skeleton + "Unlock -- N gold"
+before `grimsbyHighRollerUnlocked`, the real "High Roller -- fee" play
+action after. "A Permanent Spot" stays its own upsell card below the
+grid, unrestyled -- the grid is deliberately exactly the four games the
+handoff specifies, not five.
+
+**Modals -- the "polish/uniformity" half, done to the extent it was
+fully specified against real data.** Added: a title + `\u25c6 gold on
+hand` topbar to all three game modals; the Dice modal's Call-a-Number/
+High-or-Low switcher restyled from the shared `.btn-subtab` pill-button
+family (used everywhere else -- Vendors, Harvest, Raids) to underlined
+tabs, a deliberate one-off per the handoff, not a change to
+`.btn-subtab` itself; both wager `<input>`s in the Dice modal switched
+from ad-hoc inline styles to a new reusable `.input` class, per the
+handoff's own instruction to add one; the Tab modal's round history
+rewritten from a plain stacked `.card` block into a real 3-column ledger
+(`Round`/`Push`/`On the tab`) -- `Push` computed correctly from
+`PeddlerManager.tabTierBuyIn(tab.tier)` (confirmed fixed for the whole
+tab session by reading `openTab`/`runItUp`); the Card modal gained a new
+facts list (`Fee at 1x` / `Outcome tiers` / `Loyalty rebate`) using
+`PeddlerManager.feeCost` and `vendorRepPercent` -- confirmed
+`repRebate`'s identical formula is what the card game's own
+`resolveFlip` already applies, not an invented number; `GrimsbyBustCard`
+needed no TSX changes at all, its existing markup already matched the
+handoff's shape -- only `app.css` changed (gradient fill, exact
+colors/sizing) for that one.
+
+**Explicitly NOT faked: past rounds' historical "on the tab" value in
+the new ledger.** Only the CURRENT round's value was ever tracked in
+`GameState.peddlerTab` (`tab.value`) -- there's no per-round history
+array. The pre-redesign code already had this gap (it silently rendered
+`0` for every non-current round); the new ledger shows an em dash for
+those cells instead, which is honest about the limitation rather than
+inventing numbers. Didn't attempt the handoff's "next round shown ...
+with its projected value" either, for the same reason -- computing a
+projected payout would mean re-deriving `runItUp`'s own success-chance
+math in the UI layer, which risks silently drifting out of sync with the
+real formula; the next round's row shows its real buy-in only.
+
+**Deferred, not lost:** the handoff's `.peddler-card-detail-overlay`
+restyle (small thumbnail next to the outcome text) and the exact
+sprite-band backdrop framing described for all three modals weren't
+touched -- existing markup/CSS for both already renders correctly, just
+not pixel-matched to the prototype. No functionality sits behind either
+gap.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` both pass
+clean (`noUnusedLocals`/`noUnusedParameters` are both on in this repo's
+`tsconfig.json`, so a stale import from any of these edits would have
+failed the build, not just linted). Manually traced every event handler
+and engine call in the four rewritten/edited files against the
+pre-redesign versions to confirm none were dropped, renamed, or
+rewired -- the request was explicit that nothing functional should be
+lost. No `SAVE_VERSION` bump needed -- markup, CSS, and local component
+state only, no `GameState` shape touched anywhere in this patch.

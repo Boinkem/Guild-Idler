@@ -1,0 +1,1083 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f2ec17f..df5947c 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -22542,3 +22542,104 @@ immediately before starting (three unrelated pricing patches, 0281-
+ before editing). No `SAVE_VERSION` bump needed -- `RaidResult.
+ heroesLeveledUp` is a result-object field, not persisted `GameState`
+ shape.
++
++### Grimsby tab redesign -- Claude Design handoff (patch 0285)
++```discord-update
++Dev Update | Grimsby's Tab, Redesign
++
++- Changed: the Grimsby tab no longer shows his sprite four times in a row -- one ruled, numbered grid instead, with a new status strip up top (cart status, time left, gold on hand, vendor rep)
++- Changed: High Roller is now its own card in that grid instead of a separate unlock box plus a second button bolted onto the card game
++- Changed: card, dice, and tab game windows all got a visual polish pass -- new header bar, underlined game tabs, a real round-by-round ledger for the Tab, restyled BUST card
++- No mechanic, payout, odds, or cost changed anywhere in this patch -- chrome only
++```
++
++Direct request: a Claude Design handoff (`Guild_Idler_Grimsby_Redesign.
++zip` -- two `.dc.html` prototypes + a detailed README spec) redesigning
++`PeddlerPanel.tsx` and doing a "polish/uniformity" pass on its four
++sub-modals. The core problem the handoff was solving: all four of
++Grimsby's game cards (Cards/Dice/Tab/High Roller) put the SAME animated
++`GrimsbySprite` at 144px side by side, which read as one screenshot
++repeated four times once there were four separate offerings instead of
++one. Explicitly scoped as chrome-only -- "no mechanic, engine call,
++sprite, animation, backdrop or particle effect is removed."
++
++**Confirmed zero overlap with patch 0284**, which landed mid-session:
++diffed every file this patch touches
++(`PeddlerPanel.tsx`/`PeddlerCardModal.tsx`/`PeddlerDiceModal.tsx`/
++`PeddlerTabModal.tsx`/`GrimsbyBustCard.tsx`/`app.css`/
++`PeddlerManager.ts`) against a fresh clone taken after 0284 was live --
++byte-identical across all seven before this patch's own edits, since
++0284's changes lived entirely in `RaidManager.ts`/tuning data. Rebased
++onto the post-0284 tree before finalizing rather than risk silently
++reverting its Tab-rebalance tuning change.
++
++**`PeddlerPanel.tsx` -- full rewrite.** New header (kicker + title +
++subtitle), a 4-column status strip (Status / Leaves in / Gold on hand /
++Vendor rep -- the last reusing the existing `ReputationRing` plus
++`vendorRepLevel`/`vendorRepPercent`, both already exported from
++`vendorRep.ts`, nothing new computed), and the four-card
++`.grimsby-game-grid` (numbered `01/CARDS` through `04/HIGH ROLLER`,
++index label + state word per card, a 3-cell stat row, actions pinned to
++the card's bottom). Every handler, guard, and piece of copy from the
++pre-redesign version carried over unchanged --
++`pickPeddlerCard`/`usePeddlerCharm`/`unlockHighRoller`/
++`unlockGrimsbyPermanentSpot`, the stake selector and its
++`PeddlerManager.STAKE_OPTIONS` map, every `canAfford*`/`title` tooltip
++guard -- only the JSX they're hung on changed. High Roller's old shape
++(a separate `.locked-upgrade` unlock box PLUS a second `btn-primary`
++button crammed onto the Cards vendor-card once unlocked) is now one
++card that just changes state: locked skeleton + "Unlock -- N gold"
++before `grimsbyHighRollerUnlocked`, the real "High Roller -- fee" play
++action after. "A Permanent Spot" stays its own upsell card below the
++grid, unrestyled -- the grid is deliberately exactly the four games the
++handoff specifies, not five.
++
++**Modals -- the "polish/uniformity" half, done to the extent it was
++fully specified against real data.** Added: a title + `\u25c6 gold on
++hand` topbar to all three game modals; the Dice modal's Call-a-Number/
++High-or-Low switcher restyled from the shared `.btn-subtab` pill-button
++family (used everywhere else -- Vendors, Harvest, Raids) to underlined
++tabs, a deliberate one-off per the handoff, not a change to
++`.btn-subtab` itself; both wager `<input>`s in the Dice modal switched
++from ad-hoc inline styles to a new reusable `.input` class, per the
++handoff's own instruction to add one; the Tab modal's round history
++rewritten from a plain stacked `.card` block into a real 3-column ledger
++(`Round`/`Push`/`On the tab`) -- `Push` computed correctly from
++`PeddlerManager.tabTierBuyIn(tab.tier)` (confirmed fixed for the whole
++tab session by reading `openTab`/`runItUp`); the Card modal gained a new
++facts list (`Fee at 1x` / `Outcome tiers` / `Loyalty rebate`) using
++`PeddlerManager.feeCost` and `vendorRepPercent` -- confirmed
++`repRebate`'s identical formula is what the card game's own
++`resolveFlip` already applies, not an invented number; `GrimsbyBustCard`
++needed no TSX changes at all, its existing markup already matched the
++handoff's shape -- only `app.css` changed (gradient fill, exact
++colors/sizing) for that one.
++
++**Explicitly NOT faked: past rounds' historical "on the tab" value in
++the new ledger.** Only the CURRENT round's value was ever tracked in
++`GameState.peddlerTab` (`tab.value`) -- there's no per-round history
++array. The pre-redesign code already had this gap (it silently rendered
++`0` for every non-current round); the new ledger shows an em dash for
++those cells instead, which is honest about the limitation rather than
++inventing numbers. Didn't attempt the handoff's "next round shown ...
++with its projected value" either, for the same reason -- computing a
++projected payout would mean re-deriving `runItUp`'s own success-chance
++math in the UI layer, which risks silently drifting out of sync with the
++real formula; the next round's row shows its real buy-in only.
++
++**Deferred, not lost:** the handoff's `.peddler-card-detail-overlay`
++restyle (small thumbnail next to the outcome text) and the exact
++sprite-band backdrop framing described for all three modals weren't
++touched -- existing markup/CSS for both already renders correctly, just
++not pixel-matched to the prototype. No functionality sits behind either
++gap.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` both pass
++clean (`noUnusedLocals`/`noUnusedParameters` are both on in this repo's
++`tsconfig.json`, so a stale import from any of these edits would have
++failed the build, not just linted). Manually traced every event handler
++and engine call in the four rewritten/edited files against the
++pre-redesign versions to confirm none were dropped, renamed, or
++rewired -- the request was explicit that nothing functional should be
++lost. No `SAVE_VERSION` bump needed -- markup, CSS, and local component
++state only, no `GameState` shape touched anywhere in this patch.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 22e8bda..8fab4c9 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -3610,9 +3610,197 @@ button.harvest-item:hover {
+ 
+ /* ------------------------------ Grimsby / the peddler ------------------------------ */
+ 
+-/* Tab presentation reuses .vendor-card as-is (no new class needed) --
+-   see PeddlerPanel.tsx's own comment for why this replaced the earlier
+-   full-scene background treatment. */
++/* Patch 0284 (Claude Design handoff, direct request) -- replaced the old
++   "reuse .vendor-card as-is, one card per game, GrimsbySprite repeated
++   on all four" tab layout (previously read as one screenshot repeated
++   four times) with a ruled, numbered game grid and no sprite anywhere
++   on this screen -- Grimsby still appears, animated, inside each game's
++   own modal below, untouched. See PeddlerPanel.tsx's own top comment. */
++
++.grimsby-header-row {
++  display: flex;
++  justify-content: space-between;
++  align-items: baseline;
++  gap: 24px;
++  flex-wrap: wrap;
++  padding-bottom: 10px;
++  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 55%, var(--edge));
++  margin-bottom: 14px;
++}
++.grimsby-kicker {
++  font-size: 0.5625rem;
++  text-transform: uppercase;
++  letter-spacing: 0.1em;
++  color: var(--muted);
++  margin-bottom: 2px;
++}
++.grimsby-header-subtitle { max-width: 560px; margin: 0; }
++
++.grimsby-status-strip {
++  display: grid;
++  grid-template-columns: repeat(4, 1fr);
++  padding-bottom: 12px;
++  margin-bottom: 16px;
++  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 55%, var(--edge));
++}
++.grimsby-status-cell:not(:first-child) {
++  border-left: 1px solid color-mix(in srgb, var(--brass-dim) 25%, var(--edge));
++  padding-left: 16px;
++}
++.grimsby-status-label {
++  font-size: 0.5625rem;
++  text-transform: uppercase;
++  letter-spacing: 0.06em;
++  color: var(--muted);
++  margin-bottom: 2px;
++}
++.grimsby-status-value {
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  font-weight: 700;
++  color: var(--parchment);
++  display: flex;
++  align-items: center;
++  gap: 6px;
++}
++.grimsby-status-dot {
++  width: 6px;
++  height: 6px;
++  border-radius: 50%;
++  background: var(--muted);
++  flex-shrink: 0;
++}
++.grimsby-status-dot.on { background: var(--moss); box-shadow: 0 0 5px color-mix(in srgb, var(--moss) 70%, transparent); }
++.grimsby-status-rep { color: var(--brass); }
++.grimsby-status-rep-detail { font-size: 0.6875rem; font-weight: 400; color: var(--muted); }
++
++.grimsby-game-grid {
++  display: grid;
++  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
++  gap: 14px;
++}
++
++.grimsby-game-card {
++  display: flex;
++  flex-direction: column;
++  background: linear-gradient(90deg, rgba(217, 164, 65, 0.08), transparent 60%), color-mix(in srgb, var(--panel) 88%, transparent);
++  border: 1px solid color-mix(in srgb, var(--brass-dim) 40%, var(--edge));
++  border-left: 3px solid var(--brass);
++  border-radius: var(--radius);
++  box-shadow: var(--bevel);
++  padding: 12px 14px 14px;
++}
++.grimsby-game-card.locked {
++  background: color-mix(in srgb, var(--panel) 70%, transparent);
++  border-style: dashed;
++  border-left-color: color-mix(in srgb, var(--brass-dim) 35%, var(--edge));
++  opacity: 0.9;
++}
++.grimsby-game-card.locked .grimsby-game-card-title,
++.grimsby-game-card.locked .grimsby-status-value { color: var(--muted); }
++
++.grimsby-game-card-header { display: flex; justify-content: space-between; align-items: center; }
++.grimsby-game-card-index {
++  font-family: var(--font-display);
++  font-weight: 700;
++  font-size: 0.625rem;
++  letter-spacing: 0.08em;
++  color: var(--muted);
++}
++.grimsby-game-card-state {
++  font-size: 0.5625rem;
++  text-transform: uppercase;
++  font-weight: 700;
++}
++.grimsby-game-card-title {
++  font-family: var(--font-display);
++  font-size: 1rem;
++  font-weight: 700;
++  color: var(--parchment);
++  margin: 4px 0 0;
++}
++.grimsby-game-card-flavour { margin: 6px 0 0; }
++
++.grimsby-game-stats {
++  display: grid;
++  grid-template-columns: repeat(3, 1fr);
++  margin-top: 8px;
++  padding-top: 8px;
++  border-top: 1px solid color-mix(in srgb, var(--brass-dim) 25%, var(--edge));
++}
++.grimsby-game-stat {
++  padding: 0 10px;
++}
++.grimsby-game-stat:first-child { padding-left: 0; }
++.grimsby-game-stat:not(:first-child) {
++  border-left: 1px solid color-mix(in srgb, var(--brass-dim) 20%, var(--edge));
++}
++.grimsby-game-stat-value {
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  font-weight: 700;
++  color: var(--parchment);
++}
++
++.grimsby-game-card-actions {
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
++  margin-top: auto;
++  padding-top: 12px;
++}
++
++/* Reusable text input, added here first (the Dice modal's wager fields,
++   patch 0284) but not tied to Grimsby specifically -- anything else that
++   needs a plain themed number/text field going forward should use this
++   instead of its own inline style block. */
++.input {
++  background: var(--panel-2);
++  border: 1px solid var(--panel-3);
++  border-radius: 4px;
++  padding: 5px 8px;
++  color: var(--parchment);
++  font-family: var(--font-body);
++}
++.input:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
++
++/* Dice modal's Call-a-Number / High-or-Low switcher, restyled as
++   underlined tabs (patch 0284, direct request) rather than the shared
++   .btn-subtab pill-button family every other sub-tabbed panel uses --
++   deliberately a one-off here, not a change to .btn-subtab itself. */
++.grimsby-subtab-row {
++  display: flex;
++  justify-content: center;
++  gap: 4px;
++  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 55%, var(--edge));
++  margin-bottom: 10px;
++}
++.grimsby-subtab {
++  background: transparent;
++  border: none;
++  border-bottom: 2px solid transparent;
++  border-radius: 0;
++  box-shadow: none;
++  padding: 8px 14px;
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  font-weight: 700;
++  color: var(--muted);
++}
++.grimsby-subtab:hover:not(:disabled) { color: var(--parchment); background: transparent; }
++.grimsby-subtab.on { color: var(--brass); border-bottom-color: var(--brass); }
++
++/* Two-column label/value facts grid -- Card modal's fee/tiers/rebate
++   summary, Dice modal's odds list -- shared here rather than each modal
++   inventing its own row markup. */
++.peddler-facts-grid {
++  display: grid;
++  grid-template-columns: auto 1fr;
++  gap: 3px 16px;
++  font-size: 0.625rem;
++}
++.peddler-facts-grid dt { color: var(--muted); }
++.peddler-facts-grid dd { margin: 0; text-align: right; color: var(--parchment); }
+ 
+ /* The card-game modal -- own background image (a tabletop scene, not
+    yet supplied as of this patch), same "missing file just fails to
+@@ -3694,6 +3882,24 @@ button.harvest-item:hover {
+   gap: 8px;
+   margin-bottom: 12px;
+ }
++/* Title + gold-on-hand bar above the sprite band (patch 0284, Claude
++   Design handoff) -- .peddler-modal-header below it stays exactly as
++   before (the animated sprite + High Roller badge), this is purely an
++   added row on top of it. */
++.peddler-modal-topbar {
++  display: flex;
++  justify-content: space-between;
++  align-items: center;
++  padding-bottom: 10px;
++  margin-bottom: 6px;
++  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 55%, var(--edge));
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  font-weight: 700;
++  color: var(--parchment);
++}
++.peddler-modal-topbar-gold { font-size: 0.625rem; color: var(--brass); font-weight: 700; }
++
+ /* Grimsby's own card game already has a purple button (btn-purple);
+    High Roller gets its own brass/gold treatment throughout -- this
+    badge, and the btn-primary color on its trigger button in
+@@ -3737,7 +3943,11 @@ button.harvest-item:hover {
+ .peddler-card {
+   width: 110px; height: 150px;
+   border-radius: 4px;
+-  background-color: var(--panel);
++  /* patch 0284: var(--panel-2), not the plain --panel this used before
++     -- brought in line with the same "art backing" shade the redesign
++     uses for the wager .input fields, so every dark-backed art element
++     on this tab draws from one consistent panel tone. */
++  background-color: var(--panel-2);
+ }
+ /* No CSS border/outline on the face-down card at all -- removed per
+    direct request. The card-back art already paints its own gold frame
+@@ -3994,10 +4204,9 @@ button.harvest-item:hover {
+ .dice-roll-button:disabled { opacity: 0.6; cursor: default; }
+ 
+ /* Sub-tab switcher inside PeddlerDiceModal (Call a Number / High or
+-   Low) -- same .btn-subtab family every other sub-tabbed panel uses,
+-   just centered since this modal has no left-aligned page chrome to
+-   anchor against. */
+-.dice-tab-row { display: flex; justify-content: center; gap: 6px; margin-bottom: 10px; }
++   Low) -- patch 0284, restyled from .btn-subtab pill buttons to
++   underlined tabs; see .grimsby-subtab/.grimsby-subtab-row further up
++   for the current rule. */
+ 
+ /* Shared BUST interstitial (GrimsbyBustCard.tsx, patch 0261) -- solid
+    black card, bold oversized red text, direct request ("Bold, large red
+@@ -4014,25 +4223,65 @@ button.harvest-item:hover {
+   gap: 14px;
+   width: 220px;
+   min-height: 150px;
+-  padding: 24px 20px;
+-  background: #0a0a0a;
+-  border: 2px solid var(--blood);
++  padding: 20px 18px;
++  /* Filled plate, patch 0284 (Claude Design handoff) -- was a flat
++     near-black panel with a glow; now a top-to-bottom blood-red
++     gradient into --panel-2, same "sits in the game's own palette
++     rather than an isolated pure-black/pure-red pair" reasoning the
++     redesign applied everywhere else on this tab. */
++  background: linear-gradient(180deg, color-mix(in srgb, var(--blood) 80%, var(--panel-2)), color-mix(in srgb, var(--blood) 45%, var(--panel-2)));
++  border: 1px solid var(--blood);
+   border-radius: var(--radius);
+-  box-shadow: 0 0 20px color-mix(in srgb, var(--blood) 45%, transparent);
++  box-shadow: var(--bevel);
+ }
+ .grimsby-bust-card-label {
+-  font-size: 2.4rem;
+-  font-weight: 900;
+-  letter-spacing: 0.1em;
+-  color: #ff3b3b;
+-  text-shadow: 0 0 12px color-mix(in srgb, #ff3b3b 60%, transparent);
++  font-family: var(--font-display);
++  font-size: 2.5rem;
++  font-weight: 700;
++  letter-spacing: 0.04em;
++  color: #fff8e6;
++  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+ }
+ .grimsby-bust-card-subtitle {
+-  color: var(--muted);
++  color: #f7e4de;
+   text-align: center;
++  max-width: 44ch;
+   margin: 0;
+ }
+ 
++/* Patch 0284 (Claude Design handoff) -- replaced the old ad-hoc stacked
++   "Round n / value" rows inside a plain .card with a real 3-column
++   ledger grid (Round / Push / On the tab). Past rounds' own historical
++   value was never actually stored (only the live tab.value is tracked),
++   so those cells show an em dash rather than a fabricated number --
++   same "0 for every non-current round" limitation the old version had,
++   just not pretending to be a real value now. */
++.peddler-tab-ledger {
++  width: 100%;
++  max-width: 280px;
++  margin: 0 auto;
++  font-size: 0.6875rem;
++}
++.peddler-tab-ledger-row {
++  display: grid;
++  grid-template-columns: 1fr 1.4fr 1fr;
++  gap: 8px;
++  padding: 7px 0 7px 20px;
++}
++.peddler-tab-ledger-header {
++  font-size: 0.5625rem;
++  text-transform: uppercase;
++  color: var(--muted);
++  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 45%, var(--edge));
++  padding-bottom: 4px;
++}
++.peddler-tab-ledger-row:not(.peddler-tab-ledger-header) {
++  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 18%, var(--edge));
++}
++.peddler-tab-ledger-row.past { color: var(--muted); }
++.peddler-tab-ledger-row.current { color: var(--parchment); }
++.peddler-tab-ledger-row.peddler-tab-ledger-next { color: var(--muted); opacity: 0.6; }
++
+ /* The Tab game's own running pot value -- direct request to make this
+    bigger than the round-history rows around it (which stay .tiny/
+    .muted), since it's the one number in that little card that actually
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+index f579011..03647ae 100644
+--- a/src/ui/PeddlerCardModal.tsx
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -12,6 +12,7 @@ import { EggIcon } from './EggIcon';
+ import { measureFlyOffset } from './flyTarget';
+ import { RewardGlowParticle } from './RewardGlowParticle';
+ import { GrimsbyBustCard } from './GrimsbyBustCard';
++import { vendorRepPercent } from '../game/data/vendorRep';
+ 
+ /**
+  * Random one-liners Grimsby fires off the moment the cards spawn --
+@@ -404,6 +405,10 @@ export function PeddlerCardModal({
+         style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
+         onClick={(e) => e.stopPropagation()}
+       >
++        <div className="peddler-modal-topbar">
++          <span>{highRoller ? 'High Roller' : 'Pick Your Card'}</span>
++          <span className="peddler-modal-topbar-gold">{'\u25c6'} {formatGold(engine.state.gold)} on hand</span>
++        </div>
+         <div className="peddler-modal-header">
+           <GrimsbySprite
+             animation={headerAnimation}
+@@ -504,7 +509,18 @@ export function PeddlerCardModal({
+           )}
+         </div>
+ 
+-        <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++        <dl className="peddler-facts-grid" style={{ marginBottom: 8, paddingTop: 8, borderTop: '1px solid color-mix(in srgb, var(--brass-dim) 25%, var(--edge))' }}>
++          <dt>Fee at 1x</dt>
++          <dd style={{ color: 'var(--brass)' }}>{formatGold(PeddlerManager.feeCost(engine.state))} gold</dd>
++          <dt>Outcome tiers</dt>
++          <dd>
++            Nothing {'\u00b7'} Partial Refund {'\u00b7'} Modest Find {'\u00b7'} Good Find {'\u00b7'} <span style={{ color: 'var(--brass)' }}>JACKPOT</span>
++          </dd>
++          <dt>Loyalty rebate</dt>
++          <dd>{vendorRepPercent(engine.state.stats.peddlerGoldSpent)}%</dd>
++        </dl>
++
++        <div className="row end" style={{ marginTop: 0, gap: 8 }}>
+           {revealStage === 'settled' && pickedCard?.outcome.tier !== 'bust' && (
+             <button
+               className="btn-purple"
+diff --git a/src/ui/PeddlerDiceModal.tsx b/src/ui/PeddlerDiceModal.tsx
+index 7069aa2..e0373c9 100644
+--- a/src/ui/PeddlerDiceModal.tsx
++++ b/src/ui/PeddlerDiceModal.tsx
+@@ -235,15 +235,19 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+         style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
+         onClick={(e) => e.stopPropagation()}
+       >
++        <div className="peddler-modal-topbar">
++          <span>Grimsby's Dice</span>
++          <span className="peddler-modal-topbar-gold">{'\u25c6'} {formatGold(state.gold)} on hand</span>
++        </div>
+         <div className="peddler-modal-header">
+           <GrimsbySprite animation="idle" height={140} />
+         </div>
+ 
+-        <div className="dice-tab-row">
+-          <button className={`btn-subtab ${tab === 'exact' ? 'on' : ''}`} onClick={() => setTab('exact')}>
++        <div className="grimsby-subtab-row">
++          <button className={`grimsby-subtab ${tab === 'exact' ? 'on' : ''}`} onClick={() => setTab('exact')}>
+             Call a Number
+           </button>
+-          <button className={`btn-subtab ${tab === 'highlow' ? 'on' : ''}`} onClick={() => setTab('highlow')}>
++          <button className={`grimsby-subtab ${tab === 'highlow' ? 'on' : ''}`} onClick={() => setTab('highlow')}>
+             High or Low
+           </button>
+         </div>
+@@ -296,10 +300,8 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+                     disabled={rolling}
+                     onChange={(e) => setWagerText(e.target.value)}
+                     placeholder="Gold"
+-                    style={{
+-                      width: 90, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+-                      color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.75rem',
+-                    }}
++                    className="input"
++                    style={{ width: 90, fontSize: '0.75rem' }}
+                   />
+                   <button type="button" className="btn-ghost" disabled={rolling} onClick={setMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
+                     Max
+@@ -398,10 +400,8 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+                     disabled={hlRolling}
+                     onChange={(e) => setHlWagerText(e.target.value)}
+                     placeholder="Gold"
+-                    style={{
+-                      width: 90, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+-                      color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.75rem',
+-                    }}
++                    className="input"
++                    style={{ width: 90, fontSize: '0.75rem' }}
+                   />
+                   <button type="button" className="btn-ghost" disabled={hlRolling} onClick={setHlMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
+                     Max
+diff --git a/src/ui/PeddlerTabModal.tsx b/src/ui/PeddlerTabModal.tsx
+index 08a61f3..eddf07f 100644
+--- a/src/ui/PeddlerTabModal.tsx
++++ b/src/ui/PeddlerTabModal.tsx
+@@ -127,6 +127,10 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+         style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
+         onClick={(e) => e.stopPropagation()}
+       >
++        <div className="peddler-modal-topbar">
++          <span>The Tab{tab ? ` \u00b7 Round ${tab.round}` : ''}</span>
++          <span className="peddler-modal-topbar-gold">{'\u25c6'} {formatGold(state.gold)} on hand</span>
++        </div>
+         <div className="peddler-modal-header">
+           <GrimsbySprite animation={closedPose ? 'idle2' : 'idle'} once={closedPose} height={140} />
+         </div>
+@@ -184,15 +188,30 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+ 
+           {tab && (
+             <>
+-              <div className="card" style={{ padding: '8px 12px', margin: '0 auto', maxWidth: 220 }}>
+-                {Array.from({ length: tab.round }, (_, i) => i + 1).map((round) => (
+-                  <div key={round} className="spread tiny" style={{ fontFamily: 'monospace' }}>
+-                    <span className="muted">Round {round}</span>
+-                    <span className={round === tab.round ? 'peddler-tab-pot-value' : undefined}>
+-                      {formatGold(round === tab.round ? tab.value : 0)}
+-                    </span>
+-                  </div>
+-                ))}
++              <div className="peddler-tab-ledger">
++                <div className="peddler-tab-ledger-row peddler-tab-ledger-header">
++                  <span>Round</span>
++                  <span>Push</span>
++                  <span style={{ textAlign: 'right' }}>On the tab</span>
++                </div>
++                {Array.from({ length: tab.round }, (_, i) => i + 1).map((round) => {
++                  const isCurrent = round === tab.round;
++                  const push = PeddlerManager.tabTierBuyIn(tab.tier);
++                  return (
++                    <div key={round} className={`peddler-tab-ledger-row ${isCurrent ? 'current' : 'past'}`}>
++                      <span>Round {round}</span>
++                      <span>{formatGold(push)}g {'\u00b7'} {round === 1 ? 'Bought in' : 'Held'}</span>
++                      <span className={isCurrent ? 'peddler-tab-pot-value' : undefined} style={{ textAlign: 'right' }}>
++                        {isCurrent ? formatGold(tab.value) : '\u2014'}
++                      </span>
++                    </div>
++                  );
++                })}
++                <div className="peddler-tab-ledger-row peddler-tab-ledger-next">
++                  <span>Round {tab.round + 1}</span>
++                  <span>{formatGold(nextBuyIn)}g {'\u00b7'} Held</span>
++                  <span style={{ textAlign: 'right' }}>{'\u2014'}</span>
++                </div>
+               </div>
+ 
+               <div className="row wrap" style={{ gap: 8, justifyContent: 'center' }}>
+diff --git a/src/ui/panels/PeddlerPanel.tsx b/src/ui/panels/PeddlerPanel.tsx
+index 6c1bd79..c680acf 100644
+--- a/src/ui/panels/PeddlerPanel.tsx
++++ b/src/ui/panels/PeddlerPanel.tsx
+@@ -2,22 +2,26 @@ import { useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { PeddlerManager } from '../../game/managers/PeddlerManager';
+ import { formatGold, formatDuration } from '../../game/util';
+-import { GrimsbySprite } from '../sprites/GrimsbySprite';
+ import { PeddlerCardModal } from '../PeddlerCardModal';
+ import { PeddlerDiceModal } from '../PeddlerDiceModal';
+ import { PeddlerTabModal } from '../PeddlerTabModal';
+ import { ReputationRing } from '../ReputationRing';
++import { vendorRepLevel, vendorRepPercent } from '../../game/data/vendorRep';
+ 
+ /**
+- * Same "vendor-card" presentation the Blacksmith/Alchemist/Enchanter
+- * already use (VendorsPanel.tsx) -- sprite + name on a dark card,
+- * blurb, action button -- rather than a bespoke full-scene background.
+- * The actual card game lives in its own modal (PeddlerCardModal), same
+- * "tab is a plain destination, the special moment is its own overlay"
+- * shape CraftingStation/EnhanceStation etc. already use from each
+- * vendor's own page. peddler-bg.png stays as the tab's faded backdrop
+- * (wired at the MenuWindow level, same as hatchery-bg.jpg/raids-bg.jpg)
+- * -- it doesn't also need to be a bold foreground element here too.
++ * Grimsby tab redesign -- Claude Design handoff, direct request. The
++ * card-per-vendor-sprite shape VendorsPanel's own cards use (see the
++ * pre-redesign version of this file, still the shape every other vendor
++ * page follows) put the SAME animated GrimsbySprite on four separate
++ * cards in a row, which read as one screenshot repeated four times once
++ * Grimsby had four separate games/upgrades instead of one. Fixed here by
++ * dropping the sprite from every card on this tab entirely -- Grimsby
++ * still appears, animated, inside each game's own modal (PeddlerCardModal/
++ * PeddlerDiceModal/PeddlerTabModal all keep their own GrimsbySprite
++ * untouched) -- and replacing the four vendor-cards with one ruled,
++ * numbered game grid instead. Every engine call, guard, and piece of
++ * copy below is identical to what the old version had; only the chrome
++ * around them changed.
+  */
+ export function PeddlerPanel() {
+   const engine = useEngine();
+@@ -42,151 +46,201 @@ export function PeddlerPanel() {
+   const highRollerUnlocked = state.grimsbyHighRollerUnlocked;
+   const highRollerFee = PeddlerManager.feeWithStake(state, true, stake);
+   const canAffordHighRoller = state.gold >= highRollerFee;
+-  const multiplier = PeddlerManager.highRollerMultiplier();
+-  const unlockCost = PeddlerManager.highRollerUnlockCost();
+-  const canAffordUnlock = PeddlerManager.canUnlockHighRoller(state);
++  const highRollerMultiplier = PeddlerManager.highRollerMultiplier();
++  const highRollerUnlockCost = PeddlerManager.highRollerUnlockCost();
++  const canAffordHighRollerUnlock = PeddlerManager.canUnlockHighRoller(state);
+ 
+   const permanentSpotUnlocked = state.grimsbyPermanentSpotUnlocked;
+   const permanentSpotCost = PeddlerManager.permanentSpotUnlockCost();
+   const canAffordPermanentSpot = PeddlerManager.canUnlockPermanentSpot(state);
+ 
++  const repLevel = vendorRepLevel(state.stats.peddlerGoldSpent);
++  const repPercent = vendorRepPercent(state.stats.peddlerGoldSpent);
++
++  const leavesIn = present && !permanentSpotUnlocked
++    ? formatDuration(Math.max(0, (state.grimsbyLeavesAt ?? now) - now))
++    : null;
++
+   return (
+     <>
+-      <h2>Grimsby</h2>
+-      <p className="subtitle">
+-        A cart, a cart, and absolutely nothing more, according to him. A card, a die, or -- once he's
+-        settled in -- a running tab: pay your way in, see what happens. He swears the odds are fair.
+-        He would say that either way.
+-      </p>
++      <div className="grimsby-header-row">
++        <div>
++          <div className="grimsby-kicker">Guild Hall / Vendors</div>
++          <h2 style={{ margin: 0 }}>Grimsby</h2>
++        </div>
++        <p className="subtitle grimsby-header-subtitle">
++          A cart, a cart, and absolutely nothing more, according to him. A card, a die, or -- once he's
++          settled in -- a running tab: pay your way in, see what happens. He swears the odds are fair.
++          He would say that either way.
++        </p>
++      </div>
+ 
+-      <div className="card vendor-card" style={{ marginBottom: 12 }}>
+-        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+-          <GrimsbySprite animation="idle" height={144} />
+-          <div style={{ flex: 1 }}>
+-            <div className="spread">
+-              <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
+-                Grimsby
+-                <ReputationRing goldSpent={state.stats.peddlerGoldSpent} size={20} />
+-              </span>
+-              {present && !permanentSpotUnlocked && (
+-                <span className="tiny muted">
+-                  {formatDuration(Math.max(0, (state.grimsbyLeavesAt ?? now) - now))} left
+-                </span>
+-              )}
+-            </div>
++      <div className="grimsby-status-strip">
++        <div className="grimsby-status-cell">
++          <div className="grimsby-status-label">Status</div>
++          <div className="grimsby-status-value">
++            <span className={`grimsby-status-dot ${present ? 'on' : ''}`} />
++            {permanentSpotUnlocked ? 'Permanent spot' : present ? 'Cart is here' : 'Cart is gone'}
++          </div>
++        </div>
++        <div className="grimsby-status-cell">
++          <div className="grimsby-status-label">Leaves in</div>
++          <div className="grimsby-status-value">
++            {permanentSpotUnlocked ? 'Never' : leavesIn ?? '\u2014'}
++          </div>
++        </div>
++        <div className="grimsby-status-cell">
++          <div className="grimsby-status-label">Gold on hand</div>
++          <div className="grimsby-status-value">{'\u25c6'} {formatGold(state.gold)}</div>
++        </div>
++        <div className="grimsby-status-cell">
++          <div className="grimsby-status-label">Vendor rep</div>
++          <div className="grimsby-status-value grimsby-status-rep">
++            <ReputationRing goldSpent={state.stats.peddlerGoldSpent} size={18} />
++            Level {repLevel} <span className="grimsby-status-rep-detail">{'\u00b7'} {repPercent}% back</span>
++          </div>
++        </div>
++      </div>
+ 
+-            {present ? (
+-              <>
+-                <p className="card-flavour">
+-                  "Well? Card's a card. Fair chance, for a fair price."
+-                </p>
+-                {/* Stake selector -- raises the fee (and the eventual
+-                    reward) for BOTH buttons below at once, see this
+-                    component's own `stake` state comment above. */}
+-                <div className="row wrap" style={{ gap: 4, alignItems: 'center', marginBottom: 6 }}>
+-                  <span className="tiny muted">Stakes</span>
+-                  {PeddlerManager.STAKE_OPTIONS.map((s) => (
+-                    <button
+-                      key={s}
+-                      className={`chip ${stake === s ? 'on' : ''}`}
+-                      onClick={() => setStake(s)}
+-                      title={s === 1 ? 'Standard fee and payout' : `${s}x the fee, for ${s}x the payout`}
+-                    >
+-                      {s}x
+-                    </button>
+-                  ))}
+-                </div>
+-                <div className="row wrap" style={{ gap: 8 }}>
++      <div className="grimsby-game-grid">
++        {/* 01 / CARDS -- unchanged mechanic (PeddlerCardModal), just no
++            longer sharing a card with the High Roller button below. */}
++        <div className="grimsby-game-card">
++          <div className="grimsby-game-card-header">
++            <span className="grimsby-game-card-index">01 / CARDS</span>
++            <span className="grimsby-game-card-state" style={{ color: present ? 'var(--moss)' : 'var(--muted)' }}>
++              {present ? 'Open' : 'Locked'}
++            </span>
++          </div>
++          <div className="grimsby-game-card-title">Pick Your Card</div>
++          <p className="card-flavour grimsby-game-card-flavour">
++            "Well? Card's a card. Fair chance, for a fair price."
++          </p>
++          <div className="grimsby-game-stats">
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Fee</div>
++              <div className="grimsby-game-stat-value" style={{ color: 'var(--brass)' }}>{formatGold(fee)} g</div>
++            </div>
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Outcomes</div>
++              <div className="grimsby-game-stat-value">5 tiers</div>
++            </div>
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Stakes</div>
++              <div className="grimsby-game-stat-value">1x {'\u2013'} 5x</div>
++            </div>
++          </div>
++          <div className="grimsby-game-card-actions">
++            {present && (
++              <div className="row wrap" style={{ gap: 4, alignItems: 'center' }}>
++                <span className="tiny muted">Stakes</span>
++                {PeddlerManager.STAKE_OPTIONS.map((s) => (
+                   <button
+-                    className="btn-purple"
+-                    disabled={!canAfford}
+-                    onClick={() => setOpenModal('regular')}
+-                    title={canAfford ? undefined : 'Not enough gold'}
++                    key={s}
++                    className={`chip ${stake === s ? 'on' : ''}`}
++                    onClick={() => setStake(s)}
++                    title={s === 1 ? 'Standard fee and payout' : `${s}x the fee, for ${s}x the payout`}
+                   >
+-                    Pick Your Card -- {formatGold(fee)} gold
+-                  </button>
+-                  {highRollerUnlocked && (
+-                    <button
+-                      className="btn-primary"
+-                      disabled={!canAffordHighRoller}
+-                      onClick={() => setOpenModal('highRoller')}
+-                      title={canAffordHighRoller ? 'Same cards, bigger stakes.' : 'Not enough gold'}
+-                    >
+-                      High Roller -- {formatGold(highRollerFee)} gold
+-                    </button>
+-                  )}
+-                </div>
+-              </>
+-            ) : (
+-              <>
+-                <p className="card-flavour muted">
+-                  The cart's not here right now. He turns up unannounced, every so often, and doesn't
+-                  stick around long once he does.
+-                </p>
+-                {charmCount > 0 && (
+-                  <button onClick={() => engine.usePeddlerCharm('beckoning_charm')}>
+-                    Use a Beckoning Charm ({charmCount})
++                    {s}x
+                   </button>
+-                )}
+-              </>
++                ))}
++              </div>
++            )}
++            <button
++              className="btn-purple"
++              disabled={!present || !canAfford}
++              onClick={() => setOpenModal('regular')}
++              title={!present ? 'He\u2019s not here right now' : canAfford ? undefined : 'Not enough gold'}
++            >
++              Pick Your Card -- {formatGold(fee)} gold
++            </button>
++            {!present && charmCount > 0 && (
++              <button onClick={() => engine.usePeddlerCharm('beckoning_charm')}>
++                Use a Beckoning Charm ({charmCount})
++              </button>
+             )}
+           </div>
+         </div>
+-      </div>
+ 
+-      {/* Grimsby's Dice -- moved into its own card (previously a third
+-          button crammed onto the card-game card above, sharing that
+-          card's own sprite pose and flavour text despite being a wholly
+-          separate wager mechanic with no stake selector of its own -- the
+-          wager amount already IS the stake, entered freely inside the
+-          modal). Same "own card, own flavour" shape the High Roller card
+-          below already uses for a second offering under the same vendor.
+-          Uses the 'idle2' pose (falls back to 'idle' automatically if that
+-          animation isn't in the manifest -- see GrimsbySprite's own
+-          comment) purely so the two cards don't look like the exact same
+-          screenshot next to each other. */}
+-      <div className="card vendor-card" style={{ marginBottom: 12 }}>
+-        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+-          <GrimsbySprite animation="idle2" height={144} />
+-          <div style={{ flex: 1 }}>
+-            <div className="card-title">Grimsby's Dice</div>
+-            {present ? (
+-              <>
+-                <p className="card-flavour">
+-                  "Dice don't care who you are. Call your number, back it with gold, see where it lands."
+-                </p>
+-                <button
+-                  className="btn-green"
+-                  onClick={() => setOpenModal('dice')}
+-                  title="A gold-only wager against the dice."
+-                >
+-                  Roll the Dice
+-                </button>
+-              </>
+-            ) : (
+-              <p className="card-flavour muted">
+-                No cart, no dice -- he brings both or neither.
+-              </p>
+-            )}
++        {/* 02 / DICE -- own card, own flavour, no stake selector of its
++            own (the wager amount already IS the stake, entered freely
++            inside the modal). Uses PeddlerDiceModal, unchanged. */}
++        <div className="grimsby-game-card">
++          <div className="grimsby-game-card-header">
++            <span className="grimsby-game-card-index">02 / DICE</span>
++            <span className="grimsby-game-card-state" style={{ color: present ? 'var(--moss)' : 'var(--muted)' }}>
++              {present ? 'Open' : 'Locked'}
++            </span>
++          </div>
++          <div className="grimsby-game-card-title">Grimsby's Dice</div>
++          <p className="card-flavour grimsby-game-card-flavour">
++            "Dice don't care who you are. Call your number, back it with gold, see where it lands."
++          </p>
++          <div className="grimsby-game-stats">
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Buy-in</div>
++              <div className="grimsby-game-stat-value">Your wager</div>
++            </div>
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Games</div>
++              <div className="grimsby-game-stat-value">2</div>
++            </div>
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Top payout</div>
++              <div className="grimsby-game-stat-value" style={{ color: 'var(--brass)' }}>3x</div>
++            </div>
++          </div>
++          <div className="grimsby-game-card-actions">
++            <button
++              className="btn-green"
++              disabled={!present}
++              onClick={() => setOpenModal('dice')}
++              title={present ? 'A gold-only wager against the dice.' : 'No cart, no dice -- he brings both or neither.'}
++            >
++              Roll the Dice
++            </button>
+           </div>
+         </div>
+-      </div>
+ 
+-      {/* Grimsby's Tab -- gated behind Permanent Spot (see that card
+-          below), same "own card, own flavour" shape Dice/High Roller
+-          each get. Shows a locked card until then, same pattern High
+-          Roller's own locked-card uses before it's bought. */}
+-      {permanentSpotUnlocked ? (
+-        <div className="card vendor-card" style={{ marginBottom: 12 }}>
+-          <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+-            <GrimsbySprite animation="dialogue" height={144} />
+-            <div style={{ flex: 1 }}>
+-              <div className="card-title">The Tab</div>
+-              <p className="card-flavour">
+-                {state.peddlerTab
+-                  ? `A tab's open -- ${formatGold(state.peddlerTab.value)} gold on it so far.`
+-                  : '"Open a tab. Push it as far as you like. Just don\'t expect me to forget what you owe."'}
+-              </p>
++        {/* 03 / THE TAB -- gated behind Permanent Spot; locked-card
++            treatment (see .grimsby-game-card.locked below) until then,
++            same skeleton as the unlocked state either way. */}
++        <div className={`grimsby-game-card ${permanentSpotUnlocked ? '' : 'locked'}`}>
++          <div className="grimsby-game-card-header">
++            <span className="grimsby-game-card-index">03 / THE TAB</span>
++            <span
++              className="grimsby-game-card-state"
++              style={{ color: !permanentSpotUnlocked ? 'var(--muted)' : state.peddlerTab ? 'var(--brass)' : present ? 'var(--moss)' : 'var(--muted)' }}
++            >
++              {!permanentSpotUnlocked ? 'Locked' : state.peddlerTab ? 'Tab open' : present ? 'Open' : 'Locked'}
++            </span>
++          </div>
++          <div className="grimsby-game-card-title">The Tab</div>
++          <p className="card-flavour grimsby-game-card-flavour">
++            {permanentSpotUnlocked
++              ? (state.peddlerTab
++                ? `A tab's open -- ${formatGold(state.peddlerTab.value)} gold on it so far.`
++                : '"Open a tab. Push it as far as you like. Just don\'t expect me to forget what you owe."')
++              : 'Only for a regular with a permanent spot -- see below.'}
++          </p>
++          <div className="grimsby-game-stats">
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Tiers</div>
++              <div className="grimsby-game-stat-value">{PeddlerManager.tabTierCount()}</div>
++            </div>
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">On the tab</div>
++              <div className="grimsby-game-stat-value" style={{ color: 'var(--brass)' }}>
++                {state.peddlerTab ? `${formatGold(state.peddlerTab.value)} g` : '\u2014'}
++              </div>
++            </div>
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">A bad push</div>
++              <div className="grimsby-game-stat-value" style={{ color: 'var(--blood)' }}>Wipes it</div>
++            </div>
++          </div>
++          {permanentSpotUnlocked && (
++            <div className="grimsby-game-card-actions">
+               <button
+                 className="btn-purple"
+                 onClick={() => setOpenModal('tab')}
+@@ -195,39 +249,69 @@ export function PeddlerPanel() {
+                 {state.peddlerTab ? 'Back to the tab' : 'Open a tab'}
+               </button>
+             </div>
+-          </div>
+-        </div>
+-      ) : (
+-        <div className="card locked-upgrade">
+-          <div className="card-title">The Tab</div>
+-          <p className="card-flavour muted">
+-            Only for a regular with a permanent spot -- see below.
+-          </p>
++          )}
+         </div>
+-      )}
+ 
+-      {/* Permanent, one-time unlock -- not tied to whether he's actually
+-          here right now, same "buy it whenever, use it on the next
+-          visit" shape a vendor upgrade already has. Once bought, this
+-          card is gone for good; the second button above is the only
+-          remaining trace of it. */}
+-      {!highRollerUnlocked && (
+-        <div className="card locked-upgrade">
+-          <div className="card-title">High Roller</div>
+-          <p className="card-flavour muted">
+-            He's noticed you've got the goods now. Same cards, same odds --
+-            {' '}{multiplier}x the fee, {multiplier}x the payout.
++        {/* 04 / HIGH ROLLER -- folded into the grid: locked-card
++            treatment + the "Unlock -- N gold" purchase action before
++            grimsbyHighRollerUnlocked, the actual "High Roller -- fee"
++            play action (same PeddlerCardModal, highRoller=true) after.
++            Previously two separate elements (a standalone locked-upgrade
++            card for the purchase, a second button crammed onto the Cards
++            card for play) -- now one card that just changes state. */}
++        <div className={`grimsby-game-card ${highRollerUnlocked ? '' : 'locked'}`}>
++          <div className="grimsby-game-card-header">
++            <span className="grimsby-game-card-index">04 / HIGH ROLLER</span>
++            <span
++              className="grimsby-game-card-state"
++              style={{ color: !highRollerUnlocked ? 'var(--muted)' : present ? 'var(--moss)' : 'var(--muted)' }}
++            >
++              {!highRollerUnlocked ? 'Locked' : present ? 'Open' : 'Locked'}
++            </span>
++          </div>
++          <div className="grimsby-game-card-title">High Roller</div>
++          <p className="card-flavour grimsby-game-card-flavour">
++            {highRollerUnlocked
++              ? '"Ah, the good stuff. Same cart, same cards. Just... more feeling behind the flip, isn\u2019t there?"'
++              : <>He's noticed you've got the goods now. Same cards, same odds -- {highRollerMultiplier}x the fee, {highRollerMultiplier}x the payout.</>}
+           </p>
+-          <button
+-            className="btn-primary"
+-            disabled={!canAffordUnlock}
+-            onClick={() => engine.unlockHighRoller()}
+-            title={canAffordUnlock ? undefined : 'Not enough gold'}
+-          >
+-            Unlock -- {formatGold(unlockCost)} gold
+-          </button>
++          <div className="grimsby-game-stats">
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Unlock</div>
++              <div className="grimsby-game-stat-value" style={{ color: 'var(--brass)' }}>{formatGold(highRollerUnlockCost)} g</div>
++            </div>
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">One-time</div>
++              <div className="grimsby-game-stat-value">Permanent</div>
++            </div>
++            <div className="grimsby-game-stat">
++              <div className="grimsby-status-label">Affects</div>
++              <div className="grimsby-game-stat-value">Cards, dice</div>
++            </div>
++          </div>
++          <div className="grimsby-game-card-actions">
++            {highRollerUnlocked ? (
++              <button
++                className="btn-yellow"
++                disabled={!present || !canAffordHighRoller}
++                onClick={() => setOpenModal('highRoller')}
++                title={!present ? 'He\u2019s not here right now' : canAffordHighRoller ? 'Same cards, bigger stakes.' : 'Not enough gold'}
++              >
++                High Roller -- {formatGold(highRollerFee)} gold
++              </button>
++            ) : (
++              <button
++                className="btn-yellow"
++                disabled={!canAffordHighRollerUnlock}
++                onClick={() => engine.unlockHighRoller()}
++                title={canAffordHighRollerUnlock ? undefined : 'Not enough gold'}
++              >
++                Unlock -- {formatGold(highRollerUnlockCost)} gold
++              </button>
++            )}
++          </div>
+         </div>
+-      )}
++      </div>
+ 
+       {(openModal === 'regular' || openModal === 'highRoller') && (
+         <PeddlerCardModal highRoller={openModal === 'highRoller'} stake={stake} onClose={() => setOpenModal('none')} />
+@@ -239,14 +323,14 @@ export function PeddlerPanel() {
+         <PeddlerTabModal onClose={() => setOpenModal('none')} />
+       )}
+ 
+-      {/* "A Permanent Spot" -- patch 0220, direct request. Same one-time,
+-          permanent-unlock shape as High Roller above, but this one flips
+-          PeddlerManager.isPresent itself rather than adding a new game --
+-          once bought, his cart never leaves again, so Pick Your Card,
+-          Dice, and the tab's own "!" badge are all available all the
+-          time instead of only during his 5-10-quest arrival cycle. */}
++      {/* "A Permanent Spot" -- patch 0220, direct request. Not one of the
++          four game cards above (the grid is deliberately exactly four),
++          stays its own upsell below the grid, same .locked-upgrade shape
++          it's always had -- once bought, this card is gone for good; The
++          Tab card above (no longer locked) is the only remaining trace
++          of it. */}
+       {!permanentSpotUnlocked && (
+-        <div className="card locked-upgrade">
++        <div className="card locked-upgrade" style={{ marginTop: 12 }}>
+           <div className="card-title">A Permanent Spot</div>
+           <p className="card-flavour muted">
+             He's tired of hauling that cart in and out of town. Buy him a real spot, and he stays for good.

@@ -127,6 +127,10 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
         style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="peddler-modal-topbar">
+          <span>The Tab{tab ? ` \u00b7 Round ${tab.round}` : ''}</span>
+          <span className="peddler-modal-topbar-gold">{'\u25c6'} {formatGold(state.gold)} on hand</span>
+        </div>
         <div className="peddler-modal-header">
           <GrimsbySprite animation={closedPose ? 'idle2' : 'idle'} once={closedPose} height={140} />
         </div>
@@ -184,15 +188,30 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
 
           {tab && (
             <>
-              <div className="card" style={{ padding: '8px 12px', margin: '0 auto', maxWidth: 220 }}>
-                {Array.from({ length: tab.round }, (_, i) => i + 1).map((round) => (
-                  <div key={round} className="spread tiny" style={{ fontFamily: 'monospace' }}>
-                    <span className="muted">Round {round}</span>
-                    <span className={round === tab.round ? 'peddler-tab-pot-value' : undefined}>
-                      {formatGold(round === tab.round ? tab.value : 0)}
-                    </span>
-                  </div>
-                ))}
+              <div className="peddler-tab-ledger">
+                <div className="peddler-tab-ledger-row peddler-tab-ledger-header">
+                  <span>Round</span>
+                  <span>Push</span>
+                  <span style={{ textAlign: 'right' }}>On the tab</span>
+                </div>
+                {Array.from({ length: tab.round }, (_, i) => i + 1).map((round) => {
+                  const isCurrent = round === tab.round;
+                  const push = PeddlerManager.tabTierBuyIn(tab.tier);
+                  return (
+                    <div key={round} className={`peddler-tab-ledger-row ${isCurrent ? 'current' : 'past'}`}>
+                      <span>Round {round}</span>
+                      <span>{formatGold(push)}g {'\u00b7'} {round === 1 ? 'Bought in' : 'Held'}</span>
+                      <span className={isCurrent ? 'peddler-tab-pot-value' : undefined} style={{ textAlign: 'right' }}>
+                        {isCurrent ? formatGold(tab.value) : '\u2014'}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div className="peddler-tab-ledger-row peddler-tab-ledger-next">
+                  <span>Round {tab.round + 1}</span>
+                  <span>{formatGold(nextBuyIn)}g {'\u00b7'} Held</span>
+                  <span style={{ textAlign: 'right' }}>{'\u2014'}</span>
+                </div>
               </div>
 
               <div className="row wrap" style={{ gap: 8, justifyContent: 'center' }}>
