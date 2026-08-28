@@ -4693,11 +4693,11 @@
     "id": "peddler.tab.baseSuccessChance",
     "label": "Grimsby's Tab: round 2 success chance",
     "category": "peddler",
-    "value": 0.85,
-    "default": 0.85,
+    "value": 0.6,
+    "default": 0.6,
     "min": 0,
     "max": 1,
-    "description": "Success chance for the FIRST 'run it up' roll (round 2 -- round 1 is the guaranteed buy-in, no roll). Placeholder shape from the design mockup, not yet balanced against real gold values -- see PeddlerManager.tabSuccessChance."
+    "description": "Success chance for the FIRST 'run it up' roll (round 2 -- round 1 is the guaranteed buy-in, no roll). Was 0.85 (an explicit placeholder, never actually balanced against real gold values) -- confirmed by direct calculation that at 0.85, an 'open tab, push once, settle' loop nets roughly +108% expected ROI per cycle, repeatable in seconds regardless of tier (buy-in cancels out of the ratio). 0.60 cuts that to roughly +47% ROI -- still meaningfully favors winning the first push (the intended hook -- winning it should feel good and invite a second push), while well clear of the true breakeven point (~41%) so it no longer reads as a solved money machine. See PeddlerManager.tabSuccessChance."
   },
   {
     "id": "peddler.tab.successDecayPerRound",

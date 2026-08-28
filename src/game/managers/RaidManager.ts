@@ -6,6 +6,7 @@ import { Tuning } from '../data/tuning';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
+import { DIFFICULTY_ORDER } from '../data/quests';
 import { HeroManager } from './HeroManager';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
@@ -334,12 +335,26 @@ export const RaidManager = {
     // recomputed per resolve, same as before) -- one shared helper now,
     // see partyLevel's own comment.
     const partyLevel = RaidManager.partyLevel(heroes);
+    // Raid difficulty mapped to its equivalent quest-tier Difficulty --
+    // shared by both the wear formula below and the injury roll further
+    // down (was previously computed fresh, inline, just for injury;
+    // hoisted here in patch 0284 so applyWear can reuse the exact same
+    // mapping rather than duplicating the ternary). Raid legendary (was
+    // 'mythic' pre-0166) maps to quest legendary, the toughest of both
+    // ladders, same relative mapping as before the rename.
+    const questDifficulty = active.difficulty === 'legendary' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
+    // Read once, reused by both the wear formula in the encounter loop
+    // below and the injury resist calc further down -- same "computed
+    // once, not re-derived per encounter" convention roleMismatched/
+    // partySuccessBonus above already establish.
+    const globalMods = ModifierManager.global(state);
 
     let encountersCleared = 0;
     let gold = 0;
     let xp = 0;
     const loot: RaidLootDrop[] = [];
     const eggsFound: RaidResult['eggsFound'] = [];
+    const heroesLeveledUp: NonNullable<RaidResult['heroesLeveledUp']> = [];
     const encounterIds = raid?.encounterIds ?? [];
 
     for (const encounterId of encounterIds) {
@@ -358,6 +373,22 @@ export const RaidManager = {
       if (!rng.chance(chance)) break;
 
       encountersCleared += 1;
+      // Patch 0284 -- previously raids never called EquipmentManager.
+      // applyWear anywhere at all (quests wear gear every single
+      // resolution; raids, despite being the harder content, wore gear
+      // down zero). Same base formula quests use (3 + tier*2), against
+      // questDifficulty (hoisted above) so a Legendary raid wears gear
+      // at the same rate as a Legendary quest would per encounter --
+      // applied ONCE PER ENCOUNTER CLEARED rather than once per whole
+      // raid, so a longer, harder-fought raid wears gear proportionally
+      // more, the same way a longer quest roughly does via its own
+      // duration-scaled difficulty. No failure-only penalty term the
+      // way quests have (quest's own +4-on-failure) -- an encounter
+      // that fails breaks this loop immediately, never reaching this
+      // line, so every application here already represents an actual
+      // clear, not a loss.
+      const wear = 3 + DIFFICULTY_ORDER.indexOf(questDifficulty) * 2;
+      for (const hero of heroes) EquipmentManager.applyWear(hero, wear, globalMods.durability ?? 0);
       // Soft-capped the same way QuestManager's own goldMultiplier/
       // xpMultiplier are (patch 0214) -- same shared softCap() helper, so
       // there's one formula for both instead of two that can drift.
@@ -476,12 +507,8 @@ export const RaidManager = {
       const resist = sumMods(HeroManager.heroMods(state, hero, resolvedAt), ModifierManager.global(state)).injuryResist ?? 0;
       const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), MIN_INJURY_RISK, 90);
       if (rng.chance(risk)) {
-        // Raid difficulty mapped to its equivalent quest-tier Difficulty
-        // purely for HeroManager.rollInjury's own tier-scaled injury pool
-        // -- raid legendary (was 'mythic' pre-0166) maps to quest legendary,
-        // the toughest of both ladders, same relative mapping as before the
-        // rename, just written against the new id.
-        const questDifficulty = active.difficulty === 'legendary' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
+        // questDifficulty computed once near the top of resolve() now --
+        // see that declaration's own comment.
         const injury = HeroManager.rollInjury(rng, questDifficulty);
         injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
         hero.injuries.push(injury);
@@ -511,6 +538,30 @@ export const RaidManager = {
       if (hero.status !== 'fallen') hero.status = 'idle';
     }
 
+    // Patch 0284 -- previously heroes only had hero.xpEarnedLifetime (a
+    // cosmetic lifetime-stats counter) updated by raids; hero.xp/
+    // hero.level themselves -- the actual fields that drive stats,
+    // success chances, and content gates -- were never touched anywhere
+    // in this file, since HeroManager.grantXp (the only path that
+    // mutates them) was quest-only. A raid-only hero could earn gold,
+    // loot, eggs, and titles indefinitely without ever actually
+    // becoming a stronger hero. Placed here, after the injury roll
+    // above rather than before it, to match QuestManager.resolve's own
+    // order exactly -- injury risk is calculated off the hero's stats
+    // as they stood BEFORE this raid's xp, not after, in both systems
+    // now. Same even per-hero split as gold/xpEarnedLifetime already
+    // use (one pooled reward, divided, not the full total per hero).
+    for (const hero of heroes) {
+      const heroXp = Math.floor(xp / heroes.length);
+      const levelsGained = HeroManager.grantXp(hero, heroXp);
+      if (levelsGained > 0) heroesLeveledUp.push({ heroId: hero.id, heroName: hero.name, levelsGained });
+      // Same gap, one level down -- a pet paired with a raid-only hero
+      // never leveled either, since PetManager.grantEquippedXp was also
+      // quest-only. Same 20%-of-this-hero's-xp-share formula quests
+      // already use, just fed from this hero's own raid xp share.
+      PetManager.grantEquippedXp(state, hero, heroXp);
+    }
+
     const result: RaidResult = {
       raidId: active.raidId,
       raidName: raid?.name ?? 'Unknown Raid',
@@ -529,6 +580,7 @@ export const RaidManager = {
       titledHeroNames: titledHeroNames.length > 0 ? titledHeroNames : undefined,
       heroesFallen: heroesFallen.length > 0 ? heroesFallen : undefined,
       petsFallen: petsFallen.length > 0 ? petsFallen : undefined,
+      heroesLeveledUp: heroesLeveledUp.length > 0 ? heroesLeveledUp : undefined,
     };
 
     state.raidLog.unshift(result);

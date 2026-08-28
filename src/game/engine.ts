@@ -629,6 +629,23 @@ export class GameEngine {
         const noun = names.length === 1 ? 'needs' : 'need';
         this.say(`${who} ${verb} fallen and ${noun} to be revived.`, 'heroes', true);
       }
+      // Patch 0284 -- raids now actually grant hero XP/levels (see
+      // RaidManager.resolve's own comment); this is the first toast/
+      // sound that progress ever gets, same level_up cue the quest path
+      // already plays via QuestResult.levelsGained. Grouped into one
+      // toast for the whole party, same shape as titled/fallen above --
+      // a level number isn't meaningful to combine across heroes who
+      // may have gained different amounts, so the toast names who
+      // leveled without claiming a single shared total.
+      if (raidResult.heroesLeveledUp?.length) {
+        playSound('level_up');
+        const names = raidResult.heroesLeveledUp.map((h) => h.heroName);
+        const who = names.length === 1
+          ? names[0]
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        const verb = names.length === 1 ? 'has' : 'have';
+        this.say(`${who} ${verb} leveled up!`, 'heroes', true);
+      }
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
       this.reportGuidance(GuidanceManager.checkAll(this.state));
     }
@@ -905,6 +922,16 @@ export class GameEngine {
           : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
         const verb = names.length === 1 ? 'has' : 'have';
         this.archive(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes');
+      }
+      // Same quiet treatment as titles/fallen just above -- see the live-
+      // resolve path's own comment for the full reasoning behind this toast.
+      if (raidResult.heroesLeveledUp?.length) {
+        const names = raidResult.heroesLeveledUp.map((h) => h.heroName);
+        const who = names.length === 1
+          ? names[0]
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        const verb = names.length === 1 ? 'has' : 'have';
+        this.archive(`${who} ${verb} leveled up!`, 'heroes');
       }
       for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
         void window.littleKnight?.unlockAchievement(id);

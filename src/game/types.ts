@@ -1463,6 +1463,17 @@ export interface RaidResult {
   /** Same reasoning, for any paired pets that fell alongside their hero
    *  this run -- see QuestResult.petFallen's own comment. */
   petsFallen?: { petName: string }[];
+  /**
+   * Heroes who actually gained a level this raid -- patch 0284, closing
+   * the gap where raids granted gold/loot/eggs/titles but never real
+   * hero.xp/level progression (only the cosmetic xpEarnedLifetime stat).
+   * Per-hero, like titledHeroNames above, since a multi-hero party can
+   * level unevenly (a low-level hero might jump several levels off the
+   * same pooled xp share a near-cap hero gains nothing further from).
+   * Only heroes with levelsGained > 0 appear here -- same lean-list
+   * shape as heroesFallen/petsFallen, not a zero-padded entry per hero.
+   */
+  heroesLeveledUp?: { heroId: string; heroName: string; levelsGained: number }[];
 }
 
 /* -------------------------- progression -------------------------- */

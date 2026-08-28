@@ -22438,3 +22438,107 @@ that all 7 Requiem items now carry `raidExclusive: true` and the file
 remains valid JSON. No `SAVE_VERSION` bump needed -- pricing math and
 equipment data only, no change to `GameState`'s shape.
 
+
+### Full systems audit -- raids never wore gear or granted real hero/pet XP; Grimsby Tab's first push rebalanced (patch 0284)
+
+```discord-update
+Dev Update | System Audit
+
+- Fixed: raids now wear down equipped gear per encounter cleared, same as quests already did -- previously raiding never touched durability at all
+- Fixed: raids now actually grant heroes real XP and levels, not just a cosmetic lifetime-stats counter -- a raid-only hero could earn gold, loot, and titles forever without ever getting stronger. A paired pet now levels from raids too, same as it already does from quests
+- Changed: Grimsby's Tab game -- the very first "run it up" push now succeeds 60% of the time (was 85%). An "open tab, push once, bank it" loop was worth roughly +108% expected return per cycle, repeatable in seconds; 60% still favors winning that first push (the intended hook) but cuts the loop's edge down to a saner +47%
+```
+
+A full pass-by-pass audit of every major system's actual behavior against
+its own stated design intent, run across ten focus areas (Harvest &
+materials; Crafting/Enchanting/Elemental Infusion; ModifierManager
+aggregation; Equipment lifecycle; Quests & chains; Raids; Pets &
+Hatchery; Grimsby; Heroes; Prestige/Renown/Vendors) -- not triggered by
+a specific bug report this time, a deliberate "does everything actually
+connect the way it's supposed to" review. Traced real call chains end to
+end rather than reading functions in isolation, the same way the
+questEggDropChance and Trade Route investigations earlier this
+conversation did.
+
+**Most of the game held up.** Confirmed clean, with no changes needed:
+the entire Harvest material economy (gathering, selling, every spend/
+gain site); Crafting, Enchanting, and Elemental Infusion end to end,
+including confirming a gem's tier-scaled matchup bonus is genuinely read
+by the real per-encounter raid roll, not just a UI preview; the whole
+`ModifierManager` aggregation layer (every mod source checked against
+every consumer -- no orphaned sources, no accidental double-counting,
+no per-hero calculation silently missing a pet/equipment/injury
+contribution); Equipment's gear score, set bonus detection, and sell/
+scrap values; quest offer generation and the burst-quest cap (confirmed
+genuinely applied to the real reward, not a display-only number); chain
+completion's double-grant guard; raid difficulty scaling and role-
+mismatch penalties; all four Grimsby minigames' payout math (Dice,
+High/Low, and the rest of the Tab game); hero leveling, injury timing
+across offline catch-up, and stat allocation; and Prestige/Renown/
+Vendor discount chains.
+
+**Three real gaps found, all in the same place -- raids never fully
+mirrored what quests already do to a hero:**
+
+**1) Raids applied zero gear durability wear.** `EquipmentManager.
+applyWear` is called every single quest resolution; grepping
+`RaidManager.ts` for `durability`/`wear`/`applyWear` turned up nothing
+at all, and nothing in the status doc suggested this was ever a
+deliberate choice. Fixed: wear now applies once per encounter actually
+cleared (not once per whole raid, so a longer, harder-fought raid wears
+gear proportionally more), using the exact same base formula quests use
+(`3 + tier*2`) against the raid's own quest-tier-equivalent difficulty
+mapping (already existed for injury rolls, hoisted to the top of
+`resolve()` so both share it instead of duplicating the mapping). No
+failure-only penalty term the way quests have one -- an encounter that
+fails breaks the loop immediately, so every wear application already
+represents an actual clear.
+
+**2) Heroes gained no real XP or levels from raiding.** Searched every
+place `hero.xp`/`hero.level` are mutated anywhere in the codebase --
+`HeroManager.grantXp` is the only path, and in real gameplay it was
+only ever called from `QuestManager.resolve`. Raids updated
+`hero.xpEarnedLifetime` (a pure display stat) but never the real
+fields that drive a hero's actual stats, success chances, and content
+gates. Fixed: each hero's own even share of the raid's pooled xp
+(same split gold/xpEarnedLifetime already use) now goes through
+`HeroManager.grantXp` for real, added AFTER the injury roll rather
+than before it -- matching `QuestManager.resolve`'s own order exactly,
+so injury resist is calculated off pre-raid stats in both systems, not
+a raid-only inconsistency. New `RaidResult.heroesLeveledUp` (per-hero,
+since a multi-hero party can level unevenly) drives a new toast + the
+existing `level_up` sound on live resolution, and a quiet archive-only
+entry during offline catch-up -- same treatment titles/fallen already
+get in both paths.
+
+**3) Pets gained no XP from raids either -- same root cause, one level
+down.** `PetManager.grantEquippedXp` (a paired pet's own leveling) was
+also quest-only. Fixed alongside #2, fed from the same hero's own raid
+xp share, same 20%-of-xp formula quests already use.
+
+**Grimsby's Tab game -- the first push was a real, measured exploit,
+not just a vague "feels too generous."** Direct player report: opening
+a tab, pushing once (round 2, the very first "run it up" roll), and
+settling immediately was worth doing over and over for fast, easy gold.
+Confirmed with the actual numbers: `peddler.tab.baseSuccessChance` was
+0.85, and since `tabRoundReward` scales proportionally with buy-in, the
+strategy's edge is identical in percentage terms at every one of the 4
+tab tiers -- roughly **+108% expected ROI per cycle**, repeatable in
+under three actions. The tuning entry's own description already
+flagged it as "a placeholder shape from the design mockup, not yet
+balanced" -- this was never actually tuned against real numbers before.
+Calculated the true breakeven point for this exact strategy (~41%) and
+walked through several candidate values before landing on **60%**,
+chosen specifically to still favor winning that first push -- the
+whole point of Tab's hook is that winning round 2 feels good and makes
+you want to push again -- while cutting the loop's edge down to a much
+saner +47%, comfortably above breakeven without erasing the appeal.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` both pass
+clean against a fresh clone of current `main`, confirmed at HEAD
+immediately before starting (three unrelated pricing patches, 0281-
+0283, had landed since the pets/eggs work two patches ago; none touched
+`RaidManager.ts`, `PeddlerManager.ts`, or `SAVE_VERSION`, confirmed
+before editing). No `SAVE_VERSION` bump needed -- `RaidResult.
+heroesLeveledUp` is a result-object field, not persisted `GameState`
+shape.
