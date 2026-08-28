@@ -567,11 +567,11 @@ a colored avatar circle on the new roster/companion "Status bars" views
 
 **Equipment** — rarities, set bonuses, repair/refine, shop + black market
 rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
-longer appear in either shop's stock). Sell price now scales with an
-item's rolled level (`rolledItemLevel`), not just its bone-stock
-template value -- see "Bug Fix: gear sell price ignored level scaling
-entirely" below. Workshop `upgradeCost` has the identical unscaled-value
-gap, noted but not yet fixed -- see Cleanup items.
+longer appear in either shop's stock). Sell price and Workshop refine
+cost both now scale with an item's rolled level (`rolledItemLevel`),
+not just its bone-stock template value -- see "Bug Fix: gear sell price
+ignored level scaling entirely" (patch 0281) and "Bug Fix: Workshop
+refine cost ignored level scaling too" (patch 0282) below.
 
 **Guild facilities & Permanent Upgrades** — vendor-style upgrade trees,
 guild-wide bonuses, gold storage. 8 facilities total, the newest being
@@ -3934,15 +3934,10 @@ correctly-named, correctly-stacked variant via the existing custom-mod
 crafting pipeline. `npx tsc --noEmit` and `vite build` both pass clean.
 
 ### Cleanup items
-- **Workshop `upgradeCost` still prices off the flat, unscaled
-  `def.value`** -- same shape of bug `sellValue` had before patch 0281,
-  found while fixing that one but deliberately left alone since the
-  original ask was scoped to sell value specifically. A high-level
-  procedural or dedicated-scaled item's Workshop refine cost is
-  currently underpriced relative to its real rolled power, mirroring
-  how sell price used to overpay-low before this patch. Same fix shape
-  should apply: route through `sellReferenceValue` (or an equivalent)
-  instead of bare `def.value` whenever `rolledItemLevel` is set.
+- ~~Workshop `upgradeCost` still prices off the flat, unscaled
+  `def.value`~~ -- done (patch 0282). Now routes through the same
+  `referenceValue` helper `sellValue` uses, so refine cost scales with
+  an item's real rolled power the same way sell/shop price already do.
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.
 - ~~A hidden achievement for clearing the Last God raid~~ -- done
@@ -22245,7 +22240,10 @@ never brought in line, and dedicated scaled items (patch 0258) never
 got it on either side.
 
 **Fix:** new `EquipmentManager.sellReferenceValue(item, def)` computes
-the "what's this worth new" baseline sellValue prices against --
+the "what's this worth new" baseline sellValue prices against
+(**renamed to `referenceValue` in patch 0282** once `upgradeCost`
+started sharing it too -- this entry keeps its original name for an
+accurate record of what actually shipped here) --
 `shopPrice`'s own `shop.baseValuePerLevel * RARITY_PRICE_MULT[rarity] *
 (1 + rolledItemLevel * shop.valueGrowthPerLevelPercent / 100)` curve
 whenever `item.rolledItemLevel` is set, falling back to the item's
@@ -22284,3 +22282,57 @@ for roughly what its shop-price curve says it should be worth at that
 level, instead of the few gold its unscaled template `value` used to
 yield. No `SAVE_VERSION` bump needed -- pricing math only, no change to
 `GameState`'s shape.
+
+### Bug Fix: Workshop refine cost ignored level scaling too (patch 0282)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: refining a piece of gear at the Workshop now costs gold in line with how strong it actually rolled, not just its bone-stock template price
+- A high-level or Heroic/Legendary-tier item's refine cost was previously a bargain relative to its real power -- that gap is closed
+```
+
+Direct follow-up to patch 0281: while fixing gear sell price, found
+`EquipmentManager.upgradeCost` had the identical shape of bug --
+`def.value * 0.6 * Math.pow(1.65, item.plus)`, priced strictly off the
+item's flat, unscaled authored value with no reference to
+`item.rolledItemLevel` at all. Flagged as a follow-up rather than fixed
+in-patch at the time, since the original ask was scoped to sell value
+specifically. This patch closes it.
+
+Where 0281's bug meant scaled gear sold for too little, this one meant
+the mirror image: refining a high-level procedural or dedicated-scaled
+item at the Workshop was UNDERPRICED relative to its real rolled power,
+since the cost curve was anchored to the same stale template number
+sell price used to be.
+
+**Fix:** `sellReferenceValue` (added in patch 0281) is renamed to
+`referenceValue` and now shared by both `sellValue` and `upgradeCost` --
+same `shop.baseValuePerLevel * RARITY_PRICE_MULT[rarity] * (1 +
+rolledItemLevel * shop.valueGrowthPerLevelPercent / 100)` curve
+whenever `item.rolledItemLevel` is set, falling back to `def.value`
+otherwise. `upgradeCost`'s own shape (`reference * 0.6 *
+Math.pow(1.65, plus)`, then the existing Workshop-level discount) is
+completely unchanged -- only the base it multiplies against moved from
+`def.value` to `referenceValue(item, def)`.
+
+**Deliberately NOT touched:** `relevelCost` (Blacksmith re-leveling,
+patch 0215) also reads `def.value` directly, but that one's correct as-
+is -- its own comment already explains why: `def.value` already scales
+with rarity, and re-leveling is the mechanism that RAISES
+`rolledItemLevel` in the first place, so anchoring its own cost to the
+current `rolledItemLevel` (the way `referenceValue` does) would
+compound in the wrong direction rather than fix anything. Confirmed by
+re-reading that comment before touching anything nearby, not just
+assumed.
+
+**Verified:** `npx tsc --noEmit` passes clean against a fresh clone of
+current `main` with patch 0281 already applied. Confirmed via a
+standalone script that a level-50 procedural Legendary template's
+refine cost at +0 now lands in the same neighborhood as a comparable
+authored Legendary Set piece's refine cost, instead of the roughly
+20-40x-cheaper number the unscaled `def.value` basis produced before.
+`EnhanceStation.tsx`, the sole UI call site for `upgradeCost`, needed no
+changes -- it already just displays whatever the function returns. No
+`SAVE_VERSION` bump needed -- pricing math only, no change to
+`GameState`'s shape.
+
