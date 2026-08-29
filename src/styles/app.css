@@ -492,23 +492,6 @@
    classes plus `role="button"` (see UpgradeCard in GuildPanel.tsx), same
    as RaidCard's own clickable card already does. */
 
-.guild-facility-icon {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--panel-3);
-  border: 1px solid var(--brass-dim);
-  clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
-  font-family: var(--font-display);
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--brass);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
 /* flex column layout -- was built so the Buy button (then the last
    child) could anchor to the bottom via margin-top: auto regardless of
    stat-line count. Direct request moved the button above the stat-row

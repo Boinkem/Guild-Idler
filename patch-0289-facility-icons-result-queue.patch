@@ -1,0 +1,158 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 500aed3..3b101d5 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -22716,3 +22716,20 @@ Dev Update | Patch 0288
+ **New shared `QuestManager.isBurstOffer(offer)` helper**, needed to identify "is this a burst-mode offer" from the UI side for the spotlight check above. Found (and fixed) that this exact same determination -- `cfg.burstMaxDuration !== undefined && offer.duration <= cfg.burstMaxDuration` -- already existed as two *independent* inline copies inside `resolve()` (the daily-first-burst-bonus check, and the Grimsby-cooldown `isBurstQuest` check, the latter's own comment explicitly noting it was "computed independently here" from the former). Pulled all three into one helper rather than writing a third copy; `resolve()`'s two prior inline checks now call it too, with no behavior change -- confirmed identical by construction (byte-identical condition, just centralized).
+ 
+ **Verified:** `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both pass clean against a fresh clone with this patch applied. `SAVE_VERSION` bumped 54 -> 55 for the new `pendingBurstQuestSpotlight` field -- migration 54 added, defaulting existing saves to `false` (a save already past the tutorial quest has nothing to arm this from anyway, per the field's own comment). Worth a real playtest: on a brand-new guild, confirm the tutorial quest card shimmers before it's sent, then confirm the shimmer picks up on the next burst-mode offer to appear (may take a board refresh or two, burst rolls at 45% on Easy) and clears the instant that offer -- or any other burst offer -- is actually sent.
++
++
++### Guild Hall letter badges removed; live quest-result popups now queue instead of dropping simultaneous completions (patch 0289)
++
++```discord-update
++Dev Update | Patch 0289
++- Changed: the single-letter badge on every Guild Hall facility/upgrade card is gone (Barracks/Treasury/Workshop/Library/etc.) -- just the card now
++- Fixed: when several heroes' quests finished in the exact same moment (Send All Idle's own favorite trick), only the last one got a reward pop-up -- every other completion in that batch is now shown too, one after another, instead of being silently skipped
++```
++
++**Guild Hall letter badges.** Direct request with a screenshot circling the small boxed letter (B/T/W/L/etc.) on every Facilities card. Traced to `UpgradeCard` (GuildPanel.tsx) -- a single shared component behind both the Facilities grid and the Permanent Upgrades grid (`facilityCard`/`generalUpgradeCard` both render through it), rendering `<div className="guild-facility-icon">{name.charAt(0)}</div>` ahead of the card's own title/body. Removed the div outright (`name` itself is still used for the actual title text just below it, untouched) and the now-dead `.guild-facility-icon` CSS rule alongside it -- confirmed via grep it wasn't referenced anywhere else. `.guild-facility-card`'s flex layout needed no adjustment: the body was already `flex: 1`, so it simply fills the space the icon used to occupy; the shared `gap: 12px` between flex children is a no-op with only one child left.
++
++**Live quest-result pop-up -- asked whether one exists, then found it silently drops completions.** Confirmed one already exists: `QuestResultModal`/`QuestResultCard` reads `engine.lastResult` (a `QuestResult` set the moment a quest resolves during live play) and shows a count-up gold/xp card with loot, gated by the "Quest result pop-ups" toggle in Settings > Quality of life (on by default). While tracing how `lastResult` gets set to answer the question fully, found it was a bare field, not a queue -- every call site (the live tick loop, and the DevTool's `testCompleteActiveQuest`/`testCompleteAllActiveQuests`) just did `this.lastResult = result;` directly. A single tick's `due` loop can resolve more than one hero's quest at once -- routine after Send All Idle sends several heroes out together on the same duration -- and each resolution in that loop overwrote the previous one before React ever got a chance to render it, so only the LAST hero in that batch ever actually got a pop-up; every earlier completion in the same tick was silently and invisibly dropped, no error, nothing in the log.
++
++**Fixed with a small FIFO queue, not a rewrite.** New private `GameEngine.queuedResults: QuestResult[]` (transient, unsaved -- same "genuinely ephemeral" treatment `lastResult` itself already gets, explicitly not persisted). New `pushResult(result)` replaces every direct `this.lastResult = result` assignment: shows immediately if nothing's currently displayed (byte-identical to the old behavior for the single-completion case, the overwhelmingly common one), otherwise queues behind whatever's already showing. `dismissResult()` now drains the queue -- `this.lastResult = this.queuedResults.shift() ?? null` -- instead of just nulling out, so the next queued completion takes over the instant the player dismisses the current card, in the order they actually finished. `QuestResultCard` itself needed zero changes: it already keys off `result.questId` and re-mounts fresh per result, so handing it a new queued result through the exact same `lastResult` prop it already reads just works. `hardReset()` (new-guild wipe) also clears `queuedResults` alongside `lastResult`, so a fresh guild never inherits a stale queue from the guild it replaced.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both pass clean against a fresh clone with this patch applied. No `SAVE_VERSION` bump needed -- `queuedResults` is in-memory GameEngine state, not `GameState`, same as `lastResult` it sits beside. Worth a real playtest: send several heroes out at once on the same duration (Send All Idle onto freshly-refreshed boards is the easiest repro), let them all land in the same tick, and confirm every one of them gets its own reward card in turn rather than only the last.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index e361abe..b7f6cff 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -69,6 +69,21 @@ export class GameEngine {
+   state: GameState;
+   offlineReport: OfflineReport | null = null;
+   lastResult: QuestResult | null = null;
++  /**
++   * Patch 0289. `lastResult` above is read directly by QuestResultModal
++   * (the live "quest just finished" reward card) as "the one currently
++   * showing" -- but a single tick can resolve more than one hero's quest
++   * at once (Send All Idle routinely sends several heroes on the same
++   * duration together, so they finish in the very same tick), and every
++   * resolve() in that batch used to just overwrite `lastResult` in turn --
++   * only the LAST hero's card ever actually got shown; every earlier
++   * completion in that same tick was silently dropped before React ever
++   * rendered it. Any result that arrives while one is already showing
++   * lands here instead, via pushResult() below; dismissResult() drains it
++   * one at a time, in order, so every completed quest gets its own card
++   * now, just queued rather than lost when several land together.
++   */
++  private queuedResults: QuestResult[] = [];
+   lastRaidResult: RaidResult | null = null;
+   /**
+    * Set by hatchEgg, cleared by dismissHatchedPet -- same transient
+@@ -429,10 +444,30 @@ export class GameEngine {
+   }
+ 
+   dismissResult() {
+-    this.lastResult = null;
++    // Patch 0289: advance to the next queued result (if any) rather than
++    // just clearing to null -- see queuedResults' own comment above for
++    // why a batch of same-tick completions can leave more than one
++    // waiting here.
++    this.lastResult = this.queuedResults.shift() ?? null;
+     this.notify();
+   }
+ 
++  /**
++   * Every live quest-resolution site should call this instead of
++   * assigning `this.lastResult` directly -- see queuedResults' own
++   * comment above. Shows immediately if nothing's currently displayed
++   * (identical to the old direct-assignment behavior for the common
++   * single-completion case); otherwise queues behind whatever's already
++   * showing, drained in order by dismissResult().
++   */
++  private pushResult(result: QuestResult) {
++    if (this.lastResult === null) {
++      this.lastResult = result;
++    } else {
++      this.queuedResults.push(result);
++    }
++  }
++
+   dismissRaidResult() {
+     this.lastRaidResult = null;
+     this.notify();
+@@ -495,7 +530,7 @@ export class GameEngine {
+     const due = this.state.activeQuests.filter((q) => q.endsAt <= now);
+     for (const quest of due) {
+       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+-      this.lastResult = result;
++      this.pushResult(result);
+       changed = true;
+       // Biggest news first, and only one cue per resolution — a chain
+       // completion is a bigger deal than a routine level-up, which is a
+@@ -1150,7 +1185,7 @@ export class GameEngine {
+     const quest = this.state.activeQuests.find((q) => q.heroId === heroId);
+     if (!quest) return;
+     const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+-    this.lastResult = result;
++    this.pushResult(result);
+     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.reportGuidance(GuidanceManager.checkAll(this.state));
+     this.notify();
+@@ -1161,7 +1196,7 @@ export class GameEngine {
+     if (!TESTING_TOOLS_ENABLED) return;
+     for (const quest of [...this.state.activeQuests]) {
+       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+-      this.lastResult = result;
++      this.pushResult(result);
+     }
+     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.reportGuidance(GuidanceManager.checkAll(this.state));
+@@ -3094,6 +3129,7 @@ export class GameEngine {
+     this.state = createInitialState();
+     this.offlineReport = null;
+     this.lastResult = null;
++    this.queuedResults = [];
+     this.refreshWorld(Date.now());
+     this.say('A new guild opens its doors.');
+     void this.saveNow();
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 6ef8a07..b50fde5 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -492,23 +492,6 @@
+    classes plus `role="button"` (see UpgradeCard in GuildPanel.tsx), same
+    as RaidCard's own clickable card already does. */
+ 
+-.guild-facility-icon {
+-  flex: none;
+-  width: 32px;
+-  height: 32px;
+-  display: flex;
+-  align-items: center;
+-  justify-content: center;
+-  background: var(--panel-3);
+-  border: 1px solid var(--brass-dim);
+-  clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
+-  font-family: var(--font-display);
+-  font-size: 0.85rem;
+-  font-weight: 700;
+-  color: var(--brass);
+-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+-}
+-
+ /* flex column layout -- was built so the Buy button (then the last
+    child) could anchor to the bottom via margin-top: auto regardless of
+    stat-line count. Direct request moved the button above the stat-row
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 8dfa2a2..ac49084 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -105,7 +105,6 @@ function UpgradeCard({
+         tabIndex={0}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); onDismissHighlight?.(); } }}
+       >
+-        <div className="guild-facility-icon" aria-hidden="true">{name.charAt(0)}</div>
+         <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
+           <div className="spread">
+             <span className="card-title">{name}</span>

@@ -69,6 +69,21 @@ export class GameEngine {
   state: GameState;
   offlineReport: OfflineReport | null = null;
   lastResult: QuestResult | null = null;
+  /**
+   * Patch 0289. `lastResult` above is read directly by QuestResultModal
+   * (the live "quest just finished" reward card) as "the one currently
+   * showing" -- but a single tick can resolve more than one hero's quest
+   * at once (Send All Idle routinely sends several heroes on the same
+   * duration together, so they finish in the very same tick), and every
+   * resolve() in that batch used to just overwrite `lastResult` in turn --
+   * only the LAST hero's card ever actually got shown; every earlier
+   * completion in that same tick was silently dropped before React ever
+   * rendered it. Any result that arrives while one is already showing
+   * lands here instead, via pushResult() below; dismissResult() drains it
+   * one at a time, in order, so every completed quest gets its own card
+   * now, just queued rather than lost when several land together.
+   */
+  private queuedResults: QuestResult[] = [];
   lastRaidResult: RaidResult | null = null;
   /**
    * Set by hatchEgg, cleared by dismissHatchedPet -- same transient
@@ -429,8 +444,28 @@ export class GameEngine {
   }
 
   dismissResult() {
-    this.lastResult = null;
+    // Patch 0289: advance to the next queued result (if any) rather than
+    // just clearing to null -- see queuedResults' own comment above for
+    // why a batch of same-tick completions can leave more than one
+    // waiting here.
+    this.lastResult = this.queuedResults.shift() ?? null;
     this.notify();
+  }
+
+  /**
+   * Every live quest-resolution site should call this instead of
+   * assigning `this.lastResult` directly -- see queuedResults' own
+   * comment above. Shows immediately if nothing's currently displayed
+   * (identical to the old direct-assignment behavior for the common
+   * single-completion case); otherwise queues behind whatever's already
+   * showing, drained in order by dismissResult().
+   */
+  private pushResult(result: QuestResult) {
+    if (this.lastResult === null) {
+      this.lastResult = result;
+    } else {
+      this.queuedResults.push(result);
+    }
   }
 
   dismissRaidResult() {
@@ -495,7 +530,7 @@ export class GameEngine {
     const due = this.state.activeQuests.filter((q) => q.endsAt <= now);
     for (const quest of due) {
       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
-      this.lastResult = result;
+      this.pushResult(result);
       changed = true;
       // Biggest news first, and only one cue per resolution — a chain
       // completion is a bigger deal than a routine level-up, which is a
@@ -1150,7 +1185,7 @@ export class GameEngine {
     const quest = this.state.activeQuests.find((q) => q.heroId === heroId);
     if (!quest) return;
     const result = QuestManager.resolve(this.state, quest, quest.endsAt);
-    this.lastResult = result;
+    this.pushResult(result);
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.reportGuidance(GuidanceManager.checkAll(this.state));
     this.notify();
@@ -1161,7 +1196,7 @@ export class GameEngine {
     if (!TESTING_TOOLS_ENABLED) return;
     for (const quest of [...this.state.activeQuests]) {
       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
-      this.lastResult = result;
+      this.pushResult(result);
     }
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.reportGuidance(GuidanceManager.checkAll(this.state));
@@ -3094,6 +3129,7 @@ export class GameEngine {
     this.state = createInitialState();
     this.offlineReport = null;
     this.lastResult = null;
+    this.queuedResults = [];
     this.refreshWorld(Date.now());
     this.say('A new guild opens its doors.');
     void this.saveNow();

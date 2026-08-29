@@ -105,7 +105,6 @@ function UpgradeCard({
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); onDismissHighlight?.(); } }}
       >
-        <div className="guild-facility-icon" aria-hidden="true">{name.charAt(0)}</div>
         <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
           <div className="spread">
             <span className="card-title">{name}</span>
