@@ -3264,6 +3264,33 @@
     "description": "Decay constant for the same curve as quest.investmentDiminishingCapExtra -- kept equal to it by default so the curve's slope is exactly 1 right at the threshold (no discontinuous jump). Lower values saturate faster (diminishing returns bite sooner)."
   },
   {
+    "id": "quest.badLuckProtectionThreshold",
+    "label": "Bad luck protection: fails before it starts",
+    "category": "quests",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "description": "Consecutive quest failures (Hero.consecutiveQuestFails) a hero can rack up before previewSuccess starts adding a bonus. Ordinary variance up to this many fails in a row is left untouched -- only a genuinely long streak gets help."
+  },
+  {
+    "id": "quest.badLuckProtectionPerFail",
+    "label": "Bad luck protection: bonus per fail past threshold",
+    "category": "quests",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "description": "Flat success percentage points added per consecutive fail beyond quest.badLuckProtectionThreshold, up to quest.badLuckProtectionCap. Resets to 0 the instant any quest succeeds."
+  },
+  {
+    "id": "quest.badLuckProtectionCap",
+    "label": "Bad luck protection: max bonus",
+    "category": "quests",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "description": "Ceiling on the total bad-luck-protection bonus previewSuccess can add, regardless of how long the fail streak runs."
+  },
+  {
     "id": "quest.easyBurstChanceTier1",
     "label": "Easy burst chance: level 1-5",
     "category": "quests",
@@ -3639,6 +3666,24 @@
     "default": 5,
     "min": 0,
     "description": "Additional gold per hero level, added to the base swap cost."
+  },
+  {
+    "id": "hero.statResetCostBase",
+    "label": "Stat reset: base gold cost",
+    "category": "progression",
+    "value": 150,
+    "default": 150,
+    "min": 0,
+    "description": "Flat gold cost of resetting a hero's spent stat points back to unspent, before the per-level addition. Same base+perLevel shape as revivalCost/roleSwapCost."
+  },
+  {
+    "id": "hero.statResetCostPerLevel",
+    "label": "Stat reset: gold cost per level",
+    "category": "progression",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "description": "Additional gold per hero level, added to the base stat reset cost -- a respec on a high-level hero undoes more invested points, priced accordingly."
   },
   {
     "id": "raid.roleMismatchPenaltyPerSlot",

@@ -1218,6 +1218,23 @@ const MIGRATIONS: Record<number, Migration> = {
     hasSeenAlchemist: (save.hasSeenAlchemist as boolean | undefined) ?? true,
     hasSeenEnchanter: (save.hasSeenEnchanter as boolean | undefined) ?? true,
   }),
+  56: (save) => {
+    // Patch 0295. Bad luck protection's own streak counter -- see
+    // Hero.consecutiveQuestFails's own comment. Every existing hero starts
+    // at 0 regardless of their real recent luck (there's no history to
+    // reconstruct it from), same "can't know the past, don't guess it"
+    // approach earlier per-hero migrations (e.g. version 3's bonusStats)
+    // already take.
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      h.consecutiveQuestFails = (h.consecutiveQuestFails as number | undefined) ?? 0;
+    }
+    return {
+      ...save,
+      version: 57,
+      heroes,
+    };
+  },
 };
 
 export const SaveManager = {

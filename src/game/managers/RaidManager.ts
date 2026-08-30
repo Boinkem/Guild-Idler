@@ -434,12 +434,20 @@ export const RaidManager = {
       // eggLootForDifficulty (patch 0250) resolves the tiered eggLoot/
       // eggLootHeroic/eggLootLegendary fields the same way lootForDifficulty
       // already does for equipment -- see raids.ts.
-      for (const entry of eggLootForDifficulty(encounter, active.difficulty)) {
-        const parsed = parseEggLootEntry(entry);
-        if (!parsed) continue;
-        if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
-        PetManager.grantEgg(state, parsed.rarity, parsed.dedicatedPetId, resolvedAt);
-        eggsFound.push({ rarity: parsed.rarity, encounterId });
+      // Gated on state.hatcheryUnlocked (patch 0295) -- same reasoning as
+      // the ordinary quest-board egg roll in QuestManager.resolve: an egg
+      // with nowhere to be equipped is just a confusing dead item. In
+      // practice a raid roster is almost always well past the Hatchery
+      // unlock by the time raids themselves unlock, but this closes the
+      // gap for consistency rather than leaving it to chance.
+      if (state.hatcheryUnlocked) {
+        for (const entry of eggLootForDifficulty(encounter, active.difficulty)) {
+          const parsed = parseEggLootEntry(entry);
+          if (!parsed) continue;
+          if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
+          PetManager.grantEgg(state, parsed.rarity, parsed.dedicatedPetId, resolvedAt);
+          eggsFound.push({ rarity: parsed.rarity, encounterId });
+        }
       }
     }
 

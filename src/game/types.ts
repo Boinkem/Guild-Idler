@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 56;
+export const SAVE_VERSION = 57;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -543,6 +543,16 @@ export interface Hero {
   xp: number;
   stats: Stats;
   statPoints: number;
+  /**
+   * Bad luck protection (patch 0295). Consecutive quest failures for this
+   * hero, reset to 0 on any success. Past a tuned threshold
+   * (quest.badLuckProtectionThreshold), QuestManager.previewSuccess adds a
+   * small, capped success bonus so a genuinely unlucky run doesn't compound
+   * indefinitely -- see previewSuccess's own comment for the exact curve.
+   * Scoped to ordinary hero quests only, not raids. Defaults 0 for a new
+   * hero (HeroManager.create); existing saves get 0 via migration 56.
+   */
+  consecutiveQuestFails: number;
   equipment: Partial<Record<EquipSlot, EquipmentItem>>;
   injuries: Injury[];
   status: HeroStatus;

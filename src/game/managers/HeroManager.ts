@@ -31,6 +31,7 @@ export const HeroManager = {
       xp: 0,
       stats,
       statPoints: startLevel - 1,
+      consecutiveQuestFails: 0,
       equipment: {},
       injuries: [],
       status: 'idle',

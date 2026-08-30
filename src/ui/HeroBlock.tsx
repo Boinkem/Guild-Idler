@@ -5,7 +5,7 @@ import { ModifierManager } from '../game/managers/ModifierManager';
 import { PrestigeManager } from '../game/managers/PrestigeManager';
 import { InventoryManager } from '../game/managers/InventoryManager';
 import { rerollsUsedToday } from '../game/data/reroll';
-import { HERO_CLASSES, SKINS, infirmaryAutoReviveUnlocked } from '../game/data/progression';
+import { HERO_CLASSES, SKINS, infirmaryAutoReviveUnlocked, statResetCost } from '../game/data/progression';
 import { Tuning } from '../game/data/tuning';
 import { Hero } from '../game/types';
 import { describeMods, formatDuration, formatGold, formatNumber, HOUR } from '../game/util';
@@ -88,7 +88,7 @@ export function HeroBlock({
 
   const mods = HeroManager.heroMods(state, hero, now);
   const sets = HeroManager.activeSetBonuses(hero);
-  const blocks = statEffectBlocks(total, role);
+  const blocks = statEffectBlocks(total, role, hero.heroClass, hero.level);
   const bandages = InventoryManager.count(state, 'field_bandage');
   const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
   const healsUsedToday = rerollsUsedToday(state.freeHealsUsedToday, state.freeHealDay, now);
@@ -97,6 +97,71 @@ export function HeroBlock({
   const fallen = hero.status === 'fallen';
   const activeChain = state.activeQuests.find((q: any) => q.heroId === hero.id)?.offer.chain;
   const spriteHeight = Math.round(96 * settings.spriteScale);
+
+  // Collapsed by default (patch 0295) -- direct feedback: with the full
+  // portrait/vitals/attribute grid always rendered per hero, a roster of
+  // even three or four heroes ate most of the screen. Mirrors the
+  // pre-redesign card's own "condensed by default, click to expand" shape
+  // (see HeroesPanel's own `expanded` Set, which still gates the SEPARATE
+  // bottom detail panel once this card is open -- two independent levels
+  // of disclosure, not one). Local state, not lifted to HeroesPanel: each
+  // card remembers its own collapse state independently and doesn't need
+  // to survive a re-render the way the detail panel's isOpen does (no
+  // level-up/revive flash timing depends on it).
+  const [collapsed, setCollapsed] = useState(true);
+
+  if (collapsed) {
+    return (
+      <div className={`card hero-block hero-block-summary ${fallen ? 'fallen' : ''}`}>
+        {children}
+        <div
+          className="hero-block-summary-row"
+          onClick={() => setCollapsed(false)}
+          role="button"
+          tabIndex={0}
+          aria-expanded={false}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(false); } }}
+        >
+          <div className="hero-block-summary-sprite">
+            {fallen
+              ? <Tombstone height={Math.round(44 * settings.spriteScale)} icon={tombstoneIcon} />
+              : (
+                <HeroSprite
+                  heroClass={hero.heroClass}
+                  skin={hero.skin}
+                  animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}
+                  height={Math.round(44 * settings.spriteScale)}
+                />
+              )}
+          </div>
+          <div className="hero-block-summary-body">
+            <div className="spread">
+              <span className="hero-block-summary-name">
+                {hero.name}
+                <span className="tiny muted"> Lv {hero.level} {classDef.name}</span>
+              </span>
+              <span className={`tiny ${fallen ? 'bad' : 'good'}`}>
+                {fallen ? 'Fallen' : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+                {activeChain && ` · Chain ${activeChain.stage + 1}/${activeChain.totalStages}`}
+              </span>
+            </div>
+            {/* Same fly-target key as the expanded XP bar below -- only one
+                of the two is ever mounted at a time (collapsed vs. not),
+                and registerFlyTarget just re-points to whichever is
+                currently in the DOM, same pattern the pre-redesign card's
+                own compact/expanded split already relied on. */}
+            <div ref={(el) => registerFlyTarget(`heroXp:${hero.id}`, el)} className="bar xp mini">
+              <span style={{ width: `${xpRatio * 100}%` }} />
+            </div>
+            <div className={`bar health mini ${healthRatio < 0.25 ? 'low' : ''}`}>
+              <span style={{ width: `${healthRatio * 100}%` }} />
+            </div>
+          </div>
+          <span className="hero-block-summary-expand" aria-hidden="true">▼</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`card hero-block ${fallen ? 'fallen' : ''}`}>
@@ -130,6 +195,14 @@ export function HeroBlock({
             <div><span>Quests won</span><b>{hero.questsSucceeded} / {hero.questsCompleted}</b></div>
             <div><span>Lifetime gold</span><b>{formatGold(hero.goldEarnedLifetime)}</b></div>
             <div><span>Lifetime xp</span><b>{formatNumber(hero.xpEarnedLifetime)}</b></div>
+            {/* Renown-from-retirement preview (patch 0295) -- reuses the
+                exact same PrestigeManager call PrestigePanel's own retire
+                list already uses, just surfaced here too so a player
+                doesn't have to leave the Heroes tab to check whether a
+                hero's worth retiring yet. Shown regardless of eligibility
+                (same as PrestigePanel), since watching it grow while
+                under-level is itself part of the motivation. */}
+            <div><span>Retire for</span><b className="gold-text">✦ {formatNumber(PrestigeManager.streakPreview(state, hero, now).total)}</b></div>
           </div>
         </div>
 
@@ -161,6 +234,13 @@ export function HeroBlock({
               </button>
               <button className="btn-ghost hero-block-expand" onClick={onToggle}>
                 {isOpen ? 'Less ▲' : 'More ▼'}
+              </button>
+              <button
+                className="btn-ghost hero-block-expand"
+                onClick={() => setCollapsed(true)}
+                title="Collapse this card back to a summary row"
+              >
+                ⌃ Collapse
               </button>
             </div>
           </div>
@@ -197,6 +277,23 @@ export function HeroBlock({
           <div className="hero-block-rule">
             <span className="hero-block-rule-label">ATTRIBUTES</span>
             {hero.statPoints > 0 && <span className="hero-block-points">{hero.statPoints} training points</span>}
+            {/* Stat reset (patch 0295), direct request: no way to walk back
+                a mis-allocated point before this. Only offered once a
+                hero's past level 1 -- a level-1 hero has never had a point
+                granted yet, so there's nothing to undo. Gold-gated via the
+                same statResetCost the engine call itself charges, so the
+                button's disabled state never drifts from what clicking it
+                would actually do. */}
+            {hero.level > 1 && (
+              <button
+                className="btn-ghost hero-block-reset"
+                onClick={() => engine.resetHeroStats(hero.id)}
+                disabled={state.gold < statResetCost(hero.level)}
+                title={`Refunds every spent training point back to unspent, for ${formatGold(statResetCost(hero.level))}. Gear and ascension bonuses are untouched.`}
+              >
+                ⟲ Reset · {formatGold(statResetCost(hero.level))}
+              </button>
+            )}
           </div>
 
           <div className="hero-block-stats">
@@ -339,7 +436,9 @@ export function HeroBlock({
 
               <p className="tiny muted hero-block-footnote">
                 Success / gold / xp / injury resist / quest speed are additive points summed with class,
-                gear and guild bonuses. Rare loot is a separate multiplier on drop chance — don't add it
+                gear and guild bonuses. Success also smooths out at high totals (diminishing returns
+                past a point), so a very geared hero's real quest odds can land a little under the sum
+                of these lines. Rare loot is a separate multiplier on drop chance — don't add it
                 to the others. Role is changed from the Training tab.
               </p>
             </div>

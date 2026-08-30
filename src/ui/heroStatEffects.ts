@@ -1,4 +1,4 @@
-import { Stats, Role, Modifiers } from '../game/types';
+import { Stats, Role, Modifiers, HeroClass } from '../game/types';
 import { HeroManager } from '../game/managers/HeroManager';
 import { roleAwareStatLabel } from '../game/util';
 
@@ -14,6 +14,9 @@ import { roleAwareStatLabel } from '../game/util';
  * If those formulas are ever retuned, this file follows automatically and
  * cannot go stale the way a hand-copied sqrt() would (see
  * stat-conversion-table.md's own "regenerate rather than hand-edit" note).
+ *
+ * Success is a deliberate exception to that zeroed-diff pattern (patch
+ * 0295) -- see statEffectBlocks' own comment below for why.
  */
 
 type ModKey = keyof Modifiers;
@@ -71,17 +74,22 @@ const GLYPH: Record<keyof Stats, string> = {
 
 const BLURB: Record<keyof Stats, string> = {
   strength: 'drives quest success',
-  endurance: 'triple dip \u2014 feeds three',
+  endurance: 'double dip \u2014 feeds two',
   luck: 'gold earned & rare drops',
   wisdom: 'experience gained',
 };
 
 /** Which modifiers each stat actually feeds, in display order. `loot` is
- *  handled separately (multiplicative, personalLootBonus, not in Modifiers). */
+ *  handled separately (multiplicative, personalLootBonus, not in Modifiers).
+ *  Endurance deliberately does NOT list 'success' here (patch 0295) -- the
+ *  Endurance/Loot rework (see HeroManager.statMods' own comment) removed
+ *  Endurance's Success slice outright, folding it into Strength's
+ *  coefficient instead. A stale FEEDS entry here (carried over from before
+ *  that rework) meant the Endurance card showed a "Success +0.0" line that
+ *  could never read as anything but zero, confirmed live on a real save. */
 const FEEDS: Record<keyof Stats, { key: ModKey; label: string; format: EffectFormat }[]> = {
   strength: [{ key: 'success', label: 'Success', format: 'points' }],
   endurance: [
-    { key: 'success', label: 'Success', format: 'points' },
     { key: 'injuryResist', label: 'Injury resist', format: 'percent' },
     { key: 'speed', label: 'Quest speed', format: 'percent' },
   ],
@@ -110,13 +118,27 @@ export function formatEffect(value: number, format: EffectFormat): string {
   }
 }
 
-export function statEffectBlocks(total: Stats, role: Role): StatEffectBlock[] {
+export function statEffectBlocks(total: Stats, role: Role, heroClass: HeroClass, level: number): StatEffectBlock[] {
+  // Success's headline number is deliberately NOT the same zeroed-diff every
+  // other line uses (patch 0295, direct feedback: a hero showing "+22
+  // Success" on the card was landing nowhere near that on real quests).
+  // QuestManager.previewSuccess only curves the INVESTED half of a hero's
+  // success -- stat points actually spent, gear worn -- not the automatic
+  // growth every hero of this class/level gets for free just by leveling
+  // up. Showing the full total here overstated what a player's own choices
+  // were worth by exactly that auto-growth amount. autoGrowthSuccess is the
+  // same "zero investment" snapshot previewSuccess itself computes.
+  const autoGrowthStats = HeroManager.baselineStats(heroClass, level);
+  const autoGrowthSuccess = HeroManager.statMods(autoGrowthStats).success ?? 0;
+
   return (['strength', 'endurance', 'luck', 'wisdom'] as (keyof Stats)[]).map((key) => {
     const zeroed: Stats = { ...total, [key]: 0 };
     const bumped: Stats = { ...total, [key]: total[key] + 1 };
 
     const lines: StatEffectLine[] = FEEDS[key].map(({ key: modKey, label, format }) => {
-      const value = mod(total, modKey) - mod(zeroed, modKey);
+      const value = modKey === 'success'
+        ? mod(total, modKey) - autoGrowthSuccess
+        : mod(total, modKey) - mod(zeroed, modKey);
       const reference = SOFT_REFERENCE[modKey] ?? 25;
       return { label, value, format, ratio: clamp01(value / reference), tint: TINT[key] };
     });

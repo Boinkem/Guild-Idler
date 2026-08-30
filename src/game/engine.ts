@@ -24,7 +24,7 @@ import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
 import { PetManager } from './managers/PetManager';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
-import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
+import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
 import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
@@ -2696,6 +2696,33 @@ export class GameEngine {
     if (!hero || hero.statPoints <= 0) return;
     hero.statPoints -= 1;
     hero.stats[stat] += 1;
+    playSound('allocate');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /**
+   * Stat reset (patch 0295) -- direct request: no way to walk back a
+   * mis-allocated training point. Sets `hero.stats` back to exactly what
+   * this class/level would have with zero investment (HeroManager.
+   * baselineStats -- the same "auto-growth only" snapshot previewSuccess
+   * already uses to separate invested success from free leveling), and
+   * refunds every point ever granted (`hero.level - 1`, 1 per level,
+   * always -- see HeroManager.create/grantXp). Gear (equipmentStats,
+   * separate from hero.stats) and bonusStats (ascension carry-over) are
+   * untouched -- this only undoes training-point choices, not gear or
+   * prestige investment. Gold-gated via statResetCost, same base+perLevel
+   * shape as revivalCost/roleSwapCost -- a respec is a real decision on a
+   * well-leveled hero, not a free do-over.
+   */
+  resetHeroStats(heroId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const cost = statResetCost(hero.level);
+    if (this.state.gold < cost) return this.say('Not enough gold to reset training.');
+    this.state.gold -= cost;
+    hero.stats = HeroManager.baselineStats(hero.heroClass, hero.level);
+    hero.statPoints = hero.level - 1;
     playSound('allocate');
     this.notify();
     void this.saveNow();

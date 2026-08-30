@@ -5,6 +5,44 @@
  * fonts or radii are introduced.
  */
 
+/* ---- collapsed summary row (patch 0295) ---- */
+
+.hero-block-summary { padding: 0; overflow: hidden; }
+
+.hero-block-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.hero-block-summary-row:hover { background: color-mix(in srgb, var(--panel-2) 60%, transparent); }
+
+.hero-block-summary-sprite {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+
+.hero-block-summary-body { flex: 1; min-width: 0; }
+
+.hero-block-summary-name {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  color: var(--parchment);
+}
+
+.bar.mini { height: 5px; margin-top: 4px; }
+
+.hero-block-summary-expand {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.hero-block.fallen.hero-block-summary { opacity: 0.9; }
+
 .hero-block {
   padding: 0;
   overflow: hidden;
@@ -204,6 +242,13 @@
   border: 1px solid var(--brass-dim);
   border-radius: 999px;
   padding: 2px 8px;
+}
+
+.hero-block-reset {
+  font-size: 0.5625rem;
+  min-height: 20px;
+  padding: 2px 8px;
+  flex-shrink: 0;
 }
 
 /* ---- attribute cards ---- */

@@ -23043,3 +23043,177 @@ patches 0293 and 0294 both applied. This is a one-file, two-line change
 -- no data/manifest changes, no `SAVE_VERSION` implications. Worth a
 real in-game look at both species moving next to a hero to confirm the
 correction reads right, same as any facing fix in this file.
+
+
+### Heroes tab follow-up pass: stat reset, collapsible cards, bad luck protection, and hero-card accuracy fixes (patch 0295)
+```discord-update
+Dev Update | Heroes Tab Follow-Up
+
+- Added: a stat reset button on each hero's card -- refunds every spent training point (gold cost scales with level), so a mis-allocated point isn't permanent anymore
+- Added: hero cards are now collapsed to a compact summary row by default -- click to expand into the full card. A guild of several heroes no longer eats the whole screen
+- Added: bad luck protection -- a hero on a genuine losing streak (3+ quests in a row) now gets a small, capped, and fully visible success boost until they land a win
+- Added: a "Retire for" renown preview on each hero's card, so you don't need to check the Prestige tab to see if retiring is worth it yet
+- Added: broken gear now shows a red outline and a "!" badge on its icon, and the durability bar shows its actual number in the compact view too
+- Changed: a hero's card no longer counts free per-level stat growth as part of what your training points and gear "earned" you -- the Success number now reflects your actual investment
+- Fixed: eggs can no longer drop from ordinary quests or raids before the Hatchery is unlocked
+- Fixed: the Endurance card's dead "Success +0.0" line (Endurance hasn't fed Success since patch 0255) is gone -- it now only lists what it actually does
+```
+
+Direct follow-up to patch 0292's Hero tab redesign, covering a batch of
+issues found once that redesign was actually being played against: a
+stat mistake with no way to undo it, cards that got taller than the
+pre-redesign ones they replaced, a new player's real 1-in-6 quest streak,
+and -- found while walking through the exact math behind that last one --
+a genuine, confirmed-live bug in the attribute cards themselves.
+
+**Stat reset (`engine.resetHeroStats`).** `HeroManager.baselineStats`
+already existed (used by `previewSuccess` to separate invested success
+from free leveling) and computes exactly "this class at this level with
+zero investment" -- a reset is just setting `hero.stats` to that snapshot
+and refunding `hero.level - 1` points (the total ever granted, always 1
+per level, confirmed against every place that ever mutates `statPoints`
+or `bonusStats`). Gear (`equipmentStats`) and ascension's `bonusStats`
+are untouched -- this only undoes training-point choices. New
+`statResetCost(level)` in `progression.ts`, same `base + perLevel` gold
+curve `revivalCost`/`roleSwapCost` already use (new tuning:
+`hero.statResetCostBase` 150, `hero.statResetCostPerLevel` 25 -- roughly
+6 quests' worth of gold on a mid-level hero, a real decision rather than
+a free do-over). Button lives on the hero card next to the "N training
+points" badge, disabled when unaffordable, only shown past level 1 (a
+level-1 hero has never had a point granted to reset).
+
+**Collapsible cards.** The pre-redesign card was compact-by-default with
+a documented reason (*"a guild of even three or four heroes used to eat
+almost the whole screen"*) -- the 0292 redesign kept that click-to-expand
+behavior only for the bottom detail panel (mods/injuries/title/livery),
+but the portrait+vitals+attribute grid above it always rendered, which is
+what actually grew the cards. `HeroBlock` now owns its own `collapsed`
+local state (default `true`, independent of `HeroesPanel`'s `expanded`
+Set, which still separately gates the bottom detail panel once a card is
+open -- two independent levels of disclosure, same as before, just with
+an outer level restored). Collapsed state is a compact row: sprite,
+name/level/class, live status, mini XP/Health bars. The XP bar's
+`registerFlyTarget(\`heroXp:\${hero.id}\`)` ref is registered on whichever
+of the two bars is actually mounted at a time -- same "re-point to
+whichever's in the DOM" pattern the pre-redesign compact/expanded split
+already relied on, not a new risk.
+
+**Bad luck protection.** Direct feedback: a fresh hero on low-level
+questing landed 1 success in 6 attempts -- against a 60-70% Easy/Normal
+baseline, an outlier well outside ordinary variance. New
+`Hero.consecutiveQuestFails` (reset to 0 on any success, incremented on
+any fail, updated in `QuestManager.resolve` right after the roll), and a
+new `QuestManager.badLuckBonus(consecutiveFails)`: 0 until
+`quest.badLuckProtectionThreshold` (2) consecutive fails, then
+`+quest.badLuckProtectionPerFail` (3) per fail beyond that, capped at
+`quest.badLuckProtectionCap` (15). Added directly into `previewSuccess`'s
+final clamp, so it's visible in the live quest preview before a player
+ever sends the hero -- same "no silent numbers" convention every other
+modifier in this game already follows -- rather than a hidden
+resolve-time adjustment. Surfaced with a small 🍀 tooltip on the quest
+row and detail view in `QuestPanel.tsx` once it's actually nonzero (not
+permanent clutter on every row). **Scoped to ordinary hero quests only,
+not raids** -- a different balance surface this wasn't written against;
+worth its own pass later if raids show the same pattern. `SAVE_VERSION`
+56 -> 57, migration 56 defaults every existing hero's counter to 0 (no
+history to reconstruct it from).
+
+**Renown-from-retirement preview.** No new calculation -- reuses
+`PrestigeManager.streakPreview(state, hero, now)`, the exact call
+`PrestigePanel`'s own retire list already runs, shown the same way
+regardless of eligibility (so watching it grow while under-level is part
+of the payoff, not just a post-eligibility reveal). One new ledger line
+on the hero card's portrait column, next to gear score/quests/gold/xp.
+
+**Broken gear indicator + durability number.** `ItemIcon`
+(`icons.tsx`) takes a new `broken?: boolean` prop -- a red inset ring
+plus a small "!" corner badge, wired at all four real item-icon render
+sites in `EquipmentPanel.tsx` (equipped-slot card + its modal, stash card
++ its modal) via the already-existing `EquipmentManager.isBroken(item)`.
+`DurabilityBar`'s compact mode (every item card in the grid) previously
+showed no number at all, only the bar's own low-durability tint --
+now shows the exact `current/max` beside the bar. Deliberately **beside**
+the bar in a flex row, not overlaid on it (`.bar` is 6px tall, nowhere
+near enough for legible text) and not a head-line above it (costs
+vertical space a dense item grid doesn't have).
+
+**Eggs before Hatchery unlock.** Confirmed bug: the ordinary quest-board
+egg roll and the raid egg-loot loop both had no `state.hatcheryUnlocked`
+gate, so a fresh player could get a random egg with the Hatchery tab not
+even visible yet -- telling sign, the dev's own `testAddEgg` debug tool
+already force-unlocks the Hatchery before granting one, "an egg with
+nowhere to be equipped isn't much of a test." Both gated now. Guard is at
+the individual ambient-roll call sites, not inside `PetManager.grantEgg`
+itself -- the guaranteed `the_last_clutch` chain reward egg is granted in
+the same resolution tick as `hatcheryUnlocked` flips true, just before
+the flag is actually set, so a shared-function guard would have silently
+eaten that specific reward. **Deliberately left Grimsby's peddler egg
+outcome ungated** -- by the point in the outcome-resolution switch where
+`case 'egg'` fires, the "you won an egg" result is already committed;
+skipping the grant there would silently short a resolved reward with no
+consolation designed, and Grimsby's own unlock threshold in practice
+already sits well past the Hatchery's. Flagging as a deliberate scope
+exclusion rather than a fix, in case it's worth a real substitute reward
+later.
+
+**Hero-card Success accuracy fixes -- found while tracing through exactly
+how the card's numbers relate to a real quest's odds, at the user's own
+request, using a real hero's screenshot as the worked example:**
+
+- **Endurance's dead "Success +0.0" line, confirmed live on that
+  screenshot.** The Endurance/Loot rework (patch 0255) removed
+  Endurance's Success contribution outright, folding its old share into
+  Strength's coefficient (1.6 -> 2.4) instead -- Endurance has fed only
+  Injury Resist and Quest Speed ever since. `heroStatEffects.ts`'s
+  `FEEDS` table still listed Endurance as a Success source from before
+  that rework, so the line rendered and always computed to exactly zero.
+  Removed the stale entry; Endurance's blurb text updated from "triple
+  dip -- feeds three" to "double dip -- feeds two" to match what's
+  actually left.
+- **Strength's Success number was overstating investment.** The card
+  computed a stat's contribution as `statMods(total) -
+  statMods(zeroed)` for every line uniformly -- for every OTHER line
+  (Gold, XP, Injury Resist, Quest Speed) this is correct, because those
+  reward formulas really do use the hero's full total stat, confirmed by
+  reading how `QuestManager.resolve` builds `mods` for gold/xp/injury/
+  speed (straight off `HeroManager.heroMods`, no baseline subtraction).
+  Success is the one exception: `previewSuccess` deliberately splits a
+  hero's success into automatic per-level growth (free, not curved) and
+  invested points/gear (curved via `curveInvestment`) -- see that
+  function's own comment. The card's Strength line was showing the FULL
+  total contribution, silently including growth the player did nothing
+  to earn. `statEffectBlocks` now takes `heroClass`/`level`, computes the
+  same `HeroManager.baselineStats` auto-growth snapshot `previewSuccess`
+  itself uses, and subtracts it specifically for the Success line --
+  every other line's math is untouched. Added a footnote line on the
+  card noting Success additionally smooths out at high combined totals
+  (the curve itself still can't be shown per-stat, since it's a function
+  of the combined total across every source, not any one stat in
+  isolation).
+
+**Explicitly NOT changed this patch, left for a follow-up decision:**
+lowering Strength's 2.4 success coefficient. Traced through the real
+numbers with the user first (a worked example against a real hero found
+the 95% hard clamp, not the coefficient, is usually what actually stops
+a well-invested hero's success from climbing further) -- concluded the
+clamp/curve tuning (`quest.investmentDiminishingCapExtra`/`...Decay`,
+or `MAX_SUCCESS` itself) is a more likely lever than the per-point
+coefficient, but no specific target number was agreed, so nothing was
+touched. **Also not resolved:** a reported health-value decimal --
+checked every place Health is rendered (`HeroBlock.tsx`, the pre-redesign
+`HeroesPanel.tsx`, the Hatchery's pet card) and all three already round
+via `Math.round`; couldn't reproduce it from the source alone. Needs a
+screenshot or the specific tab it showed up in to chase further.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this
+patch applied. `SAVE_VERSION` bumped 56 -> 57 for `Hero.
+consecutiveQuestFails`, migration 56 added (every existing hero defaults
+to 0). Worth a real playtest: allocate and then reset a hero's stats and
+confirm the refund matches `hero.level - 1`; collapse/expand a card and
+confirm the XP fly-to animation still lands correctly either way; run a
+hero through a genuine 3+ loss streak and confirm the 🍀 indicator
+appears and the streak clears on the next win; check a broken item's
+icon in both the equipped-slot and stash grids; confirm no egg drops
+from the quest board or a raid before the Hatchery is unlocked on a
+fresh save.

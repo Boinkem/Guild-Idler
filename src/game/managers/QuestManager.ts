@@ -825,9 +825,10 @@ export const QuestManager = {
     const investmentCurved = QuestManager.curveInvestment(investmentRaw);
 
     const levelGapBonus = (hero.level - successReqLevel) * Tuning.get('quest_reqlevel.levelGapSuccessCoefficient');
+    const badLuck = QuestManager.badLuckBonus(hero.consecutiveQuestFails);
 
     return clamp(
-      offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus,
+      offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus + badLuck,
       MIN_SUCCESS,
       MAX_SUCCESS,
     );
@@ -855,6 +856,28 @@ export const QuestManager = {
     const decay = Tuning.get('quest.investmentDiminishingDecay');
     const excess = raw - threshold;
     return threshold + capExtra * (1 - Math.exp(-excess / decay));
+  },
+
+  /**
+   * Bad luck protection (patch 0295). A flat, capped success bonus keyed
+   * to Hero.consecutiveQuestFails -- direct feedback: a fresh hero on
+   * low-level questing landed 1 success in 6 attempts, well outside
+   * normal variance for a 60-70%-baseline Easy/Normal quest. Deliberately
+   * NOT a hidden mechanic: previewSuccess adds this before the player
+   * ever sends the quest, so what's shown is what's real, same "no
+   * silent numbers" convention every other modifier in this game follows.
+   * Ordinary variance up to badLuckProtectionThreshold consecutive fails
+   * is left completely untouched -- only a genuinely long streak gets
+   * help, and it resets the instant any quest succeeds (see resolve()'s
+   * own update of the counter). Scoped to ordinary hero quests only, not
+   * raids -- a different balance surface this wasn't written against.
+   */
+  badLuckBonus(consecutiveFails: number): number {
+    const threshold = Tuning.get('quest.badLuckProtectionThreshold');
+    if (consecutiveFails <= threshold) return 0;
+    const perFail = Tuning.get('quest.badLuckProtectionPerFail');
+    const cap = Tuning.get('quest.badLuckProtectionCap');
+    return Math.min(cap, (consecutiveFails - threshold) * perFail);
   },
 
   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {
@@ -1023,6 +1046,16 @@ export const QuestManager = {
     const finalSuccess = clamp(quest.finalSuccess + events.successDelta, MIN_SUCCESS, MAX_SUCCESS);
     const success = isTutorialQuest || rng.chance(finalSuccess);
 
+    // Bad luck protection's own streak counter (patch 0295) -- reset to 0
+    // on any success, incremented on any fail, regardless of whether
+    // badLuckBonus was actually nonzero for this particular roll (the
+    // counter tracks real outcomes; badLuckBonus is just what previewSuccess
+    // derives from it). Skipped for a missing hero (already-departed edge
+    // case elsewhere in this function) since there's nothing to update.
+    if (hero) {
+      hero.consecutiveQuestFails = success ? 0 : hero.consecutiveQuestFails + 1;
+    }
+
     const cfg = DIFFICULTIES[quest.offer.difficulty];
     let gold = 0;
     let xp = 0;
@@ -1086,7 +1119,14 @@ export const QuestManager = {
       // simple independent roll since eggs aren't part of the equipment-
       // loot economy at all). Rarity is fixed per difficulty tier -- see
       // the pets.questEggDropChance.* tuning descriptions for why.
-      if (rng.chance(questEggDropChance(quest.offer.difficulty))) {
+      // Gated on state.hatcheryUnlocked (patch 0295) -- an egg with
+      // nowhere to be equipped is just a confusing dead item for a
+      // player who hasn't reached the_last_clutch yet (the dev's own
+      // testAddEgg tool already force-unlocks the Hatchery before
+      // granting one, for exactly this reason). The guaranteed
+      // the_last_clutch chain reward below is a separate, curated grant
+      // and stays ungated.
+      if (state.hatcheryUnlocked && rng.chance(questEggDropChance(quest.offer.difficulty))) {
         const rarities = LOOT_RARITY_BY_DIFFICULTY[quest.offer.difficulty] ?? ['common'];
         const rarity = rarities[rarities.length - 1];
         PetManager.grantEgg(state, rarity, undefined, resolvedAt);

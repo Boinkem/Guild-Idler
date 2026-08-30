@@ -964,6 +964,17 @@ export function roleSwapCost(level: number): number {
   return Math.floor(Tuning.get('role.swapBaseCost') + Tuning.get('role.swapCostPerLevel') * level);
 }
 
+/**
+ * Stat reset cost (patch 0295) -- same base+perLevel shape as
+ * revivalCost/roleSwapCost above. Undoes every spent training point back
+ * to unspent (see HeroManager.baselineStats, the read side), so it's
+ * priced to scale with how much a hero could actually have invested by
+ * that level, not a flat fee.
+ */
+export function statResetCost(level: number): number {
+  return Math.floor(Tuning.get('hero.statResetCostBase') + Tuning.get('hero.statResetCostPerLevel') * level);
+}
+
 /* -------------------------------- skins --------------------------------- */
 
 export interface SkinDef {

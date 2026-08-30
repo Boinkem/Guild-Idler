@@ -161,7 +161,20 @@ export function QuestRow({
               ❄ Frozen
             </span>
           )}
-          <span className="tiny">{Math.round(chance)}% success</span>
+          <span className="tiny">
+            {Math.round(chance)}% success
+            {/* Bad luck protection indicator (patch 0295) -- transparent
+                by design, same "no silent numbers" convention every other
+                modifier here follows. Only shown once it's actually
+                doing something (hero.consecutiveQuestFails past the
+                threshold), not as permanent clutter on every row. */}
+            {QuestManager.badLuckBonus(hero.consecutiveQuestFails) > 0 && (
+              <span
+                className="good"
+                title={`Steadied by bad luck protection: +${QuestManager.badLuckBonus(hero.consecutiveQuestFails).toFixed(0)}% after ${hero.consecutiveQuestFails} losses in a row`}
+              > 🍀</span>
+            )}
+          </span>
           <span className="tiny gold-text">{formatGold(offer.rewardGold)} gold</span>
         </div>
       </div>
@@ -244,7 +257,15 @@ export function QuestDetailModal({
           </p>
         )}
         <div className="stat-row" style={{ margin: '6px 0' }}>
-          <span>Success <b className={chance >= 60 ? 'good' : chance >= 35 ? '' : 'bad'}>{Math.round(chance)}%</b></span>
+          <span>
+            Success <b className={chance >= 60 ? 'good' : chance >= 35 ? '' : 'bad'}>{Math.round(chance)}%</b>
+            {QuestManager.badLuckBonus(hero.consecutiveQuestFails) > 0 && (
+              <span
+                className="tiny good"
+                title={`Steadied by bad luck protection: +${QuestManager.badLuckBonus(hero.consecutiveQuestFails).toFixed(0)}% after ${hero.consecutiveQuestFails} losses in a row`}
+              > 🍀 steadied</span>
+            )}
+          </span>
           <span>Time <b>{formatDuration(duration)}</b></span>
           <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>
           <span>XP <b>{offer.rewardXp}</b></span>

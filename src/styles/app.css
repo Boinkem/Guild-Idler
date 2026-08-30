@@ -121,6 +121,7 @@
 .item-card.empty.clickable .item-card-summary { cursor: pointer; }
 .item-card.empty.clickable:hover { border-color: var(--brass); opacity: 0.85; }
 .item-icon {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
@@ -133,6 +134,30 @@
      (IconBox in icons.tsx, shown when an item has no icon file assigned
      yet) still needs SOME backdrop to read against arbitrary art behind
      it -- see .item-icon-fallback just below, scoped to only that case. */
+}
+/* Broken-gear indicator (patch 0295) -- a red ring around the icon plus
+   a small corner "!" badge, so a durability-0 item is visible at a
+   glance even in a dense grid, before the durability bar's own text is
+   read. `inset` keeps the ring from adding to the icon's own box size,
+   so it doesn't nudge layout in item-card grids. */
+.item-icon-broken {
+  box-shadow: inset 0 0 0 2px var(--blood);
+  border-radius: 4px;
+}
+.item-icon-broken-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--blood);
+  color: var(--parchment);
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--night);
 }
 .item-icon img { width: 70%; height: 70%; image-rendering: pixelated; }
 .item-icon-fallback {
@@ -1565,6 +1590,13 @@ button:focus-visible, [tabindex]:focus-visible {
   opacity: 0.85;
   pointer-events: none;
 }
+/* Durability number-beside-bar (patch 0295) -- see DurabilityBar's own
+   comment for why this is an inline row rather than text overlaid on
+   the bar (too short, 6px) or a head-line above it (costs vertical
+   space a dense item-card grid doesn't have). */
+.dura-row { display: flex; align-items: center; gap: 6px; }
+.dura-row .bar { flex: 1; min-width: 0; }
+.dura-value { flex-shrink: 0; white-space: nowrap; }
 /* Auto Heal / Fallen auto-revive countdown -- a distinct teal fill so a
    "time remaining" bar never reads as another Health/Durability/XP bar at
    a glance. Drains (not fills) as time passes, per its own component

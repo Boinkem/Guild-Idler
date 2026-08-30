@@ -112,21 +112,28 @@ function DurabilityBar({ item, compact = false, thresholdPercent }: { item: Equi
   const ratio = item.durability / max;
   return (
     <>
-      <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: compact ? 2 : 4 }}>
-        <span style={{ width: `${ratio * 100}%` }} />
-        {thresholdPercent !== undefined && (
-          <i
-            className="bar-threshold"
-            style={{ left: `${thresholdPercent}%` }}
-            title={`Auto-repairs at ${thresholdPercent}% durability`}
-          />
-        )}
+      <div className="dura-row" style={{ marginTop: compact ? 2 : 4 }}>
+        <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`}>
+          <span style={{ width: `${ratio * 100}%` }} />
+          {thresholdPercent !== undefined && (
+            <i
+              className="bar-threshold"
+              style={{ left: `${thresholdPercent}%` }}
+              title={`Auto-repairs at ${thresholdPercent}% durability`}
+            />
+          )}
+        </div>
+        {/* Number beside the bar (patch 0295), compact mode only -- direct
+            request: the compact card grid had no numeric durability
+            readout at all before this, only the bar's own low-tint
+            threshold. Inline rather than overlaid on the bar itself --
+            .bar is only 6px tall, nowhere near enough to hold legible
+            text -- and inline rather than a head-line above/below so it
+            costs no extra vertical space in a dense item grid. The
+            expanded (non-compact) view below keeps its own existing text
+            line instead, since it already has the room. */}
+        {compact && <span className="dura-value tiny muted">{item.durability}/{max}</span>}
       </div>
-      {/* Compact mode (the always-visible collapsed card row) skips the
-          text line -- the bar itself, plus its own low-durability red
-          tint, is enough to spot "this needs repair" at a glance across
-          a whole hero's loadout without expanding every card first. The
-          exact number still shows once expanded, same as before. */}
       {!compact && (
         <div className="tiny muted">
           {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${max}`}
@@ -645,7 +652,7 @@ function SlotCard({
       >
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
-          <ItemIcon slot={def.slot} icon={def.icon} />
+          <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
@@ -662,7 +669,7 @@ function SlotCard({
             <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
             <div className="modal-banner-scrim">
               <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
-                <ItemIcon slot={def.slot} icon={def.icon} size={48} />
+                <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />
                 <div>
                   <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
                     {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
@@ -761,7 +768,7 @@ function StashCard({
       >
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
-          <ItemIcon slot={def.slot} icon={def.icon} />
+          <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
@@ -780,7 +787,7 @@ function StashCard({
             <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
             <div className="modal-banner-scrim">
               <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
-                <ItemIcon slot={def.slot} icon={def.icon} size={48} />
+                <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />
                 <div>
                   <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
                     {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
