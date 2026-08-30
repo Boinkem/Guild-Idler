@@ -848,6 +848,28 @@ export interface HeroClassDef {
    */
   milestoneUnlockDescription?: string;
   milestoneGoldCost?: number;
+  /**
+   * Patch 0296 -- the character-portrait art shown on the redesigned
+   * Recruit tab (HeroesPanel.tsx's tiered chip cards + detail modal).
+   * Deliberately a SEPARATE asset from `icon` above: `icon` is a small
+   * item-icon-style emblem (item-icons/Heroes/, used only by the Settings
+   * status-bar avatar), while this is the full character headshot/pose
+   * art the recruit card actually shows -- same "two different asset
+   * types, two different fields" split ChainDef.banner/icon already
+   * established, not a reuse of the emblem folder.
+   *
+   * Same optional-override shape as ChainDef.banner/icon (path/focusX/
+   * focusY/scale, DevTool's shared `bannerImage` field type) -- unset for
+   * every class falls back to the `public/lore/hero-portraits/<id>.png`
+   * naming convention at dead-center focus, exactly like a chain's banner
+   * falls back to `chains/<id>.jpg`. See heroPortraitSrc in
+   * HeroesPanel.tsx for the actual fallback resolution. `.png` rather
+   * than banners' `.jpg` convention on purpose -- portrait art ships with
+   * a transparent background (see claude/hero-portrait-generation-
+   * prompt.md's own generation spec), which a lossy/opaque .jpg would
+   * destroy.
+   */
+  portrait?: { path?: string; focusX?: number; focusY?: number; scale?: number };
 }
 
 /**

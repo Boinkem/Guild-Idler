@@ -400,6 +400,22 @@ td.actions button.danger:hover { background: var(--bad-wash); border-color: var(
 .icon-picker-item.selected { border-color: var(--brass); background: var(--brass-wash); }
 .icon-picker-item img { width: 32px; height: 32px; image-rendering: pixelated; }
 
+/* Patch 0296 -- "Upload new image…" row shared by openIconPicker and
+   openBannerPicker. A label styled as a button (rather than a real
+   <button>) so clicking it can trigger the paired hidden file input via
+   the label's native for-id behaviour, no extra JS needed. */
+.icon-picker-upload-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--panel3);
+}
+.icon-picker-upload-row input[type="text"] { flex: 1; min-width: 0; }
+.btn-like {
+  padding: 6px 10px; font-size: 11px; border-radius: var(--radius);
+  background: var(--brass); color: var(--bg); border: 1px solid var(--brass);
+  cursor: pointer; white-space: nowrap; font-weight: 600;
+}
+.btn-like:hover { filter: brightness(1.08); }
+
 td.icon-cell { width: 1%; padding-right: 0; }
 .table-icon { width: 22px; height: 22px; image-rendering: pixelated; vertical-align: middle; display: block; }
 .table-icon-empty { color: var(--dim); }

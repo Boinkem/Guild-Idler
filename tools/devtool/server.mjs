@@ -263,6 +263,24 @@ const SCHEMAS = {
       // go together, unset for every class without a milestone path.
       milestoneUnlockDescription: { type: 'string', required: false },
       milestoneGoldCost: { type: 'number', required: false },
+      // Patch 0296 -- the Recruit tab's new tiered chip cards + detail
+      // modal (HeroesPanel.tsx) needed real character-portrait art, a
+      // different asset entirely from the small `icon` emblem above (see
+      // HeroClassDef.portrait's own comment in progression.ts). Reuses
+      // the *existing* `bannerImage` field type wholesale -- same
+      // path/focusX/focusY/scale shape, same drag-to-focus + zoom picker
+      // UI quest-chains'/raids'/quest-tags' own banner fields already
+      // have, just pointed at a different root/aspect via defaultFolder/
+      // previewAspect the same way quest-chains' own `icon` field already
+      // reuses this type with a different defaultFolder than `banner`.
+      // Rooted under public/lore/ (not a new top-level folder) purely so
+      // it inherits BANNERS_DIR's existing list/serve/picker plumbing for
+      // free -- "hero-portraits" is just another lore-art subfolder as
+      // far as the server is concerned.
+      portrait: {
+        type: 'bannerImage', required: false, defaultFolder: 'hero-portraits',
+        previewAspect: '1/1', previewSize: '~1024x1024px, transparent background',
+      },
     },
   },
   'recruit-costs': {
@@ -1970,6 +1988,72 @@ async function listGitTags() {
 // any other clutter never shows up as a broken thumbnail.
 const ICON_EXTENSIONS = /\.(png|jpg|jpeg|webp|gif)$/i;
 
+// Patch 0296 -- direct request: every art picker on this page (icon,
+// banner, decor) could only ever CHOOSE an existing file already sitting
+// on disk ("drop a file in a folder and it shows up on next open," per
+// listIcons' own comment above) -- there was no way to actually get a new
+// piece of art onto disk without leaving the browser. This is the one
+// generic upload primitive both /api/icons/upload and /api/banners/upload
+// below share; each just passes its own root dir and folder-naming rule.
+//
+// Deliberately JSON-body + base64 rather than multipart/form-data -- this
+// server has no dependencies and no build step (see its own header
+// comment), and every existing POST route already reads a plain JSON body
+// via readBody/JSON.parse, so this reuses that exact shape instead of
+// hand-rolling a multipart parser for one feature. The frontend reads the
+// picked File via FileReader.readAsDataURL and strips the data: prefix
+// before POSTing -- see uploadImageField in app.js.
+const UPLOAD_MAX_BYTES = 8 * 1024 * 1024; // 8MB -- generous for a UI icon/portrait, not for a raw sprite sheet
+
+function safeUploadFileName(name) {
+  // basename() alone already strips any directory component (the real
+  // path-traversal guard is the dest.startsWith(rootDir) check below,
+  // same pattern the /item-icons/ and /lore-art/ static-serve routes
+  // already use) -- this additionally collapses anything not a plain
+  // filename character down to '_', so an upload from a browser file
+  // picker (which can hand back names with spaces, unicode, etc) never
+  // produces a name the folder-listing regexes or the bannerImage `path`
+  // validator's own charset would choke on.
+  const base = path.basename(String(name || '').trim());
+  return base.replace(/[^\w .()-]/g, '_') || 'upload.png';
+}
+
+async function uploadImageFile(rootDir, { folder, filename, dataBase64 }) {
+  if (typeof dataBase64 !== 'string' || dataBase64.length === 0) {
+    return { ok: false, error: 'No file data received.' };
+  }
+  const safeName = safeUploadFileName(filename);
+  if (!ICON_EXTENSIONS.test(safeName)) {
+    return { ok: false, error: 'Only .png, .jpg, .jpeg, .webp, or .gif files are supported.' };
+  }
+  let buffer;
+  try {
+    buffer = Buffer.from(dataBase64, 'base64');
+  } catch {
+    return { ok: false, error: 'Could not decode the uploaded file.' };
+  }
+  if (buffer.length === 0) return { ok: false, error: 'The uploaded file is empty.' };
+  if (buffer.length > UPLOAD_MAX_BYTES) {
+    return { ok: false, error: `File is too large (${Math.round(buffer.length / 1024)}KB) -- ${UPLOAD_MAX_BYTES / 1024 / 1024}MB max.` };
+  }
+
+  // folder is optional (uploads straight into rootDir's own root, same as
+  // a banner picker's "(general)" loose files) -- when given, it's a
+  // single path segment only (no nested subfolders from this endpoint),
+  // sanitised the same way safeUploadFileName sanitises the filename.
+  const safeFolder = folder && folder !== GENERAL_BANNER_FOLDER
+    ? String(folder).trim().replace(/[^\w-]/g, '_')
+    : '';
+  const destDir = safeFolder ? path.join(rootDir, safeFolder) : rootDir;
+  const destPath = path.join(destDir, safeName);
+  if (!destPath.startsWith(rootDir)) return { ok: false, error: 'Invalid destination path.' };
+
+  await fs.mkdir(destDir, { recursive: true });
+  await fs.writeFile(destPath, buffer);
+  const relPath = safeFolder ? `${safeFolder}/${safeName}` : safeName;
+  return { ok: true, path: relPath };
+}
+
 async function listIcons() {
   let topEntries;
   try {
@@ -2555,8 +2639,26 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, await listIcons());
   }
 
+  // Patch 0296 -- upload a new icon file (e.g. a hero class emblem) straight
+  // from the picker instead of requiring a manual drop into public/item-icons
+  // first. See uploadImageFile's own comment above for the request shape.
+  if (url.pathname === '/api/icons/upload' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const result = await uploadImageFile(ICONS_DIR, body);
+    return json(res, result.ok ? 200 : 400, result);
+  }
+
   if (url.pathname === '/api/banners' && req.method === 'GET') {
     return json(res, 200, await listBanners());
+  }
+
+  // Patch 0296 -- same as /api/icons/upload but rooted at public/lore, used
+  // by every bannerImage-typed field (chain banners/icons, raid banners, and
+  // now hero recruit portraits via defaultFolder: 'hero-portraits').
+  if (url.pathname === '/api/banners/upload' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const result = await uploadImageFile(BANNERS_DIR, body);
+    return json(res, result.ok ? 200 : 400, result);
   }
 
   if (url.pathname === '/api/decor-art' && req.method === 'GET') {

@@ -1,12 +1,14 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { HERO_CLASSES, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+import { HERO_CLASSES, HeroClassDef, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { heroMilestoneUnlocked } from '../../game/data/heroMilestones';
 import { Tuning } from '../../game/data/tuning';
+import type { GameEngine } from '../../game/engine';
 import { HeroClass, Hero } from '../../game/types';
 import { describeMods, formatGold } from '../../game/util';
 import { HeroStatusList } from '../HeroStatusBar';
@@ -14,6 +16,68 @@ import { GearScoreBadge } from '../GearScoreBadge';
 import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
 import { useReviveFlash, ReviveFlash } from '../reviveFlash';
 import { HeroBlock } from '../HeroBlock';
+
+/**
+ * Patch 0296. Recruit-card portrait for a hero class -- mirrors
+ * chainBannerSrc's own convention exactly (see QuestPanel.tsx): an unset
+ * `portrait` override just falls back to `<id>.png` in a well-known
+ * folder at dead-center focus, so art can be dropped in by filename alone
+ * with no DevTool trip required, but a class whose source sprite needs a
+ * tighter/looser crop can still be nudged via HeroClassDef.portrait (same
+ * {path, focusX, focusY, scale} shape a chain's banner already uses).
+ * `.png` rather than banners' `.jpg` convention on purpose -- portrait art
+ * ships with a transparent background (see hero-portrait-generation-
+ * prompt.md in the project docs), not a full-bleed photo/painting.
+ */
+export function heroPortraitSrc(heroId: string, portrait?: HeroClassDef['portrait']): string {
+  return portrait?.path ? `./lore/${portrait.path}` : `./lore/hero-portraits/${heroId}.png`;
+}
+
+/** Shared backgroundPosition/backgroundSize for a portrait div, same
+ *  conditional-scale convention as LorePanel's ChainBanner -- cover
+ *  (the CSS class default) unless a custom zoom was set in DevTools. */
+function heroPortraitStyle(portrait?: HeroClassDef['portrait']): CSSProperties {
+  return {
+    backgroundPosition: `${portrait?.focusX ?? 50}% ${portrait?.focusY ?? 50}%`,
+    ...(portrait?.scale && portrait.scale !== 100 ? { backgroundSize: `${portrait.scale}%` } : {}),
+  };
+}
+
+/** Everything the recruit chip row and its detail modal both need per
+ *  class, computed once and shared -- mirrors GuildManager.recruit's own
+ *  cost logic exactly (see the original inline computation this replaces)
+ *  so the displayed price/affordability never drifts from what a click
+ *  would actually charge. */
+interface RecruitStatus {
+  def: HeroClassDef;
+  unlocked: boolean;
+  milestoneMet: boolean;
+  cost: number;
+  tavernUnlocked: boolean;
+  slotsFull: boolean;
+  alreadyRecruited: boolean;
+}
+
+function recruitStatusFor(
+  engine: GameEngine,
+  id: HeroClass,
+  recruitable: HeroClass[],
+  slots: number,
+): RecruitStatus {
+  const state = engine.state;
+  const def = HERO_CLASSES[id];
+  const unlocked = recruitable.includes(id);
+  const milestoneMet = heroMilestoneUnlocked(state, id);
+  const cost = (def.milestoneGoldCost != null && milestoneMet) ? def.milestoneGoldCost : RECRUIT_COST[id];
+  const tavernUnlocked = GuildManager.facilityLevel(state, 'tavern') >= def.unlockTavernLevel;
+  const slotsFull = state.heroes.length >= slots;
+  // One of every hero (patch 0219) -- once a class has a living hero in
+  // the roster, it's permanently done recruiting; see GuildManager.
+  // classAlreadyRecruited's own comment for why this never needs to
+  // un-set later.
+  const alreadyRecruited = GuildManager.classAlreadyRecruited(state, id);
+  return { def, unlocked, milestoneMet, cost, tavernUnlocked, slotsFull, alreadyRecruited };
+}
 
 export function HeroesPanel() {
   const engine = useEngine();
@@ -39,6 +103,12 @@ export function HeroesPanel() {
   // than shown by default, direct request. See HeroComparisonModal's own
   // comment for the counters it reads.
   const [showComparison, setShowComparison] = useState(false);
+
+  // Recruit tier chips (patch 0296) -- which class's detail modal (full
+  // stats + Purchase button) is currently open, if any. Direct request:
+  // short named chips grouped by tier, click opens the modal with
+  // everything the old inline card used to show up front.
+  const [selectedRecruitId, setSelectedRecruitId] = useState<HeroClass | null>(null);
 
   const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
     state.heroes.map((h) => ({ id: h.id, level: h.level })),
@@ -161,28 +231,77 @@ export function HeroesPanel() {
           </div>
         </>
       )}
-      <div className="grid three">
-        {(Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => {
-          const def = HERO_CLASSES[id];
-          const unlocked = recruitable.includes(id);
-          // Patch 0251 -- mirrors GuildManager.recruit's own cost logic
-          // exactly (milestoneGoldCost once the milestone is met, plain
-          // RECRUIT_COST otherwise), so the displayed price and afford
-          // check never drift from what a click would actually charge.
-          const milestoneMet = heroMilestoneUnlocked(state, id);
-          const cost = (def.milestoneGoldCost != null && milestoneMet) ? def.milestoneGoldCost : RECRUIT_COST[id];
-          const tavernUnlocked = GuildManager.facilityLevel(state, 'tavern') >= def.unlockTavernLevel;
-          const slotsFull = state.heroes.length >= slots;
-          // One of every hero (patch 0219) -- once a class has a living
-          // hero in the roster, it's permanently done recruiting; see
-          // GuildManager.classAlreadyRecruited's own comment for why
-          // this never needs to un-set later.
-          const alreadyRecruited = GuildManager.classAlreadyRecruited(state, id);
-          return (
-            <div key={id} className="card" style={{ marginBottom: 0 }}>
-              <div className="card-title">{def.name}</div>
-              <p className="card-flavour">{def.blurb}</p>
-              <div className="stat-row" style={{ marginBottom: 8 }}>
+      {/* Patch 0296 -- tiered short chips replacing the old flat
+          `.grid.three` of full stat cards, direct request: "Hero's are now
+          shown in their tiered brackets, not clumped together", "cards are
+          short - on-click opens a new modal". Tiers grouped by
+          HeroClassDef.tier, in ascending order; within a tier, classes stay
+          in HERO_CLASSES' own declared order (already tier-ascending in
+          hero-classes.json, so this never needs a secondary sort). */}
+      {(() => {
+        const tierGroups: { tier: number; ids: HeroClass[] }[] = [];
+        for (const id of Object.keys(HERO_CLASSES) as HeroClass[]) {
+          const tier = HERO_CLASSES[id].tier;
+          let group = tierGroups.find((g) => g.tier === tier);
+          if (!group) { group = { tier, ids: [] }; tierGroups.push(group); }
+          group.ids.push(id);
+        }
+        tierGroups.sort((a, b) => a.tier - b.tier);
+
+        return tierGroups.map(({ tier, ids }) => (
+          <div key={tier}>
+            <div className="recruit-tier-heading">Tier {tier}</div>
+            <div className="recruit-row">
+              {ids.map((id) => {
+                const { def, unlocked, cost, alreadyRecruited } = recruitStatusFor(engine, id, recruitable, slots);
+                const badgeText = alreadyRecruited ? 'Recruited' : !unlocked ? 'Locked' : formatGold(cost);
+                const badgeClass = alreadyRecruited ? 'good' : !unlocked ? 'locked' : 'view';
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`recruit-chip ${alreadyRecruited ? 'recruited' : ''}`}
+                    onClick={() => setSelectedRecruitId(id)}
+                  >
+                    <span
+                      className="chip-icon-frame"
+                      style={{ backgroundImage: `url(${heroPortraitSrc(id, def.portrait)})`, ...heroPortraitStyle(def.portrait) }}
+                    />
+                    <span className="chip-name">{def.name}</span>
+                    <span className={`chip-badge ${badgeClass}`}>{badgeText}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ));
+      })()}
+
+      {/* Recruit detail modal (patch 0296) -- the short chip above just
+          picks a class; every stat/blurb/milestone/Purchase decision the
+          old inline card used to show up front now lives here instead,
+          verbatim same logic (unlocked/cost/slotsFull/alreadyRecruited
+          disable rules, milestone note, Tavern-link fallback) just moved
+          behind a click. */}
+      {selectedRecruitId && (() => {
+        const id = selectedRecruitId;
+        const { def, unlocked, milestoneMet, cost, tavernUnlocked, slotsFull, alreadyRecruited } =
+          recruitStatusFor(engine, id, recruitable, slots);
+        return (
+          <div className="overlay" onClick={() => setSelectedRecruitId(null)}>
+            <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+              <div className="spread" style={{ marginBottom: 10 }}>
+                <span className="card-title">{def.name}</span>
+                <button className="btn-ghost" onClick={() => setSelectedRecruitId(null)}>Close</button>
+              </div>
+              <div className="row" style={{ alignItems: 'flex-start', gap: 14, marginBottom: 12 }}>
+                <span
+                  className="recruit-modal-icon-frame"
+                  style={{ backgroundImage: `url(${heroPortraitSrc(id, def.portrait)})`, ...heroPortraitStyle(def.portrait) }}
+                />
+                <p className="card-flavour" style={{ margin: 0, flex: 1 }}>{def.blurb}</p>
+              </div>
+              <div className="stat-row" style={{ marginBottom: 10 }}>
                 {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
               </div>
               {/* Patch 0251 -- shown for any class with a milestone path,
@@ -192,23 +311,26 @@ export function HeroesPanel() {
                   so it reads as "done" rather than repeating an
                   instruction that's no longer relevant. */}
               {def.milestoneUnlockDescription && (
-                <p className="tiny muted" style={{ margin: '0 0 6px' }}>
+                <p className="tiny muted" style={{ margin: '0 0 10px' }}>
                   {milestoneMet
                     ? <span className="good">✓ Milestone met -- {formatGold(def.milestoneGoldCost ?? 0)} recruit unlocked</span>
                     : <>Or: {def.milestoneUnlockDescription}</>}
                 </p>
               )}
-              <button
-                className="btn-primary"
-                disabled={!unlocked || state.gold < cost || slotsFull || alreadyRecruited}
-                onClick={() => engine.recruit(id)}
-              >
-                {alreadyRecruited
-                  ? 'Already Recruited'
-                  : !unlocked
-                    ? `Tavern level ${def.unlockTavernLevel}`
-                    : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
-              </button>
+              <div className="spread">
+                <span className="gold-text" style={{ fontWeight: 700 }}>{!alreadyRecruited && formatGold(cost)}</span>
+                <button
+                  className="btn-primary"
+                  disabled={!unlocked || state.gold < cost || slotsFull || alreadyRecruited}
+                  onClick={() => { engine.recruit(id); setSelectedRecruitId(null); }}
+                >
+                  {alreadyRecruited
+                    ? 'Already Recruited'
+                    : !unlocked
+                      ? `Tavern level ${def.unlockTavernLevel}`
+                      : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
+                </button>
+              </div>
               {/* Direct feedback: a locked purchase should link straight to
                   where the blocking requirement actually gets fixed, not
                   just name it. Jumps to the Guild Hall and glows the
@@ -222,16 +344,16 @@ export function HeroesPanel() {
               {!unlocked && !tavernUnlocked && (
                 <button
                   className="btn-ghost"
-                  style={{ width: '100%', marginTop: 4, fontSize: '0.6875rem' }}
-                  onClick={() => engine.requestTab('guild', 'tavern')}
+                  style={{ width: '100%', marginTop: 10, fontSize: '0.6875rem' }}
+                  onClick={() => { setSelectedRecruitId(null); engine.requestTab('guild', 'tavern'); }}
                 >
                   Go to Tavern →
                 </button>
               )}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })()}
 
       <div className="section-heading">Skins</div>
       <p className="small muted">

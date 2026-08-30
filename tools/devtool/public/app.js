@@ -957,6 +957,42 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/**
+ * Patch 0296 -- shared upload plumbing for both the icon picker and the
+ * banner picker's new "Upload new image…" control (direct request: every
+ * art picker on this page could only ever *choose* a file already sitting
+ * on disk, there was no way to get a new one there without leaving the
+ * browser). Reads the chosen File as a data: URL and strips the prefix
+ * down to raw base64 -- server.mjs's uploadImageFile expects exactly that
+ * shape (see its own comment for why JSON+base64 rather than multipart).
+ */
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const commaIdx = result.indexOf(',');
+      resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Could not read the file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** POSTs one file to `uploadUrl` (either /api/icons/upload or
+ *  /api/banners/upload) under the given folder, returning the new
+ *  relative path on success. Errors surface via api()'s own thrown-Error
+ *  shape, same as every other failed save in this tool. */
+async function uploadPickerImage(uploadUrl, folder, file) {
+  const dataBase64 = await readFileAsBase64(file);
+  const result = await api(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder, filename: file.name, dataBase64 }),
+  });
+  return result.path;
+}
+
 /* ----------------------------------------------------------- icon field --- */
 // Fetched once and cached for the session -- the icon set only changes when
 // someone drops new files into public/item-icons/, which means restarting
@@ -1347,8 +1383,21 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
           </div>
         </div>`).join('');
 
+  // Patch 0296 -- same upload-row pattern as openIconPicker, defaulting the
+  // target folder to this field's own preferredFolder (e.g. 'hero-portraits'
+  // for the new recruit-card portraits) so the common case is just "pick a
+  // file" -- direct request: "ensure Devtools supports updating the image".
+  const uploadRowHtml = `
+    <div class="icon-picker-upload-row">
+      <input type="text" id="bannerPickerUploadFolder" list="bannerPickerFolderList" placeholder="Folder (e.g. hero-portraits)" value="${escapeHtml(preferredFolder || '')}" />
+      <datalist id="bannerPickerFolderList">${ordered.map((f) => `<option value="${escapeHtml(f.name === BANNER_GENERAL_LABEL ? '' : f.name)}"></option>`).join('')}</datalist>
+      <label class="btn-like" for="bannerPickerUploadInput">Upload new image…</label>
+      <input type="file" id="bannerPickerUploadInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+    </div>`;
+
   panel.innerHTML = `
     <h2>Choose a banner</h2>
+    ${uploadRowHtml}
     <div class="icon-picker-body">${sectionsHtml}</div>
     <div class="editor-actions">
       <button id="bannerPickerCancel">Cancel</button>
@@ -1363,6 +1412,23 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
       overlay.remove();
     };
   });
+  const uploadInput = panel.querySelector('#bannerPickerUploadInput');
+  const uploadFolderField = panel.querySelector('#bannerPickerUploadFolder');
+  uploadInput.onchange = async () => {
+    const file = uploadInput.files[0];
+    if (!file) return;
+    const folder = uploadFolderField.value.trim();
+    try {
+      setStatus('Uploading image…');
+      const relPath = await uploadPickerImage('/api/banners/upload', folder, file);
+      state.banners = null; // bust the session cache so the next open sees it
+      setStatus('Image uploaded.', 'ok');
+      onPick(relPath);
+      overlay.remove();
+    } catch (err) {
+      setStatus(err.message || 'Upload failed.', 'error');
+    }
+  };
   panel.querySelector('#bannerPickerCancel').onclick = () => overlay.remove();
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }
@@ -1957,8 +2023,23 @@ function openIconPicker(folders, currentValue, onPick) {
           </div>
         </div>`).join('');
 
+  // Patch 0296 -- upload target folder: a free-text field (with existing
+  // folder names offered via datalist, so "Heroes" etc is one click, not
+  // retyped) rather than a rigid <select>, since a brand-new class of icon
+  // (this patch's own Centaur emblem) needs a folder that may not exist as
+  // a section yet -- uploadImageFile on the server creates it on demand.
+  const defaultUploadFolder = folders.some((f) => f.name === 'Heroes') ? 'Heroes' : (folders[0]?.name || '');
+  const uploadRowHtml = `
+    <div class="icon-picker-upload-row">
+      <input type="text" id="iconPickerUploadFolder" list="iconPickerFolderList" placeholder="Folder (e.g. Heroes)" value="${escapeHtml(defaultUploadFolder)}" />
+      <datalist id="iconPickerFolderList">${folders.map((f) => `<option value="${escapeHtml(f.name)}"></option>`).join('')}</datalist>
+      <label class="btn-like" for="iconPickerUploadInput">Upload new icon…</label>
+      <input type="file" id="iconPickerUploadInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+    </div>`;
+
   panel.innerHTML = `
     <h2>Choose an icon</h2>
+    ${uploadRowHtml}
     <div class="icon-picker-body">${sectionsHtml}</div>
     <div class="editor-actions">
       <button id="iconPickerCancel">Cancel</button>
@@ -1973,6 +2054,23 @@ function openIconPicker(folders, currentValue, onPick) {
       overlay.remove();
     };
   });
+  const uploadInput = panel.querySelector('#iconPickerUploadInput');
+  const uploadFolderField = panel.querySelector('#iconPickerUploadFolder');
+  uploadInput.onchange = async () => {
+    const file = uploadInput.files[0];
+    if (!file) return;
+    const folder = uploadFolderField.value.trim();
+    try {
+      setStatus('Uploading icon…');
+      const relPath = await uploadPickerImage('/api/icons/upload', folder, file);
+      state.icons = null; // bust the session cache so the next open sees it
+      setStatus('Icon uploaded.', 'ok');
+      onPick(relPath);
+      overlay.remove();
+    } catch (err) {
+      setStatus(err.message || 'Upload failed.', 'error');
+    }
+  };
   panel.querySelector('#iconPickerCancel').onclick = () => overlay.remove();
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }

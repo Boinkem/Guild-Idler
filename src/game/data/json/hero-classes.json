@@ -732,7 +732,7 @@
     "id": "centaur",
     "name": "Centaur",
     "color": "#7c5c3a",
-    "icon": "",
+    "icon": "Heroes/Icon - Copy (13).png",
     "blurb": "Half warrior, half warhorse, and faster across open ground than anything else the guild has ever fielded.",
     "baseStats": {
       "strength": 11,

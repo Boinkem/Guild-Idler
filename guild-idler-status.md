@@ -23217,3 +23217,122 @@ appears and the streak clears on the next win; check a broken item's
 icon in both the equipped-slot and stash grids; confirm no egg drops
 from the quest board or a raid before the Hatchery is unlocked on a
 fresh save.
+
+### Recruit tab redesign: tiered chip cards + detail modal, Centaur portrait/icon art, DevTool image uploads (patch 0296)
+```discord-update
+Dev Update | Patch 0296
+
+- Added: heroes in the Recruit list are now grouped into their tier brackets instead of one long list
+- Changed: recruit cards are now short, named chips with a small portrait -- click one to see full stats, unlock requirements, and Recruit
+- Added: Centaur finally has its own portrait art and class icon -- it was already recruitable, just missing its art until now
+- Added: the local Dev Tool can now upload a new icon or portrait image directly from the picker, instead of requiring a manual file drop into the folder first
+```
+
+Three asks bundled into one patch: the Recruit tab's visual redesign
+(direct request, mockup reviewed and approved first), Centaur's missing
+art, and a DevTool workflow gap surfaced while sourcing that art.
+
+**Recruit tab redesign (`HeroesPanel.tsx`, `app.css`).** Direct request:
+"Hero's are now shown in their tiered brackets, not clumped together
+anymore," "cards are short - on-click opens a new modal that shows all
+their details and the Purchase button," "the hero Icon is shown (scaled
+down) next to their name, on the short card." The old flat `.grid.three`
+of 14 full stat cards is replaced with pill-shaped `.recruit-chip`
+buttons grouped under a `.recruit-tier-heading` per `HeroClassDef.tier`
+(0-4), built directly off a Claude Design mockup ("Live game skin"
+direction) reviewed and approved before this patch was written. Chips
+carry only a portrait, name, and a short badge (gold cost / "Locked" /
+"Recruited"); clicking any chip -- locked or not, so the milestone/Tavern
+requirement stays visible -- opens the existing `.overlay`/`.modal` shell
+with the full blurb, `describeMods` stat list, milestone note, and
+Purchase button. Every disable rule and button-label branch
+(`!unlocked`, `state.gold < cost`, `slotsFull`, `alreadyRecruited`, the
+Tavern-link fallback when `!unlocked && !tavernUnlocked`) is moved
+verbatim from the old inline card into the modal, not rewritten --
+`recruitStatusFor()` is the same cost/unlock computation the original
+card did inline, now shared by both the chip badge and the modal so the
+two can never drift. New CSS is scoped to its own `.recruit-*`/`.chip-*`
+classes; `.overlay`, `.modal`, `.btn-primary`, `.btn-ghost`,
+`.card-title`, `.card-flavour`, `.stat-row`, `.good`, `.gold-text` are
+all reused as-is rather than duplicated.
+
+**New `HeroClassDef.portrait` field, reusing the existing `bannerImage`
+picture-picker rather than inventing a new one.** Investigation during
+this patch found the existing `icon` field (used by the Settings >
+Status Bars avatar in `HeroStatusBar.tsx`) is a completely different
+asset -- a small framed "emblem" crop, not a portrait -- so the Recruit
+tab needed its own field rather than reusing `icon`. Rather than a bare
+string+number pair, `portrait` takes the exact `{path?, focusX?,
+focusY?, scale?}` shape `ChainDef.banner`/`.icon` already use, which
+means it gets that type's fully-built drag-to-focus + zoom-slider picker
+in the DevTool for free (`tools/devtool/server.mjs`'s `'hero-classes'`
+schema, `defaultFolder: 'hero-portraits'`) -- directly answers "ensure
+Devtools supports updating the image, or moving the crop." An unset
+`portrait` falls back to `public/lore/hero-portraits/<id>.png` at
+dead-center focus, same convention `chainBannerSrc` established
+(`heroPortraitSrc`/`heroPortraitStyle`, new in `HeroesPanel.tsx`); the
+chip/modal frames render it the same way `LorePanel`'s `ChainBanner`
+does (a `backgroundImage`/`backgroundPosition`/`backgroundSize` div, not
+an `<img>`), so a missing file just fails to paint rather than showing a
+broken-image icon. `.png` rather than banners' usual `.jpg`, since
+portrait art ships with a transparent background.
+
+**Centaur portrait + class icon supplied.** Centaur was already fully
+coded as the 14th hero class since patch 0293 -- this patch is purely
+the missing art, same "art can't travel through a text patch" gap every
+tier-4 batch has hit before, except this time the destination folder
+(`public/lore/hero-portraits/`) is a normal tracked path, not a
+gitignored one, so the art ships directly in this patch's diff rather
+than needing a separate host-side import step. Portrait cropped from the
+sprite pack supplied for this patch (`Centaur 2D Pixel Art v1.2`, the
+same pack `tools/import_characters.py`'s existing `centaur` entry
+already points at for in-game sprites); class icon (the small framed
+emblem for the Settings > Status Bars avatar, `HeroClassDef.icon`) built
+from the separate class-icon image supplied this patch, resized to match
+the other 13 tracked files in `public/item-icons/Heroes/` exactly.
+`hero-classes.json`'s `centaur.icon` updated from `""` to the new file's
+path -- the only real data change in this patch; everything else about
+Centaur (tier, cost, mods, milestone) is untouched from patch 0293.
+
+**Labeling correction applied to the reference art.** Per direct note on
+the source portrait collage: the panel labeled "Archer" in that image is
+actually Gladiator's art, and the panel labeled "Gladiator" is actually
+Knight's -- both portraits were cropped and assigned per the corrected
+mapping, not the collage's own (wrong) labels; cross-checked directly
+against the original uploaded collage before finalizing this patch.
+
+**DevTool: upload support added to both the icon and banner/portrait
+pickers.** Direct request, found while sourcing Centaur's own art:
+every picker on the Assets side of the DevTool (`openIconPicker`,
+`openBannerPicker` in `app.js`) could only ever *choose* a file already
+sitting on disk -- there was no way to get a brand-new file onto disk
+without leaving the browser and dropping it into the right folder by
+hand first. Two new endpoints, `POST /api/icons/upload` and `POST
+/api/banners/upload` (`tools/devtool/server.mjs`), share one generic
+`uploadImageFile(rootDir, {folder, filename, dataBase64})` primitive --
+JSON + base64 rather than multipart, matching every other POST route
+this dependency-free server already has, capped at 8MB, filename
+sanitised and destination-path-traversal-guarded the same way the
+existing static-serve routes already are. Both pickers gained an upload
+row (a folder text field with existing folder names offered via
+`<datalist>`, defaulting to `'Heroes'` for icons or the field's own
+`defaultFolder`/`preferredFolder` for banners/portraits -- e.g.
+`hero-portraits` when opened from the new `portrait` field) plus a file
+input; picking a file uploads it, busts the relevant session cache
+(`state.icons`/`state.banners`), and immediately selects the new file
+via the same `onPick` callback a normal grid click already uses -- no
+separate "now go choose what you just uploaded" step.
+
+**Verified:** `npx tsc --noEmit` and `npm run build` (web bundle plus
+both Electron sub-builds) all pass clean against a fresh clone with this
+patch applied. `node --check` clean on both `server.mjs` and `app.js`.
+Both new upload endpoints smoke-tested directly (`curl` against a
+running `node tools/devtool/server.mjs`) end-to-end -- confirmed a
+POSTed file actually lands at the expected path under both
+`public/item-icons/` and `public/lore/`, and the response's `path` is
+exactly what a picker's `onPick` expects. All 14 hero portraits
+(including Centaur) visually spot-checked after cropping. No live
+in-app playtest of the redesigned Recruit tab itself in this
+environment (no browser available) -- worth a real pass to confirm the
+tier grouping, the modal's Tavern-link/milestone branches, and the new
+DevTool upload buttons all feel right before calling this fully closed.
