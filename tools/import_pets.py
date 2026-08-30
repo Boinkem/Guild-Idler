@@ -370,27 +370,14 @@ TIDEWHELP = PetSpec(
     keep=['#000000', '#45283c'],  # outline + eye/nose
 )
 
-# Bandit's own sheet ships two colourways (Brown/Grey) that are the exact
-# same shapes with a different palette baked in -- confirmed by identical
-# per-colour pixel counts between the two files. Brown picked as canonical,
-# same "pick one, auto-tint covers the rest" treatment as Mossback above.
-# Box coordinates are the real connected-component scan of
-# RaccoonRun SpriteSheets/BrownRaccoons.png (see PetSpec.frame_boxes) --
-# row 1 (front-facing idle bob) and row 4 (side-profile walk) specifically,
-# the two rows that map onto this game's idle/movement vocabulary. Rows 2
-# (3/4-angle idle, both directions) and 3 (back-facing idle) are real frames
-# in the source pack but have no slot to go in yet.
-BANDIT = PetSpec(
-    species_id='bandit',
-    frame_w=20, frame_h=22,
-    sheet_file='Raccoon/RaccoonRun SpriteSheets/BrownRaccoons.png',
-    frame_boxes={
-        'idle': [(1, 1, 16, 22), (17, 1, 16, 22), (33, 1, 16, 22)],
-        'movement': [(0, 73, 17, 22), (22, 73, 17, 22), (43, 73, 20, 22), (64, 73, 17, 22)],
-    },
-    recolor=['#5e4a40', '#bba69a', '#33241d', '#55433a', '#3b291f', '#4d372b'],  # fur tones
-    keep=['#000000', '#ffffff'],  # outline + tiny highlight
-)
+# Bandit (raccoon) was removed entirely -- direct request, unhappy with the
+# sprite's real resolution (20x22 source frames, the smallest of any pet in
+# the game by a wide margin, and it shows once scaled up next to anything
+# else). Removed from pets.json/PETS below rather than left dormant with no
+# PetDef pointing at it. Its old frame_boxes spec (RaccoonRun SpriteSheets/
+# BrownRaccoons.png) is gone with it -- if a higher-resolution raccoon pack
+# ever replaces it, this is a from-scratch spec, not a resurrection of the
+# old boxes.
 
 WISPLET = PetSpec(
     species_id='wisplet',
@@ -555,9 +542,47 @@ FLYING_EYE = PetSpec(
     keep=['#ffffff', '#b4b4b4', '#858585', '#161c39', '#22284a'],  # sclera + outline family
 )
 
+# Gargoyle -- same "2D Pixel Art template pack family" as Skelly through
+# Flying Eye above (confirmed the same way: identical palette turns up --
+# 8a4836/5d2c28/bf6f4a/e69c69/f6ca9f/391f21 skin-tone family, 891e2b/c42430
+# reds -- and the same generic Sprites/<no_outline|outline>/IDLE.png etc.
+# layout, one species subfolder deep under --src). New pet, dedicated drop
+# from Blackford Keep's own final encounter (blackford_uncrowned, see
+# raid-encounters.json) -- the guild's very first raid never had a
+# signature pet of its own before this.
+#
+# Frame width confirmed the same way Minotaur's hero frame_w was in patch
+# 0251 (measured, not just computed from a raw GCD) -- 144px x 96px checked
+# by actually rendering every IDLE/MOVE frame side by side and visually
+# confirming a clean, uncut gargoyle in every one, not assumed off the
+# sheet widths' arithmetic GCD alone. Only ATTACK 1 of the pack's two
+# attack variants is wired to 'catch' (ATTACK 2 unused, same "extra
+# variant, no slot" treatment Skeleton Warrior's own ATTACK 2 already
+# got); DEATH (7 frames) has no matching PetAnimation slot at all, same
+# gap as every other pack's death sequence in this file.
+GARGOYLE = PetSpec(
+    species_id='gargoyle',
+    frame_w=144, frame_h=96,
+    anim_files={
+        'idle': 'Gargoyle 2D Pixel Art v1.2/New Version/Sprites/outline/IDLE.png',
+        'movement': 'Gargoyle 2D Pixel Art v1.2/New Version/Sprites/outline/MOVE.png',
+        'catch': 'Gargoyle 2D Pixel Art v1.2/New Version/Sprites/outline/ATTACK 1.png',
+        'damage': 'Gargoyle 2D Pixel Art v1.2/New Version/Sprites/outline/HURT.png',
+    },
+    # Stone-hide browns + the green loincloth accent shift together as one
+    # identity palette per rarity tier, same multi-tone-coat treatment
+    # Longshadow's harlequin coat already established. Horns (grey/white)
+    # and the small red eye-accent are kept fixed across every tier, same
+    # "constant accent" precedent Frostrunner's eyes / Skelly's staff-glow
+    # already set -- a Legendary Gargoyle still has the same stone-grey
+    # horns and the same red eyes, only its hide tint shifts.
+    recolor=['#8a4836', '#5d2c28', '#bf6f4a', '#e69c69', '#f6ca9f', '#391f21', '#33984b', '#1e6f50', '#134c4c'],
+    keep=['#131313', '#858585', '#b4b4b4', '#5d5d5d', '#891e2b', '#c42430'],
+)
+
 PETS: List[PetSpec] = [
     FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER,
-    MOSSBACK, TIDEWHELP, BANDIT, WISPLET, SQUIRREL, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE,
+    MOSSBACK, TIDEWHELP, WISPLET, SQUIRREL, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE, GARGOYLE,
 ]
 
 

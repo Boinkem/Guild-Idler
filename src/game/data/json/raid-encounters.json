@@ -95,6 +95,18 @@
     ],
     "vulnerableTo": [
       "lightning"
+    ],
+    "eggLoot": [
+      "common:gargoyle@10",
+      "uncommon:gargoyle@3"
+    ],
+    "eggLootHeroic": [
+      "uncommon:gargoyle@10",
+      "rare:gargoyle@3"
+    ],
+    "eggLootLegendary": [
+      "rare:gargoyle@10",
+      "epic:gargoyle@3"
     ]
   },
   {

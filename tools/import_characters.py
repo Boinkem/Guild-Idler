@@ -142,6 +142,19 @@ CHARACTERS: Dict[str, dict] = {
         # unmapped extras.
         'map': {'IDLE': 'idle', 'RUN': 'walk', 'ATTACK1': 'attack_1', 'ATTACK2': 'attack_2', 'HURT': 'hurt', 'DEATH': 'death'},
     },
+    # Fifth tier-4-bucket class, added standalone (not part of the original
+    # patch 0251 batch). Same "2D Pixel Art" template pack family as that
+    # batch (confirmed: same generic Sprites/<no_outline|outline>/IDLE.png
+    # etc. layout, one 'New Version'/'Old Version' split same as Gargoyle's
+    # own pet pack). frame_w confirmed by rendering every IDLE/RUN frame
+    # side by side and checking for a clean, uncut centaur in each one, not
+    # assumed from the sheet widths' raw GCD alone (148 -- same lesson
+    # patch 0251's own Minotaur/patch 0250's Mimic already paid for once).
+    'centaur': {
+        'frame_w': 148, 'frame_h': 96,
+        'base': 'Centaur 2D Pixel Art v1.2/New Version/Sprites/outline',
+        'map': {'IDLE': 'idle', 'RUN': 'walk', 'ATTACK': 'attack_1', 'HURT': 'hurt', 'DEATH': 'death'},
+    },
 }
 
 # ------------------------------------------------------------------- skins ----

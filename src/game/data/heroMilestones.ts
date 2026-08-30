@@ -37,6 +37,12 @@ const HERO_MILESTONE_CHECKS: Partial<Record<HeroClass, (state: GameState) => boo
   // list every other "has this chain been finished" check in the game
   // already reads.
   werewolf: (state) => state.completedChains.includes('kindred_moon'),
+  // Centaur: clear three different raids. completedRaids already tracks
+  // every raid id the guild has ever fully cleared (see its own comment
+  // in types.ts) -- deduped by id already, so .length is a plain "how many
+  // distinct raids" count with zero new state, same "reuse what's already
+  // tracked" precedent every check above already follows.
+  centaur: (state) => state.completedRaids.length >= 3,
 };
 
 /** True if this class's milestone condition (if it has one) is currently

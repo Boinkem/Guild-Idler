@@ -22874,3 +22874,134 @@ confirm the portrait plate's Tombstone fallback, the attribute meters'
 soft-reference scaling (`SOFT_REFERENCE` in `heroStatEffects.ts`; bump
 these if a well-geared hero pins every bar), and the 720px narrow-window
 breakpoint all look right.
+
+### Bandit removed, Gargoyle added as Blackford Keep's first dedicated pet, Centaur added as a 14th hero class (patch 0293)
+
+```discord-update
+Dev Update | Patch 0293
+
+- Removed Bandit (the raccoon) from the pet pool entirely -- its sprite resolution wasn't holding up, no replacement planned right now
+- Added Gargoyle, a new pet -- drops from The Uncrowned, the final boss of The Siege of Blackford Keep (the guild's very first raid, which never had a signature pet before)
+- Added Centaur, a new hero class -- fast, hard-hitting melee on four legs, recruitable from the Tavern or by clearing three different raids
+```
+
+Three separate asks bundled into one patch: a removal, a new pet, and a
+new hero, arriving the same way the tier-4 hero/pet batches did --
+supplied art run through the existing importers, data wired to match.
+
+**Bandit removed, direct request ("not happy with the sprite
+resolution").** Same treatment patch 0250 already gave Packrat: gone
+from `pets.json` outright, no replacement, no migration for anyone who'd
+already hatched one. Confirmed nothing else in the codebase references
+the `bandit` id before removing it (the other "bandit" hits in the repo
+are all the unrelated Bandits-on-the-Old-Road quest chain content) --
+this needed touching exactly one file's worth of data plus its own
+`PetSpec`/`PETS` entry in `tools/import_pets.py`, nothing else. Its old
+`frame_boxes` spec (a 20x22-frame raccoon sheet, the smallest source
+frames of any pet in the game) is deleted, not commented out -- a future
+higher-resolution raccoon pack would be a from-scratch spec anyway.
+
+**Gargoyle -- new pet, dedicated drop suggested and built against
+Blackford Keep specifically.** Every other raid in the game either
+already has a dedicated pet tied to its final (or a mid) encounter
+(Bonewrought Vault -> Skelly/Skeleton Warrior [see below], What Got Out
+-> Imp, Black Dragon Nest -> Dragonling) or is very high-level endgame
+content (House of Bones, Silence the Loom, Requiem for the Last God) --
+Blackford Keep, the guild's very first raid (reqLevel 8), was the one
+raid with no egg drop at all. A stone guardian perched on a keep's own
+walls is a natural fit for a siege raid, and giving the FIRST raid its
+own signature pet reward (rather than stacking a fifth one onto an
+already-decorated later raid) seemed like the more interesting slot to
+fill. Wired to `blackford_uncrowned` (the raid's final boss, "The
+Uncrowned"), same `eggLoot`/`eggLootHeroic`/`eggLootLegendary` shape
+every other dedicated drop already uses -- scaled a tier gentler than
+Imp/Skeleton Warrior's own tables (common/uncommon at Normal rather than
+starting at uncommon) since Blackford Keep is reqLevel 8 versus their
+26/41.
+
+Confirmed the same "2D Pixel Art template pack family" as the Skelly-
+through-Flying-Eye batch (identical palette signature, identical generic
+`Sprites/<no_outline|outline>/IDLE.png` etc. layout) -- treated the same
+way: `anim_files` pointing at the `New Version/Sprites/outline` variant,
+frame size (144x96) confirmed by actually rendering every IDLE/MOVE
+frame side by side rather than trusting the sheet widths' raw GCD alone
+(same lesson patch 0251's Minotaur and patch 0250's Mimic already paid
+for). `idle`/`movement`/`catch` (ATTACK 1 only -- ATTACK 2 is a real,
+unused second variant, same "extra variant, no slot" gap Skeleton
+Warrior's own pack already has)/`damage` mapped; `DEATH` has no matching
+`PetAnimation` slot at all, same standing gap every other pack's death
+sequence hits in this file. Stone-hide browns and the green loincloth
+accent recolor together as one identity palette per rarity tier (same
+multi-tone-coat treatment Longshadow's harlequin coat already
+established); horns and the small red eye-accent are kept fixed across
+every tier, same "constant accent" precedent Frostrunner's eyes and
+Skelly's staff-glow already set.
+
+**Skeleton Warrior and Flying Eye art finally supplied -- both were
+already fully wired in code/data since patch 0250, purely an art-file
+gap until now**, same as every prior "art can't travel through a text
+patch" note in this file. No data changes needed for either -- confirmed
+`skeleton_warrior`'s `eggLoot` (on `hob_the_lich`, The House of Bones'
+own final boss) and `flying_eye`'s `rewardEgg` (on its quest chain) were
+already both present and correctly pointed before touching anything.
+
+**Centaur -- new 14th hero class, added standalone rather than as part
+of a batch.** Same "2D Pixel Art" template pack family as the pet batch
+above (and as the original tier-4 hero batch) -- `frame_w`/`frame_h`
+(148x96 source, 115x78 after the shared content-box crop) confirmed the
+same rendering-and-counting way as every hero added since Minotaur's own
+case-typo lesson. `IDLE`/`RUN`/`ATTACK`/`HURT`/`DEATH` mapped to the
+standard 5-animation shape (`idle`/`walk`/`attack_1`/`hurt`/`death`),
+same bucket Huge Knight/Gladiator/Pyromancer already sit in. Runs
+through the existing generic saturation-based skin recolor
+(`theme_pixel` in `tools/import_characters.py`) same as every other
+class -- no per-class recolor list needed, unlike a pet.
+
+Slotted into the existing tier-4 bucket rather than inventing a new
+tier: `unlockTavernLevel: 6` (same gate as Huge Knight/Kobold/Minotaur/
+Werewolf), `55000g` recruit cost (matching theirs exactly), plus a
+milestone alt-unlock following the same pattern `heroMilestones.ts`
+already established -- "clear three different raids," read straight off
+the existing `state.completedRaids` array (deduped by raid id already,
+confirmed directly in `RaidManager.resolve` before trusting `.length`
+as a distinct-raid count) for zero new tracking, same "reuse what's
+already there" precedent every one of the four tier-4 milestones already
+set. `role: 'melee'` (native), with `ranged`/`caster` flavor names
+(Plainsrider/Stargazer) and descriptions following the same shape every
+other class's `roleFlavors`/`roleDescriptions` already use. Stats/mods
+are a first-pass build (fast, hard-hitting, unarmored) -- flagged for
+Balance Sandbox verification same as every other new numeric content in
+this game, same disclaimer patch 0251's own four heroes shipped under.
+`icon` shipped blank (`""`) -- no dedicated icon asset supplied this
+patch, same graceful-missing-icon fallback (plain color circle) every
+other class without one already renders correctly.
+
+**Open item, not fixed in this patch: hero-slot cap is now short by
+one.** Patch 0251 raised Extra Banner's cap specifically to fit 13
+classes into 13 max slots (1 base + 6 Tavern + 6 Extra Banner, via its
+`tier2`). Centaur makes 14 classes against that same 13-slot ceiling --
+`RenownPerkDef` only has a single optional `tier2` field, not a generic
+tier list, so a further +1 slot would need either a genuine `tier3`
+addition to that type (real engine work, not just a data/tuning change)
+or a cheaper stopgap (e.g. bumping `extra_banner.tier2MaxLevel` by one
+more level if its cost curve tolerates it -- not checked this patch).
+Deliberately not built as a side effect of an art-and-content request --
+flagging it here the same way patch 0219's original 9-class/11-slot
+mismatch was flagged rather than silently patched, so it's a visible
+decision rather than a quietly-shipped gap. A guild can still recruit
+and field Centaur today; "one of every class at once" simply can't be
+achieved again until this is addressed.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build` (both the web
+bundle and the two Electron sub-builds, main and preload) all pass clean
+against a fresh clone with every change above applied. Every new/removed
+id (`bandit`, `gargoyle`, `centaur`) confirmed by direct grep to have no
+other hardcoded reference anywhere in `src/` or `tools/devtool/` --
+`HeroClass`/pet species ids are both plain data-driven strings, so
+nothing else needed touching. All three new pets' and the new hero's art
+rendered frame-by-frame and spot-checked across every rarity/skin tier
+before delivery (idle frame 0 for all three pets, all 5 rarity tiers for
+Gargoyle specifically, all 5 skin tiers for Centaur). No live playtest
+in this environment, same standing caveat as every patch since 0214 --
+worth a real recruit-and-send pass on Centaur and a real Blackford Keep
+clear for the Gargoyle drop before calling either fully proven.

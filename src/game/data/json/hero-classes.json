@@ -727,5 +727,61 @@
     },
     "milestoneUnlockDescription": "Complete The Kindred Moon quest chain.",
     "milestoneGoldCost": 3000
+  },
+  {
+    "id": "centaur",
+    "name": "Centaur",
+    "color": "#7c5c3a",
+    "icon": "",
+    "blurb": "Half warrior, half warhorse, and faster across open ground than anything else the guild has ever fielded.",
+    "baseStats": {
+      "strength": 11,
+      "endurance": 9,
+      "luck": 4,
+      "wisdom": 3
+    },
+    "growth": {
+      "strength": 1.4,
+      "endurance": 1.2,
+      "luck": 0.5,
+      "wisdom": 0.4
+    },
+    "mods": {
+      "success": 3,
+      "injuryResist": 4,
+      "speed": 10
+    },
+    "preferred": [
+      "combat",
+      "explore"
+    ],
+    "preferredBonus": 16,
+    "unlockTavernLevel": 6,
+    "tier": 4,
+    "names": [
+      "Chiron",
+      "Nessa",
+      "Pholus",
+      "Rhoecus",
+      "Thundermane Orin",
+      "Kestra",
+      "Bracchus",
+      "Ilia",
+      "Torvun",
+      "Windrunner Sable"
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Centaur",
+      "ranged": "Plainsrider",
+      "caster": "Stargazer"
+    },
+    "roleDescriptions": {
+      "melee": "Half warrior, half warhorse, axe swung with the full weight of a full gallop behind it.",
+      "ranged": "Never stops moving long enough to be an easy target -- throws from a dead run and is already three lengths away before it lands.",
+      "caster": "Old herd-lore about the stars, half-remembered and mostly self-taught, cast between one stride and the next."
+    },
+    "milestoneUnlockDescription": "Clear three different raids.",
+    "milestoneGoldCost": 3500
   }
 ]

@@ -100,13 +100,6 @@
     "spriteFolder": "frostrunner"
   },
   {
-    "id": "bandit",
-    "name": "Bandit",
-    "description": "Steals first, sorts the loot later -- usually while sitting directly on top of whatever it took.",
-    "glyph": "\ud83e\udd9d",
-    "spriteFolder": "bandit"
-  },
-  {
     "id": "squirrel",
     "name": "Squirrel",
     "description": "Buries a season's worth of anything shiny and forgets exactly none of it, no matter how insulted it looks when questioned.",
@@ -151,6 +144,14 @@
     "description": "Watches everything, blinks at nothing, and reports back to something that stopped needing reports a long time ago.",
     "glyph": "\ud83d\udc41\ufe0f",
     "spriteFolder": "flying_eye",
+    "dedicatedOnly": true
+  },
+  {
+    "id": "gargoyle",
+    "name": "Gargoyle",
+    "description": "Held its post on Blackford Keep's wall for longer than the lord upstairs realizes. Still counts every visitor -- guild included -- as trespassing, technically.",
+    "glyph": "\ud83d\uddff",
+    "spriteFolder": "gargoyle",
     "dedicatedOnly": true
   }
 ]

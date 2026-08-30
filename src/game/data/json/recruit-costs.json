@@ -50,5 +50,9 @@
   {
     "id": "werewolf",
     "cost": 55000
+  },
+  {
+    "id": "centaur",
+    "cost": 55000
   }
 ]
