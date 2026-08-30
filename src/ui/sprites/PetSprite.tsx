@@ -19,15 +19,25 @@ import { Rarity } from '../../game/types';
  * species' `flip` prop assumes the same default facing direction in its
  * own source sheet, and a pack authored facing the opposite way needs its
  * own facing inverted once, here, rather than pushing the quirk onto every
- * caller of `flip`. Skeleton Warrior reported with the same symptom the
+ * caller of `flip`. Dragonling reported with the same symptom the
  * Dwarf/Wizard/Witch hero classes originally had (facing backward relative
- * to everything else running beside it) -- same fix, same shape. Dragonling
- * added at the same time, same reported symptom, confirmed against its own
- * pack directly rather than assumed from the species being new.
+ * to everything else running beside it) -- same fix, same shape.
+ *
+ * Skeleton Warrior's own entry (added the same patch as Dragonling's, back
+ * when neither species' real art had actually landed in the pipeline yet)
+ * turned out to be wrong once real art finally shipped in patch 0293 and
+ * got tested in game -- reported backward with the flip applied, correct
+ * without it. Removed rather than left in "just in case": that original
+ * entry was reasoned about, not confirmed against real rendered frames,
+ * and this patch is the first chance to actually confirm it either way.
+ *
+ * Gargoyle added here instead (patch 0294), same real-art-now-in-hand
+ * situation -- reported facing backward relative to everything else
+ * running beside it, same fix, same shape.
  */
 const PET_REVERSED_FACING: Partial<Record<string, true>> = {
-  skeleton_warrior: true,
   dragonling: true,
+  gargoyle: true,
 };
 
 export type PetAnimation =

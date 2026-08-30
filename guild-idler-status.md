@@ -23005,3 +23005,41 @@ Gargoyle specifically, all 5 skin tiers for Centaur). No live playtest
 in this environment, same standing caveat as every patch since 0214 --
 worth a real recruit-and-send pass on Centaur and a real Blackford Keep
 clear for the Gargoyle drop before calling either fully proven.
+
+### Pet facing fixes: Skeleton Warrior corrected, Gargoyle added (patch 0294)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed Skeleton Warrior and Gargoyle facing the wrong way
+```
+
+Direct report against real art in game for the first time -- both
+species' art only landed in patch 0293, so this is the first chance
+either one has actually been seen moving on screen rather than reasoned
+about at the code level.
+
+**Skeleton Warrior's existing `PET_REVERSED_FACING` entry was wrong.**
+It was added back in patch 0250, alongside Dragonling's own entry, while
+neither species had real art in the pipeline yet -- the comment on that
+entry said "confirmed against its own pack directly," but with no
+running game to actually render it in, that confirmation could only
+ever have been a visual read of the source sheet, not the real flip
+behaviour in motion. Now that patch 0293 finally supplied the art and it
+got tested in game, it reported backward with the flip applied and
+correct without it. Removed from `PET_REVERSED_FACING` in
+`src/ui/sprites/PetSprite.tsx` rather than toggled or special-cased --
+Dragonling's own entry is untouched, since it wasn't reported as wrong
+and this patch didn't re-test it.
+
+**Gargoyle added to the same map**, same symptom, same fix shape --
+facing backward relative to everything else running beside it. Its own
+comment block updated to record both changes and why Skeleton Warrior's
+original entry didn't survive contact with real art.
+
+**Verified:** `npx tsc --noEmit` and a full `npx vite build` (web bundle
+plus both Electron sub-builds) all pass clean against a fresh clone with
+patches 0293 and 0294 both applied. This is a one-file, two-line change
+-- no data/manifest changes, no `SAVE_VERSION` implications. Worth a
+real in-game look at both species moving next to a hero to confirm the
+correction reads right, same as any facing fix in this file.
