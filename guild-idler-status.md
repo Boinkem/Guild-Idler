@@ -23336,3 +23336,137 @@ in-app playtest of the redesigned Recruit tab itself in this
 environment (no browser available) -- worth a real pass to confirm the
 tier grouping, the modal's Tavern-link/milestone branches, and the new
 DevTool upload buttons all feel right before calling this fully closed.
+
+### Treasury cost-vs-storage-cap softlock, five UI colour/readability fixes (patch 0297)
+```discord-update
+Dev Update | Patch 0297
+
+- Fixed: Treasury upgrades no longer cost more than you can physically save up -- cost stops climbing past a point, and the gold storage cap grows faster per level to match
+- Changed: the Buy button's default yellow is brighter before you even hover it
+- Changed: Compare Heroes is now a blue button
+- Changed: the "Go to Tavern" and "Go to Prestige" recruit-slot buttons are coloured now too
+- Changed: Show on Desktop / More / Collapse always sit in the top-right corner of an expanded hero card, even with a long name
+- Changed: Guide tab notification lines now sit on a dark card so they're readable over the background art
+- Changed: Retire has its own new colour -- pink
+- Fixed: Grimsby's Card Flip, Dice, and Tab games now show their gold/fee/history text on a dark card instead of directly over the tabletop art
+```
+
+Six separate direct reports bundled into one patch -- a real balance bug and a
+batch of small colour/contrast fixes across five tabs.
+
+**Treasury cost outrunning its own storage cap (`src/game/types.ts`,
+`src/game/data/progression.ts`).** Direct report: "Treasury Cost (from what
+I can tell @ level 16) is higher than actual gold storage cap." Confirmed by
+hand against the live curve (`baseCost` 40, `costGrowth` 1.79, old
+`storagePerLevel` 5,000): the cost to buy level 13 alone (~77.5k) already
+exceeded the level-12 storage cap (75k), and it only gets worse from there --
+level 16's next-level cost (~444k) against a 90k cap, level 20's (~4.56M)
+against 110k. This is a genuine soft-lock, not just steep pricing -- gold is
+hard-capped at `ModifierManager.goldStorage`, so once the next level's price
+passes that cap there is no way to ever save up enough to pay it, regardless
+of income. Two changes, matching the report's own two asks:
+1. New `GuildDef.flatCostFromLevel` field (optional, undefined for every
+   facility except Treasury -- no other facility's curve changes). Once a
+   facility's current level reaches this value, `guildCost` (progression.ts)
+   stops compounding `costGrowth` any further -- every level from there to
+   `maxLevel` costs exactly what `flatCostFromLevel` itself would have.
+   Treasury sets it to 12, the same level `modsMaxLevel` already treats as
+   "the real % bonus is done, everything past this is pure storage
+   headroom" -- so price stops climbing at exactly the point the facility's
+   own design already says nothing else meaningful is being bought anymore.
+   Level 13 onward all cost the same flat ~43.3k instead of continuing to
+   balloon toward the millions by level 20.
+2. `storagePerLevel` tripled, 5,000 -> 15,000, so the cap itself climbs
+   faster too, not just the cost ceiling -- at level 12 alone the new cap
+   (190k) is already well clear of the ~43.3k flat cost every level past it
+   now charges, and stays clear all the way to level 20 (cap 295k vs. the
+   same flat 43.3k). Re-verified the full 0-20 curve by hand against both
+   changes together -- cost never exceeds the cap at any level, old or new.
+
+**Buy button default brightness (`app.css`, `.btn-yellow`).** Direct
+report: the resting-state yellow "is too dull prior to highlighting it."
+The color-mix ratio toward `--panel-2` was 70%/45%, noticeably muddier at
+rest than `.btn-purple`/`.btn-green`/etc.'s own 65%/45% resting mix despite
+yellow needing more saturation to read as bright against a dark panel in
+the first place. Bumped to 85%/62%; hover (solid `--brass`) is untouched,
+so it's still the brightest state, just no longer doing all the contrast
+work alone.
+
+**Heroes tab (`HeroesPanel.tsx`, `hero-card.css`, `app.css`).** Three
+separate asks:
+- Compare Heroes: new `.chip.chip-blue` modifier (border/text `--sky`,
+  the game's one existing blue accent, already used for sub-tab nav) on
+  the existing `.chip` button -- reused rather than a new hue since this
+  reads as the same "opens an informational view" category.
+- "Go to Tavern"/"Go to Prestige" (shown only once a guild has no free
+  hero slots): both were plain `.btn-ghost`. Recoloured using colours
+  that already mean these destinations elsewhere in the game rather than
+  inventing new ones -- Tavern to `.btn-primary` (brass, matching every
+  other Guild Hall/gold action), Prestige to `.btn-purple` (violet,
+  matching Heroic Renown's own colour throughout PrestigePanel).
+- Show on Desktop / More / Collapse (`.hero-block-actions`) not reliably
+  landing top-right on an expanded card: `.hero-block-head`'s
+  `flex-wrap: wrap` let a long name/title/role/prefers line in
+  `.hero-block-identity` push the action row down onto its own line
+  instead of staying pinned beside it. Switched to `flex-wrap: nowrap` on
+  the head (identity gets `flex: 1 1 auto` so it's the side that
+  absorbs/wraps its own text), and `.hero-block-actions` gets
+  `flex-shrink: 0` plus its own internal `flex-wrap: wrap` so the three
+  buttons can drop to a second internal line without ever leaving the
+  top-right corner.
+
+**Guide tab (`app.css`, `.notif-row`/`.notif-list`).** Direct report:
+"Text is hard to read, each line has no background." The Notifications
+list previously had no background at all, just a `border-bottom` divider,
+sitting straight on the Guide tab's own background art. Gave each row the
+same translucent dark-grey card treatment `.card` already uses elsewhere
+(`color-mix` against `--panel`, not a flat colour, so it stays theme-aware)
+with its own border/radius; the old border-bottom divider is gone in favor
+of a small gap between rows so each one reads as a separate card. The How
+To sub-tab was already fine -- its entries are plain `.card`s already.
+
+**Prestige tab (`app.css` new `--pink` token + `.btn-pink`,
+`PrestigePanel.tsx`).** Direct request: "Retire - new colour button,
+pink?" New `--pink: oklch(68% 0.19 352)` token, sitting between `--violet`
+(318) and `--blood` (24) on the hue wheel without landing on either --
+Retire needed a colour nothing else in the game was already using. New
+`.btn-pink` class following the same accent-button shape every other
+category (`.btn-purple`/`.btn-green`/`.btn-danger`) already uses. Applied
+to the real Retire button in `HeroRetireCard` and to `RetireConfirmModal`'s
+own confirm button when `tone === 'primary'` (the confirm-before-retiring
+setting's dialog) -- Early Retire stays plain `.btn-ghost` on purpose, so
+the strictly-worse fallback never looks as inviting as the real thing.
+
+**Grimsby's minigames (`app.css`; `.peddler-modal-topbar`,
+`.peddler-facts-grid`, `.peddler-tab-ledger`; `PeddlerCardModal.tsx`).**
+Direct report specifically against Card Flip ("text is hard to read on the
+background... have text sit on a dark grey card"), but all three affected
+classes are shared across every Peddler modal, so Dice and Tab (the
+"other games likely have the same issue" guess in the report) are fixed by
+the same change:
+- `.peddler-modal-topbar` (title + gold-on-hand bar, all three modals) had
+  only a `border-bottom` rule line, no actual backing -- now a full dark
+  card, same family as `.peddler-corner-comment`/`.peddler-result-summary`
+  elsewhere in these modals, which already had this treatment.
+- `.peddler-facts-grid` (Card's fee/tiers/rebate summary) had no backing
+  at all. Removed the inline `paddingTop`/`borderTop` `PeddlerCardModal.tsx`
+  used to carry for this and baked a full card background/border/padding
+  into the class itself instead.
+- `.peddler-tab-ledger` (Grimsby's Tab game round history) had no backing
+  either, just per-row border-bottoms. Same dark-card wrapper added; the
+  existing per-row dividers stay as internal separators inside it.
+
+**Not touched:** every other Peddler-specific element (`.peddler-card`,
+`GrimsbyBustCard`'s own deliberately-opaque black card, the dice sprite
+button) already had its own established readability treatment and wasn't
+part of either report.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this patch
+applied. Treasury's full 0-20 cost-vs-cap curve re-checked by hand (see
+above) rather than assumed. No live in-app playtest of the visual changes
+in this environment (no browser available) -- worth a quick real-window
+pass to confirm the new chip/button colours read well against their
+backgrounds, and that the hero card's action row still looks right at a
+genuinely narrow window width where three buttons wrapping internally
+might look cramped.

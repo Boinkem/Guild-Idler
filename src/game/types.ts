@@ -1620,6 +1620,23 @@ export interface GuildDef {
    *  instead of Treat -- see ModifierManager.freeRepairsPerDay and
    *  GameEngine.consumeFreeRepair. */
   freeRepairsPerLevel?: number;
+  /**
+   * Patch 0297 bug fix. `guildCost` compounds `costGrowth` every level
+   * forever -- fine for a facility that stops at a modest maxLevel, but
+   * Treasury's own long storage tail (see `modsMaxLevel` above: levels
+   * past 12 buy pure `storagePerLevel` headroom, nothing else) let the
+   * cost keep compounding right along with it. Confirmed directly: by
+   * level 13 the next level already cost more gold than the player could
+   * even physically hold (`ModifierManager.goldStorage`'s own cap), a
+   * real soft-lock, not just "expensive" -- there's no way to bank enough
+   * gold at once to ever pay it. Set this to the level `guildCost` should
+   * stop compounding past -- every level from here to `maxLevel` costs
+   * exactly what THIS level would have, matching the same idea
+   * `modsMaxLevel` already applies to the flat bonus, just applied to
+   * price instead. Undefined means no cap, same uncompromised exponential
+   * curve every other facility still uses.
+   */
+  flatCostFromLevel?: number;
 }
 
 export interface RenownPerkTier2 {

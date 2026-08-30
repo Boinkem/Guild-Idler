@@ -15,9 +15,10 @@ import { Hero } from '../../game/types';
  * unstyled" was the actual feedback). Same .overlay/.modal shape every
  * other in-game confirmation/detail popup already uses (PeddlerCard's
  * detail overlay, the Vendors shop item modals). `tone` picks which
- * button color signals the stakes: 'primary' (brass) for the real
- * Retire, which is a genuine reward; 'ghost' (plain) for Early Retire,
- * which gives up the renown/streak entirely and shouldn't look inviting.
+ * button color signals the stakes: 'primary' (pink, patch 0297 -- direct
+ * request for Retire to get its own colour) for the real Retire, which is
+ * a genuine reward; 'ghost' (plain) for Early Retire, which gives up the
+ * renown/streak entirely and shouldn't look inviting.
  */
 function RetireConfirmModal({
   title, body, confirmLabel, tone, onConfirm, onCancel,
@@ -32,7 +33,7 @@ function RetireConfirmModal({
         <p className="small muted">{body}</p>
         <div className="row end" style={{ gap: 8, marginTop: 12 }}>
           <button onClick={onCancel}>Cancel</button>
-          <button className={tone === 'primary' ? 'btn-primary' : 'btn-ghost'} onClick={onConfirm}>
+          <button className={tone === 'primary' ? 'btn-pink' : 'btn-ghost'} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>
@@ -84,7 +85,7 @@ function HeroRetireCard({
       </div>
       <div className="row" style={{ gap: 6 }}>
         <button
-          className="btn-primary"
+          className="btn-pink"
           disabled={!eligible}
           onClick={() => { if (confirmRetire) setConfirming('retire'); else doRetire(); }}
         >

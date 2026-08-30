@@ -143,15 +143,26 @@
   min-width: 0;
 }
 
+/* Patch 0297: direct report -- Show on desktop/More/Collapse should sit
+   at the top right of the expanded card, but `flex-wrap: wrap` here let a
+   long name+title+role+prefers-line combination in `.hero-block-identity`
+   push these buttons down onto their own row instead, which read as them
+   floating in the middle of the card rather than pinned to a corner.
+   `nowrap` keeps identity and actions on the same top row always;
+   identity gets `min-width: 0` + `flex: 1 1 auto` so it's the side that
+   shrinks/wraps its own text internally, and actions get `flex-shrink: 0`
+   plus its own internal wrap (see .hero-block-actions below) so three
+   buttons can drop to a second internal line without ever leaving the
+   top-right corner. */
 .hero-block-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
-.hero-block-identity { min-width: 0; }
+.hero-block-identity { min-width: 0; flex: 1 1 auto; }
 
 .hero-block-name {
   font-family: var(--font-display);
@@ -186,6 +197,8 @@
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* ---- vitals ---- */

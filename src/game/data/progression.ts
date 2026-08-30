@@ -423,7 +423,27 @@ export const GUILD_FACILITIES: GuildDef[] = [
     // tuning-driven, same "structural, not a balance knob" reasoning
     // storagePerLevel/heroSlotsPerLevel already use.
     modsMaxLevel: 12,
-    storagePerLevel: 5000,
+    // Patch 0297 bug fix, direct report: "Treasury Cost (from what I can
+    // tell @ level 16) is higher than actual gold storage cap." Confirmed
+    // by hand against the live curve -- at baseCost 40/costGrowth 1.79
+    // the cost to reach level 13 alone (~77.5k) already exceeded the old
+    // 5,000/level storage cap at level 12 (75k), and it only gets worse
+    // from there (level 16's next cost was ~444k against an 90k cap) --
+    // a real soft-lock, not just steep pricing, since the player
+    // physically cannot hold enough gold at once to ever pay it. Two
+    // changes together, matching what was actually asked for:
+    // 1) flatCostFromLevel (see guildCost/GuildDef's own comments) stops
+    //    the cost curve compounding past the same level-12 mark
+    //    modsMaxLevel already treats as "the real upgrade is done, the
+    //    rest is pure long-tail" -- level 13 onward all cost exactly
+    //    what level 13 already did (~43.3k) instead of continuing to
+    //    balloon toward millions by level 20.
+    // 2) storagePerLevel tripled (5,000 -> 15,000) so the cap actually
+    //    keeps outpacing that flat cost through the rest of the climb --
+    //    at level 12 alone the new cap (190k) is already well clear of
+    //    the ~43.3k flat cost every level past it now charges.
+    flatCostFromLevel: 12,
+    storagePerLevel: 15000,
   },
   {
     id: 'workshop', name: 'Workshop',
@@ -574,8 +594,21 @@ export function kennelAutoReviveUnlocked(kennelLevel: number): boolean {
   return kennelLevel >= max;
 }
 
+/**
+ * Patch 0297 bug fix -- see GuildDef.flatCostFromLevel's own comment for
+ * the full "Treasury cost outran its own storage cap" report this fixes.
+ * Once `currentLevel` reaches `flatCostFromLevel`, every further level
+ * costs exactly what `flatCostFromLevel` itself would have under the
+ * ordinary exponential curve below -- the compounding simply stops there
+ * rather than continuing toward `maxLevel`. Facilities without the field
+ * set (every one except Treasury, currently) are completely unaffected --
+ * this is additive, not a change to the existing curve itself.
+ */
 export function guildCost(def: GuildDef, currentLevel: number): number {
-  return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel) * earlyTierDiscount(currentLevel));
+  const level = def.flatCostFromLevel !== undefined
+    ? Math.min(currentLevel, def.flatCostFromLevel)
+    : currentLevel;
+  return Math.floor(def.baseCost * Math.pow(def.costGrowth, level) * earlyTierDiscount(level));
 }
 
 export const BASE_GOLD_STORAGE = 10_000;

@@ -509,7 +509,11 @@ export function PeddlerCardModal({
           )}
         </div>
 
-        <dl className="peddler-facts-grid" style={{ marginBottom: 8, paddingTop: 8, borderTop: '1px solid color-mix(in srgb, var(--brass-dim) 25%, var(--edge))' }}>
+        {/* Patch 0297: the manual paddingTop/borderTop this used to carry
+            inline are now baked into .peddler-facts-grid itself (full
+            card background, not just a top rule) -- see that class's own
+            comment in app.css. */}
+        <dl className="peddler-facts-grid" style={{ marginBottom: 8 }}>
           <dt>Fee at 1x</dt>
           <dd style={{ color: 'var(--brass)' }}>{formatGold(PeddlerManager.feeCost(engine.state))} gold</dd>
           <dt>Outcome tiers</dt>

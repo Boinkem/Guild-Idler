@@ -134,7 +134,7 @@ export function HeroesPanel() {
       <p className="subtitle">{state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.</p>
 
       {state.heroes.length > 1 && (
-        <button className="chip" style={{ marginBottom: 10 }} onClick={() => setShowComparison(true)}>
+        <button className="chip chip-blue" style={{ marginBottom: 10 }} onClick={() => setShowComparison(true)}>
           Compare Heroes
         </button>
       )}
@@ -221,11 +221,20 @@ export function HeroesPanel() {
           {/* Two possible paths named in the prose above, so two links --
               same "jump to and highlight the requirement" treatment every
               other locked-purchase message in the game now gets. */}
+          {/* Patch 0297, direct request ("Recruit buttons (prestige and
+              tavern) need to be coloured too") -- Tavern gets the same
+              brass .btn-primary every other Guild Hall/gold action uses,
+              Prestige gets .btn-purple, matching the violet Renown already
+              reads as everywhere else in that tab (PrestigePanel's own
+              Heroic Renown readout, RenownPerkCard). Reusing existing
+              category colours rather than inventing new ones, so each
+              button's colour already means "that destination" elsewhere
+              in the game. */}
           <div className="row" style={{ gap: 8, marginBottom: 10 }}>
-            <button className="btn-ghost" onClick={() => engine.requestTab('guild', 'tavern')}>
+            <button className="btn-primary" onClick={() => engine.requestTab('guild', 'tavern')}>
               Go to Tavern →
             </button>
-            <button className="btn-ghost" onClick={() => engine.requestTab('prestige', 'extra_banner')}>
+            <button className="btn-purple" onClick={() => engine.requestTab('prestige', 'extra_banner')}>
               Go to Prestige →
             </button>
           </div>
