@@ -1,0 +1,270 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 283a26f..7ad6de7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -22752,3 +22752,25 @@ Direct request: reduce how often quests drop eggs, "very rare" as the target. Re
+ **Confirmed unaffected, explicitly out of scope:** raid egg drops (authored per-encounter in raid loot tables, not this flat-percentage system, so untouched) and chain-completion guaranteed eggs (`ChainDef.rewardEgg`, a fixed one-time grant on specific story beats, not a per-quest roll). Only the ordinary quest-board roll changed.
+ 
+ **Verified:** `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both pass clean against a fresh clone with this patch applied. No `SAVE_VERSION` bump needed -- tuning-data-only change, no `GameState` shape touched.
++
++
++### Alchemist/Enchanter first-visit shimmer (patch 0291)
++
++```discord-update
++Dev Update | Patch 0291
++- Added: the Alchemist and Enchanter sub-tabs now glow with the same gold shimmer border used elsewhere, until you visit each one for the first time
++```
++
++**New-tester feedback, direct quote:** "important things weren't immedently obvious (ie, Vendors such as Alchemist and Enchanter)." On a first playthrough, Alchemist and Enchanter are just two more plain sub-tab buttons sitting next to the always-open Blacksmith tab -- nothing marks them as worth a look, so a new player can go a long time never realizing they exist. Requested fix: reuse the existing gold shimmer border (the same one already used elsewhere) to highlight both, clearing permanently the first time each is opened.
++
++**Reused the exact shimmer, not a lookalike -- same pattern as patch 0288's quest-card spotlight.** `.nav-tab-unread::after`'s rotating conic-gradient ring (the registered `--nav-tab-shimmer-angle` custom property plus the `nav-tab-shimmer-rotate` keyframe) now has a third sibling rule, `.btn-subtab.subtab-spotlight::after`, sharing the same custom property and keyframe so the rotation and gradient stops stay byte-identical rather than drifting into a second, subtly different effect. Only the ring's thickness and `border-radius` differ, sized down for a `.btn-subtab` button (`border-radius: var(--radius)`) instead of a nav button or a full quest card.
++
++**A deliberate exception to the sub-tab-dot precedent, not an oversight.** `.btn-subtab.subtab-unread` (patch 0191) is a small pulsing dot rather than a ring specifically because several sub-tabs can be simultaneously flagged "unread" via the general notification system at once (Vendors has three sub-tabs, Lore and Statistics three each), and a full ring on every one of them together would compete with itself for attention. That reasoning doesn't apply here: at most two buttons (Alchemist, Enchanter) can ever carry the new class, Blacksmith is deliberately excluded (it's the default-open tab a new player already lands on, nothing to discover there), and each clears permanently the instant that vendor's page is opened once -- a one-time "look over here" nudge, not a recurring signal that can re-arm. Documented this reasoning directly in both the CSS comment and the new `GameState` fields' own comment so a future patch author doesn't "fix" the inconsistency by merging it into the dot.
++
++**New `GameState.hasSeenAlchemist` / `hasSeenEnchanter: boolean`** (`SAVE_VERSION` 55 -> 56, migration 55 added). Each defaults `false` for a brand-new save (`SaveManager.createInitialState`) so the shimmer shows until that vendor's tab is opened once. The migration grandfathers every *existing* save to `true` for both fields rather than `false` -- this is a first-timer's nudge, not a retroactive nag aimed at a tester who's already had the Alchemist open a hundred times; re-arming the shimmer for someone already deep into a save would just read as a bug.
++
++**New `GameEngine.acknowledgeVendorFirstVisit(vendorId)`**, called from `VendorsPanel`'s existing per-tab `useEffect` (the same one that already calls `acknowledgeTab('vendors', tab)` on mount and on every switch) -- so it fires whether the player got to that vendor by clicking the button directly or via a notification's own deep link (`requestTab`'s `subTab`), either way counting as "seen." No-op for `blacksmith` and for a vendor already marked seen, so it's safe to call unconditionally on every tab change rather than gating the call site itself.
++
++**`VendorsPanel.tsx`:** each vendor button's `isSpotlighted` check is `(v.id === 'alchemist' && !hasSeenAlchemist) || (v.id === 'enchanter' && !hasSeenEnchanter)`, adding `subtab-spotlight` to the button's existing className alongside the pre-existing `on`/`subtab-unread` classes -- all three can combine on the same button without conflict, since they're independent visual layers (background fill, dot, ring).
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both pass clean against a fresh clone with this patch applied. `SAVE_VERSION` bumped 55 -> 56 for the two new fields -- migration 55 added, defaulting existing saves to `true` for both (see reasoning above). Worth a real playtest: on a brand-new guild, confirm Alchemist and Enchanter both shimmer in the Vendors tab strip before either has been opened, and confirm each ring clears independently and permanently the instant that specific vendor's page is opened (not both at once, and not on a reload once cleared).
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index b7f6cff..f8f2c5c 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1,4 +1,4 @@
+-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
++import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+@@ -2135,6 +2135,34 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /**
++   * Patch 0291. Dismisses the one-time "first visit" gold-ring spotlight
++   * on the Alchemist/Enchanter sub-tab buttons -- direct new-tester
++   * feedback: those two weren't obvious to find at all, sitting as plain
++   * unlabeled sub-tab buttons next to the always-open Blacksmith. See
++   * GameState.hasSeenAlchemist/hasSeenEnchanter's own comment for the
++   * full reasoning and why this is a real exception to the sub-tab-dot
++   * precedent (`.btn-subtab.subtab-unread`, patch 0191's own comment)
++   * rather than reusing it.
++   *
++   * No-op for `blacksmith` (never spotlighted -- it's the default open
++   * tab, nothing to discover) and for a vendor already marked seen.
++   * Called from VendorsPanel's existing per-tab effect, so it fires
++   * whether the player got here by clicking the button directly or via
++   * a notification's own deep link (`requestTab`'s `subTab`) -- either
++   * way, they've now genuinely seen the page, which is the only thing
++   * this flag is tracking.
++   */
++  acknowledgeVendorFirstVisit(vendorId: VendorId) {
++    if (vendorId === 'alchemist' && !this.state.hasSeenAlchemist) {
++      this.state.hasSeenAlchemist = true;
++      void this.saveNow();
++    } else if (vendorId === 'enchanter' && !this.state.hasSeenEnchanter) {
++      this.state.hasSeenEnchanter = true;
++      void this.saveNow();
++    }
++  }
++
+   /** Restocks the Blacksmith's own gear stock early -- free once a day
+    *  (more via Trade Favor: Blacksmith), gold cost climbing after that.
+    *  Independent of the Alchemist/Enchanter's own reroll tracks. See
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index d0a599f..3d88c7a 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -175,6 +175,8 @@ export function createInitialState(now = Date.now()): GameState {
+     unlockedBardTracks: [],
+     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+     vendorGoldSpent: { blacksmith: 0, alchemist: 0, enchanter: 0 },
++    hasSeenAlchemist: false,
++    hasSeenEnchanter: false,
+     peddlerTab: null,
+     guildName: '',
+     notifiedSetBonuses: [],
+@@ -1204,6 +1206,18 @@ const MIGRATIONS: Record<number, Migration> = {
+     // save has nothing left for this flag to even fire from).
+     pendingBurstQuestSpotlight: (save.pendingBurstQuestSpotlight as boolean | undefined) ?? false,
+   }),
++  55: (save) => ({
++    ...save,
++    version: 56,
++    // Patch 0291. New Alchemist/Enchanter first-visit shimmer -- see
++    // GameState.hasSeenAlchemist's own comment. Defaults to true (not
++    // false) for every existing save: this is a one-time nudge pointing a
++    // brand-new player at vendors they haven't discovered yet, not a
++    // retroactive nag aimed at someone who's had the Alchemist open a
++    // hundred times already.
++    hasSeenAlchemist: (save.hasSeenAlchemist as boolean | undefined) ?? true,
++    hasSeenEnchanter: (save.hasSeenEnchanter as boolean | undefined) ?? true,
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index db148d1..f2180d7 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 55;
++export const SAVE_VERSION = 56;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -2072,6 +2072,41 @@ export interface GameState {
+    * a separate spent-to-unlock-upgrades track, not a loyalty measure.
+    */
+   vendorGoldSpent: Record<VendorId, number>;
++  /**
++   * Patch 0291. True once the player has ever opened the Alchemist's own
++   * sub-tab page (VendorsPanel) -- while false, that sub-tab button gets
++   * the rotating gold-ring shimmer (`.btn-subtab.subtab-spotlight` in
++   * app.css, the same `--nav-tab-shimmer-angle`/`nav-tab-shimmer-rotate`
++   * ring `.nav-tab-unread` uses on the main nav) as a "there's more here"
++   * nudge. Direct new-tester feedback: Alchemist and Enchanter sit as
++   * plain unlabeled sub-tab buttons next to the always-open Blacksmith,
++   * and weren't obviously discoverable at all on a first playthrough.
++   *
++   * A genuine, deliberate exception to the existing sub-tab-dot
++   * precedent (`.btn-subtab.subtab-unread`, patch 0191's own comment
++   * explains why a full ring was rejected there: several sub-tabs could
++   * all be unread-notification-flagged AT ONCE, and a ring on every one
++   * simultaneously competes with itself). That reasoning doesn't apply
++   * here -- at most Alchemist and Enchanter ring together, never more,
++   * and each is gone forever the instant it's opened once, not a
++   * recurring signal that can re-arm.
++   *
++   * Set true by GameEngine.acknowledgeVendorFirstVisit, called from
++   * VendorsPanel's existing per-tab effect -- fires whether the player
++   * got here by clicking the button directly or via a notification's
++   * own deep link, either way counting as "seen." Defaults false for a
++   * brand-new save (see SaveManager.createInitialState) but true for
++   * every save that already existed before this patch (the migration
++   * grandfathers them in, same "an existing player doesn't need a
++   * first-timer's tour" reasoning pendingHarvestSpotlight's own comment
++   * already established) -- this is a new-player nudge, not a
++   * retroactive nag aimed at someone who's had the Alchemist open a
++   * hundred times already.
++   */
++  hasSeenAlchemist: boolean;
++  /** Same shape as hasSeenAlchemist directly above, for the Enchanter's
++   *  own sub-tab. */
++  hasSeenEnchanter: boolean;
+   /**
+    * Grimsby's Tab -- a repeating push-your-luck game, gated behind
+    * grimsbyPermanentSpotUnlocked (see PeddlerManager.canOpenTab). null
+diff --git a/src/styles/app.css b/src/styles/app.css
+index b50fde5..7aefa6b 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1328,6 +1328,45 @@ button:focus-visible, [tabindex]:focus-visible {
+   50% { opacity: 1; transform: scale(1); }
+ }
+ 
++/* Vendor first-visit spotlight (patch 0291): the same rotating gold ring
++   as .nav-tab-unread / .quest-card-spotlight above, this time on a
++   sub-tab button -- new-tester feedback said the Alchemist and Enchanter
++   sub-tabs weren't obviously "there" next to Blacksmith. This is a
++   deliberate exception to the sub-tab dot's own reasoning above: that
++   dot avoids a ring because several sub-tabs can be simultaneously
++   "unread" via the general notification system, and a ring on each would
++   compete with itself. Here at most two buttons (Alchemist, Enchanter)
++   can ever carry this class, each clears permanently the first time its
++   tab is opened (see GameEngine.acknowledgeVendorFirstVisit), and it's
++   a one-time "look over here" nudge rather than a recurring unread
++   signal -- so the stronger ring reads as intended instead of competing
++   with itself. Shares --nav-tab-shimmer-angle / nav-tab-shimmer-rotate
++   with the other two rather than redeclaring them, sized down to fit a
++   .btn-subtab button. */
++.btn-subtab.subtab-spotlight {
++  position: relative;
++}
++.btn-subtab.subtab-spotlight::after {
++  content: '';
++  position: absolute;
++  inset: 0;
++  border-radius: var(--radius);
++  padding: 1.5px;
++  background: conic-gradient(
++    from var(--nav-tab-shimmer-angle),
++    transparent 0%,
++    var(--brass) 10%,
++    #fff8 16%,
++    var(--brass) 22%,
++    transparent 32%
++  );
++  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
++  -webkit-mask-composite: xor;
++  mask-composite: exclude;
++  animation: nav-tab-shimmer-rotate 2.6s linear infinite;
++  pointer-events: none;
++}
++
+ .panel {
+   flex: 1;
+   min-width: 0;
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index df03cd4..bee7b90 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -75,8 +75,14 @@ export function VendorsPanel() {
+   // default Blacksmith) and again on every switch -- clearing the nav
+   // shimmer for a banner-worthy notification targeting this specific
+   // vendor (patch 0191). See acknowledgeTab's own comment in engine.ts.
++  // acknowledgeVendorFirstVisit (patch 0291) piggybacks on the same
++  // effect to clear the Alchemist/Enchanter first-visit ring the moment
++  // their tab opens -- it's a no-op for Blacksmith and for a vendor
++  // that's already been seen, so it's safe to call unconditionally here
++  // rather than gating it on which vendor this is.
+   useEffect(() => {
+     engine.acknowledgeTab('vendors', tab);
++    engine.acknowledgeVendorFirstVisit(tab);
+   }, [engine, tab]);
+ 
+   return (
+@@ -86,17 +92,27 @@ export function VendorsPanel() {
+         <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>
+ 
+         <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
+-          {VENDORS.map((v) => (
+-            <button
+-              key={v.id}
+-              className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
+-              onClick={() => setTab(v.id)}
+-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+-            >
+-              {v.name}
+-              <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
+-            </button>
+-          ))}
++          {VENDORS.map((v) => {
++            // First-visit spotlight (patch 0291): only Alchemist and
++            // Enchanter ever carry this -- Blacksmith is the vendor every
++            // new player already lands on by default, so it needs no
++            // pointer toward itself. See hasSeenAlchemist's own comment
++            // in types.ts and the .btn-subtab.subtab-spotlight comment in
++            // app.css for the full reasoning.
++            const isSpotlighted = (v.id === 'alchemist' && !engine.state.hasSeenAlchemist)
++              || (v.id === 'enchanter' && !engine.state.hasSeenEnchanter);
++            return (
++              <button
++                key={v.id}
++                className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''} ${isSpotlighted ? 'subtab-spotlight' : ''}`}
++                onClick={() => setTab(v.id)}
++                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
++              >
++                {v.name}
++                <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
++              </button>
++            );
++          })}
+         </div>
+ 
+         {VENDORS.filter((v) => v.id === tab).map((v) => <VendorPage key={v.id} vendorId={v.id} />)}

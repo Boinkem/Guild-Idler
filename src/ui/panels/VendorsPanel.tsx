@@ -75,8 +75,14 @@ export function VendorsPanel() {
   // default Blacksmith) and again on every switch -- clearing the nav
   // shimmer for a banner-worthy notification targeting this specific
   // vendor (patch 0191). See acknowledgeTab's own comment in engine.ts.
+  // acknowledgeVendorFirstVisit (patch 0291) piggybacks on the same
+  // effect to clear the Alchemist/Enchanter first-visit ring the moment
+  // their tab opens -- it's a no-op for Blacksmith and for a vendor
+  // that's already been seen, so it's safe to call unconditionally here
+  // rather than gating it on which vendor this is.
   useEffect(() => {
     engine.acknowledgeTab('vendors', tab);
+    engine.acknowledgeVendorFirstVisit(tab);
   }, [engine, tab]);
 
   return (
@@ -86,17 +92,27 @@ export function VendorsPanel() {
         <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>
 
         <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
-          {VENDORS.map((v) => (
-            <button
-              key={v.id}
-              className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
-              onClick={() => setTab(v.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              {v.name}
-              <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
-            </button>
-          ))}
+          {VENDORS.map((v) => {
+            // First-visit spotlight (patch 0291): only Alchemist and
+            // Enchanter ever carry this -- Blacksmith is the vendor every
+            // new player already lands on by default, so it needs no
+            // pointer toward itself. See hasSeenAlchemist's own comment
+            // in types.ts and the .btn-subtab.subtab-spotlight comment in
+            // app.css for the full reasoning.
+            const isSpotlighted = (v.id === 'alchemist' && !engine.state.hasSeenAlchemist)
+              || (v.id === 'enchanter' && !engine.state.hasSeenEnchanter);
+            return (
+              <button
+                key={v.id}
+                className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''} ${isSpotlighted ? 'subtab-spotlight' : ''}`}
+                onClick={() => setTab(v.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                {v.name}
+                <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
+              </button>
+            );
+          })}
         </div>
 
         {VENDORS.filter((v) => v.id === tab).map((v) => <VendorPage key={v.id} vendorId={v.id} />)}

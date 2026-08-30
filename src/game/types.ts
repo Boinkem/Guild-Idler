@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 55;
+export const SAVE_VERSION = 56;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2072,6 +2072,41 @@ export interface GameState {
    * a separate spent-to-unlock-upgrades track, not a loyalty measure.
    */
   vendorGoldSpent: Record<VendorId, number>;
+  /**
+   * Patch 0291. True once the player has ever opened the Alchemist's own
+   * sub-tab page (VendorsPanel) -- while false, that sub-tab button gets
+   * the rotating gold-ring shimmer (`.btn-subtab.subtab-spotlight` in
+   * app.css, the same `--nav-tab-shimmer-angle`/`nav-tab-shimmer-rotate`
+   * ring `.nav-tab-unread` uses on the main nav) as a "there's more here"
+   * nudge. Direct new-tester feedback: Alchemist and Enchanter sit as
+   * plain unlabeled sub-tab buttons next to the always-open Blacksmith,
+   * and weren't obviously discoverable at all on a first playthrough.
+   *
+   * A genuine, deliberate exception to the existing sub-tab-dot
+   * precedent (`.btn-subtab.subtab-unread`, patch 0191's own comment
+   * explains why a full ring was rejected there: several sub-tabs could
+   * all be unread-notification-flagged AT ONCE, and a ring on every one
+   * simultaneously competes with itself). That reasoning doesn't apply
+   * here -- at most Alchemist and Enchanter ring together, never more,
+   * and each is gone forever the instant it's opened once, not a
+   * recurring signal that can re-arm.
+   *
+   * Set true by GameEngine.acknowledgeVendorFirstVisit, called from
+   * VendorsPanel's existing per-tab effect -- fires whether the player
+   * got here by clicking the button directly or via a notification's
+   * own deep link, either way counting as "seen." Defaults false for a
+   * brand-new save (see SaveManager.createInitialState) but true for
+   * every save that already existed before this patch (the migration
+   * grandfathers them in, same "an existing player doesn't need a
+   * first-timer's tour" reasoning pendingHarvestSpotlight's own comment
+   * already established) -- this is a new-player nudge, not a
+   * retroactive nag aimed at someone who's had the Alchemist open a
+   * hundred times already.
+   */
+  hasSeenAlchemist: boolean;
+  /** Same shape as hasSeenAlchemist directly above, for the Enchanter's
+   *  own sub-tab. */
+  hasSeenEnchanter: boolean;
   /**
    * Grimsby's Tab -- a repeating push-your-luck game, gated behind
    * grimsbyPermanentSpotUnlocked (see PeddlerManager.canOpenTab). null

@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -2133,6 +2133,34 @@ export class GameEngine {
     playSound('purchase');
     this.say('Added to the stash.');
     void this.saveNow();
+  }
+
+  /**
+   * Patch 0291. Dismisses the one-time "first visit" gold-ring spotlight
+   * on the Alchemist/Enchanter sub-tab buttons -- direct new-tester
+   * feedback: those two weren't obvious to find at all, sitting as plain
+   * unlabeled sub-tab buttons next to the always-open Blacksmith. See
+   * GameState.hasSeenAlchemist/hasSeenEnchanter's own comment for the
+   * full reasoning and why this is a real exception to the sub-tab-dot
+   * precedent (`.btn-subtab.subtab-unread`, patch 0191's own comment)
+   * rather than reusing it.
+   *
+   * No-op for `blacksmith` (never spotlighted -- it's the default open
+   * tab, nothing to discover) and for a vendor already marked seen.
+   * Called from VendorsPanel's existing per-tab effect, so it fires
+   * whether the player got here by clicking the button directly or via
+   * a notification's own deep link (`requestTab`'s `subTab`) -- either
+   * way, they've now genuinely seen the page, which is the only thing
+   * this flag is tracking.
+   */
+  acknowledgeVendorFirstVisit(vendorId: VendorId) {
+    if (vendorId === 'alchemist' && !this.state.hasSeenAlchemist) {
+      this.state.hasSeenAlchemist = true;
+      void this.saveNow();
+    } else if (vendorId === 'enchanter' && !this.state.hasSeenEnchanter) {
+      this.state.hasSeenEnchanter = true;
+      void this.saveNow();
+    }
   }
 
   /** Restocks the Blacksmith's own gear stock early -- free once a day

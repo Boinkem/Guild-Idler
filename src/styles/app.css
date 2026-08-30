@@ -1328,6 +1328,45 @@ button:focus-visible, [tabindex]:focus-visible {
   50% { opacity: 1; transform: scale(1); }
 }
 
+/* Vendor first-visit spotlight (patch 0291): the same rotating gold ring
+   as .nav-tab-unread / .quest-card-spotlight above, this time on a
+   sub-tab button -- new-tester feedback said the Alchemist and Enchanter
+   sub-tabs weren't obviously "there" next to Blacksmith. This is a
+   deliberate exception to the sub-tab dot's own reasoning above: that
+   dot avoids a ring because several sub-tabs can be simultaneously
+   "unread" via the general notification system, and a ring on each would
+   compete with itself. Here at most two buttons (Alchemist, Enchanter)
+   can ever carry this class, each clears permanently the first time its
+   tab is opened (see GameEngine.acknowledgeVendorFirstVisit), and it's
+   a one-time "look over here" nudge rather than a recurring unread
+   signal -- so the stronger ring reads as intended instead of competing
+   with itself. Shares --nav-tab-shimmer-angle / nav-tab-shimmer-rotate
+   with the other two rather than redeclaring them, sized down to fit a
+   .btn-subtab button. */
+.btn-subtab.subtab-spotlight {
+  position: relative;
+}
+.btn-subtab.subtab-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--nav-tab-shimmer-angle),
+    transparent 0%,
+    var(--brass) 10%,
+    #fff8 16%,
+    var(--brass) 22%,
+    transparent 32%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: nav-tab-shimmer-rotate 2.6s linear infinite;
+  pointer-events: none;
+}
+
 .panel {
   flex: 1;
   min-width: 0;

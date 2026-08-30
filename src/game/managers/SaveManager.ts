@@ -175,6 +175,8 @@ export function createInitialState(now = Date.now()): GameState {
     unlockedBardTracks: [],
     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
     vendorGoldSpent: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+    hasSeenAlchemist: false,
+    hasSeenEnchanter: false,
     peddlerTab: null,
     guildName: '',
     notifiedSetBonuses: [],
@@ -1203,6 +1205,18 @@ const MIGRATIONS: Record<number, Migration> = {
     // see tutorialQuestOffer's own comment in quests.ts -- so an existing
     // save has nothing left for this flag to even fire from).
     pendingBurstQuestSpotlight: (save.pendingBurstQuestSpotlight as boolean | undefined) ?? false,
+  }),
+  55: (save) => ({
+    ...save,
+    version: 56,
+    // Patch 0291. New Alchemist/Enchanter first-visit shimmer -- see
+    // GameState.hasSeenAlchemist's own comment. Defaults to true (not
+    // false) for every existing save: this is a one-time nudge pointing a
+    // brand-new player at vendors they haven't discovered yet, not a
+    // retroactive nag aimed at someone who's had the Alchemist open a
+    // hundred times already.
+    hasSeenAlchemist: (save.hasSeenAlchemist as boolean | undefined) ?? true,
+    hasSeenEnchanter: (save.hasSeenEnchanter as boolean | undefined) ?? true,
   }),
 };
 
