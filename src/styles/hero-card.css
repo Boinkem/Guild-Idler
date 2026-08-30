@@ -1,0 +1,405 @@
+/*
+ * Hero card redesign (hero block). Import once, after app.css:
+ *   import './styles/hero-card.css';
+ * Every value here comes from app.css's own :root tokens -- no new colours,
+ * fonts or radii are introduced.
+ */
+
+.hero-block {
+  padding: 0;
+  overflow: hidden;
+}
+
+.hero-block-grid {
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  align-items: stretch;
+}
+
+/* ---- portrait column ---- */
+
+.hero-block-portrait {
+  border-right: 1px solid var(--panel-3);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-block-plate {
+  width: 118px;
+  height: 118px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--brass-dim);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(45deg,
+      color-mix(in srgb, var(--panel-2) 70%, var(--night)) 0 6px,
+      color-mix(in srgb, var(--panel) 80%, var(--night)) 6px 12px);
+  box-shadow: inset 0 0 0 3px var(--night), inset 0 0 22px rgba(0, 0, 0, 0.55);
+  image-rendering: pixelated;
+  overflow: hidden;
+}
+
+.hero-block-portrait-fallback {
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.hero-block-level {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--brass-dim);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.hero-block-level-num {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  line-height: 1;
+  color: var(--brass);
+}
+
+.hero-block-ascension {
+  color: var(--brass);
+  letter-spacing: 0.4px;
+}
+
+.hero-block-ledger {
+  width: 100%;
+  border-top: 1px solid var(--panel-3);
+  padding-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+.hero-block-ledger > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hero-block-ledger b {
+  color: var(--parchment);
+  font-weight: 700;
+}
+
+/* ---- body ---- */
+
+.hero-block-body {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hero-block-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.hero-block-identity { min-width: 0; }
+
+.hero-block-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--parchment);
+}
+
+.hero-block-name .hero-title { color: var(--brass); }
+
+.hero-block-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+.hero-block-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--panel-3);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.hero-block-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ---- vitals ---- */
+
+.hero-block-vitals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.hero-block-vital-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+.hero-block-vital-head > span:first-child { letter-spacing: 0.6px; }
+.hero-block-vital-head > span:last-child { color: var(--parchment); }
+
+.hero-block-vitals .bar { height: 12px; }
+.hero-block-vitals .tiny { margin-top: 4px; }
+
+/* ---- section rule ---- */
+
+.hero-block-rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-block-rule::before,
+.hero-block-rule::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--brass-dim);
+  opacity: 0.7;
+}
+
+.hero-block-rule-label {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  letter-spacing: 1px;
+  color: var(--brass);
+}
+
+.hero-block-points {
+  font-size: 0.5625rem;
+  color: var(--moss);
+  border: 1px solid var(--brass-dim);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+/* ---- attribute cards ---- */
+
+.hero-block-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.hero-stat {
+  border: 1px solid var(--panel-3);
+  border-left: 3px solid var(--brass-dim);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 70%, var(--panel-2));
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hero-stat-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.hero-stat-glyph {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--brass-dim);
+  border-radius: 5px;
+  background: var(--panel);
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+}
+
+.hero-stat-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-stat-name b {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.4px;
+  color: var(--parchment);
+}
+
+.hero-stat-value {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  line-height: 1;
+  color: var(--parchment);
+}
+
+.hero-stat-add {
+  min-height: 20px;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+.hero-stat-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.hero-stat-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+.hero-stat-line-label {
+  width: 84px;
+  flex-shrink: 0;
+}
+
+.hero-stat-line b {
+  width: 48px;
+  text-align: right;
+  color: var(--moss);
+  font-weight: 700;
+}
+
+.hero-stat-marginal { color: var(--muted); }
+.hero-stat-marginal span { color: var(--brass); }
+
+.hero-block-meter {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--night) 80%, var(--panel));
+  overflow: hidden;
+}
+
+.hero-block-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--brass);
+  transition: width 400ms ease-out;
+}
+
+/* ---- expanded detail ---- */
+
+.hero-block-details {
+  border-top: 1px solid var(--panel-3);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hero-block-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.hero-block-panel {
+  border: 1px solid var(--panel-3);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 10px 11px;
+}
+
+.hero-block-panel-danger {
+  border-color: color-mix(in srgb, var(--blood) 60%, var(--panel-3));
+  background: color-mix(in srgb, var(--blood) 12%, var(--panel));
+}
+
+.hero-block-panel-label {
+  font-size: 0.625rem;
+  letter-spacing: 0.6px;
+  color: var(--brass);
+  margin-bottom: 7px;
+}
+
+.hero-block-mods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+.hero-block-sets {
+  color: var(--brass);
+  margin-top: 8px;
+  border-top: 1px solid var(--panel-3);
+  padding-top: 7px;
+}
+
+.hero-block-injury {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.hero-block-title-row { align-items: center; gap: 6px; }
+.hero-block-livery { align-items: center; margin-top: 2px; }
+.hero-block-footnote { line-height: 1.6; }
+
+.hero-block.fallen .hero-block-plate { opacity: 0.85; }
+
+/* ---- narrow screens ---- */
+
+@media (max-width: 720px) {
+  .hero-block-grid { grid-template-columns: 1fr; }
+  .hero-block-portrait {
+    border-right: none;
+    border-bottom: 1px solid var(--panel-3);
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .hero-block-plate { width: 84px; height: 84px; }
+  .hero-block-ledger {
+    width: auto;
+    flex: 1;
+    border-top: none;
+    padding-top: 0;
+    min-width: 150px;
+  }
+  .hero-block-stats,
+  .hero-block-vitals,
+  .hero-block-panels { grid-template-columns: 1fr; }
+  .hero-stat-line-label { width: 72px; }
+}

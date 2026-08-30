@@ -22774,3 +22774,103 @@ Dev Update | Patch 0291
 **`VendorsPanel.tsx`:** each vendor button's `isSpotlighted` check is `(v.id === 'alchemist' && !hasSeenAlchemist) || (v.id === 'enchanter' && !hasSeenEnchanter)`, adding `subtab-spotlight` to the button's existing className alongside the pre-existing `on`/`subtab-unread` classes -- all three can combine on the same button without conflict, since they're independent visual layers (background fill, dot, ring).
 
 **Verified:** `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both pass clean against a fresh clone with this patch applied. `SAVE_VERSION` bumped 55 -> 56 for the two new fields -- migration 55 added, defaulting existing saves to `true` for both (see reasoning above). Worth a real playtest: on a brand-new guild, confirm Alchemist and Enchanter both shimmer in the Vendors tab strip before either has been opened, and confirm each ring clears independently and permanently the instant that specific vendor's page is opened (not both at once, and not on a reload once cleared).
+
+
+### Hero tab redesign -- Claude Design handoff (patch 0292)
+```discord-update
+Dev Update | Hero Tab Redesign
+
+- Changed: hero cards rebuilt -- portrait plate with level, ascension rank, gear score, and lifetime quests/gold/xp down the left; name, role and status across the top; XP and Health shown side by side
+- Changed: each attribute (Strength/Agility/Intellect, Endurance, Luck, Wisdom) is now its own card stating exactly what it feeds, its current contribution, and the value of your next training point -- no more guessing what a stat point actually does
+- Changed: Endurance is flagged as the one stat that feeds three things at once (success, injury resist, quest speed); Luck's rare-loot bonus is shown as its own multiplier, kept separate from the additive gold/success numbers so the two are never mixed up
+- No stat formula, tuning value, or save data changed -- this is a visual rebuild only
+```
+
+Direct request: a Claude Design handoff (`Hero_Tab_RPG_Redesign.zip` --
+`APPLY.md` spec plus three ready-to-drop files) rebuilding the hero card
+in `HeroesPanel.tsx`. The problem it was solving: the old card only ever
+showed a stat's raw number (`Strength 34`) with no indication anywhere in
+the UI of what that number actually bought -- how much success it adds,
+whether it's worth spending the next training point there over another
+stat. Lifetime counters (`questsSucceeded`/`questsCompleted`,
+`goldEarnedLifetime`, `xpEarnedLifetime`) already existed on `Hero` for
+the Compare Heroes table (patch 0249) but were never surfaced on the card
+itself either. Explicitly scoped as presentation-only -- confirmed
+against the handoff's own `APPLY.md` note that nothing in the game model,
+tuning, or save format was meant to change, and nothing did.
+
+**Pulled the live repo fresh via the `codeload.github.com` tarball
+(not a cached `raw.githubusercontent.com` fetch) before assigning a patch
+number** -- confirmed 0291 is genuinely the highest heading in this file,
+making this 0292.
+
+**Two new files, both additive, both verified against the real managers
+before use:**
+- **`src/ui/heroStatEffects.ts`** -- turns a hero's total `Stats` into
+  the per-attribute breakdown the new card reads. Never re-implements a
+  curve: a stat's contribution is `HeroManager.statMods(total)` minus
+  `statMods(total with that stat zeroed)`, and the next-point value is
+  `statMods(total + 1)` minus `statMods(total)`; Luck's loot line does
+  the same through `HeroManager.personalLootBonus`, kept as an
+  independent multiplicative line rather than summed with Luck's
+  additive gold bonus. Because it calls the real manager methods instead
+  of hand-copying their formulas, this can't go stale the way a
+  hand-written stat-conversion table can if those curves are ever
+  retuned.
+- **`src/ui/HeroBlock.tsx`** -- the rebuilt card itself: portrait plate
+  (sprite or Tombstone, level/class badge, ascension rank, then the
+  gear-score/quests/gold/xp ledger), identity header (name, title, role,
+  live status including `Chain n/m`, class's preferred-contract bonus),
+  XP and Health side by side (the XP bar keeps its `registerFlyTarget`
+  ref so fly-to-bar animations still land correctly), the new attribute
+  grid from `heroStatEffects.ts`, and an expandable detail panel (total
+  modifiers, set bonuses, injuries/Fallen state, class blurb, title
+  select, livery, name reroll) -- functionally identical to what the old
+  expanded card showed, just laid out under the new grid. Every engine
+  call (`allocateStat`, `treatInjury`, `useConsumable`, `reviveHero`,
+  `setActiveTitle`, `setHeroSkin`, `rerollHeroName`, `setFocusedHero`)
+  carried over unchanged from the pre-redesign card.
+
+**`src/styles/hero-card.css`, new**, imported once in `main.tsx` right
+after `app.css`. Built entirely on existing `app.css` tokens (`--panel*`,
+`--brass*`, `--parchment`, `--muted`, `--moss`, `--blood`, `--sky`,
+`--violet`, both font vars) and existing shared classes (`.bar`,
+`.bar.xp`, `.bar.health`, `.chip`, `.btn-ghost`, `.btn-primary`,
+`.skin-chip`) -- no new colors introduced, so the accessibility/
+large-font and reduced-motion overrides already in `app.css` keep
+applying automatically. Includes its own `max-width: 720px` breakpoint
+that stacks the portrait/body columns for the narrow desktop companion
+window.
+
+**`HeroesPanel.tsx` -- wired in per the handoff's `APPLY.md`, not
+rewritten.** Added the `HeroBlock` import and replaced the entire
+per-hero `state.heroes.map((hero) => { ... })` card body with a call to
+`<HeroBlock>`, passing `hero`/`engine`/`now`/`settings`/`tombstoneIcon`/
+`isOpen`/`onToggle` and keeping `LevelUpFlash`/`ReviveFlash` as children,
+exactly as specified -- those two overlays stay owned by `HeroesPanel`
+since they're keyed off state (`levelFlashes`/`reviveFlashes`) that
+belongs to the whole roster, not one card. Compare Heroes, Revive All,
+tombstone-style picker, the `settings.heroStatusBars` branch, Recruit,
+and Skins sections below are untouched. The old `Tombstone`/
+`TombstoneImg`/`HealthBar`/`AutoHealBar` helper components (their own
+copy now lives inside `HeroBlock.tsx`) and every import/local that only
+existed to feed them -- `HeroSprite`, `RoleIcon`, `PrestigeManager`,
+`registerFlyTarget`, `rerollsUsedToday`, `infirmaryAutoReviveUnlocked`,
+`STAT_KEYS`, `HOUR`, `formatDuration`, plus the panel-level `bandages`
+and `infirmaryLevel` consts -- were deleted rather than left in place,
+since this repo's `tsconfig.json` runs with `noUnusedLocals`/
+`noUnusedParameters` on and a stale import would fail the build outright
+rather than just linting a warning.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this
+patch applied. Manually cross-checked every engine call and prop read in
+the new `HeroBlock.tsx` against the pre-redesign card to confirm nothing
+functional was dropped in the rebuild. No `SAVE_VERSION` bump needed --
+markup, CSS, and one new pure-presentation module only, no `GameState`
+shape touched anywhere in this patch. Worth a real playtest across a
+roster with a mix of levels, an injured hero, and a Fallen hero, to
+confirm the portrait plate's Tombstone fallback, the attribute meters'
+soft-reference scaling (`SOFT_REFERENCE` in `heroStatEffects.ts`; bump
+these if a well-geared hero pins every bar), and the 720px narrow-window
+breakpoint all look right.

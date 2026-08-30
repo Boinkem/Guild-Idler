@@ -1,0 +1,1537 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 7ad6de7..25c0f3d 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -22774,3 +22774,103 @@ Dev Update | Patch 0291
+ **`VendorsPanel.tsx`:** each vendor button's `isSpotlighted` check is `(v.id === 'alchemist' && !hasSeenAlchemist) || (v.id === 'enchanter' && !hasSeenEnchanter)`, adding `subtab-spotlight` to the button's existing className alongside the pre-existing `on`/`subtab-unread` classes -- all three can combine on the same button without conflict, since they're independent visual layers (background fill, dot, ring).
+ 
+ **Verified:** `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both pass clean against a fresh clone with this patch applied. `SAVE_VERSION` bumped 55 -> 56 for the two new fields -- migration 55 added, defaulting existing saves to `true` for both (see reasoning above). Worth a real playtest: on a brand-new guild, confirm Alchemist and Enchanter both shimmer in the Vendors tab strip before either has been opened, and confirm each ring clears independently and permanently the instant that specific vendor's page is opened (not both at once, and not on a reload once cleared).
++
++
++### Hero tab redesign -- Claude Design handoff (patch 0292)
++```discord-update
++Dev Update | Hero Tab Redesign
++
++- Changed: hero cards rebuilt -- portrait plate with level, ascension rank, gear score, and lifetime quests/gold/xp down the left; name, role and status across the top; XP and Health shown side by side
++- Changed: each attribute (Strength/Agility/Intellect, Endurance, Luck, Wisdom) is now its own card stating exactly what it feeds, its current contribution, and the value of your next training point -- no more guessing what a stat point actually does
++- Changed: Endurance is flagged as the one stat that feeds three things at once (success, injury resist, quest speed); Luck's rare-loot bonus is shown as its own multiplier, kept separate from the additive gold/success numbers so the two are never mixed up
++- No stat formula, tuning value, or save data changed -- this is a visual rebuild only
++```
++
++Direct request: a Claude Design handoff (`Hero_Tab_RPG_Redesign.zip` --
++`APPLY.md` spec plus three ready-to-drop files) rebuilding the hero card
++in `HeroesPanel.tsx`. The problem it was solving: the old card only ever
++showed a stat's raw number (`Strength 34`) with no indication anywhere in
++the UI of what that number actually bought -- how much success it adds,
++whether it's worth spending the next training point there over another
++stat. Lifetime counters (`questsSucceeded`/`questsCompleted`,
++`goldEarnedLifetime`, `xpEarnedLifetime`) already existed on `Hero` for
++the Compare Heroes table (patch 0249) but were never surfaced on the card
++itself either. Explicitly scoped as presentation-only -- confirmed
++against the handoff's own `APPLY.md` note that nothing in the game model,
++tuning, or save format was meant to change, and nothing did.
++
++**Pulled the live repo fresh via the `codeload.github.com` tarball
++(not a cached `raw.githubusercontent.com` fetch) before assigning a patch
++number** -- confirmed 0291 is genuinely the highest heading in this file,
++making this 0292.
++
++**Two new files, both additive, both verified against the real managers
++before use:**
++- **`src/ui/heroStatEffects.ts`** -- turns a hero's total `Stats` into
++  the per-attribute breakdown the new card reads. Never re-implements a
++  curve: a stat's contribution is `HeroManager.statMods(total)` minus
++  `statMods(total with that stat zeroed)`, and the next-point value is
++  `statMods(total + 1)` minus `statMods(total)`; Luck's loot line does
++  the same through `HeroManager.personalLootBonus`, kept as an
++  independent multiplicative line rather than summed with Luck's
++  additive gold bonus. Because it calls the real manager methods instead
++  of hand-copying their formulas, this can't go stale the way a
++  hand-written stat-conversion table can if those curves are ever
++  retuned.
++- **`src/ui/HeroBlock.tsx`** -- the rebuilt card itself: portrait plate
++  (sprite or Tombstone, level/class badge, ascension rank, then the
++  gear-score/quests/gold/xp ledger), identity header (name, title, role,
++  live status including `Chain n/m`, class's preferred-contract bonus),
++  XP and Health side by side (the XP bar keeps its `registerFlyTarget`
++  ref so fly-to-bar animations still land correctly), the new attribute
++  grid from `heroStatEffects.ts`, and an expandable detail panel (total
++  modifiers, set bonuses, injuries/Fallen state, class blurb, title
++  select, livery, name reroll) -- functionally identical to what the old
++  expanded card showed, just laid out under the new grid. Every engine
++  call (`allocateStat`, `treatInjury`, `useConsumable`, `reviveHero`,
++  `setActiveTitle`, `setHeroSkin`, `rerollHeroName`, `setFocusedHero`)
++  carried over unchanged from the pre-redesign card.
++
++**`src/styles/hero-card.css`, new**, imported once in `main.tsx` right
++after `app.css`. Built entirely on existing `app.css` tokens (`--panel*`,
++`--brass*`, `--parchment`, `--muted`, `--moss`, `--blood`, `--sky`,
++`--violet`, both font vars) and existing shared classes (`.bar`,
++`.bar.xp`, `.bar.health`, `.chip`, `.btn-ghost`, `.btn-primary`,
++`.skin-chip`) -- no new colors introduced, so the accessibility/
++large-font and reduced-motion overrides already in `app.css` keep
++applying automatically. Includes its own `max-width: 720px` breakpoint
++that stacks the portrait/body columns for the narrow desktop companion
++window.
++
++**`HeroesPanel.tsx` -- wired in per the handoff's `APPLY.md`, not
++rewritten.** Added the `HeroBlock` import and replaced the entire
++per-hero `state.heroes.map((hero) => { ... })` card body with a call to
++`<HeroBlock>`, passing `hero`/`engine`/`now`/`settings`/`tombstoneIcon`/
++`isOpen`/`onToggle` and keeping `LevelUpFlash`/`ReviveFlash` as children,
++exactly as specified -- those two overlays stay owned by `HeroesPanel`
++since they're keyed off state (`levelFlashes`/`reviveFlashes`) that
++belongs to the whole roster, not one card. Compare Heroes, Revive All,
++tombstone-style picker, the `settings.heroStatusBars` branch, Recruit,
++and Skins sections below are untouched. The old `Tombstone`/
++`TombstoneImg`/`HealthBar`/`AutoHealBar` helper components (their own
++copy now lives inside `HeroBlock.tsx`) and every import/local that only
++existed to feed them -- `HeroSprite`, `RoleIcon`, `PrestigeManager`,
++`registerFlyTarget`, `rerollsUsedToday`, `infirmaryAutoReviveUnlocked`,
++`STAT_KEYS`, `HOUR`, `formatDuration`, plus the panel-level `bandages`
++and `infirmaryLevel` consts -- were deleted rather than left in place,
++since this repo's `tsconfig.json` runs with `noUnusedLocals`/
++`noUnusedParameters` on and a stale import would fail the build outright
++rather than just linting a warning.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh clone with this
++patch applied. Manually cross-checked every engine call and prop read in
++the new `HeroBlock.tsx` against the pre-redesign card to confirm nothing
++functional was dropped in the rebuild. No `SAVE_VERSION` bump needed --
++markup, CSS, and one new pure-presentation module only, no `GameState`
++shape touched anywhere in this patch. Worth a real playtest across a
++roster with a mix of levels, an injured hero, and a Fallen hero, to
++confirm the portrait plate's Tombstone fallback, the attribute meters'
++soft-reference scaling (`SOFT_REFERENCE` in `heroStatEffects.ts`; bump
++these if a well-geared hero pins every bar), and the 720px narrow-window
++breakpoint all look right.
+diff --git a/src/main.tsx b/src/main.tsx
+index 7dd6406..83071cc 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
+ import { App } from './App';
+ import { SettingsProvider } from './ui/useSettings';
+ import './styles/app.css';
++import './styles/hero-card.css';
+ 
+ const container = document.getElementById('root');
+ if (!container) throw new Error('Root element is missing from index.html.');
+diff --git a/src/styles/hero-card.css b/src/styles/hero-card.css
+new file mode 100644
+index 0000000..853cb51
+--- /dev/null
++++ b/src/styles/hero-card.css
+@@ -0,0 +1,405 @@
++/*
++ * Hero card redesign (hero block). Import once, after app.css:
++ *   import './styles/hero-card.css';
++ * Every value here comes from app.css's own :root tokens -- no new colours,
++ * fonts or radii are introduced.
++ */
++
++.hero-block {
++  padding: 0;
++  overflow: hidden;
++}
++
++.hero-block-grid {
++  display: grid;
++  grid-template-columns: 168px 1fr;
++  align-items: stretch;
++}
++
++/* ---- portrait column ---- */
++
++.hero-block-portrait {
++  border-right: 1px solid var(--panel-3);
++  background: linear-gradient(180deg, var(--panel-2), var(--panel));
++  padding: 14px 12px;
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  gap: 10px;
++}
++
++.hero-block-plate {
++  width: 118px;
++  height: 118px;
++  display: grid;
++  place-items: center;
++  border: 1px solid var(--brass-dim);
++  border-radius: 6px;
++  background:
++    repeating-linear-gradient(45deg,
++      color-mix(in srgb, var(--panel-2) 70%, var(--night)) 0 6px,
++      color-mix(in srgb, var(--panel) 80%, var(--night)) 6px 12px);
++  box-shadow: inset 0 0 0 3px var(--night), inset 0 0 22px rgba(0, 0, 0, 0.55);
++  image-rendering: pixelated;
++  overflow: hidden;
++}
++
++.hero-block-portrait-fallback {
++  display: grid;
++  place-items: center;
++  line-height: 1;
++}
++
++.hero-block-level {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  padding: 3px 9px;
++  border: 1px solid var(--brass-dim);
++  border-radius: 999px;
++  background: var(--panel);
++}
++
++.hero-block-level-num {
++  font-family: var(--font-display);
++  font-size: 0.9375rem;
++  line-height: 1;
++  color: var(--brass);
++}
++
++.hero-block-ascension {
++  color: var(--brass);
++  letter-spacing: 0.4px;
++}
++
++.hero-block-ledger {
++  width: 100%;
++  border-top: 1px solid var(--panel-3);
++  padding-top: 9px;
++  display: flex;
++  flex-direction: column;
++  gap: 5px;
++  font-size: 0.625rem;
++  color: var(--muted);
++}
++
++.hero-block-ledger > div {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 8px;
++}
++
++.hero-block-ledger b {
++  color: var(--parchment);
++  font-weight: 700;
++}
++
++/* ---- body ---- */
++
++.hero-block-body {
++  padding: 14px 16px 16px;
++  display: flex;
++  flex-direction: column;
++  gap: 12px;
++  min-width: 0;
++}
++
++.hero-block-head {
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: 14px;
++  flex-wrap: wrap;
++}
++
++.hero-block-identity { min-width: 0; }
++
++.hero-block-name {
++  font-family: var(--font-display);
++  font-size: 1.5rem;
++  line-height: 1.1;
++  color: var(--parchment);
++}
++
++.hero-block-name .hero-title { color: var(--brass); }
++
++.hero-block-meta {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  flex-wrap: wrap;
++  margin-top: 6px;
++  font-size: 0.625rem;
++  color: var(--muted);
++}
++
++.hero-block-role {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  padding: 2px 7px;
++  border: 1px solid var(--panel-3);
++  border-radius: 999px;
++  background: var(--panel);
++}
++
++.hero-block-actions {
++  display: flex;
++  gap: 6px;
++  flex-shrink: 0;
++}
++
++/* ---- vitals ---- */
++
++.hero-block-vitals {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 12px;
++}
++
++.hero-block-vital-head {
++  display: flex;
++  align-items: baseline;
++  justify-content: space-between;
++  gap: 8px;
++  margin-bottom: 4px;
++  font-size: 0.625rem;
++  color: var(--muted);
++}
++
++.hero-block-vital-head > span:first-child { letter-spacing: 0.6px; }
++.hero-block-vital-head > span:last-child { color: var(--parchment); }
++
++.hero-block-vitals .bar { height: 12px; }
++.hero-block-vitals .tiny { margin-top: 4px; }
++
++/* ---- section rule ---- */
++
++.hero-block-rule {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++}
++
++.hero-block-rule::before,
++.hero-block-rule::after {
++  content: '';
++  flex: 1;
++  height: 1px;
++  background: var(--brass-dim);
++  opacity: 0.7;
++}
++
++.hero-block-rule-label {
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  letter-spacing: 1px;
++  color: var(--brass);
++}
++
++.hero-block-points {
++  font-size: 0.5625rem;
++  color: var(--moss);
++  border: 1px solid var(--brass-dim);
++  border-radius: 999px;
++  padding: 2px 8px;
++}
++
++/* ---- attribute cards ---- */
++
++.hero-block-stats {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 10px;
++}
++
++.hero-stat {
++  border: 1px solid var(--panel-3);
++  border-left: 3px solid var(--brass-dim);
++  border-radius: 6px;
++  background: color-mix(in srgb, var(--panel) 70%, var(--panel-2));
++  padding: 10px 11px;
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++}
++
++.hero-stat-head {
++  display: flex;
++  align-items: center;
++  gap: 9px;
++}
++
++.hero-stat-glyph {
++  width: 26px;
++  height: 26px;
++  flex-shrink: 0;
++  display: grid;
++  place-items: center;
++  border: 1px solid var(--brass-dim);
++  border-radius: 5px;
++  background: var(--panel);
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++}
++
++.hero-stat-name {
++  flex: 1;
++  min-width: 0;
++  display: flex;
++  flex-direction: column;
++}
++
++.hero-stat-name b {
++  font-size: 0.6875rem;
++  font-weight: 400;
++  letter-spacing: 0.4px;
++  color: var(--parchment);
++}
++
++.hero-stat-value {
++  font-family: var(--font-display);
++  font-size: 1.375rem;
++  line-height: 1;
++  color: var(--parchment);
++}
++
++.hero-stat-add {
++  min-height: 20px;
++  padding: 0 6px;
++  flex-shrink: 0;
++}
++
++.hero-stat-lines {
++  display: flex;
++  flex-direction: column;
++  gap: 5px;
++}
++
++.hero-stat-line {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  font-size: 0.625rem;
++  color: var(--muted);
++}
++
++.hero-stat-line-label {
++  width: 84px;
++  flex-shrink: 0;
++}
++
++.hero-stat-line b {
++  width: 48px;
++  text-align: right;
++  color: var(--moss);
++  font-weight: 700;
++}
++
++.hero-stat-marginal { color: var(--muted); }
++.hero-stat-marginal span { color: var(--brass); }
++
++.hero-block-meter {
++  flex: 1;
++  height: 5px;
++  border-radius: 3px;
++  background: color-mix(in srgb, var(--night) 80%, var(--panel));
++  overflow: hidden;
++}
++
++.hero-block-meter > span {
++  display: block;
++  height: 100%;
++  background: var(--brass);
++  transition: width 400ms ease-out;
++}
++
++/* ---- expanded detail ---- */
++
++.hero-block-details {
++  border-top: 1px solid var(--panel-3);
++  padding-top: 12px;
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
++}
++
++.hero-block-panels {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 12px;
++}
++
++.hero-block-panel {
++  border: 1px solid var(--panel-3);
++  border-radius: 6px;
++  background: var(--panel);
++  padding: 10px 11px;
++}
++
++.hero-block-panel-danger {
++  border-color: color-mix(in srgb, var(--blood) 60%, var(--panel-3));
++  background: color-mix(in srgb, var(--blood) 12%, var(--panel));
++}
++
++.hero-block-panel-label {
++  font-size: 0.625rem;
++  letter-spacing: 0.6px;
++  color: var(--brass);
++  margin-bottom: 7px;
++}
++
++.hero-block-mods {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 4px 12px;
++  font-size: 0.625rem;
++  color: var(--muted);
++}
++
++.hero-block-sets {
++  color: var(--brass);
++  margin-top: 8px;
++  border-top: 1px solid var(--panel-3);
++  padding-top: 7px;
++}
++
++.hero-block-injury {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 8px;
++  margin-top: 6px;
++}
++
++.hero-block-title-row { align-items: center; gap: 6px; }
++.hero-block-livery { align-items: center; margin-top: 2px; }
++.hero-block-footnote { line-height: 1.6; }
++
++.hero-block.fallen .hero-block-plate { opacity: 0.85; }
++
++/* ---- narrow screens ---- */
++
++@media (max-width: 720px) {
++  .hero-block-grid { grid-template-columns: 1fr; }
++  .hero-block-portrait {
++    border-right: none;
++    border-bottom: 1px solid var(--panel-3);
++    flex-direction: row;
++    flex-wrap: wrap;
++    align-items: center;
++  }
++  .hero-block-plate { width: 84px; height: 84px; }
++  .hero-block-ledger {
++    width: auto;
++    flex: 1;
++    border-top: none;
++    padding-top: 0;
++    min-width: 150px;
++  }
++  .hero-block-stats,
++  .hero-block-vitals,
++  .hero-block-panels { grid-template-columns: 1fr; }
++  .hero-stat-line-label { width: 72px; }
++}
+diff --git a/src/ui/HeroBlock.tsx b/src/ui/HeroBlock.tsx
+new file mode 100644
+index 0000000..d8e0b7c
+--- /dev/null
++++ b/src/ui/HeroBlock.tsx
+@@ -0,0 +1,351 @@
++import { useState } from 'react';
++import { HeroManager } from '../game/managers/HeroManager';
++import { GuildManager } from '../game/managers/GuildManager';
++import { ModifierManager } from '../game/managers/ModifierManager';
++import { PrestigeManager } from '../game/managers/PrestigeManager';
++import { InventoryManager } from '../game/managers/InventoryManager';
++import { rerollsUsedToday } from '../game/data/reroll';
++import { HERO_CLASSES, SKINS, infirmaryAutoReviveUnlocked } from '../game/data/progression';
++import { Tuning } from '../game/data/tuning';
++import { Hero } from '../game/types';
++import { describeMods, formatDuration, formatGold, formatNumber, HOUR } from '../game/util';
++import { HeroSprite } from './sprites/HeroSprite';
++import { GearScoreBadge } from './GearScoreBadge';
++import { RoleIcon } from './RoleIcon';
++import { registerFlyTarget } from './flyTarget';
++import { statEffectBlocks, formatEffect } from './heroStatEffects';
++
++/**
++ * The hero card, rebuilt as a character block (hero-card redesign).
++ *
++ * Replaces the old flat card body in HeroesPanel: a portrait plate with
++ * level/class/lifetime figures down the left, the identity + status header
++ * across the top, XP and Health side by side, then the attribute grid --
++ * where each stat now states which modifiers it feeds, its computed
++ * contribution, and the marginal value of the next point (see
++ * heroStatEffects.ts). Nothing about the underlying model changed; this is
++ * presentation only, and every number still comes from the same managers
++ * the old card read.
++ *
++ * Styling lives in src/styles/hero-card.css, on the existing app.css
++ * tokens -- no new colours were introduced.
++ */
++
++function Tombstone({ height, icon }: { height: number; icon: string }) {
++  const [failed, setFailed] = useState(false);
++  if (failed) {
++    return <div className="hero-block-portrait-fallback" style={{ fontSize: height * 0.55 }}>💀</div>;
++  }
++  return (
++    <img
++      src={`./hero-status/${icon}`}
++      alt="Fallen"
++      onError={() => setFailed(true)}
++      style={{ height, width: 'auto', objectFit: 'contain' }}
++    />
++  );
++}
++
++function Meter({ ratio, tint, className }: { ratio: number; tint?: string; className?: string }) {
++  return (
++    <div className={`hero-block-meter ${className ?? ''}`}>
++      <span style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%`, background: tint }} />
++    </div>
++  );
++}
++
++export interface HeroBlockProps {
++  hero: Hero;
++  /** The live engine (useEngine()) -- every action button calls straight
++   *  through to it, exactly as the old inline card did. */
++  engine: any;
++  now: number;
++  settings: { spriteScale: number };
++  tombstoneIcon: string;
++  isOpen: boolean;
++  onToggle: () => void;
++  /** Level-up / revive flash overlays, still owned by HeroesPanel. */
++  children?: React.ReactNode;
++}
++
++export function HeroBlock({
++  hero, engine, now, settings, tombstoneIcon, isOpen, onToggle, children,
++}: HeroBlockProps) {
++  const state = engine.state;
++  const classDef = HERO_CLASSES[hero.heroClass];
++  const role = HeroManager.activeRole(hero);
++  const total = HeroManager.totalStats(hero);
++  const maxed = HeroManager.isMaxLevel(hero);
++  const toNext = HeroManager.xpToNext(hero);
++  const xpRatio = maxed ? 1 : hero.xp / toNext;
++
++  const maxHealth = HeroManager.maxHealth(hero);
++  const health = HeroManager.currentHealth(hero);
++  const healthRatio = maxHealth > 0 ? health / maxHealth : 0;
++
++  const infirmaryLevel = GuildManager.facilityLevel(state, 'infirmary');
++  const healEta = HeroManager.healthRegenEtaMs(hero, infirmaryLevel);
++
++  const mods = HeroManager.heroMods(state, hero, now);
++  const sets = HeroManager.activeSetBonuses(hero);
++  const blocks = statEffectBlocks(total, role);
++  const bandages = InventoryManager.count(state, 'field_bandage');
++  const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
++  const healsUsedToday = rerollsUsedToday(state.freeHealsUsedToday, state.freeHealDay, now);
++  const freeTreat = healsUsedToday < ModifierManager.freeHealsPerDay(state) || !hero.usedFreeTreat;
++  const showingOnDesktop = engine.displayedHero.id === hero.id;
++  const fallen = hero.status === 'fallen';
++  const activeChain = state.activeQuests.find((q: any) => q.heroId === hero.id)?.offer.chain;
++  const spriteHeight = Math.round(96 * settings.spriteScale);
++
++  return (
++    <div className={`card hero-block ${fallen ? 'fallen' : ''}`}>
++      {children}
++      <div className="hero-block-grid">
++
++        <div className="hero-block-portrait">
++          <div className="hero-block-plate">
++            {fallen
++              ? <Tombstone height={spriteHeight} icon={tombstoneIcon} />
++              : (
++                <HeroSprite
++                  heroClass={hero.heroClass}
++                  skin={hero.skin}
++                  animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}
++                  height={spriteHeight}
++                />
++              )}
++          </div>
++          <div className="hero-block-level">
++            <span className="hero-block-level-num">Lv {hero.level}</span>
++            <span className="tiny muted">{classDef.name}</span>
++          </div>
++          {hero.ascension > 0 && (
++            <div className="tiny hero-block-ascension">
++              ★ {PrestigeManager.rankFor(hero) ?? `Ascended ×${hero.ascension}`}
++            </div>
++          )}
++          <div className="hero-block-ledger">
++            <div><span>Gear score</span><GearScoreBadge score={HeroManager.gearScore(hero)} size="small" /></div>
++            <div><span>Quests won</span><b>{hero.questsSucceeded} / {hero.questsCompleted}</b></div>
++            <div><span>Lifetime gold</span><b>{formatGold(hero.goldEarnedLifetime)}</b></div>
++            <div><span>Lifetime xp</span><b>{formatNumber(hero.xpEarnedLifetime)}</b></div>
++          </div>
++        </div>
++
++        <div className="hero-block-body">
++
++          <div className="hero-block-head">
++            <div className="hero-block-identity">
++              <div className="hero-block-name">
++                {hero.name}
++                {HeroManager.displayTitle(hero) && <span className="hero-title">, {HeroManager.displayTitle(hero)}</span>}
++              </div>
++              <div className="hero-block-meta">
++                <span className="hero-block-role"><RoleIcon role={role} size={12} /> {HeroManager.roleDisplayName(hero)}</span>
++                <span className={fallen ? 'bad' : 'good'}>
++                  ● {fallen ? 'Fallen' : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
++                  {activeChain && ` · Chain ${activeChain.stage + 1}/${activeChain.totalStages}`}
++                </span>
++                <span>prefers {classDef.preferred.join(', ')} <span className="good">+{classDef.preferredBonus}% success</span></span>
++              </div>
++            </div>
++            <div className="hero-block-actions">
++              <button
++                className={`chip ${showingOnDesktop ? 'on' : ''}`}
++                disabled={showingOnDesktop}
++                onClick={() => engine.setFocusedHero(hero.id)}
++                title="Shows this hero on the desktop companion"
++              >
++                {showingOnDesktop ? '● On desktop' : 'Show on desktop'}
++              </button>
++              <button className="btn-ghost hero-block-expand" onClick={onToggle}>
++                {isOpen ? 'Less ▲' : 'More ▼'}
++              </button>
++            </div>
++          </div>
++
++          <div className="hero-block-vitals">
++            <div>
++              <div className="hero-block-vital-head">
++                <span>EXPERIENCE</span>
++                <span>{maxed ? 'Max level' : `${hero.xp.toLocaleString()} / ${toNext.toLocaleString()}`}</span>
++              </div>
++              <div ref={(el) => registerFlyTarget(`heroXp:${hero.id}`, el)} className="bar xp">
++                <span style={{ width: `${xpRatio * 100}%` }} />
++              </div>
++              <div className="tiny muted">
++                {maxed ? 'no further levels' : `${Math.max(0, Math.round(toNext - hero.xp)).toLocaleString()} xp to level ${hero.level + 1}`}
++              </div>
++            </div>
++            <div>
++              <div className="hero-block-vital-head">
++                <span>HEALTH</span>
++                <span>{Math.round(health)} / {maxHealth}</span>
++              </div>
++              <div className={`bar health ${healthRatio < 0.25 ? 'low' : ''}`}>
++                <span style={{ width: `${healthRatio * 100}%` }} />
++              </div>
++              {healEta > 0 ? (
++                <div className="tiny muted">Auto heal · full in {formatDuration(healEta)}</div>
++              ) : (
++                <div className="tiny muted">{fallen ? 'needs reviving' : 'at full health'}</div>
++              )}
++            </div>
++          </div>
++
++          <div className="hero-block-rule">
++            <span className="hero-block-rule-label">ATTRIBUTES</span>
++            {hero.statPoints > 0 && <span className="hero-block-points">{hero.statPoints} training points</span>}
++          </div>
++
++          <div className="hero-block-stats">
++            {blocks.map((block) => (
++              <div key={block.key} className="hero-stat" style={{ borderLeftColor: block.tint }}>
++                <div className="hero-stat-head">
++                  <span className="hero-stat-glyph" style={{ borderColor: block.tint, color: block.tint }}>{block.glyph}</span>
++                  <span className="hero-stat-name">
++                    <b>{block.label}</b>
++                    <span className="tiny muted">{block.blurb}</span>
++                  </span>
++                  <span className="hero-stat-value">{block.value}</span>
++                  {hero.statPoints > 0 && (
++                    <button
++                      className="btn-ghost hero-stat-add"
++                      onClick={() => engine.allocateStat(hero.id, block.key)}
++                      title={`Spend a training point on ${block.label}`}
++                    >+</button>
++                  )}
++                </div>
++                <div className="hero-stat-lines">
++                  {block.lines.map((line) => (
++                    <div key={line.label} className="hero-stat-line">
++                      <span className="hero-stat-line-label">{line.label}</span>
++                      <Meter ratio={line.ratio} tint={line.tint} />
++                      <b>{formatEffect(line.value, line.format)}</b>
++                    </div>
++                  ))}
++                  <div className="tiny hero-stat-marginal">
++                    Next point: <span>{block.marginal}</span>
++                  </div>
++                </div>
++              </div>
++            ))}
++          </div>
++
++          {isOpen && (
++            <div className="hero-block-details">
++              <div className="hero-block-panels">
++                <div className="hero-block-panel">
++                  <div className="hero-block-panel-label">TOTAL MODIFIERS</div>
++                  <div className="hero-block-mods">
++                    {describeMods(mods).map((line) => <span key={line}>{line}</span>)}
++                  </div>
++                  {sets.length > 0 && (
++                    <div className="tiny hero-block-sets">
++                      {sets.map((s: any) => `${s.setName}: ${s.label}`).join(' · ')}
++                    </div>
++                  )}
++                </div>
++
++                {(hero.injuries.length > 0 || fallen) && (
++                  <div className="hero-block-panel hero-block-panel-danger">
++                    <div className="hero-block-panel-label">{fallen ? 'FALLEN' : 'INJURIES'}</div>
++                    {hero.injuries.map((injury) => (
++                      <div key={injury.id} className="hero-block-injury">
++                        <div>
++                          <div className="small bad">{injury.name}</div>
++                          <div className="tiny muted">heals in {formatDuration(injury.healsAt - now)}</div>
++                        </div>
++                        <div className="row">
++                          <button
++                            className="btn-primary"
++                            onClick={() => engine.treatInjury(hero.id, injury.id)}
++                            disabled={!freeTreat && state.gold < injury.treatmentCost}
++                            title={freeTreat ? 'Free -- on the guild' : undefined}
++                          >
++                            {freeTreat ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
++                          </button>
++                          <button
++                            className="btn-primary"
++                            onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
++                            disabled={bandages === 0}
++                          >
++                            Bandage ×{bandages}
++                          </button>
++                        </div>
++                      </div>
++                    ))}
++                    {fallen && (
++                      <div className="hero-block-injury">
++                        <div className="tiny muted">
++                          {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
++                            ? `Auto-revive in ${formatDuration(hero.fallenAt + Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR - now)}`
++                            : 'needs reviving before being sent out again'}
++                        </div>
++                        <button
++                          className="btn-primary"
++                          onClick={() => engine.reviveHero(hero.id)}
++                          disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
++                        >
++                          Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
++                        </button>
++                      </div>
++                    )}
++                  </div>
++                )}
++              </div>
++
++              <p className="card-flavour">{classDef.blurb}</p>
++
++              {hero.titles.length > 0 && (
++                <div className="row hero-block-title-row">
++                  <span className="tiny muted">Title</span>
++                  <select
++                    value={hero.activeTitle ?? ''}
++                    onChange={(e) => engine.setActiveTitle(hero.id, e.target.value || null)}
++                  >
++                    <option value="">None</option>
++                    {hero.titles.map((t) => <option key={t} value={t}>{t}</option>)}
++                  </select>
++                </div>
++              )}
++
++              <div className="row wrap hero-block-livery">
++                <span className="tiny muted">Livery:</span>
++                {SKINS.map((sk) => {
++                  const owned = sk.id === 'original' || state.unlockedSkins.includes(sk.id);
++                  const active = (hero.skin ?? 'original') === sk.id;
++                  return (
++                    <button
++                      key={sk.id}
++                      className={`skin-chip ${active ? 'on' : ''}`}
++                      disabled={!owned}
++                      title={owned ? sk.name : `${sk.name}, buy in the Skins shop below`}
++                      onClick={() => engine.setHeroSkin(hero.id, sk.id)}
++                    >
++                      <span className="skin-dots">
++                        <span style={{ background: sk.swatch[0] }} />
++                        <span style={{ background: sk.swatch[1] }} />
++                      </span>
++                      {sk.name}
++                    </button>
++                  );
++                })}
++                <button className="chip" onClick={() => engine.rerollHeroName(hero.id)} title="Rerolls this hero's name from their class's name pool">
++                  ⟲ Reroll Name
++                </button>
++              </div>
++
++              <p className="tiny muted hero-block-footnote">
++                Success / gold / xp / injury resist / quest speed are additive points summed with class,
++                gear and guild bonuses. Rare loot is a separate multiplier on drop chance — don't add it
++                to the others. Role is changed from the Training tab.
++              </p>
++            </div>
++          )}
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/heroStatEffects.ts b/src/ui/heroStatEffects.ts
+new file mode 100644
+index 0000000..070947c
+--- /dev/null
++++ b/src/ui/heroStatEffects.ts
+@@ -0,0 +1,156 @@
++import { Stats, Role, Modifiers } from '../game/types';
++import { HeroManager } from '../game/managers/HeroManager';
++import { roleAwareStatLabel } from '../game/util';
++
++/**
++ * Hero card attribute readouts (hero-card redesign) -- turns each raw stat
++ * into "what this stat actually buys you", which the old flat
++ * `Strength 34` stat-row never said anywhere in the UI.
++ *
++ * Deliberately calls HeroManager.statMods / personalLootBonus rather than
++ * re-deriving their curves here: the contribution of one stat is measured
++ * as `statMods(total) - statMods(total with that stat zeroed)`, and the
++ * marginal value of the next point as `statMods(total+1) - statMods(total)`.
++ * If those formulas are ever retuned, this file follows automatically and
++ * cannot go stale the way a hand-copied sqrt() would (see
++ * stat-conversion-table.md's own "regenerate rather than hand-edit" note).
++ */
++
++type ModKey = keyof Modifiers;
++
++export type EffectFormat = 'points' | 'percent' | 'multiplier';
++
++export interface StatEffectLine {
++  /** Player-facing name of the modifier this stat feeds. */
++  label: string;
++  value: number;
++  format: EffectFormat;
++  /** 0-1, for the small meter beside the number. Relative to a soft
++   *  reference value per modifier, not an absolute cap -- these mods have
++   *  no hard ceiling, the bar is a "how stacked is this" hint only. */
++  ratio: number;
++  /** CSS colour var for the meter fill. */
++  tint: string;
++}
++
++export interface StatEffectBlock {
++  key: keyof Stats;
++  /** Role-aware (Strength / Agility / Intellect), via roleAwareStatLabel. */
++  label: string;
++  /** Two-letter plate glyph, e.g. ST / EN / LK / WS. */
++  glyph: string;
++  /** CSS colour var used for the plate + accent edge. */
++  tint: string;
++  /** One-line "what it's for". */
++  blurb: string;
++  value: number;
++  lines: StatEffectLine[];
++  /** "+0.14 success", "+0.08 success · +0.19 resist · +0.34 speed", ... */
++  marginal: string;
++}
++
++const SOFT_REFERENCE: Partial<Record<ModKey, number>> = {
++  success: 15,
++  injuryResist: 25,
++  speed: 25,
++  gold: 30,
++  xp: 30,
++};
++const LOOT_SOFT_REFERENCE = 175;
++
++const TINT: Record<keyof Stats, string> = {
++  strength: 'var(--blood)',
++  endurance: 'var(--moss)',
++  luck: 'var(--brass)',
++  wisdom: 'var(--sky)',
++};
++
++const GLYPH: Record<keyof Stats, string> = {
++  strength: 'ST', endurance: 'EN', luck: 'LK', wisdom: 'WS',
++};
++
++const BLURB: Record<keyof Stats, string> = {
++  strength: 'drives quest success',
++  endurance: 'triple dip \u2014 feeds three',
++  luck: 'gold earned & rare drops',
++  wisdom: 'experience gained',
++};
++
++/** Which modifiers each stat actually feeds, in display order. `loot` is
++ *  handled separately (multiplicative, personalLootBonus, not in Modifiers). */
++const FEEDS: Record<keyof Stats, { key: ModKey; label: string; format: EffectFormat }[]> = {
++  strength: [{ key: 'success', label: 'Success', format: 'points' }],
++  endurance: [
++    { key: 'success', label: 'Success', format: 'points' },
++    { key: 'injuryResist', label: 'Injury resist', format: 'percent' },
++    { key: 'speed', label: 'Quest speed', format: 'percent' },
++  ],
++  luck: [{ key: 'gold', label: 'Gold', format: 'percent' }],
++  wisdom: [{ key: 'xp', label: 'Experience', format: 'percent' }],
++};
++
++/** Short label used in the "next point" line -- lowercase, no units. */
++const MARGINAL_LABEL: Partial<Record<ModKey, string>> = {
++  success: 'success', injuryResist: 'resist', speed: 'speed', gold: 'gold', xp: 'xp',
++};
++
++function mod(stats: Stats, key: ModKey): number {
++  return HeroManager.statMods(stats)[key] ?? 0;
++}
++
++function clamp01(n: number): number {
++  return Math.max(0, Math.min(1, n));
++}
++
++export function formatEffect(value: number, format: EffectFormat): string {
++  switch (format) {
++    case 'points': return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
++    case 'percent': return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
++    case 'multiplier': return `\u00d7${(1 + value / 100).toFixed(2)}`;
++  }
++}
++
++export function statEffectBlocks(total: Stats, role: Role): StatEffectBlock[] {
++  return (['strength', 'endurance', 'luck', 'wisdom'] as (keyof Stats)[]).map((key) => {
++    const zeroed: Stats = { ...total, [key]: 0 };
++    const bumped: Stats = { ...total, [key]: total[key] + 1 };
++
++    const lines: StatEffectLine[] = FEEDS[key].map(({ key: modKey, label, format }) => {
++      const value = mod(total, modKey) - mod(zeroed, modKey);
++      const reference = SOFT_REFERENCE[modKey] ?? 25;
++      return { label, value, format, ratio: clamp01(value / reference), tint: TINT[key] };
++    });
++
++    const marginalParts = FEEDS[key].map(({ key: modKey }) => {
++      const delta = mod(bumped, modKey) - mod(total, modKey);
++      return `${delta >= 0 ? '+' : ''}${delta.toFixed(2)} ${MARGINAL_LABEL[modKey]}`;
++    });
++
++    // Luck feeds Gold (additive) and Loot (multiplicative) through two
++    // independent formulas -- shown as two separate lines, never summed.
++    // See stat-conversion-table.md's Units section.
++    if (key === 'luck') {
++      const loot = HeroManager.personalLootBonus(total) - HeroManager.personalLootBonus(zeroed);
++      lines.push({
++        label: 'Rare loot',
++        value: loot,
++        format: 'multiplier',
++        ratio: clamp01(loot / LOOT_SOFT_REFERENCE),
++        tint: 'var(--violet)',
++      });
++      const lootDelta = HeroManager.personalLootBonus(bumped) - HeroManager.personalLootBonus(total);
++      marginalParts.push(`+${lootDelta.toFixed(2)} loot%`);
++    }
++
++    return {
++      key,
++      label: roleAwareStatLabel(key, role),
++      glyph: GLYPH[key],
++      tint: TINT[key],
++      blurb: BLURB[key],
++      value: Math.round(total[key]),
++      lines,
++      marginal: marginalParts.join(' \u00b7 '),
++    };
++  });
++}
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 28cefc8..726e750 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -1,135 +1,19 @@
+-import { useRef, useState } from 'react';
++import { useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { PrestigeManager } from '../../game/managers/PrestigeManager';
+-import { InventoryManager } from '../../game/managers/InventoryManager';
+-import { rerollsUsedToday } from '../../game/data/reroll';
+-import { HERO_CLASSES, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
++import { HERO_CLASSES, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+ import { heroMilestoneUnlocked } from '../../game/data/heroMilestones';
+ import { Tuning } from '../../game/data/tuning';
+-import { HeroClass, Hero, Stats } from '../../game/types';
+-import { describeMods, formatDuration, formatGold, HOUR, roleAwareStatLabel } from '../../game/util';
+-import { HeroSprite } from '../sprites/HeroSprite';
++import { HeroClass, Hero } from '../../game/types';
++import { describeMods, formatGold } from '../../game/util';
+ import { HeroStatusList } from '../HeroStatusBar';
+ import { GearScoreBadge } from '../GearScoreBadge';
+-import { RoleIcon } from '../RoleIcon';
+ import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
+ import { useReviveFlash, ReviveFlash } from '../reviveFlash';
+-import { registerFlyTarget } from '../flyTarget';
+-
+-const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
+-
+-/**
+- * Static art for a Fallen hero, deliberately NOT the existing `death`
+- * sprite animation -- a looping death animation standing around the idle
+- * guild view would read as broken/distressing rather than as a status.
+- * Same graceful-missing-asset pattern HarvestPanel's HarvestGlyph already
+- * uses: falls back to a plain glyph if the real file (dropped into
+- * public/hero-status/tombstone.png) hasn't been added yet, rather than a
+- * broken image icon. See guild-idler-status.md's Health stat + Fallen/
+- * death mechanic section.
+- */
+-/**
+- * Static art for a Fallen hero, deliberately NOT the existing `death`
+- * sprite animation -- a looping death animation standing around the idle
+- * guild view would read as broken/distressing rather than as a status.
+- * Same graceful-missing-asset pattern HarvestPanel's HarvestGlyph already
+- * uses: falls back to a plain glyph if the real file (dropped into
+- * public/hero-status/<icon>) hasn't been added yet, rather than a broken
+- * image icon. `icon` comes from the globally-selected TombstoneStyleDef
+- * (see TOMBSTONE_STYLES) -- `key={icon}` forces a fresh mount whenever the
+- * style changes, so a previous style's fallback state doesn't leak onto a
+- * newly-selected one that might have real art. See guild-idler-status.md's
+- * Health stat + Fallen/death mechanic section and its Health-related gold
+- * sinks follow-up (tombstone variants).
+- */
+-function Tombstone({ height, icon }: { height: number; icon: string }) {
+-  return <TombstoneImg key={icon} height={height} icon={icon} />;
+-}
+-
+-function TombstoneImg({ height, icon }: { height: number; icon: string }) {
+-  const [failed, setFailed] = useState(false);
+-  if (failed) {
+-    return (
+-      <div style={{ height, width: height, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: height * 0.6 }}>
+-        💀
+-      </div>
+-    );
+-  }
+-  return (
+-    <img
+-      src={`./hero-status/${icon}`}
+-      alt="Fallen"
+-      onError={() => setFailed(true)}
+-      style={{ height, width: 'auto', objectFit: 'contain' }}
+-    />
+-  );
+-}
+-
+-/**
+- * Mirrors DurabilityBar (EquipmentPanel.tsx) exactly -- same `.bar`
+- * class, same `low` threshold/red-tint behaviour, just reading Health
+- * instead of gear durability. Two equally-visible, equally-styled bars a
+- * player tracks the same way, rather than Health being a hidden number
+- * you only discover after a bad string of injuries.
+- */
+-/**
+- * Auto Heal countdown -- a slim second bar directly under Health, DRAINING
+- * from full to empty as the hero's passive Infirmary regen closes the gap
+- * to full Health (mirrors the "full in Xm" text that already exists for
+- * the Fallen/auto-revive timer below, just for the ordinary regen case).
+- * `eta` is the live, currently-projected time-to-full from
+- * HeroManager.healthRegenEtaMs; `initialEta` is captured once via a ref on
+- * mount/health-change so the bar has a stable denominator to drain
+- * against rather than recomputing its own total every render (which would
+- * make it read as permanently ~empty, since remaining-time-over-itself is
+- * always ~1). Renders nothing once the hero is at full Health, Fallen, or
+- * Infirmary hasn't been built yet (healTimeMinutes still applies at
+- * Infirmary level 0, so this is really just "hero is already full" in
+- * practice pre-Infirmary too).
+- */
+-function AutoHealBar({ hero, infirmaryLevel }: { hero: Hero; infirmaryLevel: number }) {
+-  const eta = HeroManager.healthRegenEtaMs(hero, infirmaryLevel);
+-  const initialEtaRef = useRef<{ health: number | undefined; eta: number } | null>(null);
+-  if (eta <= 0) {
+-    initialEtaRef.current = null;
+-    return null;
+-  }
+-  if (!initialEtaRef.current || initialEtaRef.current.health !== hero.health) {
+-    initialEtaRef.current = { health: hero.health, eta };
+-  }
+-  const total = Math.max(initialEtaRef.current.eta, eta);
+-  const ratio = total > 0 ? Math.max(0, Math.min(1, eta / total)) : 0;
+-  return (
+-    <>
+-      <div className="bar heal-timer" style={{ marginTop: 2 }} title="Time until fully healed at the current Infirmary rate">
+-        <span style={{ width: `${ratio * 100}%` }} />
+-      </div>
+-      <div className="tiny muted">Auto Heal, full in {formatDuration(eta)}</div>
+-    </>
+-  );
+-}
+-
+-function HealthBar({ hero, compact = false }: { hero: Hero; compact?: boolean }) {
+-  const max = HeroManager.maxHealth(hero);
+-  const current = HeroManager.currentHealth(hero);
+-  const ratio = max > 0 ? current / max : 0;
+-  return (
+-    <>
+-      <div className={`bar health ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: compact ? 2 : 4 }}>
+-        <span style={{ width: `${ratio * 100}%` }} />
+-      </div>
+-      {!compact && (
+-        <div className="tiny muted">
+-          Health {Math.round(current)}/{max}
+-        </div>
+-      )}
+-    </>
+-  );
+-}
++import { HeroBlock } from '../HeroBlock';
+ 
+ export function HeroesPanel() {
+   const engine = useEngine();
+@@ -138,7 +22,6 @@ export function HeroesPanel() {
+   const state = engine.state;
+   const slots = engine.heroSlots;
+   const recruitable = GuildManager.recruitableClasses(state);
+-  const bandages = InventoryManager.count(state, 'field_bandage');
+ 
+   // Condensed by default -- a guild of even three or four heroes used to eat
+   // almost the whole screen. Each card opens on click for the full stat
+@@ -164,7 +47,6 @@ export function HeroesPanel() {
+     state.heroes.map((h) => ({ id: h.id, fallen: h.status === 'fallen' })),
+   );
+ 
+-  const infirmaryLevel = GuildManager.facilityLevel(state, 'infirmary');
+   const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
+   const fallenHeroes = state.heroes.filter((h) => h.status === 'fallen');
+   const bulkReviveCost = Math.round(
+@@ -230,299 +112,32 @@ export function HeroesPanel() {
+         // body itself swaps.
+         <HeroStatusList engine={engine} now={now} />
+       ) : (
+-      state.heroes.map((hero) => {
+-        const classDef = HERO_CLASSES[hero.heroClass];
+-        const total = HeroManager.totalStats(hero);
+-        const toNext = HeroManager.xpToNext(hero);
+-        // Same reasoning as DashboardPanel's own Ring -- a maxed hero's
+-        // xp is zeroed the instant it hits the cap (HeroManager.grantXp),
+-        // so both bars below need this to read as "full/done" rather than
+-        // a stalled-at-0 bar with no level left to actually fill it.
+-        const maxed = HeroManager.isMaxLevel(hero);
+-        const mods = HeroManager.heroMods(state, hero, now);
+-        const sets = HeroManager.activeSetBonuses(hero);
+-        const isOpen = expanded.has(hero.id);
+-        const showingOnDesktop = engine.displayedHero.id === hero.id;
+-        // Mirrors GameEngine.consumeFreeHeal's own priority (guild daily
+-        // allowance first, hero's one-time freebie second) purely for
+-        // the button label/enabled-state -- the engine call is still the
+-        // actual source of truth when Treat is actually clicked.
+-        const healsUsedToday = rerollsUsedToday(state.freeHealsUsedToday, state.freeHealDay, now);
+-        const heroFreeTreatAvailable = healsUsedToday < ModifierManager.freeHealsPerDay(state) || !hero.usedFreeTreat;
+-
+-        return (
+-          <div key={hero.id} className="card">
+-            {levelFlashes[hero.id] && (
+-              <LevelUpFlash
+-                key={levelFlashes[hero.id].key}
+-                levels={levelFlashes[hero.id].levels}
+-                onDone={() => dismissLevelFlash(hero.id)}
+-              />
+-            )}
+-            {reviveFlashes[hero.id] && (
+-              <ReviveFlash
+-                key={reviveFlashes[hero.id].key}
+-                onDone={() => dismissReviveFlash(hero.id)}
+-              />
+-            )}
+-            <div
+-              className="row hero-card-summary"
+-              style={{ alignItems: 'center', gap: 12 }}
+-              onClick={() => toggleExpanded(hero.id)}
+-              role="button"
+-              tabIndex={0}
+-              aria-expanded={isOpen}
+-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(hero.id); } }}
+-            >
+-              {hero.status === 'fallen' ? (
+-                <Tombstone height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)} icon={tombstoneIcon} />
+-              ) : (
+-                <HeroSprite
+-                  heroClass={hero.heroClass}
+-                  skin={hero.skin}
+-                  animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}
+-                  height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)}
+-                />
+-              )}
+-              <div style={{ flex: 1, minWidth: 0 }}>
+-                <div className="spread">
+-                  <span className="card-title hero-card-name">
+-                    {hero.name}
+-                    {HeroManager.displayTitle(hero) && <span className="hero-title">, {HeroManager.displayTitle(hero)}</span>}
+-                  </span>
+-                  <span className="small muted">
+-                    <RoleIcon role={HeroManager.activeRole(hero)} size={14} /> {HeroManager.roleDisplayName(hero)} · Level {hero.level}
+-                    {hero.ascension > 0 && (
+-                      <> · {PrestigeManager.rankFor(hero) ?? `ascended ×${hero.ascension}`}</>
+-                    )}
+-                    {' · '}<GearScoreBadge score={HeroManager.gearScore(hero)} size="small" />
+-                  </span>
+-                </div>
+-                <div
+-                  ref={(el) => registerFlyTarget(`heroXp:${hero.id}`, el)}
+-                  className="bar xp"
+-                  style={{ marginTop: 6 }}
+-                >
+-                  <span style={{ width: `${maxed ? 100 : (hero.xp / toNext) * 100}%` }} />
+-                </div>
+-                <HealthBar hero={hero} compact />
+-                <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
+-                {!isOpen && (
+-                  <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-                    {hero.status === 'fallen'
+-                      ? <span className="bad">Fallen</span>
+-                      : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+-                    {hero.status === 'questing' && (() => {
+-                      // Direct request: a hero mid-chain showed nowhere
+-                      // that they're on stage N of M without going back
+-                      // into Discovered Quests -- Discovered Quests and
+-                      // the Lore tab both already showed this, this card
+-                      // was the one place that didn't. Covers replay
+-                      // stages too (ActiveQuest.offer.chain is set either
+-                      // way); no chain name shown here, matching
+-                      // DiscoveredQuestsPanel's own compact "Chain N/M"
+-                      // wording rather than a longer line.
+-                      const active = state.activeQuests.find((q) => q.heroId === hero.id);
+-                      const chain = active?.offer.chain;
+-                      return chain ? <span> · Chain {chain.stage + 1}/{chain.totalStages}</span> : null;
+-                    })()}
+-                    {hero.injuries.length > 0 && (
+-                      <span className="bad"> · {hero.injuries.map((i) => i.name).join(', ')} (expand to Treat)</span>
+-                    )}
+-                    {showingOnDesktop && <span className="good"> · showing on desktop</span>}
+-                  </p>
+-                )}
+-              </div>
+-              <button
+-                className="btn-ghost hero-card-expand"
+-                onClick={(e) => { e.stopPropagation(); toggleExpanded(hero.id); }}
+-              >
+-                {isOpen ? 'Less ▲' : 'More ▼'}
+-              </button>
+-            </div>
+-
+-            {isOpen && (
+-              <div className="hero-card-details">
+-                <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+-                  <button
+-                    className={`chip ${showingOnDesktop ? 'on' : ''}`}
+-                    onClick={() => engine.setFocusedHero(hero.id)}
+-                    disabled={showingOnDesktop}
+-                    title="Shows this hero on the desktop companion"
+-                  >
+-                    {showingOnDesktop ? '● Showing on desktop' : 'Show on desktop'}
+-                  </button>
+-                  {/* Patch 0287, direct request -- free cosmetic reroll from
+-                      the hero's own class name pool, same "no confirmation
+-                      needed, nothing lost" shape as the skin picker below.
+-                      Exists mainly to fix same-class name collisions (each
+-                      class only had 5 names before this patch's pool
+-                      expansion) without having to retire a hero over it. */}
+-                  <button
+-                    className="chip"
+-                    onClick={() => engine.rerollHeroName(hero.id)}
+-                    title="Rerolls this hero's name from their class's name pool"
+-                  >
+-                    ⟲ Reroll Name
+-                  </button>
+-                </div>
+-                <p className="card-flavour">{classDef.blurb}</p>
+-
+-                {hero.titles.length > 0 && (
+-                  <div className="row" style={{ alignItems: 'center', gap: 6, marginBottom: 8 }}>
+-                    <span className="tiny muted">Title</span>
+-                    <select
+-                      value={hero.activeTitle ?? ''}
+-                      onChange={(e) => engine.setActiveTitle(hero.id, e.target.value || null)}
+-                    >
+-                      <option value="">None</option>
+-                      {hero.titles.map((t) => <option key={t} value={t}>{t}</option>)}
+-                    </select>
+-                  </div>
+-                )}
+-
+-                <div className="small muted" style={{ marginBottom: 3 }}>
+-                  {maxed ? 'Max level' : `Experience ${hero.xp} / ${toNext}`}
+-                </div>
+-                <div className="bar xp"><span style={{ width: `${maxed ? 100 : (hero.xp / toNext) * 100}%` }} /></div>
+-
+-                <div className="small muted" style={{ marginTop: 8, marginBottom: 3 }}>
+-                  Health
+-                </div>
+-                <HealthBar hero={hero} />
+-                <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
+-                <div className="stat-row" style={{ marginTop: 8 }}>
+-                  {STAT_KEYS.map((key) => (
+-                    <span key={key}>
+-                      {roleAwareStatLabel(key, HeroManager.activeRole(hero))} <b>{Math.round(total[key])}</b>
+-                      {hero.statPoints > 0 && (
+-                        <button
+-                          className="btn-ghost"
+-                          style={{ minHeight: 18, padding: '0 5px', marginLeft: 4 }}
+-                          onClick={() => engine.allocateStat(hero.id, key)}
+-                        >+</button>
+-                      )}
+-                    </span>
+-                  ))}
+-                </div>
+-                {hero.statPoints > 0 && (
+-                  <p className="tiny good" style={{ margin: '4px 0 0' }}>
+-                    {hero.statPoints} unspent training points.
+-                  </p>
+-                )}
+-
+-                <div className="stat-row" style={{ marginTop: 8 }}>
+-                  {describeMods(mods).map((line) => <span key={line}>{line}</span>)}
+-                </div>
+-
+-                {sets.length > 0 && (
+-                  <p className="tiny" style={{ color: 'var(--brass)', marginTop: 6 }}>
+-                    {sets.map((s) => `${s.setName}: ${s.label}`).join(' · ')}
+-                  </p>
+-                )}
+-
+-                {hero.injuries.length > 0 && (
+-                  <div style={{ marginTop: 8 }}>
+-                    {hero.injuries.map((injury) => (
+-                      <div key={injury.id} className="spread" style={{ marginBottom: 4 }}>
+-                        <span className="small bad">
+-                          {injury.name}, heals in {formatDuration(injury.healsAt - now)}
+-                        </span>
+-                        <span className="row">
+-                          <button
+-                            className="btn-primary"
+-                            onClick={() => engine.treatInjury(hero.id, injury.id)}
+-                            disabled={!heroFreeTreatAvailable && state.gold < injury.treatmentCost}
+-                            title={heroFreeTreatAvailable ? 'Free -- on the guild' : undefined}
+-                          >
+-                            {heroFreeTreatAvailable ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
+-                          </button>
+-                          <button
+-                            className="btn-primary"
+-                            onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
+-                            disabled={bandages === 0}
+-                          >
+-                            Bandage ×{bandages}
+-                          </button>
+-                        </span>
+-                      </div>
+-                    ))}
+-                  </div>
+-                )}
+-
+-                {hero.status === 'fallen' && (
+-                  <div style={{ marginTop: 8 }}>
+-                    <div className="spread">
+-                      <span className="small bad">
+-                        Fallen
+-                        {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
+-                          ? ', recovers on its own, or pay to skip'
+-                          : ', needs to be revived before being sent out again'}
+-                      </span>
+-                      <button
+-                        onClick={() => engine.reviveHero(hero.id)}
+-                        disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
+-                      >
+-                        Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
+-                      </button>
+-                    </div>
+-                    {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt && (() => {
+-                      const totalMs = Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR;
+-                      const remainingMs = Math.max(0, hero.fallenAt + totalMs - now);
+-                      const ratio = totalMs > 0 ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 0;
+-                      return (
+-                        <>
+-                          <div className="bar heal-timer" style={{ marginTop: 4 }} title="Time until free auto-revive">
+-                            <span style={{ width: `${ratio * 100}%` }} />
+-                          </div>
+-                          <div className="tiny muted">Auto-revive, ready in {formatDuration(remainingMs)}</div>
+-                        </>
+-                      );
+-                    })()}
+-                  </div>
+-                )}
+-
+-                <p className="tiny muted" style={{ marginTop: 8 }}>
+-                  Prefers {classDef.preferred.join(', ')} contracts (+{classDef.preferredBonus}% success) ·
+-                  {' '}{hero.questsCompleted} quests completed ·
+-                  {' '}{hero.status === 'fallen' ? 'Fallen' : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+-                  {hero.status === 'questing' && (() => {
+-                    const active = state.activeQuests.find((q) => q.heroId === hero.id);
+-                    const chain = active?.offer.chain;
+-                    return chain ? <> (Chain {chain.stage + 1}/{chain.totalStages})</> : null;
+-                  })()}
+-                </p>
+-                <p className="tiny muted" style={{ marginTop: 2 }}>
+-                  Role: <RoleIcon role={HeroManager.activeRole(hero)} size={13} /> {HeroManager.roleDisplayName(hero)} -- change it from the Training tab.
+-                </p>
+-
+-                <div className="row wrap" style={{ marginTop: 6, alignItems: 'center' }}>
+-                  <span className="tiny muted">Livery:</span>
+-                  {SKINS.map((sk) => {
+-                    const owned = sk.id === 'original' || state.unlockedSkins.includes(sk.id);
+-                    const active = (hero.skin ?? 'original') === sk.id;
+-                    return (
+-                      <button
+-                        key={sk.id}
+-                        className={`skin-chip ${active ? 'on' : ''}`}
+-                        disabled={!owned}
+-                        title={owned ? sk.name : `${sk.name}, buy in the Skins shop below`}
+-                        onClick={() => engine.setHeroSkin(hero.id, sk.id)}
+-                      >
+-                        <span className="skin-dots">
+-                          <span style={{ background: sk.swatch[0] }} />
+-                          <span style={{ background: sk.swatch[1] }} />
+-                        </span>
+-                        {sk.name}
+-                      </button>
+-                    );
+-                  })}
+-                </div>
+-              </div>
+-            )}
+-          </div>
+-        );
+-      })
++      state.heroes.map((hero) => (
++        <HeroBlock
++          key={hero.id}
++          hero={hero}
++          engine={engine}
++          now={now}
++          settings={settings}
++          tombstoneIcon={tombstoneIcon}
++          isOpen={expanded.has(hero.id)}
++          onToggle={() => toggleExpanded(hero.id)}
++        >
++          {levelFlashes[hero.id] && (
++            <LevelUpFlash
++              key={levelFlashes[hero.id].key}
++              levels={levelFlashes[hero.id].levels}
++              onDone={() => dismissLevelFlash(hero.id)}
++            />
++          )}
++          {reviveFlashes[hero.id] && (
++            <ReviveFlash
++              key={reviveFlashes[hero.id].key}
++              onDone={() => dismissReviveFlash(hero.id)}
++            />
++          )}
++        </HeroBlock>
++      ))
+       )}
+ 
+       <div className="section-heading">Recruit</div>
