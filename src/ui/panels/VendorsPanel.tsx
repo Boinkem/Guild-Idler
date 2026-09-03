@@ -137,6 +137,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const level = GuildManager.vendorLevel(state, vendorId);
   const upgradeList = vendorUpgrades(vendorId);
   const cost = GuildManager.nextVendorLevelCost(state, vendorId);
+  const scrapCost = GuildManager.nextVendorLevelScrapCost(state, vendorId) ?? 0;
   const maxed = cost === null;
 
   const { flashes, dismiss } = useMaxFlash([
@@ -159,7 +160,9 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   function upgradeCard(def: UpgradeDef) {
     const upLevel = GuildManager.upgradeLevel(state, def.id);
     const upCost = GuildManager.nextUpgradeCost(state, def.id);
+    const upScrapCost = GuildManager.nextUpgradeScrapCost(state, def.id) ?? 0;
     const upMaxed = upCost === null && upLevel >= def.maxLevel;
+    const upAffordable = upCost !== null && state.gold >= upCost && state.scrap >= upScrapCost;
     const flash = flashes[def.id];
     const pulsing = levelPulses[def.id];
     return (
@@ -176,10 +179,10 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
         </div>
         <button
           className="btn-yellow"
-          disabled={upMaxed || upCost === null || state.gold < upCost}
+          disabled={upMaxed || !upAffordable}
           onClick={() => engine.buyUpgrade(def.id)}
         >
-          {upMaxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(upCost ?? 0)}`}
+          {upMaxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(upCost ?? 0)} + ${upScrapCost} Scrap`}
         </button>
         {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
       </div>
@@ -212,10 +215,10 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
             <div className="row" style={{ gap: 8 }}>
               <button
                 className="btn-yellow"
-                disabled={maxed || cost === null || state.gold < cost}
+                disabled={maxed || cost === null || state.gold < cost || state.scrap < scrapCost}
                 onClick={() => engine.levelUpVendor(vendorId)}
               >
-                {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)}`}
+                {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`}
               </button>
               <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
               {/* Durability repair -- moved here from a per-item button

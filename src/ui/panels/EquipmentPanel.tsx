@@ -720,7 +720,7 @@ function SlotCard({
                 >
                   {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0
                     ? 'Repair · Free'
-                    : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))}`}
+                    : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))} + ${EquipmentManager.repairScrapCost(item, workshop, repairDiscount)} Scrap`}
                 </button>
                 <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
                   Remove
@@ -865,8 +865,11 @@ export function EquipmentPanel() {
   const [heroId, setHeroId] = useState(state.heroes[0].id);
   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
 
+  const repairDiscountForBill = ModifierManager.global(state).repairDiscount ?? 0;
   const repairBill = EquipmentManager.allItems(state)
-    .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop, ModifierManager.global(state).repairDiscount ?? 0), 0);
+    .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop, repairDiscountForBill), 0);
+  const repairScrapBill = EquipmentManager.allItems(state)
+    .reduce((sum, e) => sum + EquipmentManager.repairScrapCost(e.item, workshop, repairDiscountForBill), 0);
 
   const curiosOwned = CurioManager.owned(state);
 
@@ -946,7 +949,7 @@ export function EquipmentPanel() {
           Equip best from stash
         </button>
         <button className="btn-primary" onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
-          Repair everything · {formatGold(repairBill)}
+          Repair everything · {formatGold(repairBill)} + {repairScrapBill} Scrap
         </button>
       </div>
 

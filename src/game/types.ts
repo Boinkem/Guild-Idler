@@ -2742,11 +2742,14 @@ export interface CraftingRecipeDef {
   icon?: string;
   materialCost: Partial<Record<MaterialId, number>>;
   goldCost: number;
-  /** `gem` recipes only, in addition to materialCost/goldCost -- Scrap is
+  /** Every recipe category, in addition to materialCost/goldCost -- Scrap is
    *  its own standalone currency (see GameState.scrap), not a MaterialId,
-   *  so it needs its own cost field rather than fitting into
-   *  materialCost. Every gem recipe is expected to set this; 0/undefined
-   *  would mean a gem that costs no scrap at all, which defeats the
+   *  so it needs its own cost field rather than fitting into materialCost.
+   *  Originally `gem`-only; patch 0298 (Scrap economy rework) extended it
+   *  to every category (`gear`/`consumable`/`charm`/`enchant` too) so every
+   *  crafted output leans on Scrap, not just gems. Every recipe is expected
+   *  to set this via `scrapCostFromGold` off its own goldCost; 0/undefined
+   *  would mean an output that costs no scrap at all, which defeats the
    *  point of the scrapping loop. */
   scrapCost?: number;
   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */

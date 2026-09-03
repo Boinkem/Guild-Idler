@@ -160,6 +160,7 @@ export const CraftingManager = {
 
     state.gold -= recipe.goldCost;
     state.stats.goldSpent += recipe.goldCost;
+    state.scrap -= recipe.scrapCost ?? 0;
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }
@@ -192,7 +193,14 @@ export const CraftingManager = {
    */
   craftConsumable(state: GameState, recipeId: string, chosenMods: (keyof Modifiers)[] = []): string | null {
     const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
-    if (!recipe || recipe.category !== 'consumable' || !recipe.resultConsumableId) return 'Unknown recipe.';
+    // Patch 0298 fix: this guard was `category !== 'consumable'` only, which
+    // silently rejected every `charm` recipe with "Unknown recipe." --
+    // `charm` was added (patch 0247) specifically to be routed through this
+    // same action (see CraftingRecipeDef.category's own comment and
+    // CraftingStation's isConsumableLike), so the guard just never caught up.
+    if (!recipe || (recipe.category !== 'consumable' && recipe.category !== 'charm') || !recipe.resultConsumableId) {
+      return 'Unknown recipe.';
+    }
     const modsToPick = recipe.modsToPick ?? 0;
     const modOptions = recipe.modOptions ?? [];
     if (chosenMods.length !== modsToPick) return `Pick exactly ${modsToPick} bonus${modsToPick === 1 ? '' : 'es'}.`;
@@ -223,6 +231,7 @@ export const CraftingManager = {
 
     state.gold -= recipe.goldCost;
     state.stats.goldSpent += recipe.goldCost;
+    state.scrap -= recipe.scrapCost ?? 0;
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }
@@ -258,6 +267,7 @@ export const CraftingManager = {
     const goldCost = CraftingManager.goldCost(state, recipe);
     state.gold -= goldCost;
     state.stats.goldSpent += goldCost;
+    state.scrap -= recipe.scrapCost ?? 0;
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }

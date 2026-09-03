@@ -1436,6 +1436,17 @@ mechanism, patch 0225. (3) resolution logic and purchasing, patch 0227
 entry's own note). (4) Replay Memories UI, patch 0228. (5) verified
 complete without new work, this entry.
 
+### Scrap economy rework (vendor levels, vendor-tied upgrades, all crafting, Repair, Enhance, re-leveling) -- built, patch 0298
+Raised directly: a play tester had over 1,000 Scrap sitting unused because
+scrapping gear was the only thing generating it and almost nothing spent
+it. Design locked in over several discussion rounds (ratio, scope,
+Repair's own exception) before this patch built it -- see patch 0298's
+own writeup below for the full mechanism, formula, and every touch point.
+
+### Pets tab: active/unpaired divider + slot-cap-aware pairing dropdown -- built, patch 0298
+Direct request, bundled into the same patch as the Scrap economy rework
+above. See patch 0298's own writeup below.
+
 ### Uncapped gold/xp multipliers -- resolved, patch 0214
 Was flagged here (see git history for the original entry) during the
 hero-stat rebalance discussion. Fixed as part of patch 0214's soft-cap
@@ -1835,6 +1846,22 @@ idle-animation and fox-run reports elsewhere in this doc already got:
   `tombstone-mossy.png`/`tombstone-ornate.png`/`tombstone-cursed.png`
   actually exist under `public/hero-status/`. Drop those three files in;
   no code changes needed.
+- **Raid difficulty icons -- resolved**, art delivered directly to the
+  repo outside this patch workflow (commit `08ef03b`, pushed between
+  this session's earlier research and this patch): real art now sits at
+  `public/raid-icons/normal.png`/`heroic.png`/`legendary.png` (the old
+  placeholder-sized files kept alongside as `-OLD.png`), which is
+  exactly where `RAID_DIFFICULTY_ICON` (`src/game/data/raids.ts`) already
+  pointed -- no code changes needed, same "art drops in, already wired"
+  shape the Tombstone variant art above has. A `tier4_mythic.png` also
+  landed in the same push but isn't referenced anywhere yet -- `raids.ts`
+  has no `mythic` entry in `RaidDifficulty`/`RAID_DIFFICULTY_ICON` today,
+  so this is art staged ahead of a future Mythic difficulty tier, not a
+  bug.
+- **Harvest tab background** -- to do. Direct report: the Harvest tab's
+  default view has no background art, unlike every other tab that
+  already got the full-page background treatment (patch 0246). Needs a
+  scene picked/commissioned for it the same way the other tabs got theirs.
 
 ### Grimsby's equipment cards: rolled by rarity tier instead of a fixed item
 Direct report: every equipment-kind card in `peddler-cards.json` was
@@ -23470,3 +23497,146 @@ pass to confirm the new chip/button colours read well against their
 backgrounds, and that the hero card's action row still looks right at a
 genuinely narrow window width where three buttons wrapping internally
 might look cramped.
+
+### Scrap becomes a real vendor currency across the board; Pets tab active/unpaired divider + slot-cap-aware pairing (patch 0298)
+```discord-update
+Dev Update | Patch 0298
+
+- Changed: Scrap is now a real currency at every Vendor -- vendor level-ups, vendor-tied upgrades, all crafting (gems, gear, potions, charms, and enchants), Repairing, Enhancing (+N refinement), and gear re-leveling all cost some Scrap alongside gold now
+- Fixed: crafting Charms (Lucky Charms, Fortune Weaves, Windfall Sigils) was silently broken and always failed with "Unknown recipe" -- works again
+- Added: the Pets tab now splits into Active and Unpaired sections once you have pets in both groups
+- Changed: the pairing dropdown greys out heroes you can't pair a pet with when every companion slot is already full, instead of silently failing
+```
+
+Two direct reports bundled into one patch: a full economy pass on Scrap
+(discussed and design-locked across several earlier conversations, see
+the Backlog's own two pointer entries above), and a small Pets tab UX
+follow-up queued into the same patch once the Scrap work was already
+touching the vendor-adjacent systems.
+
+**Scrap economy rework -- motivation and locked design.** A play tester
+reported mostly just scrapping all their gear, sitting on 1,000+ Scrap
+with nothing to spend it on. Confirmed design across the discussion:
+Scrap becomes Gold's minor-key twin -- a real resource, not a
+box-clearing byproduct -- and everything in the Vendors (upgrades,
+crafting, enhancements) should draw on it. Locked scope, exactly as
+agreed:
+- **In scope**: vendor level-ups, all 9 vendor-tied Upgrades (Smith's
+  Discount, Bulk Scrapper, Arcane Discount, etc. -- general Guild Hall
+  upgrades with no `vendor` tag are untouched, still gold-only), all 72
+  crafting recipes across every category (`gem`/`gear`/`consumable`/
+  `charm`/`enchant`), Repair (its own gentler ratio, confirmed directly:
+  "Repair should use a bit of scrap, yes"), Enhance (+N refinement), and
+  gear re-leveling (retuned, not newly added -- see below).
+- **Explicitly out of scope**: Weapon Enchanting/Armour Infusion
+  themselves have no separate cost -- they already spend through the
+  underlying gem-crafting recipe, which is in scope on its own. Shop
+  equipment purchases (Blacksmith stock, Black Market) stay gold-only.
+
+**The formula (`src/game/data/progression.ts`).** One shared helper,
+`scrapCostFromGold(goldCost) = Math.max(1, Math.round(goldCost /
+Tuning.get('economy.scrapToGoldRatio')))`, backing every in-scope system
+except Repair. New tuning entry `economy.scrapToGoldRatio` (value 9,
+range 5-15, live-editable via the DevTool same as every other cost knob)
+-- picked at the tighter end of the discussed 8-10 range. Repair gets its
+own `repairScrapCost(goldCost)` off a separate, gentler
+`economy.repairScrapToGoldRatio` (value 14) rather than the shared ratio
+-- repairs happen far more often than a one-off vendor purchase, so
+leaning on the same ratio would have drained Scrap much faster than
+intended for routine upkeep.
+
+**Vendor levels and vendor-tied upgrades (`GuildManager.ts`,
+`VendorsPanel.tsx`).** `nextVendorLevelScrapCost`/`nextUpgradeScrapCost`
+sit alongside the existing gold-cost functions (existing functions
+unchanged, so nothing else calling them broke); `levelUpVendor`/
+`buyUpgrade` now gate on and deduct both currencies. Deliberately NOT
+routed through Vendor Rep's gold discount -- that discount is
+specifically a "spend more gold with this vendor" loyalty mechanic, not
+a general cost reducer. Both buttons in `VendorsPanel.tsx` now read
+"... + N Scrap" and disable on either currency running short.
+
+**Crafting -- all 72 recipes retuned or newly priced
+(`crafting-recipes.json`, `CraftingManager.ts`).** The 40 gem recipes
+already had a `scrapCost` (flat 25:1 against their own gold cost, e.g.
+150g/6 scrap); retuned to the new ~9:1 ratio (150g -> 17 scrap). The
+remaining 32 recipes (12 `gear`, 11 `consumable`, 6 `charm`, 3 `enchant`)
+had no `scrapCost` at all before this patch; all 32 now do, computed the
+same way. **Found and fixed a real pre-existing bug while wiring this
+up**: `CraftingManager.craftConsumable`'s own guard only accepted
+`recipe.category === 'consumable'`, silently rejecting every `charm`
+recipe with "Unknown recipe." even though `charm` was added specifically
+to route through this exact action (patch 0247 -- see
+`CraftingRecipeDef.category`'s own comment and `CraftingStation.tsx`'s
+`isConsumableLike`). Crafting a Lucky Charm, Fortune Weave, or Windfall
+Sigil has been silently broken since that patch; fixed here by widening
+the guard. Also caught (and fixed) that `craftGear`/`craftConsumable`/
+`enchantItem` all correctly *checked* `recipe.scrapCost` via
+`affordability()` but then never actually deducted it on success --
+dead code until this patch started giving those categories real
+non-zero scrap costs, at which point it would have let every gear/
+consumable/enchant recipe be crafted for free on the scrap side. All
+three now deduct `state.scrap -= recipe.scrapCost ?? 0` alongside gold.
+The have/need scrap row in `CraftingStation.tsx` already read generically
+off `recipe.scrapCost` for any category, so no UI change was needed
+there -- it just started showing real numbers for the 32 recipes that
+previously had none.
+
+**Repair (`EquipmentManager.ts`, `EquipmentPanel.tsx`, `engine.ts`).**
+New `EquipmentManager.repairScrapCost` alongside the existing
+`repairCost`; `repair()` now gates on and deducts both. Threaded through
+every call site: the single-item repair button and modal, the
+"Repair everything" bulk estimate/button (now shows "... + N Scrap" and
+sums the scrap side same as the gold side), and both engine-side repair
+paths (`repairAll()`, and the auto-repair tick in the main loop) -- the
+auto-repair tick in particular now checks the player's Scrap balance
+before attempting a repair, and only counts it toward `changed`
+if `EquipmentManager.repair` actually succeeds, rather than assuming
+success just because the gold check passed.
+
+**Enhance / +N refinement (`EquipmentManager.ts`, `EnhanceStation.tsx`).**
+New `EquipmentManager.upgradeScrapCost` off the existing `upgradeCost`;
+`upgrade()` gates on and deducts both. The Enhance button now shows and
+requires both currencies.
+
+**Gear re-leveling, retuned (`EquipmentManager.relevelCost`).** Was a
+flat `2 * levelsToRaise` scrap cost -- trivial next to the 1,000+ Scrap
+balances this whole patch exists to address. Retuned to
+`scrapCostFromGold` off the same gold cost the function already
+computes, so re-leveling a high-rarity item now draws down the Scrap
+pile the same way every other vendor spend does. This was already a
+`{gold, scrap}`-returning function and already fully gated/deducted
+correctly -- only the formula changed.
+
+**Pets tab (`HatcheryPanel.tsx`).** Two direct requests:
+- **Active/Unpaired divider.** `PetsTab` now splits `state.pets` into
+  pets currently paired with a hero vs. not, rendering each group under
+  its own `section-heading` (the game's existing convention, e.g.
+  GuildPanel's "Facilities"/"Permanent Upgrades"). Falls back to the
+  original flat, undivided grid whenever every pet is in the same
+  bucket (all-active or all-unpaired), so a small roster doesn't show a
+  pointless empty second heading.
+- **Slot-cap-aware pairing dropdown.** The per-pet "Paired with" select
+  already disabled a hero already bonded to a *different* pet; it did
+  not disable a hero when picking them would fail for a completely
+  different reason -- every companion slot already full. Mirrors
+  `PetManager.equip`'s own cap check exactly: a hero option is now also
+  disabled (labelled "(no free slot)") whenever this specific pet is
+  currently unpaired AND the guild's total equipped-pet count is already
+  at `ModifierManager.petSlots`. Deliberately does NOT block moving an
+  *already*-paired pet to a different hero even at full capacity --
+  that action frees its old hero's slot in the same move, so the total
+  never actually goes up, exactly the nuance `PetManager.equip`'s own
+  `petAlreadyEquippedElsewhere` short-circuit already protects against
+  server-side; the dropdown now reads the same way instead of only being
+  safe underneath.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this patch
+applied. Hand-checked the new gem-recipe scrap costs against the shared
+ratio (150g -> 17, 300g -> 33, 600g -> 67, 1200g -> 133, 2400g -> 267,
+all `Math.round(gold / 9)`) and spot-checked several of the 32
+newly-priced gear/consumable/charm/enchant recipes for sane, proportional
+numbers. No live in-app playtest in this environment (no browser
+available) -- worth a real-window pass to confirm the new "+ N Scrap"
+button labels don't overflow on any of the affected buttons, and that the
+Pets tab divider reads well with a genuinely large roster.

@@ -4235,6 +4235,26 @@
     "description": "Baseline xp at breakpoint 6's level."
   },
   {
+    "id": "economy.scrapToGoldRatio",
+    "label": "Scrap value: gold-equivalent ratio",
+    "category": "economy",
+    "value": 9,
+    "default": 9,
+    "min": 5,
+    "max": 15,
+    "description": "Shared conversion rate used to derive a scrap cost from a system's existing gold cost (scrapCost = round(goldCost / ratio), floored at 1). Lower = scrap costs more relative to gold."
+  },
+  {
+    "id": "economy.repairScrapToGoldRatio",
+    "label": "Repair cost: scrap gold-equivalent ratio",
+    "category": "economy",
+    "value": 14,
+    "default": 14,
+    "min": 5,
+    "max": 30,
+    "description": "Separate, gentler conversion rate for Repair's scrap cost (scrapCost = round(goldCost / ratio), floored at 1) -- repairs happen far more often than vendor purchases, so they lean less on scrap than the shared ratio."
+  },
+  {
     "id": "quest_reqlevel.offsetWeightM4",
     "label": "reqLevel roll: weight at hero.level-4",
     "category": "quest_reqlevel",

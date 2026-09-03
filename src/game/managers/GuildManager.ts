@@ -1,6 +1,6 @@
 import {
   GUILD_BY_ID, GUILD_FACILITIES, HERO_CLASSES, RECRUIT_COST, UPGRADE_BY_ID, UPGRADES, VENDORS,
-  guildCost, upgradeCost, vendorLevelCost, isVendorUpgradeUnlocked,
+  guildCost, upgradeCost, upgradeScrapCost, vendorLevelCost, vendorLevelScrapCost, isVendorUpgradeUnlocked,
 } from '../data/progression';
 import { RAID_UPGRADES, RAID_UPGRADE_BY_ID, raidUpgradeCost } from '../data/raidUpgrades';
 import { chainReplayTierForChain, CHAIN_REPLAY_TIER_BY_ID } from '../data/chainReplay';
@@ -106,6 +106,21 @@ export const GuildManager = {
     return def.vendor ? applyVendorRepDiscount(cost, state.vendorGoldSpent?.[def.vendor] ?? 0) : cost;
   },
 
+  /**
+   * Scrap component of an upgrade's cost -- null for general Guild Hall
+   * upgrades (gold-only), only vendor-tied upgrades require scrap. Patch
+   * 0298, Scrap economy rework: unlike the gold side, scrap isn't run
+   * through Vendor Rep's discount -- that discount is specifically a
+   * "spend more gold with this vendor, gold gets cheaper" loyalty mechanic.
+   */
+  nextUpgradeScrapCost(state: GameState, id: string): number | null {
+    const def = UPGRADE_BY_ID[id];
+    const level = GuildManager.upgradeLevel(state, id);
+    if (!def || level >= def.maxLevel) return null;
+    if (def.vendor && !isVendorUpgradeUnlocked(state.vendorLevels[def.vendor], def.vendor, def.id)) return null;
+    return upgradeScrapCost(def, level);
+  },
+
   buyUpgrade(state: GameState, id: string): string | null {
     const def = UPGRADE_BY_ID[id];
     if (!def) return 'Unknown upgrade.';
@@ -116,9 +131,12 @@ export const GuildManager = {
     if (level >= def.maxLevel) return 'Already at maximum.';
     const cost = GuildManager.nextUpgradeCost(state, id);
     if (cost === null) return 'Already at maximum.';
+    const scrapCost = GuildManager.nextUpgradeScrapCost(state, id) ?? 0;
     if (state.gold < cost) return 'Not enough gold.';
+    if (state.scrap < scrapCost) return 'Not enough scrap.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
+    state.scrap -= scrapCost;
     if (def.vendor) state.vendorGoldSpent[def.vendor] += cost;
     state.upgrades[id] = level + 1;
     return null;
@@ -138,13 +156,21 @@ export const GuildManager = {
     return vendorLevelCost(vendorId, GuildManager.vendorLevel(state, vendorId));
   },
 
+  /** Scrap component of a vendor level-up's cost. Patch 0298, Scrap economy rework. */
+  nextVendorLevelScrapCost(state: GameState, vendorId: VendorId): number | null {
+    return vendorLevelScrapCost(vendorId, GuildManager.vendorLevel(state, vendorId));
+  },
+
   levelUpVendor(state: GameState, vendorId: VendorId): string | null {
     const level = GuildManager.vendorLevel(state, vendorId);
     const cost = vendorLevelCost(vendorId, level);
     if (cost === null) return 'This vendor has nothing further to teach right now.';
+    const scrapCost = vendorLevelScrapCost(vendorId, level) ?? 0;
     if (state.gold < cost) return 'Not enough gold.';
+    if (state.scrap < scrapCost) return 'Not enough scrap.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
+    state.scrap -= scrapCost;
     state.vendorLevels[vendorId] = level + 1;
     return null;
   },

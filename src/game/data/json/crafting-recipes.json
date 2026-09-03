@@ -19,7 +19,8 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 44
   },
   {
     "id": "craft_guildmade_band",
@@ -41,7 +42,8 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 39
   },
   {
     "id": "craft_trail_rations",
@@ -58,7 +60,8 @@
     "modValue": 0,
     "resultConsumableId": "trail_rations_item",
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 2
   },
   {
     "id": "craft_trail_meal",
@@ -78,7 +81,8 @@
     "modValue": 10,
     "resultConsumableId": "meal_on_the_go_potion",
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 11
   },
   {
     "id": "craft_herbal_tonic",
@@ -94,7 +98,8 @@
     "modValue": 0,
     "resultConsumableId": "herbal_tonic_item",
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 2
   },
   {
     "id": "enchant_minor_sigil",
@@ -116,7 +121,8 @@
       "wisdom"
     ],
     "statsToPick": 1,
-    "statValue": 3
+    "statValue": 3,
+    "scrapCost": 33
   },
   {
     "id": "enchant_standard_sigil",
@@ -138,7 +144,8 @@
       "wisdom"
     ],
     "statsToPick": 2,
-    "statValue": 3
+    "statValue": 3,
+    "scrapCost": 56
   },
   {
     "id": "enchant_greater_sigil",
@@ -160,7 +167,8 @@
       "wisdom"
     ],
     "statsToPick": 2,
-    "statValue": 6
+    "statValue": 6,
+    "scrapCost": 100
   },
   {
     "id": "craft_foragers_bundle",
@@ -176,7 +184,8 @@
     "modValue": 0,
     "resultConsumableId": "foragers_bundle_potion",
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 3
   },
   {
     "id": "craft_pet_treat",
@@ -193,7 +202,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 3
   },
   {
     "id": "craft_elemental_gem_fire_common",
@@ -203,7 +213,7 @@
     "icon": "crafting/Crafting_28.png",
     "materialCost": {},
     "goldCost": 150,
-    "scrapCost": 6,
+    "scrapCost": 17,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -222,7 +232,7 @@
     "icon": "crafting/Crafting_28.png",
     "materialCost": {},
     "goldCost": 300,
-    "scrapCost": 12,
+    "scrapCost": 33,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -243,7 +253,7 @@
       "ore": 10
     },
     "goldCost": 600,
-    "scrapCost": 24,
+    "scrapCost": 67,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -265,7 +275,7 @@
       "herbs": 10
     },
     "goldCost": 1200,
-    "scrapCost": 48,
+    "scrapCost": 133,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -288,7 +298,7 @@
       "fish": 10
     },
     "goldCost": 2400,
-    "scrapCost": 96,
+    "scrapCost": 267,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -307,7 +317,7 @@
     "icon": "crafting/Crafting_14.png",
     "materialCost": {},
     "goldCost": 150,
-    "scrapCost": 6,
+    "scrapCost": 17,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -326,7 +336,7 @@
     "icon": "crafting/Crafting_14.png",
     "materialCost": {},
     "goldCost": 300,
-    "scrapCost": 12,
+    "scrapCost": 33,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -347,7 +357,7 @@
       "ore": 10
     },
     "goldCost": 600,
-    "scrapCost": 24,
+    "scrapCost": 67,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -369,7 +379,7 @@
       "herbs": 10
     },
     "goldCost": 1200,
-    "scrapCost": 48,
+    "scrapCost": 133,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -392,7 +402,7 @@
       "fish": 10
     },
     "goldCost": 2400,
-    "scrapCost": 96,
+    "scrapCost": 267,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -411,7 +421,7 @@
     "icon": "crafting/Crafting_21.png",
     "materialCost": {},
     "goldCost": 150,
-    "scrapCost": 6,
+    "scrapCost": 17,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -430,7 +440,7 @@
     "icon": "crafting/Crafting_21.png",
     "materialCost": {},
     "goldCost": 300,
-    "scrapCost": 12,
+    "scrapCost": 33,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -451,7 +461,7 @@
       "ore": 10
     },
     "goldCost": 600,
-    "scrapCost": 24,
+    "scrapCost": 67,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -473,7 +483,7 @@
       "herbs": 10
     },
     "goldCost": 1200,
-    "scrapCost": 48,
+    "scrapCost": 133,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -496,7 +506,7 @@
       "fish": 10
     },
     "goldCost": 2400,
-    "scrapCost": 96,
+    "scrapCost": 267,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -515,7 +525,7 @@
     "icon": "crafting/Crafting_35.png",
     "materialCost": {},
     "goldCost": 150,
-    "scrapCost": 6,
+    "scrapCost": 17,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -534,7 +544,7 @@
     "icon": "crafting/Crafting_35.png",
     "materialCost": {},
     "goldCost": 300,
-    "scrapCost": 12,
+    "scrapCost": 33,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -555,7 +565,7 @@
       "ore": 10
     },
     "goldCost": 600,
-    "scrapCost": 24,
+    "scrapCost": 67,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -577,7 +587,7 @@
       "herbs": 10
     },
     "goldCost": 1200,
-    "scrapCost": 48,
+    "scrapCost": 133,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -600,7 +610,7 @@
       "fish": 10
     },
     "goldCost": 2400,
-    "scrapCost": 96,
+    "scrapCost": 267,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -619,7 +629,7 @@
     "icon": "crafting/Crafting_23.png",
     "materialCost": {},
     "goldCost": 150,
-    "scrapCost": 6,
+    "scrapCost": 17,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -638,7 +648,7 @@
     "icon": "crafting/Crafting_23.png",
     "materialCost": {},
     "goldCost": 300,
-    "scrapCost": 12,
+    "scrapCost": 33,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -659,7 +669,7 @@
       "ore": 10
     },
     "goldCost": 600,
-    "scrapCost": 24,
+    "scrapCost": 67,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -681,7 +691,7 @@
       "herbs": 10
     },
     "goldCost": 1200,
-    "scrapCost": 48,
+    "scrapCost": 133,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -704,7 +714,7 @@
       "fish": 10
     },
     "goldCost": 2400,
-    "scrapCost": 96,
+    "scrapCost": 267,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -723,7 +733,7 @@
     "icon": "crafting/Crafting_09.png",
     "materialCost": {},
     "goldCost": 150,
-    "scrapCost": 6,
+    "scrapCost": 17,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -742,7 +752,7 @@
     "icon": "crafting/Crafting_09.png",
     "materialCost": {},
     "goldCost": 300,
-    "scrapCost": 12,
+    "scrapCost": 33,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -763,7 +773,7 @@
       "ore": 10
     },
     "goldCost": 600,
-    "scrapCost": 24,
+    "scrapCost": 67,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -785,7 +795,7 @@
       "herbs": 10
     },
     "goldCost": 1200,
-    "scrapCost": 48,
+    "scrapCost": 133,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -808,7 +818,7 @@
       "fish": 10
     },
     "goldCost": 2400,
-    "scrapCost": 96,
+    "scrapCost": 267,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -827,7 +837,7 @@
     "icon": "crafting/Crafting_16.png",
     "materialCost": {},
     "goldCost": 150,
-    "scrapCost": 6,
+    "scrapCost": 17,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -846,7 +856,7 @@
     "icon": "crafting/Crafting_16.png",
     "materialCost": {},
     "goldCost": 300,
-    "scrapCost": 12,
+    "scrapCost": 33,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -867,7 +877,7 @@
       "ore": 10
     },
     "goldCost": 600,
-    "scrapCost": 24,
+    "scrapCost": 67,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -889,7 +899,7 @@
       "herbs": 10
     },
     "goldCost": 1200,
-    "scrapCost": 48,
+    "scrapCost": 133,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -912,7 +922,7 @@
       "fish": 10
     },
     "goldCost": 2400,
-    "scrapCost": 96,
+    "scrapCost": 267,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -931,7 +941,7 @@
     "icon": "crafting/Crafting_30.png",
     "materialCost": {},
     "goldCost": 150,
-    "scrapCost": 6,
+    "scrapCost": 17,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -950,7 +960,7 @@
     "icon": "crafting/Crafting_30.png",
     "materialCost": {},
     "goldCost": 300,
-    "scrapCost": 12,
+    "scrapCost": 33,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -971,7 +981,7 @@
       "ore": 10
     },
     "goldCost": 600,
-    "scrapCost": 24,
+    "scrapCost": 67,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -993,7 +1003,7 @@
       "herbs": 10
     },
     "goldCost": 1200,
-    "scrapCost": 48,
+    "scrapCost": 133,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -1016,7 +1026,7 @@
       "fish": 10
     },
     "goldCost": 2400,
-    "scrapCost": 96,
+    "scrapCost": 267,
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
@@ -1038,7 +1048,7 @@
       "herbs": 6
     },
     "goldCost": 40,
-    "scrapCost": 0,
+    "scrapCost": 4,
     "modsToPick": 0,
     "modValue": 0,
     "resultConsumableId": "beckoning_charm",
@@ -1065,7 +1075,8 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 47
   },
   {
     "id": "craft_guildmade_plate",
@@ -1087,7 +1098,8 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 50
   },
   {
     "id": "craft_guildmade_boots",
@@ -1109,7 +1121,8 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 42
   },
   {
     "id": "craft_guildmade_cloak",
@@ -1131,7 +1144,8 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 44
   },
   {
     "id": "craft_masterwork_warblade",
@@ -1156,7 +1170,8 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 1556
   },
   {
     "id": "craft_masterwork_greathelm",
@@ -1181,7 +1196,8 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 1500
   },
   {
     "id": "craft_masterwork_plate",
@@ -1206,7 +1222,8 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 1611
   },
   {
     "id": "craft_masterwork_gauntlets",
@@ -1231,7 +1248,8 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 1333
   },
   {
     "id": "craft_masterwork_sabatons",
@@ -1256,7 +1274,8 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 1333
   },
   {
     "id": "craft_masterwork_sigil",
@@ -1281,7 +1300,8 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 1444
   },
   {
     "id": "craft_alchemists_reserve",
@@ -1298,7 +1318,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 7
   },
   {
     "id": "craft_phoenix_ember",
@@ -1316,7 +1337,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 22
   },
   {
     "id": "craft_warband_feast",
@@ -1334,7 +1356,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 36
   },
   {
     "id": "craft_prospectors_cache",
@@ -1351,7 +1374,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 11
   },
   {
     "id": "craft_dragons_hoard_charm",
@@ -1369,7 +1393,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 22
   },
   {
     "id": "craft_lucky_charm_gold",
@@ -1385,7 +1410,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 3
   },
   {
     "id": "craft_lucky_charm_xp",
@@ -1401,7 +1427,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 3
   },
   {
     "id": "craft_fortune_weave_gold",
@@ -1418,7 +1445,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 11
   },
   {
     "id": "craft_fortune_weave_xp",
@@ -1435,7 +1463,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 11
   },
   {
     "id": "craft_windfall_sigil_gold",
@@ -1453,7 +1482,8 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 16
   },
   {
     "id": "craft_windfall_sigil_xp",
@@ -1471,6 +1501,7 @@
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0
+    "statValue": 0,
+    "scrapCost": 16
   }
 ]

@@ -189,16 +189,36 @@ function PetsTab() {
       {state.pets.length === 0 && (
         <div className="card"><p className="card-flavour">No pets hatched yet -- check the Nests tab.</p></div>
       )}
-      <div className="grid two pet-grid">
-        {state.pets.map((pet) => (
+      {/* Patch 0298 -- split into "Active" (paired with a hero) and "Unpaired"
+          groups rather than one flat grid, so a large collection doesn't
+          bury which companions are actually doing anything right now.
+          Falls back to the plain flat grid (no dividers) when every pet is
+          in the same bucket, so an all-active or all-unpaired roster
+          doesn't show an empty, pointless second heading. */}
+      {(() => {
+        const activePets = state.pets.filter((p) => state.heroes.some((h) => h.equippedPetId === p.uid));
+        const unpairedPets = state.pets.filter((p) => !state.heroes.some((h) => h.equippedPetId === p.uid));
+        const showDivider = activePets.length > 0 && unpairedPets.length > 0;
+        const petCard = (pet: Pet) => (
           <PetCard
             key={pet.uid}
             pet={pet}
             reviveFlash={reviveFlashes[pet.uid]}
             dismissReviveFlash={() => dismissReviveFlash(pet.uid)}
           />
-        ))}
-      </div>
+        );
+        if (!showDivider) {
+          return <div className="grid two pet-grid">{state.pets.map(petCard)}</div>;
+        }
+        return (
+          <>
+            <div className="section-heading">Active ({activePets.length})</div>
+            <div className="grid two pet-grid" style={{ marginBottom: 16 }}>{activePets.map(petCard)}</div>
+            <div className="section-heading">Unpaired ({unpairedPets.length})</div>
+            <div className="grid two pet-grid">{unpairedPets.map(petCard)}</div>
+          </>
+        );
+      })()}
     </>
   );
 }
@@ -224,6 +244,9 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
   // Hero.equippedPetId) rather than sitting in a guild-wide list --
   // find whichever hero (if any) currently has this exact pet.
   const boundHero = state.heroes.find((h) => h.equippedPetId === pet.uid);
+  // Patch 0298 -- slot-cap awareness for the pairing dropdown below.
+  const totalEquipped = state.heroes.filter((h) => h.equippedPetId).length;
+  const petSlots = ModifierManager.petSlots(state);
   const fallen = PetManager.isFallen(pet);
   const maxHealth = PetManager.maxHealth(state, pet);
   const currentHealth = PetManager.currentHealth(state, pet);
@@ -363,11 +386,25 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
             style={{ flex: 1, minWidth: 0, background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--parchment)', padding: '4px 6px' }}
           >
             <option value="">Unassigned</option>
-            {state.heroes.map((h) => (
-              <option key={h.id} value={h.id} disabled={!!h.equippedPetId && h.equippedPetId !== pet.uid}>
-                {h.name}{h.equippedPetId && h.equippedPetId !== pet.uid ? ' (has a companion)' : ''}
-              </option>
-            ))}
+            {state.heroes.map((h) => {
+              const takenByOtherPet = !!h.equippedPetId && h.equippedPetId !== pet.uid;
+              // Patch 0298 -- mirrors PetManager.equip's own cap check: this
+              // pet is currently unpaired (no `boundHero`) AND every
+              // companion slot is already spoken for, so picking ANY new
+              // hero here would fail server-side anyway. Moving an
+              // ALREADY-paired pet to a different hero never trips this --
+              // its own hero frees a slot in the same action, so the total
+              // never actually goes up (see PetManager.equip's
+              // `petAlreadyEquippedElsewhere` short-circuit).
+              const noFreeSlot = !boundHero && !takenByOtherPet && totalEquipped >= petSlots;
+              return (
+                <option key={h.id} value={h.id} disabled={takenByOtherPet || noFreeSlot}>
+                  {h.name}
+                  {takenByOtherPet ? ' (has a companion)' : ''}
+                  {noFreeSlot ? ' (no free slot)' : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
       )}

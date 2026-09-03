@@ -5,6 +5,7 @@ import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
 import { matchBonusForTier } from '../data/elements';
 import { isProceduralTemplate, rollProceduralItem, scaleDedicatedItem, LootSourceTag } from '../data/proceduralLoot';
+import { scrapCostFromGold, repairScrapCost as repairScrapCostFromGold } from '../data/progression';
 
 export const MAX_PLUS = 10;
 
@@ -151,6 +152,22 @@ export const EquipmentManager = {
   },
 
   /**
+   * Scrap component of a repair, patch 0298 (Scrap economy rework). Derived
+   * from the same gold cost above but through the gentler
+   * `economy.repairScrapToGoldRatio` (not the shared `economy.
+   * scrapToGoldRatio` every other vendor spend uses) -- repairs happen far
+   * more often than a one-off vendor purchase, so leaning on the shared
+   * ratio would have made scrap disappear fast. Returns 0 (not 1) when the
+   * item needs no repair at all, same "nothing to pay" shape repairCost's
+   * own `missing <= 0` branch already has.
+   */
+  repairScrapCost(item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): number {
+    const goldCost = EquipmentManager.repairCost(item, workshopLevel, vendorDiscountPercent);
+    if (goldCost === 0) return 0;
+    return repairScrapCostFromGold(goldCost);
+  },
+
+  /**
    * Patch 0282: previously priced every refine off the flat, unscaled
    * `def.value` too -- same shape of bug `sellValue` had before patch
    * 0281, just biting in the opposite direction. A level-50 procedural
@@ -169,6 +186,11 @@ export const EquipmentManager = {
     const base = reference * 0.6 * Math.pow(1.65, item.plus);
     const discount = 1 - Math.min(0.4, workshopLevel * 0.04);
     return Math.ceil(base * discount);
+  },
+
+  /** Scrap component of a +N refinement, patch 0298 (Scrap economy rework) -- the shared `economy.scrapToGoldRatio` off this same gold cost. */
+  upgradeScrapCost(item: EquipmentItem, workshopLevel: number): number {
+    return scrapCostFromGold(EquipmentManager.upgradeCost(item, workshopLevel));
   },
 
   /**
@@ -354,9 +376,12 @@ export const EquipmentManager = {
   repair(state: GameState, item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): string | null {
     const cost = EquipmentManager.repairCost(item, workshopLevel, vendorDiscountPercent);
     if (cost === 0) return 'Already in perfect condition.';
+    const scrapCost = EquipmentManager.repairScrapCost(item, workshopLevel, vendorDiscountPercent);
     if (state.gold < cost) return 'Not enough gold for the repair.';
+    if (state.scrap < scrapCost) return 'Not enough scrap for the repair.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
+    state.scrap -= scrapCost;
     item.durability = EquipmentManager.maxDurability(item);
     return null;
   },
@@ -364,9 +389,12 @@ export const EquipmentManager = {
   upgrade(state: GameState, item: EquipmentItem, workshopLevel: number): string | null {
     if (item.plus >= MAX_PLUS) return 'Already at maximum refinement.';
     const cost = EquipmentManager.upgradeCost(item, workshopLevel);
+    const scrapCost = EquipmentManager.upgradeScrapCost(item, workshopLevel);
     if (state.gold < cost) return 'Not enough gold for the upgrade.';
+    if (state.scrap < scrapCost) return 'Not enough scrap for the upgrade.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
+    state.scrap -= scrapCost;
     item.plus += 1;
     item.durability = EquipmentManager.maxDurability(item);
     return null;
@@ -397,7 +425,12 @@ export const EquipmentManager = {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def || levelsToRaise <= 0) return { gold: 0, scrap: 0 };
     const gold = Math.ceil(def.value * 0.5 * levelsToRaise);
-    const scrap = 2 * levelsToRaise;
+    // Patch 0298 (Scrap economy rework): was a flat `2 * levelsToRaise`,
+    // trivial next to what testers were sitting on (1000+ scrap). Retuned
+    // to the shared `economy.scrapToGoldRatio` off this same gold cost, so
+    // re-leveling a high-rarity item actually draws down the scrap pile
+    // the way every other vendor spend now does.
+    const scrap = scrapCostFromGold(gold);
     return { gold, scrap };
   },
 

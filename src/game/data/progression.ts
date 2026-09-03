@@ -343,11 +343,35 @@ export function earlyTierDiscount(level: number): number {
   return level < EARLY_TIER_DISCOUNT.length ? EARLY_TIER_DISCOUNT[level] : 1;
 }
 
+/**
+ * Patch 0298 -- Scrap economy rework. Derives a scrap cost from a system's
+ * existing gold cost using the shared `economy.scrapToGoldRatio` conversion
+ * rate, so every vendor-facing spend (vendor levels, vendor-tied upgrades,
+ * crafting, enhancing, re-leveling) prices scrap consistently off the same
+ * knob. Floored at 1 so nothing is ever free. Repair uses its own gentler
+ * `repairScrapCost` below rather than this one, since repairs happen far
+ * more often than a one-off vendor purchase.
+ */
+export function scrapCostFromGold(goldCost: number): number {
+  return Math.max(1, Math.round(goldCost / Tuning.get('economy.scrapToGoldRatio')));
+}
+
+/** Same shape as `scrapCostFromGold`, but for Repair's own softer ratio. */
+export function repairScrapCost(goldCost: number): number {
+  return Math.max(1, Math.round(goldCost / Tuning.get('economy.repairScrapToGoldRatio')));
+}
+
 /** Cost to raise a vendor from currentLevel to currentLevel+1, or null if they're already at their cap. */
 export function vendorLevelCost(vendorId: VendorId, currentLevel: number): number | null {
   const cap = vendorUpgrades(vendorId).length;
   if (currentLevel >= cap) return null;
   return Math.floor(VENDOR_LEVEL_BASE_COST * Math.pow(VENDOR_LEVEL_COST_GROWTH, currentLevel) * earlyTierDiscount(currentLevel));
+}
+
+/** Scrap component of a vendor level-up's cost -- always required alongside `vendorLevelCost`'s gold. */
+export function vendorLevelScrapCost(vendorId: VendorId, currentLevel: number): number | null {
+  const goldCost = vendorLevelCost(vendorId, currentLevel);
+  return goldCost === null ? null : scrapCostFromGold(goldCost);
 }
 
 /** Whether a specific upgrade is currently visible/purchasable given the vendor's level. */
@@ -362,6 +386,16 @@ export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(UPGR
 
 export function upgradeCost(def: UpgradeDef, currentLevel: number): number {
   return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel) * earlyTierDiscount(currentLevel));
+}
+
+/**
+ * Scrap component of an upgrade's cost. Only vendor-tied upgrades (Smith's
+ * Discount, Bulk Scrapper, Arcane Discount, etc.) require scrap -- general
+ * Guild Hall upgrades stay gold-only, so this returns null for those.
+ */
+export function upgradeScrapCost(def: UpgradeDef, currentLevel: number): number | null {
+  if (!def.vendor) return null;
+  return scrapCostFromGold(upgradeCost(def, currentLevel));
 }
 
 /* ------------------------------- guild hall ------------------------------- */

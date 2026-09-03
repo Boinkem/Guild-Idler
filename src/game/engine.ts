@@ -829,9 +829,10 @@ export class GameEngine {
         const max = EquipmentManager.maxDurability(item);
         if (max <= 0 || item.durability / max > threshold) continue;
         const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
-        if (cost > 0 && this.state.gold >= cost) {
-          EquipmentManager.repair(this.state, item, workshop, repairDiscount);
-          changed = true;
+        const scrapCost = EquipmentManager.repairScrapCost(item, workshop, repairDiscount);
+        if (cost > 0 && this.state.gold >= cost && this.state.scrap >= scrapCost) {
+          const err = EquipmentManager.repair(this.state, item, workshop, repairDiscount);
+          if (!err) changed = true;
         }
       }
     }
@@ -1914,6 +1915,7 @@ export class GameEngine {
     const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
     const now = Date.now();
     let spent = 0;
+    let scrapSpent = 0;
     let freeCount = 0;
     for (const { item, heroId } of EquipmentManager.allItems(this.state)) {
       const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
@@ -1922,9 +1924,15 @@ export class GameEngine {
       if (free) {
         item.durability = EquipmentManager.maxDurability(item);
         freeCount += 1;
-      } else if (this.state.gold >= cost) {
-        EquipmentManager.repair(this.state, item, workshop, repairDiscount);
-        spent += cost;
+      } else {
+        const scrapCost = EquipmentManager.repairScrapCost(item, workshop, repairDiscount);
+        if (this.state.gold >= cost && this.state.scrap >= scrapCost) {
+          const err = EquipmentManager.repair(this.state, item, workshop, repairDiscount);
+          if (!err) {
+            spent += cost;
+            scrapSpent += scrapCost;
+          }
+        }
       }
     }
     if (spent > 0 || freeCount > 0) playSound('repair');
@@ -1933,9 +1941,9 @@ export class GameEngine {
     } else if (freeCount > 0 && spent === 0) {
       this.say(freeCount === 1 ? 'Repaired one item, on the house.' : `Repaired ${freeCount} items, on the house.`);
     } else if (freeCount > 0) {
-      this.say(`Repaired everything for ${spent} gold (${freeCount} free).`);
+      this.say(`Repaired everything for ${spent} gold + ${scrapSpent} scrap (${freeCount} free).`);
     } else {
-      this.say(`Repaired everything for ${spent} gold.`);
+      this.say(`Repaired everything for ${spent} gold + ${scrapSpent} scrap.`);
     }
     void this.saveNow();
   }

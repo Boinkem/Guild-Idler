@@ -50,6 +50,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   const item = found?.item;
   const def = item ? EquipmentManager.def(item) : undefined;
   const cost = item ? EquipmentManager.upgradeCost(item, workshop) : 0;
+  const scrapCost = item ? EquipmentManager.upgradeScrapCost(item, workshop) : 0;
   const maxDurability = item ? EquipmentManager.maxDurability(item) : 0;
   const maxed = item ? item.plus >= MAX_PLUS : false;
   // Same formula EquipmentManager.maxDurability itself uses, evaluated one
@@ -118,9 +119,13 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
             every other paid action in the game -- it used to only appear
             at the tail end of the muted preview sentence above, easy to
             miss since nothing else in that sentence was a cost. */}
-        <button className="btn-purple" disabled={!item || maxed || state.gold < cost} onClick={handleEnhance}>
+        <button
+          className="btn-purple"
+          disabled={!item || maxed || state.gold < cost || state.scrap < scrapCost}
+          onClick={handleEnhance}
+        >
           {!item ? 'Enhance' : maxed ? 'Max refinement' : (
-            <>Enhance {'\u00b7'} <span className="gold-text">{'\u25c6'} {formatGold(cost)}</span></>
+            <>Enhance {'\u00b7'} <span className="gold-text">{'\u25c6'} {formatGold(cost)}</span> + {scrapCost} Scrap</>
           )}
         </button>
       </div>
