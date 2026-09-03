@@ -1,19 +1,19 @@
 [
   {
     "id": "normal",
-    "path": {
+    "icon": {
       "path": "raid-difficulty-icons/normal.png"
     }
   },
   {
     "id": "heroic",
-    "path": {
+    "icon": {
       "path": "raid-difficulty-icons/heroic.png"
     }
   },
   {
     "id": "legendary",
-    "path": {
+    "icon": {
       "path": "raid-difficulty-icons/legendary.png"
     }
   }

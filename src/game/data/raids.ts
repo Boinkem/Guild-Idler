@@ -106,53 +106,47 @@ export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
 };
 
 /**
- * Badge icons for the N/H/L difficulty circles -- patch 0302: was a flat
- * `Record<RaidDifficulty, string>` path constant, editable only by
- * replacing the PNG files on disk by hand ("never devtool-edited," this
- * comment used to say). Now the same DevTool-editable `{path, focusX,
- * focusY, scale}` shape chain/raid banners already use
- * (raid-difficulty-icons.json, 3 entries), for the same reason those
- * exist: the actual bug report was that these are square source PNGs
- * rendered `object-fit: contain` inside a circular button
- * (DifficultyCircle, RaidsPanel.tsx), so a square canvas's own
- * background shows inside the round chrome instead of being cropped to
- * fill it. Fixing the crop (contain -> cover, see DifficultyCircle) is
- * only half the fix -- a plain center-crop won't always land right on
- * every source image, so this also gives it the same focus-point + zoom
- * adjuster every other DevTool-editable icon already has, rather than a
- * second one-off cropping mechanism.
+ * Badge icons for the N/H/L difficulty circles -- patch 0302 built this,
+ * patch 0304 fixes a real bug in it: the DevTool-editable image lived
+ * under a schema field literally named `path`, but every `bannerImage`
+ * field's *value* is itself an object shaped `{path, focusX, focusY,
+ * scale}` (see server.mjs's `readField` and RaidDef.banner/icon's own
+ * comment for the established convention) -- so a field named `path`
+ * ends up holding `{ path: { path: "...", focusX: ... } }`, not the flat
+ * `{ path, focusX, ... }` this file's own `RaidDifficultyIconDef` (and
+ * every read site below) assumed. Confirmed directly against the actual
+ * saved data after a real DevTool edit: `{"id":"normal","path":{"path":
+ * "raid-difficulty-icons/normal.png"}}` -- exactly the double-nesting
+ * this predicts, which is why the image "didn't surface" even though
+ * DevTool reported the save as successful and the file itself uploaded
+ * correctly. Renamed the field to `icon` (matching RaidDef.icon's own
+ * naming) and nested `RaidDifficultyIconDef` to match -- same shape
+ * every other bannerImage-backed type already correctly uses, this one
+ * just didn't follow it. The three already-live JSON entries are
+ * migrated in this same patch (see raid-difficulty-icons.json), not
+ * left for a re-upload.
  *
- * `path` unset (every entry ships that way) falls back to the exact
- * same convention path these always used --
+ * `icon.path` unset falls back to the original convention path --
  * `./lore/raid-difficulty-icons/<difficulty>.png` -- so nothing changes
- * visually from this patch alone beyond the contain->cover crop fix;
- * DevTool-assigning a real override only matters once someone actually
- * wants different art, same "nothing changes until deliberately
- * assigned" rollout every other bannerImage field follows. The three
- * files themselves moved from the old public/raid-icons/ (outside the
- * DevTool's public/lore/ picker root, hence "never devtool-edited") to
- * public/lore/raid-difficulty-icons/ -- identical art, just relocated to
- * where the picker can actually reach it; the old folder is left in
- * place, unreferenced, rather than deleted as part of a code patch.
+ * visually beyond patch 0302's contain->cover crop fix until someone
+ * deliberately assigns different art, same "nothing changes until
+ * deliberately assigned" rollout every other bannerImage field follows.
  */
 export interface RaidDifficultyIconDef {
   id: RaidDifficulty;
-  path?: string;
-  focusX?: number;
-  focusY?: number;
-  scale?: number;
+  icon?: { path?: string; focusX?: number; focusY?: number; scale?: number };
 }
 export const RAID_DIFFICULTY_ICON_DEFS: Record<RaidDifficulty, RaidDifficultyIconDef> = Object.fromEntries(
   (raidDifficultyIconsJson as RaidDifficultyIconDef[]).map((d) => [d.id, d]),
 ) as Record<RaidDifficulty, RaidDifficultyIconDef>;
 
 /** Resolves a difficulty's icon def to an actual src path -- an assigned
- *  `path` override (relative to public/lore/) wins, otherwise falls back
- *  to the original convention path. Mirrors raidBannerSrc's exact shape
- *  just below RaidBanner in RaidsPanel.tsx. */
+ *  `icon.path` override (relative to public/lore/) wins, otherwise falls
+ *  back to the original convention path. Mirrors raidBannerSrc's exact
+ *  shape just below RaidBanner in RaidsPanel.tsx. */
 export function raidDifficultyIconSrc(difficulty: RaidDifficulty): string {
   const def = RAID_DIFFICULTY_ICON_DEFS[difficulty];
-  return def?.path ? `./lore/${def.path}` : `./lore/raid-difficulty-icons/${difficulty}.png`;
+  return def?.icon?.path ? `./lore/${def.icon.path}` : `./lore/raid-difficulty-icons/${difficulty}.png`;
 }
 
 /** Parses a "defId@chance" loot entry into its two parts. Malformed entries

@@ -24344,3 +24344,61 @@ confirming: the raid-card badge row reads cleanly at the compact card
 width; the auto-pilot band run actually survives an offline gap
 end-to-end; and the widened Raid Party View window looks right against a
 genuinely large sprite-scale + Legendary-size party.
+
+### Bug Fix: raid difficulty icons still not surfacing after a real DevTool edit -- the new field's own name collided with bannerImage's value shape (patch 0304)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: an icon assigned to a raid difficulty badge through DevTool wasn't showing up in-game, even though the upload itself succeeded
+```
+
+Direct report, one patch after 0302 shipped the DevTool adjuster for
+these: art was assigned through DevTool, the upload worked, git was
+pushed, and the icon still didn't show in the actual raid difficulty
+circles.
+
+**Root cause, confirmed against the actual live data rather than
+guessed.** Pulled the pushed `raid-difficulty-icons.json` directly:
+
+```json
+{ "id": "normal", "path": { "path": "raid-difficulty-icons/normal.png" } }
+```
+
+Double-nested. Patch 0302's schema named the field `path`, but every
+`bannerImage` field's *value* is itself an object shaped `{path,
+focusX, focusY, scale}` (`readField` in app.js) -- so a field literally
+named `path` necessarily saves as `{ path: { path: "...", ... } }`, not
+the flat `{path, focusX, ...}` `RaidDifficultyIconDef` (raids.ts) and
+every read site assumed. Every other bannerImage field in the game
+avoids this by naming the field something else entirely (`banner`,
+`icon`) -- this was the one place that field name collided with its own
+value's shape, and nothing typechecks across the DevTool/game boundary
+to catch it (the server is a plain `.mjs` file, not covered by `tsc`).
+
+**Fixed on both sides of that boundary, not just one.** Renamed the
+field from `path` to `icon` (server.mjs schema, matching RaidDef.icon's
+own naming for the identical shape one schema up), and nested
+`RaidDifficultyIconDef.icon` to match in raids.ts -- `raidDifficultyIconSrc`
+and `DifficultyCircle` (RaidsPanel.tsx) now read `def.icon?.path`/
+`icon?.focusX`/`icon?.focusY`/`icon?.scale` instead of the flat (wrong)
+`def.path`/`def.focusX`/etc. Rebased against patch 0303's own changes to
+this same file (the `cleared`/checkmark restructure of `DifficultyCircle`
+-- its own `raid-diff-circle-wrap` split) rather than against the
+older tree this bug was originally found in, since 0303 landed first.
+
+**The already-live, already-pushed data is migrated in this same
+patch, not left for a re-upload.** `raid-difficulty-icons.json`'s three
+entries rewritten from the buggy `path.path` nesting to the correct
+`icon.path` shape, preserving the exact filenames already assigned
+(`raid-difficulty-icons/normal.png` etc -- the actual upload and file
+placement were never wrong, only the JSON shape wrapping the reference
+to it) -- nothing needs re-assigning in DevTool once this lands.
+
+**Verification.** Simulated `raidDifficultyIconSrc`'s resolution logic
+directly against the migrated JSON (all three difficulties correctly
+resolve to `./lore/raid-difficulty-icons/<difficulty>.png`) before
+touching the TypeScript. `npx tsc --noEmit`, a full `vite build`, and
+`node --check tools/devtool/server.mjs` all pass clean against the
+current tree (pulled fresh, confirmed patch 0303 was already live and
+this fix is rebased on top of it, not the older tree it was found in).

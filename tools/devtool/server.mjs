@@ -1208,9 +1208,17 @@ const SCHEMAS = {
     // how DifficultyCircle actually clips it in-game -- without it the
     // rectangular preview every other bannerImage field uses would
     // itself be misleading for a field that's cropped to a circle.
+    // Patch 0304: the field itself was named `path`, which collided with
+    // every bannerImage field's own value shape -- `{path, focusX,
+    // focusY, scale}` (see readField in app.js) -- so a field literally
+    // named `path` saved as `{ path: { path: "...", focusX: ... } }`,
+    // not the flat shape RaidDifficultyIconDef (raids.ts) expected.
+    // Renamed to `icon`, matching RaidDef.icon's own naming for the
+    // exact same bannerImage shape one schema up. See raids.ts's own
+    // comment on RaidDifficultyIconDef for the full incident writeup.
     fields: {
       id: { type: 'string', required: true, slug: true },
-      path: { type: 'bannerImage', required: false, defaultFolder: 'raid-difficulty-icons', previewAspect: '1/1', previewShape: 'circle', previewSize: '~256x256px' },
+      icon: { type: 'bannerImage', required: false, defaultFolder: 'raid-difficulty-icons', previewAspect: '1/1', previewShape: 'circle', previewSize: '~256x256px' },
     },
   },
   'crafting-recipes': {

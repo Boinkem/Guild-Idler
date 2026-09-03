@@ -1,0 +1,212 @@
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a6/guild-idler-status.md b6/guild-idler-status.md
+--- a/guild-idler-status.md	2026-09-03 10:55:37.000000000 +0000
++++ b/guild-idler-status.md	2026-09-03 10:58:23.926925430 +0000
+@@ -24344,3 +24344,61 @@
+ width; the auto-pilot band run actually survives an offline gap
+ end-to-end; and the widened Raid Party View window looks right against a
+ genuinely large sprite-scale + Legendary-size party.
++
++### Bug Fix: raid difficulty icons still not surfacing after a real DevTool edit -- the new field's own name collided with bannerImage's value shape (patch 0304)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed: an icon assigned to a raid difficulty badge through DevTool wasn't showing up in-game, even though the upload itself succeeded
++```
++
++Direct report, one patch after 0302 shipped the DevTool adjuster for
++these: art was assigned through DevTool, the upload worked, git was
++pushed, and the icon still didn't show in the actual raid difficulty
++circles.
++
++**Root cause, confirmed against the actual live data rather than
++guessed.** Pulled the pushed `raid-difficulty-icons.json` directly:
++
++```json
++{ "id": "normal", "path": { "path": "raid-difficulty-icons/normal.png" } }
++```
++
++Double-nested. Patch 0302's schema named the field `path`, but every
++`bannerImage` field's *value* is itself an object shaped `{path,
++focusX, focusY, scale}` (`readField` in app.js) -- so a field literally
++named `path` necessarily saves as `{ path: { path: "...", ... } }`, not
++the flat `{path, focusX, ...}` `RaidDifficultyIconDef` (raids.ts) and
++every read site assumed. Every other bannerImage field in the game
++avoids this by naming the field something else entirely (`banner`,
++`icon`) -- this was the one place that field name collided with its own
++value's shape, and nothing typechecks across the DevTool/game boundary
++to catch it (the server is a plain `.mjs` file, not covered by `tsc`).
++
++**Fixed on both sides of that boundary, not just one.** Renamed the
++field from `path` to `icon` (server.mjs schema, matching RaidDef.icon's
++own naming for the identical shape one schema up), and nested
++`RaidDifficultyIconDef.icon` to match in raids.ts -- `raidDifficultyIconSrc`
++and `DifficultyCircle` (RaidsPanel.tsx) now read `def.icon?.path`/
++`icon?.focusX`/`icon?.focusY`/`icon?.scale` instead of the flat (wrong)
++`def.path`/`def.focusX`/etc. Rebased against patch 0303's own changes to
++this same file (the `cleared`/checkmark restructure of `DifficultyCircle`
++-- its own `raid-diff-circle-wrap` split) rather than against the
++older tree this bug was originally found in, since 0303 landed first.
++
++**The already-live, already-pushed data is migrated in this same
++patch, not left for a re-upload.** `raid-difficulty-icons.json`'s three
++entries rewritten from the buggy `path.path` nesting to the correct
++`icon.path` shape, preserving the exact filenames already assigned
++(`raid-difficulty-icons/normal.png` etc -- the actual upload and file
++placement were never wrong, only the JSON shape wrapping the reference
++to it) -- nothing needs re-assigning in DevTool once this lands.
++
++**Verification.** Simulated `raidDifficultyIconSrc`'s resolution logic
++directly against the migrated JSON (all three difficulties correctly
++resolve to `./lore/raid-difficulty-icons/<difficulty>.png`) before
++touching the TypeScript. `npx tsc --noEmit`, a full `vite build`, and
++`node --check tools/devtool/server.mjs` all pass clean against the
++current tree (pulled fresh, confirmed patch 0303 was already live and
++this fix is rebased on top of it, not the older tree it was found in).
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a6/src/game/data/json/raid-difficulty-icons.json b6/src/game/data/json/raid-difficulty-icons.json
+--- a/src/game/data/json/raid-difficulty-icons.json	2026-09-03 10:55:37.000000000 +0000
++++ b/src/game/data/json/raid-difficulty-icons.json	2026-09-03 10:58:24.235229361 +0000
+@@ -1,19 +1,19 @@
+ [
+   {
+     "id": "normal",
+-    "path": {
++    "icon": {
+       "path": "raid-difficulty-icons/normal.png"
+     }
+   },
+   {
+     "id": "heroic",
+-    "path": {
++    "icon": {
+       "path": "raid-difficulty-icons/heroic.png"
+     }
+   },
+   {
+     "id": "legendary",
+-    "path": {
++    "icon": {
+       "path": "raid-difficulty-icons/legendary.png"
+     }
+   }
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a6/src/game/data/raids.ts b6/src/game/data/raids.ts
+--- a/src/game/data/raids.ts	2026-09-03 10:55:37.000000000 +0000
++++ b/src/game/data/raids.ts	2026-09-03 10:58:24.237941328 +0000
+@@ -106,53 +106,47 @@
+ };
+ 
+ /**
+- * Badge icons for the N/H/L difficulty circles -- patch 0302: was a flat
+- * `Record<RaidDifficulty, string>` path constant, editable only by
+- * replacing the PNG files on disk by hand ("never devtool-edited," this
+- * comment used to say). Now the same DevTool-editable `{path, focusX,
+- * focusY, scale}` shape chain/raid banners already use
+- * (raid-difficulty-icons.json, 3 entries), for the same reason those
+- * exist: the actual bug report was that these are square source PNGs
+- * rendered `object-fit: contain` inside a circular button
+- * (DifficultyCircle, RaidsPanel.tsx), so a square canvas's own
+- * background shows inside the round chrome instead of being cropped to
+- * fill it. Fixing the crop (contain -> cover, see DifficultyCircle) is
+- * only half the fix -- a plain center-crop won't always land right on
+- * every source image, so this also gives it the same focus-point + zoom
+- * adjuster every other DevTool-editable icon already has, rather than a
+- * second one-off cropping mechanism.
++ * Badge icons for the N/H/L difficulty circles -- patch 0302 built this,
++ * patch 0304 fixes a real bug in it: the DevTool-editable image lived
++ * under a schema field literally named `path`, but every `bannerImage`
++ * field's *value* is itself an object shaped `{path, focusX, focusY,
++ * scale}` (see server.mjs's `readField` and RaidDef.banner/icon's own
++ * comment for the established convention) -- so a field named `path`
++ * ends up holding `{ path: { path: "...", focusX: ... } }`, not the flat
++ * `{ path, focusX, ... }` this file's own `RaidDifficultyIconDef` (and
++ * every read site below) assumed. Confirmed directly against the actual
++ * saved data after a real DevTool edit: `{"id":"normal","path":{"path":
++ * "raid-difficulty-icons/normal.png"}}` -- exactly the double-nesting
++ * this predicts, which is why the image "didn't surface" even though
++ * DevTool reported the save as successful and the file itself uploaded
++ * correctly. Renamed the field to `icon` (matching RaidDef.icon's own
++ * naming) and nested `RaidDifficultyIconDef` to match -- same shape
++ * every other bannerImage-backed type already correctly uses, this one
++ * just didn't follow it. The three already-live JSON entries are
++ * migrated in this same patch (see raid-difficulty-icons.json), not
++ * left for a re-upload.
+  *
+- * `path` unset (every entry ships that way) falls back to the exact
+- * same convention path these always used --
++ * `icon.path` unset falls back to the original convention path --
+  * `./lore/raid-difficulty-icons/<difficulty>.png` -- so nothing changes
+- * visually from this patch alone beyond the contain->cover crop fix;
+- * DevTool-assigning a real override only matters once someone actually
+- * wants different art, same "nothing changes until deliberately
+- * assigned" rollout every other bannerImage field follows. The three
+- * files themselves moved from the old public/raid-icons/ (outside the
+- * DevTool's public/lore/ picker root, hence "never devtool-edited") to
+- * public/lore/raid-difficulty-icons/ -- identical art, just relocated to
+- * where the picker can actually reach it; the old folder is left in
+- * place, unreferenced, rather than deleted as part of a code patch.
++ * visually beyond patch 0302's contain->cover crop fix until someone
++ * deliberately assigns different art, same "nothing changes until
++ * deliberately assigned" rollout every other bannerImage field follows.
+  */
+ export interface RaidDifficultyIconDef {
+   id: RaidDifficulty;
+-  path?: string;
+-  focusX?: number;
+-  focusY?: number;
+-  scale?: number;
++  icon?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+ }
+ export const RAID_DIFFICULTY_ICON_DEFS: Record<RaidDifficulty, RaidDifficultyIconDef> = Object.fromEntries(
+   (raidDifficultyIconsJson as RaidDifficultyIconDef[]).map((d) => [d.id, d]),
+ ) as Record<RaidDifficulty, RaidDifficultyIconDef>;
+ 
+ /** Resolves a difficulty's icon def to an actual src path -- an assigned
+- *  `path` override (relative to public/lore/) wins, otherwise falls back
+- *  to the original convention path. Mirrors raidBannerSrc's exact shape
+- *  just below RaidBanner in RaidsPanel.tsx. */
++ *  `icon.path` override (relative to public/lore/) wins, otherwise falls
++ *  back to the original convention path. Mirrors raidBannerSrc's exact
++ *  shape just below RaidBanner in RaidsPanel.tsx. */
+ export function raidDifficultyIconSrc(difficulty: RaidDifficulty): string {
+   const def = RAID_DIFFICULTY_ICON_DEFS[difficulty];
+-  return def?.path ? `./lore/${def.path}` : `./lore/raid-difficulty-icons/${difficulty}.png`;
++  return def?.icon?.path ? `./lore/${def.icon.path}` : `./lore/raid-difficulty-icons/${difficulty}.png`;
+ }
+ 
+ /** Parses a "defId@chance" loot entry into its two parts. Malformed entries
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a6/src/ui/panels/RaidsPanel.tsx b6/src/ui/panels/RaidsPanel.tsx
+--- a/src/ui/panels/RaidsPanel.tsx	2026-09-03 10:55:37.000000000 +0000
++++ b/src/ui/panels/RaidsPanel.tsx	2026-09-03 10:58:24.246276290 +0000
+@@ -382,8 +382,8 @@
+             style={{
+               width: '100%', height: '100%', borderRadius: '50%',
+               backgroundImage: `url(${raidDifficultyIconSrc(difficulty)})`,
+-              backgroundPosition: `${iconDef?.focusX ?? 50}% ${iconDef?.focusY ?? 50}%`,
+-              backgroundSize: iconDef?.scale && iconDef.scale !== 100 ? `${iconDef.scale}%` : 'cover',
++              backgroundPosition: `${iconDef?.icon?.focusX ?? 50}% ${iconDef?.icon?.focusY ?? 50}%`,
++              backgroundSize: iconDef?.icon?.scale && iconDef.icon.scale !== 100 ? `${iconDef.icon.scale}%` : 'cover',
+             }}
+           >
+             {/* A background-image never fires onError, unlike <img> --
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a6/tools/devtool/server.mjs b6/tools/devtool/server.mjs
+--- a/tools/devtool/server.mjs	2026-09-03 10:55:37.000000000 +0000
++++ b/tools/devtool/server.mjs	2026-09-03 10:58:24.248645717 +0000
+@@ -1208,9 +1208,17 @@
+     // how DifficultyCircle actually clips it in-game -- without it the
+     // rectangular preview every other bannerImage field uses would
+     // itself be misleading for a field that's cropped to a circle.
++    // Patch 0304: the field itself was named `path`, which collided with
++    // every bannerImage field's own value shape -- `{path, focusX,
++    // focusY, scale}` (see readField in app.js) -- so a field literally
++    // named `path` saved as `{ path: { path: "...", focusX: ... } }`,
++    // not the flat shape RaidDifficultyIconDef (raids.ts) expected.
++    // Renamed to `icon`, matching RaidDef.icon's own naming for the
++    // exact same bannerImage shape one schema up. See raids.ts's own
++    // comment on RaidDifficultyIconDef for the full incident writeup.
+     fields: {
+       id: { type: 'string', required: true, slug: true },
+-      path: { type: 'bannerImage', required: false, defaultFolder: 'raid-difficulty-icons', previewAspect: '1/1', previewShape: 'circle', previewSize: '~256x256px' },
++      icon: { type: 'bannerImage', required: false, defaultFolder: 'raid-difficulty-icons', previewAspect: '1/1', previewShape: 'circle', previewSize: '~256x256px' },
+     },
+   },
+   'crafting-recipes': {

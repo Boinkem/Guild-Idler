@@ -382,8 +382,8 @@ function DifficultyCircle({
             style={{
               width: '100%', height: '100%', borderRadius: '50%',
               backgroundImage: `url(${raidDifficultyIconSrc(difficulty)})`,
-              backgroundPosition: `${iconDef?.focusX ?? 50}% ${iconDef?.focusY ?? 50}%`,
-              backgroundSize: iconDef?.scale && iconDef.scale !== 100 ? `${iconDef.scale}%` : 'cover',
+              backgroundPosition: `${iconDef?.icon?.focusX ?? 50}% ${iconDef?.icon?.focusY ?? 50}%`,
+              backgroundSize: iconDef?.icon?.scale && iconDef.icon.scale !== 100 ? `${iconDef.icon.scale}%` : 'cover',
             }}
           >
             {/* A background-image never fires onError, unlike <img> --
