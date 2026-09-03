@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useEngine } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
@@ -206,6 +208,7 @@ export function Ring({
 export function DashboardPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const breakdown = guildPowerBreakdown(state);
   const power = breakdown.total;
   const rank = currentGuildRank(state);
@@ -224,21 +227,24 @@ export function DashboardPanel() {
   };
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/dashboard.jpg', settings.backgroundMood)})` }}>
+      <div className="tab-scene-content">
       <div className="spread" style={{ alignItems: 'flex-start' }}>
         <div>
           <h2>The Guild</h2>
           <p className="subtitle">Everything the guild has built, at a glance.</p>
         </div>
-        {/* Moved here from the Guild Hall tab's own header (patch 0213) --
-            Customize decorates the whole guild's home, not specifically a
-            facility, so it reads better as a home-tab call-to-action than
-            a small header button buried on the Guild Hall tab. Bigger and
-            its own colour (.btn-teal-lg) rather than the plain .btn-ghost
-            it used to be, so it actually stands out here. Navigates to
-            the Guild Hall tab with the 'customize' sub-tab sentinel,
-            which GuildPanel consumes once on mount to open straight into
-            GuildHallCustomizeScene instead of the normal facilities view. */}
+        {/* Customize entry point turned off (patch 0305, direct request) --
+            hidden here rather than removed. GuildHallCustomizeScene, its
+            slot-placement system, and GuildPanel's own `customizing`
+            consumeRequestedSubTab('customize') plumbing are all left
+            completely untouched below and in GuildPanel.tsx -- this is
+            the only actual entry point into that mode anywhere in the
+            game, so simply not rendering this button makes the whole
+            feature unreachable without deleting a single line of it.
+            Re-enable by uncommenting this block whenever that work
+            picks back up; nothing else needs to change. */}
+        {/*
         <button
           className="btn-teal-lg"
           onClick={() => engine.requestTab('guild', undefined, 'customize')}
@@ -246,6 +252,7 @@ export function DashboardPanel() {
         >
           🎨 Customize
         </button>
+        */}
       </div>
 
       <AttentionDigest />
@@ -380,6 +387,7 @@ export function DashboardPanel() {
           <div className="tiny muted">Retirements</div>
         </div>
       </div>
-    </>
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEngine } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { isTabUnread } from '../../game/attention';
 import { AchievementManager } from '../../game/managers/AchievementManager';
 import { GuildManager } from '../../game/managers/GuildManager';
@@ -167,6 +169,7 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
 export function StatsPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const stats = state.stats;
   const successRate = stats.totalQuests > 0
     ? `${Math.round((stats.successes / stats.totalQuests) * 100)}%`
@@ -292,7 +295,7 @@ export function StatsPanel() {
   ].sort((a, b) => b.resolvedAt - a.resolvedAt);
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/settings.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/settings.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Statistics</h2>
       <p className="subtitle">Everything the guild scribe has bothered to write down.</p>

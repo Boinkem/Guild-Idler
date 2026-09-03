@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEngine } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { GUIDE_TOPICS } from '../../game/data/guideTopics';
 import { TAB_LABELS } from '../tabLabels';
 
@@ -67,10 +69,11 @@ function HowToTab() {
 }
 
 export function GuidePanel() {
+  const { settings } = useSettings();
   const [subTab, setSubTab] = useState<'notifications' | 'howto'>('notifications');
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/lore-and-guide.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/lore-and-guide.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Guide</h2>
       <p className="subtitle">A running log of what's happened, and a quick reference for how everything works.</p>

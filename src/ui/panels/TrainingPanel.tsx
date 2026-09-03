@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useEngine } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
@@ -123,19 +125,23 @@ function HeroTile({ hero, onClick }: { hero: Hero; onClick: () => void }) {
 export function TrainingPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const hasTraining = ModifierManager.hasUnlock(state, 'training');
   const [selectedHeroId, setSelectedHeroId] = useState<string | null>(null);
   const selectedHero = state.heroes.find((h) => h.id === selectedHeroId) ?? null;
 
-  // Same "hidden entirely, not shown-but-locked" nav gate as Hatchery/
-  // Harvest/Grimsby (see MenuWindow.tsx's own filter comment) already
-  // keeps this tab off the nav bar before Blackford Keep is cleared, so
-  // reaching this component at all means that condition is already met
-  // -- what's left to gate here is purely the Training Grounds purchase.
+  // Same "hidden entirely, not shown-but-locked" gate as Hatchery/
+  // Harvest/Grimsby's own nav entries (see MenuWindow.tsx's own filter
+  // comment) already keeps this sub-tab's button off HeroesPanel's own
+  // sub-tab row before Blackford Keep is cleared (patch 0305 moved this
+  // gate from the top-level nav onto that button when Training became a
+  // Heroes sub-tab -- see HeroesPanel.tsx's own comment), so reaching
+  // this component at all means that condition is already met -- what's
+  // left to gate here is purely the Training Grounds purchase.
   if (!hasTraining) {
     const cost = GuildManager.nextUpgradeCost(state, 'training_grounds');
     return (
-      <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/training.jpg)' }}>
+      <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/training.jpg', settings.backgroundMood)})` }}>
         <div className="tab-scene-content">
         <h2>Training</h2>
         <p className="subtitle">Reassign a hero's battlefield role -- Melee, Ranged, or Caster.</p>
@@ -160,7 +166,7 @@ export function TrainingPanel() {
   }
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/training.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/training.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Training</h2>
       <p className="subtitle">Click a hero to see their available roles.</p>

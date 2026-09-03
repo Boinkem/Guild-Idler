@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
+import type { BackgroundMoodId } from '../game/settings';
 
 /**
  * Blocking, non-dismissible prompt asking the player to name their guild.
@@ -15,9 +17,22 @@ import { useEngine } from './useEngine';
  */
 export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise<void> | void }) {
   const engine = useEngine();
+  const { update: updateSettings } = useSettings();
   const [draft, setDraft] = useState('');
   const unnamed = engine.state.guildName === '';
   const inputRef = useRef<HTMLInputElement>(null);
+  // Two-step setup (patch 0305, direct request: "Guild's Mood" toggle
+  // during first-time setup) -- 'name' first, then 'vibe'. Both steps
+  // live in this one component/gate (unnamed) rather than splitting vibe
+  // into its own separately-gated modal, since a second gate would need
+  // its own "have we asked yet" flag persisted somewhere, and the guild
+  // not being named yet is already exactly the right one-shot condition
+  // for "this is a brand-new guild that hasn't finished setup." Picking a
+  // name on step 1 no longer immediately calls setGuildName -- it now
+  // only advances `step`, holding the trimmed name in `draft` (already
+  // local state) until the vibe is picked too, since setGuildName is what
+  // flips `unnamed` false and closes this modal entirely.
+  const [step, setStep] = useState<'name' | 'vibe'>('name');
 
   // Forces full menu size before this modal has to render at all -- lives
   // here rather than in App.tsx specifically because this component
@@ -80,8 +95,13 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
 
   const trimmed = draft.trim();
 
-  const confirm = () => {
+  const confirmName = () => {
     if (!trimmed) return;
+    setStep('vibe');
+  };
+
+  const confirmVibe = (mood: BackgroundMoodId) => {
+    updateSettings('backgroundMood', mood);
     engine.setGuildName(trimmed);
   };
 
@@ -107,33 +127,69 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
           📜
         </div>
 
-        <h3 style={{ textAlign: 'center' }}>What is your guild called?</h3>
-        <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
-          You can rename it later from the Dashboard.
-        </p>
+        {step === 'name' ? (
+          <>
+            <h3 style={{ textAlign: 'center' }}>What is your guild called?</h3>
+            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
+              You can rename it later from the Dashboard.
+            </p>
 
-        <div className="row" style={{ gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
-          <span className="tiny muted">Guild -</span>
-          <input
-            ref={inputRef}
-            type="text"
-            value={draft}
-            placeholder="Ironclad"
-            maxLength={24}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
-            style={{
-              flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-              color: 'var(--parchment)', padding: '7px 8px',
-            }}
-          />
-        </div>
+            <div className="row" style={{ gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
+              <span className="tiny muted">Guild -</span>
+              <input
+                ref={inputRef}
+                type="text"
+                value={draft}
+                placeholder="Ironclad"
+                maxLength={24}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmName(); }}
+                style={{
+                  flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                  color: 'var(--parchment)', padding: '7px 8px',
+                }}
+              />
+            </div>
 
-        <div className="row end" style={{ marginTop: 16 }}>
-          <button className="btn-primary" onClick={confirm} disabled={!trimmed}>
-            Found the guild
-          </button>
-        </div>
+            <div className="row end" style={{ marginTop: 16 }}>
+              <button className="btn-primary" onClick={confirmName} disabled={!trimmed}>
+                Next
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 style={{ textAlign: 'center' }}>What's your guild's vibe?</h3>
+            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
+              Sets the look of every hall and tab -- changeable anytime later from Settings.
+            </p>
+
+            <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
+              <button
+                className="btn-primary"
+                onClick={() => confirmVibe('dim')}
+                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
+                title="Candlelit halls, torchlit chambers -- the classic look"
+              >
+                🕯️<br />Moody
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => confirmVibe('bright')}
+                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
+                title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
+              >
+                ☀️<br />Bright
+              </button>
+            </div>
+
+            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+              <button className="btn-ghost tiny" onClick={() => setStep('name')}>
+                ← Back
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
+import { isTabUnread } from '../../game/attention';
+import { TrainingPanel } from './TrainingPanel';
 import { HERO_CLASSES, HeroClassDef, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { heroMilestoneUnlocked } from '../../game/data/heroMilestones';
 import { Tuning } from '../../game/data/tuning';
@@ -79,7 +81,75 @@ function recruitStatusFor(
   return { def, unlocked, milestoneMet, cost, tavernUnlocked, slotsFull, alreadyRecruited };
 }
 
+/**
+ * Heroes tab shell (patch 0305) -- Training moved here from its own
+ * top-level nav entry as a sub-tab, direct request. Same
+ * subTab-state/consumeRequestedSubTab/acknowledgeTab shape every other
+ * sub-tabbed panel in this game already uses (VendorsPanel, RaidsPanel),
+ * with one deliberate difference: the two sub-views here are each a
+ * FULL separate component (HeroesRosterView below, TrainingPanel
+ * unchanged) rather than one shared background wrapper switching what's
+ * inside it the way VendorsPanel's vendor-scene does -- Heroes and
+ * Training each already had their own complete tab-scene background,
+ * heading, and content before this move, and reusing them as-is here
+ * keeps that intact with zero risk of the two 499-line and ~170-line
+ * bodies drifting apart during the extraction.
+ *
+ * Training's own visibility gate (state.completedRaids.includes
+ * ('blackford_keep')) moved here unchanged from MenuWindow.tsx's old
+ * isTabVisible entry for it -- same condition, just checked on this
+ * sub-tab button instead of the old top-level nav entry. TrainingPanel
+ * itself still shows its own internal "Fund Training" purchase screen
+ * below that if the actual unlock upgrade hasn't been bought yet --
+ * unrelated, unchanged gate one layer deeper.
+ */
 export function HeroesPanel() {
+  const engine = useEngine();
+  const [subTab, setSubTab] = useState<'heroes' | 'training'>('heroes');
+  const trainingVisible = engine.state.completedRaids.includes('blackford_keep');
+
+  // Deep-link support for a notification's "Go to" button targeting
+  // Training specifically -- same consume-once shape every other
+  // sub-tabbed panel uses. A request for 'training' while it's not
+  // actually visible yet is simply ignored, same defensive shape
+  // VendorsPanel's own VENDORS.some(...) guard uses for a foreign id.
+  useEffect(() => {
+    const requested = engine.consumeRequestedSubTab();
+    if (requested === 'training' && trainingVisible) setSubTab('training');
+    else if (requested === 'heroes') setSubTab('heroes');
+  }, [engine, engine.requestedSubTab, trainingVisible]);
+
+  useEffect(() => {
+    engine.acknowledgeTab('heroes', subTab);
+  }, [engine, subTab]);
+
+  return (
+    <>
+      {trainingVisible && (
+        <div className="row" style={{ gap: 8, marginBottom: 14 }}>
+          <button
+            className={`btn-subtab ${subTab === 'heroes' ? 'on' : ''} ${isTabUnread(engine.state, 'heroes', 'heroes') ? 'subtab-unread' : ''}`}
+            onClick={() => setSubTab('heroes')}
+          >
+            Heroes
+          </button>
+          <button
+            className={`btn-subtab ${subTab === 'training' ? 'on' : ''} ${isTabUnread(engine.state, 'heroes', 'training') ? 'subtab-unread' : ''}`}
+            onClick={() => setSubTab('training')}
+          >
+            Training
+          </button>
+        </div>
+      )}
+      {subTab === 'training' && trainingVisible ? <TrainingPanel /> : <HeroesRosterView />}
+    </>
+  );
+}
+
+/** The Heroes tab's actual roster content -- unchanged from before patch
+ *  0305's sub-tab extraction, just renamed from the old exported
+ *  `HeroesPanel` (see that name's own comment just above). */
+function HeroesRosterView() {
   const engine = useEngine();
   const now = useNow();
   const { settings } = useSettings();

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useEngine } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
@@ -142,6 +144,7 @@ function UpgradeCard({
 export function GuildPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const global = ModifierManager.global(state);
 
   // Inline "Customize" mode -- per the original design brainstorm's own
@@ -228,7 +231,7 @@ export function GuildPanel() {
       ...(def.unlocks === 'raids' ? [<span key="unlock-raids" className="gold-text">Unlocks Normal-difficulty raids</span>] : []),
       ...(def.unlocks === 'raidsHeroic' ? [<span key="unlock-raids-h" className="gold-text">Unlocks Heroic raid difficulty</span>] : []),
       ...(def.unlocks === 'raidsLegendary' ? [<span key="unlock-raids-l" className="gold-text">Unlocks Legendary raid difficulty</span>] : []),
-      ...(def.unlocks === 'training' ? [<span key="unlock-training" className="gold-text">Unlocks the Training tab -- reassign any hero's role</span>] : []),
+      ...(def.unlocks === 'training' ? [<span key="unlock-training" className="gold-text">Unlocks the Training sub-tab under Heroes -- reassign any hero's role</span>] : []),
       ...(def.unlocks === 'autoChain' && level > 0
         ? [<span key="ac-current" className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>] : []),
       ...(def.unlocks === 'autoChain' && !maxed
@@ -338,7 +341,7 @@ export function GuildPanel() {
   }
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/guildhall.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/guildhall.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <div>
         <h2>Guild Hall</h2>

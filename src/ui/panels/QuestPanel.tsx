@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
-import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
+import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import {
   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
 } from '../../game/data/quests';
@@ -420,6 +422,7 @@ export function QuestPanel() {
   const engine = useEngine();
   const now = useNow();
   const state = engine.state;
+  const { settings } = useSettings();
 
   // Which row's detail modal is currently open -- replaces the old
   // per-card expand/collapse toggle now that a row opens a full modal
@@ -545,7 +548,7 @@ export function QuestPanel() {
   };
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Quest Board</h2>
       <p className="subtitle">

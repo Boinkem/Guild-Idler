@@ -28,6 +28,7 @@ import { ReputationRing } from '../ReputationRing';
 import { ConfirmModal } from '../ConfirmModal';
 import { RewardGlowParticle } from '../RewardGlowParticle';
 import { useFlyTargetRef, getFlyTargetCenter } from '../flyTarget';
+import { backgroundSrc } from '../../game/settings';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -59,6 +60,7 @@ const VENDOR_BG: Record<VendorId, string> = {
 
 export function VendorsPanel() {
   const engine = useEngine();
+  const { settings } = useSettings();
   const [tab, setTab] = useState<VendorId>('blacksmith');
 
   // Deep-link support for a notification's "Go to Enchanter" button (see
@@ -87,7 +89,7 @@ export function VendorsPanel() {
   }, [engine, tab]);
 
   return (
-    <div className="vendor-scene" style={{ backgroundImage: `url(${VENDOR_BG[tab]})` }}>
+    <div className="vendor-scene" style={{ backgroundImage: `url(${backgroundSrc(VENDOR_BG[tab], settings.backgroundMood)})` }}>
       <div className="vendor-scene-content">
         <h2>Vendors</h2>
         <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>

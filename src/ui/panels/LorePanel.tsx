@@ -9,6 +9,8 @@ import { describeMods, RARITY_COLOR, formatDuration } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
 import { RarityPill } from '../RarityPill';
 import { useEngine } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 
 /**
  * Banner strip for a chain card and its detail modal -- same
@@ -478,6 +480,7 @@ function CollectionTab() {
 export function LorePanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const [subTab, setSubTab] = useState<'quests' | 'raids' | 'collection'>('quests');
 
   // Deep-link support for a notification's "Go to" button targeting a
@@ -501,7 +504,7 @@ export function LorePanel() {
   const powerNeeded = powerToNextRank(state);
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/lore-and-guide.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/lore-and-guide.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Lore</h2>
       <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>

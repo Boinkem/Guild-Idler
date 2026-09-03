@@ -46,6 +46,21 @@ export type FontId = 'themed' | 'readable';
  */
 export type CompanionBackdropId = 'off' | 'subtle' | 'strong';
 
+/**
+ * "Guild's Mood" (patch 0305, direct request) -- swaps which art folder
+ * every tab-scene/vendor-scene/menu-backdrop image is read from. 'dim'
+ * (the default, matching every image this game has always shipped with)
+ * reads straight from each image's existing path. 'bright' reads the
+ * exact same filename from a sibling `bright/` folder one level under
+ * each existing image's own directory (e.g. `lore/panels/heroes.jpg` ->
+ * `lore/panels/bright/heroes.jpg`) via backgroundSrc() in this same
+ * file. A tab with no bright/ counterpart yet just keeps showing its dim
+ * image -- the browser's own 404-on-missing-image is the fallback, no
+ * special-case code needed, same "ship safely before art lands" shape
+ * MenuWindow.tsx's raids/hatchery/peddler backdrop comment already uses.
+ */
+export type BackgroundMoodId = 'dim' | 'bright';
+
 export interface Theme {
   id: ThemeId;
   name: string;
@@ -80,6 +95,13 @@ export interface Settings {
   styleId: StyleId;
   /** Typeface: pixel/monospace 'themed', or a plain sans-serif 'readable'. */
   fontId: FontId;
+  /** Which art folder every tab/vendor/menu background image reads from --
+   *  see BackgroundMoodId's own comment. Asked once during first-time
+   *  setup (GuildNamingModal) and changeable anytime after from Settings,
+   *  same "asked once, revisitable" shape nothing else in this file
+   *  actually uses yet, but matches how every other cosmetic choice here
+   *  behaves once picked. */
+  backgroundMood: BackgroundMoodId;
   /** Optional backing plate behind the idle companion, for readability over busy wallpaper. */
   companionBackdrop: CompanionBackdropId;
   /**
@@ -205,6 +227,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'high_contrast',
   styleId: 'adventure',
   fontId: 'readable',
+  backgroundMood: 'dim',
   companionBackdrop: 'off',
   hideIdleInfo: false,
   hideHeroSprite: false,
@@ -370,6 +393,23 @@ function prefersReducedMotionByDefault(): boolean {
   }
 }
 
+/**
+ * Resolves a dim-mode background image path to its Bright counterpart when
+ * the setting calls for it -- see BackgroundMoodId's own comment for the
+ * folder convention. `dimPath` is whatever path a component already builds
+ * for its dim image (e.g. `./lore/panels/heroes.jpg` or
+ * `./lore/vendors/blacksmith.jpg`); this only ever touches the filename's
+ * own directory, inserting a `bright/` segment right before it, so it works
+ * unchanged for any of this game's background folders without needing to
+ * know which one it's looking at.
+ */
+export function backgroundSrc(dimPath: string, mood: BackgroundMoodId): string {
+  if (mood === 'dim') return dimPath;
+  const slash = dimPath.lastIndexOf('/');
+  if (slash === -1) return dimPath;
+  return `${dimPath.slice(0, slash)}/bright${dimPath.slice(slash)}`;
+}
+
 export const SettingsStore = {
   load(): Settings {
     try {
@@ -420,6 +460,7 @@ export const SettingsStore = {
     root.dataset.style = settings.styleId;
     root.dataset.font = settings.fontId;
     root.dataset.companionBackdrop = settings.companionBackdrop;
+    root.dataset.backgroundMood = settings.backgroundMood;
     root.dataset.motion = motion === 0 ? 'off' : 'on';
   },
 };

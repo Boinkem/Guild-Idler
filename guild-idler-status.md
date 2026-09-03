@@ -1127,6 +1127,30 @@ raid fight).
 
 ## Backlog
 
+### Repair/heal availability while a hero is on a quest
+Direct report (patch 0305 session, not yet built): repairing gear, and
+healing, should be usable "while hero is on a quest -- need to be
+available" -- i.e. the constraint should be about whether the *item or
+hero* is actually in use (equipped by a hero currently mid-quest, or the
+hero themselves being the one away), not a blanket "no repair/heal
+actions at all if anyone in the guild is questing." Needs a look at
+EquipmentManager's repair path and whatever currently gates
+healing/injury-clearing to find the actual over-broad check before
+narrowing it.
+
+### Level 1 gear should not cost Scrap to repair
+Direct report (patch 0305 session, not yet built). Presumably a floor/
+scaling issue in whatever repair-cost formula EquipmentManager uses --
+a Level 1 item's own low value should round down to zero Scrap rather
+than the current non-zero cost. Not yet investigated.
+
+### On The Road quest cards should use the artwork shown after clicking in
+Direct report (patch 0305 session, not yet built): the collapsed quest
+card (before opening the detail view) should show the same artwork
+that's already available once you click into a quest, rather than
+whatever it currently shows (or doesn't) on the card face itself. Not
+yet investigated which component/asset this touches.
+
 ### Idea: flip sprites at the halfway point of a quest/raid timer, to read as "heading back"
 Raised alongside the Raid View feature (patch 0245) but deliberately not
 built as part of it -- explicitly flagged for the backlog rather than
@@ -24402,3 +24426,151 @@ touching the TypeScript. `npx tsc --noEmit`, a full `vite build`, and
 `node --check tools/devtool/server.mjs` all pass clean against the
 current tree (pulled fresh, confirmed patch 0303 was already live and
 this fix is rebased on top of it, not the older tree it was found in).
+
+### Guild's Mood (Dim/Bright background art), Training moved into a Heroes sub-tab, and the Guild Hall Customize feature turned off for now (patch 0305)
+
+```discord-update
+Dev Update | Patch 0305
+
+- Added: Guild's Mood -- a Moody/Bright toggle (asked once when you found your guild, changeable anytime from Settings) that swaps in a whole new set of sunlit daytime art across the guild
+- Changed: Training moved out of the main tab bar and into its own sub-tab under Heroes
+- Changed: the Guild Hall decorating feature is turned off for now -- we're revisiting it later
+```
+
+Two direct reports this patch, bundled with one closely-related change:
+the background-mood system and moving Training under Heroes were both
+asked for together, and turning off Guild Hall Customize came up in the
+middle of investigating the background system itself (its theme art
+turned out to double as part of the same global backdrop this patch was
+already touching). The three earlier reports from this same
+session -- repair/heal availability, Level 1 Scrap cost, and quest-card
+artwork -- are still open; see the note near the end of this entry.
+
+**Guild's Mood (`Settings.backgroundMood`, `backgroundSrc()` in
+`settings.ts`, every tab/vendor/menu background).** New setting,
+`'dim' | 'bright'`, defaulting to `'dim'` (this game's look has always
+been dim; nothing changes for an existing save on load). Convention: every
+background image keeps its existing dim-mode path exactly as-is, and a
+Bright counterpart lives at the same filename one level under a sibling
+`bright/` folder -- `lore/panels/heroes.jpg` -> `lore/panels/bright/
+heroes.jpg`, `lore/vendors/blacksmith.jpg` -> `lore/vendors/bright/
+blacksmith.jpg`, and so on. `backgroundSrc(dimPath, mood)` is the one
+function every consumer calls -- it's a pure path rewrite (find the last
+`/`, insert `bright` before it) with zero knowledge of which folder it's
+actually looking at, so it works unchanged across every background
+category in the game. A tab with no Bright art yet (Prestige, Hatchery)
+just keeps showing its dim image -- the browser's own missing-image
+behaviour is the fallback, no special-case code anywhere, same "safe to
+ship before art lands" precedent Hatchery/Peddler/Raids' own menu-backdrop
+comment already used before this patch.
+
+Wiring touched every panel with a `.tab-scene`/`.vendor-scene`/
+`.harvest-scene-bg` background: QuestPanel, DiscoveredQuestsPanel,
+StatsPanel, SettingsPanel, LorePanel, GuidePanel, EquipmentPanel,
+TrainingPanel, PrestigePanel, HeroesPanel (now HeroesRosterView),
+GuildPanel, HarvestPanel's FieldsTab, and VendorsPanel (its background
+comes from a `VENDOR_BG[tab]` lookup map rather than one static path, so
+`backgroundSrc` wraps that lookup's result instead of a literal string).
+Also reached into `MenuWindow.tsx`'s own separate ambient backdrop layer --
+a 35%-opacity image behind the *entire* menu window, not any one panel,
+that shows `raids-bg.jpg`/`hatchery-bg.jpg`/`peddler-bg.png` for those
+three tabs specifically and the active Guild Hall Customize theme's own
+background for every other tab. That customize-theme half of the backdrop
+is untouched by this patch (its own separate art pipeline, not something
+new art was generated for) -- only the raids/hatchery/peddler special case
+is mood-aware now.
+
+New art landed for twelve destinations this patch: eight of the original
+panel-level dim images got a Bright counterpart (Quests, Settings, Lore &
+Guide, Inventory, Training, Heroes, and the Guild Hall tab's own
+construction-site scene); two dim images were fully replaced with better-
+composed art before getting their Bright pair (Blacksmith, which had a
+sparse, half-empty original composition, and Harvest, whose old `fields.
+jpg` was a generic sunset meadow with nothing tying it to the tab); and two
+brand-new dim+bright pairs were added where none existed before at all --
+Raids (`raids-bg.jpg`, a dragon on a gold hoard, replacing an earlier
+placeholder of the same subject) and Grimsby/Peddler (`peddler-bg.png`,
+a wagon-and-campfire scene, replacing the old fortune-telling-tent art).
+A thirteenth destination is genuinely new rather than a replacement:
+**DashboardPanel** ("The Guild" tab) had no background art at all before
+this patch -- it now reads from a new `lore/panels/dashboard.jpg` (a
+great-hall/dining-table scene), the first background this specific tab
+has ever had.
+
+Two stray orphaned files cleaned up while staging the new art:
+`lore/harvest/3fields.jpg` (an unused duplicate/draft sitting next to the
+real `fields.jpg`) and a `public/New folder/` directory containing a
+second, unreferenced copy of `guild-hall-bg.jpg` -- neither was ever read
+by any code path; both were just build-artifact-looking leftovers.
+
+Asked once during first-time setup: `GuildNamingModal` is now a two-step
+flow -- name, then "What's your guild's vibe?" (Moody/Bright) -- rather
+than closing the moment a name is confirmed. Naming no longer calls
+`engine.setGuildName` directly on step 1; it holds the trimmed name in
+local state and advances to step 2, only calling `setGuildName` (which is
+what actually dismisses the modal, gated on `guildName === ''`) once a
+mood is picked too. Also changeable anytime after from Settings -- a new
+"Guild's Mood" row, same `Segmented` control shape as the existing Style/
+Font rows right above it.
+
+**Guild Hall Customize turned off (not removed).** Direct request: "less
+[than] remove the feature entirely, but turn it off so no one sees it, we
+will work on it later." The single entry point into that whole feature --
+the 🎨 Customize button on `DashboardPanel` ("The Guild" tab), which calls
+`engine.requestTab('guild', undefined, 'customize')` -- is commented out,
+not deleted. `GuildHallCustomizeScene`, its slot-placement system, its own
+theme art, and `GuildPanel`'s `customizing` state/`consumeRequestedSubTab`
+plumbing are all left completely untouched; with the only button that ever
+set `customizing = true` gone, the whole mode is simply unreachable until
+that comment block is removed again. Re-enabling it later is a one-line
+change, not a rebuild.
+
+Worth noting for whoever picks the Customize work back up later: this
+patch's own investigation found that the Customize theme system already
+doubles as part of the *global* menu backdrop (see the Guild's Mood
+section above) -- any future work on it should keep that dual role in
+mind, since it's not purely a Guild Hall tab concern.
+
+**Training moved into Heroes (`HeroesPanel.tsx`, `MenuWindow.tsx`).**
+Direct request. `HeroesPanel` is now a thin shell: a `subTab` state
+('heroes' | 'training'), a sub-tab button row (same pattern VendorsPanel/
+RaidsPanel already use, including deep-link support via
+`consumeRequestedSubTab` and the nav-shimmer `isTabUnread` check per
+sub-tab), and it renders either the old Heroes content (renamed
+`HeroesRosterView`, otherwise byte-for-byte unchanged) or `TrainingPanel`
+(also completely unchanged) depending on which sub-tab is active. The
+Training button itself only appears once `state.completedRaids.includes
+('blackford_keep')` -- the exact same gate that used to hide the
+top-level nav entry, just moved onto this button instead. `TrainingPanel`
+still shows its own internal "Fund Training" purchase screen underneath
+that if the Training Grounds upgrade itself hasn't been bought yet --
+unrelated, unchanged, one gate deeper.
+
+Removed 'training' from `MenuWindow.tsx`'s `ALL_TABS`/`isTabVisible`
+entirely, which also removes it from the onboarding tour for free (tour
+steps are already derived from `ALL_TABS.filter(isTabVisible)` rather
+than a separately hand-maintained list). The `PANEL_BREAKDOWNS` help-card
+content that used to live under its own `training` key got merged into
+the `heroes` entry instead, since that lookup has no concept of
+sub-tabs. `GuildManager`'s "Unlocks the Training tab" upgrade description
+now reads "Unlocks the Training sub-tab under Heroes."
+
+**Repair/heal while questing, quest-card artwork, and Level 1 Scrap cost
+-- not in this patch.** The three original reports from earlier this
+session (repair/heal availability while a hero is out, "On The Road"
+quest cards using their real artwork, and Level 1 gear not costing
+Scrap) did not make it into 0305 -- the background-mood system ended up
+being the entire patch on its own. Still open, tracked in the backlog
+below for the next pass.
+
+**Verification.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh pull of `main`
+(confirmed patch 0304 was already live and this patch is rebased on top
+of it). All twelve new/replaced image destinations confirmed present on
+disk at their correct paths with no double-nested `bright/bright`
+mistakes. No live in-app playtest in this environment (no browser
+available) -- worth a real pass confirming: the two-step naming modal's
+back button and Enter-to-advance both feel right; the Heroes/Training
+sub-tab switch doesn't lose the currently-selected hero; and the Bright
+set actually reads as a cohesive "sunlit" pass across a full runthrough,
+not just each image in isolation.

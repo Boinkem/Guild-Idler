@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useEngine } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
@@ -892,6 +894,7 @@ function StashCard({
 export function EquipmentPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const workshop = state.guild.workshop ?? 0;
   const [heroId, setHeroId] = useState(state.heroes[0].id);
   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
@@ -955,7 +958,7 @@ export function EquipmentPanel() {
   });
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/inventory.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/inventory.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Inventory</h2>
       <p className="subtitle">

@@ -1,0 +1,1083 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index e734193..fb69d8b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1127,6 +1127,30 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Repair/heal availability while a hero is on a quest
++Direct report (patch 0305 session, not yet built): repairing gear, and
++healing, should be usable "while hero is on a quest -- need to be
++available" -- i.e. the constraint should be about whether the *item or
++hero* is actually in use (equipped by a hero currently mid-quest, or the
++hero themselves being the one away), not a blanket "no repair/heal
++actions at all if anyone in the guild is questing." Needs a look at
++EquipmentManager's repair path and whatever currently gates
++healing/injury-clearing to find the actual over-broad check before
++narrowing it.
++
++### Level 1 gear should not cost Scrap to repair
++Direct report (patch 0305 session, not yet built). Presumably a floor/
++scaling issue in whatever repair-cost formula EquipmentManager uses --
++a Level 1 item's own low value should round down to zero Scrap rather
++than the current non-zero cost. Not yet investigated.
++
++### On The Road quest cards should use the artwork shown after clicking in
++Direct report (patch 0305 session, not yet built): the collapsed quest
++card (before opening the detail view) should show the same artwork
++that's already available once you click into a quest, rather than
++whatever it currently shows (or doesn't) on the card face itself. Not
++yet investigated which component/asset this touches.
++
+ ### Idea: flip sprites at the halfway point of a quest/raid timer, to read as "heading back"
+ Raised alongside the Raid View feature (patch 0245) but deliberately not
+ built as part of it -- explicitly flagged for the backlog rather than
+@@ -24402,3 +24426,151 @@ touching the TypeScript. `npx tsc --noEmit`, a full `vite build`, and
+ `node --check tools/devtool/server.mjs` all pass clean against the
+ current tree (pulled fresh, confirmed patch 0303 was already live and
+ this fix is rebased on top of it, not the older tree it was found in).
++
++### Guild's Mood (Dim/Bright background art), Training moved into a Heroes sub-tab, and the Guild Hall Customize feature turned off for now (patch 0305)
++
++```discord-update
++Dev Update | Patch 0305
++
++- Added: Guild's Mood -- a Moody/Bright toggle (asked once when you found your guild, changeable anytime from Settings) that swaps in a whole new set of sunlit daytime art across the guild
++- Changed: Training moved out of the main tab bar and into its own sub-tab under Heroes
++- Changed: the Guild Hall decorating feature is turned off for now -- we're revisiting it later
++```
++
++Two direct reports this patch, bundled with one closely-related change:
++the background-mood system and moving Training under Heroes were both
++asked for together, and turning off Guild Hall Customize came up in the
++middle of investigating the background system itself (its theme art
++turned out to double as part of the same global backdrop this patch was
++already touching). The three earlier reports from this same
++session -- repair/heal availability, Level 1 Scrap cost, and quest-card
++artwork -- are still open; see the note near the end of this entry.
++
++**Guild's Mood (`Settings.backgroundMood`, `backgroundSrc()` in
++`settings.ts`, every tab/vendor/menu background).** New setting,
++`'dim' | 'bright'`, defaulting to `'dim'` (this game's look has always
++been dim; nothing changes for an existing save on load). Convention: every
++background image keeps its existing dim-mode path exactly as-is, and a
++Bright counterpart lives at the same filename one level under a sibling
++`bright/` folder -- `lore/panels/heroes.jpg` -> `lore/panels/bright/
++heroes.jpg`, `lore/vendors/blacksmith.jpg` -> `lore/vendors/bright/
++blacksmith.jpg`, and so on. `backgroundSrc(dimPath, mood)` is the one
++function every consumer calls -- it's a pure path rewrite (find the last
++`/`, insert `bright` before it) with zero knowledge of which folder it's
++actually looking at, so it works unchanged across every background
++category in the game. A tab with no Bright art yet (Prestige, Hatchery)
++just keeps showing its dim image -- the browser's own missing-image
++behaviour is the fallback, no special-case code anywhere, same "safe to
++ship before art lands" precedent Hatchery/Peddler/Raids' own menu-backdrop
++comment already used before this patch.
++
++Wiring touched every panel with a `.tab-scene`/`.vendor-scene`/
++`.harvest-scene-bg` background: QuestPanel, DiscoveredQuestsPanel,
++StatsPanel, SettingsPanel, LorePanel, GuidePanel, EquipmentPanel,
++TrainingPanel, PrestigePanel, HeroesPanel (now HeroesRosterView),
++GuildPanel, HarvestPanel's FieldsTab, and VendorsPanel (its background
++comes from a `VENDOR_BG[tab]` lookup map rather than one static path, so
++`backgroundSrc` wraps that lookup's result instead of a literal string).
++Also reached into `MenuWindow.tsx`'s own separate ambient backdrop layer --
++a 35%-opacity image behind the *entire* menu window, not any one panel,
++that shows `raids-bg.jpg`/`hatchery-bg.jpg`/`peddler-bg.png` for those
++three tabs specifically and the active Guild Hall Customize theme's own
++background for every other tab. That customize-theme half of the backdrop
++is untouched by this patch (its own separate art pipeline, not something
++new art was generated for) -- only the raids/hatchery/peddler special case
++is mood-aware now.
++
++New art landed for twelve destinations this patch: eight of the original
++panel-level dim images got a Bright counterpart (Quests, Settings, Lore &
++Guide, Inventory, Training, Heroes, and the Guild Hall tab's own
++construction-site scene); two dim images were fully replaced with better-
++composed art before getting their Bright pair (Blacksmith, which had a
++sparse, half-empty original composition, and Harvest, whose old `fields.
++jpg` was a generic sunset meadow with nothing tying it to the tab); and two
++brand-new dim+bright pairs were added where none existed before at all --
++Raids (`raids-bg.jpg`, a dragon on a gold hoard, replacing an earlier
++placeholder of the same subject) and Grimsby/Peddler (`peddler-bg.png`,
++a wagon-and-campfire scene, replacing the old fortune-telling-tent art).
++A thirteenth destination is genuinely new rather than a replacement:
++**DashboardPanel** ("The Guild" tab) had no background art at all before
++this patch -- it now reads from a new `lore/panels/dashboard.jpg` (a
++great-hall/dining-table scene), the first background this specific tab
++has ever had.
++
++Two stray orphaned files cleaned up while staging the new art:
++`lore/harvest/3fields.jpg` (an unused duplicate/draft sitting next to the
++real `fields.jpg`) and a `public/New folder/` directory containing a
++second, unreferenced copy of `guild-hall-bg.jpg` -- neither was ever read
++by any code path; both were just build-artifact-looking leftovers.
++
++Asked once during first-time setup: `GuildNamingModal` is now a two-step
++flow -- name, then "What's your guild's vibe?" (Moody/Bright) -- rather
++than closing the moment a name is confirmed. Naming no longer calls
++`engine.setGuildName` directly on step 1; it holds the trimmed name in
++local state and advances to step 2, only calling `setGuildName` (which is
++what actually dismisses the modal, gated on `guildName === ''`) once a
++mood is picked too. Also changeable anytime after from Settings -- a new
++"Guild's Mood" row, same `Segmented` control shape as the existing Style/
++Font rows right above it.
++
++**Guild Hall Customize turned off (not removed).** Direct request: "less
++[than] remove the feature entirely, but turn it off so no one sees it, we
++will work on it later." The single entry point into that whole feature --
++the 🎨 Customize button on `DashboardPanel` ("The Guild" tab), which calls
++`engine.requestTab('guild', undefined, 'customize')` -- is commented out,
++not deleted. `GuildHallCustomizeScene`, its slot-placement system, its own
++theme art, and `GuildPanel`'s `customizing` state/`consumeRequestedSubTab`
++plumbing are all left completely untouched; with the only button that ever
++set `customizing = true` gone, the whole mode is simply unreachable until
++that comment block is removed again. Re-enabling it later is a one-line
++change, not a rebuild.
++
++Worth noting for whoever picks the Customize work back up later: this
++patch's own investigation found that the Customize theme system already
++doubles as part of the *global* menu backdrop (see the Guild's Mood
++section above) -- any future work on it should keep that dual role in
++mind, since it's not purely a Guild Hall tab concern.
++
++**Training moved into Heroes (`HeroesPanel.tsx`, `MenuWindow.tsx`).**
++Direct request. `HeroesPanel` is now a thin shell: a `subTab` state
++('heroes' | 'training'), a sub-tab button row (same pattern VendorsPanel/
++RaidsPanel already use, including deep-link support via
++`consumeRequestedSubTab` and the nav-shimmer `isTabUnread` check per
++sub-tab), and it renders either the old Heroes content (renamed
++`HeroesRosterView`, otherwise byte-for-byte unchanged) or `TrainingPanel`
++(also completely unchanged) depending on which sub-tab is active. The
++Training button itself only appears once `state.completedRaids.includes
++('blackford_keep')` -- the exact same gate that used to hide the
++top-level nav entry, just moved onto this button instead. `TrainingPanel`
++still shows its own internal "Fund Training" purchase screen underneath
++that if the Training Grounds upgrade itself hasn't been bought yet --
++unrelated, unchanged, one gate deeper.
++
++Removed 'training' from `MenuWindow.tsx`'s `ALL_TABS`/`isTabVisible`
++entirely, which also removes it from the onboarding tour for free (tour
++steps are already derived from `ALL_TABS.filter(isTabVisible)` rather
++than a separately hand-maintained list). The `PANEL_BREAKDOWNS` help-card
++content that used to live under its own `training` key got merged into
++the `heroes` entry instead, since that lookup has no concept of
++sub-tabs. `GuildManager`'s "Unlocks the Training tab" upgrade description
++now reads "Unlocks the Training sub-tab under Heroes."
++
++**Repair/heal while questing, quest-card artwork, and Level 1 Scrap cost
++-- not in this patch.** The three original reports from earlier this
++session (repair/heal availability while a hero is out, "On The Road"
++quest cards using their real artwork, and Level 1 gear not costing
++Scrap) did not make it into 0305 -- the background-mood system ended up
++being the entire patch on its own. Still open, tracked in the backlog
++below for the next pass.
++
++**Verification.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh pull of `main`
++(confirmed patch 0304 was already live and this patch is rebased on top
++of it). All twelve new/replaced image destinations confirmed present on
++disk at their correct paths with no double-nested `bright/bright`
++mistakes. No live in-app playtest in this environment (no browser
++available) -- worth a real pass confirming: the two-step naming modal's
++back button and Enter-to-advance both feel right; the Heroes/Training
++sub-tab switch doesn't lose the currently-selected hero; and the Bright
++set actually reads as a cohesive "sunlit" pass across a full runthrough,
++not just each image in isolation.
+diff --git a/src/game/settings.ts b/src/game/settings.ts
+index 92eb708..bae2191 100644
+--- a/src/game/settings.ts
++++ b/src/game/settings.ts
+@@ -46,6 +46,21 @@ export type FontId = 'themed' | 'readable';
+  */
+ export type CompanionBackdropId = 'off' | 'subtle' | 'strong';
+ 
++/**
++ * "Guild's Mood" (patch 0305, direct request) -- swaps which art folder
++ * every tab-scene/vendor-scene/menu-backdrop image is read from. 'dim'
++ * (the default, matching every image this game has always shipped with)
++ * reads straight from each image's existing path. 'bright' reads the
++ * exact same filename from a sibling `bright/` folder one level under
++ * each existing image's own directory (e.g. `lore/panels/heroes.jpg` ->
++ * `lore/panels/bright/heroes.jpg`) via backgroundSrc() in this same
++ * file. A tab with no bright/ counterpart yet just keeps showing its dim
++ * image -- the browser's own 404-on-missing-image is the fallback, no
++ * special-case code needed, same "ship safely before art lands" shape
++ * MenuWindow.tsx's raids/hatchery/peddler backdrop comment already uses.
++ */
++export type BackgroundMoodId = 'dim' | 'bright';
++
+ export interface Theme {
+   id: ThemeId;
+   name: string;
+@@ -80,6 +95,13 @@ export interface Settings {
+   styleId: StyleId;
+   /** Typeface: pixel/monospace 'themed', or a plain sans-serif 'readable'. */
+   fontId: FontId;
++  /** Which art folder every tab/vendor/menu background image reads from --
++   *  see BackgroundMoodId's own comment. Asked once during first-time
++   *  setup (GuildNamingModal) and changeable anytime after from Settings,
++   *  same "asked once, revisitable" shape nothing else in this file
++   *  actually uses yet, but matches how every other cosmetic choice here
++   *  behaves once picked. */
++  backgroundMood: BackgroundMoodId;
+   /** Optional backing plate behind the idle companion, for readability over busy wallpaper. */
+   companionBackdrop: CompanionBackdropId;
+   /**
+@@ -205,6 +227,7 @@ export const DEFAULT_SETTINGS: Settings = {
+   theme: 'high_contrast',
+   styleId: 'adventure',
+   fontId: 'readable',
++  backgroundMood: 'dim',
+   companionBackdrop: 'off',
+   hideIdleInfo: false,
+   hideHeroSprite: false,
+@@ -370,6 +393,23 @@ function prefersReducedMotionByDefault(): boolean {
+   }
+ }
+ 
++/**
++ * Resolves a dim-mode background image path to its Bright counterpart when
++ * the setting calls for it -- see BackgroundMoodId's own comment for the
++ * folder convention. `dimPath` is whatever path a component already builds
++ * for its dim image (e.g. `./lore/panels/heroes.jpg` or
++ * `./lore/vendors/blacksmith.jpg`); this only ever touches the filename's
++ * own directory, inserting a `bright/` segment right before it, so it works
++ * unchanged for any of this game's background folders without needing to
++ * know which one it's looking at.
++ */
++export function backgroundSrc(dimPath: string, mood: BackgroundMoodId): string {
++  if (mood === 'dim') return dimPath;
++  const slash = dimPath.lastIndexOf('/');
++  if (slash === -1) return dimPath;
++  return `${dimPath.slice(0, slash)}/bright${dimPath.slice(slash)}`;
++}
++
+ export const SettingsStore = {
+   load(): Settings {
+     try {
+@@ -420,6 +460,7 @@ export const SettingsStore = {
+     root.dataset.style = settings.styleId;
+     root.dataset.font = settings.fontId;
+     root.dataset.companionBackdrop = settings.companionBackdrop;
++    root.dataset.backgroundMood = settings.backgroundMood;
+     root.dataset.motion = motion === 0 ? 'off' : 'on';
+   },
+ };
+diff --git a/src/ui/GuildNamingModal.tsx b/src/ui/GuildNamingModal.tsx
+index ee50f82..d4d2c95 100644
+--- a/src/ui/GuildNamingModal.tsx
++++ b/src/ui/GuildNamingModal.tsx
+@@ -1,5 +1,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
++import { useSettings } from './useSettings';
++import type { BackgroundMoodId } from '../game/settings';
+ 
+ /**
+  * Blocking, non-dismissible prompt asking the player to name their guild.
+@@ -15,9 +17,22 @@ import { useEngine } from './useEngine';
+  */
+ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise<void> | void }) {
+   const engine = useEngine();
++  const { update: updateSettings } = useSettings();
+   const [draft, setDraft] = useState('');
+   const unnamed = engine.state.guildName === '';
+   const inputRef = useRef<HTMLInputElement>(null);
++  // Two-step setup (patch 0305, direct request: "Guild's Mood" toggle
++  // during first-time setup) -- 'name' first, then 'vibe'. Both steps
++  // live in this one component/gate (unnamed) rather than splitting vibe
++  // into its own separately-gated modal, since a second gate would need
++  // its own "have we asked yet" flag persisted somewhere, and the guild
++  // not being named yet is already exactly the right one-shot condition
++  // for "this is a brand-new guild that hasn't finished setup." Picking a
++  // name on step 1 no longer immediately calls setGuildName -- it now
++  // only advances `step`, holding the trimmed name in `draft` (already
++  // local state) until the vibe is picked too, since setGuildName is what
++  // flips `unnamed` false and closes this modal entirely.
++  const [step, setStep] = useState<'name' | 'vibe'>('name');
+ 
+   // Forces full menu size before this modal has to render at all -- lives
+   // here rather than in App.tsx specifically because this component
+@@ -80,8 +95,13 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+ 
+   const trimmed = draft.trim();
+ 
+-  const confirm = () => {
++  const confirmName = () => {
+     if (!trimmed) return;
++    setStep('vibe');
++  };
++
++  const confirmVibe = (mood: BackgroundMoodId) => {
++    updateSettings('backgroundMood', mood);
+     engine.setGuildName(trimmed);
+   };
+ 
+@@ -107,33 +127,69 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+           📜
+         </div>
+ 
+-        <h3 style={{ textAlign: 'center' }}>What is your guild called?</h3>
+-        <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
+-          You can rename it later from the Dashboard.
+-        </p>
++        {step === 'name' ? (
++          <>
++            <h3 style={{ textAlign: 'center' }}>What is your guild called?</h3>
++            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
++              You can rename it later from the Dashboard.
++            </p>
+ 
+-        <div className="row" style={{ gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
+-          <span className="tiny muted">Guild -</span>
+-          <input
+-            ref={inputRef}
+-            type="text"
+-            value={draft}
+-            placeholder="Ironclad"
+-            maxLength={24}
+-            onChange={(e) => setDraft(e.target.value)}
+-            onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
+-            style={{
+-              flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+-              color: 'var(--parchment)', padding: '7px 8px',
+-            }}
+-          />
+-        </div>
++            <div className="row" style={{ gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
++              <span className="tiny muted">Guild -</span>
++              <input
++                ref={inputRef}
++                type="text"
++                value={draft}
++                placeholder="Ironclad"
++                maxLength={24}
++                onChange={(e) => setDraft(e.target.value)}
++                onKeyDown={(e) => { if (e.key === 'Enter') confirmName(); }}
++                style={{
++                  flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
++                  color: 'var(--parchment)', padding: '7px 8px',
++                }}
++              />
++            </div>
+ 
+-        <div className="row end" style={{ marginTop: 16 }}>
+-          <button className="btn-primary" onClick={confirm} disabled={!trimmed}>
+-            Found the guild
+-          </button>
+-        </div>
++            <div className="row end" style={{ marginTop: 16 }}>
++              <button className="btn-primary" onClick={confirmName} disabled={!trimmed}>
++                Next
++              </button>
++            </div>
++          </>
++        ) : (
++          <>
++            <h3 style={{ textAlign: 'center' }}>What's your guild's vibe?</h3>
++            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
++              Sets the look of every hall and tab -- changeable anytime later from Settings.
++            </p>
++
++            <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
++              <button
++                className="btn-primary"
++                onClick={() => confirmVibe('dim')}
++                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
++                title="Candlelit halls, torchlit chambers -- the classic look"
++              >
++                🕯️<br />Moody
++              </button>
++              <button
++                className="btn-primary"
++                onClick={() => confirmVibe('bright')}
++                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
++                title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
++              >
++                ☀️<br />Bright
++              </button>
++            </div>
++
++            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
++              <button className="btn-ghost tiny" onClick={() => setStep('name')}>
++                ← Back
++              </button>
++            </div>
++          </>
++        )}
+       </div>
+     </div>
+   );
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index c994411..ada72b3 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -1,6 +1,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
++import { backgroundSrc } from '../game/settings';
+ import { OnboardingTour } from './OnboardingTour';
+ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+ import { formatGold, formatNumber } from '../game/util';
+@@ -15,7 +16,6 @@ import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
+ import { QuestPanel } from './panels/QuestPanel';
+ import { DiscoveredQuestsPanel } from './panels/DiscoveredQuestsPanel';
+ import { HeroesPanel } from './panels/HeroesPanel';
+-import { TrainingPanel } from './panels/TrainingPanel';
+ import { EquipmentPanel } from './panels/EquipmentPanel';
+ import { VendorsPanel } from './panels/VendorsPanel';
+ import { GuildPanel } from './panels/GuildPanel';
+@@ -60,8 +60,7 @@ const DASHBOARD_GROUP = {
+ const GUILD_GROUP = {
+   label: 'Guild',
+   tabs: [
+-    { id: 'heroes', label: 'Heroes', Panel: HeroesPanel, tooltip: 'Recruit, level, and manage your roster of heroes.' },
+-    { id: 'training', label: 'Training', Panel: TrainingPanel, tooltip: 'Reassign a hero\u2019s Melee/Ranged/Caster role for raid parties.' },
++    { id: 'heroes', label: 'Heroes', Panel: HeroesPanel, tooltip: 'Recruit, level, and manage your roster of heroes -- Training now lives in its own sub-tab here.' },
+     { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel, tooltip: 'Gear and consumables in your stash, and what each hero has equipped.' },
+     { id: 'vendors', label: 'Vendors', Panel: VendorsPanel, tooltip: 'Buy from the Blacksmith, Alchemist, and Enchanter, or craft your own gear.' },
+     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel, tooltip: 'Facility and permanent upgrades that boost the whole guild.' },
+@@ -169,11 +168,10 @@ const PANEL_BREAKDOWNS: Partial<Record<TabId, string[]>> = {
+     'Your roster -- stats, gear, and skins for every hero recruited so far.',
+     'Recruit fills an empty slot; slots expand as the guild grows.',
+     "Skins are cosmetic only, separate from a hero's own gear.",
+-  ],
+-  training: [
+-    "Reassign a hero's battlefield role -- Melee, Ranged, or Caster -- for a gold cost.",
+-    "Role only matters for raid party composition; quests don't care which role a hero is set to.",
+-    "Unlocks once the guild clears its first raid, Blackford Keep.",
++    // Merged in from the old standalone Training tab (patch 0305 moved it
++    // into a Heroes sub-tab) -- this breakdown card doesn't know about
++    // sub-tabs, so its content just lives alongside the roster tips now.
++    "Training (its own sub-tab, unlocked after clearing Blackford Keep) reassigns a hero's battlefield role -- Melee, Ranged, or Caster -- for a gold cost.",
+   ],
+   equipment: [
+     "Everything the guild owns: gear worn by each hero, the shared stash, and consumables.",
+@@ -326,8 +324,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+   // they can't drift apart again the way that duplication already had.
+   const isTabVisible = (id: TabId) => (id === 'hatchery' ? engine.state.hatcheryUnlocked
+     : id === 'peddler' ? engine.state.peddlerUnlocked
+-    : id === 'harvest' ? engine.state.harvestUnlocked
+-    : id === 'training' ? engine.state.completedRaids.includes('blackford_keep') : true);
++    : id === 'harvest' ? engine.state.harvestUnlocked : true);
+   const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
+   // Acknowledges the bare (no-sub-tab) key for whichever top-level tab is
+   // currently active, every time it changes -- clears the nav shimmer for
+@@ -377,14 +374,20 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+         separate layer (not the image's own opacity) so it never washes out
+         the panel content drawn on top. A missing file just paints nothing,
+         so this is safe to ship before art lands -- same pattern as the Lore
+-        tab's per-chain card backgrounds.
++        tab's per-chain card backgrounds. Now mood-aware (patch 0305) via
++        backgroundSrc(); Hatchery has no Bright counterpart yet, so it just
++        keeps showing its dim image in Bright mode until one's added --
++        same safe fallback, no special-case code needed.
+       */}
+       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', overflow: 'hidden' }}>
+         {tab === 'raids' || tab === 'hatchery' || tab === 'peddler' ? (
+           <div
+             style={{
+               position: 'absolute', inset: 0,
+-              backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/peddler-bg.png'})`,
++              backgroundImage: `url(${backgroundSrc(
++                tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/peddler-bg.png',
++                settings.backgroundMood,
++              )})`,
+               backgroundSize: 'cover',
+               backgroundPosition: 'center',
+             }}
+@@ -509,16 +512,14 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+                 // always exist -- all three hidden entirely until their
+                 // own intro chain completes, rather than shown-but-locked
+                 // the way e.g. Raids' own internal gating works. Training
+-                // (patch 0142) is a fourth: hidden until Blackford Keep
+-                // is cleared (the guild's first raid, "the Siege" --
+-                // narratively the moment training stops being optional),
+-                // derived directly from state.completedRaids rather than
+-                // its own boolean flag -- completedRaids already exists
+-                // and is reliable on every save, so there's no migration
+-                // to write and no second source of truth to keep in sync.
+-                // Once visible, it still shows a locked screen internally
+-                // (a "Fund Training" purchase) same as Raids' own pattern
+-                // -- see TrainingPanel.tsx. Every other tab id has no
++                // (patch 0142) used to be a fourth here, hidden until
++                // Blackford Keep was cleared; patch 0305 moved it into its
++                // own sub-tab inside Heroes instead (direct request), so
++                // that same completedRaids check now lives on the
++                // sub-tab button inside HeroesPanel.tsx rather than here --
++                // see that file's own comment for the "Fund Training"
++                // purchase screen this still shows internally once visible,
++                // unchanged from before the move. Every other tab id has no
+                 // visibility condition at all, hence `?? true`. Harvest is
+                 // the odd one out here (see GameState.harvestUnlocked's
+                 // own comment) -- it's the only one of the three that
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index b8ad657..46319ce 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -1,6 +1,8 @@
+ import { useState } from 'react';
+ import type { ReactNode } from 'react';
+ import { useEngine } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
+@@ -206,6 +208,7 @@ export function Ring({
+ export function DashboardPanel() {
+   const engine = useEngine();
+   const state = engine.state;
++  const { settings } = useSettings();
+   const breakdown = guildPowerBreakdown(state);
+   const power = breakdown.total;
+   const rank = currentGuildRank(state);
+@@ -224,21 +227,24 @@ export function DashboardPanel() {
+   };
+ 
+   return (
+-    <>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/dashboard.jpg', settings.backgroundMood)})` }}>
++      <div className="tab-scene-content">
+       <div className="spread" style={{ alignItems: 'flex-start' }}>
+         <div>
+           <h2>The Guild</h2>
+           <p className="subtitle">Everything the guild has built, at a glance.</p>
+         </div>
+-        {/* Moved here from the Guild Hall tab's own header (patch 0213) --
+-            Customize decorates the whole guild's home, not specifically a
+-            facility, so it reads better as a home-tab call-to-action than
+-            a small header button buried on the Guild Hall tab. Bigger and
+-            its own colour (.btn-teal-lg) rather than the plain .btn-ghost
+-            it used to be, so it actually stands out here. Navigates to
+-            the Guild Hall tab with the 'customize' sub-tab sentinel,
+-            which GuildPanel consumes once on mount to open straight into
+-            GuildHallCustomizeScene instead of the normal facilities view. */}
++        {/* Customize entry point turned off (patch 0305, direct request) --
++            hidden here rather than removed. GuildHallCustomizeScene, its
++            slot-placement system, and GuildPanel's own `customizing`
++            consumeRequestedSubTab('customize') plumbing are all left
++            completely untouched below and in GuildPanel.tsx -- this is
++            the only actual entry point into that mode anywhere in the
++            game, so simply not rendering this button makes the whole
++            feature unreachable without deleting a single line of it.
++            Re-enable by uncommenting this block whenever that work
++            picks back up; nothing else needs to change. */}
++        {/*
+         <button
+           className="btn-teal-lg"
+           onClick={() => engine.requestTab('guild', undefined, 'customize')}
+@@ -246,6 +252,7 @@ export function DashboardPanel() {
+         >
+           🎨 Customize
+         </button>
++        */}
+       </div>
+ 
+       <AttentionDigest />
+@@ -380,6 +387,7 @@ export function DashboardPanel() {
+           <div className="tiny muted">Retirements</div>
+         </div>
+       </div>
+-    </>
++      </div>
++    </div>
+   );
+ }
+diff --git a/src/ui/panels/DiscoveredQuestsPanel.tsx b/src/ui/panels/DiscoveredQuestsPanel.tsx
+index 865a162..67ba3a4 100644
+--- a/src/ui/panels/DiscoveredQuestsPanel.tsx
++++ b/src/ui/panels/DiscoveredQuestsPanel.tsx
+@@ -1,5 +1,7 @@
+ import { useEffect, useMemo, useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import {
+   HeroTab, ChainQuestBanner, chainIconSrc, Offer,
+ } from './QuestPanel';
+@@ -65,6 +67,7 @@ export function DiscoveredQuestsPanel() {
+   const engine = useEngine();
+   const now = useNow();
+   const state = engine.state;
++  const { settings } = useSettings();
+ 
+   const [subTab, setSubTab] = useState<'board' | 'memories'>('board');
+ 
+@@ -112,7 +115,7 @@ export function DiscoveredQuestsPanel() {
+ 
+   if (!selectedHero) {
+     return (
+-      <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
++      <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
+         <div className="tab-scene-content">
+         <h2>Story Quests</h2>
+         <p className="subtitle">Recruit a hero first -- quest chains open up once you have someone to send.</p>
+@@ -122,7 +125,7 @@ export function DiscoveredQuestsPanel() {
+   }
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Story Quests</h2>
+ 
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 1d04a42..1a96dfc 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -1,5 +1,7 @@
+ import { useState } from 'react';
+ import { useEngine } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import { GameEngine } from '../../game/engine';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+@@ -892,6 +894,7 @@ function StashCard({
+ export function EquipmentPanel() {
+   const engine = useEngine();
+   const state = engine.state;
++  const { settings } = useSettings();
+   const workshop = state.guild.workshop ?? 0;
+   const [heroId, setHeroId] = useState(state.heroes[0].id);
+   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
+@@ -955,7 +958,7 @@ export function EquipmentPanel() {
+   });
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/inventory.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/inventory.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Inventory</h2>
+       <p className="subtitle">
+diff --git a/src/ui/panels/GuidePanel.tsx b/src/ui/panels/GuidePanel.tsx
+index 99ecd94..828985e 100644
+--- a/src/ui/panels/GuidePanel.tsx
++++ b/src/ui/panels/GuidePanel.tsx
+@@ -1,5 +1,7 @@
+ import { useEffect, useState } from 'react';
+ import { useEngine } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import { GUIDE_TOPICS } from '../../game/data/guideTopics';
+ import { TAB_LABELS } from '../tabLabels';
+ 
+@@ -67,10 +69,11 @@ function HowToTab() {
+ }
+ 
+ export function GuidePanel() {
++  const { settings } = useSettings();
+   const [subTab, setSubTab] = useState<'notifications' | 'howto'>('notifications');
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/lore-and-guide.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/lore-and-guide.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Guide</h2>
+       <p className="subtitle">A running log of what's happened, and a quick reference for how everything works.</p>
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index ac49084..bf86ef2 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -1,6 +1,8 @@
+ import { useEffect, useRef, useState } from 'react';
+ import type { ReactNode } from 'react';
+ import { useEngine } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
+@@ -142,6 +144,7 @@ function UpgradeCard({
+ export function GuildPanel() {
+   const engine = useEngine();
+   const state = engine.state;
++  const { settings } = useSettings();
+   const global = ModifierManager.global(state);
+ 
+   // Inline "Customize" mode -- per the original design brainstorm's own
+@@ -228,7 +231,7 @@ export function GuildPanel() {
+       ...(def.unlocks === 'raids' ? [<span key="unlock-raids" className="gold-text">Unlocks Normal-difficulty raids</span>] : []),
+       ...(def.unlocks === 'raidsHeroic' ? [<span key="unlock-raids-h" className="gold-text">Unlocks Heroic raid difficulty</span>] : []),
+       ...(def.unlocks === 'raidsLegendary' ? [<span key="unlock-raids-l" className="gold-text">Unlocks Legendary raid difficulty</span>] : []),
+-      ...(def.unlocks === 'training' ? [<span key="unlock-training" className="gold-text">Unlocks the Training tab -- reassign any hero's role</span>] : []),
++      ...(def.unlocks === 'training' ? [<span key="unlock-training" className="gold-text">Unlocks the Training sub-tab under Heroes -- reassign any hero's role</span>] : []),
+       ...(def.unlocks === 'autoChain' && level > 0
+         ? [<span key="ac-current" className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>] : []),
+       ...(def.unlocks === 'autoChain' && !maxed
+@@ -338,7 +341,7 @@ export function GuildPanel() {
+   }
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/guildhall.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/guildhall.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <div>
+         <h2>Guild Hall</h2>
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index 16db554..b297f44 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -15,6 +15,7 @@ import { isTabUnread } from '../../game/attention';
+ import { Ring } from './DashboardPanel';
+ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+ import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
++import { backgroundSrc } from '../../game/settings';
+ 
+ type SubTab = 'warehouse' | 'fields';
+ 
+@@ -150,6 +151,7 @@ const HARVEST_FLASH_MS = 700;
+ 
+ function FieldsTab() {
+   const state = useEngine().state;
++  const { settings } = useSettings();
+   const cap = HarvestManager.capacity(state);
+   const [flashing, setFlashing] = useState<Partial<Record<MaterialId, boolean>>>({});
+   const flashTimeouts = useRef<Partial<Record<MaterialId, number>>>({});
+@@ -176,7 +178,7 @@ function FieldsTab() {
+       </div>
+       <SpawnTimerBar />
+       <div className="harvest-scene">
+-        <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }} />
++        <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: `url(${backgroundSrc('./lore/harvest/fields.jpg', settings.backgroundMood)})` }} />
+         {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} onCatch={triggerFlash} />)}
+       </div>
+     </>
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 900463f..82383cd 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -1,10 +1,12 @@
+-import { useState } from 'react';
++import { useEffect, useState } from 'react';
+ import type { CSSProperties } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
++import { isTabUnread } from '../../game/attention';
++import { TrainingPanel } from './TrainingPanel';
+ import { HERO_CLASSES, HeroClassDef, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+ import { heroMilestoneUnlocked } from '../../game/data/heroMilestones';
+ import { Tuning } from '../../game/data/tuning';
+@@ -79,7 +81,75 @@ function recruitStatusFor(
+   return { def, unlocked, milestoneMet, cost, tavernUnlocked, slotsFull, alreadyRecruited };
+ }
+ 
++/**
++ * Heroes tab shell (patch 0305) -- Training moved here from its own
++ * top-level nav entry as a sub-tab, direct request. Same
++ * subTab-state/consumeRequestedSubTab/acknowledgeTab shape every other
++ * sub-tabbed panel in this game already uses (VendorsPanel, RaidsPanel),
++ * with one deliberate difference: the two sub-views here are each a
++ * FULL separate component (HeroesRosterView below, TrainingPanel
++ * unchanged) rather than one shared background wrapper switching what's
++ * inside it the way VendorsPanel's vendor-scene does -- Heroes and
++ * Training each already had their own complete tab-scene background,
++ * heading, and content before this move, and reusing them as-is here
++ * keeps that intact with zero risk of the two 499-line and ~170-line
++ * bodies drifting apart during the extraction.
++ *
++ * Training's own visibility gate (state.completedRaids.includes
++ * ('blackford_keep')) moved here unchanged from MenuWindow.tsx's old
++ * isTabVisible entry for it -- same condition, just checked on this
++ * sub-tab button instead of the old top-level nav entry. TrainingPanel
++ * itself still shows its own internal "Fund Training" purchase screen
++ * below that if the actual unlock upgrade hasn't been bought yet --
++ * unrelated, unchanged gate one layer deeper.
++ */
+ export function HeroesPanel() {
++  const engine = useEngine();
++  const [subTab, setSubTab] = useState<'heroes' | 'training'>('heroes');
++  const trainingVisible = engine.state.completedRaids.includes('blackford_keep');
++
++  // Deep-link support for a notification's "Go to" button targeting
++  // Training specifically -- same consume-once shape every other
++  // sub-tabbed panel uses. A request for 'training' while it's not
++  // actually visible yet is simply ignored, same defensive shape
++  // VendorsPanel's own VENDORS.some(...) guard uses for a foreign id.
++  useEffect(() => {
++    const requested = engine.consumeRequestedSubTab();
++    if (requested === 'training' && trainingVisible) setSubTab('training');
++    else if (requested === 'heroes') setSubTab('heroes');
++  }, [engine, engine.requestedSubTab, trainingVisible]);
++
++  useEffect(() => {
++    engine.acknowledgeTab('heroes', subTab);
++  }, [engine, subTab]);
++
++  return (
++    <>
++      {trainingVisible && (
++        <div className="row" style={{ gap: 8, marginBottom: 14 }}>
++          <button
++            className={`btn-subtab ${subTab === 'heroes' ? 'on' : ''} ${isTabUnread(engine.state, 'heroes', 'heroes') ? 'subtab-unread' : ''}`}
++            onClick={() => setSubTab('heroes')}
++          >
++            Heroes
++          </button>
++          <button
++            className={`btn-subtab ${subTab === 'training' ? 'on' : ''} ${isTabUnread(engine.state, 'heroes', 'training') ? 'subtab-unread' : ''}`}
++            onClick={() => setSubTab('training')}
++          >
++            Training
++          </button>
++        </div>
++      )}
++      {subTab === 'training' && trainingVisible ? <TrainingPanel /> : <HeroesRosterView />}
++    </>
++  );
++}
++
++/** The Heroes tab's actual roster content -- unchanged from before patch
++ *  0305's sub-tab extraction, just renamed from the old exported
++ *  `HeroesPanel` (see that name's own comment just above). */
++function HeroesRosterView() {
+   const engine = useEngine();
+   const now = useNow();
+   const { settings } = useSettings();
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index 49eb3f6..b8cdcef 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -9,6 +9,8 @@ import { describeMods, RARITY_COLOR, formatDuration } from '../../game/util';
+ import { isTabUnread } from '../../game/attention';
+ import { RarityPill } from '../RarityPill';
+ import { useEngine } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ 
+ /**
+  * Banner strip for a chain card and its detail modal -- same
+@@ -478,6 +480,7 @@ function CollectionTab() {
+ export function LorePanel() {
+   const engine = useEngine();
+   const state = engine.state;
++  const { settings } = useSettings();
+   const [subTab, setSubTab] = useState<'quests' | 'raids' | 'collection'>('quests');
+ 
+   // Deep-link support for a notification's "Go to" button targeting a
+@@ -501,7 +504,7 @@ export function LorePanel() {
+   const powerNeeded = powerToNextRank(state);
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/lore-and-guide.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/lore-and-guide.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Lore</h2>
+       <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index bbddadb..0b503dd 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -7,6 +7,7 @@ import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel
+ import { describeMods, formatDuration, formatNumber } from '../../game/util';
+ import { usePulsesOnChange } from '../maxFlash';
+ import { Hero } from '../../game/types';
++import { backgroundSrc } from '../../game/settings';
+ 
+ /**
+  * Replaces the native browser confirm() previously used for both Retire
+@@ -222,7 +223,7 @@ export function PrestigePanel() {
+     : 0;
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/prestige.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/prestige.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Prestige</h2>
+       <p className="subtitle">
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 7fbd1db..694a321 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -1,7 +1,9 @@
+ import { useEffect, useMemo, useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+-import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import { GuildManager } from '../../game/managers/GuildManager';
++import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+ import {
+   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
+ } from '../../game/data/quests';
+@@ -420,6 +422,7 @@ export function QuestPanel() {
+   const engine = useEngine();
+   const now = useNow();
+   const state = engine.state;
++  const { settings } = useSettings();
+ 
+   // Which row's detail modal is currently open -- replaces the old
+   // per-card expand/collapse toggle now that a row opens a full modal
+@@ -545,7 +548,7 @@ export function QuestPanel() {
+   };
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Quest Board</h2>
+       <p className="subtitle">
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index 0bda4eb..adbdd6e 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -3,7 +3,7 @@ import { useEngine } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { HeroSprite } from '../sprites/HeroSprite';
+ import { PetSprite } from '../sprites/PetSprite';
+-import { Settings, THEMES } from '../../game/settings';
++import { Settings, THEMES, backgroundSrc } from '../../game/settings';
+ import { previewSound } from '../../game/sound';
+ import { BARD_TRACKS } from '../../game/data/bard';
+ import { CREDITS } from '../../game/data/credits';
+@@ -68,7 +68,7 @@ export function SettingsPanel() {
+   const unlockedTracks = BARD_TRACKS.filter((t) => unlockedTrackIds.includes(t.id));
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/settings.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/settings.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Settings</h2>
+       <p className="subtitle">Everything here is per-device and saved instantly. It never touches your guild's progress.</p>
+@@ -97,6 +97,25 @@ export function SettingsPanel() {
+         />
+       </Row>
+ 
++      {/* Guild's Mood (patch 0305, direct request) -- same Segmented shape
++       *  as Style/Font just above, also asked once during first-time setup
++       *  (GuildNamingModal) but revisitable anytime here, same as every
++       *  other cosmetic choice on this panel. Swaps which art folder every
++       *  tab/vendor/menu background reads from (see BackgroundMoodId's own
++       *  comment) -- a tab with no Bright counterpart yet just keeps
++       *  showing its dim image, so toggling this is always safe even while
++       *  the Bright set is still being filled in. */}
++      <Row label="Guild's Mood" hint="Moody is candlelit halls and torchlit chambers. Bright swaps in sunlit daytime art for the same rooms.">
++        <Segmented
++          value={settings.backgroundMood}
++          onChange={set('backgroundMood')}
++          options={[
++            { label: 'Moody', value: 'dim' },
++            { label: 'Bright', value: 'bright' },
++          ]}
++        />
++      </Row>
++
+       <Row label="Theme" hint="Recolours the entire guild menu.">
+         <div className="theme-grid">
+           {THEMES.map((theme) => (
+diff --git a/src/ui/panels/StatsPanel.tsx b/src/ui/panels/StatsPanel.tsx
+index f7c9412..2d9e0d8 100644
+--- a/src/ui/panels/StatsPanel.tsx
++++ b/src/ui/panels/StatsPanel.tsx
+@@ -1,5 +1,7 @@
+ import { useEffect, useState } from 'react';
+ import { useEngine } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import { isTabUnread } from '../../game/attention';
+ import { AchievementManager } from '../../game/managers/AchievementManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+@@ -167,6 +169,7 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
+ export function StatsPanel() {
+   const engine = useEngine();
+   const state = engine.state;
++  const { settings } = useSettings();
+   const stats = state.stats;
+   const successRate = stats.totalQuests > 0
+     ? `${Math.round((stats.successes / stats.totalQuests) * 100)}%`
+@@ -292,7 +295,7 @@ export function StatsPanel() {
+   ].sort((a, b) => b.resolvedAt - a.resolvedAt);
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/settings.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/settings.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Statistics</h2>
+       <p className="subtitle">Everything the guild scribe has bothered to write down.</p>
+diff --git a/src/ui/panels/TrainingPanel.tsx b/src/ui/panels/TrainingPanel.tsx
+index a76c767..74a63dc 100644
+--- a/src/ui/panels/TrainingPanel.tsx
++++ b/src/ui/panels/TrainingPanel.tsx
+@@ -1,5 +1,7 @@
+ import { useState } from 'react';
+ import { useEngine } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+@@ -123,19 +125,23 @@ function HeroTile({ hero, onClick }: { hero: Hero; onClick: () => void }) {
+ export function TrainingPanel() {
+   const engine = useEngine();
+   const state = engine.state;
++  const { settings } = useSettings();
+   const hasTraining = ModifierManager.hasUnlock(state, 'training');
+   const [selectedHeroId, setSelectedHeroId] = useState<string | null>(null);
+   const selectedHero = state.heroes.find((h) => h.id === selectedHeroId) ?? null;
+ 
+-  // Same "hidden entirely, not shown-but-locked" nav gate as Hatchery/
+-  // Harvest/Grimsby (see MenuWindow.tsx's own filter comment) already
+-  // keeps this tab off the nav bar before Blackford Keep is cleared, so
+-  // reaching this component at all means that condition is already met
+-  // -- what's left to gate here is purely the Training Grounds purchase.
++  // Same "hidden entirely, not shown-but-locked" gate as Hatchery/
++  // Harvest/Grimsby's own nav entries (see MenuWindow.tsx's own filter
++  // comment) already keeps this sub-tab's button off HeroesPanel's own
++  // sub-tab row before Blackford Keep is cleared (patch 0305 moved this
++  // gate from the top-level nav onto that button when Training became a
++  // Heroes sub-tab -- see HeroesPanel.tsx's own comment), so reaching
++  // this component at all means that condition is already met -- what's
++  // left to gate here is purely the Training Grounds purchase.
+   if (!hasTraining) {
+     const cost = GuildManager.nextUpgradeCost(state, 'training_grounds');
+     return (
+-      <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/training.jpg)' }}>
++      <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/training.jpg', settings.backgroundMood)})` }}>
+         <div className="tab-scene-content">
+         <h2>Training</h2>
+         <p className="subtitle">Reassign a hero's battlefield role -- Melee, Ranged, or Caster.</p>
+@@ -160,7 +166,7 @@ export function TrainingPanel() {
+   }
+ 
+   return (
+-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/training.jpg)' }}>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/training.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Training</h2>
+       <p className="subtitle">Click a hero to see their available roles.</p>
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 44cddbd..6e5b57a 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -28,6 +28,7 @@ import { ReputationRing } from '../ReputationRing';
+ import { ConfirmModal } from '../ConfirmModal';
+ import { RewardGlowParticle } from '../RewardGlowParticle';
+ import { useFlyTargetRef, getFlyTargetCenter } from '../flyTarget';
++import { backgroundSrc } from '../../game/settings';
+ 
+ /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
+  *  supplies, Enchanter sells the black market. Same mapping decides which
+@@ -59,6 +60,7 @@ const VENDOR_BG: Record<VendorId, string> = {
+ 
+ export function VendorsPanel() {
+   const engine = useEngine();
++  const { settings } = useSettings();
+   const [tab, setTab] = useState<VendorId>('blacksmith');
+ 
+   // Deep-link support for a notification's "Go to Enchanter" button (see
+@@ -87,7 +89,7 @@ export function VendorsPanel() {
+   }, [engine, tab]);
+ 
+   return (
+-    <div className="vendor-scene" style={{ backgroundImage: `url(${VENDOR_BG[tab]})` }}>
++    <div className="vendor-scene" style={{ backgroundImage: `url(${backgroundSrc(VENDOR_BG[tab], settings.backgroundMood)})` }}>
+       <div className="vendor-scene-content">
+         <h2>Vendors</h2>
+         <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>

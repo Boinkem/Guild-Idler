@@ -7,6 +7,7 @@ import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel 
 import { describeMods, formatDuration, formatNumber } from '../../game/util';
 import { usePulsesOnChange } from '../maxFlash';
 import { Hero } from '../../game/types';
+import { backgroundSrc } from '../../game/settings';
 
 /**
  * Replaces the native browser confirm() previously used for both Retire
@@ -222,7 +223,7 @@ export function PrestigePanel() {
     : 0;
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/prestige.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/prestige.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Prestige</h2>
       <p className="subtitle">

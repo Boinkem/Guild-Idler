@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
+import { backgroundSrc } from '../game/settings';
 import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
@@ -15,7 +16,6 @@ import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
 import { QuestPanel } from './panels/QuestPanel';
 import { DiscoveredQuestsPanel } from './panels/DiscoveredQuestsPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
-import { TrainingPanel } from './panels/TrainingPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
 import { VendorsPanel } from './panels/VendorsPanel';
 import { GuildPanel } from './panels/GuildPanel';
@@ -60,8 +60,7 @@ const DASHBOARD_GROUP = {
 const GUILD_GROUP = {
   label: 'Guild',
   tabs: [
-    { id: 'heroes', label: 'Heroes', Panel: HeroesPanel, tooltip: 'Recruit, level, and manage your roster of heroes.' },
-    { id: 'training', label: 'Training', Panel: TrainingPanel, tooltip: 'Reassign a hero\u2019s Melee/Ranged/Caster role for raid parties.' },
+    { id: 'heroes', label: 'Heroes', Panel: HeroesPanel, tooltip: 'Recruit, level, and manage your roster of heroes -- Training now lives in its own sub-tab here.' },
     { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel, tooltip: 'Gear and consumables in your stash, and what each hero has equipped.' },
     { id: 'vendors', label: 'Vendors', Panel: VendorsPanel, tooltip: 'Buy from the Blacksmith, Alchemist, and Enchanter, or craft your own gear.' },
     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel, tooltip: 'Facility and permanent upgrades that boost the whole guild.' },
@@ -169,11 +168,10 @@ const PANEL_BREAKDOWNS: Partial<Record<TabId, string[]>> = {
     'Your roster -- stats, gear, and skins for every hero recruited so far.',
     'Recruit fills an empty slot; slots expand as the guild grows.',
     "Skins are cosmetic only, separate from a hero's own gear.",
-  ],
-  training: [
-    "Reassign a hero's battlefield role -- Melee, Ranged, or Caster -- for a gold cost.",
-    "Role only matters for raid party composition; quests don't care which role a hero is set to.",
-    "Unlocks once the guild clears its first raid, Blackford Keep.",
+    // Merged in from the old standalone Training tab (patch 0305 moved it
+    // into a Heroes sub-tab) -- this breakdown card doesn't know about
+    // sub-tabs, so its content just lives alongside the roster tips now.
+    "Training (its own sub-tab, unlocked after clearing Blackford Keep) reassigns a hero's battlefield role -- Melee, Ranged, or Caster -- for a gold cost.",
   ],
   equipment: [
     "Everything the guild owns: gear worn by each hero, the shared stash, and consumables.",
@@ -326,8 +324,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   // they can't drift apart again the way that duplication already had.
   const isTabVisible = (id: TabId) => (id === 'hatchery' ? engine.state.hatcheryUnlocked
     : id === 'peddler' ? engine.state.peddlerUnlocked
-    : id === 'harvest' ? engine.state.harvestUnlocked
-    : id === 'training' ? engine.state.completedRaids.includes('blackford_keep') : true);
+    : id === 'harvest' ? engine.state.harvestUnlocked : true);
   const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
   // Acknowledges the bare (no-sub-tab) key for whichever top-level tab is
   // currently active, every time it changes -- clears the nav shimmer for
@@ -377,14 +374,20 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         separate layer (not the image's own opacity) so it never washes out
         the panel content drawn on top. A missing file just paints nothing,
         so this is safe to ship before art lands -- same pattern as the Lore
-        tab's per-chain card backgrounds.
+        tab's per-chain card backgrounds. Now mood-aware (patch 0305) via
+        backgroundSrc(); Hatchery has no Bright counterpart yet, so it just
+        keeps showing its dim image in Bright mode until one's added --
+        same safe fallback, no special-case code needed.
       */}
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', overflow: 'hidden' }}>
         {tab === 'raids' || tab === 'hatchery' || tab === 'peddler' ? (
           <div
             style={{
               position: 'absolute', inset: 0,
-              backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/peddler-bg.png'})`,
+              backgroundImage: `url(${backgroundSrc(
+                tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/peddler-bg.png',
+                settings.backgroundMood,
+              )})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
             }}
@@ -509,16 +512,14 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                 // always exist -- all three hidden entirely until their
                 // own intro chain completes, rather than shown-but-locked
                 // the way e.g. Raids' own internal gating works. Training
-                // (patch 0142) is a fourth: hidden until Blackford Keep
-                // is cleared (the guild's first raid, "the Siege" --
-                // narratively the moment training stops being optional),
-                // derived directly from state.completedRaids rather than
-                // its own boolean flag -- completedRaids already exists
-                // and is reliable on every save, so there's no migration
-                // to write and no second source of truth to keep in sync.
-                // Once visible, it still shows a locked screen internally
-                // (a "Fund Training" purchase) same as Raids' own pattern
-                // -- see TrainingPanel.tsx. Every other tab id has no
+                // (patch 0142) used to be a fourth here, hidden until
+                // Blackford Keep was cleared; patch 0305 moved it into its
+                // own sub-tab inside Heroes instead (direct request), so
+                // that same completedRaids check now lives on the
+                // sub-tab button inside HeroesPanel.tsx rather than here --
+                // see that file's own comment for the "Fund Training"
+                // purchase screen this still shows internally once visible,
+                // unchanged from before the move. Every other tab id has no
                 // visibility condition at all, hence `?? true`. Harvest is
                 // the odd one out here (see GameState.harvestUnlocked's
                 // own comment) -- it's the only one of the three that

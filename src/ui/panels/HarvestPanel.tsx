@@ -15,6 +15,7 @@ import { isTabUnread } from '../../game/attention';
 import { Ring } from './DashboardPanel';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
+import { backgroundSrc } from '../../game/settings';
 
 type SubTab = 'warehouse' | 'fields';
 
@@ -150,6 +151,7 @@ const HARVEST_FLASH_MS = 700;
 
 function FieldsTab() {
   const state = useEngine().state;
+  const { settings } = useSettings();
   const cap = HarvestManager.capacity(state);
   const [flashing, setFlashing] = useState<Partial<Record<MaterialId, boolean>>>({});
   const flashTimeouts = useRef<Partial<Record<MaterialId, number>>>({});
@@ -176,7 +178,7 @@ function FieldsTab() {
       </div>
       <SpawnTimerBar />
       <div className="harvest-scene">
-        <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }} />
+        <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: `url(${backgroundSrc('./lore/harvest/fields.jpg', settings.backgroundMood)})` }} />
         {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} onCatch={triggerFlash} />)}
       </div>
     </>

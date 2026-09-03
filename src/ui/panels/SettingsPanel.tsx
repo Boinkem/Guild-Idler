@@ -3,7 +3,7 @@ import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { PetSprite } from '../sprites/PetSprite';
-import { Settings, THEMES } from '../../game/settings';
+import { Settings, THEMES, backgroundSrc } from '../../game/settings';
 import { previewSound } from '../../game/sound';
 import { BARD_TRACKS } from '../../game/data/bard';
 import { CREDITS } from '../../game/data/credits';
@@ -68,7 +68,7 @@ export function SettingsPanel() {
   const unlockedTracks = BARD_TRACKS.filter((t) => unlockedTrackIds.includes(t.id));
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/settings.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/settings.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Settings</h2>
       <p className="subtitle">Everything here is per-device and saved instantly. It never touches your guild's progress.</p>
@@ -93,6 +93,25 @@ export function SettingsPanel() {
           options={[
             { label: 'Themed', value: 'themed' },
             { label: 'Readable', value: 'readable' },
+          ]}
+        />
+      </Row>
+
+      {/* Guild's Mood (patch 0305, direct request) -- same Segmented shape
+       *  as Style/Font just above, also asked once during first-time setup
+       *  (GuildNamingModal) but revisitable anytime here, same as every
+       *  other cosmetic choice on this panel. Swaps which art folder every
+       *  tab/vendor/menu background reads from (see BackgroundMoodId's own
+       *  comment) -- a tab with no Bright counterpart yet just keeps
+       *  showing its dim image, so toggling this is always safe even while
+       *  the Bright set is still being filled in. */}
+      <Row label="Guild's Mood" hint="Moody is candlelit halls and torchlit chambers. Bright swaps in sunlit daytime art for the same rooms.">
+        <Segmented
+          value={settings.backgroundMood}
+          onChange={set('backgroundMood')}
+          options={[
+            { label: 'Moody', value: 'dim' },
+            { label: 'Bright', value: 'bright' },
           ]}
         />
       </Row>

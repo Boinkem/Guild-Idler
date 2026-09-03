@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import {
   HeroTab, ChainQuestBanner, chainIconSrc, Offer,
 } from './QuestPanel';
@@ -65,6 +67,7 @@ export function DiscoveredQuestsPanel() {
   const engine = useEngine();
   const now = useNow();
   const state = engine.state;
+  const { settings } = useSettings();
 
   const [subTab, setSubTab] = useState<'board' | 'memories'>('board');
 
@@ -112,7 +115,7 @@ export function DiscoveredQuestsPanel() {
 
   if (!selectedHero) {
     return (
-      <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
+      <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
         <div className="tab-scene-content">
         <h2>Story Quests</h2>
         <p className="subtitle">Recruit a hero first -- quest chains open up once you have someone to send.</p>
@@ -122,7 +125,7 @@ export function DiscoveredQuestsPanel() {
   }
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Story Quests</h2>
 
