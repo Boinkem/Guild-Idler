@@ -4,7 +4,7 @@
     "name": "The Miller's Problem",
     "description": "A miller reports strange noises and a foul smell coming from his locked cellar. He believes it's rats, but hasn't gone down in three days. The rats have started fleeing upward instead of hiding, a sign something worse is below. Something old and unidentifiable has lived under the mill for years, undisturbed until now. The guild must investigate the cellar, track the smell to its source, and confront whatever is waiting beneath the mill.",
     "reqLevel": 2,
-    "rewardGold": 150,
+    "rewardGold": 456,
     "rewardItems": [
       "cellar_dwellers_tooth@5"
     ],
@@ -55,7 +55,7 @@
     "name": "The Last Clutch",
     "description": "The old hatchery at the edge of town has been failing for years. Its last keeper, too frail now to climb the coop ladder, has kept one final clutch of eggs alive through sheer stubbornness. The roof is failing and the fence is broken, and the clutch will not survive another storm without help.",
     "reqLevel": 5,
-    "rewardGold": 400,
+    "rewardGold": 406,
     "rewardItems": [
       "keepers_last_feather@5"
     ],
@@ -102,7 +102,7 @@
     "name": "The Crow's Warning",
     "description": "Thornhollow was not burned. It was searched, room by room and drawer by drawer, as if something specific was being hunted and never found. Those bitten during the attack are slowly turning into ghouls, and no cure exists anywhere in the ruins. A crow has attached itself to the guild and refuses to leave. It may be the only reason a cure reaches Thornhollow in time.",
     "reqLevel": 8,
-    "rewardGold": 900,
+    "rewardGold": 2733,
     "rewardItems": [
       "crow_feather_charm@5"
     ],
@@ -161,7 +161,7 @@
     "name": "The Harrower's Foot",
     "description": "A second village has been culled the same way as the last one. It was not burned or looted, only searched, drawer by drawer and room by room. Whatever is directing these raids is hunting for something specific, and every emptied village brings it closer to finding it.",
     "reqLevel": 11,
-    "rewardGold": 1300,
+    "rewardGold": 1617,
     "rewardItems": [
       "ashwoven_charm@5"
     ],
@@ -205,7 +205,7 @@
     "name": "A Demon General's Ledger",
     "description": "The foot soldiers answer to something bigger than hunger. A column of demons moves with real discipline, boots landing in step, led by something that gives orders instead of chasing its next meal.",
     "reqLevel": 15,
-    "rewardGold": 2100,
+    "rewardGold": 1950,
     "rewardItems": [
       "seized_glaive@5"
     ],
@@ -249,7 +249,7 @@
     "name": "What the Culled Become",
     "description": "The Harrower's name still means nothing to anyone at IronRest, but the ledger's tally means everything. Every village it culled has since reported graves opening from the inside. The people it took did not stay taken. They came back, and they came back different.",
     "reqLevel": 19,
-    "rewardGold": 2800,
+    "rewardGold": 3675,
     "rewardItems": [
       "gravewatchers_band@5"
     ],
@@ -301,7 +301,7 @@
     "name": "Proving the Bastion",
     "description": "The Thornhollow cure reached IronRest Bastion on schedule, carried the last leg by the guild that ran those vials there in the first place. Captain Maeryn Thorne does not forget a debt like that, and she has plenty of work that needs hands she can trust. Prove useful, and she has bigger plans in mind.",
     "reqLevel": 16,
-    "rewardGold": 3800,
+    "rewardGold": 4067,
     "rewardItems": [
       "wardens_signet@5"
     ],
@@ -361,7 +361,7 @@
     "name": "Granite Crossing",
     "description": "The Keep is finally the guild's own, and the war table already carries a new name in Thorne's own hand: Granite Crossing, home of the west coast's Stone Masons Guild. IronRest has heard nothing from it in weeks, and silence from a place that busy is never good news.",
     "reqLevel": 20,
-    "rewardGold": 2400,
+    "rewardGold": 2700,
     "rewardItems": [
       "bulwark_cuirass@5"
     ],
@@ -405,7 +405,7 @@
     "name": "The Farm at the Edge",
     "description": "No word has come from the border farm in ten days, and now IronRest's own riders have not returned either. Whatever is out there has stopped being a farmer's problem. The Keep is sending its own this time.",
     "reqLevel": 24,
-    "rewardGold": 3200,
+    "rewardGold": 3733,
     "rewardItems": [
       "gravekeepers_gloves@5"
     ],
@@ -448,7 +448,7 @@
     "name": "The Pale Rider",
     "description": "A squire is waiting at the Keep on return, sent ahead by the Paladins of the Ashen Hand. The paladins arrive not long after, asking for help they clearly hate needing. They call the threat the Pale Rider, and by their own account, they have been losing to it.",
     "reqLevel": 32,
-    "rewardGold": 12000,
+    "rewardGold": 12873,
     "rewardItems": [
       "sword_of_the_ashen_hand@5",
       "bulwark_of_the_war_saint@5"
@@ -508,7 +508,7 @@
     "name": "The Dragon Hunt",
     "description": "Something is burning Emberfell, northernmost of the holdfasts, one farmstead at a time. The trail leads several days north, ending in a threat larger than anything the guild has faced so far.",
     "reqLevel": 18,
-    "rewardGold": 4000,
+    "rewardGold": 4400,
     "rewardItems": [
       "dragon_helm@5",
       "dragon_blade@5"
@@ -568,7 +568,7 @@
     "name": "Lost Kingdom Expedition",
     "description": "A kingdom that every map somehow forgot to mention has surfaced in old records. The road there is long, the ruins are older than anyone can date, and at the center of it all waits a living stone guardian nobody has gotten past yet. The patron funding the expedition is paying well enough that nobody asks too many questions about why.",
     "reqLevel": 14,
-    "rewardGold": 2600,
+    "rewardGold": 2800,
     "rewardItems": [
       "crown_of_the_lost@5"
     ],
@@ -619,7 +619,7 @@
     "name": "Demon Fortress Assault",
     "description": "The guild is gathering every banner it can call on for an assault on a demon fortress. Whoever leads the breach has been asked personally, and there will be no second attempt if this one fails.",
     "reqLevel": 22,
-    "rewardGold": 6500,
+    "rewardGold": 6400,
     "rewardItems": [
       "dragon_armor@5",
       "amulet_of_fortune@5"
@@ -677,7 +677,7 @@
     "name": "Search for the Ancient Crown",
     "description": "Three crown fragments are scattered across three regions, tied together by a rumor persistent enough that half the taverns on the coast now tell their own version of it. One fragment, hidden in a fen, is said to still be guarded by a suit of ancient armor with no one inside.",
     "reqLevel": 10,
-    "rewardGold": 1800,
+    "rewardGold": 2300,
     "rewardItems": [
       "lucky_ring@5"
     ],
@@ -727,7 +727,7 @@
     "name": "The Goblin King's Warband",
     "description": "Three goblin warbands used to raid alone, tripping over each other's territory as often as they hit anything useful. Not anymore. A chieftain with more ambition than sense has welded them into one horde under a single stolen crown. They now move together, burn together, and answer to one voice. Silence that voice, and the horde should come apart again.",
     "reqLevel": 6,
-    "rewardGold": 550,
+    "rewardGold": 440,
     "rewardItems": [
       "warband_cleaver@5"
     ],
@@ -769,7 +769,7 @@
     "name": "The Third Crown",
     "description": "One of the goblin king's three crowns was not looted from a rival warband or plundered from a manor. It was collected as a toll on the Blackford road, taken from a lord passing through. He was reported dead that same season. He was not. Whoever he is now, he has had a long time to plan what comes next.",
     "reqLevel": 7,
-    "rewardGold": 600,
+    "rewardGold": 711,
     "rewardItems": [
       "tollkeepers_signet@5"
     ],
@@ -821,7 +821,7 @@
     "name": "The Hollow Choir",
     "description": "The guild broke a choir like this one before, at the demon fortress. They cracked its wards, cut down the demon lord keeping it caged, and left the voices behind since silencing them was never the job. It did not stay put for long. Something has settled into the old cathedral now, singing as if it means to make the place its home. It never once pauses to breathe.",
     "reqLevel": 26,
-    "rewardGold": 5200,
+    "rewardGold": 6400,
     "rewardItems": [
       "choir_mask@5",
       "silenced_bell@5"
@@ -872,7 +872,7 @@
     "name": "The World-Ender's Vigil",
     "description": "Every culture that has kept records describes some version of the same ending, though never with the same name twice: something patient that waits beyond the edge of every map, not born but always waiting. Sailors marked the same blank stretch of ocean on unrelated charts a century apart, warning that the world stops arguing there. Scholars dismissed it as superstition until it appeared on land instead. It has no fixed location. It finds guilds that get close enough to matter. The guild's patron has funded five prior expeditions and none returned. He will not say what he sent them to find, only that this time he is not sending strangers. Five stages, and no easy ones.",
     "reqLevel": 34,
-    "rewardGold": 22000,
+    "rewardGold": 17848,
     "rewardItems": [
       "voidforged_blade@5",
       "voidforged_crown@5",
@@ -944,7 +944,7 @@
     "name": "The Last Pilgrimage",
     "description": "Travelers along an old, unofficial road have gone missing near a waystone shrine and returned changed. They were not robbed or killed. They were claimed, made to kneel through unknown rites they never agreed to before being released. Every map marks the shrine as abandoned, and has for longer than anyone can say. Whatever is using it now is not abandoned at all.",
     "reqLevel": 44,
-    "rewardGold": 30000,
+    "rewardGold": 23800,
     "rewardItems": [
       "last_pilgrims_waystone@5"
     ],
@@ -1003,7 +1003,7 @@
     "name": "The Hollow King's Return",
     "description": "For guilds a run or two into prestige. The barrow-ground that has been stirring quietly for months has stopped being quiet at all. The king everyone assumed was safely buried is not staying that way, and whatever is escorting him back out is worse company than he ever was.",
     "reqLevel": 45,
-    "rewardGold": 42000,
+    "rewardGold": 25333,
     "rewardItems": [
       "empyrean_blade@5",
       "empyrean_halo@5",
@@ -1064,7 +1064,7 @@
     "name": "The Man Who Sells Maybe",
     "description": "A cart has been working the roads outside town for a week, selling something described only as a chance. Three separate people have already asked the guild to look into it, each for a different reason, and none of them flattering.",
     "reqLevel": 5,
-    "rewardGold": 300,
+    "rewardGold": 609,
     "rewardItems": [
       "grimsbys_loaded_coin@5"
     ],
@@ -1115,7 +1115,7 @@
     "name": "Bandits on the Old Road",
     "description": "Every caravan coming up the old trade road tells the same story: a toll demanded at knifepoint, sometimes by a different crew than the week before. There are too many bandits, too well coordinated, for this to be a handful of desperate strangers acting alone.",
     "reqLevel": 4,
-    "rewardGold": 450,
+    "rewardGold": 558,
     "rewardItems": [
       "tollbreakers_gloves@5"
     ],
@@ -1166,7 +1166,7 @@
     "name": "Something Big in the Foothills",
     "description": "Herders in the foothills keep losing whole flocks overnight to hill giants. What is left behind is not the tidy work of wolves or the opportunistic mess of bears. Fence posts are uprooted rather than chewed through, and the tracks in the mud are the wrong size and shape for any known predator.",
     "reqLevel": 12,
-    "rewardGold": 2100,
+    "rewardGold": 2550,
     "rewardItems": [
       "ridgebreakers_pauldron@5"
     ],
@@ -1217,7 +1217,7 @@
     "name": "Full Moon Over Ashvale",
     "description": "The hunting lodge town of Ashvale wants a wolf problem solved before the next full moon. The tracks are shaped wrong, the attacks escalate on a fixed schedule, and at least one survivor has started acting like they are waiting for something.",
     "reqLevel": 17,
-    "rewardGold": 3400,
+    "rewardGold": 3175,
     "rewardItems": [
       "moonsilver_fang@5"
     ],
@@ -1268,7 +1268,7 @@
     "name": "The Body Snatcher Problem",
     "description": "A prominent Ironrest household has started acting subtly wrong. The words are right, but the rhythm is off, and every laugh lands a half second late. Nobody can point to exactly what has changed. Everyone agrees that something has.",
     "reqLevel": 29,
-    "rewardGold": 7800,
+    "rewardGold": 8050,
     "rewardItems": [
       "unravelers_mark@5"
     ],
@@ -1319,7 +1319,7 @@
     "name": "Hunt-a-Lich",
     "description": "Raised dead have been getting bolder and far better organized than any ordinary wight problem. Someone, or something, is directing them with real intent, and the pattern only makes sense as the early moves of a much longer game.",
     "reqLevel": 37,
-    "rewardGold": 19000,
+    "rewardGold": 12291,
     "rewardItems": [
       "lichfinders_compass@5"
     ],
@@ -1370,7 +1370,7 @@
     "name": "Quiet in Millbrook",
     "description": "Every report out of Millbrook says the same unsettling thing in a different way: the town looks fine and sounds fine, but is not. Residents show flat affect and give identical answers despite never having met, and a whole community has suddenly started agreeing on everything a little too easily.",
     "reqLevel": 35,
-    "rewardGold": 15000,
+    "rewardGold": 7491,
     "rewardItems": [
       "millbrook_ledger_page@5"
     ],
@@ -1411,7 +1411,7 @@
     "name": "The Loom Beneath",
     "description": "Whatever went quiet under Millbrook has not stopped. It has simply stopped being subtle about it. Tracing the compulsion to its root leads underground, to something that was never a person and has apparently been weaving many of them together for longer than anyone in Millbrook has been alive.",
     "reqLevel": 39,
-    "rewardGold": 24000,
+    "rewardGold": 8897,
     "rewardItems": [
       "loomsplinter_shard@5"
     ],
@@ -1453,7 +1453,7 @@
     "name": "The First Haul",
     "description": "A grizzled old quartermaster corners the guild before their first real job is even finished. He insists that buying every scrap of ore and timber from the shop is money any guild worth the name should be keeping for itself, if someone is willing to clear the bramble off the old gathering grounds first.",
     "reqLevel": 1,
-    "rewardGold": 120,
+    "rewardGold": 270,
     "rewardItems": [
       "quartermasters_token@5"
     ],
@@ -1496,7 +1496,7 @@
     "name": "The Kindred Moon",
     "description": "A letter reaches the guild from Ashvale, addressed by name and asking, carefully, not to be read aloud to anyone else. The man who wrote it survived the pack the guild put down there -- survived the bite, too, and has spent every month since hiding what that actually means. The next full moon is close enough to count in days.",
     "reqLevel": 46,
-    "rewardGold": 46000,
+    "rewardGold": 26867,
     "rewardItems": [
       "kindred_fang@5"
     ],

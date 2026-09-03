@@ -23829,3 +23829,159 @@ this environment (no browser available) -- worth a real pass confirming
 the widened 4-column action row still reads cleanly at the
 `minmax(180px, 1fr)` card width, and that Repair All's stagger looks
 right against a stash with a genuinely large number of worn items.
+
+### Gold economy review: chain completion bonuses were hand-authored and drifted ~30x out of proportion with the rest of the economy -- retuned against the raid gold curve (patch 0301)
+
+```discord-update
+Dev Update | Gold Economy Rebalance
+
+- Fixed: quest chain completion bonuses paid wildly more late-game than early-game relative to everything else -- The Hollow King's Return dropping 42k gold was correctly-firing, over-tuned data, not a bug in the payout code
+- Changed: every chain's completion bonus recalculated from a real formula (anchored to quest income pre-raids, to raid clear value once raids exist) instead of a hand-picked round number -- 23 of 30 chains changed, most by a moderate amount, a handful of the latest ones cut substantially
+- Added: two new tunable multipliers (Tuning tab, economy category) documenting exactly how every chain's bonus was derived, so a newly authored chain can be seeded correctly instead of guessed
+```
+
+**Reported directly by design:** a late-game tester was pulling 40k+ gold
+from a single chain completion ("The Hollow King's Return," +42.0k gold,
++10 renown screenshot), a huge jump from the "a few hundred gold" feel of
+early chains. Asked to review whether gold is over-inflated.
+
+**Root cause, confirmed with real numbers before touching anything.**
+`ChainDef.rewardGold` (quest-chains.json) is a flat, hand-authored
+completion bonus, separate from and paid on top of each stage's own
+formula-driven reward (`questGoldBaseline(chain.reqLevel) *
+cfg.rewardMultiplier * stageDef.goldMultiplier`, unaffected by this
+patch). The completion bonus itself has never been tied to any curve.
+Computing the ratio of each chain's bonus to `questGoldBaseline` at that
+chain's own `reqLevel` exposed the drift directly:
+
+| Level | Chain | Bonus | Ratio to quest baseline |
+|---|---|---|---|
+| 1 | the_first_haul | 120 | 8x |
+| 8 | crows_warning | 900 | 32x |
+| 18 | dragon_hunt | 4,000 | 69x |
+| 34 | world_ender | 22,000 | 176x |
+| 45 | hollow_king | 42,000 | 233x |
+| 46 | kindred_moon | 46,000 | 249x |
+
+A healthy curve keeps that ratio roughly flat. This one climbs 30x
+across the level range -- confirmation this was authoring drift (later
+chains getting bigger and bigger round numbers with nothing anchoring
+them back to the rest of the economy), not a deliberate design.
+
+**Sanity-checked against the rest of the economy before proposing a
+fix, two ways:**
+1. **Raid total gold**, for comparison: 2,050 (reqLevel 8) to 30,500
+   (reqLevel 55) across the real raid roster, a 15x raw increase.
+   Ratio-to-quest-baseline only drifts 1.8x over that same range (73x
+   to 133x) -- confirms raids are a healthy reference curve and chains
+   are the actual outlier, not the economy generally.
+2. **Total gold to max every guild facility**, computed live from
+   `tuning.json`'s `guild_facilities` category (baseCost/costGrowth/
+   maxLevel per facility, summed): **~6.96M**, not the "~1.16M
+   cumulative" figure this doc's own patch-0173-era note cites --
+   that number is now stale (predates the patch 0297 Treasury
+   softlock retune) and shouldn't be treated as current without
+   re-deriving it the same way. Not corrected in its own old entry
+   above, on purpose -- that section is a historical patch writeup,
+   not a living reference; flagging it here so it isn't silently
+   re-trusted later.
+
+**First retune attempt (quest-baseline-anchored) rejected before
+shipping.** `rewardGold = round(questGoldBaseline(reqLevel) * stageCount
+* 9)` was tried first, using 9 as "a smidge higher than the ~7-8
+average per-stage ratio early chains already sit at." Simulated against
+all 30 chains before writing anything: it undercorrects nothing and
+overcorrects everything past the low levels -- hollow_king falls from
+42,000 to 6,480 (an 85% cut), and lands *below* same-tier raid totals
+(house_of_bones, reqLevel 41, pays 14,400). `questGoldBaseline` is
+deliberately tamed for repeated grind income (its own comment says as
+much); a one-time chain-completion payoff is closer in spirit to a
+raid clear and shouldn't be anchored to the grind curve at all once a
+raid-tier reference actually exists.
+
+**Shipped formula: raid-anchored, quest-baseline as an early-game
+fallback only.** New `chainCompletionGoldReference(reqLevel,
+stageCount)` in `progression.ts`, next to `questGoldBaseline`:
+
+- Builds `raidGoldPerEncounter` breakpoints directly from live data --
+  each 3-encounter raid's `(reqLevel, totalEncounterGold / 3)`,
+  excluding `silence_the_loom` (a genuine 1-encounter outlier, not
+  comparable). Same `evalBreakpoints` piecewise-linear interpolator
+  `questGoldBaseline`/`questXpBaseline` already use, not a fitted
+  curve with opaque constants -- keeps the convention consistent and
+  means it re-derives itself correctly if raid rewards are ever
+  retuned, rather than needing a parallel manual update.
+- Below the first raid's `reqLevel` (8 -- no raid exists yet to anchor
+  against that early), falls back to `questGoldBaseline(reqLevel) *
+  economy.chainCompletionQuestMultiplier` (9).
+- At or above reqLevel 8, uses `raidGoldPerEncounter(reqLevel) *
+  economy.chainCompletionRaidMultiplier` (1.0 -- one chain stage's
+  completion-bonus share is worth about one same-level raid encounter).
+- Either way, multiplied by the chain's own stage count.
+- Both multipliers are new Tuning-tab entries (category `economy`),
+  editable live, each with a full explanation of what it does and why
+  it isn't read at runtime (see below) directly in its own
+  `description` field.
+
+**`ChainDef.rewardGold` is NOT computed at runtime from this
+formula.** It stays exactly what it always was: a flat, DevTool-
+editable authored number per chain, required by the devtool's generic
+content schema (`tools/devtool/server.mjs`) same as every other
+content-file field. `chainCompletionGoldReference` isn't called from
+`QuestManager`/`engine.ts`/anywhere in the running game -- it's a pure
+reference function, exported so it's directly usable (from a script,
+or by hand) whenever a new chain is authored, instead of a future
+author picking another round number and reintroducing the exact drift
+this patch just fixed. This was a deliberate choice over wiring it
+into the live payout path: `rewardGold` already has consumers reading
+it directly in a few places (`LorePanel.tsx`'s own completion-reward
+line, `ChainCompleteModal`, `DiscoveredQuestsPanel`, `QuestManager.
+chainCompletionPreview`) and none of them needed to change, since the
+JSON values themselves are now already correct.
+
+**All 30 chains recalculated and written directly into
+quest-chains.json**, not left as a formula the game evaluates lazily --
+same precedent as the patch 0281/0282/0283 hand-authored-value fixes.
+23 of 30 changed (7 already happened to sit close to the new formula's
+output and moved by rounding only). Selected before/after, across the
+full level range:
+
+- `the_first_haul` (lvl 1, 2 stages): 120 -> 270
+- `crows_warning` (lvl 8, 4 stages, first one to cross into the raid-
+  anchored branch): 900 -> 2,733
+- `dragon_hunt` (lvl 18, 4 stages): 4,000 -> 4,400 (barely moved --
+  already close to proportionate)
+- `world_ender` (lvl 34, 5 stages): 22,000 -> 17,848
+- `quiet_in_millbrook` (lvl 35, only 2 stages): 15,000 -> 7,491 --
+  the single largest cut in the whole set, because a 2-stage chain at
+  that level was carrying a bonus sized for a much longer chain
+- `hollow_king` (lvl 45, 4 stages): 42,000 -> 25,333 -- the exact
+  chain from the tester report. Down 40%, but still comfortably the
+  second-largest completion bonus in the game (after kindred_moon,
+  its own successor chain) and still well above same-tier raid totals,
+  matching a capstone "Kingslayer Twice Over" reward rather than
+  undershooting it the way the rejected quest-anchored version did.
+- `kindred_moon` (lvl 46, 4 stages): 46,000 -> 26,867
+
+`rewardRenown` was checked during the same pass and left untouched --
+its own level-1-to-46 growth (1 to 11) tracks reasonably against the
+rest of the renown economy and wasn't flagged by the same ratio check
+that caught gold.
+
+**Verification.** `npx tsc --noEmit` and a full `vite build` both pass
+clean with the new `progression.ts` import (`RAIDS`/
+`RAID_ENCOUNTER_BY_ID` from `raids.ts` -- confirmed no circular import,
+`raids.ts` itself only imports from `quests.ts`, not `progression.ts`).
+`quest-chains.json` re-parsed and every one of the 30 `rewardGold`
+fields checked against the freshly recomputed formula output,
+byte-identical. `tuning.json` re-parsed clean after the two new
+entries. No other files touched -- this patch is pure data plus one
+new pure function, no changes to any payout, display, or DevTool code
+path.
+
+**Not done in this pass, flagged for whenever it's picked up next:**
+the stale "~1.16M cumulative" facility-cost figure noted above (now
+known to actually be ~6.96M); auditing `rewardItems`/dedicated-loot
+value the same way gold was just audited, in case the same
+round-number drift shows up there too, was raised but not scoped as
+part of this specific report.

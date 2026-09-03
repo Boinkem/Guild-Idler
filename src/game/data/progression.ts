@@ -1,5 +1,6 @@
 import { GuildDef, HeroClass, Modifiers, QuestTag, RenownPerkDef, Role, RoleDef, Stats, UpgradeDef, VendorId } from '../types';
 import { Tuning } from './tuning';
+import { RAIDS, RAID_ENCOUNTER_BY_ID } from './raids';
 
 /* --------------------------- permanent upgrades --------------------------- */
 
@@ -1295,6 +1296,53 @@ export function questGoldBaseline(level: number): number {
 
 export function questXpBaseline(level: number): number {
   return evalBreakpoints(QUEST_XP_BREAKPOINTS, level);
+}
+
+/**
+ * Patch 0301 -- gold economy review. Chain completion bonuses
+ * (ChainDef.rewardGold, quest-chains.json) were found hand-authored per
+ * chain with no formula behind them: the ratio of a chain's bonus to
+ * questGoldBaseline at that chain's own reqLevel drifted from ~8x at
+ * level 1 to ~250x by level 46, because whoever authored later chains
+ * just picked bigger round numbers rather than anchoring to anything.
+ * A tester's 42.0k "The Hollow King's Return" completion screen (chain
+ * hollow_king, reqLevel 45) was the real, correctly-firing symptom of
+ * this, not a bug in the payout code itself.
+ *
+ * Anchoring purely to questGoldBaseline (a curve deliberately tamed for
+ * *repeated* grind income, see its own comment above) overcorrects --
+ * simulated at a quest-tier multiplier of 9, hollow_king's bonus falls
+ * to 6,480, ~85% below the original and noticeably below same-tier raid
+ * totals (house_of_bones, reqLevel 41, pays 14,400 across 3 encounters).
+ * A chain completion is a one-time payoff much closer in spirit to a
+ * raid clear than to routine questing, so this reference formula
+ * anchors to the raid gold curve instead once one actually exists to
+ * anchor against (raids start at reqLevel 8); below that, it falls back
+ * to the quest-gold curve, the only reference available that early.
+ *
+ * NOT called anywhere at runtime -- ChainDef.rewardGold stays a flat,
+ * DevTool-editable authored field (required by the devtool schema,
+ * same as every other content-file value), same as it always was. This
+ * function exists purely so a *new* chain's rewardGold can be seeded
+ * consistently instead of hand-picked, and so the reasoning behind the
+ * patch-0301 rebalance of all 30 existing chains' values is traceable
+ * back to something real rather than another set of round numbers.
+ */
+export function chainCompletionGoldReference(reqLevel: number, stageCount: number): number {
+  const raidPoints = RAIDS
+    .filter((r) => r.encounterIds.length === 3) // excludes silence_the_loom's single-encounter outlier
+    .map((r) => ({
+      level: r.reqLevel,
+      value: r.encounterIds.reduce((sum, id) => sum + (RAID_ENCOUNTER_BY_ID[id]?.rewardGold ?? 0), 0) / 3,
+    }))
+    .sort((a, b) => a.level - b.level);
+  const raidFloorLevel = raidPoints.length > 0 ? raidPoints[0].level : Infinity;
+
+  const perStage = reqLevel < raidFloorLevel
+    ? questGoldBaseline(reqLevel) * Tuning.get('economy.chainCompletionQuestMultiplier')
+    : evalBreakpoints(raidPoints, reqLevel) * Tuning.get('economy.chainCompletionRaidMultiplier');
+
+  return Math.round(perStage * stageCount);
 }
 
 export function xpForLevel(level: number): number {
