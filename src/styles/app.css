@@ -2846,6 +2846,14 @@ input[type='range'] {
   padding: 14px 16px 24px;
   background: color-mix(in srgb, var(--night) 45%, transparent);
 }
+/* Same Bright-mood tint reduction as .tab-scene-content above (patch
+ * 0306) -- kept as its own separate rule rather than merging the two
+ * selectors, matching how .tab-scene-content/.vendor-scene-content have
+ * always been declared as two independent (if identical-valued) rules
+ * throughout this file rather than a shared class. */
+[data-background-mood='bright'] .vendor-scene-content {
+  background: color-mix(in srgb, var(--night) 15%, transparent);
+}
 
 /*
  * Generic full-bleed panel backdrop (patch 0246) -- same shape as
@@ -2891,6 +2899,19 @@ input[type='range'] {
   position: relative;
   padding: 14px 16px 24px;
   background: color-mix(in srgb, var(--night) 45%, transparent);
+}
+/* Bright mood (patch 0306, direct report) -- the flat 45% dark tint above
+ * was applied identically regardless of Guild's Mood, which meant a
+ * Bright background could never actually read as bright: the same
+ * darkening sat over it as over the Dim art it was meant to replace,
+ * capping how vivid ANY background could look. Cut substantially just
+ * for Bright mode via the data-background-mood attribute
+ * SettingsStore.apply already sets on <html> -- Dim is completely
+ * unaffected (same 45% as always, no regression to the established
+ * look). Still not 0% -- text drawn on top of a busy, colorful Bright
+ * image needs *some* darkening to stay legible, just far less of it. */
+[data-background-mood='bright'] .tab-scene-content {
+  background: color-mix(in srgb, var(--night) 15%, transparent);
 }
 
 .locked-upgrade {
@@ -3419,6 +3440,15 @@ input[type='range'] {
   background-size: 100% 100%;
   background-position: center;
   opacity: 0.7;
+}
+/* Same Bright-mood reasoning as .tab-scene-content's own comment above
+ * (patch 0306) -- less darkening specifically in Bright mode so the art
+ * actually reads as bright. This one's a plain opacity bump rather than
+ * a tint reduction since harvest-scene-bg dims via its own opacity, not
+ * a separate overlay layer (see this rule's own comment just above for
+ * why that split exists). */
+[data-background-mood='bright'] .harvest-scene-bg {
+  opacity: 0.9;
 }
 .harvest-scene-empty {
   position: absolute;

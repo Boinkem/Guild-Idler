@@ -1127,6 +1127,17 @@ raid fight).
 
 ## Backlog
 
+### Crafting modals should match Guild's Mood too
+Direct report (patch 0306 session, not yet built): `CraftingStation.tsx`'s
+own per-category scene backgrounds (`.craft-scene` for gear/enchant/gem/
+charm, `.consumable-scene`) are a separate, not-yet-touched art category
+from everything Guild's Mood (patch 0305/0306) wired up so far -- still
+fixed to their dim originals regardless of the Bright/Dim setting. Same
+`backgroundSrc()`/`bright/` folder convention should extend here once
+art exists for it; genuinely new art needed (nothing to relight from,
+same situation Raids/Grimsby/Dashboard were in for 0305), not just a
+wiring change.
+
 ### Repair/heal availability while a hero is on a quest
 Direct report (patch 0305 session, not yet built): repairing gear, and
 healing, should be usable "while hero is on a quest -- need to be
@@ -24574,3 +24585,67 @@ back button and Enter-to-advance both feel right; the Heroes/Training
 sub-tab switch doesn't lose the currently-selected hero; and the Bright
 set actually reads as a cohesive "sunlit" pass across a full runthrough,
 not just each image in isolation.
+
+### Bug Fix: Bright mood's tab/vendor/harvest overlay tint was as dark as Dim's, defeating the whole point of Bright mode (patch 0306)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: Bright mood backgrounds now actually look bright -- the same dark overlay that sat over Dim art was quietly capping how vivid Bright art could ever look too
+```
+
+Direct report, three screenshots: the Lore and Vendors tabs showed the new
+Bright art looking noticeably duller than expected, and Harvest appeared
+to have "not picked up" its new background at all.
+
+**Root cause, the dulling.** `.tab-scene-content` and `.vendor-scene-content`
+both apply a flat `color-mix(in srgb, var(--night) 45%, transparent)` tint
+over their entire content area, for text legibility against busy artwork.
+That tint was identical in Dim and Bright mode -- it was never mood-aware
+to begin with, since it predates Guild's Mood entirely (patch 0305). A
+uniform 45% darkening applied on top of ANY background, however bright the
+underlying art actually is, puts a hard ceiling on how vivid a Bright
+image could ever look on screen -- confirmed by rereading both rules
+directly rather than guessing from the screenshots alone. Fix: a
+`[data-background-mood='bright']` override on both rules drops the tint
+to 15% specifically in Bright mode, using the `data-background-mood`
+attribute `SettingsStore.apply` already sets on `<html>` (patch 0305, no
+new plumbing needed). Dim mode is completely untouched -- same 45% it's
+always had, zero risk of regressing the established look. `.harvest-
+scene-bg` got the equivalent treatment on the other side of the same
+coin -- it dims via its own `opacity` (0.7) rather than a separate tint
+layer, so its Bright override bumps that to 0.9 instead.
+
+**"Harvest hasn't picked up the new background" -- not actually a bug.**
+Traced directly against `FieldsTab()`: the `.harvest-scene`/`.harvest-
+scene-bg` background has only ever lived on the **Fields** sub-tab,
+never Warehouse -- confirmed by rereading the component, that split
+predates this patch entirely. The screenshot was taken on the Warehouse
+sub-tab, which has never had any background art of its own. Also
+confirmed while investigating: the new `fields.jpg`/`bright/fields.jpg`
+pair is exactly 1672x941, matching `.harvest-scene`'s CSS-locked aspect
+ratio precisely, so there's no stretch/distortion risk either. Nothing
+to fix here -- flagging so it isn't mistaken for a second bug hiding
+behind the first one.
+
+**Hatchery's Dim counterpart -- waiting on the file.** Hatchery's
+existing `hatchery-bg.jpg` was already a bright/cheerful scene by
+default (see patch 0305's own notes) with no Dim counterpart. A new
+`HatcheryDim.jpg` was reported as ready locally, but wasn't attached to
+this session, so it isn't in this patch. Once it's uploaded, wiring it
+in is a pure asset move, no code change: the existing (already-bright)
+`hatchery-bg.jpg` moves to `lore/bright/hatchery-bg.jpg` (the Bright
+slot), and the new art becomes the base `lore/hatchery-bg.jpg` (the Dim
+slot) -- `MenuWindow.tsx`'s existing `backgroundSrc('./lore/hatchery-bg
+.jpg', mood)` call already resolves both paths correctly as-is.
+
+Also added to the backlog this session: Guild's Mood doesn't reach
+`CraftingStation.tsx`'s own per-category scene backgrounds yet (a
+separate art category, genuinely new art needed, not just wiring) --
+see the Backlog section.
+
+**Verification.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh pull of `main`
+(confirmed patch 0305 was already live and this patch is rebased on top
+of it). CSS-only change plus a status/backlog update -- no source
+files touched beyond `app.css` and this document.
