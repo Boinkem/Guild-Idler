@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { RaidDifficulty } from '../game/types';
 import { RAID_DIFFICULTY_LABEL } from '../game/data/raids';
@@ -7,6 +7,7 @@ import { useSettings } from './useSettings';
 import { formatDuration, formatGold, formatMaterial, RARITY_COLOR } from '../game/util';
 import { useCountUp } from './useCountUp';
 import { MATERIAL_BY_ID, NODE_ORDER } from '../game/data/materials';
+import { measureFlyOffset } from './flyTarget';
 
 /** Same rarity-parallel palette RaidsPanel already uses for Normal/Heroic/
  *  Legendary -- kept local rather than shared, matching how RaidResultModal
@@ -39,6 +40,11 @@ const LEGENDARY_PARTICLES = [
   { dx: 50, dy: -125, rot: 14, delay: 100 },
   { dx: 85, dy: -85, rot: 26, delay: 40 },
 ];
+
+/** Patch 0302 -- same dismiss timing every other result modal in the game
+ *  uses, so the gold-fly particle (added this patch) has time to finish
+ *  its travel before the modal actually unmounts. */
+const DISMISS_DELAY_MS = 640;
 
 /**
  * Summarises everything that happened while the app was closed -- the
@@ -76,6 +82,38 @@ export function OfflineReportModal({ active }: { active: boolean }) {
   const displayGold = useCountUp(report?.goldGained ?? 0, { from: 0, durationMs: 900 });
   const displayXp = useCountUp(report?.xpGained ?? 0, { from: 0, durationMs: 900 });
 
+  /**
+   * Patch 0302, direct request: dismissing this report ("Back to work")
+   * had no long-distance payoff at all -- only the local arrival burst
+   * below (already existed). Same mechanism QuestResultModal/
+   * RaidResultModal's own gold flight uses: measured at the moment of
+   * dismissal, flies the real on-screen distance to the header's `gold`
+   * target (flyTarget.ts), silently skipped if that target isn't mounted
+   * (idle mode has no header). `goldRef` anchors the flight's start point
+   * to the stat-row's own "+N gold" figure rather than the modal's
+   * center, so it visibly launches from the number it's leaving.
+   */
+  const [dismissing, setDismissing] = useState(false);
+  const goldRef = useRef<HTMLSpanElement>(null);
+  const [goldFlight, setGoldFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+  }, []);
+
+  const handleDismiss = () => {
+    if (dismissing) return;
+    setDismissing(true);
+    if (goldRef.current && report && report.goldGained > 0) {
+      const originRect = goldRef.current.getBoundingClientRect();
+      const origin = { x: originRect.left + originRect.width / 2, y: originRect.top + originRect.height / 2 };
+      const offset = measureFlyOffset(goldRef.current, 'gold');
+      if (offset) setGoldFlight({ ...origin, ...offset });
+    }
+    timeoutRef.current = window.setTimeout(() => engine.dismissOfflineReport(), DISMISS_DELAY_MS);
+  };
+
   if (!active || !report || !settings.offlineReportOnLaunch) return null;
 
   // Ordered the same as every other Harvest surface (NODE_ORDER: ore, timber,
@@ -92,7 +130,7 @@ export function OfflineReportModal({ active }: { active: boolean }) {
     || report.raidResults.some((r) => r.loot.some((l) => l.rarity === 'legendary'));
 
   return (
-    <div className="overlay" onClick={() => engine.dismissOfflineReport()}>
+    <div className="overlay" onClick={handleDismiss}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>While you were away</h3>
         <p className="small muted" style={{ marginTop: 0 }}>
@@ -104,7 +142,7 @@ export function OfflineReportModal({ active }: { active: boolean }) {
         ) : (
           <>
             <div className="stat-row" style={{ marginBottom: 10 }}>
-              <span className="gold-text">+{formatGold(displayGold)} gold</span>
+              <span ref={goldRef} className="gold-text">+{formatGold(displayGold)} gold</span>
               <span>+{displayXp} experience</span>
               {levelsGained > 0 && <span className="good">+{levelsGained} level{levelsGained === 1 ? '' : 's'}</span>}
               {(report.results.length > 0 || report.raidResults.length > 0) && (
@@ -195,7 +233,7 @@ export function OfflineReportModal({ active }: { active: boolean }) {
         )}
 
         <div className="row end" style={{ marginTop: 12 }}>
-          <button className="btn-primary" onClick={() => engine.dismissOfflineReport()}>Back to work</button>
+          <button className="btn-primary" onClick={handleDismiss} disabled={dismissing}>Back to work</button>
         </div>
 
         {/* Fires on arrival, same reasoning as ChainCompleteModal's own
@@ -234,6 +272,25 @@ export function OfflineReportModal({ active }: { active: boolean }) {
               </span>
             ))}
           </div>
+        )}
+
+        {/* The actual "flies to the header" particle -- see handleDismiss's
+            own comment above for why this exists and what it measures
+            against. Silently renders nothing if 'gold' isn't currently
+            mounted (idle mode has no header) -- the local coin burst and
+            the count-up above already cover the reward either way. */}
+        {dismissing && goldFlight && (
+          <span
+            className="fly-particle"
+            aria-hidden="true"
+            style={{
+              position: 'fixed', left: goldFlight.x, top: goldFlight.y,
+              '--fly-dx': `${goldFlight.dx}px`, '--fly-dy': `${goldFlight.dy}px`,
+              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--brass)',
+            } as CSSProperties}
+          >
+            ◆
+          </span>
         )}
       </div>
     </div>

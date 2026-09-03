@@ -362,6 +362,13 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
             ◆
           </span>
         )}
+        {/* Patch 0302: XP's long-distance flight now matches the standard
+            "small lettered green XP" language used everywhere else this
+            patch touches (RaidResultModal, OfflineReportModal, and the
+            Sell/Scrap flights' own silver -- see VendorsPanel.tsx) instead
+            of a blue sparkle glyph, so XP reads as its own consistent
+            signal (green, lettered) the same way gold (brass, ◆) and
+            scrap (silver) each do. */}
         {dismissing && xpFlight && (
           <span
             className="fly-particle"
@@ -369,10 +376,10 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
             style={{
               position: 'fixed', left: xpFlight.x, top: xpFlight.y,
               '--fly-dx': `${xpFlight.dx}px`, '--fly-dy': `${xpFlight.dy}px`,
-              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--sky)',
+              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '0.7rem', fontWeight: 700, color: 'var(--moss)',
             } as CSSProperties}
           >
-            ✦
+            XP
           </span>
         )}
       </div>

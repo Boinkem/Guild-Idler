@@ -6,7 +6,7 @@ import { RaidManager } from '../../game/managers/RaidManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import {
-  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON, RAID_DIFFICULTY_LABEL,
+  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON_DEFS, raidDifficultyIconSrc, RAID_DIFFICULTY_LABEL,
   isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
@@ -343,6 +343,7 @@ function DifficultyCircle({
   const engine = useEngine();
   const color = DIFFICULTY_COLOR[difficulty];
   const [imgFailed, setImgFailed] = useState(false);
+  const iconDef = RAID_DIFFICULTY_ICON_DEFS[difficulty];
   return (
     <div className="raid-diff-circle-wrap">
       <button
@@ -358,12 +359,37 @@ function DifficultyCircle({
           : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
       >
         {!imgFailed ? (
-          <img
-            src={RAID_DIFFICULTY_ICON[difficulty]}
-            alt=""
-            onError={() => setImgFailed(true)}
-            style={{ width: '70%', height: '70%', objectFit: 'contain' }}
-          />
+          // Patch 0302: was <img object-fit:contain> at 70% -- a square
+          // source PNG shown whole (letterboxed) inside a round button
+          // reads as "the square is showing through the circle," the
+          // exact bug reported. background-image + cover fills the full
+          // circle and lets the button's own border-radius:50% clip it,
+          // same "crop to fill, focus point picks what's centered" shape
+          // RaidBanner (just above in this file) already uses for
+          // raid banners/icons -- focusX/focusY/scale default to
+          // 50/50/100 (dead-center, no zoom) so this looks like a
+          // reasonable center-crop even before anyone touches the new
+          // DevTool adjuster.
+          <div
+            aria-hidden="true"
+            style={{
+              width: '100%', height: '100%', borderRadius: '50%',
+              backgroundImage: `url(${raidDifficultyIconSrc(difficulty)})`,
+              backgroundPosition: `${iconDef?.focusX ?? 50}% ${iconDef?.focusY ?? 50}%`,
+              backgroundSize: iconDef?.scale && iconDef.scale !== 100 ? `${iconDef.scale}%` : 'cover',
+            }}
+          >
+            {/* A background-image never fires onError, unlike <img> --
+                a 1x1 transparent img sharing the exact same src is the
+                simplest way to keep the existing "fall back to the
+                letter label if the file's missing" behavior working. */}
+            <img
+              src={raidDifficultyIconSrc(difficulty)}
+              alt=""
+              onError={() => setImgFailed(true)}
+              style={{ width: 1, height: 1, opacity: 0, position: 'absolute' }}
+            />
+          </div>
         ) : (
           DIFFICULTY_LABEL[difficulty]
         )}

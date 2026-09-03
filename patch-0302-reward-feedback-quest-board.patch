@@ -1,0 +1,795 @@
+diff -ruN a/guild-idler-status.md b3/guild-idler-status.md
+--- a/guild-idler-status.md	2026-09-03 06:33:18.769549991 +0000
++++ b/guild-idler-status.md	2026-09-03 06:33:18.838788350 +0000
+@@ -23985,3 +23985,164 @@
+ value the same way gold was just audited, in case the same
+ round-number drift shows up there too, was raised but not scoped as
+ part of this specific report.
++
++### Reward-feedback consistency pass: Sell All (Curios), Scrap's gold-coloured flight bug, XP flight styling, session-recap gold-fly, quest board level display, and a real DevTool fix for the raid difficulty icons' square-in-a-circle crop (patch 0302)
++
++```discord-update
++Dev Update | Reward Feedback & Quest Board
++
++- Fixed: Scrap All's long-distance flight has been colored brass (gold) instead of silver this whole time -- now genuinely silver/grey
++- Added: Sell All (Curios) now flies gold to the header, one card at a time, matching every other bulk-sell button in the game
++- Changed: the XP flight now reads as small green lettering instead of a blue sparkle, added to the "While you were away" report's Back to Work button too
++- Added: contract cards on the Quest Board now show their level, colored gold/green/red against your hero's own
++- Fixed: raid difficulty icons (Normal/Heroic/Legendary) were square art cropped wrong inside their round badges -- now crop correctly, plus a real DevTool adjuster for them
++```
++
++Six separate fixes/additions from one report, grouped into a single patch
++since they're all small and touch the same "does earning something feel
++rewarded" surface area. Investigated each claim against the actual code
++before building anything -- two of the six (Grimsby, Scrap All's
++existence) turned out to already be built; the other four were real
++gaps or a real bug.
++
++**Scrap All's flight has been gold-colored, not silver, since it
++shipped.** Real bug, not a missing feature. `ArmourStock`
++(VendorsPanel.tsx) had `pushGoldFlight`/`pushScrapFlight` both writing
++into one `goldFlights` state array, and the render side had no `kind`
++to key off -- every flight, scrap included, rendered via
++`RewardGlowParticle` with `color="var(--brass)"` hardcoded. Fixed:
++merged into `pushRewardFlight` plus a `kind: 'gold' | 'scrap'` tag per
++flight entry (renamed the array to `rewardFlights` since it's no longer
++gold-specific), color picked per-kind at render time. New `--silver:
++oklch(78% 0.006 260)` CSS var (near-zero chroma, deliberately reads as
++metal rather than another named hue) for scrap's own color, distinct
++from `--brass`.
++
++**Sell All (Curios) had zero animation.** Confirmed by reading it, not
++assumed: `onClick={() => engine.sellAllCurios()}`, one bulk call, no
++burst, no stagger, no fly -- unlike Sell Junk/Scrap All/Repair All
++(VendorsPanel.tsx), which already established the "snapshot each card's
++position, then stagger individual calls with a gold-fly per card" shape
++this patch reuses. `EquipmentPanel.tsx`'s `runSellAllCurios` calls
++`engine.sellCurio(def.id)` once per curio type (curios are grouped by
++type, not per-uid the way stash items are, so "one card" here means one
++curio type's card) staggered 140ms apart -- same `STAGGER_MS` value
++VendorsPanel already uses -- each firing a `RewardGlowParticle` toward
++the header's `gold` target. `CurioCard` gained a `data-curio-id`
++attribute so its position can be measured before it unmounts, same
++`data-stash-uid` convention the equipment cards already use. The
++per-curio-type modal's own "Sell all ×N" button (inside CurioCard, a
++different, smaller action) was left untouched -- not part of what was
++reported, flagged below as a follow-up rather than folded in
++unrequested.
++
++**XP's long-distance flight is now small green lettering, matching the
++report's exact spec ("small lettered green xp").** Previously a blue
++(`var(--sky)`) "✦" sparkle glyph in `QuestResultModal.tsx` -- changed to
++`var(--moss)` (the game's one green, same color `.good` text already
++uses) at `0.7rem`/`700` weight, literal text "XP" as the flying token,
++the same way gold's "◆" is a token rather than a repeated number.
++**Deliberately not added to `RaidResultModal.tsx`**: that file's own
++comment already explains why gold-only was the original design --
++raid XP is awarded to the whole party (`result.heroIds`), not one
++hero, so there's no single hero XP bar to aim a flight at the way a
++solo quest result has one obvious target. Confirmed this reasoning
++still holds rather than overriding it; the local in-place XP burst
++(`XP_PARTICLES`/`collect-particle xp`) was already there and stays
++exactly as-is.
++
++**Session recap ("Back to work") now flies gold, not XP** -- the
++report specifically asked for gold here, not the blanket "every gold
++AND xp" language used elsewhere in the same report, and offline XP is
++the same multi-source aggregate problem RaidResultModal's gold-only
++choice already covers (a session can easily mix several heroes' worth
++of quest and raid XP with no single bar to land on). `OfflineReportModal.
++tsx` gained the same `dismissing`/timeout/measure-at-dismiss shape
++Quest/RaidResultModal already use: a new `goldRef` anchors the flight's
++start to the stat-row's own "+N gold" figure, `handleDismiss` (now
++wired to both the overlay click and the "Back to work" button, replacing
++the old direct `engine.dismissOfflineReport()` calls) measures the real
++distance to the header's `gold` target and fires it, then dismisses
++after the same `DISMISS_DELAY_MS` (640ms) every other result modal
++uses. The existing local coin/XP arrival burst (fires on mount, unique
++to this modal since it has no natural "exit" moment otherwise) is
++unchanged.
++
++**Quest Board contract cards now show their level.** `QuestRow`
++(QuestPanel.tsx) previously showed no level anywhere on the collapsed
++card (only inside `QuestDetailModal`'s own `levelGap` calc). Appended
++`- Lvl {offer.reqLevel}` after the contract name, colored via a
++three-way compare against the viewing hero's own level: `--brass`
++(gold) exactly at level, `--moss` (green) below it, `--blood` (red)
++above it -- matching the report's spec exactly, including the naming
++("Quest Name - Lvl 17").
++
++**Raid difficulty icons: real crop bug, plus the DevTool gap that
++caused it.** Confirmed directly: `DifficultyCircle` (RaidsPanel.tsx)
++rendered `RAID_DIFFICULTY_ICON[difficulty]` as an `<img
++style={{objectFit:'contain'}}>` at 70% size inside a circular button --
++a square source PNG shown whole (letterboxed) inside round chrome, the
++exact "square within the circle" bug described. The icons themselves
++had never been reachable by any DevTool picker at all (this file's own
++comment used to say "fixed UI chrome... never devtool-edited," now
++removed since it's no longer true) -- they lived in `public/raid-icons/`,
++outside the DevTool's `bannerImage` picker root (`BANNERS_DIR`, hard-
++locked to `public/lore/` server-side, confirmed by reading server.mjs's
++own `/lore-art/` route rather than assumed).
++
++Fixed both halves:
++- **The crop itself.** `DifficultyCircle` now renders a
++  `background-image` + `background-size: cover` div inside the same
++  circular button, letting the button's own `border-radius: 50%` (plus
++  a new `overflow: hidden` on `.raid-diff-circle`, added defensively)
++  clip it to a real circle instead of showing the whole square.
++  `background-position` reads a new per-difficulty `focusX`/`focusY`
++  (default 50/50 -- dead-center, same as today's visual result), so
++  this alone fixes the reported bug even before anyone touches the new
++  DevTool control. A 1x1 transparent `<img>` sharing the same `src`
++  preserves the original "fall back to the plain letter label if the
++  file's missing" behavior, since a CSS `background-image` never fires
++  `onerror` the way an `<img>` tag does.
++- **A real DevTool adjuster.** New content type `raid-difficulty-icons`
++  (`raid-difficulty-icons.json`, 3 entries: normal/heroic/legendary),
++  using the exact same `{path, focusX, focusY, scale}` shape and the
++  same `bannerImage` field type chain/raid banners already use --
++  `RAID_DIFFICULTY_ICON_DEFS`/`raidDifficultyIconSrc()` (raids.ts)
++  replace the old flat `RAID_DIFFICULTY_ICON` path constant. `path`
++  unset (all three ship that way) falls back to
++  `./lore/raid-difficulty-icons/<difficulty>.png` -- the same three PNG
++  files, copied byte-identical from the old `public/raid-icons/` into
++  the DevTool's reachable `public/lore/` tree (the old folder is left in
++  place, unreferenced, not deleted as part of a code patch -- the actual
++  image bytes aren't part of this patch's text diff for the same reason
++  patch 0274's raid/chain art wasn't: binary content doesn't belong in a
++  diff, delivered as ready-to-drop files alongside it instead).
++- **The picker itself needed one small gap closed.** No existing
++  bannerImage field previewed as anything but a rectangle, which would
++  have made the adjuster's own preview box misleading for a field
++  that's actually clipped to a circle in-game. New optional
++  `previewShape: 'circle'` schema flag (server.mjs) threads through as
++  a `data-preview-shape` attribute (app.js) to a new
++  `.banner-preview-box--circle` CSS class (style.css, just `border-
++  radius: 50%` -- drag-to-focus/nudge/zoom all work identically,
++  unchanged) -- opt-in, every other bannerImage field is unaffected.
++
++**Verification.** `npx tsc --noEmit` and a full `vite build` (both
++`vite.config.ts` and `vite.web.config.ts` targets) pass clean against
++every change in this patch. `node --check` confirms `server.mjs` and
++`app.js` are still syntactically valid (not covered by `tsc`, which
++only checks `src/`). `raid-difficulty-icons.json` re-parsed clean.
++
++**Confirmed already built, not touched:** Grimsby (`PeddlerCardModal.
++tsx`/`PeddlerDiceModal.tsx`) already flies gold/material/equipment/egg
++rewards to their real targets via this exact `flyTarget.ts` mechanism --
++nothing in the report's "ie, selling, rewards, Grimsby" list was
++actually missing there.
++
++**Not done in this pass, flagged for whenever it's picked up next:**
++the per-curio-type "Sell all ×N" button inside `CurioCard`'s own modal
++has the same no-animation gap Sell All (Curios) just had, not folded in
++since it wasn't part of what was reported; the old, now-unreferenced
++`public/raid-icons/` folder (including a stray `tier4_mythic.png`, a
++leftover from the Mythic->Legendary rename) could be cleaned up
++whenever a broader asset-folder pass happens.
+diff -ruN a/src/game/data/json/raid-difficulty-icons.json b3/src/game/data/json/raid-difficulty-icons.json
+--- a/src/game/data/json/raid-difficulty-icons.json	1970-01-01 00:00:00.000000000 +0000
++++ b/src/game/data/json/raid-difficulty-icons.json	2026-09-03 06:33:18.974050775 +0000
+@@ -0,0 +1,20 @@
++[
++  {
++    "id": "normal",
++    "focusX": 50,
++    "focusY": 50,
++    "scale": 100
++  },
++  {
++    "id": "heroic",
++    "focusX": 50,
++    "focusY": 50,
++    "scale": 100
++  },
++  {
++    "id": "legendary",
++    "focusX": 50,
++    "focusY": 50,
++    "scale": 100
++  }
++]
+diff -ruN a/src/game/data/raids.ts b3/src/game/data/raids.ts
+--- a/src/game/data/raids.ts	2026-09-03 06:33:18.833324154 +0000
++++ b/src/game/data/raids.ts	2026-09-03 06:33:18.971321633 +0000
+@@ -15,6 +15,7 @@
+  */
+ import raidEncountersJson from './json/raid-encounters.json';
+ import raidsJson from './json/raids.json';
++import raidDifficultyIconsJson from './json/raid-difficulty-icons.json';
+ 
+ const HOUR = 3600000;
+ 
+@@ -105,18 +106,54 @@
+ };
+ 
+ /**
+- * Badge icons for the N/H/L difficulty circles. Lives in its own
+- * public/raid-icons/ folder, separate from public/item-icons/, since these
+- * are fixed UI chrome (exactly three, never devtool-edited) rather than
+- * per-item art assigned one at a time. Falls back to the plain letter
+- * label in the UI if the file is missing -- see DifficultyCircle in
+- * RaidsPanel.tsx.
++ * Badge icons for the N/H/L difficulty circles -- patch 0302: was a flat
++ * `Record<RaidDifficulty, string>` path constant, editable only by
++ * replacing the PNG files on disk by hand ("never devtool-edited," this
++ * comment used to say). Now the same DevTool-editable `{path, focusX,
++ * focusY, scale}` shape chain/raid banners already use
++ * (raid-difficulty-icons.json, 3 entries), for the same reason those
++ * exist: the actual bug report was that these are square source PNGs
++ * rendered `object-fit: contain` inside a circular button
++ * (DifficultyCircle, RaidsPanel.tsx), so a square canvas's own
++ * background shows inside the round chrome instead of being cropped to
++ * fill it. Fixing the crop (contain -> cover, see DifficultyCircle) is
++ * only half the fix -- a plain center-crop won't always land right on
++ * every source image, so this also gives it the same focus-point + zoom
++ * adjuster every other DevTool-editable icon already has, rather than a
++ * second one-off cropping mechanism.
++ *
++ * `path` unset (every entry ships that way) falls back to the exact
++ * same convention path these always used --
++ * `./lore/raid-difficulty-icons/<difficulty>.png` -- so nothing changes
++ * visually from this patch alone beyond the contain->cover crop fix;
++ * DevTool-assigning a real override only matters once someone actually
++ * wants different art, same "nothing changes until deliberately
++ * assigned" rollout every other bannerImage field follows. The three
++ * files themselves moved from the old public/raid-icons/ (outside the
++ * DevTool's public/lore/ picker root, hence "never devtool-edited") to
++ * public/lore/raid-difficulty-icons/ -- identical art, just relocated to
++ * where the picker can actually reach it; the old folder is left in
++ * place, unreferenced, rather than deleted as part of a code patch.
+  */
+-export const RAID_DIFFICULTY_ICON: Record<RaidDifficulty, string> = {
+-  normal: './raid-icons/normal.png',
+-  heroic: './raid-icons/heroic.png',
+-  legendary: './raid-icons/legendary.png',
+-};
++export interface RaidDifficultyIconDef {
++  id: RaidDifficulty;
++  path?: string;
++  focusX?: number;
++  focusY?: number;
++  scale?: number;
++}
++export const RAID_DIFFICULTY_ICON_DEFS: Record<RaidDifficulty, RaidDifficultyIconDef> = Object.fromEntries(
++  (raidDifficultyIconsJson as RaidDifficultyIconDef[]).map((d) => [d.id, d]),
++) as Record<RaidDifficulty, RaidDifficultyIconDef>;
++
++/** Resolves a difficulty's icon def to an actual src path -- an assigned
++ *  `path` override (relative to public/lore/) wins, otherwise falls back
++ *  to the original convention path. Mirrors raidBannerSrc's exact shape
++ *  just below RaidBanner in RaidsPanel.tsx. */
++export function raidDifficultyIconSrc(difficulty: RaidDifficulty): string {
++  const def = RAID_DIFFICULTY_ICON_DEFS[difficulty];
++  return def?.path ? `./lore/${def.path}` : `./lore/raid-difficulty-icons/${difficulty}.png`;
++}
+ 
+ /** Parses a "defId@chance" loot entry into its two parts. Malformed entries
+  *  (missing the @, or a non-numeric chance) are dropped rather than
+diff -ruN a/src/styles/app.css b3/src/styles/app.css
+--- a/src/styles/app.css	2026-09-03 06:33:18.834431502 +0000
++++ b/src/styles/app.css	2026-09-03 06:33:18.976235139 +0000
+@@ -38,6 +38,13 @@
+      Retire reads as its own distinct action rather than borrowing an
+      already-claimed accent. */
+   --pink: oklch(68% 0.19 352);
++  /* Patch 0302. Scrap's own fly-to-counter particle was silently reusing
++     --brass (gold's colour) end to end -- see the goldFlights rewrite in
++     VendorsPanel.tsx. Near-zero chroma on purpose (0.006, barely above
++     grayscale) so it reads as metal/silver rather than another named hue
++     competing with brass/moss/sky for attention -- Scrap is meant to look
++     distinctly *not* like gold. */
++  --silver: oklch(78% 0.006 260);
+ 
+   --font-display: 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', 'Courier New', ui-monospace, monospace;
+   --font-body: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+@@ -385,6 +392,7 @@
+   align-items: center;
+   justify-content: center;
+   padding: 0;
++  overflow: hidden;
+   transition: transform 120ms ease, filter 120ms ease;
+ }
+ .raid-diff-circle:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+diff -ruN a/src/ui/OfflineReportModal.tsx b3/src/ui/OfflineReportModal.tsx
+--- a/src/ui/OfflineReportModal.tsx	2026-09-03 06:33:18.835171934 +0000
++++ b/src/ui/OfflineReportModal.tsx	2026-09-03 06:33:18.978245362 +0000
+@@ -1,4 +1,4 @@
+-import { useEffect } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import type { CSSProperties } from 'react';
+ import { RaidDifficulty } from '../game/types';
+ import { RAID_DIFFICULTY_LABEL } from '../game/data/raids';
+@@ -7,6 +7,7 @@
+ import { formatDuration, formatGold, formatMaterial, RARITY_COLOR } from '../game/util';
+ import { useCountUp } from './useCountUp';
+ import { MATERIAL_BY_ID, NODE_ORDER } from '../game/data/materials';
++import { measureFlyOffset } from './flyTarget';
+ 
+ /** Same rarity-parallel palette RaidsPanel already uses for Normal/Heroic/
+  *  Legendary -- kept local rather than shared, matching how RaidResultModal
+@@ -40,6 +41,11 @@
+   { dx: 85, dy: -85, rot: 26, delay: 40 },
+ ];
+ 
++/** Patch 0302 -- same dismiss timing every other result modal in the game
++ *  uses, so the gold-fly particle (added this patch) has time to finish
++ *  its travel before the modal actually unmounts. */
++const DISMISS_DELAY_MS = 640;
++
+ /**
+  * Summarises everything that happened while the app was closed -- the
+  * classic idle-game "welcome back" payoff moment, and previously the
+@@ -76,6 +82,38 @@
+   const displayGold = useCountUp(report?.goldGained ?? 0, { from: 0, durationMs: 900 });
+   const displayXp = useCountUp(report?.xpGained ?? 0, { from: 0, durationMs: 900 });
+ 
++  /**
++   * Patch 0302, direct request: dismissing this report ("Back to work")
++   * had no long-distance payoff at all -- only the local arrival burst
++   * below (already existed). Same mechanism QuestResultModal/
++   * RaidResultModal's own gold flight uses: measured at the moment of
++   * dismissal, flies the real on-screen distance to the header's `gold`
++   * target (flyTarget.ts), silently skipped if that target isn't mounted
++   * (idle mode has no header). `goldRef` anchors the flight's start point
++   * to the stat-row's own "+N gold" figure rather than the modal's
++   * center, so it visibly launches from the number it's leaving.
++   */
++  const [dismissing, setDismissing] = useState(false);
++  const goldRef = useRef<HTMLSpanElement>(null);
++  const [goldFlight, setGoldFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
++  const timeoutRef = useRef<number | null>(null);
++
++  useEffect(() => () => {
++    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
++  }, []);
++
++  const handleDismiss = () => {
++    if (dismissing) return;
++    setDismissing(true);
++    if (goldRef.current && report && report.goldGained > 0) {
++      const originRect = goldRef.current.getBoundingClientRect();
++      const origin = { x: originRect.left + originRect.width / 2, y: originRect.top + originRect.height / 2 };
++      const offset = measureFlyOffset(goldRef.current, 'gold');
++      if (offset) setGoldFlight({ ...origin, ...offset });
++    }
++    timeoutRef.current = window.setTimeout(() => engine.dismissOfflineReport(), DISMISS_DELAY_MS);
++  };
++
+   if (!active || !report || !settings.offlineReportOnLaunch) return null;
+ 
+   // Ordered the same as every other Harvest surface (NODE_ORDER: ore, timber,
+@@ -92,7 +130,7 @@
+     || report.raidResults.some((r) => r.loot.some((l) => l.rarity === 'legendary'));
+ 
+   return (
+-    <div className="overlay" onClick={() => engine.dismissOfflineReport()}>
++    <div className="overlay" onClick={handleDismiss}>
+       <div className="modal" onClick={(e) => e.stopPropagation()}>
+         <h3>While you were away</h3>
+         <p className="small muted" style={{ marginTop: 0 }}>
+@@ -104,7 +142,7 @@
+         ) : (
+           <>
+             <div className="stat-row" style={{ marginBottom: 10 }}>
+-              <span className="gold-text">+{formatGold(displayGold)} gold</span>
++              <span ref={goldRef} className="gold-text">+{formatGold(displayGold)} gold</span>
+               <span>+{displayXp} experience</span>
+               {levelsGained > 0 && <span className="good">+{levelsGained} level{levelsGained === 1 ? '' : 's'}</span>}
+               {(report.results.length > 0 || report.raidResults.length > 0) && (
+@@ -195,7 +233,7 @@
+         )}
+ 
+         <div className="row end" style={{ marginTop: 12 }}>
+-          <button className="btn-primary" onClick={() => engine.dismissOfflineReport()}>Back to work</button>
++          <button className="btn-primary" onClick={handleDismiss} disabled={dismissing}>Back to work</button>
+         </div>
+ 
+         {/* Fires on arrival, same reasoning as ChainCompleteModal's own
+@@ -235,6 +273,25 @@
+             ))}
+           </div>
+         )}
++
++        {/* The actual "flies to the header" particle -- see handleDismiss's
++            own comment above for why this exists and what it measures
++            against. Silently renders nothing if 'gold' isn't currently
++            mounted (idle mode has no header) -- the local coin burst and
++            the count-up above already cover the reward either way. */}
++        {dismissing && goldFlight && (
++          <span
++            className="fly-particle"
++            aria-hidden="true"
++            style={{
++              position: 'fixed', left: goldFlight.x, top: goldFlight.y,
++              '--fly-dx': `${goldFlight.dx}px`, '--fly-dy': `${goldFlight.dy}px`,
++              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--brass)',
++            } as CSSProperties}
++          >
++            ◆
++          </span>
++        )}
+       </div>
+     </div>
+   );
+diff -ruN a/src/ui/QuestResultModal.tsx b3/src/ui/QuestResultModal.tsx
+--- a/src/ui/QuestResultModal.tsx	2026-09-03 06:33:18.835351511 +0000
++++ b/src/ui/QuestResultModal.tsx	2026-09-03 06:33:18.978700651 +0000
+@@ -362,6 +362,13 @@
+             ◆
+           </span>
+         )}
++        {/* Patch 0302: XP's long-distance flight now matches the standard
++            "small lettered green XP" language used everywhere else this
++            patch touches (RaidResultModal, OfflineReportModal, and the
++            Sell/Scrap flights' own silver -- see VendorsPanel.tsx) instead
++            of a blue sparkle glyph, so XP reads as its own consistent
++            signal (green, lettered) the same way gold (brass, ◆) and
++            scrap (silver) each do. */}
+         {dismissing && xpFlight && (
+           <span
+             className="fly-particle"
+@@ -369,10 +376,10 @@
+             style={{
+               position: 'fixed', left: xpFlight.x, top: xpFlight.y,
+               '--fly-dx': `${xpFlight.dx}px`, '--fly-dy': `${xpFlight.dy}px`,
+-              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--sky)',
++              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '0.7rem', fontWeight: 700, color: 'var(--moss)',
+             } as CSSProperties}
+           >
+-            ✦
++            XP
+           </span>
+         )}
+       </div>
+diff -ruN a/src/ui/panels/EquipmentPanel.tsx b3/src/ui/panels/EquipmentPanel.tsx
+--- a/src/ui/panels/EquipmentPanel.tsx	2026-09-03 06:33:18.835718548 +0000
++++ b/src/ui/panels/EquipmentPanel.tsx	2026-09-03 06:33:18.980164920 +0000
+@@ -14,6 +14,8 @@
+ import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
+ import { GearScoreBadge } from '../GearScoreBadge';
+ import { Row, Toggle } from './SettingsPanel';
++import { RewardGlowParticle } from '../RewardGlowParticle';
++import { getFlyTargetCenter } from '../flyTarget';
+ 
+ const SLOTS = EQUIP_SLOTS;
+ 
+@@ -332,6 +334,7 @@
+     <>
+       <div
+         className="item-card"
++        data-curio-id={def.id}
+         onClick={() => setOpen(true)}
+         role="button"
+         tabIndex={0}
+@@ -901,6 +904,45 @@
+ 
+   const curiosOwned = CurioManager.owned(state);
+ 
++  /**
++   * Patch 0302, direct request. Sell All (Curios) previously called
++   * `engine.sellAllCurios()` once and nothing else -- every card vanished
++   * in the same render with zero feedback, unlike every other bulk-sell
++   * action in the game (Sell Junk/Scrap All/Repair All, VendorsPanel.tsx)
++   * which already stagger per-item and fly a burst to the header. Same
++   * "snapshot positions before anything moves, animate each card
++   * individually" shape those three already established: one
++   * `engine.sellCurio(def.id)` call per curio type instead of the single
++   * bulk call, staggered STAGGER_MS apart, each firing its own gold-fly
++   * particle toward the header's `gold` target (flyTarget.ts) -- so cards
++   * visibly leave the grid one at a time instead of all at once.
++   */
++  const [curioFlights, setCurioFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
++  const CURIO_SELL_STAGGER_MS = 140;
++  const runSellAllCurios = () => {
++    if (curiosOwned.length === 0) return;
++    const targets = curiosOwned.map(({ def }) => {
++      const el = document.querySelector(`[data-curio-id="${def.id}"]`);
++      const rect = el?.getBoundingClientRect();
++      return {
++        id: def.id,
++        x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
++        y: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
++      };
++    });
++    targets.forEach((t, i) => {
++      window.setTimeout(() => {
++        engine.sellCurio(t.id);
++        const target = getFlyTargetCenter('gold');
++        if (target) {
++          const key = Date.now() + Math.random();
++          setCurioFlights((prev) => [...prev, { key, x: t.x, y: t.y, dx: target.x - t.x, dy: target.y - t.y }]);
++          window.setTimeout(() => setCurioFlights((prev) => prev.filter((f) => f.key !== key)), 750);
++        }
++      }, i * CURIO_SELL_STAGGER_MS);
++    });
++  };
++
+   // Gear-type filter -- sorts the Stash grid down to one slot at a time
+   // (Weapon/Helmet/etc.), purely a display filter. 'all' is the default
+   // so nothing changes for anyone who never touches it.
+@@ -1121,7 +1163,7 @@
+             <button
+               className="btn-green"
+               style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+-              onClick={() => engine.sellAllCurios()}
++              onClick={runSellAllCurios}
+               title="Sells every curio currently in the stash"
+             >
+               Sell All · {formatGold(curiosOwned.reduce((sum, { def, count }) => sum + def.sellValue * count, 0))}
+@@ -1132,6 +1174,13 @@
+               <CurioCard key={def.id} def={def} count={count} engine={engine} />
+             ))}
+           </div>
++          {curioFlights.map((f) => (
++            <RewardGlowParticle
++              key={f.key}
++              x={f.x} y={f.y} dx={f.dx} dy={f.dy}
++              color="var(--brass)" delay={0} durationMs={750}
++            />
++          ))}
+         </>
+       )}
+       </div>
+diff -ruN a/src/ui/panels/QuestPanel.tsx b3/src/ui/panels/QuestPanel.tsx
+--- a/src/ui/panels/QuestPanel.tsx	2026-09-03 06:33:18.835931972 +0000
++++ b/src/ui/panels/QuestPanel.tsx	2026-09-03 06:33:18.980906109 +0000
+@@ -148,7 +148,26 @@
+         style={thumbSrc ? { backgroundImage: `url(${thumbSrc})` } : undefined}
+       />
+       <div className="raid-card-body">
+-        <div className="raid-card-name">{offer.name}</div>
++        <div className="raid-card-name">
++          {offer.name}
++          {' '}
++          {/* Patch 0302, direct request: show the contract's own level
++              right on the collapsed card instead of only inside the detail
++              modal (QuestDetailModal's levelGap), colored as a quick
++              at-a-glance signal -- gold at exactly the hero's own level,
++              green below it (comfortably under-leveled content), red
++              above it (the hero is under-leveled for this contract). */}
++          <span
++            className="tiny"
++            style={{
++              color: offer.reqLevel === hero.level ? 'var(--brass)'
++                : offer.reqLevel < hero.level ? 'var(--moss)'
++                : 'var(--blood)',
++            }}
++          >
++            - Lvl {offer.reqLevel}
++          </span>
++        </div>
+         <div className="raid-card-meta">
+           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+           {offer.chain && (
+diff -ruN a/src/ui/panels/RaidsPanel.tsx b3/src/ui/panels/RaidsPanel.tsx
+--- a/src/ui/panels/RaidsPanel.tsx	2026-09-03 06:33:18.835955473 +0000
++++ b/src/ui/panels/RaidsPanel.tsx	2026-09-03 06:33:18.980977665 +0000
+@@ -6,7 +6,7 @@
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import {
+-  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON, RAID_DIFFICULTY_LABEL,
++  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON_DEFS, raidDifficultyIconSrc, RAID_DIFFICULTY_LABEL,
+   isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
+ } from '../../game/data/raids';
+ import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
+@@ -343,6 +343,7 @@
+   const engine = useEngine();
+   const color = DIFFICULTY_COLOR[difficulty];
+   const [imgFailed, setImgFailed] = useState(false);
++  const iconDef = RAID_DIFFICULTY_ICON_DEFS[difficulty];
+   return (
+     <div className="raid-diff-circle-wrap">
+       <button
+@@ -358,12 +359,37 @@
+           : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
+       >
+         {!imgFailed ? (
+-          <img
+-            src={RAID_DIFFICULTY_ICON[difficulty]}
+-            alt=""
+-            onError={() => setImgFailed(true)}
+-            style={{ width: '70%', height: '70%', objectFit: 'contain' }}
+-          />
++          // Patch 0302: was <img object-fit:contain> at 70% -- a square
++          // source PNG shown whole (letterboxed) inside a round button
++          // reads as "the square is showing through the circle," the
++          // exact bug reported. background-image + cover fills the full
++          // circle and lets the button's own border-radius:50% clip it,
++          // same "crop to fill, focus point picks what's centered" shape
++          // RaidBanner (just above in this file) already uses for
++          // raid banners/icons -- focusX/focusY/scale default to
++          // 50/50/100 (dead-center, no zoom) so this looks like a
++          // reasonable center-crop even before anyone touches the new
++          // DevTool adjuster.
++          <div
++            aria-hidden="true"
++            style={{
++              width: '100%', height: '100%', borderRadius: '50%',
++              backgroundImage: `url(${raidDifficultyIconSrc(difficulty)})`,
++              backgroundPosition: `${iconDef?.focusX ?? 50}% ${iconDef?.focusY ?? 50}%`,
++              backgroundSize: iconDef?.scale && iconDef.scale !== 100 ? `${iconDef.scale}%` : 'cover',
++            }}
++          >
++            {/* A background-image never fires onError, unlike <img> --
++                a 1x1 transparent img sharing the exact same src is the
++                simplest way to keep the existing "fall back to the
++                letter label if the file's missing" behavior working. */}
++            <img
++              src={raidDifficultyIconSrc(difficulty)}
++              alt=""
++              onError={() => setImgFailed(true)}
++              style={{ width: 1, height: 1, opacity: 0, position: 'absolute' }}
++            />
++          </div>
+         ) : (
+           DIFFICULTY_LABEL[difficulty]
+         )}
+diff -ruN a/src/ui/panels/VendorsPanel.tsx b3/src/ui/panels/VendorsPanel.tsx
+--- a/src/ui/panels/VendorsPanel.tsx	2026-09-03 06:33:18.836073642 +0000
++++ b/src/ui/panels/VendorsPanel.tsx	2026-09-03 06:33:18.981350598 +0000
+@@ -354,16 +354,31 @@
+   const pushRepairBurst = (x: number, y: number, free: boolean) => {
+     pushBurst(x, y, 0, 'repair', undefined, free);
+   };
+-  const [goldFlights, setGoldFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
+-  const pushGoldFlight = (x: number, y: number, gained: number) => {
+-    pushBurst(x, y, gained, 'gold');
+-    const target = getFlyTargetCenter('gold');
++  /**
++   * Patch 0302: was two copies of the exact same push logic (one for gold,
++   * one for scrap) both writing into a single state array literally named
++   * `goldFlights` -- harmless for the flight's own math (dx/dy don't care
++   * what's flying), but the render side below then had no way to tell the
++   * two apart and rendered every flight, scrap included, as a brass/gold
++   * glow (see RewardGlowParticle's `color` prop). Real, visible bug: Scrap
++   * All's long-distance flight has been gold-coloured this whole time.
++   * Merged into one `pushRewardFlight` plus a `kind` on each flight entry,
++   * so color (and, later, icon) can be picked per-kind at render time
++   * instead of being hardcoded to gold's.
++   */
++  const [rewardFlights, setRewardFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number; kind: 'gold' | 'scrap' }[]>([]);
++  const pushRewardFlight = (x: number, y: number, targetKey: string, kind: 'gold' | 'scrap') => {
++    const target = getFlyTargetCenter(targetKey);
+     if (target) {
+       const key = Date.now() + Math.random() + 0.5;
+-      setGoldFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y }]);
+-      window.setTimeout(() => setGoldFlights((prev) => prev.filter((f) => f.key !== key)), 750);
++      setRewardFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y, kind }]);
++      window.setTimeout(() => setRewardFlights((prev) => prev.filter((f) => f.key !== key)), 750);
+     }
+   };
++  const pushGoldFlight = (x: number, y: number, gained: number) => {
++    pushBurst(x, y, gained, 'gold');
++    pushRewardFlight(x, y, 'gold', 'gold');
++  };
+   /**
+    * Scrap gets the real long-distance flight here too, unlike on
+    * Inventory -- this page has a genuine persistent Scrap total on
+@@ -375,12 +390,7 @@
+   const scrapRef = useFlyTargetRef<HTMLSpanElement>('scrap');
+   const pushScrapFlight = (x: number, y: number, gained: number, icon: string) => {
+     pushBurst(x, y, gained, 'scrap', icon);
+-    const target = getFlyTargetCenter('scrap');
+-    if (target) {
+-      const key = Date.now() + Math.random() + 0.5;
+-      setGoldFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y }]);
+-      window.setTimeout(() => setGoldFlights((prev) => prev.filter((f) => f.key !== key)), 750);
+-    }
++    pushRewardFlight(x, y, 'scrap', 'scrap');
+   };
+ 
+   const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
+@@ -622,11 +632,16 @@
+           {b.kind === 'repair' ? (b.free ? 'Repaired \u00b7 Free' : 'Repaired!') : `+${b.gained} ${b.kind === 'gold' ? 'gold' : 'Scrap'}`}
+         </span>
+       ))}
+-      {goldFlights.map((f) => (
++      {/* Patch 0302: color now genuinely per-kind -- gold keeps the brass
++          glow every other gold flourish in the game uses, scrap gets its
++          own silver/grey (--silver) rather than silently inheriting
++          gold's, which is the bug this patch fixes (see pushRewardFlight's
++          own comment above). */}
++      {rewardFlights.map((f) => (
+         <RewardGlowParticle
+           key={f.key}
+           x={f.x} y={f.y} dx={f.dx} dy={f.dy}
+-          color="var(--brass)" delay={0} durationMs={750}
++          color={f.kind === 'gold' ? 'var(--brass)' : 'var(--silver)'} delay={0} durationMs={750}
+         />
+       ))}
+ 
+diff -ruN a/tools/devtool/public/app.js b3/tools/devtool/public/app.js
+--- a/tools/devtool/public/app.js	2026-09-03 06:33:18.836523484 +0000
++++ b/tools/devtool/public/app.js	2026-09-03 06:33:18.983207680 +0000
+@@ -603,7 +603,13 @@
+     // hint -- a short recommended-resolution caption shown under the
+     // preview box, see renderBannerField. Aspect alone tells an artist
+     // the shape to crop to, not the resolution worth exporting at.
+-    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}"></div>`;
++    // `data-preview-shape` (patch 0302) carries the schema's optional
++    // `previewShape` hint through -- 'circle' rounds the preview box to
++    // match fields (like the raid difficulty icons) that are actually
++    // clipped to a circle in-game, so the picker's own preview isn't
++    // misleadingly square for those. Every other bannerImage field
++    // simply omits it and gets the ordinary rectangular box, unchanged.
++    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}" data-preview-shape="${escapeHtml(spec.previewShape ?? '')}"></div>`;
+   }
+   if (spec.type === 'decorationImage') {
+     // Same deferred-render approach as bannerImage just above -- a bare
+@@ -1219,11 +1225,16 @@
+   const scaleVal = parseFloat(field.dataset.scale);
+   const scale = Number.isFinite(scaleVal) ? scaleVal : 100;
+   const aspect = field.dataset.previewAspect || '8/2.5';
++  // Patch 0302 -- see the data-preview-shape comment where it's set,
++  // above. Only 'circle' is a real value today; anything else (usually
++  // just unset) falls through to the plain rectangular box every other
++  // bannerImage field has always used.
++  const shapeClass = field.dataset.previewShape === 'circle' ? ' banner-preview-box--circle' : '';
+   const defaultPath = bannerDefaultPath(field);
+   const previewPath = override || defaultPath;
+ 
+   field.innerHTML = `
+-    <div class="banner-preview-box" data-drag-target
++    <div class="banner-preview-box${shapeClass}" data-drag-target
+          style="aspect-ratio:${escapeHtml(aspect)};${previewPath ? `background-image:url('/lore-art/${escapeHtml(previewPath)}');` : ''}background-size:${bannerBackgroundSize(scale)};background-position:${fx}% ${fy}%;">
+       ${previewPath ? '' : '<span class="banner-preview-empty">No banner art yet — click/drag still sets focus for when art is added</span>'}
+       <div class="banner-focus-marker" style="left:${fx}%; top:${fy}%;"></div>
+diff -ruN a/tools/devtool/public/style.css b3/tools/devtool/public/style.css
+--- a/tools/devtool/public/style.css	2026-09-03 06:33:18.836601202 +0000
++++ b/tools/devtool/public/style.css	2026-09-03 06:33:18.983405926 +0000
+@@ -444,6 +444,15 @@
+   cursor: crosshair; touch-action: none; overflow: hidden;
+   user-select: none;
+ }
++/* Patch 0302 -- for fields whose schema sets previewShape: 'circle'
++   (currently just raid-difficulty-icons), rounds the preview to match
++   how the art is actually clipped in-game (DifficultyCircle,
++   RaidsPanel.tsx). Everything else about the box -- drag-to-focus,
++   nudge pad, zoom slider -- works identically; this is purely a visual
++   shape change so what the artist sees here matches the real crop. */
++.banner-preview-box--circle {
++  border-radius: 50%;
++}
+ .banner-preview-empty {
+   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+   padding: 12px; text-align: center; font-size: 11px; color: var(--dim);
+diff -ruN a/tools/devtool/server.mjs b3/tools/devtool/server.mjs
+--- a/tools/devtool/server.mjs	2026-09-03 06:33:18.836626328 +0000
++++ b/tools/devtool/server.mjs	2026-09-03 06:33:18.983006099 +0000
+@@ -1186,6 +1186,33 @@
+       requiredRoles: { type: 'roleRequirements', required: false },
+     },
+   },
++  'raid-difficulty-icons': {
++    file: 'raid-difficulty-icons.json',
++    label: 'Raid Difficulty Icons',
++    group: 'Raids',
++    idField: 'id',
++    // Patch 0302, direct request. The N/H/L difficulty badge circles
++    // (DifficultyCircle, RaidsPanel.tsx) were "fixed UI chrome, never
++    // devtool-edited" -- reported bug: their source PNGs are square but
++    // rendered inside a circular button, and the old contain-fit showed
++    // the square canvas's own background through the round chrome
++    // instead of cropping to fill it. Same fix shape as every other
++    // cropping bug this tool already solves: give it the standard
++    // bannerImage focus-point + zoom picker instead of a one-off. Always
++    // exactly 3 entries (normal/heroic/legendary) -- id is a fixed enum
++    // in practice, not a free slug, but left as the ordinary string+slug
++    // field every other content type uses rather than a special case;
++    // nothing in the game reads a 4th id if one were added by mistake.
++    // `previewShape: 'circle'` (new this patch, see app.js's
++    // renderBannerField) rounds the picker's own preview box to match
++    // how DifficultyCircle actually clips it in-game -- without it the
++    // rectangular preview every other bannerImage field uses would
++    // itself be misleading for a field that's cropped to a circle.
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      path: { type: 'bannerImage', required: false, defaultFolder: 'raid-difficulty-icons', previewAspect: '1/1', previewShape: 'circle', previewSize: '~256x256px' },
++    },
++  },
+   'crafting-recipes': {
+     file: 'crafting-recipes.json',
+     label: 'Crafting Recipes',

@@ -23985,3 +23985,164 @@ known to actually be ~6.96M); auditing `rewardItems`/dedicated-loot
 value the same way gold was just audited, in case the same
 round-number drift shows up there too, was raised but not scoped as
 part of this specific report.
+
+### Reward-feedback consistency pass: Sell All (Curios), Scrap's gold-coloured flight bug, XP flight styling, session-recap gold-fly, quest board level display, and a real DevTool fix for the raid difficulty icons' square-in-a-circle crop (patch 0302)
+
+```discord-update
+Dev Update | Reward Feedback & Quest Board
+
+- Fixed: Scrap All's long-distance flight has been colored brass (gold) instead of silver this whole time -- now genuinely silver/grey
+- Added: Sell All (Curios) now flies gold to the header, one card at a time, matching every other bulk-sell button in the game
+- Changed: the XP flight now reads as small green lettering instead of a blue sparkle, added to the "While you were away" report's Back to Work button too
+- Added: contract cards on the Quest Board now show their level, colored gold/green/red against your hero's own
+- Fixed: raid difficulty icons (Normal/Heroic/Legendary) were square art cropped wrong inside their round badges -- now crop correctly, plus a real DevTool adjuster for them
+```
+
+Six separate fixes/additions from one report, grouped into a single patch
+since they're all small and touch the same "does earning something feel
+rewarded" surface area. Investigated each claim against the actual code
+before building anything -- two of the six (Grimsby, Scrap All's
+existence) turned out to already be built; the other four were real
+gaps or a real bug.
+
+**Scrap All's flight has been gold-colored, not silver, since it
+shipped.** Real bug, not a missing feature. `ArmourStock`
+(VendorsPanel.tsx) had `pushGoldFlight`/`pushScrapFlight` both writing
+into one `goldFlights` state array, and the render side had no `kind`
+to key off -- every flight, scrap included, rendered via
+`RewardGlowParticle` with `color="var(--brass)"` hardcoded. Fixed:
+merged into `pushRewardFlight` plus a `kind: 'gold' | 'scrap'` tag per
+flight entry (renamed the array to `rewardFlights` since it's no longer
+gold-specific), color picked per-kind at render time. New `--silver:
+oklch(78% 0.006 260)` CSS var (near-zero chroma, deliberately reads as
+metal rather than another named hue) for scrap's own color, distinct
+from `--brass`.
+
+**Sell All (Curios) had zero animation.** Confirmed by reading it, not
+assumed: `onClick={() => engine.sellAllCurios()}`, one bulk call, no
+burst, no stagger, no fly -- unlike Sell Junk/Scrap All/Repair All
+(VendorsPanel.tsx), which already established the "snapshot each card's
+position, then stagger individual calls with a gold-fly per card" shape
+this patch reuses. `EquipmentPanel.tsx`'s `runSellAllCurios` calls
+`engine.sellCurio(def.id)` once per curio type (curios are grouped by
+type, not per-uid the way stash items are, so "one card" here means one
+curio type's card) staggered 140ms apart -- same `STAGGER_MS` value
+VendorsPanel already uses -- each firing a `RewardGlowParticle` toward
+the header's `gold` target. `CurioCard` gained a `data-curio-id`
+attribute so its position can be measured before it unmounts, same
+`data-stash-uid` convention the equipment cards already use. The
+per-curio-type modal's own "Sell all ×N" button (inside CurioCard, a
+different, smaller action) was left untouched -- not part of what was
+reported, flagged below as a follow-up rather than folded in
+unrequested.
+
+**XP's long-distance flight is now small green lettering, matching the
+report's exact spec ("small lettered green xp").** Previously a blue
+(`var(--sky)`) "✦" sparkle glyph in `QuestResultModal.tsx` -- changed to
+`var(--moss)` (the game's one green, same color `.good` text already
+uses) at `0.7rem`/`700` weight, literal text "XP" as the flying token,
+the same way gold's "◆" is a token rather than a repeated number.
+**Deliberately not added to `RaidResultModal.tsx`**: that file's own
+comment already explains why gold-only was the original design --
+raid XP is awarded to the whole party (`result.heroIds`), not one
+hero, so there's no single hero XP bar to aim a flight at the way a
+solo quest result has one obvious target. Confirmed this reasoning
+still holds rather than overriding it; the local in-place XP burst
+(`XP_PARTICLES`/`collect-particle xp`) was already there and stays
+exactly as-is.
+
+**Session recap ("Back to work") now flies gold, not XP** -- the
+report specifically asked for gold here, not the blanket "every gold
+AND xp" language used elsewhere in the same report, and offline XP is
+the same multi-source aggregate problem RaidResultModal's gold-only
+choice already covers (a session can easily mix several heroes' worth
+of quest and raid XP with no single bar to land on). `OfflineReportModal.
+tsx` gained the same `dismissing`/timeout/measure-at-dismiss shape
+Quest/RaidResultModal already use: a new `goldRef` anchors the flight's
+start to the stat-row's own "+N gold" figure, `handleDismiss` (now
+wired to both the overlay click and the "Back to work" button, replacing
+the old direct `engine.dismissOfflineReport()` calls) measures the real
+distance to the header's `gold` target and fires it, then dismisses
+after the same `DISMISS_DELAY_MS` (640ms) every other result modal
+uses. The existing local coin/XP arrival burst (fires on mount, unique
+to this modal since it has no natural "exit" moment otherwise) is
+unchanged.
+
+**Quest Board contract cards now show their level.** `QuestRow`
+(QuestPanel.tsx) previously showed no level anywhere on the collapsed
+card (only inside `QuestDetailModal`'s own `levelGap` calc). Appended
+`- Lvl {offer.reqLevel}` after the contract name, colored via a
+three-way compare against the viewing hero's own level: `--brass`
+(gold) exactly at level, `--moss` (green) below it, `--blood` (red)
+above it -- matching the report's spec exactly, including the naming
+("Quest Name - Lvl 17").
+
+**Raid difficulty icons: real crop bug, plus the DevTool gap that
+caused it.** Confirmed directly: `DifficultyCircle` (RaidsPanel.tsx)
+rendered `RAID_DIFFICULTY_ICON[difficulty]` as an `<img
+style={{objectFit:'contain'}}>` at 70% size inside a circular button --
+a square source PNG shown whole (letterboxed) inside round chrome, the
+exact "square within the circle" bug described. The icons themselves
+had never been reachable by any DevTool picker at all (this file's own
+comment used to say "fixed UI chrome... never devtool-edited," now
+removed since it's no longer true) -- they lived in `public/raid-icons/`,
+outside the DevTool's `bannerImage` picker root (`BANNERS_DIR`, hard-
+locked to `public/lore/` server-side, confirmed by reading server.mjs's
+own `/lore-art/` route rather than assumed).
+
+Fixed both halves:
+- **The crop itself.** `DifficultyCircle` now renders a
+  `background-image` + `background-size: cover` div inside the same
+  circular button, letting the button's own `border-radius: 50%` (plus
+  a new `overflow: hidden` on `.raid-diff-circle`, added defensively)
+  clip it to a real circle instead of showing the whole square.
+  `background-position` reads a new per-difficulty `focusX`/`focusY`
+  (default 50/50 -- dead-center, same as today's visual result), so
+  this alone fixes the reported bug even before anyone touches the new
+  DevTool control. A 1x1 transparent `<img>` sharing the same `src`
+  preserves the original "fall back to the plain letter label if the
+  file's missing" behavior, since a CSS `background-image` never fires
+  `onerror` the way an `<img>` tag does.
+- **A real DevTool adjuster.** New content type `raid-difficulty-icons`
+  (`raid-difficulty-icons.json`, 3 entries: normal/heroic/legendary),
+  using the exact same `{path, focusX, focusY, scale}` shape and the
+  same `bannerImage` field type chain/raid banners already use --
+  `RAID_DIFFICULTY_ICON_DEFS`/`raidDifficultyIconSrc()` (raids.ts)
+  replace the old flat `RAID_DIFFICULTY_ICON` path constant. `path`
+  unset (all three ship that way) falls back to
+  `./lore/raid-difficulty-icons/<difficulty>.png` -- the same three PNG
+  files, copied byte-identical from the old `public/raid-icons/` into
+  the DevTool's reachable `public/lore/` tree (the old folder is left in
+  place, unreferenced, not deleted as part of a code patch -- the actual
+  image bytes aren't part of this patch's text diff for the same reason
+  patch 0274's raid/chain art wasn't: binary content doesn't belong in a
+  diff, delivered as ready-to-drop files alongside it instead).
+- **The picker itself needed one small gap closed.** No existing
+  bannerImage field previewed as anything but a rectangle, which would
+  have made the adjuster's own preview box misleading for a field
+  that's actually clipped to a circle in-game. New optional
+  `previewShape: 'circle'` schema flag (server.mjs) threads through as
+  a `data-preview-shape` attribute (app.js) to a new
+  `.banner-preview-box--circle` CSS class (style.css, just `border-
+  radius: 50%` -- drag-to-focus/nudge/zoom all work identically,
+  unchanged) -- opt-in, every other bannerImage field is unaffected.
+
+**Verification.** `npx tsc --noEmit` and a full `vite build` (both
+`vite.config.ts` and `vite.web.config.ts` targets) pass clean against
+every change in this patch. `node --check` confirms `server.mjs` and
+`app.js` are still syntactically valid (not covered by `tsc`, which
+only checks `src/`). `raid-difficulty-icons.json` re-parsed clean.
+
+**Confirmed already built, not touched:** Grimsby (`PeddlerCardModal.
+tsx`/`PeddlerDiceModal.tsx`) already flies gold/material/equipment/egg
+rewards to their real targets via this exact `flyTarget.ts` mechanism --
+nothing in the report's "ie, selling, rewards, Grimsby" list was
+actually missing there.
+
+**Not done in this pass, flagged for whenever it's picked up next:**
+the per-curio-type "Sell all ×N" button inside `CurioCard`'s own modal
+has the same no-animation gap Sell All (Curios) just had, not folded in
+since it wasn't part of what was reported; the old, now-unreferenced
+`public/raid-icons/` folder (including a stray `tier4_mythic.png`, a
+leftover from the Mythic->Legendary rename) could be cleaned up
+whenever a broader asset-folder pass happens.

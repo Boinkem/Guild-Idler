@@ -444,6 +444,15 @@ td.icon-cell { width: 1%; padding-right: 0; }
   cursor: crosshair; touch-action: none; overflow: hidden;
   user-select: none;
 }
+/* Patch 0302 -- for fields whose schema sets previewShape: 'circle'
+   (currently just raid-difficulty-icons), rounds the preview to match
+   how the art is actually clipped in-game (DifficultyCircle,
+   RaidsPanel.tsx). Everything else about the box -- drag-to-focus,
+   nudge pad, zoom slider -- works identically; this is purely a visual
+   shape change so what the artist sees here matches the real crop. */
+.banner-preview-box--circle {
+  border-radius: 50%;
+}
 .banner-preview-empty {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   padding: 12px; text-align: center; font-size: 11px; color: var(--dim);

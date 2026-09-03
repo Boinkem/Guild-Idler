@@ -354,15 +354,30 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
   const pushRepairBurst = (x: number, y: number, free: boolean) => {
     pushBurst(x, y, 0, 'repair', undefined, free);
   };
-  const [goldFlights, setGoldFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
-  const pushGoldFlight = (x: number, y: number, gained: number) => {
-    pushBurst(x, y, gained, 'gold');
-    const target = getFlyTargetCenter('gold');
+  /**
+   * Patch 0302: was two copies of the exact same push logic (one for gold,
+   * one for scrap) both writing into a single state array literally named
+   * `goldFlights` -- harmless for the flight's own math (dx/dy don't care
+   * what's flying), but the render side below then had no way to tell the
+   * two apart and rendered every flight, scrap included, as a brass/gold
+   * glow (see RewardGlowParticle's `color` prop). Real, visible bug: Scrap
+   * All's long-distance flight has been gold-coloured this whole time.
+   * Merged into one `pushRewardFlight` plus a `kind` on each flight entry,
+   * so color (and, later, icon) can be picked per-kind at render time
+   * instead of being hardcoded to gold's.
+   */
+  const [rewardFlights, setRewardFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number; kind: 'gold' | 'scrap' }[]>([]);
+  const pushRewardFlight = (x: number, y: number, targetKey: string, kind: 'gold' | 'scrap') => {
+    const target = getFlyTargetCenter(targetKey);
     if (target) {
       const key = Date.now() + Math.random() + 0.5;
-      setGoldFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y }]);
-      window.setTimeout(() => setGoldFlights((prev) => prev.filter((f) => f.key !== key)), 750);
+      setRewardFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y, kind }]);
+      window.setTimeout(() => setRewardFlights((prev) => prev.filter((f) => f.key !== key)), 750);
     }
+  };
+  const pushGoldFlight = (x: number, y: number, gained: number) => {
+    pushBurst(x, y, gained, 'gold');
+    pushRewardFlight(x, y, 'gold', 'gold');
   };
   /**
    * Scrap gets the real long-distance flight here too, unlike on
@@ -375,12 +390,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
   const scrapRef = useFlyTargetRef<HTMLSpanElement>('scrap');
   const pushScrapFlight = (x: number, y: number, gained: number, icon: string) => {
     pushBurst(x, y, gained, 'scrap', icon);
-    const target = getFlyTargetCenter('scrap');
-    if (target) {
-      const key = Date.now() + Math.random() + 0.5;
-      setGoldFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y }]);
-      window.setTimeout(() => setGoldFlights((prev) => prev.filter((f) => f.key !== key)), 750);
-    }
+    pushRewardFlight(x, y, 'scrap', 'scrap');
   };
 
   const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
@@ -622,11 +632,16 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           {b.kind === 'repair' ? (b.free ? 'Repaired \u00b7 Free' : 'Repaired!') : `+${b.gained} ${b.kind === 'gold' ? 'gold' : 'Scrap'}`}
         </span>
       ))}
-      {goldFlights.map((f) => (
+      {/* Patch 0302: color now genuinely per-kind -- gold keeps the brass
+          glow every other gold flourish in the game uses, scrap gets its
+          own silver/grey (--silver) rather than silently inheriting
+          gold's, which is the bug this patch fixes (see pushRewardFlight's
+          own comment above). */}
+      {rewardFlights.map((f) => (
         <RewardGlowParticle
           key={f.key}
           x={f.x} y={f.y} dx={f.dx} dy={f.dy}
-          color="var(--brass)" delay={0} durationMs={750}
+          color={f.kind === 'gold' ? 'var(--brass)' : 'var(--silver)'} delay={0} durationMs={750}
         />
       ))}
 

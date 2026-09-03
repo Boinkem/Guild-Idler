@@ -1,0 +1,20 @@
+[
+  {
+    "id": "normal",
+    "focusX": 50,
+    "focusY": 50,
+    "scale": 100
+  },
+  {
+    "id": "heroic",
+    "focusX": 50,
+    "focusY": 50,
+    "scale": 100
+  },
+  {
+    "id": "legendary",
+    "focusX": 50,
+    "focusY": 50,
+    "scale": 100
+  }
+]

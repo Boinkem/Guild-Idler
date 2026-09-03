@@ -38,6 +38,13 @@
      Retire reads as its own distinct action rather than borrowing an
      already-claimed accent. */
   --pink: oklch(68% 0.19 352);
+  /* Patch 0302. Scrap's own fly-to-counter particle was silently reusing
+     --brass (gold's colour) end to end -- see the goldFlights rewrite in
+     VendorsPanel.tsx. Near-zero chroma on purpose (0.006, barely above
+     grayscale) so it reads as metal/silver rather than another named hue
+     competing with brass/moss/sky for attention -- Scrap is meant to look
+     distinctly *not* like gold. */
+  --silver: oklch(78% 0.006 260);
 
   --font-display: 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', 'Courier New', ui-monospace, monospace;
   --font-body: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
@@ -385,6 +392,7 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  overflow: hidden;
   transition: transform 120ms ease, filter 120ms ease;
 }
 .raid-diff-circle:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }

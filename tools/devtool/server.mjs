@@ -1186,6 +1186,33 @@ const SCHEMAS = {
       requiredRoles: { type: 'roleRequirements', required: false },
     },
   },
+  'raid-difficulty-icons': {
+    file: 'raid-difficulty-icons.json',
+    label: 'Raid Difficulty Icons',
+    group: 'Raids',
+    idField: 'id',
+    // Patch 0302, direct request. The N/H/L difficulty badge circles
+    // (DifficultyCircle, RaidsPanel.tsx) were "fixed UI chrome, never
+    // devtool-edited" -- reported bug: their source PNGs are square but
+    // rendered inside a circular button, and the old contain-fit showed
+    // the square canvas's own background through the round chrome
+    // instead of cropping to fill it. Same fix shape as every other
+    // cropping bug this tool already solves: give it the standard
+    // bannerImage focus-point + zoom picker instead of a one-off. Always
+    // exactly 3 entries (normal/heroic/legendary) -- id is a fixed enum
+    // in practice, not a free slug, but left as the ordinary string+slug
+    // field every other content type uses rather than a special case;
+    // nothing in the game reads a 4th id if one were added by mistake.
+    // `previewShape: 'circle'` (new this patch, see app.js's
+    // renderBannerField) rounds the picker's own preview box to match
+    // how DifficultyCircle actually clips it in-game -- without it the
+    // rectangular preview every other bannerImage field uses would
+    // itself be misleading for a field that's cropped to a circle.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      path: { type: 'bannerImage', required: false, defaultFolder: 'raid-difficulty-icons', previewAspect: '1/1', previewShape: 'circle', previewSize: '~256x256px' },
+    },
+  },
   'crafting-recipes': {
     file: 'crafting-recipes.json',
     label: 'Crafting Recipes',

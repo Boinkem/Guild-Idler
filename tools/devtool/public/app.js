@@ -603,7 +603,13 @@ function fieldControl(spec, key, value) {
     // hint -- a short recommended-resolution caption shown under the
     // preview box, see renderBannerField. Aspect alone tells an artist
     // the shape to crop to, not the resolution worth exporting at.
-    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}"></div>`;
+    // `data-preview-shape` (patch 0302) carries the schema's optional
+    // `previewShape` hint through -- 'circle' rounds the preview box to
+    // match fields (like the raid difficulty icons) that are actually
+    // clipped to a circle in-game, so the picker's own preview isn't
+    // misleadingly square for those. Every other bannerImage field
+    // simply omits it and gets the ordinary rectangular box, unchanged.
+    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}" data-preview-shape="${escapeHtml(spec.previewShape ?? '')}"></div>`;
   }
   if (spec.type === 'decorationImage') {
     // Same deferred-render approach as bannerImage just above -- a bare
@@ -1219,11 +1225,16 @@ function renderBannerField(field) {
   const scaleVal = parseFloat(field.dataset.scale);
   const scale = Number.isFinite(scaleVal) ? scaleVal : 100;
   const aspect = field.dataset.previewAspect || '8/2.5';
+  // Patch 0302 -- see the data-preview-shape comment where it's set,
+  // above. Only 'circle' is a real value today; anything else (usually
+  // just unset) falls through to the plain rectangular box every other
+  // bannerImage field has always used.
+  const shapeClass = field.dataset.previewShape === 'circle' ? ' banner-preview-box--circle' : '';
   const defaultPath = bannerDefaultPath(field);
   const previewPath = override || defaultPath;
 
   field.innerHTML = `
-    <div class="banner-preview-box" data-drag-target
+    <div class="banner-preview-box${shapeClass}" data-drag-target
          style="aspect-ratio:${escapeHtml(aspect)};${previewPath ? `background-image:url('/lore-art/${escapeHtml(previewPath)}');` : ''}background-size:${bannerBackgroundSize(scale)};background-position:${fx}% ${fy}%;">
       ${previewPath ? '' : '<span class="banner-preview-empty">No banner art yet — click/drag still sets focus for when art is added</span>'}
       <div class="banner-focus-marker" style="left:${fx}%; top:${fy}%;"></div>

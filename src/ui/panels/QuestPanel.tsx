@@ -148,7 +148,26 @@ export function QuestRow({
         style={thumbSrc ? { backgroundImage: `url(${thumbSrc})` } : undefined}
       />
       <div className="raid-card-body">
-        <div className="raid-card-name">{offer.name}</div>
+        <div className="raid-card-name">
+          {offer.name}
+          {' '}
+          {/* Patch 0302, direct request: show the contract's own level
+              right on the collapsed card instead of only inside the detail
+              modal (QuestDetailModal's levelGap), colored as a quick
+              at-a-glance signal -- gold at exactly the hero's own level,
+              green below it (comfortably under-leveled content), red
+              above it (the hero is under-leveled for this contract). */}
+          <span
+            className="tiny"
+            style={{
+              color: offer.reqLevel === hero.level ? 'var(--brass)'
+                : offer.reqLevel < hero.level ? 'var(--moss)'
+                : 'var(--blood)',
+            }}
+          >
+            - Lvl {offer.reqLevel}
+          </span>
+        </div>
         <div className="raid-card-meta">
           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
           {offer.chain && (

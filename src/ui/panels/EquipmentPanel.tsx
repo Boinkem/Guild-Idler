@@ -14,6 +14,8 @@ import { describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_COLOR, M
 import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
+import { RewardGlowParticle } from '../RewardGlowParticle';
+import { getFlyTargetCenter } from '../flyTarget';
 
 const SLOTS = EQUIP_SLOTS;
 
@@ -332,6 +334,7 @@ function CurioCard({ def, count, engine }: { def: CurioDef; count: number; engin
     <>
       <div
         className="item-card"
+        data-curio-id={def.id}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
@@ -901,6 +904,45 @@ export function EquipmentPanel() {
 
   const curiosOwned = CurioManager.owned(state);
 
+  /**
+   * Patch 0302, direct request. Sell All (Curios) previously called
+   * `engine.sellAllCurios()` once and nothing else -- every card vanished
+   * in the same render with zero feedback, unlike every other bulk-sell
+   * action in the game (Sell Junk/Scrap All/Repair All, VendorsPanel.tsx)
+   * which already stagger per-item and fly a burst to the header. Same
+   * "snapshot positions before anything moves, animate each card
+   * individually" shape those three already established: one
+   * `engine.sellCurio(def.id)` call per curio type instead of the single
+   * bulk call, staggered STAGGER_MS apart, each firing its own gold-fly
+   * particle toward the header's `gold` target (flyTarget.ts) -- so cards
+   * visibly leave the grid one at a time instead of all at once.
+   */
+  const [curioFlights, setCurioFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
+  const CURIO_SELL_STAGGER_MS = 140;
+  const runSellAllCurios = () => {
+    if (curiosOwned.length === 0) return;
+    const targets = curiosOwned.map(({ def }) => {
+      const el = document.querySelector(`[data-curio-id="${def.id}"]`);
+      const rect = el?.getBoundingClientRect();
+      return {
+        id: def.id,
+        x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+        y: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
+      };
+    });
+    targets.forEach((t, i) => {
+      window.setTimeout(() => {
+        engine.sellCurio(t.id);
+        const target = getFlyTargetCenter('gold');
+        if (target) {
+          const key = Date.now() + Math.random();
+          setCurioFlights((prev) => [...prev, { key, x: t.x, y: t.y, dx: target.x - t.x, dy: target.y - t.y }]);
+          window.setTimeout(() => setCurioFlights((prev) => prev.filter((f) => f.key !== key)), 750);
+        }
+      }, i * CURIO_SELL_STAGGER_MS);
+    });
+  };
+
   // Gear-type filter -- sorts the Stash grid down to one slot at a time
   // (Weapon/Helmet/etc.), purely a display filter. 'all' is the default
   // so nothing changes for anyone who never touches it.
@@ -1121,7 +1163,7 @@ export function EquipmentPanel() {
             <button
               className="btn-green"
               style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
-              onClick={() => engine.sellAllCurios()}
+              onClick={runSellAllCurios}
               title="Sells every curio currently in the stash"
             >
               Sell All · {formatGold(curiosOwned.reduce((sum, { def, count }) => sum + def.sellValue * count, 0))}
@@ -1132,6 +1174,13 @@ export function EquipmentPanel() {
               <CurioCard key={def.id} def={def} count={count} engine={engine} />
             ))}
           </div>
+          {curioFlights.map((f) => (
+            <RewardGlowParticle
+              key={f.key}
+              x={f.x} y={f.y} dx={f.dx} dy={f.dy}
+              color="var(--brass)" delay={0} durationMs={750}
+            />
+          ))}
         </>
       )}
       </div>
