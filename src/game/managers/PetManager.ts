@@ -154,8 +154,21 @@ export const PetManager = {
    * ticked every second -- correct across offline gaps for free, same
    * "store an absolute timestamp, compute on read" approach as
    * Injury.healsAt. Never returns above the stored value or below 0.
+   *
+   * `paired` (patch 0303) freezes decay entirely while a pet isn't
+   * paired with any hero -- an unpaired pet's happiness never feeds into
+   * anything (effectiveBonus/petModsForHero are only ever read for the
+   * one pet paired with the current hero, see ModifierManager.petModsForHero's
+   * own `if (!hero.equippedPetId) return {}` guard), so letting it
+   * silently decay was pure busywork: a pet sitting in the Unpaired
+   * bucket would need "catching up" on feeding the moment it was finally
+   * paired, for a stat that did nothing the whole time it sat there.
+   * Defaults to true so a caller that doesn't know/care about pairing
+   * (there are none left after this patch, but keeping the default safe
+   * rather than a breaking required param) still gets the old behavior.
    */
-  currentHappiness(pet: Pet, now = Date.now()): number {
+  currentHappiness(pet: Pet, paired = true, now = Date.now()): number {
+    if (!paired) return pet.happiness;
     const hoursElapsed = Math.max(0, now - pet.happinessUpdatedAt) / (60 * 60 * 1000);
     const decay = hoursElapsed * Tuning.get('pets.happinessDecayPerHour');
     return clamp(pet.happiness - decay, 0, 100);
@@ -166,11 +179,18 @@ export const PetManager = {
    * growth, scaled down by current happiness but never below the
    * happiness floor -- a neglected pet still helps a little, it's just not
    * at its best. See pets.happinessFloorPercent's tuning description.
+   *
+   * `paired` (patch 0303) threads straight through to currentHappiness's
+   * own decay-freeze -- ModifierManager.petModsForHero always passes true
+   * (its own equippedPetId guard means it's never called otherwise), and
+   * HatcheryPanel's card passes whatever this exact pet's own pairing
+   * state actually is, so an Unpaired card's bonus preview and its
+   * Happiness bar always agree on whether decay is even running.
    */
-  effectiveBonus(pet: Pet, now = Date.now()): number {
+  effectiveBonus(pet: Pet, paired: boolean, now = Date.now()): number {
     const level = PetManager.levelForXp(pet.xp);
     const grown = pet.baseBonusValue + level * Tuning.get('pets.bonusGrowthPerLevel');
-    const happiness = PetManager.currentHappiness(pet, now);
+    const happiness = PetManager.currentHappiness(pet, paired, now);
     const floor = Tuning.get('pets.happinessFloorPercent');
     const factor = Math.max(floor, happiness) / 100;
     return grown * factor;
@@ -248,7 +268,8 @@ export const PetManager = {
     const batch = Tuning.get('pets.feedMaterialBatchSize');
     if (state.materials[materialId] < batch) return 'Not enough in the Warehouse.';
     state.materials[materialId] -= batch;
-    PetManager.applyFeed(pet, Tuning.get('pets.feedMaterialHappinessGain'), now);
+    const paired = state.heroes.some((h) => h.equippedPetId === petUid);
+    PetManager.applyFeed(pet, Tuning.get('pets.feedMaterialHappinessGain'), paired, now);
     return null;
   },
 
@@ -258,12 +279,18 @@ export const PetManager = {
     if (!pet) return 'No such pet.';
     if ((state.inventory[PET_TREAT_ID] ?? 0) < 1) return "You don't have any Pet Treats.";
     state.inventory[PET_TREAT_ID] -= 1;
-    PetManager.applyFeed(pet, Tuning.get('pets.feedCraftedHappinessGain'), now);
+    const paired = state.heroes.some((h) => h.equippedPetId === petUid);
+    PetManager.applyFeed(pet, Tuning.get('pets.feedCraftedHappinessGain'), paired, now);
     return null;
   },
 
-  applyFeed(pet: Pet, gain: number, now: number): void {
-    const current = PetManager.currentHappiness(pet, now);
+  /** `paired` (patch 0303) -- same decay-freeze reasoning currentHappiness's
+   *  own comment gives: an unpaired pet's happiness is already frozen at
+   *  whatever it last was, so feeding one just adds the gain directly
+   *  rather than first "catching up" a decay that was never actually
+   *  supposed to have happened. */
+  applyFeed(pet: Pet, gain: number, paired: boolean, now: number): void {
+    const current = PetManager.currentHappiness(pet, paired, now);
     pet.happiness = clamp(current + gain, 0, 100);
     pet.happinessUpdatedAt = now;
   },

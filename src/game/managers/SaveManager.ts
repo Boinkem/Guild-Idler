@@ -184,6 +184,7 @@ export function createInitialState(now = Date.now()): GameState {
     completedRaids: [],
     raidLog: [],
     completedRaidDifficulties: [],
+    raidClearsByDifficulty: {},
     notifications: [],
     notificationsSeenId: null,
     tabAcknowledged: {},
@@ -1235,6 +1236,19 @@ const MIGRATIONS: Record<number, Migration> = {
       heroes,
     };
   },
+  57: (save) => ({
+    // Patch 0303. New per-raid clear tracker (RaidsPanel's difficulty
+    // circles/card badges) -- see GameState.raidClearsByDifficulty's own
+    // comment. No past raid history to reconstruct which difficulty each
+    // raid was actually cleared at, same "can't know the past, don't
+    // guess it" approach version 56 just above already takes for
+    // consecutiveQuestFails -- every existing save starts with every
+    // raid showing no cleared badges yet, even one with completedRaids
+    // already full of entries, until the player clears each one again.
+    ...save,
+    version: 58,
+    raidClearsByDifficulty: (save.raidClearsByDifficulty as Record<string, string[]> | undefined) ?? {},
+  }),
 };
 
 export const SaveManager = {

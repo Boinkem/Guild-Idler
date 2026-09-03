@@ -487,6 +487,18 @@ export const RaidManager = {
     if (fullClear && !state.completedRaidDifficulties.includes(active.difficulty)) {
       state.completedRaidDifficulties.push(active.difficulty);
     }
+    // Per-raid clear tracker (patch 0303) -- same fullClear gate as
+    // completedRaids/completedRaidDifficulties just above, but keyed by
+    // raidId so RaidsPanel's difficulty circles can show "cleared this
+    // one before" rather than only a guild-wide "cleared A Legendary
+    // somewhere" flag. Deduped per raid, same shape
+    // chainReplayCompletions already established for the replay side.
+    if (fullClear && raid) {
+      const cleared = state.raidClearsByDifficulty[raid.id] ?? [];
+      if (!cleared.includes(active.difficulty)) {
+        state.raidClearsByDifficulty[raid.id] = [...cleared, active.difficulty];
+      }
+    }
     // Every hero in the clearing party earns the raid's title, if it has
     // one -- unlike a quest chain's title (one hero, since a quest is
     // solo), a raid is a group effort, so the whole party that actually

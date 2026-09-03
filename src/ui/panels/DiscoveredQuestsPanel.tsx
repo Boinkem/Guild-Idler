@@ -412,7 +412,7 @@ function ReplayMemoriesView({
       <div className="section-heading">Sagas</div>
       <div className="raid-list">
         {CHAIN_REPLAY_TIERS.map((tier) => (
-          <TierCard key={tier.id} tier={tier} onOpenChain={onOpenReplayChain} />
+          <TierCard key={tier.id} tier={tier} hero={selectedHero} onOpenChain={onOpenReplayChain} />
         ))}
       </div>
 
@@ -434,7 +434,7 @@ function ReplayMemoriesView({
  * owned) every chain it covers as its own small button, disabled unless
  * that specific chain is already in completedChains.
  */
-function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain: (chainId: string) => void }) {
+function TierCard({ tier, hero, onOpenChain }: { tier: ChainReplayTierDef; hero: Hero; onOpenChain: (chainId: string) => void }) {
   const engine = useEngine();
   const state = engine.state;
   const isMaster = tier.id === 'master';
@@ -457,6 +457,18 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
   // openReplayChainId's modal would use if it weren't lifted to the
   // parent view for deep-link reasons -- this one has no deep-link need.
   const [showLoot, setShowLoot] = useState(false);
+  // Saga Auto-Pilot (patch 0303) -- own local difficulty pick, same
+  // "persists across the card independent of any modal" shape
+  // percentDifficulty above already uses, deliberately separate state so
+  // switching one doesn't move the other.
+  const [autopilotDifficulty, setAutopilotDifficulty] = useState<ChainReplayDifficulty>('legendary');
+  const autopilotOwned = GuildManager.hasChainReplayTier(state, 'autopilot');
+  const eligibleChainCount = tier.chainIds.filter((id) => GuildManager.isChainReplayEligible(state, id)).length;
+  const heroBusy = hero.status === 'questing';
+  const autopilotTitle = eligibleChainCount === 0
+    ? 'Complete at least one chain in this saga first'
+    : heroBusy ? `${hero.name} is already out on a quest`
+      : `Send ${hero.name} through all ${eligibleChainCount} replayable chain${eligibleChainCount === 1 ? '' : 's'} in this saga, back-to-back, at ${REPLAY_DIFFICULTY_NAME[autopilotDifficulty]}`;
 
   const buyTitle = owned ? undefined
     : !masterOwned && !isMaster ? 'Unlock Replay Memories first'
@@ -517,6 +529,38 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
                 );
               })}
             </div>
+            {/* Saga Auto-Pilot (patch 0303) -- only shown once that
+             *  separate tier is owned, same "automation is its own
+             *  purchase" gating GameEngine.queueSagaAutoPilot enforces
+             *  server-side too; this is just the matching UI gate so a
+             *  player without it sees nothing rather than a disabled
+             *  button with no obvious way to enable it (the Owned tag on
+             *  the Auto-Pilot card itself is that "obvious way"). */}
+            {autopilotOwned && (
+              <div className="row spread" style={{ alignItems: 'center', marginTop: 8, gap: 6 }}>
+                <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+                  <span className="tiny muted">Auto-Pilot:</span>
+                  {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
+                    <button
+                      key={d}
+                      className="btn-ghost tiny"
+                      style={autopilotDifficulty === d ? { color: REPLAY_DIFFICULTY_COLOR[d], fontWeight: 'bold' } : undefined}
+                      onClick={() => setAutopilotDifficulty(d)}
+                    >
+                      {REPLAY_DIFFICULTY_NAME[d]}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="btn-primary tiny"
+                  disabled={eligibleChainCount === 0 || heroBusy}
+                  title={autopilotTitle}
+                  onClick={() => engine.queueSagaAutoPilot(hero.id, tier.id, autopilotDifficulty)}
+                >
+                  Queue Auto-Pilot ({eligibleChainCount})
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

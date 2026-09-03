@@ -1,0 +1,1112 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 761e18a..d399cef 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -24146,3 +24146,201 @@ since it wasn't part of what was reported; the old, now-unreferenced
+ `public/raid-icons/` folder (including a stray `tier4_mythic.png`, a
+ leftover from the Mythic->Legendary rename) could be cleaned up
+ whenever a broader asset-folder pass happens.
++
++### Raid clear tracker, feed-only-Active-Pets, doubled inventory limits, Name Pet on hatch, Saga Auto-Pilot, and a raid-view sprite clipping fix (patch 0303)
++
++```discord-update
++Dev Update | Patch 0303
++
++- Added: raid cards now show a checkmark on each difficulty you've cleared before, plus a small N/H/L badge row on the collapsed card
++- Changed: an unpaired pet's happiness no longer decays -- only a paired pet's happiness ever mattered anyway, so there's nothing left to feed until you pair one
++- Changed: Stash and Warehouse capacity are both doubled, baseline and per-upgrade-level
++- Added: the hatch-reveal card now lets you name your new pet right there, instead of having to go find it in the Pets tab afterward
++- Added: Saga Auto-Pilot, a new Replay Memories upgrade -- once unlocked, queue a whole saga band to replay unattended, one chain after another, at your chosen difficulty
++- Fixed: the corner companion's Raid Party View no longer clips the end sprites at larger sprite-scale settings
++```
++
++Six direct reports bundled into one patch -- none large enough on their own
++to warrant a separate pass, but none trivial enough to skip the usual
++"why," so each gets its own section below.
++
++**Raid clear tracker (`GameState.raidClearsByDifficulty`, `RaidManager.
++resolve`, `RaidsPanel.tsx`).** Nothing tracked this before -- the game only
++ever had two GLOBAL flags, `completedRaids` (any raid, any difficulty, has
++it been full-cleared at all) and `completedRaidDifficulties` (any raid,
++has ANY raid ever been cleared at Heroic/Legendary). Neither could answer
++"has THIS raid been cleared at THIS difficulty," which is what a per-tier
++"cleared before" badge actually needs. New field, same shape
++`chainReplayCompletions` already established for the replay side --
++`Record<raidId, RaidDifficulty[]>`, deduped, written once per fullClear in
++`RaidManager.resolve` right alongside the two existing flags, never
++removed afterward. `DifficultyCircle` (the detail modal's N/H/L picker)
++gets a small green check overlay, same treatment `RoleRequirementCircle`
++already uses for "this slot is met" -- moved the button into its own
++`position: relative` wrapper div rather than adding it as the button's own
++child, since the button itself has `overflow: hidden` (needed for the
++patch-0302 background-image icon crop) which would have clipped an
++edge-anchored badge. The collapsed `RaidCard` gets a new `RaidClearBadges`
++component -- three small letters, lit in each difficulty's own colour once
++cleared, dim otherwise -- sitting inline next to the level tag rather than
++repeating the full circles at that compact size. Save migration (v57->58)
++backfills `{}` for every existing save -- no way to reconstruct which
++difficulty a raid already in `completedRaids` was actually cleared at, so
++every raid starts with no badges until cleared again, same "can't know the
++past, don't guess it" precedent v56's `consecutiveQuestFails` migration
++already set.
++
++**Feed-only-Active-Pets (`PetManager.currentHappiness`/`effectiveBonus`/
++`applyFeed`, `ModifierManager.petModsForHero`, `HatcheryPanel.tsx`).**
++Confirmed before touching anything: an unpaired pet's happiness has
++*zero* gameplay effect. `petModsForHero` only ever reads
++`hero.equippedPetId`'s own pet (`if (!hero.equippedPetId) return {}`), so
++an Unpaired-bucket pet's `effectiveBonus` is never consulted by anything.
++Its happiness was still decaying in the background the whole time,
++though, which meant a pet could sit unpaired for a while and then need a
++round of "catch-up" feeding the moment it was finally paired -- busywork
++for a stat that did nothing the entire time it sat there. Fix: both
++`currentHappiness` and `effectiveBonus` now take a `paired: boolean`
++(no default on `effectiveBonus` -- both its call sites, `ModifierManager`
++and `HatcheryPanel`, always know their own pairing state, so a silent
++wrong default felt riskier than making it required). `currentHappiness`
++short-circuits to the raw stored value when `!paired`, skipping the decay
++math entirely. `applyFeed` also threads `paired` through (both
++`feedMaterial`/`feedCrafted` now derive it via
++`state.heroes.some((h) => h.equippedPetId === petUid)`) so feeding an
++unpaired pet doesn't first "catch up" a decay that was never supposed to
++have run. `HatcheryPanel`'s pet card computes `boundHero`/`paired` once,
++before either happiness call, and now shows a small "Not paired --
++happiness is on hold, no need to feed until paired with a hero" note so
++the frozen bar doesn't read as broken.
++
++**Doubled inventory limits (`BASE_STASH_CAPACITY`, `harvest.
++baseWarehouseCapacity`, `upgrade.stash_expansion.stashCapacityPerLevel`,
++`harvest.warehouse.capacityPerLevel`).** Direct request: baseline AND
++per-upgrade-level amounts, both systems. Stash: `BASE_STASH_CAPACITY`
++(hardcoded constant, `progression.ts` -- this one was never
++tuning-registry-backed, matching `BASE_GOLD_STORAGE` right next to it)
++10 -> 20; Stash Expansion's own `stashCapacityPerLevel` tuning value 5 ->
++10 (8 levels unchanged, so max stash goes 50 -> 100). Warehouse:
++`harvest.baseWarehouseCapacity` 100 -> 200; `harvest.warehouse.
++capacityPerLevel` 50 -> 100 (10 levels unchanged, so max per-material
++storage goes 600 -> 1200). Deliberately left every cost/costGrowth/
++maxLevel curve untouched -- only the capacity OUTPUT doubled, not how
++many levels or how much each level costs, since "double what the
++upgrades allow to increase to" read as the amount, not the pacing. Every
++stale code comment citing the old 10-slot/50-cap numbers (`ModifierManager.
++stashCapacity`, `progression.ts`'s stash_expansion entry, `Hero.
++stashCapacityPerLevel`'s own doc comment) updated to match.
++
++**Name Pet on hatch (`HatchRevealModal.tsx`).** A freshly hatched pet's
++name defaults to its species name (`PetManager.hatch`'s own `name: def?.
++name ?? 'Unnamed'`), so every pet of the same species starts out sharing
++one identical name until someone renames it -- and the reveal card
++previously offered no way to do that on the spot, only a "hatched into
++X" line and Close/Go to Pets. New inline text field, pre-seeded with the
++pet's current (default) name via a `pet?.uid`-keyed reset (re-seeds
++fresh each time a genuinely NEW pet hatches, without needing a
++`useEffect`) -- Enter, Close, or Go to Pets all commit whatever's in the
++field first (via a shared `commitAndThen` helper) if it actually differs
++from the pet's current name, then proceed. Reuses the existing
++`engine.renamePet`/`PetManager.rename` (trim, 24-char cap, rejects
++blank) rather than adding a second rename path. `lastHatchedPet` and the
++live `state.pets` entry are confirmed the same object reference
++(`PetManager.hatch` pushes then returns the identical `pet`), so
++`renamePet`'s in-place mutation is immediately reflected back into this
++same card without any extra plumbing. Also swapped the header copy from
++quoting the about-to-be-renamed default name ("hatched into 'Kobold'")
++to a simpler "A new Kobold joins your guild" line, since the old wording
++read oddly once the name shown was about to be overwritten a second
++later.
++
++**Saga Auto-Pilot (`GameState.ChainReplayTierDef` autopilot entry,
++`Hero.autoAdvanceReplayChainId`/`replayQueue`, `GameEngine.
++queueSagaAutoPilot`/`startChainReplay`/`tryContinueAutoChain`,
++`DiscoveredQuestsPanel.tsx`'s `TierCard`).** Direct request, clarified as
++"full auto-pilot through an entire band at a chosen difficulty" -- both
++per-chain stage-stepping AND cross-chain band queueing, not just one or
++the other. Gated behind its own new `ChainReplayTierDef` (id
++`'autopilot'`, 8000g, no `chainIds` of its own -- same "gates a
++capability, not specific chains" shape `'master'` already uses) rather
++than being a free extension of an owned band: full unattended automation
++through a whole saga is a materially bigger ask than the existing
++per-chain manual difficulty picker, same "automation is its own
++purchase" precedent Auto-Chain Tactics already set for ordinary
++chain-stepping. Positioned as the very next entry in `CHAIN_REPLAY_TIERS`
++right after `'master'`, direct request ("under the first Replay Memories
++upgrade/card") -- `TierCard`/`buyChainReplayTier` needed zero code
++changes to support an arbitrary new tier id, both were already generic.
++
++Two new optional `Hero` fields carry a run: `autoAdvanceReplayChainId`
++(mirrors `autoAdvanceChainId`, but for a replay -- kept as a genuinely
++separate field rather than reused, since a replay's own offer generator
++and failure behavior are already their own fork everywhere else in this
++codebase) and `replayQueue` (`{chainId, difficulty}[]`, the rest of the
++band still waiting). `startChainReplay` gained a 4th `autoAdvance`
++parameter (default `false`, so a plain manual Send from
++`ChainReplayDetailModal` is unchanged) -- when true, sets
++`autoAdvanceReplayChainId` instead of clearing it, and skips its own
++"sets out to replay X" toast (the new band-level toast covers that
++send). `tryContinueAutoChain` gained a new branch, checked before the
++existing ordinary chain-stepping branch: on success, re-sends the next
++stage of the same chain exactly like chain-stepping's own branch does
++(just via `chainReplayOffer` instead of `chainOffer`); once that chain's
++`activeChainReplays` entry is gone (full chain complete), pops the next
++`{chainId, difficulty}` off `replayQueue` and starts it fresh at stage 0.
++On ANY stage failure, both `autoAdvanceReplayChainId` and the whole
++`replayQueue` are cleared together -- as-far-as-you-can-go, same rule
++every other auto-continue mechanism in this game already follows; this
++never silently grinds through a full band on repeated failures. New
++`GameEngine.queueSagaAutoPilot(heroId, tierId, difficulty)` filters a
++band's `chainIds` down to whichever are actually replay-eligible right
++now (a band can be bought ahead of finishing every chain in it, same as
++always), starts the first via `startChainReplay(..., true)`, and stashes
++the rest in `hero.replayQueue`. Works identically during offline
++catch-up for free -- `tryContinueAutoChain`'s other call site (the
++offline-elapsed-time loop) already existed for ordinary chain-stepping,
++no changes needed there.
++
++`TierCard` gained its own local `autopilotDifficulty` N/H/L picker (same
++shape the existing "Cleared at" percent picker already uses) plus a
++"Queue Auto-Pilot (N)" button, shown only once the `'autopilot'` tier
++itself is owned -- `N` is the live count of this band's chains currently
++eligible to replay, and the button disables (with an explanatory title)
++at 0 eligible or while the selected hero is already questing.
++`ReplayMemoriesView` now threads its existing `selectedHero` down into
++`TierCard` (previously only used for the detail modal) so the button
++knows which hero to send.
++
++**Sprite clipping at larger scale, corner companion Raid Party View
++(`IdleView.tsx`).** Confirmed root cause by rereading the estimate math
++rather than guessing: `spriteWidthEstimate` (this effect's own OS-window-
++width request) has always undershot each sprite's real rendered width by
++a roughly constant FRACTION (the `* 0.9` multiplier, tuned in patch
++0276) to save a `.raid-party-row` from wrapping onto a staggered second
++line (see that rule's own `app.css` comment). A constant fractional
++undershoot means the ABSOLUTE pixel error scales linearly with sprite
++size -- so raising Settings' sprite-scale slider doesn't make the
++estimate any less accurate in relative terms, but it turns what used to
++read as "an occasional sliver clipped" into a genuinely amputated end
++sprite once the base size is large enough, exactly the repro described.
++Fix: `0.9` -> `1.2`, plus a flat `+ 10` per-sprite margin on top of that.
++Deliberately generous rather than re-tuned to another single "close
++enough" ratio -- `main.ts`'s own `clampToWorkArea` already caps this
++from ever requesting more width than the actual screen can give, so the
++only real cost of overshooting now is a little empty padding around the
++row, strictly better than a hero's sprite reading as cut off at the
++window edge. `.raid-party-row`'s own `nowrap`/`overflow: hidden` (the
++patch-0276 anti-stagger fix) is left untouched -- still a reasonable
++last-resort safety net, just one that should now trigger far more
++rarely.
++
++**Verification.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh clone with this
++patch applied. The one `tsc` error surfaced (`raids.ts`'s
++`RaidDifficultyIconDef` cast) is confirmed pre-existing on `main` before
++this patch, unrelated to any of the six changes here. No live in-app
++playtest in this environment (no browser available) -- worth a real pass
++confirming: the raid-card badge row reads cleanly at the compact card
++width; the auto-pilot band run actually survives an offline gap
++end-to-end; and the widened Raid Party View window looks right against a
++genuinely large sprite-scale + Legendary-size party.
+diff --git a/src/game/data/chainReplay.ts b/src/game/data/chainReplay.ts
+index d4afea6..bdaf5c4 100644
+--- a/src/game/data/chainReplay.ts
++++ b/src/game/data/chainReplay.ts
+@@ -62,6 +62,24 @@ export const CHAIN_REPLAY_TIERS: ChainReplayTierDef[] = [
+     chainIds: [],
+     goldCost: Tuning.get('chain_replay_tier.master.goldCost'),
+   },
++  {
++    // Patch 0303 -- Saga Auto-Pilot. Sits right under 'master' in this
++    // array (the very next Replay Memories upgrade card, direct
++    // request) rather than after the 6 bands: it's a capability that
++    // applies across every band, same "gates the feature, not any
++    // specific chains" shape 'master' itself already uses (chainIds:
++    // []), so it belongs beside master conceptually as well as visually.
++    // Bought like any other tier (GuildManager.buyChainReplayTier
++    // already handles an arbitrary tier id generically, no code change
++    // needed there) and requires 'master' first, same "canBuy" gating
++    // TierCard already applies to every non-master entry.
++    id: 'autopilot',
++    sagaName: 'Saga Auto-Pilot',
++    levelRange: '',
++    description: 'Once unlocked, a saga band card gets a "Queue Auto-Pilot" option -- send a hero through every replayable chain in that band, back-to-back, at one chosen difficulty, with no manual re-send between stages or chains. A failed stage still stops the whole run right there.',
++    chainIds: [],
++    goldCost: Tuning.get('chain_replay_tier.autopilot.goldCost'),
++  },
+   {
+     id: 'band1',
+     sagaName: 'The Founding Days',
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 8e8d3d1..375a286 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -504,10 +504,10 @@
+     "id": "harvest.baseWarehouseCapacity",
+     "label": "Harvest: base warehouse capacity",
+     "category": "harvest",
+-    "value": 100,
+-    "default": 100,
++    "value": 200,
++    "default": 200,
+     "min": 0,
+-    "description": "Per-material storage cap at Warehouse level 0. Shared across all four materials -- there's one Warehouse, not four."
++    "description": "[Patch 0303: doubled, direct request -- baseline+per-level inventory limits felt too tight] Per-material storage cap at Warehouse level 0. Shared across all four materials -- there's one Warehouse, not four."
+   },
+   {
+     "id": "harvest.warehouse.baseCost",
+@@ -541,10 +541,10 @@
+     "id": "harvest.warehouse.capacityPerLevel",
+     "label": "Warehouse: capacity per level",
+     "category": "harvest",
+-    "value": 50,
+-    "default": 50,
++    "value": 100,
++    "default": 100,
+     "min": 1,
+-    "description": "Added to the per-material storage cap per Warehouse level."
++    "description": "[Patch 0303: doubled, direct request -- baseline+per-level inventory limits felt too tight] Added to the per-material storage cap per Warehouse level."
+   },
+   {
+     "id": "harvest.tradeRoute.cost",
+@@ -2373,9 +2373,9 @@
+     "id": "upgrade.stash_expansion.stashCapacityPerLevel",
+     "label": "Stash Expansion: extra stash slots granted per level",
+     "category": "vendor_upgrades",
+-    "value": 5,
+-    "default": 5,
+-    "description": "Stash Expansion's extra stash slots granted per level, on top of the 10-slot base floor.",
++    "value": 10,
++    "default": 10,
++    "description": "[Patch 0303: doubled, direct request -- baseline+per-level inventory limits felt too tight] Stash Expansion's extra stash slots granted per level, on top of the 20-slot base floor.",
+     "min": 0
+   },
+   {
+@@ -4580,6 +4580,16 @@
+     "max": 1000000,
+     "description": "One-time gold cost to reveal Replay Memories at all."
+   },
++  {
++    "id": "chain_replay_tier.autopilot.goldCost",
++    "label": "Replay tier: Saga Auto-Pilot cost",
++    "category": "chain_replay_tiers",
++    "value": 8000,
++    "default": 8000,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to unlock Saga Auto-Pilot (queue an entire saga band to run unattended). First-pass number, same Balance Sandbox caveat as every other new economy figure -- priced between band1 and band2 so it's a real early choice, not gatekept behind the whole saga list."
++  },
+   {
+     "id": "chain_replay_tier.band1.goldCost",
+     "label": "Replay tier: The Founding Days (1-7) cost",
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index ccfc962..b6650e3 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -242,7 +242,8 @@ export const UPGRADES: UpgradeDef[] = [
+   {
+     id: 'stash_expansion', name: 'Stash Expansion',
+     description: 'More shelving in the back room -- room to hold onto gear a little longer before the Shop or Vault has to deal with it.',
+-    // Base (10 slots) lives in ModifierManager.stashCapacity as the
++    // Base (20 slots, doubled from 10 in patch 0303) lives in
++    // ModifierManager.stashCapacity as the
+     // floor -- see that method's own comment. Only blocks buying/crafting
+     // NEW equipment once the stash is already full (Shop purchases,
+     // Black Market purchases, buyback, and gear crafting); quest, raid,
+@@ -649,8 +650,14 @@ export function guildCost(def: GuildDef, currentLevel: number): number {
+ export const BASE_GOLD_STORAGE = 10_000;
+ 
+ /** Stash slot floor before any Stash Expansion levels -- see
+- *  ModifierManager.stashCapacity. */
+-export const BASE_STASH_CAPACITY = 10;
++ *  ModifierManager.stashCapacity. Doubled 10 -> 20 in patch 0303
++ *  (direct request: baseline inventory limits felt too tight even before
++ *  Stash Expansion's own per-level bonus is doubled to match, see
++ *  Stash Expansion: extra stash slots granted per level's own tuning
++ *  entry) -- a flat code constant, not tuning-registry-backed, since
++ *  this has always been a hardcoded floor (same as BASE_GOLD_STORAGE
++ *  just above), not something the devtool exposes for live editing. */
++export const BASE_STASH_CAPACITY = 20;
+ 
+ /* ----------------------------- renown perks ------------------------------ */
+ 
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 116d274..c0a4e3a 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -352,6 +352,56 @@ export class GameEngine {
+   private tryContinueAutoChain(
+     hero: Hero, now: number, prevSuccess: boolean,
+   ): { continued: boolean; completedCount: number; target: number; via: 'chain' | 'streak'; stoppedByFailure?: boolean } | null {
++    // Saga Auto-Pilot (patch 0303) -- checked before ordinary chain-
++    // stepping below, same "replay's own mechanism is a genuinely
++    // separate fork, not a shared code path" precedent startChainReplay
++    // already established over startQuest. A failed stage aborts the
++    // WHOLE band queue right here, not just the one chain in progress --
++    // as-far-as-you-can-go, same rule chain-stepping's own failure
++    // branch follows just below.
++    if (hero.autoAdvanceReplayChainId) {
++      const chainId = hero.autoAdvanceReplayChainId;
++      if (!prevSuccess) {
++        hero.autoAdvanceReplayChainId = null;
++        hero.replayQueue = [];
++        return { continued: false, completedCount: 0, target: 0, via: 'chain', stoppedByFailure: true };
++      }
++      const chain = CHAIN_BY_ID[chainId];
++      const active = this.state.activeChainReplays.find((r) => r.heroId === hero.id && r.chainId === chainId);
++      if (chain && active && active.stage < chain.stages.length) {
++        const rng = createRng(uid('autoAdvanceReplay'));
++        const offer = QuestManager.chainReplayOffer(chain, active.stage, active.difficulty, rng, hero.level);
++        const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
++        if (!error) {
++          return { continued: true, completedCount: active.stage + 1, target: chain.stages.length, via: 'chain' };
++        }
++      }
++      // This chain's replay attempt is done (or nothing left to advance)
++      // -- pop the next queued chain in the band, if any, and start it
++      // fresh at stage 0, same difficulty the whole queue was built at.
++      hero.autoAdvanceReplayChainId = null;
++      const queue = hero.replayQueue ?? [];
++      const next = queue.shift();
++      if (next) {
++        const nextChain = CHAIN_BY_ID[next.chainId];
++        if (nextChain) {
++          const rng = createRng(uid('autoAdvanceReplay'));
++          const offer = QuestManager.chainReplayOffer(nextChain, 0, next.difficulty, rng, hero.level);
++          const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
++          if (!error) {
++            hero.replayQueue = queue;
++            hero.autoAdvanceReplayChainId = next.chainId;
++            return { continued: true, completedCount: 1, target: nextChain.stages.length, via: 'chain' };
++          }
++        }
++      }
++      hero.replayQueue = [];
++      // Falls through to the ordinary Auto-Chain streak below, same as
++      // chain-stepping's own "nothing left to advance" fallthrough --
++      // an auto-pilot run finishing hands off to whatever bounty streak
++      // budget the hero still has, rather than a dead end.
++    }
++
+     if (hero.autoAdvanceChainId) {
+       const chainId = hero.autoAdvanceChainId;
+       if (!prevSuccess) {
+@@ -1527,8 +1577,16 @@ export class GameEngine {
+    * (the UI only ever offers a picker before a fresh attempt begins),
+    * rather than trying to carry partial progress across a difficulty
+    * switch that was never really defined.
++   *
++   * `autoAdvance` (patch 0303) is the Saga Auto-Pilot upgrade's
++   * counterpart to startQuest's `chainSteps` -- sets
++   * hero.autoAdvanceReplayChainId so tryContinueAutoChain re-sends this
++   * exact chain's remaining stages on its own once each one resolves,
++   * instead of waiting for another manual click. Defaults to false so a
++   * plain single-chain Send from ChainReplayDetailModal is unchanged --
++   * only queueSagaAutoPilot below opts in.
+    */
+-  startChainReplay(heroId: string, chainId: string, difficulty: ChainReplayDifficulty) {
++  startChainReplay(heroId: string, chainId: string, difficulty: ChainReplayDifficulty, autoAdvance = false) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+     if (!GuildManager.isChainReplayEligible(this.state, chainId)) {
+@@ -1543,16 +1601,66 @@ export class GameEngine {
+     const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
+     if (error) return this.say(error);
+     this.state.focusedHeroId = heroId;
+-    // Deliberately no Auto-Chain streak interaction here, same reasoning
+-    // pickBestQuest's own comment already gives for excluding chain
+-    // offers from automation entirely -- a replay is even more clearly a
+-    // deliberate, noticed choice than a first-clear chain stage is.
++    // A plain manual send is still deliberately excluded from the
++    // ordinary Auto-Chain streak, same reasoning pickBestQuest's own
++    // comment gives -- a replay is a noticed choice, not a bounty grab.
++    // autoAdvanceReplayChainId is the one exception: only ever set here
++    // when the caller explicitly asked for it (queueSagaAutoPilot).
+     hero.autoAdvanceChainId = null;
++    hero.autoAdvanceReplayChainId = autoAdvance ? chainId : null;
++    if (!autoAdvance) hero.replayQueue = [];
+     playSound('depart');
+-    this.say(`${hero.name} sets out to replay ${chain.name}.`, 'chains');
++    // The auto-pilot band toast (queueSagaAutoPilot, below) already
++    // covers this exact send with a more useful "N chains queued"
++    // message -- skip the plain per-chain toast so starting a band run
++    // doesn't fire two toasts back to back for the one click.
++    if (!autoAdvance) this.say(`${hero.name} sets out to replay ${chain.name}.`, 'chains');
+     void this.saveNow();
+   }
+ 
++  /**
++   * Saga Auto-Pilot (patch 0303) -- queues every one of a saga band's
++   * chains that's actually replayable (already in completedChains; a
++   * band can be bought ahead of finishing every chain in it, same as
++   * always) for one hero, back-to-back, at one chosen difficulty, with
++   * no manual re-send between either stages or chains. Gated behind its
++   * own ChainReplayTierDef ('autopilot', bought like any other tier --
++   * see CHAIN_REPLAY_TIERS, sits right under 'master' in that array so
++   * it's the first upgrade card after the master unlock) rather than
++   * being free once a band is owned -- full unattended automation
++   * through an entire saga is a bigger ask than the existing per-chain
++   * manual difficulty picker, same "automation is its own purchase, not
++   * a free extension of the underlying feature" precedent Auto-Chain
++   * Tactics already set for ordinary chain-stepping.
++   *
++   * Any stage failure anywhere in the run stops the whole queue right
++   * there (tryContinueAutoChain's autoAdvanceReplayChainId branch),
++   * same as-far-as-you-can-go rule every other auto-continue mechanism
++   * in this game already follows -- this never silently burns through
++   * a full band on repeated failures.
++   */
++  queueSagaAutoPilot(heroId: string, tierId: string, difficulty: ChainReplayDifficulty) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    if (hero.status === 'questing') return this.say(`${hero.name} is already out on a quest.`);
++    if (!GuildManager.hasChainReplayTier(this.state, 'autopilot')) {
++      return this.say('Saga Auto-Pilot has not been unlocked yet.');
++    }
++    const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
++    if (!tier || !GuildManager.hasChainReplayTier(this.state, tierId)) {
++      return this.say("This saga hasn't been unlocked yet.");
++    }
++    const eligible = tier.chainIds.filter((id) => GuildManager.isChainReplayEligible(this.state, id));
++    if (eligible.length === 0) {
++      return this.say('No chains in this saga are ready to replay yet.');
++    }
++    const queue = eligible.map((chainId) => ({ chainId, difficulty }));
++    const first = queue.shift()!;
++    hero.replayQueue = queue;
++    this.startChainReplay(heroId, first.chainId, difficulty, true);
++    this.say(`${hero.name} begins an auto-pilot run through ${tier.sagaName} (${eligible.length} chain${eligible.length === 1 ? '' : 's'}).`, 'chains');
++  }
++
+   /**
+    * Buys one Replay Memories tier (the master unlock or one of the 6
+    * saga bands) -- see GuildManager.buyChainReplayTier's own comment for
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 00188a0..db166b0 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -81,7 +81,7 @@ export const ModifierManager = {
+     if (!hero.equippedPetId) return {};
+     const pet = state.pets.find((p) => p.uid === hero.equippedPetId);
+     if (!pet || PetManager.isFallen(pet)) return {};
+-    const value = PetManager.effectiveBonus(pet, now);
++    const value = PetManager.effectiveBonus(pet, true, now);
+     return { [pet.bonusType]: value };
+   },
+ 
+@@ -202,7 +202,8 @@ export const ModifierManager = {
+     return (def?.freeRepairsPerLevel ?? 0) * level;
+   },
+ 
+-  /** 10 base, +5 per Stash Expansion level (max 8 levels -> 50 total).
++  /** 20 base, +10 per Stash Expansion level (max 8 levels -> 100 total).
++   *  Doubled from 10 base/+5 per level in patch 0303, direct request.
+    *  Same shape as goldStorage above -- gates voluntary stash additions
+    *  only (see ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
+    *  and CraftingManager.craftGear); quest/raid/Grimsby loot always
+diff --git a/src/game/managers/PetManager.ts b/src/game/managers/PetManager.ts
+index 8d94689..a982b0c 100644
+--- a/src/game/managers/PetManager.ts
++++ b/src/game/managers/PetManager.ts
+@@ -154,8 +154,21 @@ export const PetManager = {
+    * ticked every second -- correct across offline gaps for free, same
+    * "store an absolute timestamp, compute on read" approach as
+    * Injury.healsAt. Never returns above the stored value or below 0.
++   *
++   * `paired` (patch 0303) freezes decay entirely while a pet isn't
++   * paired with any hero -- an unpaired pet's happiness never feeds into
++   * anything (effectiveBonus/petModsForHero are only ever read for the
++   * one pet paired with the current hero, see ModifierManager.petModsForHero's
++   * own `if (!hero.equippedPetId) return {}` guard), so letting it
++   * silently decay was pure busywork: a pet sitting in the Unpaired
++   * bucket would need "catching up" on feeding the moment it was finally
++   * paired, for a stat that did nothing the whole time it sat there.
++   * Defaults to true so a caller that doesn't know/care about pairing
++   * (there are none left after this patch, but keeping the default safe
++   * rather than a breaking required param) still gets the old behavior.
+    */
+-  currentHappiness(pet: Pet, now = Date.now()): number {
++  currentHappiness(pet: Pet, paired = true, now = Date.now()): number {
++    if (!paired) return pet.happiness;
+     const hoursElapsed = Math.max(0, now - pet.happinessUpdatedAt) / (60 * 60 * 1000);
+     const decay = hoursElapsed * Tuning.get('pets.happinessDecayPerHour');
+     return clamp(pet.happiness - decay, 0, 100);
+@@ -166,11 +179,18 @@ export const PetManager = {
+    * growth, scaled down by current happiness but never below the
+    * happiness floor -- a neglected pet still helps a little, it's just not
+    * at its best. See pets.happinessFloorPercent's tuning description.
++   *
++   * `paired` (patch 0303) threads straight through to currentHappiness's
++   * own decay-freeze -- ModifierManager.petModsForHero always passes true
++   * (its own equippedPetId guard means it's never called otherwise), and
++   * HatcheryPanel's card passes whatever this exact pet's own pairing
++   * state actually is, so an Unpaired card's bonus preview and its
++   * Happiness bar always agree on whether decay is even running.
+    */
+-  effectiveBonus(pet: Pet, now = Date.now()): number {
++  effectiveBonus(pet: Pet, paired: boolean, now = Date.now()): number {
+     const level = PetManager.levelForXp(pet.xp);
+     const grown = pet.baseBonusValue + level * Tuning.get('pets.bonusGrowthPerLevel');
+-    const happiness = PetManager.currentHappiness(pet, now);
++    const happiness = PetManager.currentHappiness(pet, paired, now);
+     const floor = Tuning.get('pets.happinessFloorPercent');
+     const factor = Math.max(floor, happiness) / 100;
+     return grown * factor;
+@@ -248,7 +268,8 @@ export const PetManager = {
+     const batch = Tuning.get('pets.feedMaterialBatchSize');
+     if (state.materials[materialId] < batch) return 'Not enough in the Warehouse.';
+     state.materials[materialId] -= batch;
+-    PetManager.applyFeed(pet, Tuning.get('pets.feedMaterialHappinessGain'), now);
++    const paired = state.heroes.some((h) => h.equippedPetId === petUid);
++    PetManager.applyFeed(pet, Tuning.get('pets.feedMaterialHappinessGain'), paired, now);
+     return null;
+   },
+ 
+@@ -258,12 +279,18 @@ export const PetManager = {
+     if (!pet) return 'No such pet.';
+     if ((state.inventory[PET_TREAT_ID] ?? 0) < 1) return "You don't have any Pet Treats.";
+     state.inventory[PET_TREAT_ID] -= 1;
+-    PetManager.applyFeed(pet, Tuning.get('pets.feedCraftedHappinessGain'), now);
++    const paired = state.heroes.some((h) => h.equippedPetId === petUid);
++    PetManager.applyFeed(pet, Tuning.get('pets.feedCraftedHappinessGain'), paired, now);
+     return null;
+   },
+ 
+-  applyFeed(pet: Pet, gain: number, now: number): void {
+-    const current = PetManager.currentHappiness(pet, now);
++  /** `paired` (patch 0303) -- same decay-freeze reasoning currentHappiness's
++   *  own comment gives: an unpaired pet's happiness is already frozen at
++   *  whatever it last was, so feeding one just adds the gain directly
++   *  rather than first "catching up" a decay that was never actually
++   *  supposed to have happened. */
++  applyFeed(pet: Pet, gain: number, paired: boolean, now: number): void {
++    const current = PetManager.currentHappiness(pet, paired, now);
+     pet.happiness = clamp(current + gain, 0, 100);
+     pet.happinessUpdatedAt = now;
+   },
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 6e47d38..b9a79e8 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -487,6 +487,18 @@ export const RaidManager = {
+     if (fullClear && !state.completedRaidDifficulties.includes(active.difficulty)) {
+       state.completedRaidDifficulties.push(active.difficulty);
+     }
++    // Per-raid clear tracker (patch 0303) -- same fullClear gate as
++    // completedRaids/completedRaidDifficulties just above, but keyed by
++    // raidId so RaidsPanel's difficulty circles can show "cleared this
++    // one before" rather than only a guild-wide "cleared A Legendary
++    // somewhere" flag. Deduped per raid, same shape
++    // chainReplayCompletions already established for the replay side.
++    if (fullClear && raid) {
++      const cleared = state.raidClearsByDifficulty[raid.id] ?? [];
++      if (!cleared.includes(active.difficulty)) {
++        state.raidClearsByDifficulty[raid.id] = [...cleared, active.difficulty];
++      }
++    }
+     // Every hero in the clearing party earns the raid's title, if it has
+     // one -- unlike a quest chain's title (one hero, since a quest is
+     // solo), a raid is a group effort, so the whole party that actually
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index d01dc64..095676c 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -184,6 +184,7 @@ export function createInitialState(now = Date.now()): GameState {
+     completedRaids: [],
+     raidLog: [],
+     completedRaidDifficulties: [],
++    raidClearsByDifficulty: {},
+     notifications: [],
+     notificationsSeenId: null,
+     tabAcknowledged: {},
+@@ -1235,6 +1236,19 @@ const MIGRATIONS: Record<number, Migration> = {
+       heroes,
+     };
+   },
++  57: (save) => ({
++    // Patch 0303. New per-raid clear tracker (RaidsPanel's difficulty
++    // circles/card badges) -- see GameState.raidClearsByDifficulty's own
++    // comment. No past raid history to reconstruct which difficulty each
++    // raid was actually cleared at, same "can't know the past, don't
++    // guess it" approach version 56 just above already takes for
++    // consecutiveQuestFails -- every existing save starts with every
++    // raid showing no cleared badges yet, even one with completedRaids
++    // already full of entries, until the player clears each one again.
++    ...save,
++    version: 58,
++    raidClearsByDifficulty: (save.raidClearsByDifficulty as Record<string, string[]> | undefined) ?? {},
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 4fe9555..1b09049 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 57;
++export const SAVE_VERSION = 58;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -715,6 +715,41 @@ export interface Hero {
+    * equippedConsumables above -- no migration needed for existing saves.
+    */
+   autoAdvanceChainId?: string | null;
++  /**
++   * Same role as autoAdvanceChainId above, but for a chain REPLAY --
++   * patch 0303, Saga Auto-Pilot. Set by GameEngine.startChainReplay when
++   * called with autoAdvance=true (only ever from queueSagaAutoPilot), so
++   * tryContinueAutoChain re-sends this exact chain's remaining replay
++   * stages on its own once each one resolves. A genuinely separate field
++   * from autoAdvanceChainId rather than a shared one: a replay's own
++   * offer generator (QuestManager.chainReplayOffer, not chainOffer) and
++   * failure behavior (the whole attempt resets to stage 0, not a
++   * same-stage retry) are already handled as their own fork throughout
++   * this codebase, and reusing one field here would blur which kind of
++   * auto-advance is actually running. Cleared the moment the current
++   * chain's replay finishes with nothing left in replayQueue, or a stage
++   * fails (as-far-as-you-can-go, same rule chain-stepping follows).
++   * Optional/undefined for any hero not currently on an auto-pilot run,
++   * same defensive-optional convention as autoAdvanceChainId above -- no
++   * migration needed for existing saves.
++   */
++  autoAdvanceReplayChainId?: string | null;
++  /**
++   * Remaining {chainId, difficulty} entries queued after the chain
++   * currently auto-advancing via autoAdvanceReplayChainId -- the rest of
++   * a Saga Auto-Pilot band run (see GameEngine.queueSagaAutoPilot).
++   * Popped one at a time, each becoming the new autoAdvanceReplayChainId,
++   * as the chain ahead of it in the queue finishes. Every entry carries
++   * its own difficulty rather than reading one shared value, since the
++   * whole queue is built from a single chosen difficulty up front but
++   * this keeps the shape self-contained per entry rather than assuming
++   * every consumer always has the original difficulty in scope. Emptied
++   * (not left stale) the moment a stage fails or the queue runs out.
++   * Optional/undefined for any hero without a run in progress, same
++   * defensive-optional convention as autoAdvanceChainId above -- no
++   * migration needed for existing saves.
++   */
++  replayQueue?: { chainId: string; difficulty: ChainReplayDifficulty }[];
+   /**
+    * Day window (see data/reroll.ts's rerollDay -- same UTC-epoch-day
+    * division every other daily system in this game already uses) this
+@@ -1558,8 +1593,8 @@ export interface UpgradeDef {
+    *  is always free (see QuestManager.unfreezeOffer). Only Board Warden
+    *  uses this. */
+   freezeChangesPerLevel?: number;
+-  /** Grants this many extra stash slots per level, on top of the 10-slot
+-   *  base floor -- same special-purpose-field shape as the slot-count
++  /** Grants this many extra stash slots per level, on top of the 20-slot
++   *  base floor (doubled from 10 in patch 0303) -- same special-purpose-field shape as the slot-count
+    *  fields above. See ModifierManager.stashCapacity for the base + this
+    *  math, and ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
+    *  and CraftingManager.craftGear for where the resulting cap is
+@@ -1961,6 +1996,19 @@ export interface GameState {
+    * the evidence; this never shrinks.
+    */
+   completedRaidDifficulties: RaidDifficulty[];
++  /**
++   * Which difficulties EACH raid has been full-cleared at, at least once --
++   * patch 0303. Distinct from completedRaidDifficulties (any raid, global
++   * flag) the same way chainReplayCompletions is keyed per-chain rather
++   * than being one global "cleared a Legendary replay" flag -- this
++   * answers "has THIS raid been cleared at Heroic," which the raid card's
++   * own difficulty circles need to show a per-tier cleared checkmark.
++   * Keyed by raidId; each value is a small deduped list of every
++   * RaidDifficulty cleared at least once. Written in RaidManager.resolve
++   * right alongside completedRaids/completedRaidDifficulties -- same fullClear
++   * gate, never removed afterward.
++   */
++  raidClearsByDifficulty: Record<string, RaidDifficulty[]>;
+ 
+   upgrades: Record<string, number>;
+   guild: Record<GuildFacility, number>;
+diff --git a/src/ui/HatchRevealModal.tsx b/src/ui/HatchRevealModal.tsx
+index 7e61c53..4043f0a 100644
+--- a/src/ui/HatchRevealModal.tsx
++++ b/src/ui/HatchRevealModal.tsx
+@@ -1,3 +1,4 @@
++import { useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { PET_BY_ID } from '../game/data/pets';
+ import { PetSprite } from './sprites/PetSprite';
+@@ -12,21 +13,50 @@ import { RarityPill } from './RarityPill';
+ export function HatchRevealModal() {
+   const engine = useEngine();
+   const pet = engine.lastHatchedPet;
++  // Draft rename field (patch 0303, direct request) -- a freshly hatched
++  // pet's name defaults to its species name (PetManager.hatch's own
++  // `name: def?.name ?? 'Unnamed'`), so every pet of the same species
++  // starts out sharing one identical name until renamed. Previously this
++  // card offered no way to fix that on the spot; a player had to close
++  // it, go find the pet in the Pets tab, and rename it there. Seeded
++  // fresh each time a NEW pet hatches (pet?.uid dependency) via useState's
++  // lazy initializer, rather than syncing with a useEffect, same "derive
++  // once per identity change, not on every render" shape HatcheryPanel's
++  // own petCard draft already uses.
++  const [draft, setDraft] = useState(pet?.name ?? '');
++  const [lastPetUid, setLastPetUid] = useState(pet?.uid);
++  if (pet && pet.uid !== lastPetUid) {
++    setLastPetUid(pet.uid);
++    setDraft(pet.name);
++  }
+   if (!pet) return null;
+ 
+   const def = PET_BY_ID[pet.defId];
+ 
+-  const goToPets = () => {
++  // Commits whatever's in the draft field (if it actually differs from
++  // the pet's current name) before running the given follow-up action --
++  // shared by both Close and Go to Pets so neither one silently discards
++  // a name the player already typed but never explicitly confirmed.
++  // Renaming to the exact same default name PetManager.rename would
++  // reject as empty never fires here since draft is always pet-seeded,
++  // never blank, so there's no error path to surface in this card.
++  const commitAndThen = (after: () => void) => {
++    if (draft.trim() && draft.trim() !== pet.name) engine.renamePet(pet.uid, draft);
++    after();
++  };
++
++  const goToPets = () => commitAndThen(() => {
+     engine.requestTab('hatchery', undefined, 'pets');
+     engine.dismissHatchedPet();
+-  };
++  });
++  const close = () => commitAndThen(() => engine.dismissHatchedPet());
+ 
+   return (
+-    <div className="overlay" onClick={() => engine.dismissHatchedPet()}>
++    <div className="overlay" onClick={close}>
+       <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+         <h3 style={{ marginBottom: 4 }}>It Hatched!</h3>
+         <p className="small muted" style={{ marginTop: 0 }}>
+-          The egg hatched into &ldquo;{pet.name}&rdquo;.
++          A new {def?.name ?? 'creature'} joins your guild.
+         </p>
+ 
+         <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
+@@ -35,7 +65,7 @@ export function HatchRevealModal() {
+             rarity={pet.rarity}
+             animation="idle"
+             height={72}
+-            title={pet.name}
++            title={draft || pet.name}
+             fallback={<span style={{ fontSize: '2.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
+           />
+         </div>
+@@ -45,8 +75,26 @@ export function HatchRevealModal() {
+           <RarityPill rarity={pet.rarity} />
+         </div>
+ 
++        <div className="row" style={{ justifyContent: 'center', gap: 6, marginTop: 10 }}>
++          <label className="tiny muted" htmlFor="hatch-name-input">Name this pet</label>
++        </div>
++        <div className="row" style={{ justifyContent: 'center', marginTop: 4 }}>
++          <input
++            id="hatch-name-input"
++            type="text"
++            value={draft}
++            maxLength={24}
++            onChange={(e) => setDraft(e.target.value)}
++            onKeyDown={(e) => { if (e.key === 'Enter') close(); }}
++            style={{
++              background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
++              color: 'var(--parchment)', padding: '4px 8px', textAlign: 'center', width: 180,
++            }}
++          />
++        </div>
++
+         <div className="row end" style={{ marginTop: 14, gap: 8, justifyContent: 'center' }}>
+-          <button className="btn-primary" onClick={() => engine.dismissHatchedPet()}>Close</button>
++          <button className="btn-primary" onClick={close}>Close</button>
+           <button className="btn-primary" onClick={goToPets}>Go to Pets</button>
+         </div>
+       </div>
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index 13650b0..093e456 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -301,12 +301,24 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+     // isn't available here), but 0.75 was tuned closer to a static
+     // standing pose than the `run` animation these sprites actually use,
+     // which reaches noticeably wider than its resting frame mid-stride
+-    // with a weapon or cape extended. .raid-party-row itself now clips
+-    // rather than staggers onto a second line if this still undershoots
+-    // for a particular class (see that rule's own comment in app.css),
+-    // so this number only needs to get CLOSE, not be exact -- just close
+-    // enough that clipping is the rare exception, not the common case.
+-    const spriteWidthEstimate = knightHeight * raidPartyScale(activeRaidParty.length) * 0.9;
++    // with a weapon or cape extended.
++    //
++    // Patch 0303: bumped again, 0.9 -> 1.2, plus a per-sprite margin on
++    // top of that (below) -- direct report: a 0.9 UNDERshoot is a
++    // constant FRACTION of each sprite's own width, so raising the
++    // Settings sprite-scale slider doesn't make the estimate any less
++    // accurate in relative terms, but it does make the resulting clip an
++    // ever-bigger number of ABSOLUTE pixels at a 6+ party size -- exactly
++    // what turned "an occasional sliver" (this comment's own words,
++    // before this patch) into genuinely cut-off end sprites once
++    // reported with a real repro. Deliberately generous now rather than
++    // re-tuned to another single "close enough" ratio: main.ts's own
++    // clampToWorkArea already caps this from ever asking the OS for more
++    // than the actual screen can give, so the only real cost of
++    // overshooting is a little empty padding around the row, which is
++    // strictly better than a hero's sprite reading as amputated at the
++    // window edge.
++    const spriteWidthEstimate = knightHeight * raidPartyScale(activeRaidParty.length) * 1.2 + 10;
+     const gap = 6;
+     const horizontalPadding = 48;
+     const requested = activeRaidParty.length * spriteWidthEstimate
+diff --git a/src/ui/panels/DiscoveredQuestsPanel.tsx b/src/ui/panels/DiscoveredQuestsPanel.tsx
+index d96ceda..865a162 100644
+--- a/src/ui/panels/DiscoveredQuestsPanel.tsx
++++ b/src/ui/panels/DiscoveredQuestsPanel.tsx
+@@ -412,7 +412,7 @@ function ReplayMemoriesView({
+       <div className="section-heading">Sagas</div>
+       <div className="raid-list">
+         {CHAIN_REPLAY_TIERS.map((tier) => (
+-          <TierCard key={tier.id} tier={tier} onOpenChain={onOpenReplayChain} />
++          <TierCard key={tier.id} tier={tier} hero={selectedHero} onOpenChain={onOpenReplayChain} />
+         ))}
+       </div>
+ 
+@@ -434,7 +434,7 @@ function ReplayMemoriesView({
+  * owned) every chain it covers as its own small button, disabled unless
+  * that specific chain is already in completedChains.
+  */
+-function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain: (chainId: string) => void }) {
++function TierCard({ tier, hero, onOpenChain }: { tier: ChainReplayTierDef; hero: Hero; onOpenChain: (chainId: string) => void }) {
+   const engine = useEngine();
+   const state = engine.state;
+   const isMaster = tier.id === 'master';
+@@ -457,6 +457,18 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
+   // openReplayChainId's modal would use if it weren't lifted to the
+   // parent view for deep-link reasons -- this one has no deep-link need.
+   const [showLoot, setShowLoot] = useState(false);
++  // Saga Auto-Pilot (patch 0303) -- own local difficulty pick, same
++  // "persists across the card independent of any modal" shape
++  // percentDifficulty above already uses, deliberately separate state so
++  // switching one doesn't move the other.
++  const [autopilotDifficulty, setAutopilotDifficulty] = useState<ChainReplayDifficulty>('legendary');
++  const autopilotOwned = GuildManager.hasChainReplayTier(state, 'autopilot');
++  const eligibleChainCount = tier.chainIds.filter((id) => GuildManager.isChainReplayEligible(state, id)).length;
++  const heroBusy = hero.status === 'questing';
++  const autopilotTitle = eligibleChainCount === 0
++    ? 'Complete at least one chain in this saga first'
++    : heroBusy ? `${hero.name} is already out on a quest`
++      : `Send ${hero.name} through all ${eligibleChainCount} replayable chain${eligibleChainCount === 1 ? '' : 's'} in this saga, back-to-back, at ${REPLAY_DIFFICULTY_NAME[autopilotDifficulty]}`;
+ 
+   const buyTitle = owned ? undefined
+     : !masterOwned && !isMaster ? 'Unlock Replay Memories first'
+@@ -517,6 +529,38 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
+                 );
+               })}
+             </div>
++            {/* Saga Auto-Pilot (patch 0303) -- only shown once that
++             *  separate tier is owned, same "automation is its own
++             *  purchase" gating GameEngine.queueSagaAutoPilot enforces
++             *  server-side too; this is just the matching UI gate so a
++             *  player without it sees nothing rather than a disabled
++             *  button with no obvious way to enable it (the Owned tag on
++             *  the Auto-Pilot card itself is that "obvious way"). */}
++            {autopilotOwned && (
++              <div className="row spread" style={{ alignItems: 'center', marginTop: 8, gap: 6 }}>
++                <div className="row" style={{ gap: 4, alignItems: 'center' }}>
++                  <span className="tiny muted">Auto-Pilot:</span>
++                  {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
++                    <button
++                      key={d}
++                      className="btn-ghost tiny"
++                      style={autopilotDifficulty === d ? { color: REPLAY_DIFFICULTY_COLOR[d], fontWeight: 'bold' } : undefined}
++                      onClick={() => setAutopilotDifficulty(d)}
++                    >
++                      {REPLAY_DIFFICULTY_NAME[d]}
++                    </button>
++                  ))}
++                </div>
++                <button
++                  className="btn-primary tiny"
++                  disabled={eligibleChainCount === 0 || heroBusy}
++                  title={autopilotTitle}
++                  onClick={() => engine.queueSagaAutoPilot(hero.id, tier.id, autopilotDifficulty)}
++                >
++                  Queue Auto-Pilot ({eligibleChainCount})
++                </button>
++              </div>
++            )}
+           </>
+         )}
+       </div>
+diff --git a/src/ui/panels/HatcheryPanel.tsx b/src/ui/panels/HatcheryPanel.tsx
+index 98598d2..5805bc1 100644
+--- a/src/ui/panels/HatcheryPanel.tsx
++++ b/src/ui/panels/HatcheryPanel.tsx
+@@ -237,13 +237,16 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
+   const [feedMaterial, setFeedMaterial] = useState<MaterialId>('herbs');
+   const [enlarged, setEnlarged] = useState(false);
+ 
+-  const happiness = PetManager.currentHappiness(pet, now);
+-  const bonus = PetManager.effectiveBonus(pet, now);
+-  const level = PetManager.levelForXp(pet.xp);
+   // A pet is "equipped" by being paired with a specific hero now (see
+   // Hero.equippedPetId) rather than sitting in a guild-wide list --
+-  // find whichever hero (if any) currently has this exact pet.
++  // find whichever hero (if any) currently has this exact pet. Computed
++  // before happiness/bonus below (patch 0303) so both can pass it
++  // through to PetManager's own decay-freeze for an unpaired pet.
+   const boundHero = state.heroes.find((h) => h.equippedPetId === pet.uid);
++  const paired = !!boundHero;
++  const happiness = PetManager.currentHappiness(pet, paired, now);
++  const bonus = PetManager.effectiveBonus(pet, paired, now);
++  const level = PetManager.levelForXp(pet.xp);
+   // Patch 0298 -- slot-cap awareness for the pairing dropdown below.
+   const totalEquipped = state.heroes.filter((h) => h.equippedPetId).length;
+   const petSlots = ModifierManager.petSlots(state);
+@@ -331,6 +334,17 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
+         </div>
+         <span className="tiny muted" style={{ width: 40, textAlign: 'right' }}>{Math.round(happiness)}%</span>
+       </div>
++      {/* Patch 0303 -- happiness no longer decays while unpaired (see
++       *  PetManager.currentHappiness's own comment: an unpaired pet's
++       *  bonus is never read by anything, so decaying it was pure
++       *  busywork). Said plainly here rather than left implicit, so a
++       *  player doesn't wonder why an Unpaired pet's bar never seems to
++       *  move and assume something's broken. */}
++      {!paired && (
++        <p className="tiny muted" style={{ marginTop: -4, marginBottom: 8 }}>
++          Not paired -- happiness is on hold, no need to feed until paired with a hero.
++        </p>
++      )}
+ 
+       <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
+         <select
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 3be9ac3..6ac0556 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -338,26 +338,33 @@ function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => v
+ }
+ 
+ function DifficultyCircle({
+-  difficulty, active, unlocked, onClick,
+-}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; onClick: () => void }) {
++  difficulty, active, unlocked, cleared, onClick,
++}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; cleared?: boolean; onClick: () => void }) {
+   const engine = useEngine();
+   const color = DIFFICULTY_COLOR[difficulty];
+   const [imgFailed, setImgFailed] = useState(false);
+   const iconDef = RAID_DIFFICULTY_ICON_DEFS[difficulty];
+   return (
+     <div className="raid-diff-circle-wrap">
+-      <button
+-        className={`raid-diff-circle ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
+-        style={{
+-          borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined,
+-          opacity: unlocked ? 1 : 0.4,
+-        }}
+-        onClick={onClick}
+-        disabled={!unlocked}
+-        title={unlocked
+-          ? `${RAID_DIFFICULTY_LABEL[difficulty]} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
+-          : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
+-      >
++      {/* Own position:relative wrapper, not the shared .raid-diff-circle-wrap
++       *  (that also holds the label/unlock-link below, which shouldn't be
++       *  where an edge-anchored badge measures from) -- same reasoning
++       *  the checkmark below needs the button's own overflow:hidden
++       *  circle out of its way, so it lives as this box's sibling, not
++       *  the button's child. */}
++      <div style={{ position: 'relative', width: 64, height: 64 }}>
++        <button
++          className={`raid-diff-circle ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
++          style={{
++            borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined,
++            opacity: unlocked ? 1 : 0.4,
++          }}
++          onClick={onClick}
++          disabled={!unlocked}
++          title={unlocked
++            ? `${RAID_DIFFICULTY_LABEL[difficulty]} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes${cleared ? ' -- cleared before' : ''}`
++            : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
++        >
+         {!imgFailed ? (
+           // Patch 0302: was <img object-fit:contain> at 70% -- a square
+           // source PNG shown whole (letterboxed) inside a round button
+@@ -393,7 +400,20 @@ function DifficultyCircle({
+         ) : (
+           DIFFICULTY_LABEL[difficulty]
+         )}
+-      </button>
++        </button>
++        {/* Cleared-before tracker (patch 0303) -- same green check
++         *  overlay treatment RoleRequirementCircle uses for "this slot is
++         *  met," answering a different question here: has this raid been
++         *  full-cleared at this exact difficulty at least once. Only
++         *  shown while unlocked -- a locked tier can't have been cleared. */}
++        {unlocked && cleared && (
++          <span
++            className="good"
++            style={{ position: 'absolute', top: -2, right: -2, fontSize: '0.8rem', lineHeight: 1, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.6))' }}
++            aria-hidden="true"
++          >✓</span>
++        )}
++      </div>
+       {/* Name printed below the circle rather than only living in its
+        *  title tooltip -- direct request: a player shouldn't have to
+        *  hover each circle to know which tier is which. */}
+@@ -640,6 +660,7 @@ function RaidDetailModal({
+                     difficulty={d}
+                     active={difficulty === d}
+                     unlocked={ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
++                    cleared={(state.raidClearsByDifficulty[raid.id] ?? []).includes(d)}
+                     onClick={() => pickDifficulty(d)}
+                   />
+                 ))}
+@@ -797,6 +818,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+           <div className="raid-card-name">{raid.name}</div>
+           <div className="raid-card-meta">
+             <span className="tiny gold-text">Lv {raid.reqLevel}</span>
++            <RaidClearBadges raidId={raid.id} />
+           </div>
+           <SetProgressLine raidId={raid.id} compact />
+         </div>
+@@ -809,6 +831,39 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+   );
+ }
+ 
++/**
++ * Compact "cleared before" summary for the collapsed RaidCard (patch
++ * 0303) -- one small letter per difficulty (N/H/L), lit in that
++ * difficulty's own colour once state.raidClearsByDifficulty shows this
++ * raid cleared there, dim/muted otherwise. Deliberately just the three
++ * letters, not full DifficultyCircle instances -- this sits inline next
++ * to the level tag in a card that's otherwise a single compact row, so
++ * it needs to read at a glance rather than repeat the detail modal's own
++ * full circles.
++ */
++function RaidClearBadges({ raidId }: { raidId: string }) {
++  const state = useEngine().state;
++  const cleared = state.raidClearsByDifficulty[raidId] ?? [];
++  if (cleared.length === 0) return null;
++  return (
++    <span className="row" style={{ gap: 3, marginLeft: 6 }} title="Cleared before">
++      {RAID_DIFFICULTY_ORDER.map((d) => (
++        <span
++          key={d}
++          className="tiny"
++          style={{
++            fontWeight: 700,
++            color: cleared.includes(d) ? DIFFICULTY_COLOR[d] : 'var(--muted)',
++            opacity: cleared.includes(d) ? 1 : 0.35,
++          }}
++        >
++          {DIFFICULTY_LABEL[d]}
++        </span>
++      ))}
++    </span>
++  );
++}
++
+ function ActiveRaidCard() {
+   const engine = useEngine();
+   const state = engine.state;

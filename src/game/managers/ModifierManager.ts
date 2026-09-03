@@ -81,7 +81,7 @@ export const ModifierManager = {
     if (!hero.equippedPetId) return {};
     const pet = state.pets.find((p) => p.uid === hero.equippedPetId);
     if (!pet || PetManager.isFallen(pet)) return {};
-    const value = PetManager.effectiveBonus(pet, now);
+    const value = PetManager.effectiveBonus(pet, true, now);
     return { [pet.bonusType]: value };
   },
 
@@ -202,7 +202,8 @@ export const ModifierManager = {
     return (def?.freeRepairsPerLevel ?? 0) * level;
   },
 
-  /** 10 base, +5 per Stash Expansion level (max 8 levels -> 50 total).
+  /** 20 base, +10 per Stash Expansion level (max 8 levels -> 100 total).
+   *  Doubled from 10 base/+5 per level in patch 0303, direct request.
    *  Same shape as goldStorage above -- gates voluntary stash additions
    *  only (see ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
    *  and CraftingManager.craftGear); quest/raid/Grimsby loot always

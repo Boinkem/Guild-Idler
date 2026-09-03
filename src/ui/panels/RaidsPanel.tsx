@@ -338,26 +338,33 @@ function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => v
 }
 
 function DifficultyCircle({
-  difficulty, active, unlocked, onClick,
-}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; onClick: () => void }) {
+  difficulty, active, unlocked, cleared, onClick,
+}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; cleared?: boolean; onClick: () => void }) {
   const engine = useEngine();
   const color = DIFFICULTY_COLOR[difficulty];
   const [imgFailed, setImgFailed] = useState(false);
   const iconDef = RAID_DIFFICULTY_ICON_DEFS[difficulty];
   return (
     <div className="raid-diff-circle-wrap">
-      <button
-        className={`raid-diff-circle ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
-        style={{
-          borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined,
-          opacity: unlocked ? 1 : 0.4,
-        }}
-        onClick={onClick}
-        disabled={!unlocked}
-        title={unlocked
-          ? `${RAID_DIFFICULTY_LABEL[difficulty]} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
-          : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
-      >
+      {/* Own position:relative wrapper, not the shared .raid-diff-circle-wrap
+       *  (that also holds the label/unlock-link below, which shouldn't be
+       *  where an edge-anchored badge measures from) -- same reasoning
+       *  the checkmark below needs the button's own overflow:hidden
+       *  circle out of its way, so it lives as this box's sibling, not
+       *  the button's child. */}
+      <div style={{ position: 'relative', width: 64, height: 64 }}>
+        <button
+          className={`raid-diff-circle ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
+          style={{
+            borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined,
+            opacity: unlocked ? 1 : 0.4,
+          }}
+          onClick={onClick}
+          disabled={!unlocked}
+          title={unlocked
+            ? `${RAID_DIFFICULTY_LABEL[difficulty]} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes${cleared ? ' -- cleared before' : ''}`
+            : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
+        >
         {!imgFailed ? (
           // Patch 0302: was <img object-fit:contain> at 70% -- a square
           // source PNG shown whole (letterboxed) inside a round button
@@ -393,7 +400,20 @@ function DifficultyCircle({
         ) : (
           DIFFICULTY_LABEL[difficulty]
         )}
-      </button>
+        </button>
+        {/* Cleared-before tracker (patch 0303) -- same green check
+         *  overlay treatment RoleRequirementCircle uses for "this slot is
+         *  met," answering a different question here: has this raid been
+         *  full-cleared at this exact difficulty at least once. Only
+         *  shown while unlocked -- a locked tier can't have been cleared. */}
+        {unlocked && cleared && (
+          <span
+            className="good"
+            style={{ position: 'absolute', top: -2, right: -2, fontSize: '0.8rem', lineHeight: 1, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.6))' }}
+            aria-hidden="true"
+          >✓</span>
+        )}
+      </div>
       {/* Name printed below the circle rather than only living in its
        *  title tooltip -- direct request: a player shouldn't have to
        *  hover each circle to know which tier is which. */}
@@ -640,6 +660,7 @@ function RaidDetailModal({
                     difficulty={d}
                     active={difficulty === d}
                     unlocked={ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
+                    cleared={(state.raidClearsByDifficulty[raid.id] ?? []).includes(d)}
                     onClick={() => pickDifficulty(d)}
                   />
                 ))}
@@ -797,6 +818,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
           <div className="raid-card-name">{raid.name}</div>
           <div className="raid-card-meta">
             <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+            <RaidClearBadges raidId={raid.id} />
           </div>
           <SetProgressLine raidId={raid.id} compact />
         </div>
@@ -806,6 +828,39 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
         <RaidDetailModal raidId={raidId} onClose={() => setShowModal(false)} onShowItem={onShowItem} />
       )}
     </>
+  );
+}
+
+/**
+ * Compact "cleared before" summary for the collapsed RaidCard (patch
+ * 0303) -- one small letter per difficulty (N/H/L), lit in that
+ * difficulty's own colour once state.raidClearsByDifficulty shows this
+ * raid cleared there, dim/muted otherwise. Deliberately just the three
+ * letters, not full DifficultyCircle instances -- this sits inline next
+ * to the level tag in a card that's otherwise a single compact row, so
+ * it needs to read at a glance rather than repeat the detail modal's own
+ * full circles.
+ */
+function RaidClearBadges({ raidId }: { raidId: string }) {
+  const state = useEngine().state;
+  const cleared = state.raidClearsByDifficulty[raidId] ?? [];
+  if (cleared.length === 0) return null;
+  return (
+    <span className="row" style={{ gap: 3, marginLeft: 6 }} title="Cleared before">
+      {RAID_DIFFICULTY_ORDER.map((d) => (
+        <span
+          key={d}
+          className="tiny"
+          style={{
+            fontWeight: 700,
+            color: cleared.includes(d) ? DIFFICULTY_COLOR[d] : 'var(--muted)',
+            opacity: cleared.includes(d) ? 1 : 0.35,
+          }}
+        >
+          {DIFFICULTY_LABEL[d]}
+        </span>
+      ))}
+    </span>
   );
 }
 

@@ -63,6 +63,24 @@ export const CHAIN_REPLAY_TIERS: ChainReplayTierDef[] = [
     goldCost: Tuning.get('chain_replay_tier.master.goldCost'),
   },
   {
+    // Patch 0303 -- Saga Auto-Pilot. Sits right under 'master' in this
+    // array (the very next Replay Memories upgrade card, direct
+    // request) rather than after the 6 bands: it's a capability that
+    // applies across every band, same "gates the feature, not any
+    // specific chains" shape 'master' itself already uses (chainIds:
+    // []), so it belongs beside master conceptually as well as visually.
+    // Bought like any other tier (GuildManager.buyChainReplayTier
+    // already handles an arbitrary tier id generically, no code change
+    // needed there) and requires 'master' first, same "canBuy" gating
+    // TierCard already applies to every non-master entry.
+    id: 'autopilot',
+    sagaName: 'Saga Auto-Pilot',
+    levelRange: '',
+    description: 'Once unlocked, a saga band card gets a "Queue Auto-Pilot" option -- send a hero through every replayable chain in that band, back-to-back, at one chosen difficulty, with no manual re-send between stages or chains. A failed stage still stops the whole run right there.',
+    chainIds: [],
+    goldCost: Tuning.get('chain_replay_tier.autopilot.goldCost'),
+  },
+  {
     id: 'band1',
     sagaName: 'The Founding Days',
     levelRange: 'Levels 1-7',

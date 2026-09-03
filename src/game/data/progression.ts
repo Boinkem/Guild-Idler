@@ -242,7 +242,8 @@ export const UPGRADES: UpgradeDef[] = [
   {
     id: 'stash_expansion', name: 'Stash Expansion',
     description: 'More shelving in the back room -- room to hold onto gear a little longer before the Shop or Vault has to deal with it.',
-    // Base (10 slots) lives in ModifierManager.stashCapacity as the
+    // Base (20 slots, doubled from 10 in patch 0303) lives in
+    // ModifierManager.stashCapacity as the
     // floor -- see that method's own comment. Only blocks buying/crafting
     // NEW equipment once the stash is already full (Shop purchases,
     // Black Market purchases, buyback, and gear crafting); quest, raid,
@@ -649,8 +650,14 @@ export function guildCost(def: GuildDef, currentLevel: number): number {
 export const BASE_GOLD_STORAGE = 10_000;
 
 /** Stash slot floor before any Stash Expansion levels -- see
- *  ModifierManager.stashCapacity. */
-export const BASE_STASH_CAPACITY = 10;
+ *  ModifierManager.stashCapacity. Doubled 10 -> 20 in patch 0303
+ *  (direct request: baseline inventory limits felt too tight even before
+ *  Stash Expansion's own per-level bonus is doubled to match, see
+ *  Stash Expansion: extra stash slots granted per level's own tuning
+ *  entry) -- a flat code constant, not tuning-registry-backed, since
+ *  this has always been a hardcoded floor (same as BASE_GOLD_STORAGE
+ *  just above), not something the devtool exposes for live editing. */
+export const BASE_STASH_CAPACITY = 20;
 
 /* ----------------------------- renown perks ------------------------------ */
 

@@ -301,12 +301,24 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     // isn't available here), but 0.75 was tuned closer to a static
     // standing pose than the `run` animation these sprites actually use,
     // which reaches noticeably wider than its resting frame mid-stride
-    // with a weapon or cape extended. .raid-party-row itself now clips
-    // rather than staggers onto a second line if this still undershoots
-    // for a particular class (see that rule's own comment in app.css),
-    // so this number only needs to get CLOSE, not be exact -- just close
-    // enough that clipping is the rare exception, not the common case.
-    const spriteWidthEstimate = knightHeight * raidPartyScale(activeRaidParty.length) * 0.9;
+    // with a weapon or cape extended.
+    //
+    // Patch 0303: bumped again, 0.9 -> 1.2, plus a per-sprite margin on
+    // top of that (below) -- direct report: a 0.9 UNDERshoot is a
+    // constant FRACTION of each sprite's own width, so raising the
+    // Settings sprite-scale slider doesn't make the estimate any less
+    // accurate in relative terms, but it does make the resulting clip an
+    // ever-bigger number of ABSOLUTE pixels at a 6+ party size -- exactly
+    // what turned "an occasional sliver" (this comment's own words,
+    // before this patch) into genuinely cut-off end sprites once
+    // reported with a real repro. Deliberately generous now rather than
+    // re-tuned to another single "close enough" ratio: main.ts's own
+    // clampToWorkArea already caps this from ever asking the OS for more
+    // than the actual screen can give, so the only real cost of
+    // overshooting is a little empty padding around the row, which is
+    // strictly better than a hero's sprite reading as amputated at the
+    // window edge.
+    const spriteWidthEstimate = knightHeight * raidPartyScale(activeRaidParty.length) * 1.2 + 10;
     const gap = 6;
     const horizontalPadding = 48;
     const requested = activeRaidParty.length * spriteWidthEstimate

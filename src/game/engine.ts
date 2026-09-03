@@ -352,6 +352,56 @@ export class GameEngine {
   private tryContinueAutoChain(
     hero: Hero, now: number, prevSuccess: boolean,
   ): { continued: boolean; completedCount: number; target: number; via: 'chain' | 'streak'; stoppedByFailure?: boolean } | null {
+    // Saga Auto-Pilot (patch 0303) -- checked before ordinary chain-
+    // stepping below, same "replay's own mechanism is a genuinely
+    // separate fork, not a shared code path" precedent startChainReplay
+    // already established over startQuest. A failed stage aborts the
+    // WHOLE band queue right here, not just the one chain in progress --
+    // as-far-as-you-can-go, same rule chain-stepping's own failure
+    // branch follows just below.
+    if (hero.autoAdvanceReplayChainId) {
+      const chainId = hero.autoAdvanceReplayChainId;
+      if (!prevSuccess) {
+        hero.autoAdvanceReplayChainId = null;
+        hero.replayQueue = [];
+        return { continued: false, completedCount: 0, target: 0, via: 'chain', stoppedByFailure: true };
+      }
+      const chain = CHAIN_BY_ID[chainId];
+      const active = this.state.activeChainReplays.find((r) => r.heroId === hero.id && r.chainId === chainId);
+      if (chain && active && active.stage < chain.stages.length) {
+        const rng = createRng(uid('autoAdvanceReplay'));
+        const offer = QuestManager.chainReplayOffer(chain, active.stage, active.difficulty, rng, hero.level);
+        const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
+        if (!error) {
+          return { continued: true, completedCount: active.stage + 1, target: chain.stages.length, via: 'chain' };
+        }
+      }
+      // This chain's replay attempt is done (or nothing left to advance)
+      // -- pop the next queued chain in the band, if any, and start it
+      // fresh at stage 0, same difficulty the whole queue was built at.
+      hero.autoAdvanceReplayChainId = null;
+      const queue = hero.replayQueue ?? [];
+      const next = queue.shift();
+      if (next) {
+        const nextChain = CHAIN_BY_ID[next.chainId];
+        if (nextChain) {
+          const rng = createRng(uid('autoAdvanceReplay'));
+          const offer = QuestManager.chainReplayOffer(nextChain, 0, next.difficulty, rng, hero.level);
+          const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
+          if (!error) {
+            hero.replayQueue = queue;
+            hero.autoAdvanceReplayChainId = next.chainId;
+            return { continued: true, completedCount: 1, target: nextChain.stages.length, via: 'chain' };
+          }
+        }
+      }
+      hero.replayQueue = [];
+      // Falls through to the ordinary Auto-Chain streak below, same as
+      // chain-stepping's own "nothing left to advance" fallthrough --
+      // an auto-pilot run finishing hands off to whatever bounty streak
+      // budget the hero still has, rather than a dead end.
+    }
+
     if (hero.autoAdvanceChainId) {
       const chainId = hero.autoAdvanceChainId;
       if (!prevSuccess) {
@@ -1527,8 +1577,16 @@ export class GameEngine {
    * (the UI only ever offers a picker before a fresh attempt begins),
    * rather than trying to carry partial progress across a difficulty
    * switch that was never really defined.
+   *
+   * `autoAdvance` (patch 0303) is the Saga Auto-Pilot upgrade's
+   * counterpart to startQuest's `chainSteps` -- sets
+   * hero.autoAdvanceReplayChainId so tryContinueAutoChain re-sends this
+   * exact chain's remaining stages on its own once each one resolves,
+   * instead of waiting for another manual click. Defaults to false so a
+   * plain single-chain Send from ChainReplayDetailModal is unchanged --
+   * only queueSagaAutoPilot below opts in.
    */
-  startChainReplay(heroId: string, chainId: string, difficulty: ChainReplayDifficulty) {
+  startChainReplay(heroId: string, chainId: string, difficulty: ChainReplayDifficulty, autoAdvance = false) {
     const hero = this.hero(heroId);
     if (!hero) return;
     if (!GuildManager.isChainReplayEligible(this.state, chainId)) {
@@ -1543,14 +1601,64 @@ export class GameEngine {
     const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
     if (error) return this.say(error);
     this.state.focusedHeroId = heroId;
-    // Deliberately no Auto-Chain streak interaction here, same reasoning
-    // pickBestQuest's own comment already gives for excluding chain
-    // offers from automation entirely -- a replay is even more clearly a
-    // deliberate, noticed choice than a first-clear chain stage is.
+    // A plain manual send is still deliberately excluded from the
+    // ordinary Auto-Chain streak, same reasoning pickBestQuest's own
+    // comment gives -- a replay is a noticed choice, not a bounty grab.
+    // autoAdvanceReplayChainId is the one exception: only ever set here
+    // when the caller explicitly asked for it (queueSagaAutoPilot).
     hero.autoAdvanceChainId = null;
+    hero.autoAdvanceReplayChainId = autoAdvance ? chainId : null;
+    if (!autoAdvance) hero.replayQueue = [];
     playSound('depart');
-    this.say(`${hero.name} sets out to replay ${chain.name}.`, 'chains');
+    // The auto-pilot band toast (queueSagaAutoPilot, below) already
+    // covers this exact send with a more useful "N chains queued"
+    // message -- skip the plain per-chain toast so starting a band run
+    // doesn't fire two toasts back to back for the one click.
+    if (!autoAdvance) this.say(`${hero.name} sets out to replay ${chain.name}.`, 'chains');
     void this.saveNow();
+  }
+
+  /**
+   * Saga Auto-Pilot (patch 0303) -- queues every one of a saga band's
+   * chains that's actually replayable (already in completedChains; a
+   * band can be bought ahead of finishing every chain in it, same as
+   * always) for one hero, back-to-back, at one chosen difficulty, with
+   * no manual re-send between either stages or chains. Gated behind its
+   * own ChainReplayTierDef ('autopilot', bought like any other tier --
+   * see CHAIN_REPLAY_TIERS, sits right under 'master' in that array so
+   * it's the first upgrade card after the master unlock) rather than
+   * being free once a band is owned -- full unattended automation
+   * through an entire saga is a bigger ask than the existing per-chain
+   * manual difficulty picker, same "automation is its own purchase, not
+   * a free extension of the underlying feature" precedent Auto-Chain
+   * Tactics already set for ordinary chain-stepping.
+   *
+   * Any stage failure anywhere in the run stops the whole queue right
+   * there (tryContinueAutoChain's autoAdvanceReplayChainId branch),
+   * same as-far-as-you-can-go rule every other auto-continue mechanism
+   * in this game already follows -- this never silently burns through
+   * a full band on repeated failures.
+   */
+  queueSagaAutoPilot(heroId: string, tierId: string, difficulty: ChainReplayDifficulty) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    if (hero.status === 'questing') return this.say(`${hero.name} is already out on a quest.`);
+    if (!GuildManager.hasChainReplayTier(this.state, 'autopilot')) {
+      return this.say('Saga Auto-Pilot has not been unlocked yet.');
+    }
+    const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
+    if (!tier || !GuildManager.hasChainReplayTier(this.state, tierId)) {
+      return this.say("This saga hasn't been unlocked yet.");
+    }
+    const eligible = tier.chainIds.filter((id) => GuildManager.isChainReplayEligible(this.state, id));
+    if (eligible.length === 0) {
+      return this.say('No chains in this saga are ready to replay yet.');
+    }
+    const queue = eligible.map((chainId) => ({ chainId, difficulty }));
+    const first = queue.shift()!;
+    hero.replayQueue = queue;
+    this.startChainReplay(heroId, first.chainId, difficulty, true);
+    this.say(`${hero.name} begins an auto-pilot run through ${tier.sagaName} (${eligible.length} chain${eligible.length === 1 ? '' : 's'}).`, 'chains');
   }
 
   /**

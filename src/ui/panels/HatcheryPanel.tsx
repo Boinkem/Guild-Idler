@@ -237,13 +237,16 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
   const [feedMaterial, setFeedMaterial] = useState<MaterialId>('herbs');
   const [enlarged, setEnlarged] = useState(false);
 
-  const happiness = PetManager.currentHappiness(pet, now);
-  const bonus = PetManager.effectiveBonus(pet, now);
-  const level = PetManager.levelForXp(pet.xp);
   // A pet is "equipped" by being paired with a specific hero now (see
   // Hero.equippedPetId) rather than sitting in a guild-wide list --
-  // find whichever hero (if any) currently has this exact pet.
+  // find whichever hero (if any) currently has this exact pet. Computed
+  // before happiness/bonus below (patch 0303) so both can pass it
+  // through to PetManager's own decay-freeze for an unpaired pet.
   const boundHero = state.heroes.find((h) => h.equippedPetId === pet.uid);
+  const paired = !!boundHero;
+  const happiness = PetManager.currentHappiness(pet, paired, now);
+  const bonus = PetManager.effectiveBonus(pet, paired, now);
+  const level = PetManager.levelForXp(pet.xp);
   // Patch 0298 -- slot-cap awareness for the pairing dropdown below.
   const totalEquipped = state.heroes.filter((h) => h.equippedPetId).length;
   const petSlots = ModifierManager.petSlots(state);
@@ -331,6 +334,17 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
         </div>
         <span className="tiny muted" style={{ width: 40, textAlign: 'right' }}>{Math.round(happiness)}%</span>
       </div>
+      {/* Patch 0303 -- happiness no longer decays while unpaired (see
+       *  PetManager.currentHappiness's own comment: an unpaired pet's
+       *  bonus is never read by anything, so decaying it was pure
+       *  busywork). Said plainly here rather than left implicit, so a
+       *  player doesn't wonder why an Unpaired pet's bar never seems to
+       *  move and assume something's broken. */}
+      {!paired && (
+        <p className="tiny muted" style={{ marginTop: -4, marginBottom: 8 }}>
+          Not paired -- happiness is on hold, no need to feed until paired with a hero.
+        </p>
+      )}
 
       <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
         <select

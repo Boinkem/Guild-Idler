@@ -24146,3 +24146,201 @@ since it wasn't part of what was reported; the old, now-unreferenced
 `public/raid-icons/` folder (including a stray `tier4_mythic.png`, a
 leftover from the Mythic->Legendary rename) could be cleaned up
 whenever a broader asset-folder pass happens.
+
+### Raid clear tracker, feed-only-Active-Pets, doubled inventory limits, Name Pet on hatch, Saga Auto-Pilot, and a raid-view sprite clipping fix (patch 0303)
+
+```discord-update
+Dev Update | Patch 0303
+
+- Added: raid cards now show a checkmark on each difficulty you've cleared before, plus a small N/H/L badge row on the collapsed card
+- Changed: an unpaired pet's happiness no longer decays -- only a paired pet's happiness ever mattered anyway, so there's nothing left to feed until you pair one
+- Changed: Stash and Warehouse capacity are both doubled, baseline and per-upgrade-level
+- Added: the hatch-reveal card now lets you name your new pet right there, instead of having to go find it in the Pets tab afterward
+- Added: Saga Auto-Pilot, a new Replay Memories upgrade -- once unlocked, queue a whole saga band to replay unattended, one chain after another, at your chosen difficulty
+- Fixed: the corner companion's Raid Party View no longer clips the end sprites at larger sprite-scale settings
+```
+
+Six direct reports bundled into one patch -- none large enough on their own
+to warrant a separate pass, but none trivial enough to skip the usual
+"why," so each gets its own section below.
+
+**Raid clear tracker (`GameState.raidClearsByDifficulty`, `RaidManager.
+resolve`, `RaidsPanel.tsx`).** Nothing tracked this before -- the game only
+ever had two GLOBAL flags, `completedRaids` (any raid, any difficulty, has
+it been full-cleared at all) and `completedRaidDifficulties` (any raid,
+has ANY raid ever been cleared at Heroic/Legendary). Neither could answer
+"has THIS raid been cleared at THIS difficulty," which is what a per-tier
+"cleared before" badge actually needs. New field, same shape
+`chainReplayCompletions` already established for the replay side --
+`Record<raidId, RaidDifficulty[]>`, deduped, written once per fullClear in
+`RaidManager.resolve` right alongside the two existing flags, never
+removed afterward. `DifficultyCircle` (the detail modal's N/H/L picker)
+gets a small green check overlay, same treatment `RoleRequirementCircle`
+already uses for "this slot is met" -- moved the button into its own
+`position: relative` wrapper div rather than adding it as the button's own
+child, since the button itself has `overflow: hidden` (needed for the
+patch-0302 background-image icon crop) which would have clipped an
+edge-anchored badge. The collapsed `RaidCard` gets a new `RaidClearBadges`
+component -- three small letters, lit in each difficulty's own colour once
+cleared, dim otherwise -- sitting inline next to the level tag rather than
+repeating the full circles at that compact size. Save migration (v57->58)
+backfills `{}` for every existing save -- no way to reconstruct which
+difficulty a raid already in `completedRaids` was actually cleared at, so
+every raid starts with no badges until cleared again, same "can't know the
+past, don't guess it" precedent v56's `consecutiveQuestFails` migration
+already set.
+
+**Feed-only-Active-Pets (`PetManager.currentHappiness`/`effectiveBonus`/
+`applyFeed`, `ModifierManager.petModsForHero`, `HatcheryPanel.tsx`).**
+Confirmed before touching anything: an unpaired pet's happiness has
+*zero* gameplay effect. `petModsForHero` only ever reads
+`hero.equippedPetId`'s own pet (`if (!hero.equippedPetId) return {}`), so
+an Unpaired-bucket pet's `effectiveBonus` is never consulted by anything.
+Its happiness was still decaying in the background the whole time,
+though, which meant a pet could sit unpaired for a while and then need a
+round of "catch-up" feeding the moment it was finally paired -- busywork
+for a stat that did nothing the entire time it sat there. Fix: both
+`currentHappiness` and `effectiveBonus` now take a `paired: boolean`
+(no default on `effectiveBonus` -- both its call sites, `ModifierManager`
+and `HatcheryPanel`, always know their own pairing state, so a silent
+wrong default felt riskier than making it required). `currentHappiness`
+short-circuits to the raw stored value when `!paired`, skipping the decay
+math entirely. `applyFeed` also threads `paired` through (both
+`feedMaterial`/`feedCrafted` now derive it via
+`state.heroes.some((h) => h.equippedPetId === petUid)`) so feeding an
+unpaired pet doesn't first "catch up" a decay that was never supposed to
+have run. `HatcheryPanel`'s pet card computes `boundHero`/`paired` once,
+before either happiness call, and now shows a small "Not paired --
+happiness is on hold, no need to feed until paired with a hero" note so
+the frozen bar doesn't read as broken.
+
+**Doubled inventory limits (`BASE_STASH_CAPACITY`, `harvest.
+baseWarehouseCapacity`, `upgrade.stash_expansion.stashCapacityPerLevel`,
+`harvest.warehouse.capacityPerLevel`).** Direct request: baseline AND
+per-upgrade-level amounts, both systems. Stash: `BASE_STASH_CAPACITY`
+(hardcoded constant, `progression.ts` -- this one was never
+tuning-registry-backed, matching `BASE_GOLD_STORAGE` right next to it)
+10 -> 20; Stash Expansion's own `stashCapacityPerLevel` tuning value 5 ->
+10 (8 levels unchanged, so max stash goes 50 -> 100). Warehouse:
+`harvest.baseWarehouseCapacity` 100 -> 200; `harvest.warehouse.
+capacityPerLevel` 50 -> 100 (10 levels unchanged, so max per-material
+storage goes 600 -> 1200). Deliberately left every cost/costGrowth/
+maxLevel curve untouched -- only the capacity OUTPUT doubled, not how
+many levels or how much each level costs, since "double what the
+upgrades allow to increase to" read as the amount, not the pacing. Every
+stale code comment citing the old 10-slot/50-cap numbers (`ModifierManager.
+stashCapacity`, `progression.ts`'s stash_expansion entry, `Hero.
+stashCapacityPerLevel`'s own doc comment) updated to match.
+
+**Name Pet on hatch (`HatchRevealModal.tsx`).** A freshly hatched pet's
+name defaults to its species name (`PetManager.hatch`'s own `name: def?.
+name ?? 'Unnamed'`), so every pet of the same species starts out sharing
+one identical name until someone renames it -- and the reveal card
+previously offered no way to do that on the spot, only a "hatched into
+X" line and Close/Go to Pets. New inline text field, pre-seeded with the
+pet's current (default) name via a `pet?.uid`-keyed reset (re-seeds
+fresh each time a genuinely NEW pet hatches, without needing a
+`useEffect`) -- Enter, Close, or Go to Pets all commit whatever's in the
+field first (via a shared `commitAndThen` helper) if it actually differs
+from the pet's current name, then proceed. Reuses the existing
+`engine.renamePet`/`PetManager.rename` (trim, 24-char cap, rejects
+blank) rather than adding a second rename path. `lastHatchedPet` and the
+live `state.pets` entry are confirmed the same object reference
+(`PetManager.hatch` pushes then returns the identical `pet`), so
+`renamePet`'s in-place mutation is immediately reflected back into this
+same card without any extra plumbing. Also swapped the header copy from
+quoting the about-to-be-renamed default name ("hatched into 'Kobold'")
+to a simpler "A new Kobold joins your guild" line, since the old wording
+read oddly once the name shown was about to be overwritten a second
+later.
+
+**Saga Auto-Pilot (`GameState.ChainReplayTierDef` autopilot entry,
+`Hero.autoAdvanceReplayChainId`/`replayQueue`, `GameEngine.
+queueSagaAutoPilot`/`startChainReplay`/`tryContinueAutoChain`,
+`DiscoveredQuestsPanel.tsx`'s `TierCard`).** Direct request, clarified as
+"full auto-pilot through an entire band at a chosen difficulty" -- both
+per-chain stage-stepping AND cross-chain band queueing, not just one or
+the other. Gated behind its own new `ChainReplayTierDef` (id
+`'autopilot'`, 8000g, no `chainIds` of its own -- same "gates a
+capability, not specific chains" shape `'master'` already uses) rather
+than being a free extension of an owned band: full unattended automation
+through a whole saga is a materially bigger ask than the existing
+per-chain manual difficulty picker, same "automation is its own
+purchase" precedent Auto-Chain Tactics already set for ordinary
+chain-stepping. Positioned as the very next entry in `CHAIN_REPLAY_TIERS`
+right after `'master'`, direct request ("under the first Replay Memories
+upgrade/card") -- `TierCard`/`buyChainReplayTier` needed zero code
+changes to support an arbitrary new tier id, both were already generic.
+
+Two new optional `Hero` fields carry a run: `autoAdvanceReplayChainId`
+(mirrors `autoAdvanceChainId`, but for a replay -- kept as a genuinely
+separate field rather than reused, since a replay's own offer generator
+and failure behavior are already their own fork everywhere else in this
+codebase) and `replayQueue` (`{chainId, difficulty}[]`, the rest of the
+band still waiting). `startChainReplay` gained a 4th `autoAdvance`
+parameter (default `false`, so a plain manual Send from
+`ChainReplayDetailModal` is unchanged) -- when true, sets
+`autoAdvanceReplayChainId` instead of clearing it, and skips its own
+"sets out to replay X" toast (the new band-level toast covers that
+send). `tryContinueAutoChain` gained a new branch, checked before the
+existing ordinary chain-stepping branch: on success, re-sends the next
+stage of the same chain exactly like chain-stepping's own branch does
+(just via `chainReplayOffer` instead of `chainOffer`); once that chain's
+`activeChainReplays` entry is gone (full chain complete), pops the next
+`{chainId, difficulty}` off `replayQueue` and starts it fresh at stage 0.
+On ANY stage failure, both `autoAdvanceReplayChainId` and the whole
+`replayQueue` are cleared together -- as-far-as-you-can-go, same rule
+every other auto-continue mechanism in this game already follows; this
+never silently grinds through a full band on repeated failures. New
+`GameEngine.queueSagaAutoPilot(heroId, tierId, difficulty)` filters a
+band's `chainIds` down to whichever are actually replay-eligible right
+now (a band can be bought ahead of finishing every chain in it, same as
+always), starts the first via `startChainReplay(..., true)`, and stashes
+the rest in `hero.replayQueue`. Works identically during offline
+catch-up for free -- `tryContinueAutoChain`'s other call site (the
+offline-elapsed-time loop) already existed for ordinary chain-stepping,
+no changes needed there.
+
+`TierCard` gained its own local `autopilotDifficulty` N/H/L picker (same
+shape the existing "Cleared at" percent picker already uses) plus a
+"Queue Auto-Pilot (N)" button, shown only once the `'autopilot'` tier
+itself is owned -- `N` is the live count of this band's chains currently
+eligible to replay, and the button disables (with an explanatory title)
+at 0 eligible or while the selected hero is already questing.
+`ReplayMemoriesView` now threads its existing `selectedHero` down into
+`TierCard` (previously only used for the detail modal) so the button
+knows which hero to send.
+
+**Sprite clipping at larger scale, corner companion Raid Party View
+(`IdleView.tsx`).** Confirmed root cause by rereading the estimate math
+rather than guessing: `spriteWidthEstimate` (this effect's own OS-window-
+width request) has always undershot each sprite's real rendered width by
+a roughly constant FRACTION (the `* 0.9` multiplier, tuned in patch
+0276) to save a `.raid-party-row` from wrapping onto a staggered second
+line (see that rule's own `app.css` comment). A constant fractional
+undershoot means the ABSOLUTE pixel error scales linearly with sprite
+size -- so raising Settings' sprite-scale slider doesn't make the
+estimate any less accurate in relative terms, but it turns what used to
+read as "an occasional sliver clipped" into a genuinely amputated end
+sprite once the base size is large enough, exactly the repro described.
+Fix: `0.9` -> `1.2`, plus a flat `+ 10` per-sprite margin on top of that.
+Deliberately generous rather than re-tuned to another single "close
+enough" ratio -- `main.ts`'s own `clampToWorkArea` already caps this
+from ever requesting more width than the actual screen can give, so the
+only real cost of overshooting now is a little empty padding around the
+row, strictly better than a hero's sprite reading as cut off at the
+window edge. `.raid-party-row`'s own `nowrap`/`overflow: hidden` (the
+patch-0276 anti-stagger fix) is left untouched -- still a reasonable
+last-resort safety net, just one that should now trigger far more
+rarely.
+
+**Verification.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this
+patch applied. The one `tsc` error surfaced (`raids.ts`'s
+`RaidDifficultyIconDef` cast) is confirmed pre-existing on `main` before
+this patch, unrelated to any of the six changes here. No live in-app
+playtest in this environment (no browser available) -- worth a real pass
+confirming: the raid-card badge row reads cleanly at the compact card
+width; the auto-pilot band run actually survives an offline gap
+end-to-end; and the widened Raid Party View window looks right against a
+genuinely large sprite-scale + Legendary-size party.

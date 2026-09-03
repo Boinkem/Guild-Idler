@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 57;
+export const SAVE_VERSION = 58;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -715,6 +715,41 @@ export interface Hero {
    * equippedConsumables above -- no migration needed for existing saves.
    */
   autoAdvanceChainId?: string | null;
+  /**
+   * Same role as autoAdvanceChainId above, but for a chain REPLAY --
+   * patch 0303, Saga Auto-Pilot. Set by GameEngine.startChainReplay when
+   * called with autoAdvance=true (only ever from queueSagaAutoPilot), so
+   * tryContinueAutoChain re-sends this exact chain's remaining replay
+   * stages on its own once each one resolves. A genuinely separate field
+   * from autoAdvanceChainId rather than a shared one: a replay's own
+   * offer generator (QuestManager.chainReplayOffer, not chainOffer) and
+   * failure behavior (the whole attempt resets to stage 0, not a
+   * same-stage retry) are already handled as their own fork throughout
+   * this codebase, and reusing one field here would blur which kind of
+   * auto-advance is actually running. Cleared the moment the current
+   * chain's replay finishes with nothing left in replayQueue, or a stage
+   * fails (as-far-as-you-can-go, same rule chain-stepping follows).
+   * Optional/undefined for any hero not currently on an auto-pilot run,
+   * same defensive-optional convention as autoAdvanceChainId above -- no
+   * migration needed for existing saves.
+   */
+  autoAdvanceReplayChainId?: string | null;
+  /**
+   * Remaining {chainId, difficulty} entries queued after the chain
+   * currently auto-advancing via autoAdvanceReplayChainId -- the rest of
+   * a Saga Auto-Pilot band run (see GameEngine.queueSagaAutoPilot).
+   * Popped one at a time, each becoming the new autoAdvanceReplayChainId,
+   * as the chain ahead of it in the queue finishes. Every entry carries
+   * its own difficulty rather than reading one shared value, since the
+   * whole queue is built from a single chosen difficulty up front but
+   * this keeps the shape self-contained per entry rather than assuming
+   * every consumer always has the original difficulty in scope. Emptied
+   * (not left stale) the moment a stage fails or the queue runs out.
+   * Optional/undefined for any hero without a run in progress, same
+   * defensive-optional convention as autoAdvanceChainId above -- no
+   * migration needed for existing saves.
+   */
+  replayQueue?: { chainId: string; difficulty: ChainReplayDifficulty }[];
   /**
    * Day window (see data/reroll.ts's rerollDay -- same UTC-epoch-day
    * division every other daily system in this game already uses) this
@@ -1558,8 +1593,8 @@ export interface UpgradeDef {
    *  is always free (see QuestManager.unfreezeOffer). Only Board Warden
    *  uses this. */
   freezeChangesPerLevel?: number;
-  /** Grants this many extra stash slots per level, on top of the 10-slot
-   *  base floor -- same special-purpose-field shape as the slot-count
+  /** Grants this many extra stash slots per level, on top of the 20-slot
+   *  base floor (doubled from 10 in patch 0303) -- same special-purpose-field shape as the slot-count
    *  fields above. See ModifierManager.stashCapacity for the base + this
    *  math, and ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
    *  and CraftingManager.craftGear for where the resulting cap is
@@ -1961,6 +1996,19 @@ export interface GameState {
    * the evidence; this never shrinks.
    */
   completedRaidDifficulties: RaidDifficulty[];
+  /**
+   * Which difficulties EACH raid has been full-cleared at, at least once --
+   * patch 0303. Distinct from completedRaidDifficulties (any raid, global
+   * flag) the same way chainReplayCompletions is keyed per-chain rather
+   * than being one global "cleared a Legendary replay" flag -- this
+   * answers "has THIS raid been cleared at Heroic," which the raid card's
+   * own difficulty circles need to show a per-tier cleared checkmark.
+   * Keyed by raidId; each value is a small deduped list of every
+   * RaidDifficulty cleared at least once. Written in RaidManager.resolve
+   * right alongside completedRaids/completedRaidDifficulties -- same fullClear
+   * gate, never removed afterward.
+   */
+  raidClearsByDifficulty: Record<string, RaidDifficulty[]>;
 
   upgrades: Record<string, number>;
   guild: Record<GuildFacility, number>;
