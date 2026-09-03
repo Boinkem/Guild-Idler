@@ -1484,24 +1484,9 @@ Enchant investment. Not done now because it touches the same summing
 logic `gearRelevance` decay also applies to, and this patch was already
 large enough to want that as its own separately-reviewable change.
 
-### Procedural item names not yet wired into every UI surface -- known gap, patch 0214
-`EquipmentItem.proceduralName` (the rolled "Fortunate Iron Sword [Hard]"
-style name) is fully wired into both result screens
-(`QuestResultModal`/`RaidResultModal`, via `QuestResult.loot`/
-`RaidResult.loot`'s `name` field, itself sourced from
-`itemDisplayName()`) -- a drop announces itself correctly the moment it
-happens. `EquipmentPanel.tsx`'s stash/equipped-gear card views still read
-`def.name` directly in several places rather than through
-`itemDisplayName()`, so a procedural item's bracketed tag and bonus-roll
-prefix won't show once it's sitting in the stash or equipped, only at
-the moment it drops. Deliberately not chased down across every card
-variant in this patch (some of those views are aggregate stash-count
-displays grouped by `defId`, where a single shared name is arguably
-correct anyway, since a stack can hold multiple differently-rolled
-instances) -- worth a dedicated UI pass distinguishing the single-item
-detail views (should use `itemDisplayName`) from the grouped/stacked
-views (should keep the plain base name) rather than a blanket find-and-
-replace.
+### ~~Procedural item names not yet wired into every UI surface~~ -- done, patch 0299
+Was a known gap since patch 0214 -- see "Procedural item names wired
+into every remaining gear surface" below for the full writeup.
 
 ### Mythic quest tier (above Legendary) -- idea logged, not scoped
 Raised during the quest success rebalance discussion (see "Quest success
@@ -23640,3 +23625,80 @@ numbers. No live in-app playtest in this environment (no browser
 available) -- worth a real-window pass to confirm the new "+ N Scrap"
 button labels don't overflow on any of the affected buttons, and that the
 Pets tab divider reads well with a genuinely large roster.
+
+### Procedural item names wired into every remaining gear surface (patch 0299)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: a procedurally-rolled item (bonus-roll prefix, difficulty tag) now keeps showing its full rolled name everywhere -- stash, equipped, Buy back, and Blacksmith's Sell/Scrap card -- instead of reverting to its plain base name the moment it's not fresh off a drop
+- Changed: the Sell and Scrap confirmation dialogs now name the exact item you're about to sell or scrap, not just its base type
+```
+
+Direct follow-through on the "known gap" flagged since patch 0214:
+`itemDisplayName(item, def)` (`item.proceduralName ?? def.name`) was
+already fully wired into the moment a procedural item drops
+(`QuestResultModal`/`RaidResultModal`, via the loot record's own
+precomputed `name`), but several `EquipmentPanel.tsx`/`VendorsPanel.tsx`
+views still read `def.name` straight off the item's definition, so the
+same item's rolled name would quietly disappear again the instant it
+landed in the stash.
+
+**Re-scoped against the live repo before touching anything, not just
+the original 0214 note.** That note assumed a real design question --
+whether some of `EquipmentPanel.tsx`'s views were aggregate
+stash-count displays grouped by `defId` (where a single shared name
+would arguably be correct, since a stack could hold several
+differently-rolled instances) -- and left the fix pending a decision on
+stacking. Direct confirmation this pass: **gear is fine stacking under
+one shared name** where it's ever grouped at all. Auditing the actual
+current source turned up something better than a design call, though --
+gear in the stash is *never* grouped by `defId` anywhere in the live
+code; `StashCard` and `ArmourStashCard` both already take one
+`EquipmentItem` per card. The only `×{count}` stacking in
+`EquipmentPanel.tsx` belongs to consumables, which aren't procedural at
+all. So there was no single-item/grouped split left to make -- every
+real gear name display gets the fix, full stop.
+
+**The audit also caught two live surfaces the original 0214 note never
+could have covered**, since they didn't exist yet at that patch:
+`VendorsPanel.tsx`'s `ArmourStashCard` (Blacksmith's own Sell/Scrap
+card, relocated here from Inventory at patch 0267) and its Buy back
+list (the "second thoughts" resale row). Both were still reading
+`def.name` the same way the original Inventory-tab views were.
+
+**Eight call sites fixed, two files, both already importing from
+`game/data/equipment.ts` -- only the import line grew, no new import
+added:**
+
+`EquipmentPanel.tsx`
+- `SlotCard` (equipped gear) -- collapsed card name and modal title
+- `StashCard` (Inventory stash) -- collapsed card name and modal title
+
+`VendorsPanel.tsx`
+- Buy back list entry
+- `ArmourStashCard` (Blacksmith Sell/Scrap card) -- collapsed card name
+- The Sell confirmation dialog's message text
+- The Scrap confirmation dialog's message text
+
+**Deliberately left untouched, confirmed correct as-is:**
+- `EquipmentShopCard` (unpurchased Blacksmith/Black Market stock,
+  `VendorsPanel.tsx`) -- no `EquipmentItem` exists yet at this point,
+  only a `def`; a procedural listing already shows "Stats roll when
+  purchased, scaled to level N" instead of pretending to know the roll
+  in advance, which is the correct behavior, not a gap.
+- Consumable cards (stash, equipped-slot, and shop) -- consumables
+  don't carry `proceduralName` at all; their `×{count}` stacking is
+  correct and untouched.
+- `HeroesPanel.tsx`'s own `def.name` spots -- those read a
+  `HeroClassDef` (recruit chips/modal), unrelated to equipment naming.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this
+patch applied. No `SAVE_VERSION` bump needed -- purely a display-layer
+change, no `GameState`/`EquipmentItem` shape touched. No live in-app
+playtest in this environment (no browser available) -- worth a real
+pass rolling a procedural item (any of the 21 standalone bases, e.g.
+`rusty_sword`) through a full drop -> stash -> equip -> sell/scrap
+cycle to confirm its rolled name holds at every stop, not just the
+drop announcement.

@@ -7,7 +7,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
-import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+import { EQUIPMENT_BY_ID, itemDisplayName } from '../../game/data/equipment';
 import { isProceduralTemplate } from '../../game/data/proceduralLoot';
 import { scrapIconFor } from '../../game/data/elements';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
@@ -589,7 +589,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
                   <div className="row" style={{ gap: 8, alignItems: 'center' }}>
                     <ItemIcon slot={def.slot} icon={def.icon} size={28} />
                     <span style={{ color: RARITY_COLOR[def.rarity], fontSize: 11 }}>
-                      {def.name}{entry.item.plus > 0 ? ` +${entry.item.plus}` : ''}
+                      {itemDisplayName(entry.item, def)}{entry.item.plus > 0 ? ` +${entry.item.plus}` : ''}
                     </span>
                   </div>
                   <button
@@ -670,7 +670,7 @@ function ArmourStashCard({
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} />
           <div className="item-card-body">
-            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <span className="rarity-pill" style={{ color: RARITY_COLOR[def.rarity], borderColor: RARITY_COLOR[def.rarity] }}>{def.rarity}</span>
             {item.locked && <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)' }}>{'\uD83D\uDD12'} vaulted</span>}
           </div>
@@ -709,7 +709,7 @@ function ArmourStashCard({
       {pendingSell && (
         <ConfirmModal
           title="Sell item"
-          message={`Sell ${def.name} for ${formatGold(EquipmentManager.sellValue(item))}?`}
+          message={`Sell ${itemDisplayName(item, def)} for ${formatGold(EquipmentManager.sellValue(item))}?`}
           confirmLabel="Sell"
           onConfirm={() => doSell(pendingSell)}
           onCancel={() => setPendingSell(null)}
@@ -718,7 +718,7 @@ function ArmourStashCard({
       {pendingScrap && (
         <ConfirmModal
           title="Scrap item"
-          message={`Scrap ${def.name} for ${scrapValue} Scrap? This cannot be undone.`}
+          message={`Scrap ${itemDisplayName(item, def)} for ${scrapValue} Scrap? This cannot be undone.`}
           confirmLabel="Scrap"
           onConfirm={() => doScrap(pendingScrap)}
           onCancel={() => setPendingScrap(null)}

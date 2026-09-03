@@ -4,7 +4,7 @@ import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance } from '../../game/data/equipment';
+import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance, itemDisplayName } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
 import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
@@ -654,7 +654,7 @@ function SlotCard({
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
-            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
             {def.setId && <SetPill />}
             {def.craftable && <CraftedPill />}
@@ -672,7 +672,7 @@ function SlotCard({
                 <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />
                 <div>
                   <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
-                    {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+                    {itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}
                   </span>
                   <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
                 </div>
@@ -770,7 +770,7 @@ function StashCard({
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
-            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
             {def.setId && <SetPill />}
             {def.craftable && <CraftedPill />}
@@ -790,7 +790,7 @@ function StashCard({
                 <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />
                 <div>
                   <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
-                    {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+                    {itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}
                   </span>
                   <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
                 </div>
