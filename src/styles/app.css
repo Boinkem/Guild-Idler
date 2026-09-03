@@ -197,20 +197,23 @@
 .item-card-details { padding: 0 8px 8px; }
 
 /**
- * Quick-action row -- patch 0265, direct request. Three equal-width
- * buttons (Lock, Sell, Scrap) directly on the card, replacing what used
- * to require opening the detail modal for every one of those. A plain
- * button reset (no individual borders/background beyond the shared
- * divider below) rather than three separate `.btn-*` pills -- three full
- * pill buttons at this width read as visually louder than the compact,
- * quiet row this was meant to declutter into. Two-line label (value/icon
- * on top, action word below) keeps each button legible at the
- * `minmax(180px, 1fr)` grid width `.item-card-grid` already uses,
- * without needing a wider card than before.
+ * Quick-action row -- patch 0265, direct request. Started as three
+ * equal-width buttons (Lock, Sell, Scrap) directly on the card,
+ * replacing what used to require opening the detail modal for every one
+ * of those; Repair joined as a fourth at patch 0300 (Enchant stayed out
+ * -- applying an enchant needs picking which gem/runic first, not a
+ * single atomic action the other three are). A plain button reset (no
+ * individual borders/background beyond the shared divider below) rather
+ * than separate `.btn-*` pills -- full pill buttons at this width read
+ * as visually louder than the compact, quiet row this was meant to
+ * declutter into. Two-line label (value/icon on top, action word below)
+ * keeps each button legible at the `minmax(180px, 1fr)` grid width
+ * `.item-card-grid` already uses, without needing a wider card than
+ * before.
  */
 .item-card-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--panel-3);
   position: relative;
   z-index: 1;
@@ -774,6 +777,28 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .btn-pink:hover:not(:disabled) { background: var(--pink); color: var(--ink); }
 .btn-pink:disabled { opacity: 0.5; }
+
+/* Repair actions specifically (patch 0300) -- own colour, distinct from
+   every category above the same way .btn-pink's own comment reasons
+   through Retire: not a leveled purchase (--brass/.btn-yellow), not
+   crafting (--violet/.btn-purple), not a bulk sale (--moss/.btn-green),
+   not destructive (--blood/.btn-danger). --sky was ruled out even
+   though it's otherwise unclaimed by any small pill button -- this
+   exact card already uses --sky for its "vaulted" (locked) pill, so
+   reusing it for Repair on the same card would read as the same status
+   twice. --teal was still fully free (only .btn-teal-lg's own large,
+   differently-scoped CTA shape touches that hue), so Repair All and the
+   per-item Repair glyph inside .item-card-actions both key off it now,
+   everywhere repairing shows up. */
+.btn-teal {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--teal) 65%, var(--panel-2)), color-mix(in srgb, var(--teal) 45%, var(--panel-2)));
+  border-color: var(--teal);
+  color: #fff8e6;
+  font-weight: 700;
+  box-shadow: var(--bevel), 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.btn-teal:hover:not(:disabled) { background: var(--teal); color: var(--ink); }
+.btn-teal:disabled { opacity: 0.5; }
 
 /* Sub-tab switcher buttons (Vendors' Blacksmith/Alchemist/Enchanter,
    Harvest's Fields/Warehouse, Raids' Raids/Quartermaster's Den) -- these
@@ -1631,6 +1656,13 @@ button:focus-visible, [tabindex]:focus-visible {
 .dura-row { display: flex; align-items: center; gap: 6px; }
 .dura-row .bar { flex: 1; min-width: 0; }
 .dura-value { flex-shrink: 0; white-space: nowrap; }
+/* Below-threshold wrench glyph (patch 0300) -- same condition the bar's
+   own .bar-threshold tick already renders at, just a spottable glyph
+   next to the row instead of a 2px line inside a 6px bar. --teal to
+   match Repair's colour everywhere else it shows up now (the row's own
+   Repair button, Repair All) -- not --sky, which this same page already
+   uses for "vaulted" (locked) items. */
+.dura-wrench { flex-shrink: 0; color: var(--teal); font-size: 11px; line-height: 1; }
 /* Auto Heal / Fallen auto-revive countdown -- a distinct teal fill so a
    "time remaining" bar never reads as another Health/Durability/XP bar at
    a glance. Drains (not fills) as time passes, per its own component
@@ -1919,6 +1951,15 @@ button:focus-visible, [tabindex]:focus-visible {
 .collect-particle.scrap {
   color: var(--brass-dim);
   text-shadow: 0 0 8px color-mix(in srgb, var(--brass-dim) 70%, transparent);
+}
+/* Repair burst (patch 0300) -- local pop-and-fade only, same "no
+   long-distance flight" call Scrap's own comment already made for
+   Inventory: nothing repair-related has a persistent on-screen counter
+   to aim at (unlike Gold/Scrap here on the Blacksmith page), so it
+   stays a burst, never a flight. */
+.collect-particle.repair {
+  color: var(--teal);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--teal) 70%, transparent);
 }
 /* The single particle that actually travels to a registered counter/bar
    target (see flyTarget.ts) -- originally built just for ScrapStation.tsx,

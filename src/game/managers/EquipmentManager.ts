@@ -1,4 +1,4 @@
-import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
+import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT, GEAR_SCORE_LEVEL_CAP } from '../data/equipment';
 import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Rarity, Stats } from '../types';
 import { uid, Rng } from '../rng';
 import { clamp } from '../util';
@@ -139,13 +139,35 @@ export const EquipmentManager = {
    * Workshop discount, same "own key, own percentage, explicitly summed"
    * shape revivalDiscount uses. Defaults to 0 so every existing call
    * site keeps working unchanged until it's threaded through.
+   *
+   * `levelFactor`, patch 0300 -- direct request: repair cost scales with
+   * an item's own Power Level now, so a low-level piece costs less to
+   * fix than a high-level one of the same rarity. Before this, repairCost
+   * was the one system left pricing off flat rarity only -- the exact
+   * bug sellValue/upgradeCost had before patches 0281/0282, just never
+   * caught here since nobody had flagged it yet. Deliberately NOT
+   * routed through the same referenceValue() those two use, though --
+   * referenceValue returns a full currency-scale value (hundreds to
+   * thousands of gold), fine for a one-off refine but far too large to
+   * multiply into a cost paid this often, every quest, on every worn
+   * slot. Instead, a normalized 0.35-1 ratio against the item's own
+   * level relative to the level cap: an item AT the cap costs exactly
+   * what it does today (levelFactor 1, no regression to balance already
+   * tuned there), while a level-1 item pays close to the 0.35 floor --
+   * floored rather than let run to 0 so even the cheapest repair still
+   * feels like spending something, not free durability upkeep forever.
+   * Same rolledItemLevel-first, def.reqLevel-fallback precedence
+   * referenceValue's own comment already establishes, so "level" means
+   * the same thing here it does everywhere else gear pricing reads it.
    */
   repairCost(item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): number {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return 0;
     const missing = EquipmentManager.maxDurability(item) - item.durability;
     if (missing <= 0) return 0;
-    const perPoint = 0.6 * RARITY_PRICE_MULT[def.rarity] * (1 + item.plus * 0.2);
+    const itemLevel = item.rolledItemLevel ?? def.reqLevel;
+    const levelFactor = clamp(itemLevel / GEAR_SCORE_LEVEL_CAP, 0.35, 1);
+    const perPoint = 0.6 * RARITY_PRICE_MULT[def.rarity] * (1 + item.plus * 0.2) * levelFactor;
     const discount = 1 - Math.min(0.5, 0.15 + workshopLevel * 0.035);
     const vendorDiscount = 1 - Math.min(0.6, vendorDiscountPercent / 100);
     return Math.max(1, Math.ceil(missing * perPoint * discount * vendorDiscount));

@@ -8,6 +8,7 @@ import { GuildManager } from '../../game/managers/GuildManager';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../../game/data/equipment';
+import { rerollsUsedToday } from '../../game/data/reroll';
 import { isProceduralTemplate } from '../../game/data/proceduralLoot';
 import { scrapIconFor } from '../../game/data/elements';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
@@ -336,11 +337,22 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
    * (there's no hero context here to equip onto), so this card is the
    * quick-action row alone, nothing to expand into.
    */
-  const [bursts, setBursts] = useState<{ key: number; x: number; y: number; gained: number; icon?: string; kind: 'scrap' | 'gold' }[]>([]);
-  const pushBurst = (x: number, y: number, gained: number, kind: 'scrap' | 'gold', icon?: string) => {
+  const [bursts, setBursts] = useState<{ key: number; x: number; y: number; gained: number; icon?: string; kind: 'scrap' | 'gold' | 'repair'; free?: boolean }[]>([]);
+  const pushBurst = (x: number, y: number, gained: number, kind: 'scrap' | 'gold' | 'repair', icon?: string, free?: boolean) => {
     const key = Date.now() + Math.random();
-    setBursts((prev) => [...prev, { key, x, y, gained, icon, kind }]);
+    setBursts((prev) => [...prev, { key, x, y, gained, icon, kind, free }]);
     window.setTimeout(() => setBursts((prev) => prev.filter((b) => b.key !== key)), 900);
+  };
+  /**
+   * Repair's own burst, patch 0300 -- "Repaired!" / "Repaired · Free"
+   * rather than the +N amount Sell/Scrap show, since repairing doesn't
+   * gain a counted resource the way selling or scrapping does (it either
+   * spends gold+scrap or costs nothing at all). Local pop only, no
+   * long-distance flight -- see the matching CSS comment on
+   * .collect-particle.repair for why.
+   */
+  const pushRepairBurst = (x: number, y: number, free: boolean) => {
+    pushBurst(x, y, 0, 'repair', undefined, free);
   };
   const [goldFlights, setGoldFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
   const pushGoldFlight = (x: number, y: number, gained: number) => {
@@ -455,6 +467,44 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
     });
   };
 
+  /**
+   * Repair All, patch 0300 -- same staggered "snapshot positions before
+   * anything moves, animate each card individually" shape runScrapAll/
+   * runSellJunk above already established, not a new mechanism. Scoped
+   * to this page's own stash grid specifically (not a rename of
+   * EquipmentPanel.tsx's existing "Repair everything," which reaches
+   * every hero's equipped gear too, most of it with no visible card
+   * anywhere on screen to fly a burst from -- that broader action stays
+   * exactly as it is). No rarity threshold and no locked-item exclusion,
+   * unlike Sell Junk/Scrap All: repairing isn't destructive and doesn't
+   * touch a Vaulted item's protected status, so there's no safety
+   * threshold to gate it behind the way there is for the other two.
+   */
+  const repairPreview = state.stash.filter((item) => {
+    const workshop = state.guild.workshop ?? 0;
+    const repairDiscount = ModifierManager.global(state).repairDiscount ?? 0;
+    return EquipmentManager.repairCost(item, workshop, repairDiscount) > 0;
+  });
+  const runRepairAll = () => {
+    if (repairPreview.length === 0) return;
+    const targets = repairPreview.map((item) => {
+      const el = document.querySelector(`[data-stash-uid="${item.uid}"]`);
+      const rect = el?.getBoundingClientRect();
+      return {
+        uid: item.uid,
+        x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+        y: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
+      };
+    });
+    targets.forEach((t, i) => {
+      window.setTimeout(() => {
+        const repairsUsedToday = rerollsUsedToday(state.freeRepairsUsedToday, state.freeRepairDay, Date.now());
+        const free = repairsUsedToday < ModifierManager.freeRepairsPerDay(state);
+        engine.repair(t.uid);
+        pushRepairBurst(t.x, t.y, free);
+      }, i * STAGGER_MS);
+    });
+  };
 
   return (
     <>
@@ -531,6 +581,15 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           >
             Scrap All ({scrapPreview.length}) · {scrapPreviewTotal} ⚙
           </button>
+          <button
+            className="btn-teal"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            onClick={runRepairAll}
+            disabled={repairPreview.length === 0}
+            title="Repairs every worn item in the stash, Vault-locked or not -- repairing doesn't touch anything's protected status"
+          >
+            {'\u2692'} Repair All ({repairPreview.length})
+          </button>
         </div>
       )}
       <div className="grid two">
@@ -543,6 +602,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
             scrapBonus={scrapBonus}
             onSell={pushGoldFlight}
             onScrap={pushScrapFlight}
+            onRepair={pushRepairBurst}
           />
         ))}
       </div>
@@ -555,11 +615,11 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
         <span
           key={b.key}
           aria-hidden="true"
-          className={`collect-particle ${b.kind === 'gold' ? 'coin' : 'scrap'}`}
+          className={`collect-particle ${b.kind === 'gold' ? 'coin' : b.kind === 'repair' ? 'repair' : 'scrap'}`}
           style={{ position: 'fixed', left: b.x, top: b.y, zIndex: 50 } as CSSProperties}
         >
           {b.icon && <img src={`./item-icons/${b.icon}`} alt="" style={{ width: 18, height: 18, objectFit: 'contain', verticalAlign: '-4px', marginRight: 4 }} />}
-          +{b.gained} {b.kind === 'gold' ? 'gold' : 'Scrap'}
+          {b.kind === 'repair' ? (b.free ? 'Repaired \u00b7 Free' : 'Repaired!') : `+${b.gained} ${b.kind === 'gold' ? 'gold' : 'Scrap'}`}
         </span>
       ))}
       {goldFlights.map((f) => (
@@ -636,17 +696,35 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
  * row, nothing to expand into.
  */
 function ArmourStashCard({
-  item, confirmSell, engine, scrapBonus, onSell, onScrap,
+  item, confirmSell, engine, scrapBonus, onSell, onScrap, onRepair,
 }: {
   item: EquipmentItem; confirmSell: boolean; engine: GameEngine; scrapBonus: number;
   onSell: (x: number, y: number, gained: number) => void;
   onScrap: (x: number, y: number, gained: number, icon: string) => void;
+  onRepair: (x: number, y: number, free: boolean) => void;
 }) {
   const [pendingSell, setPendingSell] = useState<{ x: number; y: number } | null>(null);
   const [pendingScrap, setPendingScrap] = useState<{ x: number; y: number } | null>(null);
   const def = EQUIPMENT_BY_ID[item.defId];
   if (!def) return null;
   const scrapValue = EquipmentManager.scrapValue(item, scrapBonus);
+
+  // Repair, folded into this row at patch 0300 -- same single-button,
+  // dynamic-label shape Lock/Sell/Scrap already use here, not the
+  // primary+secondary split EquipmentPanel.tsx's SlotCard modal gets
+  // below (that view already had the room and precedent for a second
+  // button; this compact 4-across row doesn't). A stashed item has no
+  // owning hero, so only the guild's own daily allowance can make this
+  // free (Repair's per-hero one-time freebie is charged to whichever
+  // hero currently has the piece equipped -- see consumeFreeRepair's own
+  // comment in engine.ts), read here without consuming it, same
+  // "compute the priority, don't spend it" pattern the modal below uses.
+  const workshop = engine.state.guild.workshop ?? 0;
+  const repairDiscount = ModifierManager.global(engine.state).repairDiscount ?? 0;
+  const repairCost = EquipmentManager.repairCost(item, workshop, repairDiscount);
+  const repairScrapCost = EquipmentManager.repairScrapCost(item, workshop, repairDiscount);
+  const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
+  const stashFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state);
 
   const centerOf = (el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
@@ -661,6 +739,10 @@ function ArmourStashCard({
     onScrap(pos.x, pos.y, scrapValue, scrapIconFor(Date.now()));
     engine.scrapItem(item.uid);
     setPendingScrap(null);
+  };
+  const doRepair = (pos: { x: number; y: number }) => {
+    onRepair(pos.x, pos.y, stashFreeRepairAvailable);
+    engine.repair(item.uid);
   };
 
   return (
@@ -703,6 +785,18 @@ function ArmourStashCard({
             onClick={(e) => setPendingScrap(centerOf(e.currentTarget))}
           >
             <span style={{ color: item.locked ? undefined : 'var(--violet)' }}>{'\u2699'} {scrapValue}</span><br />Scrap
+          </button>
+          <button
+            type="button"
+            disabled={repairCost === 0}
+            title={repairCost === 0
+              ? 'Already in perfect condition.'
+              : stashFreeRepairAvailable ? 'Free, from today\'s guild-wide allowance' : undefined}
+            onClick={(e) => doRepair(centerOf(e.currentTarget))}
+          >
+            <span style={{ color: repairCost === 0 ? undefined : 'var(--teal)' }}>
+              {'\u2692'} {repairCost === 0 ? '--' : stashFreeRepairAvailable ? 'Free' : `${formatGold(repairCost)} +${repairScrapCost}`}
+            </span><br />Repair
           </button>
         </div>
       </div>

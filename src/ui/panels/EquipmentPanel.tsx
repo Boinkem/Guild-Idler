@@ -133,6 +133,16 @@ function DurabilityBar({ item, compact = false, thresholdPercent }: { item: Equi
             expanded (non-compact) view below keeps its own existing text
             line instead, since it already has the room. */}
         {compact && <span className="dura-value tiny muted">{item.durability}/{max}</span>}
+        {/* Wrench glyph, patch 0300 -- same "below auto-repair threshold"
+            condition the bar's own marker (above) already renders at,
+            just made spottable without hunting for a thin threshold tick
+            on a 6px bar. Only shows once auto-repair is actually on
+            (thresholdPercent undefined otherwise, same guard the marker
+            itself already uses) and only once durability has genuinely
+            crossed it -- not a permanent decoration. */}
+        {thresholdPercent !== undefined && ratio * 100 <= thresholdPercent && (
+          <span className="dura-wrench" title={`Below the ${thresholdPercent}% auto-repair threshold`}>{'\u2692'}</span>
+        )}
       </div>
       {!compact && (
         <div className="tiny muted">
@@ -718,10 +728,28 @@ function SlotCard({
                   disabled={EquipmentManager.repairCost(item, workshop, repairDiscount) === 0}
                   onClick={() => { engine.repair(item.uid); setOpen(false); }}
                 >
-                  {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0
-                    ? 'Repair · Free'
-                    : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))} + ${EquipmentManager.repairScrapCost(item, workshop, repairDiscount)} Scrap`}
+                  {`Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))} + ${EquipmentManager.repairScrapCost(item, workshop, repairDiscount)} Scrap`}
                 </button>
+                {/* Secondary Free Repair button, patch 0300 -- split out
+                    from the single button above, which used to swap its
+                    own label to "Repair · Free" whenever a free repair was
+                    available instead of showing both options side by
+                    side. Same engine.repair(item.uid) call either button
+                    triggers -- the engine already spends the guild-daily-
+                    then-personal-freebie priority on its own regardless of
+                    which button was clicked, so this button isn't a
+                    different action, just an explicit, always-visible
+                    affordance for it rather than a label that silently
+                    changed meaning depending on state. .btn-teal to match
+                    Repair's colour everywhere else it shows up now. */}
+                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
+                  <button
+                    className="btn-teal"
+                    onClick={() => { engine.repair(item.uid); setOpen(false); }}
+                  >
+                    Free Repair
+                  </button>
+                )}
                 <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
                   Remove
                 </button>

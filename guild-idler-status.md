@@ -23702,3 +23702,130 @@ pass rolling a procedural item (any of the 21 standalone bases, e.g.
 `rusty_sword`) through a full drop -> stash -> equip -> sell/scrap
 cycle to confirm its rolled name holds at every stop, not just the
 drop announcement.
+
+### Repair joins the Blacksmith's quick-action row; Free Repair split into its own button; repair cost now scales with Power Level (patch 0300)
+
+```discord-update
+Dev Update | Repair Overhaul
+
+- Added: Repair is now a button right on the Blacksmith's stash cards, alongside Lock/Sell/Scrap -- no need to leave the page to fix your gear
+- Added: Repair All, next to Sell Junk and Scrap All, with the same one-by-one animated pop as those
+- Changed: when a free repair is available, it now shows as its own separate "Free Repair" button next to the regular one, instead of the Repair button's label silently swapping
+- Changed: repairing now costs less for lower-level gear -- a level-cap item costs exactly what it always has, everything below that scales down from there
+- Added: the durability bar shows a small wrench once a piece drops below your auto-repair threshold, so worn gear is spottable without opening the card
+```
+
+Direct follow-through on the icon-button/QOL backlog discussed across several
+earlier conversations. Enchant deliberately stayed out of this pass --
+applying an enchant means picking which gem/runic first, not a single
+atomic action the other three (Lock/Sell/Scrap/now Repair) already are,
+so it doesn't fold into this row the same clean way. Every new glyph is
+plain Unicode for now (⚒ for Repair), matching this row's own existing
+convention (🔒/◆/⚙) rather than introducing the separate PNG icon set
+discussed earlier -- that set is still on the backlog for a later pass,
+once there's a place it actually fits.
+
+**Repair folded into `ArmourStashCard`'s action row
+(`VendorsPanel.tsx`).** Same single-button, dynamic-label shape
+Lock/Sell/Scrap already use in this exact row -- not the two-button
+primary/secondary split the modal below gets, since a stashed item has
+no owning hero to explain a personal freebie to, and this row's 4-across
+grid doesn't have room for a second button per action anyway. Reads
+"Free" off the guild's own daily allowance only (`freeRepairsPerDay`,
+via `rerollsUsedToday` against `freeRepairsUsedToday`/`freeRepairDay`,
+computed read-only exactly the way the modal's own
+`itemFreeRepairAvailable` already does it) -- a stash item can never
+draw on a hero's personal one-time freebie, same rule
+`consumeFreeRepair`'s own comment in `engine.ts` already documents.
+Clicking calls `engine.repair(item.uid)` directly, same engine method
+every other repair path already uses, so the actual free-vs-paid
+resolution happens in exactly one place regardless of which button
+triggered it.
+
+**`.item-card-actions` grid widened 3 → 4 columns** (`app.css`), new
+`.btn-teal` pill class added for **Repair All** (mirrors `.btn-pink`'s
+own shape exactly, see that class's comment for the reasoning
+pattern). Colour picked deliberately: `--sky` was the obvious "still
+unclaimed" option, but this exact card already uses `--sky` for its own
+"vaulted" (locked) pill, so reusing it for Repair would read as the same
+status twice on one card -- `--teal` was genuinely free and is now
+Repair's colour everywhere it shows up (the row's glyph, Repair All, the
+durability-bar wrench, the modal's new secondary button).
+
+**Repair All (`ArmourStock` in `VendorsPanel.tsx`), staggered.** Same
+"snapshot every card's position via `data-stash-uid` before anything
+moves, then animate each one on a 140ms stagger" mechanism
+`runScrapAll`/`runSellJunk` already established -- not reinvented, just
+extended to a third bulk action on the same page. Deliberately scoped
+to this page's own `state.stash` grid, not a change to
+`EquipmentPanel.tsx`'s existing global "Repair everything" (which
+reaches every hero's equipped gear too, most of it with no visible card
+on this page to animate from -- that button stays exactly as it was).
+No rarity threshold and no locked-item exclusion, unlike Sell Junk/Scrap
+All: repairing isn't destructive and doesn't touch a Vaulted item's
+protected status, so there's no safety threshold to gate it behind the
+way there is for the other two. No precomputed total cost shown on the
+button either (unlike Scrap All's live total) -- earlier items in the
+stagger can consume the guild's daily free-repair allowance before later
+ones execute, so a single precomputed number would drift from what
+actually gets charged; the per-item cost/Free badge on each card is the
+honest source of truth here, same as it already is for a single Repair
+click.
+
+**Repair's own burst, not a reused one.** New `'repair'` burst kind
+alongside the existing `'scrap'`/`'gold'` (`ArmourStock`'s `bursts`
+state, `.collect-particle.repair` in `app.css`) -- shows "Repaired!" or
+"Repaired · Free" rather than a "+N" amount, since repairing doesn't
+gain a counted resource the way selling or scrapping does. Local
+pop-and-fade only, no long-distance flight toward a counter -- same
+reasoning patch 0265 already gave for why Scrap didn't get one either:
+nothing repair-related has a persistent on-screen total to aim at.
+
+**Free Repair split into its own button
+(`EquipmentPanel.tsx`'s `SlotCard` modal).** Previously one button whose
+own label silently swapped between "Repair · Free" and a real cost
+depending on state. Now two: the primary "Repair {cost}" button always
+shows the real gold+scrap price, and a new secondary "Free Repair"
+button (`.btn-teal`) appears only when `itemFreeRepairAvailable` is
+true. Both call the identical `engine.repair(item.uid)` -- this isn't a
+new code path, just an explicit, always-visible affordance for an
+option that used to be communicated purely through a label change
+someone could easily miss.
+
+**Repair cost now scales with an item's own Power Level
+(`EquipmentManager.repairCost`).** Found while implementing: this was
+the one gear-pricing system still left pricing off flat rarity only --
+the exact bug `sellValue`/`upgradeCost` had before patches 0281/0282,
+just never flagged here yet. Deliberately NOT routed through the same
+`referenceValue()` those two use, though -- `referenceValue` returns a
+full currency-scale number (hundreds to thousands of gold), fine for a
+one-off refine but far too large to multiply into a cost paid this
+often, on every worn slot, every quest. Instead, a normalized
+`levelFactor` (0.35-1) against the item's own level relative to
+`GEAR_SCORE_LEVEL_CAP` (55, the same constant `gearScoreForItem` already
+anchors to): an item AT the level cap costs exactly what it always has
+(`levelFactor` 1, zero regression to balance already tuned there), while
+a level-1 item pays close to the 0.35 floor -- floored rather than let
+run toward 0 so even the cheapest repair still costs something. Reads
+`item.rolledItemLevel ?? def.reqLevel`, the same precedence
+`referenceValue`'s own comment already establishes for "what level does
+this item actually mean." Verified by hand: a level-1 Legendary now
+costs 65% less per durability point to repair than before this patch; a
+level-55 Legendary costs precisely the same as it always did.
+
+**Durability-bar wrench glyph (`DurabilityBar` in
+`EquipmentPanel.tsx`).** Same condition the bar's own existing
+`.bar-threshold` tick already renders at (`ratio*100 <= thresholdPercent`,
+only when auto-repair is on) -- just a spottable ⚒ glyph next to the row
+instead of a 2px line inside a 6px bar most players would never notice.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this
+patch applied. Repair cost curve re-checked by hand at both ends
+(level-1 and level-55 Legendary, see above) rather than assumed. No
+`SAVE_VERSION` bump needed -- no `GameState`/`EquipmentItem` shape
+touched, purely UI plus one pricing formula. No live in-app playtest in
+this environment (no browser available) -- worth a real pass confirming
+the widened 4-column action row still reads cleanly at the
+`minmax(180px, 1fr)` card width, and that Repair All's stagger looks
+right against a stash with a genuinely large number of worn items.
