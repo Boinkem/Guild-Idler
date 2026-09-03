@@ -1,20 +1,20 @@
 [
   {
     "id": "normal",
-    "focusX": 50,
-    "focusY": 50,
-    "scale": 100
+    "path": {
+      "path": "raid-difficulty-icons/normal.png"
+    }
   },
   {
     "id": "heroic",
-    "focusX": 50,
-    "focusY": 50,
-    "scale": 100
+    "path": {
+      "path": "raid-difficulty-icons/heroic.png"
+    }
   },
   {
     "id": "legendary",
-    "focusX": 50,
-    "focusY": 50,
-    "scale": 100
+    "path": {
+      "path": "raid-difficulty-icons/legendary.png"
+    }
   }
 ]
