@@ -1,0 +1,501 @@
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig318/guild-idler-status.md repo/guild-idler-status.md
+--- orig318/guild-idler-status.md	2026-09-04 11:45:02.915786324 +0000
++++ repo/guild-idler-status.md	2026-09-04 11:48:30.791798681 +0000
+@@ -748,8 +748,9 @@
+ now comes from clearing raids/Replay Memories at Mythic or Legendary
+ with a capped hero, and spends into two trees off one shared pool --
+ the existing guild-wide perks (two-tier, gold-then-renown cost curves)
+-plus a new per-hero tree (single tier, placeholder content pending a
+-follow-up patch). See this patch's own entry below for the full writeup.
++plus a new per-hero tree (single tier, five perks as of patch 0318 --
++three role-gated, two universal). See both patches' own entries below
++for the full writeup.
+ 
+ **Achievements** — Steam-stub integration, dedicated unlock popup
+ (non-blocking, separate from the toast queue), hidden achievements
+@@ -25897,3 +25898,75 @@
+   increments anymore) should be repointed at Early Retirement counts,
+   retired outright, or left as "only earnable pre-0317" -- not decided
+   here, flagging so it isn't silently forgotten.
++
++### Hero Renown Perk Tree: real content, five perks (patch 0318)
++
++```discord-update
++Dev Update | Hero Renown Perk Tree
++
++- Added five real perks to the per-hero Renown tree in the Prestige tab, replacing last patch's placeholder
++- Three are role-locked: Shield-Wall Veteran (Melee), Deadeye Focus (Ranged), and Arcane Quickening (Caster) -- train the role to unlock the perk
++- Two are open to any capped hero: Veteran Instinct and Battle-Worn Luck
++- Each perk is a different bonus -- injury resistance, success, speed, gold, or loot -- so the five choices actually feel distinct
++```
++
++Follow-up to patch 0317's Prestige/Retirement Rework, which shipped the
++per-hero tree's mechanism (storage, cost curve, buy flow, UI) with one
++scaffolding placeholder and explicitly deferred the real effects list.
++Scoped in a short design pass this patch: reuse the existing Modifiers
++channels rather than new mechanics (confirmed direction), 4-6 perks,
++tied into a hero's trained Role.
++
++**Five perks, one class-agnostic theme each, all on `HERO_RENOWN_PERKS`
++(progression.ts):**
++- **Shield-Wall Veteran** (Melee) -- `injuryResist`
++- **Deadeye Focus** (Ranged) -- `success`
++- **Arcane Quickening** (Caster) -- `speed`
++- **Veteran Instinct** (no role) -- `gold`, replacing 0317's placeholder
++  `success` channel on the same id (kept the id, changed the channel and
++  flavour text -- no save-migration concern, all current players are
++  testers)
++- **Battle-Worn Luck** (no role) -- `loot`
++
++**Role gating is new plumbing, not just content.** `HeroRenownPerkDef`
++gained an optional `requiresRole?: Role` (types.ts). A role-gated perk
++checks `HeroManager.unlockedRoles(hero)` -- which already includes a
++hero's class-native role for free, so e.g. any Warrior can buy Shield-
++Wall Veteran immediately, but needs to actually pay to train Ranged (see
++`HeroManager.trainRole`) before Deadeye Focus unlocks for them. This is
++a deliberate cross-system tie-in: the per-hero Renown tree now gives
++Training spend a reason to matter even for a fully capped, already-
++"finished" hero. `PrestigeManager.heroPerkRoleEligible(hero, def)` is
++the read side; `buyHeroPerk` checks it before `nextHeroPerkCost`/spend,
++same order the existing level check already used.
++`PrestigePanel.tsx`'s `HeroPerkRow` shows a locked, dimmed row with
++"needs \<role\> trained" text rather than just a disabled button with no
++explanation -- same "explain the lock" convention every other
++requirement gate in this game already follows.
++
++**Numbers are first-pass**, not yet a real balance pass (same caveat
++0317's Renown-per-clear numbers got): all five share one cost curve for
++now (5 Renown start, ×1.35/level, 10 levels, ~273 Renown to max one) and
++1 percentage-point-per-level magnitude (1.5 for Shield-Wall Veteran's
++`injuryResist`, since that channel reads smaller numbers than the
++others at the same nominal value elsewhere in this game). 20 new Tuning
++entries (category `hero_renown_perk`) for the four new perks, plus one
++renamed (`veteran_instinct.successPerLevel` -> `.goldPerLevel`) and
++three re-worded (cost/costGrowth/maxLevel, no longer described as
++scaffolding) for the fifth.
++
++**Verified:** pulled `types.ts`, `progression.ts`, `PrestigeManager.ts`,
++`PrestigePanel.tsx`, `tuning.json`, and this file fresh from `main` via
++`raw.githubusercontent.com` immediately before editing (patch 0317 was
++already live and matched the working copy exactly, byte for byte, on
++every file this patch touches). `npm install` + `npx tsc --noEmit`
++clean under `strict`/`noUnusedLocals`/`noUnusedParameters`. Full `vite
++build` (web target) passing clean as well.
++
++**Still open:**
++- Real tuning for all five perks' costs/magnitudes -- explicitly
++  first-pass, same as 0317's Renown-income numbers.
++- Whether a sixth "no role needed but scales with ascension count"
++  perk (tying into the now-frozen classic-ascension flavour) is worth
++  adding later -- floated during scoping, not built this patch, no
++  decision made either way.
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig318/src/game/data/json/tuning.json repo/src/game/data/json/tuning.json
+--- orig318/src/game/data/json/tuning.json	2026-09-04 11:45:09.353079621 +0000
++++ repo/src/game/data/json/tuning.json	2026-09-04 11:46:31.931791616 +0000
+@@ -4963,7 +4963,7 @@
+     "value": 5,
+     "default": 5,
+     "min": 1,
+-    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
++    "description": "Real content as of patch 0318 (was scaffolding in 0317)."
+   },
+   {
+     "id": "hero_renown_perk.veteran_instinct.costGrowth",
+@@ -4973,7 +4973,7 @@
+     "default": 1.35,
+     "min": 1,
+     "max": 3,
+-    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
++    "description": "Real content as of patch 0318 (was scaffolding in 0317)."
+   },
+   {
+     "id": "hero_renown_perk.veteran_instinct.maxLevel",
+@@ -4983,16 +4983,16 @@
+     "default": 10,
+     "min": 1,
+     "max": 50,
+-    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
++    "description": "Real content as of patch 0318 (was scaffolding in 0317)."
+   },
+   {
+-    "id": "hero_renown_perk.veteran_instinct.successPerLevel",
+-    "label": "Veteran Instinct: success per level",
++    "id": "hero_renown_perk.veteran_instinct.goldPerLevel",
++    "label": "Veteran Instinct: gold per level",
+     "category": "hero_renown_perk",
+     "value": 1,
+     "default": 1,
+     "min": 0,
+-    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
++    "description": "Real content as of patch 0318 (was a placeholder success bonus in 0317). Percentage gold bonus per level, applied only to this specific hero."
+   },
+   {
+     "id": "loot_procedural.raidLegendaryBudgetMultiplier",
+@@ -5029,5 +5029,157 @@
+     "default": 2.2,
+     "min": 1,
+     "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
++  },
++  {
++    "id": "hero_renown_perk.shield_wall_veteran.cost",
++    "label": "Shield-Wall Veteran: cost",
++    "category": "hero_renown_perk",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.shield_wall_veteran.costGrowth",
++    "label": "Shield-Wall Veteran: cost growth",
++    "category": "hero_renown_perk",
++    "value": 1.35,
++    "default": 1.35,
++    "min": 1,
++    "max": 3,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.shield_wall_veteran.maxLevel",
++    "label": "Shield-Wall Veteran: max level",
++    "category": "hero_renown_perk",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 50,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.shield_wall_veteran.injuryResistPerLevel",
++    "label": "Shield-Wall Veteran: injuryResist per level",
++    "category": "hero_renown_perk",
++    "value": 1.5,
++    "default": 1.5,
++    "min": 0,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.deadeye_focus.cost",
++    "label": "Deadeye Focus: cost",
++    "category": "hero_renown_perk",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.deadeye_focus.costGrowth",
++    "label": "Deadeye Focus: cost growth",
++    "category": "hero_renown_perk",
++    "value": 1.35,
++    "default": 1.35,
++    "min": 1,
++    "max": 3,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.deadeye_focus.maxLevel",
++    "label": "Deadeye Focus: max level",
++    "category": "hero_renown_perk",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 50,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.deadeye_focus.successPerLevel",
++    "label": "Deadeye Focus: success per level",
++    "category": "hero_renown_perk",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.arcane_quickening.cost",
++    "label": "Arcane Quickening: cost",
++    "category": "hero_renown_perk",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.arcane_quickening.costGrowth",
++    "label": "Arcane Quickening: cost growth",
++    "category": "hero_renown_perk",
++    "value": 1.35,
++    "default": 1.35,
++    "min": 1,
++    "max": 3,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.arcane_quickening.maxLevel",
++    "label": "Arcane Quickening: max level",
++    "category": "hero_renown_perk",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 50,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.arcane_quickening.speedPerLevel",
++    "label": "Arcane Quickening: speed per level",
++    "category": "hero_renown_perk",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.battle_worn_luck.cost",
++    "label": "Battle-Worn Luck: cost",
++    "category": "hero_renown_perk",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.battle_worn_luck.costGrowth",
++    "label": "Battle-Worn Luck: cost growth",
++    "category": "hero_renown_perk",
++    "value": 1.35,
++    "default": 1.35,
++    "min": 1,
++    "max": 3,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.battle_worn_luck.maxLevel",
++    "label": "Battle-Worn Luck: max level",
++    "category": "hero_renown_perk",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 50,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "hero_renown_perk.battle_worn_luck.lootPerLevel",
++    "label": "Battle-Worn Luck: loot per level",
++    "category": "hero_renown_perk",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
+   }
+ ]
+\ No newline at end of file
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig318/src/game/data/progression.ts repo/src/game/data/progression.ts
+--- orig318/src/game/data/progression.ts	2026-09-04 11:45:09.355031875 +0000
++++ repo/src/game/data/progression.ts	2026-09-04 11:46:19.186765247 +0000
+@@ -1473,22 +1473,67 @@
+  * to the existing guild-wide RENOWN_PERKS above (same currency, separate
+  * spend, separate storage on the hero itself).
+  *
+- * PLACEHOLDER CONTENT. The actual per-hero effects list is still being
+- * designed (explicitly deferred in the design brief this patch was
+- * scoped from -- "new hero-specific effects, described separately") and
+- * will land as a follow-up patch. This single entry exists only so the
+- * mechanism (storage, cost curve, buy flow, UI hookup) is real and
+- * testable end to end in the meantime -- treat its name/description/
+- * numbers as scaffolding, not final content.
++ * Real content as of patch 0318, replacing patch 0317's single
++ * scaffolding placeholder. Five perks, one class-agnostic theme each:
++ * three role-flavored (Shield-Wall Veteran/Deadeye Focus/Arcane
++ * Quickening -- gated behind HeroManager.unlockedRoles, see
++ * HeroRenownPerkDef.requiresRole's own comment) and two universal
++ * (Veteran Instinct/Battle-Worn Luck, open to any capped hero). All five
++ * reuse existing Modifiers channels rather than introducing new
++ * mechanics (confirmed direction), each on a distinct channel from the
++ * others so the five choices actually feel different: injuryResist,
++ * success, speed, gold, loot in that order below.
++ *
++ * First-pass numbers, same "shipped as real content, not yet a tuned
++ * balance pass" caveat every other new economy number in this codebase
++ * gets -- cost curve is identical across all five (cost 5, growth 1.35,
++ * 10 levels -- ~273 Renown to max one) purely so the five are easy to
++ * compare against each other for now; nothing stops them diverging once
++ * a real pass happens.
+  */
+ export const HERO_RENOWN_PERKS: HeroRenownPerkDef[] = [
+   {
++    id: 'shield_wall_veteran', name: 'Shield-Wall Veteran',
++    description: 'Years at the front of the line teach a body exactly how to fall without breaking.',
++    cost: Tuning.get('hero_renown_perk.shield_wall_veteran.cost'),
++    costGrowth: Tuning.get('hero_renown_perk.shield_wall_veteran.costGrowth'),
++    maxLevel: Tuning.get('hero_renown_perk.shield_wall_veteran.maxLevel'),
++    modsPerLevel: { injuryResist: Tuning.get('hero_renown_perk.shield_wall_veteran.injuryResistPerLevel') },
++    requiresRole: 'melee',
++  },
++  {
++    id: 'deadeye_focus', name: 'Deadeye Focus',
++    description: "A lifetime of held breath and steady hands -- this hero doesn't miss the shot that matters.",
++    cost: Tuning.get('hero_renown_perk.deadeye_focus.cost'),
++    costGrowth: Tuning.get('hero_renown_perk.deadeye_focus.costGrowth'),
++    maxLevel: Tuning.get('hero_renown_perk.deadeye_focus.maxLevel'),
++    modsPerLevel: { success: Tuning.get('hero_renown_perk.deadeye_focus.successPerLevel') },
++    requiresRole: 'ranged',
++  },
++  {
++    id: 'arcane_quickening', name: 'Arcane Quickening',
++    description: 'A standing haste weave, worn into muscle memory after enough campaigns to stop needing the words.',
++    cost: Tuning.get('hero_renown_perk.arcane_quickening.cost'),
++    costGrowth: Tuning.get('hero_renown_perk.arcane_quickening.costGrowth'),
++    maxLevel: Tuning.get('hero_renown_perk.arcane_quickening.maxLevel'),
++    modsPerLevel: { speed: Tuning.get('hero_renown_perk.arcane_quickening.speedPerLevel') },
++    requiresRole: 'caster',
++  },
++  {
+     id: 'veteran_instinct', name: 'Veteran Instinct',
+-    description: '[Placeholder perk -- real per-hero effects still being designed.] This hero has seen enough endgame content to trust their gut.',
++    description: 'A hero this well known no longer haggles -- employers just pay what the reputation is worth.',
+     cost: Tuning.get('hero_renown_perk.veteran_instinct.cost'),
+     costGrowth: Tuning.get('hero_renown_perk.veteran_instinct.costGrowth'),
+     maxLevel: Tuning.get('hero_renown_perk.veteran_instinct.maxLevel'),
+-    modsPerLevel: { success: Tuning.get('hero_renown_perk.veteran_instinct.successPerLevel') },
++    modsPerLevel: { gold: Tuning.get('hero_renown_perk.veteran_instinct.goldPerLevel') },
++  },
++  {
++    id: 'battle_worn_luck', name: 'Battle-Worn Luck',
++    description: "Ask any veteran and they'll swear it's real -- the ones who've survived the most somehow keep finding the good stuff.",
++    cost: Tuning.get('hero_renown_perk.battle_worn_luck.cost'),
++    costGrowth: Tuning.get('hero_renown_perk.battle_worn_luck.costGrowth'),
++    maxLevel: Tuning.get('hero_renown_perk.battle_worn_luck.maxLevel'),
++    modsPerLevel: { loot: Tuning.get('hero_renown_perk.battle_worn_luck.lootPerLevel') },
+   },
+ ];
+ 
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig318/src/game/managers/PrestigeManager.ts repo/src/game/managers/PrestigeManager.ts
+--- orig318/src/game/managers/PrestigeManager.ts	2026-09-04 11:45:09.358731759 +0000
++++ repo/src/game/managers/PrestigeManager.ts	2026-09-04 11:47:05.965830470 +0000
+@@ -2,7 +2,8 @@
+   HERO_RENOWN_BY_ID, HERO_RENOWN_PERKS, PRESTIGE_MIN_LEVEL, RENOWN_BY_ID, RENOWN_PERKS,
+   ascensionRank, renownCost, renownEffectiveMaxLevel,
+ } from '../data/progression';
+-import { GameState, Hero } from '../types';
++import { GameState, Hero, HeroRenownPerkDef } from '../types';
++import { HeroManager } from './HeroManager';
+ 
+ /**
+  * Prestige/Retirement Rework (patch 0317). Classic Retire -- level-cap
+@@ -113,6 +114,19 @@
+     return hero.level >= PRESTIGE_MIN_LEVEL;
+   },
+ 
++  /**
++   * New in patch 0318, alongside the tree's real content -- three of the
++   * five perks are role-flavored and gated behind the hero actually
++   * having that role (HeroManager.unlockedRoles(hero), which always
++   * includes the class's native role for free -- see
++   * HeroRenownPerkDef.requiresRole's own comment in types.ts). The two
++   * universal perks (undefined requiresRole) pass unconditionally here.
++   */
++  heroPerkRoleEligible(hero: Hero, def: HeroRenownPerkDef): boolean {
++    if (!def.requiresRole) return true;
++    return HeroManager.unlockedRoles(hero).includes(def.requiresRole);
++  },
++
+   heroPerkLevel(hero: Hero, id: string): number {
+     return hero.renownPerks?.[id] ?? 0;
+   },
+@@ -134,6 +148,9 @@
+     if (!PrestigeManager.heroPerkEligible(hero)) {
+       return `${hero.name} needs to reach level ${PRESTIGE_MIN_LEVEL} first.`;
+     }
++    if (!PrestigeManager.heroPerkRoleEligible(hero, def)) {
++      return `${hero.name} needs to train the ${def.requiresRole} role first.`;
++    }
+     const level = PrestigeManager.heroPerkLevel(hero, id);
+     if (level >= def.maxLevel) return 'Already at maximum.';
+     const cost = PrestigeManager.nextHeroPerkCost(hero, id);
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig318/src/game/types.ts repo/src/game/types.ts
+--- orig318/src/game/types.ts	2026-09-04 11:45:09.369393028 +0000
++++ repo/src/game/types.ts	2026-09-04 11:45:53.031405934 +0000
+@@ -1818,6 +1818,18 @@
+   /** Applied only to the hero that bought it -- see HeroManager.heroMods
+    *  folding in ModifierManager.heroRenownMods for the read side. */
+   modsPerLevel: Partial<Modifiers>;
++  /**
++   * Patch 0318 -- three of the five real perks are role-flavored (Shield-
++   * Wall Veteran/Deadeye Focus/Arcane Quickening), gated behind the hero
++   * actually having that role in HeroManager.unlockedRoles(hero) -- which
++   * always includes the class's native role for free, so a hero can
++   * always buy their own native-role perk with no separate Training
++   * spend, and needs to train into an off-role (see HeroManager.trainRole)
++   * to unlock the other two. Undefined means no role gate at all (the two
++   * universal perks). See PrestigeManager.heroPerkRoleEligible for the
++   * read side.
++   */
++  requiresRole?: Role;
+ }
+ 
+ export interface ShopStock {
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig318/src/ui/panels/PrestigePanel.tsx repo/src/ui/panels/PrestigePanel.tsx
+--- orig318/src/ui/panels/PrestigePanel.tsx	2026-09-04 11:45:09.383642462 +0000
++++ repo/src/ui/panels/PrestigePanel.tsx	2026-09-04 11:47:30.101872452 +0000
+@@ -155,11 +155,12 @@
+ }
+ 
+ /**
+- * New in patch 0317 -- one capped hero's row in the per-hero Renown perk
+- * tree (HERO_RENOWN_PERKS, progression.ts). Deliberately a flatter, less
+- * ornamented card than RenownPerkCard above: this tree's real content is
+- * still being designed (see HERO_RENOWN_PERKS' own comment), so the
+- * layout here favors "obviously functional" over "obviously finished."
++ * New in patch 0317 (mechanism), real content as of patch 0318 -- one
++ * capped hero's row in the per-hero Renown perk tree (HERO_RENOWN_PERKS,
++ * progression.ts). Deliberately a flatter, less ornamented card than
++ * RenownPerkCard above -- five short rows read fine without the bigger
++ * card treatment guild-wide perks get, and this keeps five rows-per-hero
++ * from turning into a very tall panel once several heroes are capped.
+  */
+ function HeroPerkRow({ hero, onBuy }: { hero: Hero; onBuy: (heroId: string, perkId: string) => void }) {
+   const engine = useEngine();
+@@ -179,21 +180,30 @@
+         <div className="stat-row" style={{ marginTop: 6, flexWrap: 'wrap', gap: 8 }}>
+           {PrestigeManager.heroPerks().map((def) => {
+             const level = PrestigeManager.heroPerkLevel(hero, def.id);
++            const roleEligible = PrestigeManager.heroPerkRoleEligible(hero, def);
+             const cost = PrestigeManager.nextHeroPerkCost(hero, def.id);
+             const maxed = cost === null;
+             const affordable = !maxed && state.renown >= cost;
+             return (
+-              <div key={def.id} className="row spread" style={{ width: '100%', alignItems: 'center' }}>
++              <div key={def.id} className="row spread" style={{ width: '100%', alignItems: 'center', opacity: roleEligible ? 1 : 0.5 }}>
+                 <span className="tiny">
+                   {def.name} ({level}/{def.maxLevel})
+                   {describeMods(def.modsPerLevel).map((line) => ` · ${line}/level`).join('')}
++                  {/* Role-gated perks (patch 0318) show which role is
++                      missing right in the row rather than only via a
++                      disabled button someone has to guess at -- same
++                      "explain the lock, don't just show it" convention
++                      the rest of this game's requirement gates use. */}
++                  {!roleEligible && def.requiresRole && (
++                    <span className="muted"> · needs {def.requiresRole} trained</span>
++                  )}
+                 </span>
+                 <button
+                   className="btn-yellow"
+-                  disabled={maxed || !affordable}
++                  disabled={maxed || !affordable || !roleEligible}
+                   onClick={() => onBuy(hero.id, def.id)}
+                 >
+-                  {maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
++                  {!roleEligible ? 'Locked' : maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
+                 </button>
+               </div>
+             );
+@@ -308,7 +318,7 @@
+         <>
+           <div className="section-heading">Spend renown -- per hero</div>
+           <p className="small muted" style={{ marginTop: -4 }}>
+-            Extra power for a specific hero who&apos;s done leveling. Content here is still being expanded.
++            Extra power for a specific hero who&apos;s done leveling.
+           </p>
+           {state.heroes.map((hero) => (
+             <HeroPerkRow key={hero.id} hero={hero} onBuy={(heroId, perkId) => engine.buyHeroPerk(heroId, perkId)} />

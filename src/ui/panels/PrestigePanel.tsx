@@ -155,11 +155,12 @@ function RenownPerkCard({
 }
 
 /**
- * New in patch 0317 -- one capped hero's row in the per-hero Renown perk
- * tree (HERO_RENOWN_PERKS, progression.ts). Deliberately a flatter, less
- * ornamented card than RenownPerkCard above: this tree's real content is
- * still being designed (see HERO_RENOWN_PERKS' own comment), so the
- * layout here favors "obviously functional" over "obviously finished."
+ * New in patch 0317 (mechanism), real content as of patch 0318 -- one
+ * capped hero's row in the per-hero Renown perk tree (HERO_RENOWN_PERKS,
+ * progression.ts). Deliberately a flatter, less ornamented card than
+ * RenownPerkCard above -- five short rows read fine without the bigger
+ * card treatment guild-wide perks get, and this keeps five rows-per-hero
+ * from turning into a very tall panel once several heroes are capped.
  */
 function HeroPerkRow({ hero, onBuy }: { hero: Hero; onBuy: (heroId: string, perkId: string) => void }) {
   const engine = useEngine();
@@ -179,21 +180,30 @@ function HeroPerkRow({ hero, onBuy }: { hero: Hero; onBuy: (heroId: string, perk
         <div className="stat-row" style={{ marginTop: 6, flexWrap: 'wrap', gap: 8 }}>
           {PrestigeManager.heroPerks().map((def) => {
             const level = PrestigeManager.heroPerkLevel(hero, def.id);
+            const roleEligible = PrestigeManager.heroPerkRoleEligible(hero, def);
             const cost = PrestigeManager.nextHeroPerkCost(hero, def.id);
             const maxed = cost === null;
             const affordable = !maxed && state.renown >= cost;
             return (
-              <div key={def.id} className="row spread" style={{ width: '100%', alignItems: 'center' }}>
+              <div key={def.id} className="row spread" style={{ width: '100%', alignItems: 'center', opacity: roleEligible ? 1 : 0.5 }}>
                 <span className="tiny">
                   {def.name} ({level}/{def.maxLevel})
                   {describeMods(def.modsPerLevel).map((line) => ` · ${line}/level`).join('')}
+                  {/* Role-gated perks (patch 0318) show which role is
+                      missing right in the row rather than only via a
+                      disabled button someone has to guess at -- same
+                      "explain the lock, don't just show it" convention
+                      the rest of this game's requirement gates use. */}
+                  {!roleEligible && def.requiresRole && (
+                    <span className="muted"> · needs {def.requiresRole} trained</span>
+                  )}
                 </span>
                 <button
                   className="btn-yellow"
-                  disabled={maxed || !affordable}
+                  disabled={maxed || !affordable || !roleEligible}
                   onClick={() => onBuy(hero.id, def.id)}
                 >
-                  {maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
+                  {!roleEligible ? 'Locked' : maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
                 </button>
               </div>
             );
@@ -308,7 +318,7 @@ export function PrestigePanel() {
         <>
           <div className="section-heading">Spend renown -- per hero</div>
           <p className="small muted" style={{ marginTop: -4 }}>
-            Extra power for a specific hero who&apos;s done leveling. Content here is still being expanded.
+            Extra power for a specific hero who&apos;s done leveling.
           </p>
           {state.heroes.map((hero) => (
             <HeroPerkRow key={hero.id} hero={hero} onBuy={(heroId, perkId) => engine.buyHeroPerk(heroId, perkId)} />

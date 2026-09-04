@@ -1473,22 +1473,67 @@ export function renownForChainReplayClear(difficulty: ChainReplayDifficulty): nu
  * to the existing guild-wide RENOWN_PERKS above (same currency, separate
  * spend, separate storage on the hero itself).
  *
- * PLACEHOLDER CONTENT. The actual per-hero effects list is still being
- * designed (explicitly deferred in the design brief this patch was
- * scoped from -- "new hero-specific effects, described separately") and
- * will land as a follow-up patch. This single entry exists only so the
- * mechanism (storage, cost curve, buy flow, UI hookup) is real and
- * testable end to end in the meantime -- treat its name/description/
- * numbers as scaffolding, not final content.
+ * Real content as of patch 0318, replacing patch 0317's single
+ * scaffolding placeholder. Five perks, one class-agnostic theme each:
+ * three role-flavored (Shield-Wall Veteran/Deadeye Focus/Arcane
+ * Quickening -- gated behind HeroManager.unlockedRoles, see
+ * HeroRenownPerkDef.requiresRole's own comment) and two universal
+ * (Veteran Instinct/Battle-Worn Luck, open to any capped hero). All five
+ * reuse existing Modifiers channels rather than introducing new
+ * mechanics (confirmed direction), each on a distinct channel from the
+ * others so the five choices actually feel different: injuryResist,
+ * success, speed, gold, loot in that order below.
+ *
+ * First-pass numbers, same "shipped as real content, not yet a tuned
+ * balance pass" caveat every other new economy number in this codebase
+ * gets -- cost curve is identical across all five (cost 5, growth 1.35,
+ * 10 levels -- ~273 Renown to max one) purely so the five are easy to
+ * compare against each other for now; nothing stops them diverging once
+ * a real pass happens.
  */
 export const HERO_RENOWN_PERKS: HeroRenownPerkDef[] = [
   {
+    id: 'shield_wall_veteran', name: 'Shield-Wall Veteran',
+    description: 'Years at the front of the line teach a body exactly how to fall without breaking.',
+    cost: Tuning.get('hero_renown_perk.shield_wall_veteran.cost'),
+    costGrowth: Tuning.get('hero_renown_perk.shield_wall_veteran.costGrowth'),
+    maxLevel: Tuning.get('hero_renown_perk.shield_wall_veteran.maxLevel'),
+    modsPerLevel: { injuryResist: Tuning.get('hero_renown_perk.shield_wall_veteran.injuryResistPerLevel') },
+    requiresRole: 'melee',
+  },
+  {
+    id: 'deadeye_focus', name: 'Deadeye Focus',
+    description: "A lifetime of held breath and steady hands -- this hero doesn't miss the shot that matters.",
+    cost: Tuning.get('hero_renown_perk.deadeye_focus.cost'),
+    costGrowth: Tuning.get('hero_renown_perk.deadeye_focus.costGrowth'),
+    maxLevel: Tuning.get('hero_renown_perk.deadeye_focus.maxLevel'),
+    modsPerLevel: { success: Tuning.get('hero_renown_perk.deadeye_focus.successPerLevel') },
+    requiresRole: 'ranged',
+  },
+  {
+    id: 'arcane_quickening', name: 'Arcane Quickening',
+    description: 'A standing haste weave, worn into muscle memory after enough campaigns to stop needing the words.',
+    cost: Tuning.get('hero_renown_perk.arcane_quickening.cost'),
+    costGrowth: Tuning.get('hero_renown_perk.arcane_quickening.costGrowth'),
+    maxLevel: Tuning.get('hero_renown_perk.arcane_quickening.maxLevel'),
+    modsPerLevel: { speed: Tuning.get('hero_renown_perk.arcane_quickening.speedPerLevel') },
+    requiresRole: 'caster',
+  },
+  {
     id: 'veteran_instinct', name: 'Veteran Instinct',
-    description: '[Placeholder perk -- real per-hero effects still being designed.] This hero has seen enough endgame content to trust their gut.',
+    description: 'A hero this well known no longer haggles -- employers just pay what the reputation is worth.',
     cost: Tuning.get('hero_renown_perk.veteran_instinct.cost'),
     costGrowth: Tuning.get('hero_renown_perk.veteran_instinct.costGrowth'),
     maxLevel: Tuning.get('hero_renown_perk.veteran_instinct.maxLevel'),
-    modsPerLevel: { success: Tuning.get('hero_renown_perk.veteran_instinct.successPerLevel') },
+    modsPerLevel: { gold: Tuning.get('hero_renown_perk.veteran_instinct.goldPerLevel') },
+  },
+  {
+    id: 'battle_worn_luck', name: 'Battle-Worn Luck',
+    description: "Ask any veteran and they'll swear it's real -- the ones who've survived the most somehow keep finding the good stuff.",
+    cost: Tuning.get('hero_renown_perk.battle_worn_luck.cost'),
+    costGrowth: Tuning.get('hero_renown_perk.battle_worn_luck.costGrowth'),
+    maxLevel: Tuning.get('hero_renown_perk.battle_worn_luck.maxLevel'),
+    modsPerLevel: { loot: Tuning.get('hero_renown_perk.battle_worn_luck.lootPerLevel') },
   },
 ];
 

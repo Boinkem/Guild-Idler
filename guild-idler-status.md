@@ -748,8 +748,9 @@ Retire is cut; Early Retirement is the sole roster-removal path. Renown
 now comes from clearing raids/Replay Memories at Mythic or Legendary
 with a capped hero, and spends into two trees off one shared pool --
 the existing guild-wide perks (two-tier, gold-then-renown cost curves)
-plus a new per-hero tree (single tier, placeholder content pending a
-follow-up patch). See this patch's own entry below for the full writeup.
+plus a new per-hero tree (single tier, five perks as of patch 0318 --
+three role-gated, two universal). See both patches' own entries below
+for the full writeup.
 
 **Achievements** — Steam-stub integration, dedicated unlock popup
 (non-blocking, separate from the toast queue), hidden achievements
@@ -25897,3 +25898,75 @@ this patch):
   increments anymore) should be repointed at Early Retirement counts,
   retired outright, or left as "only earnable pre-0317" -- not decided
   here, flagging so it isn't silently forgotten.
+
+### Hero Renown Perk Tree: real content, five perks (patch 0318)
+
+```discord-update
+Dev Update | Hero Renown Perk Tree
+
+- Added five real perks to the per-hero Renown tree in the Prestige tab, replacing last patch's placeholder
+- Three are role-locked: Shield-Wall Veteran (Melee), Deadeye Focus (Ranged), and Arcane Quickening (Caster) -- train the role to unlock the perk
+- Two are open to any capped hero: Veteran Instinct and Battle-Worn Luck
+- Each perk is a different bonus -- injury resistance, success, speed, gold, or loot -- so the five choices actually feel distinct
+```
+
+Follow-up to patch 0317's Prestige/Retirement Rework, which shipped the
+per-hero tree's mechanism (storage, cost curve, buy flow, UI) with one
+scaffolding placeholder and explicitly deferred the real effects list.
+Scoped in a short design pass this patch: reuse the existing Modifiers
+channels rather than new mechanics (confirmed direction), 4-6 perks,
+tied into a hero's trained Role.
+
+**Five perks, one class-agnostic theme each, all on `HERO_RENOWN_PERKS`
+(progression.ts):**
+- **Shield-Wall Veteran** (Melee) -- `injuryResist`
+- **Deadeye Focus** (Ranged) -- `success`
+- **Arcane Quickening** (Caster) -- `speed`
+- **Veteran Instinct** (no role) -- `gold`, replacing 0317's placeholder
+  `success` channel on the same id (kept the id, changed the channel and
+  flavour text -- no save-migration concern, all current players are
+  testers)
+- **Battle-Worn Luck** (no role) -- `loot`
+
+**Role gating is new plumbing, not just content.** `HeroRenownPerkDef`
+gained an optional `requiresRole?: Role` (types.ts). A role-gated perk
+checks `HeroManager.unlockedRoles(hero)` -- which already includes a
+hero's class-native role for free, so e.g. any Warrior can buy Shield-
+Wall Veteran immediately, but needs to actually pay to train Ranged (see
+`HeroManager.trainRole`) before Deadeye Focus unlocks for them. This is
+a deliberate cross-system tie-in: the per-hero Renown tree now gives
+Training spend a reason to matter even for a fully capped, already-
+"finished" hero. `PrestigeManager.heroPerkRoleEligible(hero, def)` is
+the read side; `buyHeroPerk` checks it before `nextHeroPerkCost`/spend,
+same order the existing level check already used.
+`PrestigePanel.tsx`'s `HeroPerkRow` shows a locked, dimmed row with
+"needs \<role\> trained" text rather than just a disabled button with no
+explanation -- same "explain the lock" convention every other
+requirement gate in this game already follows.
+
+**Numbers are first-pass**, not yet a real balance pass (same caveat
+0317's Renown-per-clear numbers got): all five share one cost curve for
+now (5 Renown start, ×1.35/level, 10 levels, ~273 Renown to max one) and
+1 percentage-point-per-level magnitude (1.5 for Shield-Wall Veteran's
+`injuryResist`, since that channel reads smaller numbers than the
+others at the same nominal value elsewhere in this game). 20 new Tuning
+entries (category `hero_renown_perk`) for the four new perks, plus one
+renamed (`veteran_instinct.successPerLevel` -> `.goldPerLevel`) and
+three re-worded (cost/costGrowth/maxLevel, no longer described as
+scaffolding) for the fifth.
+
+**Verified:** pulled `types.ts`, `progression.ts`, `PrestigeManager.ts`,
+`PrestigePanel.tsx`, `tuning.json`, and this file fresh from `main` via
+`raw.githubusercontent.com` immediately before editing (patch 0317 was
+already live and matched the working copy exactly, byte for byte, on
+every file this patch touches). `npm install` + `npx tsc --noEmit`
+clean under `strict`/`noUnusedLocals`/`noUnusedParameters`. Full `vite
+build` (web target) passing clean as well.
+
+**Still open:**
+- Real tuning for all five perks' costs/magnitudes -- explicitly
+  first-pass, same as 0317's Renown-income numbers.
+- Whether a sixth "no role needed but scales with ascension count"
+  perk (tying into the now-frozen classic-ascension flavour) is worth
+  adding later -- floated during scoping, not built this patch, no
+  decision made either way.

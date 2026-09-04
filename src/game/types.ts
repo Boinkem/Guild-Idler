@@ -1818,6 +1818,18 @@ export interface HeroRenownPerkDef {
   /** Applied only to the hero that bought it -- see HeroManager.heroMods
    *  folding in ModifierManager.heroRenownMods for the read side. */
   modsPerLevel: Partial<Modifiers>;
+  /**
+   * Patch 0318 -- three of the five real perks are role-flavored (Shield-
+   * Wall Veteran/Deadeye Focus/Arcane Quickening), gated behind the hero
+   * actually having that role in HeroManager.unlockedRoles(hero) -- which
+   * always includes the class's native role for free, so a hero can
+   * always buy their own native-role perk with no separate Training
+   * spend, and needs to train into an off-role (see HeroManager.trainRole)
+   * to unlock the other two. Undefined means no role gate at all (the two
+   * universal perks). See PrestigeManager.heroPerkRoleEligible for the
+   * read side.
+   */
+  requiresRole?: Role;
 }
 
 export interface ShopStock {

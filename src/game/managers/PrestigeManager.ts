@@ -2,7 +2,8 @@ import {
   HERO_RENOWN_BY_ID, HERO_RENOWN_PERKS, PRESTIGE_MIN_LEVEL, RENOWN_BY_ID, RENOWN_PERKS,
   ascensionRank, renownCost, renownEffectiveMaxLevel,
 } from '../data/progression';
-import { GameState, Hero } from '../types';
+import { GameState, Hero, HeroRenownPerkDef } from '../types';
+import { HeroManager } from './HeroManager';
 
 /**
  * Prestige/Retirement Rework (patch 0317). Classic Retire -- level-cap
@@ -113,6 +114,19 @@ export const PrestigeManager = {
     return hero.level >= PRESTIGE_MIN_LEVEL;
   },
 
+  /**
+   * New in patch 0318, alongside the tree's real content -- three of the
+   * five perks are role-flavored and gated behind the hero actually
+   * having that role (HeroManager.unlockedRoles(hero), which always
+   * includes the class's native role for free -- see
+   * HeroRenownPerkDef.requiresRole's own comment in types.ts). The two
+   * universal perks (undefined requiresRole) pass unconditionally here.
+   */
+  heroPerkRoleEligible(hero: Hero, def: HeroRenownPerkDef): boolean {
+    if (!def.requiresRole) return true;
+    return HeroManager.unlockedRoles(hero).includes(def.requiresRole);
+  },
+
   heroPerkLevel(hero: Hero, id: string): number {
     return hero.renownPerks?.[id] ?? 0;
   },
@@ -133,6 +147,9 @@ export const PrestigeManager = {
     if (!def) return 'Unknown perk.';
     if (!PrestigeManager.heroPerkEligible(hero)) {
       return `${hero.name} needs to reach level ${PRESTIGE_MIN_LEVEL} first.`;
+    }
+    if (!PrestigeManager.heroPerkRoleEligible(hero, def)) {
+      return `${hero.name} needs to train the ${def.requiresRole} role first.`;
     }
     const level = PrestigeManager.heroPerkLevel(hero, id);
     if (level >= def.maxLevel) return 'Already at maximum.';
