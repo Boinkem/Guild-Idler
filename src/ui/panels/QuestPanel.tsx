@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -53,8 +54,8 @@ export function chainIconSrc(chainId: string, icon?: ChainDef['icon'], banner?: 
  *  site of this component is already a detail/board strip, not a
  *  collapsed card thumb. */
 export function ChainQuestBanner({
-  chainId, banner, height = 70, className,
-}: { chainId: string; banner?: ChainDef['banner']; height?: number; className?: string }) {
+  chainId, banner, height = 70, className, style,
+}: { chainId: string; banner?: ChainDef['banner']; height?: number; className?: string; style?: CSSProperties }) {
   return (
     <div
       aria-hidden="true"
@@ -68,6 +69,7 @@ export function ChainQuestBanner({
         height,
         marginBottom: 8,
         borderRadius: 4,
+        ...style,
       }}
     />
   );
@@ -564,8 +566,26 @@ export function QuestPanel() {
             const questHero = state.heroes.find((h) => h.id === quest.heroId);
             const total = quest.endsAt - quest.startedAt;
             const progress = Math.min(100, ((now - quest.startedAt) / total) * 100);
+            // Direct report: this card showed no art at all, even though
+            // the exact same offer already has a banner the instant you
+            // click into it before sending (QuestDetailModal, just
+            // above in this file). Same source, same chain-vs-plain-tag
+            // branch that modal already uses -- just the shorter
+            // .raid-active-banner strip (48px) RaidsPanel's own
+            // in-progress card uses, not the full 90px detail-view
+            // banner, since this card already carries a title/stats/
+            // progress bar of its own and the banner is a mood strip
+            // here, not the primary identifier. Slightly dimmed per
+            // direct request ("maybe a smidge dimmer") so it doesn't
+            // compete with the card's own text sitting right below it.
+            const onTheRoadTagSrc = !quest.offer.chain ? questTagBannerSrc(quest.offer.tag) : undefined;
             return (
               <div key={quest.id} className={`card ${quest.offer.difficulty}`}>
+                {quest.offer.chain ? (
+                  <ChainQuestBanner chainId={quest.offer.chain.chainId} height={48} style={{ opacity: 0.85 }} />
+                ) : onTheRoadTagSrc ? (
+                  <div className="raid-active-banner" style={{ backgroundImage: `url(${onTheRoadTagSrc})`, opacity: 0.85 }} />
+                ) : null}
                 <div className="spread">
                   <span className="card-title quest-title">{quest.offer.name}</span>
                   <span className="small gold-text">{formatDuration(quest.endsAt - now)}</span>

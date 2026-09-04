@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { isTabUnread } from '../../game/attention';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { RaidManager } from '../../game/managers/RaidManager';
@@ -925,6 +927,7 @@ function useRaidSetTotals(state: ReturnType<typeof useEngine>['state']) {
 export function RaidsPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
   const [itemDetail, setItemDetail] = useState<string | null>(null);
   const [subTab, setSubTab] = useState<'raids' | 'quartermaster'>('raids');
@@ -949,7 +952,8 @@ export function RaidsPanel() {
 
   if (!hasRaids) {
     return (
-      <>
+      <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/raids-bg.jpg', settings.backgroundMood)})` }}>
+        <div className="tab-scene-content">
         <h2>Raids</h2>
         <p className="subtitle">Send the whole guild, not just one hero.</p>
         <p className="small muted">
@@ -961,12 +965,14 @@ export function RaidsPanel() {
         >
           Go to Guild Hall →
         </button>
-      </>
+        </div>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/raids-bg.jpg', settings.backgroundMood)})` }}>
+      <div className="tab-scene-content">
       <h2>Raids</h2>
       <p className="subtitle">
         Multi-hero expeditions. Big rewards, long odds, and everyone comes home a little worse for wear -- win or lose.
@@ -1005,6 +1011,7 @@ export function RaidsPanel() {
       )}
 
       {itemDetail && <ItemDetailOverlay defId={itemDetail} onClose={() => setItemDetail(null)} />}
-    </>
+      </div>
+    </div>
   );
 }

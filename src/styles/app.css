@@ -133,6 +133,14 @@
    reads as just as inert as a gear slot that genuinely isn't clickable. */
 .item-card.empty.clickable .item-card-summary { cursor: pointer; }
 .item-card.empty.clickable:hover { border-color: var(--brass); opacity: 0.85; }
+/* Consumable slot specifically (patch, direct report) -- reads as too
+ * similar to a plain empty gear slot at the shared 0.6 dulled opacity,
+ * when it's actually a slot the player should be filling before every
+ * quest, not a background detail. Permanently at the same
+ * border/opacity a gear slot only reaches ON hover, rather than adding
+ * a genuinely new visual language -- distinguishes it without
+ * introducing a third look. */
+.item-card.empty.consumable-empty { border-color: var(--brass); opacity: 0.85; }
 .item-icon {
   position: relative;
   flex: none;
@@ -632,12 +640,38 @@
    `.guild-facility-card`) for the "Go to Prestige" link on HeroesPanel's
    full-roster message, so the selector can't assume the Guild Hall's own
    card shape anymore. */
+/* Direct report: the box-shadow pulse below was reported as showing "no
+ * shimmer at all" -- switched to the same rotating gold ring every other
+ * "new, worth clicking" signal in the game already uses
+ * (.nav-tab-unread, .quest-card-spotlight, .btn-subtab.subtab-spotlight,
+ * .header-notif-icon.header-notif-unread) rather than keep debugging a
+ * fifth, weaker mechanism blind. GuildPanel/PrestigePanel's own JS
+ * timeout clears highlightId after 4000ms -- about a rotation and a
+ * half at this ring's 2.6s pace, comfortably enough to read as moving
+ * rather than risking landing on a bare frame the way the old pulse's
+ * fixed 3-count could. */
 .card.requirement-highlight {
-  animation: requirement-highlight-pulse 1100ms ease-in-out 3;
+  position: relative;
 }
-@keyframes requirement-highlight-pulse {
-  0%, 100% { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
-  50% { box-shadow: 0 0 0 3px var(--brass), 0 0 18px 4px var(--brass); }
+.card.requirement-highlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--nav-tab-shimmer-angle),
+    transparent 0%,
+    var(--brass) 10%,
+    #fff8 16%,
+    var(--brass) 22%,
+    transparent 32%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: nav-tab-shimmer-rotate 2.6s linear infinite;
+  pointer-events: none;
 }
 
 * { box-sizing: border-box; }
@@ -1233,6 +1267,36 @@ button:focus-visible, [tabindex]:focus-visible {
   -webkit-app-region: no-drag;
 }
 .header-notif-icon:hover { background: var(--panel-3); }
+/* Direct report: the plain corner count badge below reads as static
+ * ("no pulse either") -- it was always meant as just a count, never a
+ * "look here" cue on its own. Reuses the exact same rotating gold ring
+ * every other "new, worth clicking" signal in the game already uses
+ * (.nav-tab-unread, .quest-card-spotlight, .btn-subtab.subtab-spotlight)
+ * rather than inventing a fourth animation style, sized down to fit this
+ * small icon button. */
+.header-notif-icon.header-notif-unread {
+  position: relative;
+}
+.header-notif-icon.header-notif-unread::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 999px;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--nav-tab-shimmer-angle),
+    transparent 0%,
+    var(--brass) 10%,
+    #fff8 16%,
+    var(--brass) 22%,
+    transparent 32%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: nav-tab-shimmer-rotate 2.6s linear infinite;
+  pointer-events: none;
+}
 .header-notif-badge {
   position: absolute;
   top: -4px;
@@ -1581,15 +1645,30 @@ button:focus-visible, [tabindex]:focus-visible {
 .stat-row b { color: var(--parchment); font-weight: 700; }
 
 .grid { display: grid; gap: calc(8px * var(--density-scale)); }
-.grid.two { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.grid.two {
+  /* auto-fill, not auto-fit (direct report -- Blacksmith's stash grid
+   * stretching a single leftover card across the whole row). auto-fit
+   * collapses empty tracks to 0 width and lets the remaining ones absorb
+   * that space via their own 1fr, which is exactly what you want for a
+   * grid meant to always look "full" -- but for a grid of individual
+   * cards like this one, it means a lone item (or a sparse trailing row)
+   * gets stretched to fill leftover width instead of sitting at its
+   * natural ~230px size. auto-fill keeps the track count fixed at
+   * whatever WOULD fit, leaving genuinely empty tracks empty rather than
+   * expanding a real item into them -- multiple items lay out
+   * identically either way (the two only differ when a row is sparse),
+   * so this is a strict fix with no behavior change for the common case.
+   */
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
 /* Pet cards specifically need a bit more room than the general 230px
    minimum -- a name + Rename button + rarity pill genuinely doesn't fit
    at 230px for a longer pet name (see the header restructuring in
    HatcheryPanel.tsx's PetCard, which also moved the pill down a row to
    help). Scoped to this one grid rather than widening `.grid.two`
    globally, since that class is shared by 11 other panels. */
-.pet-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.grid.three { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.pet-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 /* Blacksmith/Alchemist/Enchanter "Stock" sections only -- previously each
    used a different grid (.grid.two for Blacksmith/Enchanter, the smaller
    .grid.three for Alchemist), which was most of why the three vendors'
@@ -1598,7 +1677,7 @@ button:focus-visible, [tabindex]:focus-visible {
    request ("increase the size of the cards by 15%") -- scoped to its own
    class rather than widening .grid.two itself, since that class is shared
    by 11 other panels that weren't part of this request. */
-.vendor-stock-grid { grid-template-columns: repeat(auto-fit, minmax(265px, 1fr)); }
+.vendor-stock-grid { grid-template-columns: repeat(auto-fill, minmax(265px, 1fr)); }
 
 .row { display: flex; gap: calc(8px * var(--density-scale)); align-items: center; }
 .row.wrap { flex-wrap: wrap; }
@@ -2328,8 +2407,20 @@ button:focus-visible, [tabindex]:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--panel-2);
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  /* Direct report: white text sitting straight on the tab-scene
+   * background reads poorly once Bright art is showing, especially now
+   * the tint itself is a flat, much lighter 25% (patch 0309) rather
+   * than the old 45%. Same backing .card already uses elsewhere in the
+   * game (Credits' own .credits-entry, cited directly as the example
+   * that already reads fine) -- an 88%-opaque panel colour, not a full
+   * card border/shadow/radius treatment, since a whole settings page of
+   * bordered boxes would be a much heavier visual change than this
+   * report asked for. The border-bottom divider these rows always had
+   * is dropped in favour of the box's own edge now doing that job. */
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-radius: var(--radius);
 }
 .setting-label { font-size: 0.75rem; }
 .setting-control { flex: none; }

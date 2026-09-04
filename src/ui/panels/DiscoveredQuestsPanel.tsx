@@ -124,6 +124,30 @@ export function DiscoveredQuestsPanel() {
     );
   }
 
+  // Direct report: a brand-new guild landing on this tab saw the full
+  // Board/Replay Memories sub-tab UI with nothing in it -- an empty
+  // list under "Story Quests" reads as broken or missing content, not
+  // as "nothing here yet, by design." state.chainBoard is guild-wide
+  // and unfiltered (unlike chainOffers above, which is also filtered
+  // per-hero by level) -- checking it directly here means this only
+  // shows for a guild that has never had ANY story chain surface yet,
+  // not a recruit who's simply under-levelled for what's already out
+  // there waiting for someone else.
+  if (state.chainBoard.length === 0) {
+    return (
+      <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
+        <div className="tab-scene-content">
+        <h2>Story Quests</h2>
+        <div className="card">
+          <p className="small muted" style={{ margin: 0 }}>
+            You have yet to unlock a story quest. Keep completing normal quests and contracts, and check back later.
+          </p>
+        </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">

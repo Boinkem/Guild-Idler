@@ -1127,6 +1127,33 @@ raid fight).
 
 ## Backlog
 
+### Prestige tab missing a Bright variant
+Direct report (this session, not yet built): `prestige.jpg` has no
+`bright/` counterpart yet -- same safe fallback as every other tab
+without one (keeps showing its dim image in Bright mode until art
+lands), just flagging the specific gap since it was called out directly.
+
+### Guild Naming screen needs real art
+Direct report (this session, not yet built): `GuildNamingModal`'s "What
+is your guild called?" step currently uses a plain scroll emoji (📜) as a
+placeholder and has no background/card art of its own -- wants real
+pixel art (a "guild master/note-taker" character in place of the emoji,
+plus proper card/background art for the modal itself). Needs actual art
+generated first, same situation every other new-art request this
+session has been in -- see this component's own comment for exactly
+where the one-line swap goes once art exists.
+
+### Cross-panel white-text legibility, beyond Settings' Row
+Direct report (this session): Settings' `Row` component got a card-style
+backing this patch (25% Bright-mode tint made plain white text harder to
+read against vivid art than the old 45% did). The same underlying issue
+-- text sitting directly on `.tab-scene-content`'s tint with no card of
+its own -- likely exists in other panels too (Lore's paragraph text,
+various stat-row lines across Quests/Heroes/etc.) that weren't in scope
+for this pass. Worth a dedicated, panel-by-panel legibility pass rather
+than trying to catch every instance blind in the same patch as thirteen
+other fixes.
+
 ### Crafting modals should match Guild's Mood too
 Direct report (patch 0306 session, not yet built): `CraftingStation.tsx`'s
 own per-category scene backgrounds (`.craft-scene` for gear/enchant/gem/
@@ -25008,3 +25035,197 @@ orphaned to `false`. Worth a real playtest: on a brand-new guild, send
 and resolve the tutorial quest and confirm the potion prompt appears
 immediately alongside the vendor nudge, before ever opening a hero's
 card to use it.
+
+### Big feedback batch from a fresh playtest: Raids/Heroes mood backgrounds, a real tutorial-board bug, shimmer overhaul, and eight smaller fixes (patch 0311)
+
+```discord-update
+Dev Update | Patch 0311
+
+- Fixed: Raids and Heroes now correctly show their Bright/Moody art -- Raids was stuck on a much fainter shared backdrop, Heroes was hardcoded to always show its dim image
+- Fixed: a real bug where a brand-new guild's board could get overwritten with a full set of ordinary quests before the scripted first quest was even sent
+- Fixed: "Every Hero Slot is Full" no longer pops up the instant you name your guild -- now waits until you can actually afford to fix it
+- Changed: the gold shimmer used to flag "something new here" now uses one consistent, clearly-moving ring everywhere, including the notification bell and the Tavern/Prestige hero-slot links
+- Added: a placeholder card on Story Quests before you've unlocked your first one, instead of an empty list
+- Added: a one-time toast the first time you ever get a notification
+- Added: "On the road" quest cards now show the same banner art as the detail view
+- Fixed: a single item in the Blacksmith's stash no longer stretches across the whole row
+- Fixed: the empty consumable slot reads as active/darker instead of dulled
+- Fixed: "requires level X" turns red when your hero doesn't meet it
+- Changed: Settings' rows now sit on their own card backing, matching Credits, for better readability over Bright art
+```
+
+Sixteen direct reports from a fresh playtest, discussed and triaged
+before touching code -- three turned out to already be correctly wired
+and are noted rather than "fixed" a second time; one (Prestige's own
+Bright art, and the Guild Naming screen's art) is genuinely new-art-
+needed and moved to the backlog rather than guessed at blind.
+
+**Raids/Heroes Guild's Mood (`RaidsPanel.tsx`, `HeroesPanel.tsx`,
+`MenuWindow.tsx`).** Two separate root causes, both confirmed by
+rereading the actual code rather than guessing from the screenshots
+alone. Heroes: `HeroesRosterView`'s background was a leftover hardcoded
+`'url(./lore/panels/heroes.jpg)'` string, never actually wired through
+`backgroundSrc()` at all -- always showed the dim image regardless of
+the setting, the one panel out of the whole game's tab-scene set that
+never got this treatment. Raids: never had its own `.tab-scene` wrapper
+to begin with, despite having a dedicated `raids-bg.jpg`/`bright/
+raids-bg.jpg` pair since patch 0305 -- it was sharing `MenuWindow.tsx`'s
+much fainter (35% opacity) ambient backdrop with Hatchery and Peddler,
+the same fallback treatment meant for tabs that don't have real art yet.
+Given Raids a genuine `.tab-scene`/`.tab-scene-content` wrapper like
+every other panel, both its locked (`!hasRaids`) and main return
+branches, and dropped it out of `MenuWindow.tsx`'s special-case list now
+that it carries its own background. Peddler was investigated for the
+same fix but left alone this patch -- it uses fully custom `.grimsby-*`
+redesigned chrome (a Claude Design handoff), not the standard `.tab-
+scene` shape, so giving it the same treatment needs its own dedicated
+pass rather than reusing this patch's generic wrapper blind.
+
+**A real, 100%-reproducible tutorial-board bug (`GameEngine.
+refreshWorld`).** Reported as "other quests are still showing" on the
+very first quest; traced to something more specific than a design gap.
+`GameState.boardRefreshedAt` starts at `0` in `createInitialState`, so
+`windowRolledOver` (`boardRefreshedAt !== currentWindow`) is true on the
+literal FIRST `refreshWorld()` call any new guild ever makes --
+regardless of real-world timing, not an edge case. The existing
+`onTutorialQuest` guard (patch 0308) only covered a hero who'd already
+SENT the tutorial quest (checked via `activeQuests`); it did nothing for
+the much earlier moment where `createInitialState` had already
+correctly seeded the tutorial quest as the board's sole entry, but it
+was still sitting there unsent -- that board got wiped and replaced with
+a full ordinary 6-offer board by the very same `refreshWorld()` call
+that runs on app load, before the player could act. Fixed by also
+checking the board's own current contents (`questBoards[hero.id]?.some
+(o => o.id === TUTORIAL_QUEST_ID)`), not only `activeQuests` -- both
+windows (unsent-on-board, and sent-but-not-resolved) are now covered by
+one combined guard.
+
+**"Every Hero Slot is Full" firing immediately
+(`GuidanceManager.CHECKS`).** Confirmed exactly: base hero slots is 1,
+a brand-new guild starts with exactly 1 hero, so the old condition
+(`heroes.length >= heroSlots(state)`) was true from the guild's very
+first tick, well before naming even finished. Added `state.gold >=
+GuildManager.nextUpgradeCost(state, 'tavern')` (confirmed at 750 gold,
+not the 250 guessed in the original report) as an additional gate --
+reuses the exact same cost helper `TrainingPanel`'s own "Fund Training"
+button already calls, rather than reaching for `guildCost`/`GUILD_BY_ID`
+directly. The Tavern is the cheaper of the two ways to open a slot (the
+Prestige/Extra Banner route needs a full retirement first, a much
+later-game action), so its own next-level cost is the right threshold.
+
+**Shimmer overhaul, three places (`app.css`, `MenuWindow.tsx`).**
+Investigated three separate reports (header bell badge, Tavern/Prestige
+hero-slot links, general "notification tab" shimmer) and found they
+traced to two different underlying causes:
+- `.header-notif-badge` (the small red count badge on the bell icon) had
+  *no animation at all* -- it was only ever built as a plain count,
+  never a "look here" cue. Added `.header-notif-icon.header-notif-unread`,
+  a small rotating gold ring around the icon itself when `unreadCount >
+  0`, reusing the exact same `--nav-tab-shimmer-angle`/
+  `nav-tab-shimmer-rotate` mechanism every other shimmer in the game
+  already uses, rather than inventing a fourth animation style.
+- `.card.requirement-highlight` (the Tavern/Extra Banner "jump to the
+  requirement" glow) technically had its own working plumbing on both
+  ends (`GuildPanel`/`PrestigePanel` both correctly consume
+  `requestedHighlightId`, IDs matched) but used a fragile box-shadow
+  pulse -- 3 fixed iterations, ending precisely on its own
+  zero-shadow keyframe -- rather than the same proven ring. Reported as
+  "no shimmer at all" regardless; rather than keep chasing a fifth,
+  weaker mechanism blind, switched it to the same rotating ring too.
+
+All four "look here" signals in the game (`.nav-tab-unread`,
+`.quest-card-spotlight`, `.btn-subtab.subtab-spotlight`, and now
+`.header-notif-icon.header-notif-unread` / `.card.requirement-highlight`)
+share one visual language now instead of five subtly different ones.
+The deliberately-different `.btn-subtab.subtab-unread` *dot* (Vendors'
+Alchemist/Enchanter, etc.) is untouched -- that one's still a dot on
+purpose, to avoid several simultaneous rings competing for attention on
+a multi-sub-tab row; it was never actually what either report was
+about.
+
+**Story Quests empty state (`DiscoveredQuestsPanel.tsx`).** A brand-new
+guild landing on this tab saw the full Board/Replay Memories sub-tab UI
+with nothing in either list -- reads as broken, not as "nothing here
+yet, by design." New early return, checked against `state.chainBoard`
+directly (guild-wide, unfiltered) rather than the hero-filtered
+`chainOffers` used elsewhere on this same tab, so this only shows for a
+guild that's never had any story chain surface at all, not a recruit
+who's simply under-levelled for what already exists.
+
+**First-notification toast (`guidance-topics.json`,
+`GuidanceManager.ts`).** New topic, `first_notification_received`,
+fires the first time `state.notifications.length > 0` -- a live read of
+current state rather than its own persisted flag, same shape
+`isNavTabUnread`'s existing `eggsReady`/`brokenGear` checks already use.
+Points at the Guide tab. No new save migration needed -- `seenGuidance`
+already tracks "has this topic id fired" generically by id, so a brand
+new JSON topic entry needs nothing else wired up to get correct
+one-time-ever semantics.
+
+**"On the road" banner art (`QuestPanel.tsx`).** These cards showed no
+art at all, even though the exact same offer already gets a banner the
+moment you open it before sending (`QuestDetailModal`, same file).
+Reused that exact source -- `ChainQuestBanner` for a chain offer,
+`questTagBannerSrc` for a plain one, same branch `QuestDetailModal`
+already uses -- at the shorter 48px strip height `RaidsPanel`'s own
+in-progress raid card uses (this card already carries its own title/
+stats/progress bar, so the banner is a mood strip here, not the primary
+identifier), slightly dimmed (`opacity: 0.85`) per direct request ("a
+smidge dimmer"). `ChainQuestBanner` gained an optional `style` prop to
+support that dimming without a second near-duplicate component.
+
+**Blacksmith single-card stretch, and the same bug everywhere else it
+was hiding (`app.css`).** Classic CSS Grid gotcha: `.grid.two` used
+`grid-template-columns: repeat(auto-fit, minmax(230px, 1fr))` --
+`auto-fit` collapses unused tracks to 0 width and lets the remaining
+ones absorb that space via their own `1fr`, so a single leftover item
+(or a sparse trailing row) stretches to fill it instead of sitting at
+its natural size. `auto-fill` keeps the track count fixed at whatever
+would fit, leaving genuinely empty tracks empty -- multiple items lay
+out identically either way, this only changes the sparse-row case. Same
+one-line fix applied to `.pet-grid`, `.grid.three`, and
+`.vendor-stock-grid` too, since they share the identical pattern and
+would have hit the exact same bug under the right circumstances.
+
+**Consumable empty slot, "requires level X," Settings legibility
+(`EquipmentPanel.tsx`, `SettingsPanel.tsx`, `app.css`).** The empty
+consumable slot (`.item-card.empty`) previously dulled to the same 0.6
+opacity as any plain empty gear slot; new `.consumable-empty` class
+holds it permanently at the brass-border/0.85-opacity look a gear slot
+only reaches on hover, per direct request ("the current hover-over
+colour is what it needs to be the whole time") -- distinguishes the
+slot you should be filling before every quest from a background detail,
+without touching gear slots. "Requires level X" (`SlotCard`'s and
+`StashCard`'s own modal views, both occurrences) now renders in
+`var(--blood)` when `hero.level < def.reqLevel`, muted otherwise --
+using the hero already in scope in both components, no new prop drilling
+needed. Settings' `Row` component (used by most of that tab's controls)
+gained the same `color-mix(in srgb, var(--panel) 88%, transparent)`
+backing `.card`/Credits' own `.credits-entry` already use, replacing
+the old plain divider-line row -- direct report cited Credits by name as
+the example that already reads fine. The same underlying gap likely
+exists in other panels' body text (not in scope for this pass) -- see
+Backlog.
+
+**Investigated, not changed -- gold/xp fly icons via Testing tab.**
+Traced `handleDismiss`'s own flight-measuring code (`QuestResultModal.
+tsx`): both the gold and XP flight targets gracefully no-op by design
+when their destination isn't currently mounted -- XP needs the Heroes
+tab open (a hero's own XP bar), gold needs the full-menu header visible
+(not the corner companion). Completing a quest from the Testing tab
+with neither of those open/visible may simply be hitting that
+by-design skip rather than a bug; flagging rather than guessing at a
+fix for behavior that might already be correct outside the testing
+context it was reported from.
+
+**Verification.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh pull of `main`
+(confirmed patch 0310 was already live and this patch is rebased on top
+of it). No new save migration needed anywhere in this patch -- every new
+flag/topic here is either a live state read or generically tracked by
+existing id-keyed arrays (`seenGuidance`). No image assets changed. No
+live in-app playtest in this environment (no browser available) --
+worth a real pass confirming: a brand-new guild's board genuinely stays
+tutorial-quest-only through app reload; the four unified shimmer
+locations all visibly rotate rather than sit static; and Raids/Heroes
+both visibly swap art when Guild's Mood is toggled.

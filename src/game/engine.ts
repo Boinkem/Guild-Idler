@@ -775,7 +775,24 @@ export class GameEngine {
       const onTutorialQuest = this.state.activeQuests.some(
         (q) => q.heroId === hero.id && q.offer.id === TUTORIAL_QUEST_ID,
       );
-      if (onTutorialQuest) continue;
+      // Direct report, confirmed as a genuine bug rather than a
+      // misconfiguration: boardRefreshedAt starts at 0 in
+      // createInitialState, so `windowRolledOver` (0 !== the real
+      // current window) is true on the very FIRST refreshWorld() call
+      // any new guild ever makes -- before the player has even sent the
+      // tutorial quest that createInitialState already correctly seeded
+      // as the board's sole entry. The `onTutorialQuest` guard just above
+      // only covers a hero who's already SENT it (tracked via
+      // activeQuests); it did nothing for the much earlier window where
+      // the quest is sitting right there on the board, unsent, about to
+      // get wiped out and replaced with a full ordinary 6-offer board by
+      // the regeneration branch below. Checked directly against the
+      // board's own current contents rather than only activeQuests, so
+      // both windows are covered by one guard.
+      const hasUnsentTutorialQuest = this.state.questBoards[hero.id]?.some(
+        (o) => o.id === TUTORIAL_QUEST_ID,
+      );
+      if (onTutorialQuest || hasUnsentTutorialQuest) continue;
       const existing = this.state.questBoards[hero.id];
       if (windowRolledOver || !existing || existing.length === 0) {
         // Patch 0308: pendingBurstQuestSpotlight (armed the instant the

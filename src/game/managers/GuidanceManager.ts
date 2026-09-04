@@ -43,7 +43,21 @@ const CHECKS: Record<string, Check> = {
   first_level_up: (state) => state.heroes.some((h) => h.level >= 2),
   first_equipment_found: (state) => state.discoveredItems.length >= 1,
   first_chain_seen: (state) => state.chainBoard.length > 0,
-  hero_slots_full: (state) => state.heroes.length >= ModifierManager.heroSlots(state),
+  // Direct report: fired the instant a brand-new guild loads (base 1
+  // hero slot, 1 starter hero -- true from tick one, before the player
+  // has even finished naming the guild). Gated on affording the Tavern's
+  // own next level now, same "only nag once there's something to
+  // actually do about it" shape -- the Tavern is the cheapest of the two
+  // ways to open a slot (see HeroesPanel's own "Go to Tavern"/"Go to
+  // Prestige" links), so its own next-level cost is the right threshold
+  // rather than Prestige's (which needs a full retirement first, a much
+  // later-game action a brand-new guild can't take regardless). Reuses
+  // GuildManager.nextUpgradeCost rather than reaching for guildCost/
+  // GUILD_BY_ID directly, same helper TrainingPanel's own "Fund
+  // Training" cost display already calls for the identical "what would
+  // the next level of this facility cost right now" question.
+  hero_slots_full: (state) => state.heroes.length >= ModifierManager.heroSlots(state)
+    && state.gold >= (GuildManager.nextUpgradeCost(state, 'tavern') ?? Infinity),
   raids_unlocked: (state) => ModifierManager.hasUnlock(state, 'raids'),
   black_market_unlocked: (state) => ModifierManager.hasUnlock(state, 'blackMarket'),
   legendary_quests_unlocked: (state) => ModifierManager.hasUnlock(state, 'legendaryQuests'),
@@ -108,6 +122,18 @@ const CHECKS: Record<string, Check> = {
   // tab-switch effect, and engine.useConsumable respectively). See
   // each flag's own comment in types.ts for the full reasoning.
   first_quest_complete_vendor_nudge: (state) => state.hasCompletedFirstQuest,
+  // Direct report: nothing ever told a brand-new player the notification
+  // log/bell even exists until they stumbled onto it themselves. Fires
+  // the first time ANY notification has ever been logged, regardless of
+  // source (achievement, banner-worthy guidance topic, chain discovery,
+  // etc.) -- deliberately a plain live read of state.notifications
+  // rather than its own persisted flag, same "nothing persisted, just
+  // read current state" shape isNavTabUnread's own eggsReady/brokenGear
+  // checks already use in attention.ts. A one-tick lag against whatever
+  // notification technically triggered this same checkAll() batch is
+  // fine -- checkAll runs again on the very next engine action either
+  // way, so this always catches up within one more tick at most.
+  first_notification_received: (state) => state.notifications.length > 0,
   first_vendors_visit: (state) => state.hasVisitedVendorsTab,
   first_consumable_obtained: (state) => state.hasObtainedConsumable,
 };

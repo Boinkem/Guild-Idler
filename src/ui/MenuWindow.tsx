@@ -383,14 +383,27 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         backgroundSrc(); Hatchery has no Bright counterpart yet, so it just
         keeps showing its dim image in Bright mode until one's added --
         same safe fallback, no special-case code needed.
+
+        Raids dropped out of this list (direct report -- Raids was stuck
+        sharing this same faint 35%-opacity ambient layer with Hatchery/
+        Peddler, even though it already has its own dedicated first-class
+        raids-bg.jpg/bright pair; every other tab in the game gets its own
+        full-strength .tab-scene background, and Raids deserved the same
+        treatment rather than the fallback). RaidsPanel.tsx now carries
+        that background itself, same as any other panel. Peddler stays
+        here for now -- its own tab uses fully custom .grimsby-* redesigned
+        chrome (Claude Design handoff) rather than the standard .tab-scene/
+        .tab-scene-content shape every other panel shares, so giving it the
+        same treatment needs its own dedicated pass rather than reusing
+        this patch's generic wrapper blind.
       */}
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', overflow: 'hidden' }}>
-        {tab === 'raids' || tab === 'hatchery' || tab === 'peddler' ? (
+        {tab === 'hatchery' || tab === 'peddler' ? (
           <div
             style={{
               position: 'absolute', inset: 0,
               backgroundImage: `url(${backgroundSrc(
-                tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/peddler-bg.png',
+                tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/peddler-bg.png',
                 settings.backgroundMood,
               )})`,
               backgroundSize: 'cover',
@@ -416,7 +429,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
           <button
-            className="header-notif-icon"
+            className={`header-notif-icon ${unreadCount > 0 ? 'header-notif-unread' : ''}`}
             onClick={() => engine.requestTab('guide')}
             title={unreadCount > 0 ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'Notifications'}
           >

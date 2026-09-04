@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
@@ -198,7 +199,7 @@ function HeroesRosterView() {
   const tombstoneIcon = TOMBSTONE_STYLE_BY_ID[selectedTombstoneStyleId]?.icon ?? 'tombstone.png';
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/heroes.jpg)' }}>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/heroes.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Heroes</h2>
       <p className="subtitle">{state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.</p>

@@ -531,7 +531,7 @@ function ConsumableSlotCard({
 
   return (
     <>
-      <div className="item-card empty clickable">
+      <div className="item-card empty clickable consumable-empty">
         <div
           className="item-card-summary"
           onClick={() => setOpen(true)}
@@ -689,7 +689,7 @@ function SlotCard({
                   <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
                     {itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}
                   </span>
-                  <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
+                  <div className="tiny muted">{slot} · requires level <span style={hero.level < def.reqLevel ? { color: 'var(--blood)' } : undefined}>{def.reqLevel}</span></div>
                 </div>
               </div>
               <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
@@ -825,7 +825,7 @@ function StashCard({
                   <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
                     {itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}
                   </span>
-                  <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
+                  <div className="tiny muted">{def.slot} · requires level <span style={hero.level < def.reqLevel ? { color: 'var(--blood)' } : undefined}>{def.reqLevel}</span></div>
                 </div>
               </div>
               <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>

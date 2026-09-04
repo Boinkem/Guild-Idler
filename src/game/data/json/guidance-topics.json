@@ -122,6 +122,13 @@
     "targetTab": "guild"
   },
   {
+    "id": "first_notification_received",
+    "messages": [
+      "Hey -- you've got a notification. The bell up top (or the Guide tab) keeps a running log of everything worth knowing about, going forward."
+    ],
+    "targetTab": "guide"
+  },
+  {
     "id": "first_quest_complete_vendor_nudge",
     "messages": [
       "Your first job's done, gold in hand. The Vendors have gear and supplies worth a look, if you'd rather gear up before sending your hero out again -- or keep questing, whatever suits you."
