@@ -350,7 +350,7 @@ export function PrestigePanel() {
       {state.heroes.length > 0 && (
         <>
           <div className="section-heading">Spend renown -- per hero</div>
-          <p className="small muted" style={{ marginTop: -4 }}>
+          <p className="small muted subtitle" style={{ marginTop: -4 }}>
             Extra power for a specific hero who&apos;s done leveling.
           </p>
           {state.heroes.map((hero) => (

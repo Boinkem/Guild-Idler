@@ -333,7 +333,7 @@ export function SettingsPanel() {
       </Row>
 
       <div className="section-heading">Credits</div>
-      <p className="small muted">
+      <p className="small muted subtitle">
         Guildbound uses licensed art from a few outside creators. None of the terms below require
         credit, but it's given anyway.
       </p>
@@ -352,7 +352,7 @@ export function SettingsPanel() {
       </div>
 
       <div className="section-heading">Reset</div>
-      <p className="small muted">Restores every setting above to its default. Your guild is untouched.</p>
+      <p className="small muted subtitle">Restores every setting above to its default. Your guild is untouched.</p>
       <button className="btn-ghost" onClick={reset}>Reset settings to defaults</button>
       </div>
     </div>

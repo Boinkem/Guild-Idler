@@ -130,6 +130,19 @@
   margin-top: 3px;
 }
 .item-card-meta-row .rarity-pill { margin-top: 0; }
+/*
+ * Patch 0322, direct follow-up report: .gear-card-grid's widened column
+ * alone still wasn't landing quite as close to .vendor-stock-card's own
+ * proportions as intended -- that card's 12px/14px padding (vs. this
+ * one's 8px default) accounts for a real chunk of the gap. Scoped to a
+ * marker class (added on every .item-card that shows a rarity-banner --
+ * SlotCard, StashCard, ArmourStashCard, and now the two consumable
+ * cards below) rather than changing .item-card-summary's own 8px
+ * default globally, since Curios/owned-consumables-without-rarity-yet
+ * and the empty-slot placeholders never had this problem and didn't
+ * ask for a size change.
+ */
+.item-card.rarity-card .item-card-summary { padding: 12px 14px; }
 .item-card {
   position: relative;
   border: 1px solid var(--panel-3);
@@ -2653,7 +2666,21 @@ select {
   background: var(--panel-2);
   border: 1px solid var(--panel-3);
   color: var(--parchment);
+  /* Patch 0322, direct report ("dropdowns have no style") -- every
+     other clickable control in this game (button, .chip, .btn-*) gets
+     rounded corners via --radius plus a subtle bevel shadow; select was
+     the one plain flat-cornered rectangle left standing next to them.
+     Padding/font-size matched to the compact inline dropdowns that
+     actually prompted the report (VendorsPanel's Sell Junk/Scrap All
+     rarity pickers) rather than the larger default -- still just a
+     min/baseline, any inline font-size override still wins. */
+  border-radius: var(--radius);
+  box-shadow: var(--bevel);
+  padding: 3px 6px;
+  font-size: 0.625rem;
+  cursor: pointer;
 }
+select:hover { border-color: var(--brass-dim); }
 select option {
   background: var(--panel-2);
   color: var(--parchment);

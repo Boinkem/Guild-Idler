@@ -598,7 +598,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
   return (
     <>
       <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
-        <p className="tiny muted" style={{ margin: 0 }}>
+        <p className="tiny muted subtitle" style={{ margin: 0 }}>
           Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. The armourer buys as well as sells.
         </p>
         <ShopRerollButton vendorId="blacksmith" />
@@ -631,10 +631,6 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           <select
             value={junkRarity}
             onChange={(e) => setJunkRarity(e.target.value as Rarity)}
-            style={{
-              background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-              color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
-            }}
           >
             {RARITY_ORDER.map((r) => (
               <option key={r} value={r}>{r} and below</option>
@@ -652,10 +648,6 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           <select
             value={scrapRarity}
             onChange={(e) => setScrapRarity(e.target.value as Rarity)}
-            style={{
-              background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-              color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
-            }}
           >
             {RARITY_ORDER.map((r) => (
               <option key={r} value={r}>{r} and below</option>
@@ -681,7 +673,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           </button>
         </div>
       )}
-      <div className="grid two">
+      <div className="item-card-grid gear-card-grid">
         {state.stash.map((item) => (
           <ArmourStashCard
             key={item.uid}
@@ -841,14 +833,16 @@ function ArmourStashCard({
 
   return (
     <>
-      <div className="item-card" data-stash-uid={item.uid}>
+      <div className="item-card rarity-card" data-stash-uid={item.uid}>
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
-            <span className="rarity-pill" style={{ color: RARITY_COLOR[def.rarity], borderColor: RARITY_COLOR[def.rarity] }}>{def.rarity}</span>
-            {item.locked && <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)' }}>{'\uD83D\uDD12'} vaulted</span>}
+            <div className="item-card-meta-row">
+              <span className="rarity-pill" style={{ color: RARITY_COLOR[def.rarity], borderColor: RARITY_COLOR[def.rarity] }}>{def.rarity}</span>
+              {item.locked && <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)' }}>{'\uD83D\uDD12'} vaulted</span>}
+            </div>
           </div>
         </div>
         <div className="item-card-actions">
@@ -952,7 +946,7 @@ function BlackMarketStock({ now }: { now: number }) {
   if (!blackMarketUnlocked) {
     return (
       <>
-        <p className="small muted">
+        <p className="small muted subtitle">
           Rumour is there's a contact who deals in rarer stock, for a price. Unlock via the Black Market
           Contact upgrade in Guild Hall.
         </p>
@@ -974,7 +968,7 @@ function BlackMarketStock({ now }: { now: number }) {
   return (
     <>
       <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
-        <p className="tiny muted" style={{ margin: 0 }}>
+        <p className="tiny muted subtitle" style={{ margin: 0 }}>
           Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
           {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
         </p>

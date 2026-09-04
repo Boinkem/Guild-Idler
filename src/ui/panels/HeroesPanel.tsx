@@ -284,7 +284,7 @@ function HeroesRosterView() {
       <div className="section-heading">Recruit</div>
       {state.heroes.length >= slots && (
         <>
-          <p className="small muted">
+          <p className="small muted subtitle">
             No free slots. The Tavern adds one per level up to 5; beyond that, earn Heroic Renown by
             clearing raids or Replay Memories at Mythic or Legendary with a capped ({PRESTIGE_MIN_LEVEL}+)
             hero, then spend it on Extra Banner (up to 4 more). {slots} is not necessarily your ceiling.
@@ -436,7 +436,7 @@ function HeroesRosterView() {
       })()}
 
       <div className="section-heading">Skins</div>
-      <p className="small muted">
+      <p className="small muted subtitle">
         Cosmetic liveries, unlocked once for the whole guild and usable by any hero.
         A pure gold sink, no effect on stats.
       </p>

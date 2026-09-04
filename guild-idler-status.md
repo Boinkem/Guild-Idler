@@ -26251,3 +26251,110 @@ row classes and this patch's generic `.upgrade-*` ones into a single
 shared set -- deliberately kept separate this patch to avoid touching
 already-verified Guild Hall code, but five call sites now exist across
 the two nearly-identical class sets.
+
+### Rarity-card sizing follow-up (a missed component, tighter proportions, Consumables brought in for the first time), a broader subtitle sweep, and unstyled dropdowns fixed (patch 0322)
+
+```discord-update
+Dev Update | Bug Fix / Features
+
+- Fixed the Blacksmith's "Sell from the stash" cards, which were missed by the rarity-card resize entirely
+- Tightened gear/stash card proportions closer to the vendor stock cards' own shape
+- Added rarity banners, colors, and pills to Inventory's Consumable cards for the first time, sized to match
+- Fixed several more panels' section intro lines reading as unreadable text over background art, same root cause as last patch's subtitle fix
+- Fixed the Sell Junk/Scrap All rarity dropdowns rendering with no visible styling
+```
+
+Direct follow-up report on three fronts, all from screenshots.
+
+**A whole card missed.** `ArmourStashCard` -- the Blacksmith's own "Sell
+from the stash" grid (`VendorsPanel.tsx`) -- turned out to be a
+completely separate component from `StashCard`/`SlotCard`
+(`EquipmentPanel.tsx`), so patch 0320's resize never touched it. Same
+treatment now: `rarity-card` marker class, its two pills (rarity +
+vaulted) moved into `.item-card-meta-row`, grid widened from `.grid.two`
+to `.item-card-grid.gear-card-grid`. Can't land on quite the same
+proportions as the other cards here, and that's not a bug -- this card
+has a real 4-button Lock/Sell/Scrap/Repair row baked directly into the
+collapsed view (a deliberate patch 0265 feature, actions the other
+cards hide behind a click-through modal instead), so it's inherently
+taller. Widened and consolidated is still a real improvement over the
+old 230px `.grid.two` square it was in before.
+
+**Gear/stash cards tightened.** Root cause: `.vendor-stock-card` uses
+12px/14px padding; `SlotCard`/`StashCard` were still on
+`.item-card-summary`'s 8px default even after 0320's grid-width and
+meta-row fixes, landing them wider/shorter than vendor-stock's own
+shape rather than truly matching it. New `.item-card.rarity-card
+.item-card-summary { padding: 12px 14px; }`, scoped to a `rarity-card`
+marker class rather than changing the 8px default globally (Curios and
+the empty-slot placeholders never had this problem).
+
+**Consumables brought in for real.** Direct request: "the Consumable
+Cards also are covered with this re-size so they are all uniform."
+Turned up something more than a sizing gap while digging in --
+`ConsumableDef` already carries a `.rarity` field (used by the
+Alchemist's own shop cards for a while now), but Inventory's owned-
+consumable and equipped-consumable cards never actually read it --
+plain icon + name, no banner, no color, no pill, ever. Added the full
+treatment both cards were missing (`rarity-card`, banner, rarity-
+colored name, `RarityPill`, and the same `modal-banner` treatment in
+each one's detail modal), then widened both grids to
+`gear-card-grid` alongside gear's own two. All five rarity-bearing
+grids in the game (gear, stash, sell-from-stash, and now both
+consumable views) are on one shared shape now.
+
+**Subtitle sweep, round 2.** Patch 0321 fixed the panel-level
+`<h2>`/`.subtitle` pair; this pass went hunting for the same "bare
+muted paragraph sitting directly on this tab's background art"
+pattern one level down, at the *section* level -- a short intro line
+under a `.section-heading` rather than under the tab's own `<h2>`.
+Confirmed and fixed by literally reusing the `.subtitle` class itself
+(same backing plaque, same shadow -- CSS classes are additive, so this
+was just adding `subtitle` alongside each line's existing `tiny muted`/
+`small muted`, no new CSS needed) on:
+- Vendors: Blacksmith's "Stock rotates in..." (the exact one from the
+  report screenshot), the Black Market's own rotation line once
+  unlocked, and its "Rumour is there's a contact..." locked-state
+  message
+- Inventory: the Consumables section's "Click one to Use or Equip..."
+  (the other example named directly)
+- Harvest: the Tools section's "Moved here from each node's own view..."
+- Prestige: the per-hero perks section's "Extra power for a specific
+  hero..."
+- Heroes: the Skins section's intro line, and the Recruit tab's "No
+  free slots" message
+- Lore: both "nothing here yet" empty states (Completed chains,
+  Completed raids) -- closes out "Lore - completed" from the original
+  report, which didn't have a reproducible case at the time
+- Settings: the Credits section intro and the Reset section's warning
+  line
+
+Not exhaustive -- there are more `tiny muted`/`small muted` lines in
+the game than these, but the rest checked were either already inside
+an opaque `.card`/`.modal` (fine, same reasoning as the original
+review) or short empty-state one-liners in low-traffic corners
+(Hatchery, Stats, Testing Tools) that didn't show the same pattern on
+inspection.
+
+**Dropdowns fixed.** The global `select` rule had colors but no
+`border-radius`/shadow at all -- every other clickable control in this
+game (`button`, `.chip`, `.btn-*`) gets both. Fixed at the shared rule
+so every select in the game picks it up, and removed the two Sell
+Junk/Scrap All rarity dropdowns' inline style overrides in
+`VendorsPanel.tsx`, which had been duplicating the same colors with no
+radius of their own -- redundant now that the shared rule covers it.
+
+**Caught during verification, not shipped:** an early pass at the
+Consumables grid fix accidentally deleted the `Array.from(...).map(...)`
+opening line wrapping `ConsumableSlotCard` while editing its grid's
+className, which `tsc` caught immediately as a syntax error on the
+first verification pass. Restored before this ever reached a diff.
+
+**Verified:** pulled `app.css`, `EquipmentPanel.tsx`, `VendorsPanel.tsx`,
+`HarvestPanel.tsx`, `PrestigePanel.tsx`, `HeroesPanel.tsx`,
+`LorePanel.tsx`, and `SettingsPanel.tsx` fresh from `main` via
+`raw.githubusercontent.com` immediately before editing (patch 0321 was
+already live). `npx tsc --noEmit` clean (would have caught, and did
+catch, the syntax slip above) and a full `vite build` (web + both
+Electron entries) passing clean against a fresh clone with every file
+applied together.

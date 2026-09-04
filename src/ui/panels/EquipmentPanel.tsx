@@ -392,16 +392,21 @@ function ConsumableInfoCard({
   return (
     <>
       <div
-        className="item-card"
+        className="item-card rarity-card"
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ConsumableIcon icon={def.icon} glyph={def.glyph} />
           <div className="item-card-body">
-            <div className="item-card-name">{def.name} ×{count}</div>
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
+            <div className="item-card-meta-row">
+              <RarityPill rarity={def.rarity} />
+              <span className="tiny muted">×{count}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -409,14 +414,17 @@ function ConsumableInfoCard({
       {open && (
         <div className="overlay" onClick={() => setOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+            <div className="modal-banner-scrim">
             <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
               <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
               <div>
-                <span className="card-title">{def.name}</span>
+                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
                 <div className="tiny muted">Owned ×{count}</div>
               </div>
             </div>
-            <div className="tiny muted">{def.description}</div>
+            <RarityPill rarity={def.rarity} />
+            <div className="tiny muted" style={{ marginTop: 6 }}>{def.description}</div>
             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
               <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
               {instantUse && (
@@ -445,6 +453,7 @@ function ConsumableInfoCard({
                   Use
                 </button>
               )}
+            </div>
             </div>
           </div>
         </div>
@@ -485,17 +494,21 @@ function ConsumableSlotCard({
     return (
       <>
         <div
-          className="item-card"
+          className="item-card rarity-card"
           onClick={() => setOpen(true)}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
         >
+          <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
           <div className="item-card-summary">
             <ConsumableIcon icon={def.icon} glyph={def.glyph} />
             <div className="item-card-body">
-              <div className="item-card-name">{def.name}</div>
-              <div className="tiny muted">Equipped on {hero.name}</div>
+              <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
+              <div className="item-card-meta-row">
+                <RarityPill rarity={def.rarity} />
+                <span className="tiny muted">on {hero.name}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -503,14 +516,17 @@ function ConsumableSlotCard({
         {open && (
           <div className="overlay" onClick={() => setOpen(false)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+              <div className="modal-banner-scrim">
               <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
                 <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
                 <div>
-                  <span className="card-title">{def.name}</span>
+                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
                   <div className="tiny muted">Equipped on {hero.name}</div>
                 </div>
               </div>
-              <div className="tiny muted">{def.description}</div>
+              <RarityPill rarity={def.rarity} />
+              <div className="tiny muted" style={{ marginTop: 6 }}>{def.description}</div>
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
                 <button
@@ -521,6 +537,7 @@ function ConsumableSlotCard({
                 >
                   Unequip
                 </button>
+              </div>
               </div>
             </div>
           </div>
@@ -659,7 +676,7 @@ function SlotCard({
   return (
     <>
       <div
-        className={`item-card ${hasActiveSetBonus ? 'set-active' : ''}`}
+        className={`item-card rarity-card ${hasActiveSetBonus ? 'set-active' : ''}`}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
@@ -795,7 +812,7 @@ function StashCard({
   return (
     <>
       <div
-        className="item-card"
+        className="item-card rarity-card"
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
@@ -1090,7 +1107,7 @@ export function EquipmentPanel() {
           </button>
         )}
       </div>
-      <div className="item-card-grid">
+      <div className="item-card-grid gear-card-grid">
         {Array.from({ length: ModifierManager.consumableSlots(state) }).map((_, i) => {
           const equipped = hero.equippedConsumables ?? [];
           // Available to equip here: an actual loadout-effect consumable
@@ -1114,13 +1131,13 @@ export function EquipmentPanel() {
       </div>
 
       <div className="section-heading">Consumables</div>
-      <p className="tiny muted" style={{ marginTop: -6, marginBottom: 6 }}>
+      <p className="tiny muted subtitle" style={{ marginTop: -6, marginBottom: 6 }}>
         Click one to Use or Equip it on {hero.name} (switch heroes with the tabs above).
       </p>
       {InventoryManager.owned(state).length === 0 ? (
         <p className="small muted">None on hand. The Shop sells potions and charms.</p>
       ) : (
-        <div className="item-card-grid">
+        <div className="item-card-grid gear-card-grid">
           {InventoryManager.owned(state).map(({ def, count }) => (
             <ConsumableInfoCard key={def.id} def={def} count={count} hero={hero} engine={engine} />
           ))}

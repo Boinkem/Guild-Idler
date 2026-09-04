@@ -588,7 +588,7 @@ function WarehouseTab() {
       <OverseerRow />
 
       <div className="section-heading">Tools</div>
-      <p className="tiny muted" style={{ marginBottom: 8 }}>
+      <p className="tiny muted subtitle" style={{ marginBottom: 8 }}>
         Moved here from each node's own view -- one shared spot for every tool upgrade, same as everything
         else Warehouse-related.
       </p>

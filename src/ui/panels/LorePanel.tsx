@@ -271,7 +271,7 @@ function StoryQuestsTab() {
       {groups.length === 0 && (
         <>
           <div className="section-heading">Completed</div>
-          <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger. Keep an eye out.</p>
+          <p className="small muted subtitle">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger. Keep an eye out.</p>
         </>
       )}
 
@@ -418,7 +418,7 @@ function StoryRaidsTab() {
 
       <div className="section-heading">Completed</div>
       {completed.length === 0 ? (
-        <p className="small muted">No raid has been cleared yet. These need the whole guild, not just one hero. See the Raids tab.</p>
+        <p className="small muted subtitle">No raid has been cleared yet. These need the whole guild, not just one hero. See the Raids tab.</p>
       ) : (
         completed.map((r) => <RaidCompletedEntry key={r.id} raidId={r.id} />)
       )}

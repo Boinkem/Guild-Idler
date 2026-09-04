@@ -1,0 +1,487 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index b858273..1f4efe3 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -26251,3 +26251,110 @@ row classes and this patch's generic `.upgrade-*` ones into a single
+ shared set -- deliberately kept separate this patch to avoid touching
+ already-verified Guild Hall code, but five call sites now exist across
+ the two nearly-identical class sets.
++
++### Rarity-card sizing follow-up (a missed component, tighter proportions, Consumables brought in for the first time), a broader subtitle sweep, and unstyled dropdowns fixed (patch 0322)
++
++```discord-update
++Dev Update | Bug Fix / Features
++
++- Fixed the Blacksmith's "Sell from the stash" cards, which were missed by the rarity-card resize entirely
++- Tightened gear/stash card proportions closer to the vendor stock cards' own shape
++- Added rarity banners, colors, and pills to Inventory's Consumable cards for the first time, sized to match
++- Fixed several more panels' section intro lines reading as unreadable text over background art, same root cause as last patch's subtitle fix
++- Fixed the Sell Junk/Scrap All rarity dropdowns rendering with no visible styling
++```
++
++Direct follow-up report on three fronts, all from screenshots.
++
++**A whole card missed.** `ArmourStashCard` -- the Blacksmith's own "Sell
++from the stash" grid (`VendorsPanel.tsx`) -- turned out to be a
++completely separate component from `StashCard`/`SlotCard`
++(`EquipmentPanel.tsx`), so patch 0320's resize never touched it. Same
++treatment now: `rarity-card` marker class, its two pills (rarity +
++vaulted) moved into `.item-card-meta-row`, grid widened from `.grid.two`
++to `.item-card-grid.gear-card-grid`. Can't land on quite the same
++proportions as the other cards here, and that's not a bug -- this card
++has a real 4-button Lock/Sell/Scrap/Repair row baked directly into the
++collapsed view (a deliberate patch 0265 feature, actions the other
++cards hide behind a click-through modal instead), so it's inherently
++taller. Widened and consolidated is still a real improvement over the
++old 230px `.grid.two` square it was in before.
++
++**Gear/stash cards tightened.** Root cause: `.vendor-stock-card` uses
++12px/14px padding; `SlotCard`/`StashCard` were still on
++`.item-card-summary`'s 8px default even after 0320's grid-width and
++meta-row fixes, landing them wider/shorter than vendor-stock's own
++shape rather than truly matching it. New `.item-card.rarity-card
++.item-card-summary { padding: 12px 14px; }`, scoped to a `rarity-card`
++marker class rather than changing the 8px default globally (Curios and
++the empty-slot placeholders never had this problem).
++
++**Consumables brought in for real.** Direct request: "the Consumable
++Cards also are covered with this re-size so they are all uniform."
++Turned up something more than a sizing gap while digging in --
++`ConsumableDef` already carries a `.rarity` field (used by the
++Alchemist's own shop cards for a while now), but Inventory's owned-
++consumable and equipped-consumable cards never actually read it --
++plain icon + name, no banner, no color, no pill, ever. Added the full
++treatment both cards were missing (`rarity-card`, banner, rarity-
++colored name, `RarityPill`, and the same `modal-banner` treatment in
++each one's detail modal), then widened both grids to
++`gear-card-grid` alongside gear's own two. All five rarity-bearing
++grids in the game (gear, stash, sell-from-stash, and now both
++consumable views) are on one shared shape now.
++
++**Subtitle sweep, round 2.** Patch 0321 fixed the panel-level
++`<h2>`/`.subtitle` pair; this pass went hunting for the same "bare
++muted paragraph sitting directly on this tab's background art"
++pattern one level down, at the *section* level -- a short intro line
++under a `.section-heading` rather than under the tab's own `<h2>`.
++Confirmed and fixed by literally reusing the `.subtitle` class itself
++(same backing plaque, same shadow -- CSS classes are additive, so this
++was just adding `subtitle` alongside each line's existing `tiny muted`/
++`small muted`, no new CSS needed) on:
++- Vendors: Blacksmith's "Stock rotates in..." (the exact one from the
++  report screenshot), the Black Market's own rotation line once
++  unlocked, and its "Rumour is there's a contact..." locked-state
++  message
++- Inventory: the Consumables section's "Click one to Use or Equip..."
++  (the other example named directly)
++- Harvest: the Tools section's "Moved here from each node's own view..."
++- Prestige: the per-hero perks section's "Extra power for a specific
++  hero..."
++- Heroes: the Skins section's intro line, and the Recruit tab's "No
++  free slots" message
++- Lore: both "nothing here yet" empty states (Completed chains,
++  Completed raids) -- closes out "Lore - completed" from the original
++  report, which didn't have a reproducible case at the time
++- Settings: the Credits section intro and the Reset section's warning
++  line
++
++Not exhaustive -- there are more `tiny muted`/`small muted` lines in
++the game than these, but the rest checked were either already inside
++an opaque `.card`/`.modal` (fine, same reasoning as the original
++review) or short empty-state one-liners in low-traffic corners
++(Hatchery, Stats, Testing Tools) that didn't show the same pattern on
++inspection.
++
++**Dropdowns fixed.** The global `select` rule had colors but no
++`border-radius`/shadow at all -- every other clickable control in this
++game (`button`, `.chip`, `.btn-*`) gets both. Fixed at the shared rule
++so every select in the game picks it up, and removed the two Sell
++Junk/Scrap All rarity dropdowns' inline style overrides in
++`VendorsPanel.tsx`, which had been duplicating the same colors with no
++radius of their own -- redundant now that the shared rule covers it.
++
++**Caught during verification, not shipped:** an early pass at the
++Consumables grid fix accidentally deleted the `Array.from(...).map(...)`
++opening line wrapping `ConsumableSlotCard` while editing its grid's
++className, which `tsc` caught immediately as a syntax error on the
++first verification pass. Restored before this ever reached a diff.
++
++**Verified:** pulled `app.css`, `EquipmentPanel.tsx`, `VendorsPanel.tsx`,
++`HarvestPanel.tsx`, `PrestigePanel.tsx`, `HeroesPanel.tsx`,
++`LorePanel.tsx`, and `SettingsPanel.tsx` fresh from `main` via
++`raw.githubusercontent.com` immediately before editing (patch 0321 was
++already live). `npx tsc --noEmit` clean (would have caught, and did
++catch, the syntax slip above) and a full `vite build` (web + both
++Electron entries) passing clean against a fresh clone with every file
++applied together.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index d212de5..2441450 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -130,6 +130,19 @@
+   margin-top: 3px;
+ }
+ .item-card-meta-row .rarity-pill { margin-top: 0; }
++/*
++ * Patch 0322, direct follow-up report: .gear-card-grid's widened column
++ * alone still wasn't landing quite as close to .vendor-stock-card's own
++ * proportions as intended -- that card's 12px/14px padding (vs. this
++ * one's 8px default) accounts for a real chunk of the gap. Scoped to a
++ * marker class (added on every .item-card that shows a rarity-banner --
++ * SlotCard, StashCard, ArmourStashCard, and now the two consumable
++ * cards below) rather than changing .item-card-summary's own 8px
++ * default globally, since Curios/owned-consumables-without-rarity-yet
++ * and the empty-slot placeholders never had this problem and didn't
++ * ask for a size change.
++ */
++.item-card.rarity-card .item-card-summary { padding: 12px 14px; }
+ .item-card {
+   position: relative;
+   border: 1px solid var(--panel-3);
+@@ -2653,7 +2666,21 @@ select {
+   background: var(--panel-2);
+   border: 1px solid var(--panel-3);
+   color: var(--parchment);
++  /* Patch 0322, direct report ("dropdowns have no style") -- every
++     other clickable control in this game (button, .chip, .btn-*) gets
++     rounded corners via --radius plus a subtle bevel shadow; select was
++     the one plain flat-cornered rectangle left standing next to them.
++     Padding/font-size matched to the compact inline dropdowns that
++     actually prompted the report (VendorsPanel's Sell Junk/Scrap All
++     rarity pickers) rather than the larger default -- still just a
++     min/baseline, any inline font-size override still wins. */
++  border-radius: var(--radius);
++  box-shadow: var(--bevel);
++  padding: 3px 6px;
++  font-size: 0.625rem;
++  cursor: pointer;
+ }
++select:hover { border-color: var(--brass-dim); }
+ select option {
+   background: var(--panel-2);
+   color: var(--parchment);
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index a5973ab..ea67a48 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -392,16 +392,21 @@ function ConsumableInfoCard({
+   return (
+     <>
+       <div
+-        className="item-card"
++        className="item-card rarity-card"
+         onClick={() => setOpen(true)}
+         role="button"
+         tabIndex={0}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+       >
++        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+         <div className="item-card-summary">
+           <ConsumableIcon icon={def.icon} glyph={def.glyph} />
+           <div className="item-card-body">
+-            <div className="item-card-name">{def.name} ×{count}</div>
++            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
++            <div className="item-card-meta-row">
++              <RarityPill rarity={def.rarity} />
++              <span className="tiny muted">×{count}</span>
++            </div>
+           </div>
+         </div>
+       </div>
+@@ -409,14 +414,17 @@ function ConsumableInfoCard({
+       {open && (
+         <div className="overlay" onClick={() => setOpen(false)}>
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++            <div className="modal-banner-scrim">
+             <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+               <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
+               <div>
+-                <span className="card-title">{def.name}</span>
++                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
+                 <div className="tiny muted">Owned ×{count}</div>
+               </div>
+             </div>
+-            <div className="tiny muted">{def.description}</div>
++            <RarityPill rarity={def.rarity} />
++            <div className="tiny muted" style={{ marginTop: 6 }}>{def.description}</div>
+             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+               <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+               {instantUse && (
+@@ -446,6 +454,7 @@ function ConsumableInfoCard({
+                 </button>
+               )}
+             </div>
++            </div>
+           </div>
+         </div>
+       )}
+@@ -485,17 +494,21 @@ function ConsumableSlotCard({
+     return (
+       <>
+         <div
+-          className="item-card"
++          className="item-card rarity-card"
+           onClick={() => setOpen(true)}
+           role="button"
+           tabIndex={0}
+           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+         >
++          <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+           <div className="item-card-summary">
+             <ConsumableIcon icon={def.icon} glyph={def.glyph} />
+             <div className="item-card-body">
+-              <div className="item-card-name">{def.name}</div>
+-              <div className="tiny muted">Equipped on {hero.name}</div>
++              <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
++              <div className="item-card-meta-row">
++                <RarityPill rarity={def.rarity} />
++                <span className="tiny muted">on {hero.name}</span>
++              </div>
+             </div>
+           </div>
+         </div>
+@@ -503,14 +516,17 @@ function ConsumableSlotCard({
+         {open && (
+           <div className="overlay" onClick={() => setOpen(false)}>
+             <div className="modal" onClick={(e) => e.stopPropagation()}>
++              <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++              <div className="modal-banner-scrim">
+               <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                 <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
+                 <div>
+-                  <span className="card-title">{def.name}</span>
++                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
+                   <div className="tiny muted">Equipped on {hero.name}</div>
+                 </div>
+               </div>
+-              <div className="tiny muted">{def.description}</div>
++              <RarityPill rarity={def.rarity} />
++              <div className="tiny muted" style={{ marginTop: 6 }}>{def.description}</div>
+               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+                 <button
+@@ -522,6 +538,7 @@ function ConsumableSlotCard({
+                   Unequip
+                 </button>
+               </div>
++              </div>
+             </div>
+           </div>
+         )}
+@@ -659,7 +676,7 @@ function SlotCard({
+   return (
+     <>
+       <div
+-        className={`item-card ${hasActiveSetBonus ? 'set-active' : ''}`}
++        className={`item-card rarity-card ${hasActiveSetBonus ? 'set-active' : ''}`}
+         onClick={() => setOpen(true)}
+         role="button"
+         tabIndex={0}
+@@ -795,7 +812,7 @@ function StashCard({
+   return (
+     <>
+       <div
+-        className="item-card"
++        className="item-card rarity-card"
+         onClick={() => setOpen(true)}
+         role="button"
+         tabIndex={0}
+@@ -1090,7 +1107,7 @@ export function EquipmentPanel() {
+           </button>
+         )}
+       </div>
+-      <div className="item-card-grid">
++      <div className="item-card-grid gear-card-grid">
+         {Array.from({ length: ModifierManager.consumableSlots(state) }).map((_, i) => {
+           const equipped = hero.equippedConsumables ?? [];
+           // Available to equip here: an actual loadout-effect consumable
+@@ -1114,13 +1131,13 @@ export function EquipmentPanel() {
+       </div>
+ 
+       <div className="section-heading">Consumables</div>
+-      <p className="tiny muted" style={{ marginTop: -6, marginBottom: 6 }}>
++      <p className="tiny muted subtitle" style={{ marginTop: -6, marginBottom: 6 }}>
+         Click one to Use or Equip it on {hero.name} (switch heroes with the tabs above).
+       </p>
+       {InventoryManager.owned(state).length === 0 ? (
+         <p className="small muted">None on hand. The Shop sells potions and charms.</p>
+       ) : (
+-        <div className="item-card-grid">
++        <div className="item-card-grid gear-card-grid">
+           {InventoryManager.owned(state).map(({ def, count }) => (
+             <ConsumableInfoCard key={def.id} def={def} count={count} hero={hero} engine={engine} />
+           ))}
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index a5536ae..b0cbbcb 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -588,7 +588,7 @@ function WarehouseTab() {
+       <OverseerRow />
+ 
+       <div className="section-heading">Tools</div>
+-      <p className="tiny muted" style={{ marginBottom: 8 }}>
++      <p className="tiny muted subtitle" style={{ marginBottom: 8 }}>
+         Moved here from each node's own view -- one shared spot for every tool upgrade, same as everything
+         else Warehouse-related.
+       </p>
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index fe9d753..b0144af 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -284,7 +284,7 @@ function HeroesRosterView() {
+       <div className="section-heading">Recruit</div>
+       {state.heroes.length >= slots && (
+         <>
+-          <p className="small muted">
++          <p className="small muted subtitle">
+             No free slots. The Tavern adds one per level up to 5; beyond that, earn Heroic Renown by
+             clearing raids or Replay Memories at Mythic or Legendary with a capped ({PRESTIGE_MIN_LEVEL}+)
+             hero, then spend it on Extra Banner (up to 4 more). {slots} is not necessarily your ceiling.
+@@ -436,7 +436,7 @@ function HeroesRosterView() {
+       })()}
+ 
+       <div className="section-heading">Skins</div>
+-      <p className="small muted">
++      <p className="small muted subtitle">
+         Cosmetic liveries, unlocked once for the whole guild and usable by any hero.
+         A pure gold sink, no effect on stats.
+       </p>
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index b8cdcef..7e8cc68 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -271,7 +271,7 @@ function StoryQuestsTab() {
+       {groups.length === 0 && (
+         <>
+           <div className="section-heading">Completed</div>
+-          <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger. Keep an eye out.</p>
++          <p className="small muted subtitle">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger. Keep an eye out.</p>
+         </>
+       )}
+ 
+@@ -418,7 +418,7 @@ function StoryRaidsTab() {
+ 
+       <div className="section-heading">Completed</div>
+       {completed.length === 0 ? (
+-        <p className="small muted">No raid has been cleared yet. These need the whole guild, not just one hero. See the Raids tab.</p>
++        <p className="small muted subtitle">No raid has been cleared yet. These need the whole guild, not just one hero. See the Raids tab.</p>
+       ) : (
+         completed.map((r) => <RaidCompletedEntry key={r.id} raidId={r.id} />)
+       )}
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index 8ea7d36..f020593 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -350,7 +350,7 @@ export function PrestigePanel() {
+       {state.heroes.length > 0 && (
+         <>
+           <div className="section-heading">Spend renown -- per hero</div>
+-          <p className="small muted" style={{ marginTop: -4 }}>
++          <p className="small muted subtitle" style={{ marginTop: -4 }}>
+             Extra power for a specific hero who&apos;s done leveling.
+           </p>
+           {state.heroes.map((hero) => (
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index a3dc633..b584816 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -333,7 +333,7 @@ export function SettingsPanel() {
+       </Row>
+ 
+       <div className="section-heading">Credits</div>
+-      <p className="small muted">
++      <p className="small muted subtitle">
+         Guildbound uses licensed art from a few outside creators. None of the terms below require
+         credit, but it's given anyway.
+       </p>
+@@ -352,7 +352,7 @@ export function SettingsPanel() {
+       </div>
+ 
+       <div className="section-heading">Reset</div>
+-      <p className="small muted">Restores every setting above to its default. Your guild is untouched.</p>
++      <p className="small muted subtitle">Restores every setting above to its default. Your guild is untouched.</p>
+       <button className="btn-ghost" onClick={reset}>Reset settings to defaults</button>
+       </div>
+     </div>
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index d32d457..c49b04d 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -598,7 +598,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+   return (
+     <>
+       <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
+-        <p className="tiny muted" style={{ margin: 0 }}>
++        <p className="tiny muted subtitle" style={{ margin: 0 }}>
+           Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. The armourer buys as well as sells.
+         </p>
+         <ShopRerollButton vendorId="blacksmith" />
+@@ -631,10 +631,6 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+           <select
+             value={junkRarity}
+             onChange={(e) => setJunkRarity(e.target.value as Rarity)}
+-            style={{
+-              background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+-              color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+-            }}
+           >
+             {RARITY_ORDER.map((r) => (
+               <option key={r} value={r}>{r} and below</option>
+@@ -652,10 +648,6 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+           <select
+             value={scrapRarity}
+             onChange={(e) => setScrapRarity(e.target.value as Rarity)}
+-            style={{
+-              background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+-              color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+-            }}
+           >
+             {RARITY_ORDER.map((r) => (
+               <option key={r} value={r}>{r} and below</option>
+@@ -681,7 +673,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+           </button>
+         </div>
+       )}
+-      <div className="grid two">
++      <div className="item-card-grid gear-card-grid">
+         {state.stash.map((item) => (
+           <ArmourStashCard
+             key={item.uid}
+@@ -841,14 +833,16 @@ function ArmourStashCard({
+ 
+   return (
+     <>
+-      <div className="item-card" data-stash-uid={item.uid}>
++      <div className="item-card rarity-card" data-stash-uid={item.uid}>
+         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+         <div className="item-card-summary">
+           <ItemIcon slot={def.slot} icon={def.icon} />
+           <div className="item-card-body">
+             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+-            <span className="rarity-pill" style={{ color: RARITY_COLOR[def.rarity], borderColor: RARITY_COLOR[def.rarity] }}>{def.rarity}</span>
+-            {item.locked && <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)' }}>{'\uD83D\uDD12'} vaulted</span>}
++            <div className="item-card-meta-row">
++              <span className="rarity-pill" style={{ color: RARITY_COLOR[def.rarity], borderColor: RARITY_COLOR[def.rarity] }}>{def.rarity}</span>
++              {item.locked && <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)' }}>{'\uD83D\uDD12'} vaulted</span>}
++            </div>
+           </div>
+         </div>
+         <div className="item-card-actions">
+@@ -952,7 +946,7 @@ function BlackMarketStock({ now }: { now: number }) {
+   if (!blackMarketUnlocked) {
+     return (
+       <>
+-        <p className="small muted">
++        <p className="small muted subtitle">
+           Rumour is there's a contact who deals in rarer stock, for a price. Unlock via the Black Market
+           Contact upgrade in Guild Hall.
+         </p>
+@@ -974,7 +968,7 @@ function BlackMarketStock({ now }: { now: number }) {
+   return (
+     <>
+       <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
+-        <p className="tiny muted" style={{ margin: 0 }}>
++        <p className="tiny muted subtitle" style={{ margin: 0 }}>
+           Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
+           {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
+         </p>
