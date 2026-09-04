@@ -670,10 +670,12 @@ function SlotCard({
           <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
-            <RarityPill rarity={def.rarity} />
-            {def.setId && <SetPill />}
-            {def.craftable && <CraftedPill />}
-            <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
+            <div className="item-card-meta-row">
+              <RarityPill rarity={def.rarity} />
+              {def.setId && <SetPill />}
+              {def.craftable && <CraftedPill />}
+              <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
+            </div>
           </div>
         </div>
       </div>
@@ -804,12 +806,14 @@ function StashCard({
           <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
-            <RarityPill rarity={def.rarity} />
-            {def.setId && <SetPill />}
-            {def.craftable && <CraftedPill />}
-            {isUpgrade && <UpgradePill />}
-            {item.locked && <LockedPill />}
-            <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
+            <div className="item-card-meta-row">
+              <RarityPill rarity={def.rarity} />
+              {def.setId && <SetPill />}
+              {def.craftable && <CraftedPill />}
+              {isUpgrade && <UpgradePill />}
+              {item.locked && <LockedPill />}
+              <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
+            </div>
           </div>
         </div>
       </div>
@@ -1064,7 +1068,7 @@ export function EquipmentPanel() {
         );
       })()}
 
-      <div className="item-card-grid">
+      <div className="item-card-grid gear-card-grid">
         {SLOTS.map((slot) => (
           <SlotCard key={slot} slot={slot} item={hero.equipment[slot]} workshop={workshop} hero={hero} engine={engine} />
         ))}
@@ -1149,7 +1153,7 @@ export function EquipmentPanel() {
       {state.stash.length > 0 && filteredStash.length === 0 && (
         <p className="small muted">Nothing in the stash matches that filter.</p>
       )}
-      <div className="item-card-grid">
+      <div className="item-card-grid gear-card-grid">
         {filteredStash.map((item) => (
           <StashCard key={item.uid} item={item} hero={hero} engine={engine} />
         ))}

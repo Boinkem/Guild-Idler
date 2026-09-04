@@ -93,6 +93,43 @@
   gap: 8px;
   margin-bottom: 14px;
 }
+/*
+ * Equipped-gear and stash grids only (SlotCard/StashCard in
+ * EquipmentPanel.tsx -- the two item-card-grid usages that actually
+ * carry a rarity-banner) -- everything else on .item-card-grid
+ * (Consumables, Curios) has no rarity art behind it and stays at the
+ * base 180px column. Widened to match .vendor-stock-grid's own 265px
+ * exactly: that card's icon+2-lines-of-text content happens to land
+ * very close to the rarity-banner art's own ~4.2:1 proportions already
+ * (see that art's own comment on RARITY_BANNER in util.ts), so matching
+ * its column width -- combined with .item-card-meta-row below
+ * condensing this card down to the same 2-line shape -- gets these
+ * cards into roughly that same shape too, instead of the much
+ * squarer/taller box the old 3-4-stacked-line body produced (direct
+ * report: the rarity-banner art was visibly cropped on these).
+ */
+.item-card-grid.gear-card-grid { grid-template-columns: repeat(auto-fill, minmax(265px, 1fr)); }
+/*
+ * Condenses RarityPill/SetPill/CraftedPill/UpgradePill/LockedPill and
+ * the compact DurabilityBar onto one row instead of each stacking on
+ * its own line -- direct companion to .gear-card-grid above, since it's
+ * this line count (name, then everything else) collapsing from 3-4
+ * lines to 2 that actually gets the card close to vendor-stock-card's
+ * shape; the wider grid column alone wouldn't have been enough. No hard
+ * height cap enforced here on purpose -- a stash item that happens to
+ * be a locked, craftable, set-bonus upgrade genuinely has 5 pills plus
+ * the bar to show, and letting that rare case wrap to a second line
+ * (row height grows a little past the ideal proportions) beats ever
+ * clipping a state indicator the player actually needs to see.
+ */
+.item-card-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+.item-card-meta-row .rarity-pill { margin-top: 0; }
 .item-card {
   position: relative;
   border: 1px solid var(--panel-3);
@@ -1890,7 +1927,7 @@ button:focus-visible, [tabindex]:focus-visible {
    comment for why this is an inline row rather than text overlaid on
    the bar (too short, 6px) or a head-line above it (costs vertical
    space a dense item-card grid doesn't have). */
-.dura-row { display: flex; align-items: center; gap: 6px; }
+.dura-row { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
 .dura-row .bar { flex: 1; min-width: 0; }
 .dura-value { flex-shrink: 0; white-space: nowrap; }
 /* Below-threshold wrench glyph (patch 0300) -- same condition the bar's
@@ -4955,9 +4992,30 @@ button.harvest-item:hover {
 .item-card .rarity-pill { background: rgba(0, 0, 0, 0.4); }
 .item-card-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
 
+/*
+ * Was `inset: 0` -- full-bleed over the ENTIRE modal, which is much
+ * taller than wide (item detail modals run 300-450px tall on a 460px-
+ * wide box) while the actual rarity-banner art is a ~4.2:1 wide strip
+ * (866x205ish -- see RARITY_BANNER's own comment in util.ts). `cover`
+ * over that mismatch was scaling the art up ~2x to fill the modal's
+ * height, cropping out most of its width in the process -- direct
+ * report, same root cause as the item-card fix right above. Locked to
+ * a fixed-aspect strip across just the top instead, at very close to
+ * the art's own native ratio, so this crops next to nothing regardless
+ * of how tall the rest of the modal's content ends up being below it --
+ * same shape .vendor-stock-card already uses this art at cleanly.
+ * `.modal-banner-scrim`'s own gradient (right below) already fades from
+ * art-visible to solid --panel well before 65% down a typical modal, so
+ * it needs no changes to still read correctly against this much
+ * shorter strip.
+ */
 .modal-banner {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  aspect-ratio: 21 / 5;
+  border-radius: 10px 10px 0 0;
   background-size: cover;
   background-position: center;
   opacity: 0.4;

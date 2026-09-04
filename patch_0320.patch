@@ -1,0 +1,243 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 31614c1..20b7c71 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -26067,3 +26067,89 @@ build` (web target) passing clean as well.
+   guild upgrade, a shared "replay slot" pool, etc.) is worth adding
+   later instead of/alongside the party-size scaling here -- discussed
+   as an alternative during scoping, not built.
++
++### Rarity-banner art no longer cropped on the equipped-gear/stash cards or the item detail modal (patch 0320)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed rarity-banner artwork getting heavily cropped on equipped-gear cards, stash cards, and the item detail popup
++- Widened those cards and reshaped their info into two lines so the artwork shows the same way it already does on the Vendor's Stock cards
++```
++
++Direct report + follow-up to patch 0316's Guild Hall row-background fix
++-- same "art doesn't fit the box" family of bug, different box. Traced
++to a real, confirmed aspect-ratio mismatch: `RARITY_BANNER` art (see
++util.ts) is a wide ~4.2:1 strip (866x205ish per file, checked directly
++against the actual PNGs in `public/rarity-banners/`), but
++`.item-card`'s old body -- name, then rarity/set/crafted/upgrade/locked
++pills each on their own line, then the durability bar on a fourth --
++stacked into a box 2-3x taller than wide, and the item detail
++`.modal` (bonuses, enchant line, set info, durability text, buttons)
++runs 300-450px tall on a 460px-wide box, portrait rather than landscape.
++`background-size: cover` on both was scaling the art up to fill the
++mismatched axis and cropping most of the rest away -- confirmed by
++comparing against `.vendor-stock-card`, which happens to land at
++almost exactly the art's own ~4.2:1 ratio already (265px column, ~65px
++content-driven height) and shows the same art with essentially no
++visible crop. Fix reshapes the other two spots toward that same
++proportions instead of touching the art itself.
++
++**Equipped-gear grid (SlotCard) and stash grid (StashCard) in
++`EquipmentPanel.tsx`.** Two changes together, neither alone was enough:
++- New `.gear-card-grid` modifier on just these two `.item-card-grid`
++  usages, widening their column from `minmax(180px, 1fr)` to
++  `minmax(265px, 1fr)` -- the exact value `.vendor-stock-grid` already
++  uses. Consumables and Curios grids (`.item-card-grid` with no
++  rarity-banner at all) are untouched.
++- New `.item-card-meta-row` wrapping RarityPill/SetPill/CraftedPill/
++  UpgradePill/LockedPill and the compact `DurabilityBar` onto one flex
++  row instead of each stacking on its own line -- collapses the body
++  from 3-4 lines down to the same 2 (name, then everything else)
++  `.vendor-stock-card` already uses. `.dura-row` (the bar + number)
++  picked up `flex: 1; min-width: 0` so it fills whatever room the row
++  has left after the pills -- a no-op everywhere else `.dura-row`
++  renders outside a flex container, so the non-compact detail-modal
++  durability line is unaffected.
++- Deliberately NOT a hard aspect-ratio/height lock -- a stash item that's
++  simultaneously set-bonus, craftable, an upgrade, AND locked genuinely
++  has 5 pills plus the bar to show; `.item-card-meta-row` wraps to a
++  second line rather than clipping in that rare case, so the card runs
++  a little taller than the ideal ratio there instead of ever hiding a
++  state indicator the player needs. The common case (no set/craft/
++  upgrade/lock flags) now lands very close to `.vendor-stock-card`'s own
++  ~4.1:1 shape.
++
++**Item detail modal (`.modal-banner`, all four usages -- equipped gear,
++stash, and both Vendor shop-card modals, `EquipmentPanel.tsx` +
++`VendorsPanel.tsx`), CSS-only, no JSX touched.** Was `position: absolute;
++inset: 0` -- full-bleed across the entire modal's height. Now
++`top/left/right: 0` plus `aspect-ratio: 21 / 5` (≈4.2, the art's own
++ratio) instead of stretching to the bottom -- a fixed-shape strip across
++just the top, same proportions `.vendor-stock-card` already uses this
++art at cleanly, regardless of how tall the rest of that item's modal
++content ends up being below it. `.modal-banner-scrim`'s existing
++gradient (art-visible near the top, solid `--panel` by 65% down the
++modal) needed no changes -- it already fades to solid well past where
++the much-shorter strip now ends, so the icon+name row still reads
++clearly against the strip and everything below it is the modal's own
++solid background same as always.
++
++**Verified:** pulled `EquipmentPanel.tsx`, `app.css`, and `VendorsPanel.tsx`
++fresh from `main` via `raw.githubusercontent.com` immediately before
++editing (patch 0319 was already live). Grepped the whole repo first to
++confirm `.item-card-grid`/`.item-card`/`.modal-banner` have exactly the
++five call sites named above and no others, so the scoped `.gear-card-grid`
++class (rather than widening `.item-card-grid` itself) was the safe
++choice -- Consumables/Curios never see the wider column or the new meta-
++row. `npx tsc --noEmit` and a full `vite build` (web + both Electron
++entries) passing clean against a fresh clone with all edits applied.
++
++**Still open:** the five `rarity-banners/*.png` files aren't pixel-
++identical to each other (866-957px wide, 200-214px tall depending on
++tier -- legendary runs noticeably wider than the other four), so
++`aspect-ratio: 21/5` is a single shared average across all five rather
++than a per-file exact match. Legendary crops a little more than the
++others as a result (~7% off vs ~2-4% for the rest) -- not enough to
++be worth a per-rarity CSS value, but worth knowing if legendary gear
++specifically still looks off after this patch.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 9b1f4d7..a438ddf 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -93,6 +93,43 @@
+   gap: 8px;
+   margin-bottom: 14px;
+ }
++/*
++ * Equipped-gear and stash grids only (SlotCard/StashCard in
++ * EquipmentPanel.tsx -- the two item-card-grid usages that actually
++ * carry a rarity-banner) -- everything else on .item-card-grid
++ * (Consumables, Curios) has no rarity art behind it and stays at the
++ * base 180px column. Widened to match .vendor-stock-grid's own 265px
++ * exactly: that card's icon+2-lines-of-text content happens to land
++ * very close to the rarity-banner art's own ~4.2:1 proportions already
++ * (see that art's own comment on RARITY_BANNER in util.ts), so matching
++ * its column width -- combined with .item-card-meta-row below
++ * condensing this card down to the same 2-line shape -- gets these
++ * cards into roughly that same shape too, instead of the much
++ * squarer/taller box the old 3-4-stacked-line body produced (direct
++ * report: the rarity-banner art was visibly cropped on these).
++ */
++.item-card-grid.gear-card-grid { grid-template-columns: repeat(auto-fill, minmax(265px, 1fr)); }
++/*
++ * Condenses RarityPill/SetPill/CraftedPill/UpgradePill/LockedPill and
++ * the compact DurabilityBar onto one row instead of each stacking on
++ * its own line -- direct companion to .gear-card-grid above, since it's
++ * this line count (name, then everything else) collapsing from 3-4
++ * lines to 2 that actually gets the card close to vendor-stock-card's
++ * shape; the wider grid column alone wouldn't have been enough. No hard
++ * height cap enforced here on purpose -- a stash item that happens to
++ * be a locked, craftable, set-bonus upgrade genuinely has 5 pills plus
++ * the bar to show, and letting that rare case wrap to a second line
++ * (row height grows a little past the ideal proportions) beats ever
++ * clipping a state indicator the player actually needs to see.
++ */
++.item-card-meta-row {
++  display: flex;
++  align-items: center;
++  flex-wrap: wrap;
++  gap: 6px;
++  margin-top: 3px;
++}
++.item-card-meta-row .rarity-pill { margin-top: 0; }
+ .item-card {
+   position: relative;
+   border: 1px solid var(--panel-3);
+@@ -1890,7 +1927,7 @@ button:focus-visible, [tabindex]:focus-visible {
+    comment for why this is an inline row rather than text overlaid on
+    the bar (too short, 6px) or a head-line above it (costs vertical
+    space a dense item-card grid doesn't have). */
+-.dura-row { display: flex; align-items: center; gap: 6px; }
++.dura-row { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+ .dura-row .bar { flex: 1; min-width: 0; }
+ .dura-value { flex-shrink: 0; white-space: nowrap; }
+ /* Below-threshold wrench glyph (patch 0300) -- same condition the bar's
+@@ -4955,9 +4992,30 @@ button.harvest-item:hover {
+ .item-card .rarity-pill { background: rgba(0, 0, 0, 0.4); }
+ .item-card-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+ 
++/*
++ * Was `inset: 0` -- full-bleed over the ENTIRE modal, which is much
++ * taller than wide (item detail modals run 300-450px tall on a 460px-
++ * wide box) while the actual rarity-banner art is a ~4.2:1 wide strip
++ * (866x205ish -- see RARITY_BANNER's own comment in util.ts). `cover`
++ * over that mismatch was scaling the art up ~2x to fill the modal's
++ * height, cropping out most of its width in the process -- direct
++ * report, same root cause as the item-card fix right above. Locked to
++ * a fixed-aspect strip across just the top instead, at very close to
++ * the art's own native ratio, so this crops next to nothing regardless
++ * of how tall the rest of the modal's content ends up being below it --
++ * same shape .vendor-stock-card already uses this art at cleanly.
++ * `.modal-banner-scrim`'s own gradient (right below) already fades from
++ * art-visible to solid --panel well before 65% down a typical modal, so
++ * it needs no changes to still read correctly against this much
++ * shorter strip.
++ */
+ .modal-banner {
+   position: absolute;
+-  inset: 0;
++  top: 0;
++  left: 0;
++  right: 0;
++  aspect-ratio: 21 / 5;
++  border-radius: 10px 10px 0 0;
+   background-size: cover;
+   background-position: center;
+   opacity: 0.4;
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 2a8cbe5..a5973ab 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -670,10 +670,12 @@ function SlotCard({
+           <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
+           <div className="item-card-body">
+             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+-            <RarityPill rarity={def.rarity} />
+-            {def.setId && <SetPill />}
+-            {def.craftable && <CraftedPill />}
+-            <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
++            <div className="item-card-meta-row">
++              <RarityPill rarity={def.rarity} />
++              {def.setId && <SetPill />}
++              {def.craftable && <CraftedPill />}
++              <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
++            </div>
+           </div>
+         </div>
+       </div>
+@@ -804,12 +806,14 @@ function StashCard({
+           <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
+           <div className="item-card-body">
+             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+-            <RarityPill rarity={def.rarity} />
+-            {def.setId && <SetPill />}
+-            {def.craftable && <CraftedPill />}
+-            {isUpgrade && <UpgradePill />}
+-            {item.locked && <LockedPill />}
+-            <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
++            <div className="item-card-meta-row">
++              <RarityPill rarity={def.rarity} />
++              {def.setId && <SetPill />}
++              {def.craftable && <CraftedPill />}
++              {isUpgrade && <UpgradePill />}
++              {item.locked && <LockedPill />}
++              <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
++            </div>
+           </div>
+         </div>
+       </div>
+@@ -1064,7 +1068,7 @@ export function EquipmentPanel() {
+         );
+       })()}
+ 
+-      <div className="item-card-grid">
++      <div className="item-card-grid gear-card-grid">
+         {SLOTS.map((slot) => (
+           <SlotCard key={slot} slot={slot} item={hero.equipment[slot]} workshop={workshop} hero={hero} engine={engine} />
+         ))}
+@@ -1149,7 +1153,7 @@ export function EquipmentPanel() {
+       {state.stash.length > 0 && filteredStash.length === 0 && (
+         <p className="small muted">Nothing in the stash matches that filter.</p>
+       )}
+-      <div className="item-card-grid">
++      <div className="item-card-grid gear-card-grid">
+         {filteredStash.map((item) => (
+           <StashCard key={item.uid} item={item} hero={hero} engine={engine} />
+         ))}

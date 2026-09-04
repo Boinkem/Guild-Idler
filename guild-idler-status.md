@@ -26067,3 +26067,89 @@ build` (web target) passing clean as well.
   guild upgrade, a shared "replay slot" pool, etc.) is worth adding
   later instead of/alongside the party-size scaling here -- discussed
   as an alternative during scoping, not built.
+
+### Rarity-banner art no longer cropped on the equipped-gear/stash cards or the item detail modal (patch 0320)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed rarity-banner artwork getting heavily cropped on equipped-gear cards, stash cards, and the item detail popup
+- Widened those cards and reshaped their info into two lines so the artwork shows the same way it already does on the Vendor's Stock cards
+```
+
+Direct report + follow-up to patch 0316's Guild Hall row-background fix
+-- same "art doesn't fit the box" family of bug, different box. Traced
+to a real, confirmed aspect-ratio mismatch: `RARITY_BANNER` art (see
+util.ts) is a wide ~4.2:1 strip (866x205ish per file, checked directly
+against the actual PNGs in `public/rarity-banners/`), but
+`.item-card`'s old body -- name, then rarity/set/crafted/upgrade/locked
+pills each on their own line, then the durability bar on a fourth --
+stacked into a box 2-3x taller than wide, and the item detail
+`.modal` (bonuses, enchant line, set info, durability text, buttons)
+runs 300-450px tall on a 460px-wide box, portrait rather than landscape.
+`background-size: cover` on both was scaling the art up to fill the
+mismatched axis and cropping most of the rest away -- confirmed by
+comparing against `.vendor-stock-card`, which happens to land at
+almost exactly the art's own ~4.2:1 ratio already (265px column, ~65px
+content-driven height) and shows the same art with essentially no
+visible crop. Fix reshapes the other two spots toward that same
+proportions instead of touching the art itself.
+
+**Equipped-gear grid (SlotCard) and stash grid (StashCard) in
+`EquipmentPanel.tsx`.** Two changes together, neither alone was enough:
+- New `.gear-card-grid` modifier on just these two `.item-card-grid`
+  usages, widening their column from `minmax(180px, 1fr)` to
+  `minmax(265px, 1fr)` -- the exact value `.vendor-stock-grid` already
+  uses. Consumables and Curios grids (`.item-card-grid` with no
+  rarity-banner at all) are untouched.
+- New `.item-card-meta-row` wrapping RarityPill/SetPill/CraftedPill/
+  UpgradePill/LockedPill and the compact `DurabilityBar` onto one flex
+  row instead of each stacking on its own line -- collapses the body
+  from 3-4 lines down to the same 2 (name, then everything else)
+  `.vendor-stock-card` already uses. `.dura-row` (the bar + number)
+  picked up `flex: 1; min-width: 0` so it fills whatever room the row
+  has left after the pills -- a no-op everywhere else `.dura-row`
+  renders outside a flex container, so the non-compact detail-modal
+  durability line is unaffected.
+- Deliberately NOT a hard aspect-ratio/height lock -- a stash item that's
+  simultaneously set-bonus, craftable, an upgrade, AND locked genuinely
+  has 5 pills plus the bar to show; `.item-card-meta-row` wraps to a
+  second line rather than clipping in that rare case, so the card runs
+  a little taller than the ideal ratio there instead of ever hiding a
+  state indicator the player needs. The common case (no set/craft/
+  upgrade/lock flags) now lands very close to `.vendor-stock-card`'s own
+  ~4.1:1 shape.
+
+**Item detail modal (`.modal-banner`, all four usages -- equipped gear,
+stash, and both Vendor shop-card modals, `EquipmentPanel.tsx` +
+`VendorsPanel.tsx`), CSS-only, no JSX touched.** Was `position: absolute;
+inset: 0` -- full-bleed across the entire modal's height. Now
+`top/left/right: 0` plus `aspect-ratio: 21 / 5` (≈4.2, the art's own
+ratio) instead of stretching to the bottom -- a fixed-shape strip across
+just the top, same proportions `.vendor-stock-card` already uses this
+art at cleanly, regardless of how tall the rest of that item's modal
+content ends up being below it. `.modal-banner-scrim`'s existing
+gradient (art-visible near the top, solid `--panel` by 65% down the
+modal) needed no changes -- it already fades to solid well past where
+the much-shorter strip now ends, so the icon+name row still reads
+clearly against the strip and everything below it is the modal's own
+solid background same as always.
+
+**Verified:** pulled `EquipmentPanel.tsx`, `app.css`, and `VendorsPanel.tsx`
+fresh from `main` via `raw.githubusercontent.com` immediately before
+editing (patch 0319 was already live). Grepped the whole repo first to
+confirm `.item-card-grid`/`.item-card`/`.modal-banner` have exactly the
+five call sites named above and no others, so the scoped `.gear-card-grid`
+class (rather than widening `.item-card-grid` itself) was the safe
+choice -- Consumables/Curios never see the wider column or the new meta-
+row. `npx tsc --noEmit` and a full `vite build` (web + both Electron
+entries) passing clean against a fresh clone with all edits applied.
+
+**Still open:** the five `rarity-banners/*.png` files aren't pixel-
+identical to each other (866-957px wide, 200-214px tall depending on
+tier -- legendary runs noticeably wider than the other four), so
+`aspect-ratio: 21/5` is a single shared average across all five rather
+than a per-file exact match. Legendary crops a little more than the
+others as a result (~7% off vs ~2-4% for the rest) -- not enough to
+be worth a per-rarity CSS value, but worth knowing if legendary gear
+specifically still looks off after this patch.
