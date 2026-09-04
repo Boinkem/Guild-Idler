@@ -1,0 +1,630 @@
+diff --git a/.gitignore b/.gitignore
+index b641430..3c386fd 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -28,3 +28,4 @@ src/game/data/json/*.bak
+ # Discord webhook URL for the Patches tab's "post a dev update" feature --
+ # a local secret, never committed. See tools/devtool/server.mjs.
+ tools/devtool/discord.config.json
++tools/devtool/steam.config.json
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index df26db2..4fc39ad 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -25452,3 +25452,117 @@ above) rather than type errors; still worth a real build pass before
+ merging, and a playtest confirming Blackford Keep's new encounter id
+ renders correctly end-to-end and The Gathering Horde offers/completes
+ cleanly for a level-7 guild that's already cleared Goblin Warband.
++
++### DevTool: Steam upload support + exact-version reset (patch 0313)
++```discord-update
++Dev Update | Patch 0313
++
++- Added Steam upload support to the internal dev tool -- new "Configure Steam" and "Upload to Steam" steps in the Patching workflow
++- Added a way to set an exact version number in the dev tool, ready for resetting to 1.0.0 for real launch
++```
++
++DevTool-only changes -- nothing here touches the shipped game itself.
++Scoped and confirmed in the prior conversation: Windows depot only for
++now (Linux depot deferred to whenever a Linux build actually exists),
++and no Steam password stored anywhere in this codebase.
++
++**Two new steps in the Patches tab, same "one confirmed button per
++step" shape every existing step already uses:**
++
++- **Step 7.5, Configure Steam upload.** New fields: Steam builder
++  account username, App ID, Depot ID, path to the Steamworks SDK's
++  `ContentBuilder` folder, and a target-branch dropdown defaulting to
++  `beta` (never `default`/live unless deliberately changed) -- matching
++  the beta-branch-first safety practice discussed before any of this
++  was scoped. Saved to `tools/devtool/steam.config.json`, gitignored,
++  same treatment as the existing `discord.config.json`. **Deliberately
++  holds a username only, never a password** -- unlike the Discord
++  webhook (a scoped, revocable, single-purpose secret), a Steam login
++  is a whole publisher account, a different risk class entirely.
++  `steamcmd` caches a login session on disk after one interactive
++  `steamcmd +login <user>` run from a real terminal (prompts for
++  password + Steam Guard that one time); every button here reuses that
++  cached session rather than this codebase ever holding the credential.
++
++- **Step 10, Upload to Steam.** Two buttons, deliberately separate
++  actions rather than one combined step:
++  - **Generate build scripts** -- writes `depot_build_<id>.vdf` and
++    `app_build_<id>.vdf` into `<ContentBuilder>/scripts`, `ContentRoot`
++    pointed at `release/` directly (electron-builder's NSIS target
++    already drops the installer as a loose `.exe` there alongside a
++    `win-unpacked/` folder -- SteamPipe just wants a folder of files,
++    it doesn't care that electron-builder produced them rather than a
++    single named artifact handed over). Excludes `win-unpacked*`,
++    `*.blockmap`, and `latest.yml` from the depot mapping -- none of
++    those are meant to ship in a Steam depot. Finds the newest `.exe`
++    in `release/` via the same "most recently modified wins" logic
++    `copyLatestBuild()` (the existing Google-Drive-copy step) already
++    uses, factored into a shared `findLatestReleaseFile()` so the two
++    don't drift into two different definitions of "the latest build"
++    over time. Pure file-write, no network call -- safe to run
++    repeatedly while dialing in config, same reasoning the VDF-generation
++    step description gives the user directly.
++  - **Upload to Steam** -- runs `steamcmd +login <user> +run_app_build
++    <path> +quit` against whatever Generate last wrote, using the same
++    `run()`/timeout-wrapped `execFile` pattern Build/Package already
++    use (`STEAM_UPLOAD_TIMEOUT_MS`, 20 minutes -- a full depot upload
++    can legitimately take a while). Confirms with the target branch
++    named explicitly before sending anything, same "Push commits"
++    confirm-dialog pattern the existing Push step already uses.
++
++**Two failure modes worth calling out, both found and fixed via direct
++runtime testing against a stub `steamcmd` script in this environment
++(not just read-through) before this patch was written up:**
++
++- **Missing/misconfigured `steamcmd` binary.** `run()`'s general-purpose
++  `execFile` error handling (shared with every git/npm command this
++  tool already runs) sets a spawn error's `stderr` to `''` rather than
++  leaving it `undefined` -- since `run()`'s own fallback is
++  `err.stderr ?? fallbackMessage`, and `??` only catches
++  `null`/`undefined` not an empty string, a missing `steamcmd` silently
++  came back with a **blank** error message instead of an actionable
++  one. Rather than changing `run()` itself (shared infra, used
++  correctly everywhere else), added an explicit `fs.access()` check on
++  the resolved `steamcmd` path before ever calling `run()`, with a
++  message naming the exact path checked and what folder structure is
++  expected -- the single most likely first-time mistake with this
++  whole feature (a wrong `ContentBuilder` folder path) now says so
++  plainly instead of failing silent.
++- **Stuck Steam Guard prompt.** If no cached login session exists yet,
++  `steamcmd` blocks waiting for a two-factor code it can never receive
++  from a non-interactive `execFile` call, indistinguishable by elapsed
++  time alone from a real upload that's just taking a while.
++  `runSteamUpload()` checks the command's combined stdout/stderr for
++  `steamcmd`'s own Steam Guard/two-factor prompt wording once `run()`
++  returns (whether via a normal exit or the full timeout), and swaps in
++  a specific "run `steamcmd +login <user>` from a terminal once first"
++  message instead of a bare timeout. Verified directly with a stub
++  script that echoes real Steam Guard prompt text.
++
++**Step 8 (Tag a release version) gained a "set exact version" field**,
++alongside the existing major/minor/patch bump buttons -- prompted
++directly by wanting to reset the dev-cycle version (`12.30.1` as of
++this patch) down to a real launch version (`1.0.0`) before the first
++Steam upload. `npm version <level>` (already used by the bump buttons)
++only ever moves forward; setting an exact value needed a literal semver
++string passed in its place instead, which `npm version` accepts just as
++well -- new `POST /api/version/set`, validated server-side against a
++plain `\d+\.\d+\.\d+` shape before ever reaching `npm version`. Existing
++git tags from the `12.x.x` dev cycle are left alone either way; `1.0.0`
++doesn't need to be numerically greater than the current version for
++`npm version` to accept it locally (that ordering rule is an
++npm-registry-publish concern this project doesn't touch, not something
++`npm version` itself enforces).
++
++**Verified:** `node --check` on both edited DevTool files
++(`server.mjs`, `app.js` -- plain JS, not covered by `tsc`), a full
++runtime pass against a locally-run DevTool server exercising every new
++endpoint directly (`GET`/`POST /api/steam/config` round-trips and
++persists correctly; `generate-scripts` against a real fake `release/`
++`.exe` produces correctly-formatted VDF output, verified byte-for-byte
++against the real Steamworks VDF format; `/api/version/set` rejects a
++malformed version string with 400; the two failure-mode fixes above
++each independently reproduced against a stub `steamcmd` script and
++confirmed fixed, not just reasoned about), plus `npx tsc --noEmit` and
++a full `vite build` across the whole project passing clean, confirming
++none of this touched anything outside the DevTool itself.
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 06aa16a..78df1f5 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -2371,6 +2371,7 @@ init().catch((err) => setStatus(err.message, 'err'));
+ const patchState = {
+   files: [], gitStatus: null, selected: null, checked: false, applied: false,
+   discordConfigured: false, discordPreview: '', discordDraft: '',
++  steam: { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'beta' },
+ };
+ 
+ /* -------------------------------- sandbox --------------------------------- */
+@@ -2414,11 +2415,12 @@ async function selectPatchesTab() {
+   subtabsEl.innerHTML = '';
+   setStatus('Loading…');
+   try {
+-    const [{ files, status }, versionInfo, devStatus, discordConfig] = await Promise.all([
++    const [{ files, status }, versionInfo, devStatus, discordConfig, steamConfig] = await Promise.all([
+       api('/api/patches/list'),
+       api('/api/version'),
+       api('/api/dev/status'),
+       api('/api/discord/config'),
++      api('/api/steam/config'),
+     ]);
+     patchState.files = files;
+     patchState.gitStatus = status;
+@@ -2427,6 +2429,7 @@ async function selectPatchesTab() {
+     patchState.devRunning = devStatus.running;
+     patchState.discordConfigured = discordConfig.configured;
+     patchState.discordPreview = discordConfig.preview;
++    patchState.steam = steamConfig;
+     setStatus('');
+     renderPatches();
+   } catch (err) {
+@@ -2567,6 +2570,36 @@ function renderPatches() {
+     <button id="copyBuildBtn">Copy latest build to Google Drive folder</button>
+     <div id="copyBuildResult"></div>
+ 
++    <div class="section-heading" style="margin-top:18px;">7.5. Configure Steam upload</div>
++    <p class="tiny muted">
++      Saved locally (<code>tools/devtool/steam.config.json</code>, gitignored). No password is stored
++      here — <code>steamcmd</code> caches your login after you run <code>steamcmd +login &lt;username&gt;</code>
++      once from a real terminal (it'll prompt for your password and Steam Guard code that one time).
++      The Upload step below reuses that cached session.
++    </p>
++    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
++      <input type="text" id="steamUsernameInput" placeholder="Steam builder account username"
++        value="${escapeHtml(patchState.steam.username)}"
++        style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
++      <input type="text" id="steamAppIdInput" placeholder="App ID"
++        value="${escapeHtml(patchState.steam.appId)}"
++        style="flex: 1 1 100px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
++      <input type="text" id="steamDepotIdInput" placeholder="Depot ID (Windows)"
++        value="${escapeHtml(patchState.steam.depotId)}"
++        style="flex: 1 1 140px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
++    </div>
++    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
++      <input type="text" id="steamContentBuilderInput" placeholder="Path to Steamworks SDK's ContentBuilder folder"
++        value="${escapeHtml(patchState.steam.contentBuilderDir)}"
++        style="flex: 2 1 320px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
++      <select id="steamBranchInput" style="flex: 1 1 140px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;">
++        <option value="beta" ${patchState.steam.branch === 'beta' ? 'selected' : ''}>beta (safe default)</option>
++        <option value="default" ${patchState.steam.branch === 'default' ? 'selected' : ''}>default (live)</option>
++      </select>
++      <button id="steamConfigSaveBtn">Save Steam config</button>
++    </div>
++    <div id="steamConfigResult"></div>
++
+     <div class="section-heading">8. Tag a release version</div>
+     <p class="tiny muted">
+       Current version: <b>${escapeHtml(patchState.version || '?')}</b>.
+@@ -2583,7 +2616,35 @@ function renderPatches() {
+     </div>
+     <div id="versionResult"></div>
+ 
+-    <div class="section-heading" style="margin-top:18px;">9. Post a dev update to Discord</div>
++    <p class="tiny muted" style="margin-top:10px;">
++      Or set an exact version directly — e.g. resetting a dev-cycle version like
++      <code>${escapeHtml(patchState.version || '0.0.0')}</code> down to a real launch version like
++      <code>1.0.0</code>. This doesn't need to be higher than the current version; existing tags are
++      left alone either way. Do this once, right before your first real release upload.
++    </p>
++    <div class="row" style="gap:6px;">
++      <input type="text" id="exactVersionInput" placeholder="1.0.0"
++        style="width:120px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
++      <button id="setVersionBtn">Set exact version</button>
++    </div>
++    <div id="setVersionResult"></div>
++
++    <div class="section-heading" style="margin-top:18px;">10. Upload to Steam</div>
++    <p class="tiny muted">
++      Two separate steps on purpose: Generate writes VDF scripts only — no network call, safe to run
++      repeatedly while you dial in the config above. Upload actually runs <code>steamcmd</code> against
++      whatever was last generated, targeting the branch selected above (defaults to <b>beta</b>, never
++      live, unless you changed it). Uses the newest installer in <code>release/</code> — run Package
++      (step 7) first if you haven't already for this batch.
++    </p>
++    <div class="row" style="gap:6px;">
++      <button id="steamGenerateBtn">Generate build scripts</button>
++      <button id="steamUploadBtn" class="primary">Upload to Steam</button>
++    </div>
++    <div id="steamGenerateResult"></div>
++    <div id="steamUploadResult"></div>
++
++    <div class="section-heading" style="margin-top:18px;">11. Post a dev update to Discord</div>
+     <p class="tiny muted">
+       Sends a message to your updates channel via a Discord webhook. The webhook URL is saved
+       locally (<code>tools/devtool/discord.config.json</code>, gitignored) and never leaves this
+@@ -2735,6 +2796,31 @@ function renderPatches() {
+     document.getElementById('copyBuildResult').innerHTML = resultBlock(result, 'Copy build');
+   };
+ 
++  const steamConfigSaveBtn = document.getElementById('steamConfigSaveBtn');
++  if (steamConfigSaveBtn) steamConfigSaveBtn.onclick = async () => {
++    steamConfigSaveBtn.disabled = true;
++    steamConfigSaveBtn.textContent = 'Saving…';
++    const cfg = {
++      username: document.getElementById('steamUsernameInput').value.trim(),
++      appId: document.getElementById('steamAppIdInput').value.trim(),
++      depotId: document.getElementById('steamDepotIdInput').value.trim(),
++      contentBuilderDir: document.getElementById('steamContentBuilderInput').value.trim(),
++      branch: document.getElementById('steamBranchInput').value,
++    };
++    try {
++      const result = await api('/api/steam/config', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify(cfg),
++      });
++      patchState.steam = { username: result.username, appId: result.appId, depotId: result.depotId, contentBuilderDir: result.contentBuilderDir, branch: result.branch };
++      document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: true, stdout: 'Saved.', stderr: '' }, 'Steam config');
++    } catch (err) {
++      document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: false, stdout: '', stderr: err.message || String(err) }, 'Steam config');
++    }
++    steamConfigSaveBtn.disabled = false;
++    steamConfigSaveBtn.textContent = 'Save Steam config';
++  };
++
+   ['bumpMajorBtn', 'bumpMinorBtn', 'bumpPatchBtn'].forEach((id, i) => {
+     const level = ['major', 'minor', 'patch'][i];
+     const btn = document.getElementById(id);
+@@ -2758,6 +2844,58 @@ function renderPatches() {
+     };
+   });
+ 
++  const setVersionBtn = document.getElementById('setVersionBtn');
++  if (setVersionBtn) setVersionBtn.onclick = async () => {
++    const input = document.getElementById('exactVersionInput');
++    const version = input.value.trim();
++    if (!/^\d+\.\d+\.\d+$/.test(version)) {
++      alert('Enter a plain semver version, e.g. 1.0.0.');
++      return;
++    }
++    if (!confirm(`Set the version to exactly ${version}? This commits and creates a git tag, same as a bump.`)) return;
++    setVersionBtn.disabled = true;
++    const result = await api('/api/version/set', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ version }),
++    });
++    setVersionBtn.disabled = false;
++    document.getElementById('setVersionResult').innerHTML = resultBlock(result, `Set version (${version})`);
++    if (result.ok) {
++      const versionInfo = await api('/api/version');
++      patchState.version = versionInfo.version;
++      patchState.tags = versionInfo.tags;
++      input.value = '';
++      renderPatches();
++      document.getElementById('setVersionResult').innerHTML = resultBlock(result, `Set version (${version})`);
++    }
++  };
++
++  const steamGenerateBtn = document.getElementById('steamGenerateBtn');
++  if (steamGenerateBtn) steamGenerateBtn.onclick = async () => {
++    steamGenerateBtn.disabled = true;
++    steamGenerateBtn.textContent = 'Generating…';
++    const result = await api('/api/steam/generate-scripts', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
++    });
++    steamGenerateBtn.disabled = false;
++    steamGenerateBtn.textContent = 'Generate build scripts';
++    document.getElementById('steamGenerateResult').innerHTML = resultBlock(result, 'Generate build scripts');
++  };
++
++  const steamUploadBtn = document.getElementById('steamUploadBtn');
++  if (steamUploadBtn) steamUploadBtn.onclick = async () => {
++    const branch = patchState.steam.branch || 'beta';
++    if (!confirm(`Upload to Steam now, targeting the "${branch}" branch? This actually sends the build.`)) return;
++    steamUploadBtn.disabled = true;
++    steamUploadBtn.textContent = 'Uploading… (this can take a while)';
++    const result = await api('/api/steam/upload', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
++    });
++    steamUploadBtn.disabled = false;
++    steamUploadBtn.textContent = 'Upload to Steam';
++    document.getElementById('steamUploadResult').innerHTML = resultBlock(result, 'Upload to Steam');
++  };
++
+   const discordSaveBtn = document.getElementById('discordSaveBtn');
+   discordSaveBtn.onclick = async () => {
+     const input = document.getElementById('discordWebhookInput');
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 13fe4f3..106fea2 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -80,6 +80,13 @@ const PORT = 5175;
+ // served as a static file (lives outside PUBLIC_DIR), only ever read/written
+ // by the /api/discord/* handlers below.
+ const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
++// Same shape/reasoning as DISCORD_CONFIG_PATH above -- local-only, gitignored,
++// holds SteamPipe upload settings for the "Upload to Steam" step further
++// down. Deliberately holds a username only, never a password -- see that
++// section's own comment for why storing a Steam login is a different risk
++// class than a scoped, revocable Discord webhook, and how steamcmd's own
++// cached-session login sidesteps needing one here at all.
++const STEAM_CONFIG_PATH = path.join(__dirname, 'steam.config.json');
+ // The running changelog/backlog doc at the repo root -- read (never written)
+ // by the patch-summary lookup below, to pull a ready-made Discord blurb for
+ // whichever patch is selected instead of guessing one from its filename.
+@@ -2462,7 +2469,221 @@ async function findPatchSummary(patchFilename) {
+   return { found: true, patchNumber, text, latestPriorPatch, continuityOk };
+ }
+ 
+-/* ------------------------------------------------------------------ http --- */
++/* -------------------------------------------------------------- steam --- */
++// Generates SteamPipe build/depot VDF scripts from the newest release/
++// installer (same lookup copyLatestBuild() already uses) and runs steamcmd
++// against them. Config (App ID, Depot ID, ContentBuilder path, branch,
++// username) lives in STEAM_CONFIG_PATH, gitignored, same "local-only dev
++// tool" treatment as discord.config.json above -- with one deliberate
++// difference: no password field. steamcmd caches a login session on this
++// machine after one interactive `steamcmd +login <user>` run from a real
++// terminal; the Upload handler below reuses that cached session rather than
++// asking this codebase to hold a publisher account credential at all. If no
++// cached session exists yet, steamcmd blocks waiting for a Steam Guard code
++// it will never receive from a non-interactive execFile call --
++// runSteamUpload() below detects that specific stuck state by checking the
++// command's own output for steamcmd's Steam Guard prompt text once it
++// returns (success, failure, or a full STEAM_UPLOAD_TIMEOUT_MS timeout
++// alike), and reports it as a clear, actionable error rather than a bare
++// "timed out" with no explanation of why.
++
++const STEAM_UPLOAD_TIMEOUT_MS = 20 * 60_000; // a full depot upload can legitimately take a while
++
++async function readSteamConfig() {
++  try {
++    const raw = await fs.readFile(STEAM_CONFIG_PATH, 'utf8');
++    const parsed = JSON.parse(raw);
++    return {
++      username: typeof parsed.username === 'string' ? parsed.username : '',
++      appId: typeof parsed.appId === 'string' ? parsed.appId : '',
++      depotId: typeof parsed.depotId === 'string' ? parsed.depotId : '',
++      contentBuilderDir: typeof parsed.contentBuilderDir === 'string' ? parsed.contentBuilderDir : '',
++      branch: typeof parsed.branch === 'string' && parsed.branch ? parsed.branch : 'beta',
++    };
++  } catch {
++    return { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'beta' };
++  }
++}
++
++async function writeSteamConfig(cfg) {
++  await fs.writeFile(STEAM_CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
++}
++
++/**
++ * Finds the newest packaged installer in RELEASE_DIR -- same file-filter and
++ * "most recently modified wins" logic copyLatestBuild() already uses for the
++ * Google Drive copy step, factored out here so both callers stay in sync
++ * rather than drifting into two slightly different "what counts as the
++ * latest build" definitions over time.
++ */
++async function findLatestReleaseFile() {
++  let entries;
++  try {
++    entries = await fs.readdir(RELEASE_DIR, { withFileTypes: true });
++  } catch {
++    return null;
++  }
++  const candidates = [];
++  for (const entry of entries) {
++    if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== '.exe') continue;
++    const full = path.join(RELEASE_DIR, entry.name);
++    const stat = await fs.stat(full);
++    candidates.push({ full, name: entry.name, mtimeMs: stat.mtimeMs });
++  }
++  if (candidates.length === 0) return null;
++  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
++  return candidates[0];
++}
++
++/**
++ * Writes app_build.vdf + depot_build.vdf into <contentBuilderDir>/scripts,
++ * pointing ContentRoot at RELEASE_DIR directly (electron-builder's NSIS
++ * target drops the installer as a loose .exe alongside a win-unpacked/
++ * folder in that same directory -- SteamPipe just needs a folder of files,
++ * it doesn't care that electron-builder produced them rather than being
++ * handed a single named artifact). Pure file-write, no network call, no
++ * steamcmd invocation -- safe to run as many times as needed while dialing
++ * in config before ever actually uploading anything.
++ */
++async function generateSteamBuildScripts() {
++  const cfg = await readSteamConfig();
++  const missing = [];
++  if (!cfg.appId) missing.push('App ID');
++  if (!cfg.depotId) missing.push('Depot ID');
++  if (!cfg.contentBuilderDir) missing.push('ContentBuilder folder path');
++  if (missing.length) {
++    return { ok: false, stdout: '', stderr: `Steam config incomplete -- missing: ${missing.join(', ')}. Fill these in above first.` };
++  }
++  const latest = await findLatestReleaseFile();
++  if (!latest) {
++    return { ok: false, stdout: '', stderr: `No .exe installer found in ${RELEASE_DIR} -- run Package (step 7) first.` };
++  }
++  const scriptsDir = path.join(cfg.contentBuilderDir, 'scripts');
++  const outputDir = path.join(cfg.contentBuilderDir, 'output');
++  const depotVdfPath = path.join(scriptsDir, `depot_build_${cfg.depotId}.vdf`);
++  const appVdfPath = path.join(scriptsDir, `app_build_${cfg.appId}.vdf`);
++
++  const depotVdf = [
++    `"DepotBuildConfig"`,
++    `{`,
++    `\t"DepotID" "${cfg.depotId}"`,
++    `\t"ContentRoot" "${RELEASE_DIR}"`,
++    `\t"FileMapping"`,
++    `\t{`,
++    `\t\t"LocalPath" "*"`,
++    `\t\t"DepotPath" "."`,
++    `\t\t"recursive" "1"`,
++    `\t}`,
++    // win-unpacked/ is electron-builder's unpacked-app-tree sibling of the
++    // real NSIS installer -- useful locally for quick manual testing, not
++    // something a Steam depot needs shipped alongside the installer itself.
++    `\t"FileExclusion" "win-unpacked*"`,
++    `\t"FileExclusion" "*.blockmap"`,
++    `\t"FileExclusion" "latest.yml"`,
++    `}`,
++  ].join('\n') + '\n';
++
++  const appVdf = [
++    `"appbuild"`,
++    `{`,
++    `\t"appid" "${cfg.appId}"`,
++    `\t"desc" "Guildbound -- ${latest.name}"`,
++    `\t"buildoutput" "${outputDir}"`,
++    `\t"contentroot" "${RELEASE_DIR}"`,
++    `\t"setlive" "${cfg.branch === 'default' ? '' : cfg.branch}"`,
++    `\t"preview" "0"`,
++    `\t"local" ""`,
++    `\t"depots"`,
++    `\t{`,
++    `\t\t"${cfg.depotId}" "depot_build_${cfg.depotId}.vdf"`,
++    `\t}`,
++    `}`,
++  ].join('\n') + '\n';
++
++  try {
++    await fs.mkdir(scriptsDir, { recursive: true });
++    await fs.mkdir(outputDir, { recursive: true });
++    await fs.writeFile(depotVdfPath, depotVdf, 'utf8');
++    await fs.writeFile(appVdfPath, appVdf, 'utf8');
++    return {
++      ok: true,
++      stdout: `Wrote ${depotVdfPath}\nWrote ${appVdfPath}\nContentRoot: ${RELEASE_DIR}\nNewest installer found: ${latest.name}\nTarget branch: ${cfg.branch}`,
++      stderr: '',
++    };
++  } catch (err) {
++    return { ok: false, stdout: '', stderr: err.message ?? String(err) };
++  }
++}
++
++/**
++ * Runs steamcmd against the generated app_build VDF. Deliberately does NOT
++ * pass a password on the command line -- `+login <user>` alone will use
++ * steamcmd's own cached session from a prior interactive login (see this
++ * section's header comment). If no cached session exists, steamcmd blocks
++ * waiting for a Steam Guard code it will never receive from a
++ * non-interactive execFile call, and just sits there until
++ * STEAM_UPLOAD_TIMEOUT_MS finally kills it -- indistinguishable, by elapsed
++ * time alone, from a real upload that's just taking a while. Once run()
++ * does return (whether via a normal exit or that timeout), this checks the
++ * combined stdout/stderr for steamcmd's own Steam Guard prompt wording and
++ * swaps in a specific, actionable error instead of a bare timeout message.
++ */
++async function runSteamUpload() {
++  const cfg = await readSteamConfig();
++  if (!cfg.username) {
++    return { ok: false, stdout: '', stderr: 'No Steam username configured above.' };
++  }
++  if (!cfg.contentBuilderDir) {
++    return { ok: false, stdout: '', stderr: 'No ContentBuilder folder configured above.' };
++  }
++  const steamcmdBin = process.platform === 'win32' ? 'steamcmd.exe' : 'steamcmd.sh';
++  const steamcmdPath = path.join(cfg.contentBuilderDir, '..', 'builder', steamcmdBin);
++  const appVdfPath = path.join(cfg.contentBuilderDir, 'scripts', `app_build_${cfg.appId}.vdf`);
++  try {
++    await fs.access(appVdfPath);
++  } catch {
++    return { ok: false, stdout: '', stderr: `${appVdfPath} doesn't exist yet -- run "Generate build scripts" first.` };
++  }
++  // Checked explicitly rather than relying on run()'s own ENOENT handling:
++  // execFile sets a spawn error's .stderr to an empty string rather than
++  // leaving it undefined, which means run()'s `err.stderr ?? fallback`
++  // never reaches its fallback message (?? only catches null/undefined, not
++  // ''), silently losing the actual "not found" reason. A wrong
++  // ContentBuilder path is the single most likely first-time mistake with
++  // this feature, so it gets its own clear message here instead of an empty
++  // one from that general-purpose path.
++  try {
++    await fs.access(steamcmdPath);
++  } catch {
++    return {
++      ok: false, stdout: '',
++      stderr: `${steamcmdPath} not found. Check the ContentBuilder folder path above -- it should be the SDK's tools/ContentBuilder directory, with steamcmd itself one level up in a sibling "builder" folder.`,
++    };
++  }
++
++  const result = await run(
++    steamcmdPath,
++    ['+login', cfg.username, '+run_app_build', appVdfPath, '+quit'],
++    STEAM_UPLOAD_TIMEOUT_MS,
++  );
++
++  // steamcmd prints this exact prompt text to stdout (not stderr) when it's
++  // blocked waiting for a Steam Guard code with no cached session to fall
++  // back on -- execFile's own timeout would otherwise report this identically
++  // to a slow-but-healthy upload, which is the one failure mode worth calling
++  // out by name rather than leaving someone to guess at a bare timeout.
++  const combined = `${result.stdout}\n${result.stderr}`;
++  if (/steam guard|two-factor|enter the current code/i.test(combined)) {
++    return {
++      ok: false,
++      stdout: result.stdout,
++      stderr: `steamcmd is waiting on a Steam Guard code, which this button can't supply. Run "${steamcmdPath} +login ${cfg.username}" once from a real terminal to cache a session, then try this button again.`,
++    };
++  }
++  return result;
++}
++
++
+ 
+ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+ 
+@@ -2570,6 +2791,31 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, await copyLatestBuild());
+   }
+ 
++  if (url.pathname === '/api/steam/config' && req.method === 'GET') {
++    return json(res, 200, await readSteamConfig());
++  }
++
++  if (url.pathname === '/api/steam/config' && req.method === 'POST') {
++    const body = JSON.parse(await readBody(req));
++    const cfg = {
++      username: typeof body.username === 'string' ? body.username.trim() : '',
++      appId: typeof body.appId === 'string' ? body.appId.trim() : '',
++      depotId: typeof body.depotId === 'string' ? body.depotId.trim() : '',
++      contentBuilderDir: typeof body.contentBuilderDir === 'string' ? body.contentBuilderDir.trim() : '',
++      branch: typeof body.branch === 'string' && body.branch.trim() ? body.branch.trim() : 'beta',
++    };
++    await writeSteamConfig(cfg);
++    return json(res, 200, { ok: true, ...cfg });
++  }
++
++  if (url.pathname === '/api/steam/generate-scripts' && req.method === 'POST') {
++    return json(res, 200, await generateSteamBuildScripts());
++  }
++
++  if (url.pathname === '/api/steam/upload' && req.method === 'POST') {
++    return json(res, 200, await runSteamUpload());
++  }
++
+   if (url.pathname === '/api/sim/presets' && req.method === 'GET') {
+     try {
+       return json(res, 200, { presets: await readSimPresets() });
+@@ -2632,6 +2878,26 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, result);
+   }
+ 
++  /**
++   * `npm version <level>` above only ever moves forward (major/minor/patch).
++   * Resetting the dev-cycle version (e.g. 12.30.1) down to a real launch
++   * version (e.g. 1.0.0) needs an exact value, not another increment --
++   * `npm version` accepts a literal semver string in place of a level just
++   * as well, with no requirement that it be greater than the current
++   * version (that ordering rule is an npm-registry-publish concern, not
++   * something `npm version` itself enforces locally). Same commit+tag
++   * behavior either way.
++   */
++  if (url.pathname === '/api/version/set' && req.method === 'POST') {
++    const body = JSON.parse(await readBody(req));
++    const version = typeof body.version === 'string' ? body.version.trim() : '';
++    if (!/^\d+\.\d+\.\d+$/.test(version)) {
++      return json(res, 400, { error: 'Version must be plain semver, e.g. 1.0.0.' });
++    }
++    const result = await runNpm(['version', version], GIT_TIMEOUT_MS);
++    return json(res, 200, result);
++  }
++
+   if (url.pathname === '/api/dev/start' && req.method === 'POST') {
+     return json(res, 200, startDevServer());
+   }

@@ -25452,3 +25452,117 @@ above) rather than type errors; still worth a real build pass before
 merging, and a playtest confirming Blackford Keep's new encounter id
 renders correctly end-to-end and The Gathering Horde offers/completes
 cleanly for a level-7 guild that's already cleared Goblin Warband.
+
+### DevTool: Steam upload support + exact-version reset (patch 0313)
+```discord-update
+Dev Update | Patch 0313
+
+- Added Steam upload support to the internal dev tool -- new "Configure Steam" and "Upload to Steam" steps in the Patching workflow
+- Added a way to set an exact version number in the dev tool, ready for resetting to 1.0.0 for real launch
+```
+
+DevTool-only changes -- nothing here touches the shipped game itself.
+Scoped and confirmed in the prior conversation: Windows depot only for
+now (Linux depot deferred to whenever a Linux build actually exists),
+and no Steam password stored anywhere in this codebase.
+
+**Two new steps in the Patches tab, same "one confirmed button per
+step" shape every existing step already uses:**
+
+- **Step 7.5, Configure Steam upload.** New fields: Steam builder
+  account username, App ID, Depot ID, path to the Steamworks SDK's
+  `ContentBuilder` folder, and a target-branch dropdown defaulting to
+  `beta` (never `default`/live unless deliberately changed) -- matching
+  the beta-branch-first safety practice discussed before any of this
+  was scoped. Saved to `tools/devtool/steam.config.json`, gitignored,
+  same treatment as the existing `discord.config.json`. **Deliberately
+  holds a username only, never a password** -- unlike the Discord
+  webhook (a scoped, revocable, single-purpose secret), a Steam login
+  is a whole publisher account, a different risk class entirely.
+  `steamcmd` caches a login session on disk after one interactive
+  `steamcmd +login <user>` run from a real terminal (prompts for
+  password + Steam Guard that one time); every button here reuses that
+  cached session rather than this codebase ever holding the credential.
+
+- **Step 10, Upload to Steam.** Two buttons, deliberately separate
+  actions rather than one combined step:
+  - **Generate build scripts** -- writes `depot_build_<id>.vdf` and
+    `app_build_<id>.vdf` into `<ContentBuilder>/scripts`, `ContentRoot`
+    pointed at `release/` directly (electron-builder's NSIS target
+    already drops the installer as a loose `.exe` there alongside a
+    `win-unpacked/` folder -- SteamPipe just wants a folder of files,
+    it doesn't care that electron-builder produced them rather than a
+    single named artifact handed over). Excludes `win-unpacked*`,
+    `*.blockmap`, and `latest.yml` from the depot mapping -- none of
+    those are meant to ship in a Steam depot. Finds the newest `.exe`
+    in `release/` via the same "most recently modified wins" logic
+    `copyLatestBuild()` (the existing Google-Drive-copy step) already
+    uses, factored into a shared `findLatestReleaseFile()` so the two
+    don't drift into two different definitions of "the latest build"
+    over time. Pure file-write, no network call -- safe to run
+    repeatedly while dialing in config, same reasoning the VDF-generation
+    step description gives the user directly.
+  - **Upload to Steam** -- runs `steamcmd +login <user> +run_app_build
+    <path> +quit` against whatever Generate last wrote, using the same
+    `run()`/timeout-wrapped `execFile` pattern Build/Package already
+    use (`STEAM_UPLOAD_TIMEOUT_MS`, 20 minutes -- a full depot upload
+    can legitimately take a while). Confirms with the target branch
+    named explicitly before sending anything, same "Push commits"
+    confirm-dialog pattern the existing Push step already uses.
+
+**Two failure modes worth calling out, both found and fixed via direct
+runtime testing against a stub `steamcmd` script in this environment
+(not just read-through) before this patch was written up:**
+
+- **Missing/misconfigured `steamcmd` binary.** `run()`'s general-purpose
+  `execFile` error handling (shared with every git/npm command this
+  tool already runs) sets a spawn error's `stderr` to `''` rather than
+  leaving it `undefined` -- since `run()`'s own fallback is
+  `err.stderr ?? fallbackMessage`, and `??` only catches
+  `null`/`undefined` not an empty string, a missing `steamcmd` silently
+  came back with a **blank** error message instead of an actionable
+  one. Rather than changing `run()` itself (shared infra, used
+  correctly everywhere else), added an explicit `fs.access()` check on
+  the resolved `steamcmd` path before ever calling `run()`, with a
+  message naming the exact path checked and what folder structure is
+  expected -- the single most likely first-time mistake with this
+  whole feature (a wrong `ContentBuilder` folder path) now says so
+  plainly instead of failing silent.
+- **Stuck Steam Guard prompt.** If no cached login session exists yet,
+  `steamcmd` blocks waiting for a two-factor code it can never receive
+  from a non-interactive `execFile` call, indistinguishable by elapsed
+  time alone from a real upload that's just taking a while.
+  `runSteamUpload()` checks the command's combined stdout/stderr for
+  `steamcmd`'s own Steam Guard/two-factor prompt wording once `run()`
+  returns (whether via a normal exit or the full timeout), and swaps in
+  a specific "run `steamcmd +login <user>` from a terminal once first"
+  message instead of a bare timeout. Verified directly with a stub
+  script that echoes real Steam Guard prompt text.
+
+**Step 8 (Tag a release version) gained a "set exact version" field**,
+alongside the existing major/minor/patch bump buttons -- prompted
+directly by wanting to reset the dev-cycle version (`12.30.1` as of
+this patch) down to a real launch version (`1.0.0`) before the first
+Steam upload. `npm version <level>` (already used by the bump buttons)
+only ever moves forward; setting an exact value needed a literal semver
+string passed in its place instead, which `npm version` accepts just as
+well -- new `POST /api/version/set`, validated server-side against a
+plain `\d+\.\d+\.\d+` shape before ever reaching `npm version`. Existing
+git tags from the `12.x.x` dev cycle are left alone either way; `1.0.0`
+doesn't need to be numerically greater than the current version for
+`npm version` to accept it locally (that ordering rule is an
+npm-registry-publish concern this project doesn't touch, not something
+`npm version` itself enforces).
+
+**Verified:** `node --check` on both edited DevTool files
+(`server.mjs`, `app.js` -- plain JS, not covered by `tsc`), a full
+runtime pass against a locally-run DevTool server exercising every new
+endpoint directly (`GET`/`POST /api/steam/config` round-trips and
+persists correctly; `generate-scripts` against a real fake `release/`
+`.exe` produces correctly-formatted VDF output, verified byte-for-byte
+against the real Steamworks VDF format; `/api/version/set` rejects a
+malformed version string with 400; the two failure-mode fixes above
+each independently reproduced against a stub `steamcmd` script and
+confirmed fixed, not just reasoned about), plus `npx tsc --noEmit` and
+a full `vite build` across the whole project passing clean, confirming
+none of this touched anything outside the DevTool itself.

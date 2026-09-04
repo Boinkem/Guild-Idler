@@ -80,6 +80,13 @@ const PORT = 5175;
 // served as a static file (lives outside PUBLIC_DIR), only ever read/written
 // by the /api/discord/* handlers below.
 const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
+// Same shape/reasoning as DISCORD_CONFIG_PATH above -- local-only, gitignored,
+// holds SteamPipe upload settings for the "Upload to Steam" step further
+// down. Deliberately holds a username only, never a password -- see that
+// section's own comment for why storing a Steam login is a different risk
+// class than a scoped, revocable Discord webhook, and how steamcmd's own
+// cached-session login sidesteps needing one here at all.
+const STEAM_CONFIG_PATH = path.join(__dirname, 'steam.config.json');
 // The running changelog/backlog doc at the repo root -- read (never written)
 // by the patch-summary lookup below, to pull a ready-made Discord blurb for
 // whichever patch is selected instead of guessing one from its filename.
@@ -2462,7 +2469,221 @@ async function findPatchSummary(patchFilename) {
   return { found: true, patchNumber, text, latestPriorPatch, continuityOk };
 }
 
-/* ------------------------------------------------------------------ http --- */
+/* -------------------------------------------------------------- steam --- */
+// Generates SteamPipe build/depot VDF scripts from the newest release/
+// installer (same lookup copyLatestBuild() already uses) and runs steamcmd
+// against them. Config (App ID, Depot ID, ContentBuilder path, branch,
+// username) lives in STEAM_CONFIG_PATH, gitignored, same "local-only dev
+// tool" treatment as discord.config.json above -- with one deliberate
+// difference: no password field. steamcmd caches a login session on this
+// machine after one interactive `steamcmd +login <user>` run from a real
+// terminal; the Upload handler below reuses that cached session rather than
+// asking this codebase to hold a publisher account credential at all. If no
+// cached session exists yet, steamcmd blocks waiting for a Steam Guard code
+// it will never receive from a non-interactive execFile call --
+// runSteamUpload() below detects that specific stuck state by checking the
+// command's own output for steamcmd's Steam Guard prompt text once it
+// returns (success, failure, or a full STEAM_UPLOAD_TIMEOUT_MS timeout
+// alike), and reports it as a clear, actionable error rather than a bare
+// "timed out" with no explanation of why.
+
+const STEAM_UPLOAD_TIMEOUT_MS = 20 * 60_000; // a full depot upload can legitimately take a while
+
+async function readSteamConfig() {
+  try {
+    const raw = await fs.readFile(STEAM_CONFIG_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      username: typeof parsed.username === 'string' ? parsed.username : '',
+      appId: typeof parsed.appId === 'string' ? parsed.appId : '',
+      depotId: typeof parsed.depotId === 'string' ? parsed.depotId : '',
+      contentBuilderDir: typeof parsed.contentBuilderDir === 'string' ? parsed.contentBuilderDir : '',
+      branch: typeof parsed.branch === 'string' && parsed.branch ? parsed.branch : 'beta',
+    };
+  } catch {
+    return { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'beta' };
+  }
+}
+
+async function writeSteamConfig(cfg) {
+  await fs.writeFile(STEAM_CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+}
+
+/**
+ * Finds the newest packaged installer in RELEASE_DIR -- same file-filter and
+ * "most recently modified wins" logic copyLatestBuild() already uses for the
+ * Google Drive copy step, factored out here so both callers stay in sync
+ * rather than drifting into two slightly different "what counts as the
+ * latest build" definitions over time.
+ */
+async function findLatestReleaseFile() {
+  let entries;
+  try {
+    entries = await fs.readdir(RELEASE_DIR, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const candidates = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== '.exe') continue;
+    const full = path.join(RELEASE_DIR, entry.name);
+    const stat = await fs.stat(full);
+    candidates.push({ full, name: entry.name, mtimeMs: stat.mtimeMs });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return candidates[0];
+}
+
+/**
+ * Writes app_build.vdf + depot_build.vdf into <contentBuilderDir>/scripts,
+ * pointing ContentRoot at RELEASE_DIR directly (electron-builder's NSIS
+ * target drops the installer as a loose .exe alongside a win-unpacked/
+ * folder in that same directory -- SteamPipe just needs a folder of files,
+ * it doesn't care that electron-builder produced them rather than being
+ * handed a single named artifact). Pure file-write, no network call, no
+ * steamcmd invocation -- safe to run as many times as needed while dialing
+ * in config before ever actually uploading anything.
+ */
+async function generateSteamBuildScripts() {
+  const cfg = await readSteamConfig();
+  const missing = [];
+  if (!cfg.appId) missing.push('App ID');
+  if (!cfg.depotId) missing.push('Depot ID');
+  if (!cfg.contentBuilderDir) missing.push('ContentBuilder folder path');
+  if (missing.length) {
+    return { ok: false, stdout: '', stderr: `Steam config incomplete -- missing: ${missing.join(', ')}. Fill these in above first.` };
+  }
+  const latest = await findLatestReleaseFile();
+  if (!latest) {
+    return { ok: false, stdout: '', stderr: `No .exe installer found in ${RELEASE_DIR} -- run Package (step 7) first.` };
+  }
+  const scriptsDir = path.join(cfg.contentBuilderDir, 'scripts');
+  const outputDir = path.join(cfg.contentBuilderDir, 'output');
+  const depotVdfPath = path.join(scriptsDir, `depot_build_${cfg.depotId}.vdf`);
+  const appVdfPath = path.join(scriptsDir, `app_build_${cfg.appId}.vdf`);
+
+  const depotVdf = [
+    `"DepotBuildConfig"`,
+    `{`,
+    `\t"DepotID" "${cfg.depotId}"`,
+    `\t"ContentRoot" "${RELEASE_DIR}"`,
+    `\t"FileMapping"`,
+    `\t{`,
+    `\t\t"LocalPath" "*"`,
+    `\t\t"DepotPath" "."`,
+    `\t\t"recursive" "1"`,
+    `\t}`,
+    // win-unpacked/ is electron-builder's unpacked-app-tree sibling of the
+    // real NSIS installer -- useful locally for quick manual testing, not
+    // something a Steam depot needs shipped alongside the installer itself.
+    `\t"FileExclusion" "win-unpacked*"`,
+    `\t"FileExclusion" "*.blockmap"`,
+    `\t"FileExclusion" "latest.yml"`,
+    `}`,
+  ].join('\n') + '\n';
+
+  const appVdf = [
+    `"appbuild"`,
+    `{`,
+    `\t"appid" "${cfg.appId}"`,
+    `\t"desc" "Guildbound -- ${latest.name}"`,
+    `\t"buildoutput" "${outputDir}"`,
+    `\t"contentroot" "${RELEASE_DIR}"`,
+    `\t"setlive" "${cfg.branch === 'default' ? '' : cfg.branch}"`,
+    `\t"preview" "0"`,
+    `\t"local" ""`,
+    `\t"depots"`,
+    `\t{`,
+    `\t\t"${cfg.depotId}" "depot_build_${cfg.depotId}.vdf"`,
+    `\t}`,
+    `}`,
+  ].join('\n') + '\n';
+
+  try {
+    await fs.mkdir(scriptsDir, { recursive: true });
+    await fs.mkdir(outputDir, { recursive: true });
+    await fs.writeFile(depotVdfPath, depotVdf, 'utf8');
+    await fs.writeFile(appVdfPath, appVdf, 'utf8');
+    return {
+      ok: true,
+      stdout: `Wrote ${depotVdfPath}\nWrote ${appVdfPath}\nContentRoot: ${RELEASE_DIR}\nNewest installer found: ${latest.name}\nTarget branch: ${cfg.branch}`,
+      stderr: '',
+    };
+  } catch (err) {
+    return { ok: false, stdout: '', stderr: err.message ?? String(err) };
+  }
+}
+
+/**
+ * Runs steamcmd against the generated app_build VDF. Deliberately does NOT
+ * pass a password on the command line -- `+login <user>` alone will use
+ * steamcmd's own cached session from a prior interactive login (see this
+ * section's header comment). If no cached session exists, steamcmd blocks
+ * waiting for a Steam Guard code it will never receive from a
+ * non-interactive execFile call, and just sits there until
+ * STEAM_UPLOAD_TIMEOUT_MS finally kills it -- indistinguishable, by elapsed
+ * time alone, from a real upload that's just taking a while. Once run()
+ * does return (whether via a normal exit or that timeout), this checks the
+ * combined stdout/stderr for steamcmd's own Steam Guard prompt wording and
+ * swaps in a specific, actionable error instead of a bare timeout message.
+ */
+async function runSteamUpload() {
+  const cfg = await readSteamConfig();
+  if (!cfg.username) {
+    return { ok: false, stdout: '', stderr: 'No Steam username configured above.' };
+  }
+  if (!cfg.contentBuilderDir) {
+    return { ok: false, stdout: '', stderr: 'No ContentBuilder folder configured above.' };
+  }
+  const steamcmdBin = process.platform === 'win32' ? 'steamcmd.exe' : 'steamcmd.sh';
+  const steamcmdPath = path.join(cfg.contentBuilderDir, '..', 'builder', steamcmdBin);
+  const appVdfPath = path.join(cfg.contentBuilderDir, 'scripts', `app_build_${cfg.appId}.vdf`);
+  try {
+    await fs.access(appVdfPath);
+  } catch {
+    return { ok: false, stdout: '', stderr: `${appVdfPath} doesn't exist yet -- run "Generate build scripts" first.` };
+  }
+  // Checked explicitly rather than relying on run()'s own ENOENT handling:
+  // execFile sets a spawn error's .stderr to an empty string rather than
+  // leaving it undefined, which means run()'s `err.stderr ?? fallback`
+  // never reaches its fallback message (?? only catches null/undefined, not
+  // ''), silently losing the actual "not found" reason. A wrong
+  // ContentBuilder path is the single most likely first-time mistake with
+  // this feature, so it gets its own clear message here instead of an empty
+  // one from that general-purpose path.
+  try {
+    await fs.access(steamcmdPath);
+  } catch {
+    return {
+      ok: false, stdout: '',
+      stderr: `${steamcmdPath} not found. Check the ContentBuilder folder path above -- it should be the SDK's tools/ContentBuilder directory, with steamcmd itself one level up in a sibling "builder" folder.`,
+    };
+  }
+
+  const result = await run(
+    steamcmdPath,
+    ['+login', cfg.username, '+run_app_build', appVdfPath, '+quit'],
+    STEAM_UPLOAD_TIMEOUT_MS,
+  );
+
+  // steamcmd prints this exact prompt text to stdout (not stderr) when it's
+  // blocked waiting for a Steam Guard code with no cached session to fall
+  // back on -- execFile's own timeout would otherwise report this identically
+  // to a slow-but-healthy upload, which is the one failure mode worth calling
+  // out by name rather than leaving someone to guess at a bare timeout.
+  const combined = `${result.stdout}\n${result.stderr}`;
+  if (/steam guard|two-factor|enter the current code/i.test(combined)) {
+    return {
+      ok: false,
+      stdout: result.stdout,
+      stderr: `steamcmd is waiting on a Steam Guard code, which this button can't supply. Run "${steamcmdPath} +login ${cfg.username}" once from a real terminal to cache a session, then try this button again.`,
+    };
+  }
+  return result;
+}
+
+
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 
@@ -2570,6 +2791,31 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, await copyLatestBuild());
   }
 
+  if (url.pathname === '/api/steam/config' && req.method === 'GET') {
+    return json(res, 200, await readSteamConfig());
+  }
+
+  if (url.pathname === '/api/steam/config' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const cfg = {
+      username: typeof body.username === 'string' ? body.username.trim() : '',
+      appId: typeof body.appId === 'string' ? body.appId.trim() : '',
+      depotId: typeof body.depotId === 'string' ? body.depotId.trim() : '',
+      contentBuilderDir: typeof body.contentBuilderDir === 'string' ? body.contentBuilderDir.trim() : '',
+      branch: typeof body.branch === 'string' && body.branch.trim() ? body.branch.trim() : 'beta',
+    };
+    await writeSteamConfig(cfg);
+    return json(res, 200, { ok: true, ...cfg });
+  }
+
+  if (url.pathname === '/api/steam/generate-scripts' && req.method === 'POST') {
+    return json(res, 200, await generateSteamBuildScripts());
+  }
+
+  if (url.pathname === '/api/steam/upload' && req.method === 'POST') {
+    return json(res, 200, await runSteamUpload());
+  }
+
   if (url.pathname === '/api/sim/presets' && req.method === 'GET') {
     try {
       return json(res, 200, { presets: await readSimPresets() });
@@ -2629,6 +2875,26 @@ const server = http.createServer(async (req, res) => {
     // step — this is the real release version, distinct from the 000N patch
     // filenames, which are just this-session-to-that-session identifiers.
     const result = await runNpm(['version', level], GIT_TIMEOUT_MS);
+    return json(res, 200, result);
+  }
+
+  /**
+   * `npm version <level>` above only ever moves forward (major/minor/patch).
+   * Resetting the dev-cycle version (e.g. 12.30.1) down to a real launch
+   * version (e.g. 1.0.0) needs an exact value, not another increment --
+   * `npm version` accepts a literal semver string in place of a level just
+   * as well, with no requirement that it be greater than the current
+   * version (that ordering rule is an npm-registry-publish concern, not
+   * something `npm version` itself enforces locally). Same commit+tag
+   * behavior either way.
+   */
+  if (url.pathname === '/api/version/set' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const version = typeof body.version === 'string' ? body.version.trim() : '';
+    if (!/^\d+\.\d+\.\d+$/.test(version)) {
+      return json(res, 400, { error: 'Version must be plain semver, e.g. 1.0.0.' });
+    }
+    const result = await runNpm(['version', version], GIT_TIMEOUT_MS);
     return json(res, 200, result);
   }
 

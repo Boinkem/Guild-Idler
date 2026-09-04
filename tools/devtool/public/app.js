@@ -2371,6 +2371,7 @@ init().catch((err) => setStatus(err.message, 'err'));
 const patchState = {
   files: [], gitStatus: null, selected: null, checked: false, applied: false,
   discordConfigured: false, discordPreview: '', discordDraft: '',
+  steam: { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'beta' },
 };
 
 /* -------------------------------- sandbox --------------------------------- */
@@ -2414,11 +2415,12 @@ async function selectPatchesTab() {
   subtabsEl.innerHTML = '';
   setStatus('Loading…');
   try {
-    const [{ files, status }, versionInfo, devStatus, discordConfig] = await Promise.all([
+    const [{ files, status }, versionInfo, devStatus, discordConfig, steamConfig] = await Promise.all([
       api('/api/patches/list'),
       api('/api/version'),
       api('/api/dev/status'),
       api('/api/discord/config'),
+      api('/api/steam/config'),
     ]);
     patchState.files = files;
     patchState.gitStatus = status;
@@ -2427,6 +2429,7 @@ async function selectPatchesTab() {
     patchState.devRunning = devStatus.running;
     patchState.discordConfigured = discordConfig.configured;
     patchState.discordPreview = discordConfig.preview;
+    patchState.steam = steamConfig;
     setStatus('');
     renderPatches();
   } catch (err) {
@@ -2567,6 +2570,36 @@ function renderPatches() {
     <button id="copyBuildBtn">Copy latest build to Google Drive folder</button>
     <div id="copyBuildResult"></div>
 
+    <div class="section-heading" style="margin-top:18px;">7.5. Configure Steam upload</div>
+    <p class="tiny muted">
+      Saved locally (<code>tools/devtool/steam.config.json</code>, gitignored). No password is stored
+      here — <code>steamcmd</code> caches your login after you run <code>steamcmd +login &lt;username&gt;</code>
+      once from a real terminal (it'll prompt for your password and Steam Guard code that one time).
+      The Upload step below reuses that cached session.
+    </p>
+    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+      <input type="text" id="steamUsernameInput" placeholder="Steam builder account username"
+        value="${escapeHtml(patchState.steam.username)}"
+        style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <input type="text" id="steamAppIdInput" placeholder="App ID"
+        value="${escapeHtml(patchState.steam.appId)}"
+        style="flex: 1 1 100px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <input type="text" id="steamDepotIdInput" placeholder="Depot ID (Windows)"
+        value="${escapeHtml(patchState.steam.depotId)}"
+        style="flex: 1 1 140px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+    </div>
+    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+      <input type="text" id="steamContentBuilderInput" placeholder="Path to Steamworks SDK's ContentBuilder folder"
+        value="${escapeHtml(patchState.steam.contentBuilderDir)}"
+        style="flex: 2 1 320px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <select id="steamBranchInput" style="flex: 1 1 140px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;">
+        <option value="beta" ${patchState.steam.branch === 'beta' ? 'selected' : ''}>beta (safe default)</option>
+        <option value="default" ${patchState.steam.branch === 'default' ? 'selected' : ''}>default (live)</option>
+      </select>
+      <button id="steamConfigSaveBtn">Save Steam config</button>
+    </div>
+    <div id="steamConfigResult"></div>
+
     <div class="section-heading">8. Tag a release version</div>
     <p class="tiny muted">
       Current version: <b>${escapeHtml(patchState.version || '?')}</b>.
@@ -2583,7 +2616,35 @@ function renderPatches() {
     </div>
     <div id="versionResult"></div>
 
-    <div class="section-heading" style="margin-top:18px;">9. Post a dev update to Discord</div>
+    <p class="tiny muted" style="margin-top:10px;">
+      Or set an exact version directly — e.g. resetting a dev-cycle version like
+      <code>${escapeHtml(patchState.version || '0.0.0')}</code> down to a real launch version like
+      <code>1.0.0</code>. This doesn't need to be higher than the current version; existing tags are
+      left alone either way. Do this once, right before your first real release upload.
+    </p>
+    <div class="row" style="gap:6px;">
+      <input type="text" id="exactVersionInput" placeholder="1.0.0"
+        style="width:120px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <button id="setVersionBtn">Set exact version</button>
+    </div>
+    <div id="setVersionResult"></div>
+
+    <div class="section-heading" style="margin-top:18px;">10. Upload to Steam</div>
+    <p class="tiny muted">
+      Two separate steps on purpose: Generate writes VDF scripts only — no network call, safe to run
+      repeatedly while you dial in the config above. Upload actually runs <code>steamcmd</code> against
+      whatever was last generated, targeting the branch selected above (defaults to <b>beta</b>, never
+      live, unless you changed it). Uses the newest installer in <code>release/</code> — run Package
+      (step 7) first if you haven't already for this batch.
+    </p>
+    <div class="row" style="gap:6px;">
+      <button id="steamGenerateBtn">Generate build scripts</button>
+      <button id="steamUploadBtn" class="primary">Upload to Steam</button>
+    </div>
+    <div id="steamGenerateResult"></div>
+    <div id="steamUploadResult"></div>
+
+    <div class="section-heading" style="margin-top:18px;">11. Post a dev update to Discord</div>
     <p class="tiny muted">
       Sends a message to your updates channel via a Discord webhook. The webhook URL is saved
       locally (<code>tools/devtool/discord.config.json</code>, gitignored) and never leaves this
@@ -2735,6 +2796,31 @@ function renderPatches() {
     document.getElementById('copyBuildResult').innerHTML = resultBlock(result, 'Copy build');
   };
 
+  const steamConfigSaveBtn = document.getElementById('steamConfigSaveBtn');
+  if (steamConfigSaveBtn) steamConfigSaveBtn.onclick = async () => {
+    steamConfigSaveBtn.disabled = true;
+    steamConfigSaveBtn.textContent = 'Saving…';
+    const cfg = {
+      username: document.getElementById('steamUsernameInput').value.trim(),
+      appId: document.getElementById('steamAppIdInput').value.trim(),
+      depotId: document.getElementById('steamDepotIdInput').value.trim(),
+      contentBuilderDir: document.getElementById('steamContentBuilderInput').value.trim(),
+      branch: document.getElementById('steamBranchInput').value,
+    };
+    try {
+      const result = await api('/api/steam/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg),
+      });
+      patchState.steam = { username: result.username, appId: result.appId, depotId: result.depotId, contentBuilderDir: result.contentBuilderDir, branch: result.branch };
+      document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: true, stdout: 'Saved.', stderr: '' }, 'Steam config');
+    } catch (err) {
+      document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: false, stdout: '', stderr: err.message || String(err) }, 'Steam config');
+    }
+    steamConfigSaveBtn.disabled = false;
+    steamConfigSaveBtn.textContent = 'Save Steam config';
+  };
+
   ['bumpMajorBtn', 'bumpMinorBtn', 'bumpPatchBtn'].forEach((id, i) => {
     const level = ['major', 'minor', 'patch'][i];
     const btn = document.getElementById(id);
@@ -2757,6 +2843,58 @@ function renderPatches() {
       }
     };
   });
+
+  const setVersionBtn = document.getElementById('setVersionBtn');
+  if (setVersionBtn) setVersionBtn.onclick = async () => {
+    const input = document.getElementById('exactVersionInput');
+    const version = input.value.trim();
+    if (!/^\d+\.\d+\.\d+$/.test(version)) {
+      alert('Enter a plain semver version, e.g. 1.0.0.');
+      return;
+    }
+    if (!confirm(`Set the version to exactly ${version}? This commits and creates a git tag, same as a bump.`)) return;
+    setVersionBtn.disabled = true;
+    const result = await api('/api/version/set', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version }),
+    });
+    setVersionBtn.disabled = false;
+    document.getElementById('setVersionResult').innerHTML = resultBlock(result, `Set version (${version})`);
+    if (result.ok) {
+      const versionInfo = await api('/api/version');
+      patchState.version = versionInfo.version;
+      patchState.tags = versionInfo.tags;
+      input.value = '';
+      renderPatches();
+      document.getElementById('setVersionResult').innerHTML = resultBlock(result, `Set version (${version})`);
+    }
+  };
+
+  const steamGenerateBtn = document.getElementById('steamGenerateBtn');
+  if (steamGenerateBtn) steamGenerateBtn.onclick = async () => {
+    steamGenerateBtn.disabled = true;
+    steamGenerateBtn.textContent = 'Generating…';
+    const result = await api('/api/steam/generate-scripts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    steamGenerateBtn.disabled = false;
+    steamGenerateBtn.textContent = 'Generate build scripts';
+    document.getElementById('steamGenerateResult').innerHTML = resultBlock(result, 'Generate build scripts');
+  };
+
+  const steamUploadBtn = document.getElementById('steamUploadBtn');
+  if (steamUploadBtn) steamUploadBtn.onclick = async () => {
+    const branch = patchState.steam.branch || 'beta';
+    if (!confirm(`Upload to Steam now, targeting the "${branch}" branch? This actually sends the build.`)) return;
+    steamUploadBtn.disabled = true;
+    steamUploadBtn.textContent = 'Uploading… (this can take a while)';
+    const result = await api('/api/steam/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    steamUploadBtn.disabled = false;
+    steamUploadBtn.textContent = 'Upload to Steam';
+    document.getElementById('steamUploadResult').innerHTML = resultBlock(result, 'Upload to Steam');
+  };
 
   const discordSaveBtn = document.getElementById('discordSaveBtn');
   discordSaveBtn.onclick = async () => {
