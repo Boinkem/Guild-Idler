@@ -335,6 +335,11 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   // independent) -- this only covers the tab overall.
   useEffect(() => {
     engine.acknowledgeTab(tab);
+    // Patch 0308: one-time "you're on the Vendors tab for the first
+    // time" explainer -- see engine.acknowledgeVendorsTabVisit's own
+    // comment for why this is separate from the plain-read
+    // acknowledgeTab call just above.
+    if (tab === 'vendors') engine.acknowledgeVendorsTabVisit();
   }, [engine, tab]);
   // Nav gold/renown count up to a new value rather than snapping -- the
   // numeric equivalent of the .bar fill transition. No animation on first

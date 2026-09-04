@@ -2,6 +2,7 @@ import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRol
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+import { TUTORIAL_QUEST_ID } from './data/quests';
 import { CHAIN_REPLAY_TIER_BY_ID } from './data/chainReplay';
 import { RaidManager } from './managers/RaidManager';
 import { ShopManager } from './managers/ShopManager';
@@ -761,14 +762,51 @@ export class GameEngine {
     // level 1), and a save migrated from before this rework, none of which
     // should have to wait out the rest of the current window for a board.
     for (const hero of this.state.heroes) {
+      // Patch 0308: while the scripted tutorial quest is actually out
+      // (sent, not yet resolved), its hero's board sits at length 0 --
+      // the "no board yet" branch just below would otherwise refill it
+      // with a full ordinary board mid-quest, so a brand-new player
+      // would see 5-6 competing offers appear behind the one thing
+      // they were just told to focus on, before it's even back. Skip
+      // regeneration entirely for a hero currently on the tutorial
+      // quest; the board stays genuinely empty (matching the "only
+      // quest available" design) until QuestManager.resolve clears it
+      // out of activeQuests.
+      const onTutorialQuest = this.state.activeQuests.some(
+        (q) => q.heroId === hero.id && q.offer.id === TUTORIAL_QUEST_ID,
+      );
+      if (onTutorialQuest) continue;
       const existing = this.state.questBoards[hero.id];
       if (windowRolledOver || !existing || existing.length === 0) {
+        // Patch 0308: pendingBurstQuestSpotlight (armed the instant the
+        // tutorial quest resolves, cleared the instant any burst offer
+        // is sent -- see its own comment in types.ts) also gates board
+        // SIZE here now, not just the card shimmer QuestRow already
+        // reads it for -- a brand-new guild's second quest should be
+        // the one scripted burst nudge and nothing else competing for
+        // attention, the same "only one thing on the board" shape the
+        // tutorial quest itself used. Deterministic per (window, hero,
+        // this specific seed tag) the same way every other offer here
+        // already is, so it survives a reload identically. Scoped to
+        // every hero rather than just the starter one -- a genuinely
+        // new guild can't afford a second hero slot this early
+        // regardless (that needs a Tavern upgrade, not just gold), so
+        // in practice this only ever narrows the one hero who matters
+        // at this stage.
+        const generated = this.state.pendingBurstQuestSpotlight
+          ? [QuestManager.generateOffer(
+            'easy',
+            createRng(`board:${window}:${hero.id}:${this.state.createdAt}:tutorialBurst`),
+            `q:${window}:${hero.id}:tutorialBurst`,
+            hero.level, true, ModifierManager.hasUnlock(this.state, 'legendaryQuests'),
+          )]
+          : QuestManager.generateContractsForHero(this.state, hero, now);
         // Frozen offer (if any) survives this regeneration too -- see
         // QuestManager.applyFrozenOffer, the same splice used by a paid
         // reroll and an Auto-Chain restock.
         this.state.questBoards[hero.id] = QuestManager.applyFrozenOffer(
           this.state, hero,
-          QuestManager.generateContractsForHero(this.state, hero, now).filter((o) => !active.has(o.id)),
+          generated.filter((o) => !active.has(o.id)),
         );
         changed = true;
       }
@@ -2269,6 +2307,24 @@ export class GameEngine {
    * way, they've now genuinely seen the page, which is the only thing
    * this flag is tracking.
    */
+  /**
+   * Patch 0308. Flips GameState.hasVisitedVendorsTab the first time the
+   * player opens the Vendors tab at all -- see that field's own comment
+   * in types.ts. Separate from acknowledgeVendorFirstVisit just below:
+   * that one dismisses the Alchemist/Enchanter sub-tab spotlight with
+   * no message attached, this one arms a real one-time explainer toast
+   * (first_vendors_visit) via the normal GuidanceManager path. Called
+   * from MenuWindow's existing per-tab-switch effect, alongside its
+   * acknowledgeTab call, so it fires however the player got there
+   * (direct click or a notification's own deep link).
+   */
+  acknowledgeVendorsTabVisit() {
+    if (this.state.hasVisitedVendorsTab) return;
+    this.state.hasVisitedVendorsTab = true;
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    void this.saveNow();
+  }
+
   acknowledgeVendorFirstVisit(vendorId: VendorId) {
     if (vendorId === 'alchemist' && !this.state.hasSeenAlchemist) {
       this.state.hasSeenAlchemist = true;
@@ -2330,6 +2386,11 @@ export class GameEngine {
     // item refine landing. Previously silent.
     playSound('enhance');
     this.say(`${hero.name} is patched up.`);
+    // Patch 0308. Set before the guidance check right below so a
+    // player's very first successful use is the one that actually
+    // trips first_consumable_used, not the one after.
+    this.state.hasUsedConsumable = true;
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     void this.saveNow();
   }
 

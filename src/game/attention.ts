@@ -1,6 +1,7 @@
 import { GameState } from './types';
 import { PetManager } from './managers/PetManager';
 import { NODE_ORDER } from './data/materials';
+import { TUTORIAL_QUEST_ID } from './data/quests';
 
 /**
  * The same signals surfaced in two places: the Dashboard's digest card
@@ -102,6 +103,19 @@ export function isTabUnread(state: GameState, tab: string, subTab?: string): boo
  * aggregate and behaves identically to isTabUnread(state, tab).
  */
 export function isNavTabUnread(state: GameState, tab: string): boolean {
+  // Patch 0308: the Quests nav tab itself shimmers for as long as the
+  // scripted tutorial quest is still sitting un-sent on its hero's
+  // board -- previously only the quest CARD itself got the gold ring
+  // (.quest-card-spotlight, patch 0288), nothing made the tab button
+  // shimmer too. Derived straight off the board contents (same
+  // "nothing persisted, just read live state" shape brokenGear/
+  // eggsReady above already use) rather than a new flag -- the offer
+  // disappears from questBoards the instant it's sent (QuestManager.
+  // start), so this clears itself for free at exactly the same moment
+  // the card's own shimmer does.
+  if (tab === 'quests' && Object.values(state.questBoards).some(
+    (board) => board?.some((offer) => offer.id === TUTORIAL_QUEST_ID),
+  )) return true;
   if (isTabUnread(state, tab)) return true;
   return (TAB_SUBTABS[tab] ?? []).some((sub) => isTabUnread(state, tab, sub));
 }

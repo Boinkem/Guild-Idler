@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 58;
+export const SAVE_VERSION = 59;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2388,6 +2388,43 @@ export interface GameState {
    * that happened to be shimmering.
    */
   pendingBurstQuestSpotlight: boolean;
+  /**
+   * Patch 0308. Set the instant the scripted tutorial quest resolves
+   * (QuestManager.resolve's own isTutorialQuest branch) -- stays true
+   * for the rest of the save's life from that point on. Drives the
+   * post-tutorial GuidanceManager nudge ("check out the Vendors, or
+   * keep questing") -- see guidance-topics.json's
+   * `first_quest_complete_vendor_nudge`. `pendingBurstQuestSpotlight`
+   * just above covers the other half of this same moment (the "try a
+   * burst quest next" card shimmer and, as of this patch, the
+   * single-forced-burst-offer board restriction in
+   * GameEngine.refreshWorld) -- kept as two separate flags rather than
+   * one, since one drives a GuidanceManager topic condition (a plain
+   * boolean check) and the other drives UI/board state directly, the
+   * same split the rest of this file already uses elsewhere.
+   */
+  hasCompletedFirstQuest: boolean;
+  /**
+   * Patch 0308. Set the first time the player opens the Vendors tab at
+   * all -- MenuWindow's existing per-tab-switch effect (the one that
+   * already calls engine.acknowledgeTab on every change) also calls
+   * engine.acknowledgeVendorsTabVisit, which flips this once. Drives
+   * the one-time `first_vendors_visit` GuidanceManager topic explaining
+   * what's there. Deliberately a plain top-level-tab flag, not scoped
+   * to a sub-tab the way hasSeenAlchemist/hasSeenEnchanter are
+   * elsewhere in this file -- this is about the Vendors tab's own
+   * first appearance, one level up from either of those.
+   */
+  hasVisitedVendorsTab: boolean;
+  /**
+   * Patch 0308. Set the first time engine.useConsumable actually
+   * succeeds (InventoryManager.useOnHero returns no error) -- drives
+   * the one-time `first_consumable_used` GuidanceManager topic. Doesn't
+   * care which consumable, just that using one worked at least once;
+   * same "first X ever happened" shape every other GuidanceManager-
+   * backed flag in this file already uses.
+   */
+  hasUsedConsumable: boolean;
   /**
    * Levels bought in the Overseer upgrade (0-3), Warehouse sub-tab. Each
    * level gives every node a chance to auto-catch a spawn that would

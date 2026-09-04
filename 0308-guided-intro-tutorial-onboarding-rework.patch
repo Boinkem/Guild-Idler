@@ -1,0 +1,466 @@
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/guild-idler-status.md b/guild-idler-status.md
+--- a/guild-idler-status.md	2026-09-04 00:45:51.070173133 +0000
++++ b/guild-idler-status.md	2026-09-04 00:51:29.890193273 +0000
+@@ -24708,3 +24708,150 @@
+ of it). No image assets changed in this patch -- same `fields.jpg`/
+ `bright/fields.jpg` pair from patch 0305, just wired to one shared
+ background instead of two separate ones.
++
++### Guided intro rework: locked single-quest board, tutorial reward, and three new post-tutorial nudges (patch 0308)
++
++```discord-update
++Dev Update | Patch 0308
++
++- Added the Quests nav tab itself shimmering gold until your first job's sent, alongside the existing card shimmer
++- Added a guaranteed Strength Potion to the tutorial quest's reward, on top of its usual gold and XP
++- Changed the quest board to stay locked to one job at a time through both your first quest and the burst quest that follows it
++- Added a nudge toward the Vendors the moment your first quest wraps up, plus a one-time explainer the first time you actually open that tab
++- Added a one-time explainer the first time you use a consumable
++```
++
++**Discussed and scoped before touching any code** (see this file's own
++prior entries -- "First-five-minutes onboarding beat" sat in the
++Bigger, still-undecided backlog since roughly patch 0245, flagged as a
++UX/telegraphing problem rather than a numbers one, needing its own
++design conversation before building). That conversation happened
++directly, across several rounds, before this patch -- not assumed from
++the original ask alone.
++
++**What the original ask actually ran into: most of the machinery
++already existed.** The scripted tutorial quest, its guaranteed win, the
++forced injury/broken-starter-sword lesson, the quest-card gold shimmer,
++the "try a burst quest next" spotlight, and the whole GuidanceManager
++one-time-toast system (first gear found, first quest chain, raids
++unlocked, first injury/wear, etc.) all shipped already, mostly across
++patches 0287/0288 and the various `pendingXSpotlight` features before
++them. Confirmed against a fresh pull of `main` before scoping anything
++further, rather than trusting an earlier chat's summary or the original
++ask's own framing of what was "missing" -- several of the requested
++notifications (first quest chain, first raid, first equipment found)
++turned out to need no new code at all, just confirmation they already
++fire correctly. This patch is deliberately scoped to the real remaining
++gaps, reusing every existing pattern it can rather than introducing a
++second parallel onboarding system alongside the one already there.
++
++**Board stays genuinely single-quest, not just single-quest-at-creation.**
++Previously, sending the scripted tutorial quest emptied that hero's
++board (`questBoards[hero.id]`), and `GameEngine.refreshWorld`'s existing
++"regenerate whenever a hero's board is empty" branch would immediately
++refill it with a full `BOARD_SIZE` (6) ordinary board while the tutorial
++quest was still in flight -- a brand-new player would see half a dozen
++competing offers appear behind the one thing they were just told to
++focus on, before it even resolved. `refreshWorld` now skips regeneration
++entirely for a hero currently on the tutorial quest (checked via
++`activeQuests`, `offer.id === TUTORIAL_QUEST_ID`), so the board stays
++empty until `QuestManager.resolve` actually clears it out.
++
++Once the tutorial quest resolves, `pendingBurstQuestSpotlight` (already
++existing, patch 0288 -- armed on tutorial resolve, cleared the instant
++any burst offer is sent) now also gates board *size*, not just the
++card-shimmer category it already drove: while armed, `refreshWorld`
++generates a single forced-burst Easy offer instead of a full board, the
++same one-thing-at-a-time shape the tutorial quest itself used. Scoped to
++every hero rather than just the starter one, but in practice this only
++ever narrows the one hero who matters at this stage -- a genuinely new
++guild can't afford a second hero slot yet regardless (that needs a
++Tavern upgrade, not just gold). The moment a burst offer is actually
++sent, the flag clears and ordinary `BOARD_SIZE`-wide generation resumes
++from the next regeneration on, no new flag needed for that half.
++
++**Quest tab shimmer.** Previously only the tutorial quest *card* itself
++carried the gold ring (`.quest-card-spotlight`); nothing made the Quests
++nav tab shimmer too. `isNavTabUnread` (attention.ts) now also returns
++true for the `quests` tab for as long as any hero's board still contains
++the tutorial offer -- derived live off `questBoards` (same "no persisted
++flag, just read current state" shape `brokenGear`/`eggsReady` already
++use in this same file), so it clears itself the instant the offer is
++sent, in lockstep with the card's own shimmer.
++
++**Tutorial reward.** `QuestManager.resolve`'s existing `isTutorialQuest`
++branch now also grants a guaranteed `strength_potion` (confirmed as the
++base tier against `grand_strength_potion`, i.e. exactly "a lesser
++Strength Potion" per the design ask) via `InventoryManager.add`, on top
++of the quest's own untouched 40 gold / 20 xp reward -- additive, not a
++replacement. Sets up a genuine reason to reach for the new
++`first_consumable_used` topic below on quest two or three, rather than
++that potion sitting unused in the stash indefinitely.
++
++**Three new GuidanceManager topics** (guidance-topics.json +
++GuidanceManager.ts's CHECKS, same shape every existing topic already
++uses -- a plain state-boolean condition, checked via the existing
++`GuidanceManager.checkAll`/`GameEngine.reportGuidance` path, no new
++plumbing):
++- `first_quest_complete_vendor_nudge` -- new `GameState.
++  hasCompletedFirstQuest`, set the instant the tutorial quest resolves
++  (alongside `pendingBurstQuestSpotlight`, kept as a separate flag since
++  one drives a GuidanceManager condition and the other drives board/UI
++  state directly). Points at Vendors, phrased to cover "check out
++  Vendors, or keep questing" in one line -- closing the toast (or just
++  not clicking through) *is* "keep questing," no second button needed.
++- `first_vendors_visit` -- new `GameState.hasVisitedVendorsTab`, set by
++  a new `engine.acknowledgeVendorsTabVisit()`, called from MenuWindow's
++  existing per-tab-switch effect (the one that already calls
++  `acknowledgeTab` on every change) the moment the Vendors tab opens for
++  the first time. Deliberately separate from the existing
++  `acknowledgeVendorFirstVisit`/`hasSeenAlchemist`/`hasSeenEnchanter`
++  pair (patch 0291) -- those dismiss a sub-tab spotlight silently, with
++  no message; this one is a real one-time explainer toast, one level up
++  at the whole-tab scope. Equipment tab's own shimmer/explainer was
++  deliberately *not* duplicated here -- confirmed during scoping that
++  the existing `first_equipment_found` topic (fires on first loot drop,
++  already targets Equipment) already covers that half correctly; adding
++  a second, tutorial-specific equipment nudge would just be a redundant
++  path to the same message.
++- `first_consumable_used` -- new `GameState.hasUsedConsumable`, set in
++  `engine.useConsumable` the moment `InventoryManager.useOnHero`
++  actually succeeds (no error). `useConsumable` previously never called
++  `reportGuidance`/`GuidanceManager.checkAll` at all -- added here,
++  matching every other player action in `engine.ts` that can trip a
++  guidance topic.
++
++**Save compatibility.** `SAVE_VERSION` 58 -> 59, migration 58 added for
++the three new flags. All three default to `true` for any save old
++enough to need migrating -- same reasoning patch 0291's `hasSeenAlchemist`/
++`hasSeenEnchanter` migration already used: a save that predates this
++patch has, by definition, already been well past its own first quest
++and Vendors tab for a long time, so there's nothing for any of these to
++retroactively fire from, and defaulting to `false` would misfire the
++nudges (and the board-size restriction) on a veteran save instead of a
++genuinely new one.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh pull of `main`
++(confirmed patch 0307 was already live and this patch is rebased on top
++of it). Beyond type-checking: a real runtime simulation, not just
++inferred -- `createInitialState`, `QuestManager.start`/`resolve`, and
++`isNavTabUnread` bundled and executed directly under `tsx` against this
++patch's actual code, confirming end to end: the starter board's sole
++offer is genuinely the tutorial quest and the Quests tab genuinely
++shimmers before it's sent; the board is genuinely empty (not
++regenerated) the instant it's sent, and the tab shimmer clears with it;
++resolving it is a genuine guaranteed win that sets
++`hasCompletedFirstQuest`, arms `pendingBurstQuestSpotlight`, and credits
++exactly one `strength_potion`; the post-tutorial board-size gate
++genuinely produces a single burst-mode offer, not a full board; and a
++manually-constructed pre-patch (version 58) save genuinely migrates all
++three new flags to `true`, landing on version 59. Worth a real playtest
++on top of this: start a brand-new guild and confirm the Quests tab and
++tutorial quest card both shimmer immediately, send the tutorial quest
++and confirm the board stays empty (not just visually, actually check no
++extra offers appear) until it resolves, confirm the vendor nudge toast
++appears right after closing the result, confirm Vendors gives its own
++explainer on first visit, confirm exactly one more (burst) offer shows
++up afterward and nothing else until it's sent, and confirm using the
++new Strength Potion pops the consumable-use explainer.
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/src/game/attention.ts b/src/game/attention.ts
+--- a/src/game/attention.ts	2026-09-04 00:45:51.589485491 +0000
++++ b/src/game/attention.ts	2026-09-04 00:48:47.747885120 +0000
+@@ -1,6 +1,7 @@
+ import { GameState } from './types';
+ import { PetManager } from './managers/PetManager';
+ import { NODE_ORDER } from './data/materials';
++import { TUTORIAL_QUEST_ID } from './data/quests';
+ 
+ /**
+  * The same signals surfaced in two places: the Dashboard's digest card
+@@ -102,6 +103,19 @@
+  * aggregate and behaves identically to isTabUnread(state, tab).
+  */
+ export function isNavTabUnread(state: GameState, tab: string): boolean {
++  // Patch 0308: the Quests nav tab itself shimmers for as long as the
++  // scripted tutorial quest is still sitting un-sent on its hero's
++  // board -- previously only the quest CARD itself got the gold ring
++  // (.quest-card-spotlight, patch 0288), nothing made the tab button
++  // shimmer too. Derived straight off the board contents (same
++  // "nothing persisted, just read live state" shape brokenGear/
++  // eggsReady above already use) rather than a new flag -- the offer
++  // disappears from questBoards the instant it's sent (QuestManager.
++  // start), so this clears itself for free at exactly the same moment
++  // the card's own shimmer does.
++  if (tab === 'quests' && Object.values(state.questBoards).some(
++    (board) => board?.some((offer) => offer.id === TUTORIAL_QUEST_ID),
++  )) return true;
+   if (isTabUnread(state, tab)) return true;
+   return (TAB_SUBTABS[tab] ?? []).some((sub) => isTabUnread(state, tab, sub));
+ }
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/src/game/data/json/guidance-topics.json b/src/game/data/json/guidance-topics.json
+--- a/src/game/data/json/guidance-topics.json	2026-09-04 00:45:51.591387831 +0000
++++ b/src/game/data/json/guidance-topics.json	2026-09-04 00:47:32.712786130 +0000
+@@ -120,5 +120,25 @@
+       "The Guild Hall has upgrades that benefit every hero at once -- worth a look once gold starts piling up."
+     ],
+     "targetTab": "guild"
++  },
++  {
++    "id": "first_quest_complete_vendor_nudge",
++    "messages": [
++      "Your first job's done, gold in hand. The Vendors have gear and supplies worth a look, if you'd rather gear up before sending your hero out again -- or keep questing, whatever suits you."
++    ],
++    "targetTab": "vendors"
++  },
++  {
++    "id": "first_vendors_visit",
++    "messages": [
++      "The Blacksmith's always open here; the Alchemist and Enchanter tuck in beside them once you've found your way to each. Buy straight from stock, or spend materials crafting your own gear and supplies."
++    ]
++  },
++  {
++    "id": "first_consumable_used",
++    "messages": [
++      "That takes effect right away. Check a hero's own card in the Heroes tab to see anything currently active on them."
++    ],
++    "targetTab": "heroes"
+   }
+ ]
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/src/game/engine.ts b/src/game/engine.ts
+--- a/src/game/engine.ts	2026-09-04 00:45:51.594373390 +0000
++++ b/src/game/engine.ts	2026-09-04 00:49:04.458184628 +0000
+@@ -2,6 +2,7 @@
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
++import { TUTORIAL_QUEST_ID } from './data/quests';
+ import { CHAIN_REPLAY_TIER_BY_ID } from './data/chainReplay';
+ import { RaidManager } from './managers/RaidManager';
+ import { ShopManager } from './managers/ShopManager';
+@@ -761,14 +762,51 @@
+     // level 1), and a save migrated from before this rework, none of which
+     // should have to wait out the rest of the current window for a board.
+     for (const hero of this.state.heroes) {
++      // Patch 0308: while the scripted tutorial quest is actually out
++      // (sent, not yet resolved), its hero's board sits at length 0 --
++      // the "no board yet" branch just below would otherwise refill it
++      // with a full ordinary board mid-quest, so a brand-new player
++      // would see 5-6 competing offers appear behind the one thing
++      // they were just told to focus on, before it's even back. Skip
++      // regeneration entirely for a hero currently on the tutorial
++      // quest; the board stays genuinely empty (matching the "only
++      // quest available" design) until QuestManager.resolve clears it
++      // out of activeQuests.
++      const onTutorialQuest = this.state.activeQuests.some(
++        (q) => q.heroId === hero.id && q.offer.id === TUTORIAL_QUEST_ID,
++      );
++      if (onTutorialQuest) continue;
+       const existing = this.state.questBoards[hero.id];
+       if (windowRolledOver || !existing || existing.length === 0) {
++        // Patch 0308: pendingBurstQuestSpotlight (armed the instant the
++        // tutorial quest resolves, cleared the instant any burst offer
++        // is sent -- see its own comment in types.ts) also gates board
++        // SIZE here now, not just the card shimmer QuestRow already
++        // reads it for -- a brand-new guild's second quest should be
++        // the one scripted burst nudge and nothing else competing for
++        // attention, the same "only one thing on the board" shape the
++        // tutorial quest itself used. Deterministic per (window, hero,
++        // this specific seed tag) the same way every other offer here
++        // already is, so it survives a reload identically. Scoped to
++        // every hero rather than just the starter one -- a genuinely
++        // new guild can't afford a second hero slot this early
++        // regardless (that needs a Tavern upgrade, not just gold), so
++        // in practice this only ever narrows the one hero who matters
++        // at this stage.
++        const generated = this.state.pendingBurstQuestSpotlight
++          ? [QuestManager.generateOffer(
++            'easy',
++            createRng(`board:${window}:${hero.id}:${this.state.createdAt}:tutorialBurst`),
++            `q:${window}:${hero.id}:tutorialBurst`,
++            hero.level, true, ModifierManager.hasUnlock(this.state, 'legendaryQuests'),
++          )]
++          : QuestManager.generateContractsForHero(this.state, hero, now);
+         // Frozen offer (if any) survives this regeneration too -- see
+         // QuestManager.applyFrozenOffer, the same splice used by a paid
+         // reroll and an Auto-Chain restock.
+         this.state.questBoards[hero.id] = QuestManager.applyFrozenOffer(
+           this.state, hero,
+-          QuestManager.generateContractsForHero(this.state, hero, now).filter((o) => !active.has(o.id)),
++          generated.filter((o) => !active.has(o.id)),
+         );
+         changed = true;
+       }
+@@ -2269,6 +2307,24 @@
+    * way, they've now genuinely seen the page, which is the only thing
+    * this flag is tracking.
+    */
++  /**
++   * Patch 0308. Flips GameState.hasVisitedVendorsTab the first time the
++   * player opens the Vendors tab at all -- see that field's own comment
++   * in types.ts. Separate from acknowledgeVendorFirstVisit just below:
++   * that one dismisses the Alchemist/Enchanter sub-tab spotlight with
++   * no message attached, this one arms a real one-time explainer toast
++   * (first_vendors_visit) via the normal GuidanceManager path. Called
++   * from MenuWindow's existing per-tab-switch effect, alongside its
++   * acknowledgeTab call, so it fires however the player got there
++   * (direct click or a notification's own deep link).
++   */
++  acknowledgeVendorsTabVisit() {
++    if (this.state.hasVisitedVendorsTab) return;
++    this.state.hasVisitedVendorsTab = true;
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    void this.saveNow();
++  }
++
+   acknowledgeVendorFirstVisit(vendorId: VendorId) {
+     if (vendorId === 'alchemist' && !this.state.hasSeenAlchemist) {
+       this.state.hasSeenAlchemist = true;
+@@ -2330,6 +2386,11 @@
+     // item refine landing. Previously silent.
+     playSound('enhance');
+     this.say(`${hero.name} is patched up.`);
++    // Patch 0308. Set before the guidance check right below so a
++    // player's very first successful use is the one that actually
++    // trips first_consumable_used, not the one after.
++    this.state.hasUsedConsumable = true;
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
+     void this.saveNow();
+   }
+ 
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/src/game/managers/GuidanceManager.ts b/src/game/managers/GuidanceManager.ts
+--- a/src/game/managers/GuidanceManager.ts	2026-09-04 00:45:51.595403088 +0000
++++ b/src/game/managers/GuidanceManager.ts	2026-09-04 00:47:27.104926225 +0000
+@@ -101,6 +101,15 @@
+   // targetTab, and these two point at different tabs.
+   guild_hall_intro: (state) => state.heroes.length === 1
+     && state.gold >= Math.min(...Object.values(RECRUIT_COST)),
++  // Patch 0308. The three new post-tutorial-quest topics -- each reads
++  // straight off its own dedicated GameState flag rather than deriving
++  // anything, since all three are set exactly once, right at the real
++  // moment they should fire (QuestManager.resolve, MenuWindow's
++  // tab-switch effect, and engine.useConsumable respectively). See
++  // each flag's own comment in types.ts for the full reasoning.
++  first_quest_complete_vendor_nudge: (state) => state.hasCompletedFirstQuest,
++  first_vendors_visit: (state) => state.hasVisitedVendorsTab,
++  first_consumable_used: (state) => state.hasUsedConsumable,
+ };
+ 
+ export const GuidanceManager = {
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+--- a/src/game/managers/QuestManager.ts	2026-09-04 00:45:51.596399707 +0000
++++ b/src/game/managers/QuestManager.ts	2026-09-04 00:46:37.547956058 +0000
+@@ -1346,6 +1346,19 @@
+     // mid-resolve.
+     if (isTutorialQuest) {
+       state.pendingBurstQuestSpotlight = true;
++      // Patch 0308. Set alongside pendingBurstQuestSpotlight -- see its
++      // own comment in types.ts for why these are two separate flags.
++      // Drives the post-tutorial GuidanceManager nudge pointing a new
++      // player at Vendors ("first_quest_complete_vendor_nudge").
++      state.hasCompletedFirstQuest = true;
++      // A guaranteed starter Strength Potion, on top of the quest's own
++      // normal 40g/20xp reward (tutorialQuestOffer's rewardGold/rewardXp,
++      // untouched by this) -- the base tier (vs. grand_strength_potion),
++      // i.e. exactly "a lesser strength potion" per the design ask. Sets
++      // a new player up to actually have a consumable worth trying once
++      // the first_consumable_used guidance topic below has something to
++      // fire from.
++      InventoryManager.add(state, 'strength_potion', 1);
+     }
+ 
+     // Grimsby's cooldown counter, same account-wide shape -- doesn't care
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+--- a/src/game/managers/SaveManager.ts	2026-09-04 00:45:51.596894752 +0000
++++ b/src/game/managers/SaveManager.ts	2026-09-04 00:47:07.567202950 +0000
+@@ -177,6 +177,9 @@
+     vendorGoldSpent: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+     hasSeenAlchemist: false,
+     hasSeenEnchanter: false,
++    hasCompletedFirstQuest: false,
++    hasVisitedVendorsTab: false,
++    hasUsedConsumable: false,
+     peddlerTab: null,
+     guildName: '',
+     notifiedSetBonuses: [],
+@@ -1249,6 +1252,24 @@
+     version: 58,
+     raidClearsByDifficulty: (save.raidClearsByDifficulty as Record<string, string[]> | undefined) ?? {},
+   }),
++  58: (save) => ({
++    // Patch 0308. New post-tutorial-quest onboarding flags -- see
++    // GameState.hasCompletedFirstQuest/hasVisitedVendorsTab's own
++    // comments. Both default to true for every existing save, same
++    // reasoning hasSeenAlchemist/hasSeenEnchanter's own migration
++    // (version 55) already used: this only exists to migrate a save
++    // that predates the patch, and any save old enough to need
++    // migrating has, by definition, already been well past its own
++    // first quest and Vendors tab for a long time -- there's nothing
++    // for either flag to retroactively fire from, and defaulting to
++    // false would misfire the new nudge/board-restriction on a
++    // veteran save instead of a genuinely new one.
++    ...save,
++    version: 59,
++    hasCompletedFirstQuest: (save.hasCompletedFirstQuest as boolean | undefined) ?? true,
++    hasVisitedVendorsTab: (save.hasVisitedVendorsTab as boolean | undefined) ?? true,
++    hasUsedConsumable: (save.hasUsedConsumable as boolean | undefined) ?? true,
++  }),
+ };
+ 
+ export const SaveManager = {
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/src/game/types.ts b/src/game/types.ts
+--- a/src/game/types.ts	2026-09-04 00:45:51.597662804 +0000
++++ b/src/game/types.ts	2026-09-04 00:47:01.142375445 +0000
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 58;
++export const SAVE_VERSION = 59;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -2389,6 +2389,43 @@
+    */
+   pendingBurstQuestSpotlight: boolean;
+   /**
++   * Patch 0308. Set the instant the scripted tutorial quest resolves
++   * (QuestManager.resolve's own isTutorialQuest branch) -- stays true
++   * for the rest of the save's life from that point on. Drives the
++   * post-tutorial GuidanceManager nudge ("check out the Vendors, or
++   * keep questing") -- see guidance-topics.json's
++   * `first_quest_complete_vendor_nudge`. `pendingBurstQuestSpotlight`
++   * just above covers the other half of this same moment (the "try a
++   * burst quest next" card shimmer and, as of this patch, the
++   * single-forced-burst-offer board restriction in
++   * GameEngine.refreshWorld) -- kept as two separate flags rather than
++   * one, since one drives a GuidanceManager topic condition (a plain
++   * boolean check) and the other drives UI/board state directly, the
++   * same split the rest of this file already uses elsewhere.
++   */
++  hasCompletedFirstQuest: boolean;
++  /**
++   * Patch 0308. Set the first time the player opens the Vendors tab at
++   * all -- MenuWindow's existing per-tab-switch effect (the one that
++   * already calls engine.acknowledgeTab on every change) also calls
++   * engine.acknowledgeVendorsTabVisit, which flips this once. Drives
++   * the one-time `first_vendors_visit` GuidanceManager topic explaining
++   * what's there. Deliberately a plain top-level-tab flag, not scoped
++   * to a sub-tab the way hasSeenAlchemist/hasSeenEnchanter are
++   * elsewhere in this file -- this is about the Vendors tab's own
++   * first appearance, one level up from either of those.
++   */
++  hasVisitedVendorsTab: boolean;
++  /**
++   * Patch 0308. Set the first time engine.useConsumable actually
++   * succeeds (InventoryManager.useOnHero returns no error) -- drives
++   * the one-time `first_consumable_used` GuidanceManager topic. Doesn't
++   * care which consumable, just that using one worked at least once;
++   * same "first X ever happened" shape every other GuidanceManager-
++   * backed flag in this file already uses.
++   */
++  hasUsedConsumable: boolean;
++  /**
+    * Levels bought in the Overseer upgrade (0-3), Warehouse sub-tab. Each
+    * level gives every node a chance to auto-catch a spawn that would
+    * otherwise expire unclicked -- `harvest.overseer.rescueChancePercentPerLevel`
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+--- a/src/ui/MenuWindow.tsx	2026-09-04 00:45:51.600623712 +0000
++++ b/src/ui/MenuWindow.tsx	2026-09-04 00:47:21.913372429 +0000
+@@ -335,6 +335,11 @@
+   // independent) -- this only covers the tab overall.
+   useEffect(() => {
+     engine.acknowledgeTab(tab);
++    // Patch 0308: one-time "you're on the Vendors tab for the first
++    // time" explainer -- see engine.acknowledgeVendorsTabVisit's own
++    // comment for why this is separate from the plain-read
++    // acknowledgeTab call just above.
++    if (tab === 'vendors') engine.acknowledgeVendorsTabVisit();
+   }, [engine, tab]);
+   // Nav gold/renown count up to a new value rather than snapping -- the
+   // numeric equivalent of the .bar fill transition. No animation on first

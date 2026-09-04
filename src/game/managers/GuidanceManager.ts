@@ -101,6 +101,15 @@ const CHECKS: Record<string, Check> = {
   // targetTab, and these two point at different tabs.
   guild_hall_intro: (state) => state.heroes.length === 1
     && state.gold >= Math.min(...Object.values(RECRUIT_COST)),
+  // Patch 0308. The three new post-tutorial-quest topics -- each reads
+  // straight off its own dedicated GameState flag rather than deriving
+  // anything, since all three are set exactly once, right at the real
+  // moment they should fire (QuestManager.resolve, MenuWindow's
+  // tab-switch effect, and engine.useConsumable respectively). See
+  // each flag's own comment in types.ts for the full reasoning.
+  first_quest_complete_vendor_nudge: (state) => state.hasCompletedFirstQuest,
+  first_vendors_visit: (state) => state.hasVisitedVendorsTab,
+  first_consumable_used: (state) => state.hasUsedConsumable,
 };
 
 export const GuidanceManager = {

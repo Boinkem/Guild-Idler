@@ -177,6 +177,9 @@ export function createInitialState(now = Date.now()): GameState {
     vendorGoldSpent: { blacksmith: 0, alchemist: 0, enchanter: 0 },
     hasSeenAlchemist: false,
     hasSeenEnchanter: false,
+    hasCompletedFirstQuest: false,
+    hasVisitedVendorsTab: false,
+    hasUsedConsumable: false,
     peddlerTab: null,
     guildName: '',
     notifiedSetBonuses: [],
@@ -1248,6 +1251,24 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     version: 58,
     raidClearsByDifficulty: (save.raidClearsByDifficulty as Record<string, string[]> | undefined) ?? {},
+  }),
+  58: (save) => ({
+    // Patch 0308. New post-tutorial-quest onboarding flags -- see
+    // GameState.hasCompletedFirstQuest/hasVisitedVendorsTab's own
+    // comments. Both default to true for every existing save, same
+    // reasoning hasSeenAlchemist/hasSeenEnchanter's own migration
+    // (version 55) already used: this only exists to migrate a save
+    // that predates the patch, and any save old enough to need
+    // migrating has, by definition, already been well past its own
+    // first quest and Vendors tab for a long time -- there's nothing
+    // for either flag to retroactively fire from, and defaulting to
+    // false would misfire the new nudge/board-restriction on a
+    // veteran save instead of a genuinely new one.
+    ...save,
+    version: 59,
+    hasCompletedFirstQuest: (save.hasCompletedFirstQuest as boolean | undefined) ?? true,
+    hasVisitedVendorsTab: (save.hasVisitedVendorsTab as boolean | undefined) ?? true,
+    hasUsedConsumable: (save.hasUsedConsumable as boolean | undefined) ?? true,
   }),
 };
 

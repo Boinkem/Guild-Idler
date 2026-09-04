@@ -120,5 +120,25 @@
       "The Guild Hall has upgrades that benefit every hero at once -- worth a look once gold starts piling up."
     ],
     "targetTab": "guild"
+  },
+  {
+    "id": "first_quest_complete_vendor_nudge",
+    "messages": [
+      "Your first job's done, gold in hand. The Vendors have gear and supplies worth a look, if you'd rather gear up before sending your hero out again -- or keep questing, whatever suits you."
+    ],
+    "targetTab": "vendors"
+  },
+  {
+    "id": "first_vendors_visit",
+    "messages": [
+      "The Blacksmith's always open here; the Alchemist and Enchanter tuck in beside them once you've found your way to each. Buy straight from stock, or spend materials crafting your own gear and supplies."
+    ]
+  },
+  {
+    "id": "first_consumable_used",
+    "messages": [
+      "That takes effect right away. Check a hero's own card in the Heroes tab to see anything currently active on them."
+    ],
+    "targetTab": "heroes"
   }
 ]

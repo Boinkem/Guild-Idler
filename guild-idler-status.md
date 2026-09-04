@@ -24708,3 +24708,150 @@ vite.web.config.ts` both pass clean against a fresh pull of `main`
 of it). No image assets changed in this patch -- same `fields.jpg`/
 `bright/fields.jpg` pair from patch 0305, just wired to one shared
 background instead of two separate ones.
+
+### Guided intro rework: locked single-quest board, tutorial reward, and three new post-tutorial nudges (patch 0308)
+
+```discord-update
+Dev Update | Patch 0308
+
+- Added the Quests nav tab itself shimmering gold until your first job's sent, alongside the existing card shimmer
+- Added a guaranteed Strength Potion to the tutorial quest's reward, on top of its usual gold and XP
+- Changed the quest board to stay locked to one job at a time through both your first quest and the burst quest that follows it
+- Added a nudge toward the Vendors the moment your first quest wraps up, plus a one-time explainer the first time you actually open that tab
+- Added a one-time explainer the first time you use a consumable
+```
+
+**Discussed and scoped before touching any code** (see this file's own
+prior entries -- "First-five-minutes onboarding beat" sat in the
+Bigger, still-undecided backlog since roughly patch 0245, flagged as a
+UX/telegraphing problem rather than a numbers one, needing its own
+design conversation before building). That conversation happened
+directly, across several rounds, before this patch -- not assumed from
+the original ask alone.
+
+**What the original ask actually ran into: most of the machinery
+already existed.** The scripted tutorial quest, its guaranteed win, the
+forced injury/broken-starter-sword lesson, the quest-card gold shimmer,
+the "try a burst quest next" spotlight, and the whole GuidanceManager
+one-time-toast system (first gear found, first quest chain, raids
+unlocked, first injury/wear, etc.) all shipped already, mostly across
+patches 0287/0288 and the various `pendingXSpotlight` features before
+them. Confirmed against a fresh pull of `main` before scoping anything
+further, rather than trusting an earlier chat's summary or the original
+ask's own framing of what was "missing" -- several of the requested
+notifications (first quest chain, first raid, first equipment found)
+turned out to need no new code at all, just confirmation they already
+fire correctly. This patch is deliberately scoped to the real remaining
+gaps, reusing every existing pattern it can rather than introducing a
+second parallel onboarding system alongside the one already there.
+
+**Board stays genuinely single-quest, not just single-quest-at-creation.**
+Previously, sending the scripted tutorial quest emptied that hero's
+board (`questBoards[hero.id]`), and `GameEngine.refreshWorld`'s existing
+"regenerate whenever a hero's board is empty" branch would immediately
+refill it with a full `BOARD_SIZE` (6) ordinary board while the tutorial
+quest was still in flight -- a brand-new player would see half a dozen
+competing offers appear behind the one thing they were just told to
+focus on, before it even resolved. `refreshWorld` now skips regeneration
+entirely for a hero currently on the tutorial quest (checked via
+`activeQuests`, `offer.id === TUTORIAL_QUEST_ID`), so the board stays
+empty until `QuestManager.resolve` actually clears it out.
+
+Once the tutorial quest resolves, `pendingBurstQuestSpotlight` (already
+existing, patch 0288 -- armed on tutorial resolve, cleared the instant
+any burst offer is sent) now also gates board *size*, not just the
+card-shimmer category it already drove: while armed, `refreshWorld`
+generates a single forced-burst Easy offer instead of a full board, the
+same one-thing-at-a-time shape the tutorial quest itself used. Scoped to
+every hero rather than just the starter one, but in practice this only
+ever narrows the one hero who matters at this stage -- a genuinely new
+guild can't afford a second hero slot yet regardless (that needs a
+Tavern upgrade, not just gold). The moment a burst offer is actually
+sent, the flag clears and ordinary `BOARD_SIZE`-wide generation resumes
+from the next regeneration on, no new flag needed for that half.
+
+**Quest tab shimmer.** Previously only the tutorial quest *card* itself
+carried the gold ring (`.quest-card-spotlight`); nothing made the Quests
+nav tab shimmer too. `isNavTabUnread` (attention.ts) now also returns
+true for the `quests` tab for as long as any hero's board still contains
+the tutorial offer -- derived live off `questBoards` (same "no persisted
+flag, just read current state" shape `brokenGear`/`eggsReady` already
+use in this same file), so it clears itself the instant the offer is
+sent, in lockstep with the card's own shimmer.
+
+**Tutorial reward.** `QuestManager.resolve`'s existing `isTutorialQuest`
+branch now also grants a guaranteed `strength_potion` (confirmed as the
+base tier against `grand_strength_potion`, i.e. exactly "a lesser
+Strength Potion" per the design ask) via `InventoryManager.add`, on top
+of the quest's own untouched 40 gold / 20 xp reward -- additive, not a
+replacement. Sets up a genuine reason to reach for the new
+`first_consumable_used` topic below on quest two or three, rather than
+that potion sitting unused in the stash indefinitely.
+
+**Three new GuidanceManager topics** (guidance-topics.json +
+GuidanceManager.ts's CHECKS, same shape every existing topic already
+uses -- a plain state-boolean condition, checked via the existing
+`GuidanceManager.checkAll`/`GameEngine.reportGuidance` path, no new
+plumbing):
+- `first_quest_complete_vendor_nudge` -- new `GameState.
+  hasCompletedFirstQuest`, set the instant the tutorial quest resolves
+  (alongside `pendingBurstQuestSpotlight`, kept as a separate flag since
+  one drives a GuidanceManager condition and the other drives board/UI
+  state directly). Points at Vendors, phrased to cover "check out
+  Vendors, or keep questing" in one line -- closing the toast (or just
+  not clicking through) *is* "keep questing," no second button needed.
+- `first_vendors_visit` -- new `GameState.hasVisitedVendorsTab`, set by
+  a new `engine.acknowledgeVendorsTabVisit()`, called from MenuWindow's
+  existing per-tab-switch effect (the one that already calls
+  `acknowledgeTab` on every change) the moment the Vendors tab opens for
+  the first time. Deliberately separate from the existing
+  `acknowledgeVendorFirstVisit`/`hasSeenAlchemist`/`hasSeenEnchanter`
+  pair (patch 0291) -- those dismiss a sub-tab spotlight silently, with
+  no message; this one is a real one-time explainer toast, one level up
+  at the whole-tab scope. Equipment tab's own shimmer/explainer was
+  deliberately *not* duplicated here -- confirmed during scoping that
+  the existing `first_equipment_found` topic (fires on first loot drop,
+  already targets Equipment) already covers that half correctly; adding
+  a second, tutorial-specific equipment nudge would just be a redundant
+  path to the same message.
+- `first_consumable_used` -- new `GameState.hasUsedConsumable`, set in
+  `engine.useConsumable` the moment `InventoryManager.useOnHero`
+  actually succeeds (no error). `useConsumable` previously never called
+  `reportGuidance`/`GuidanceManager.checkAll` at all -- added here,
+  matching every other player action in `engine.ts` that can trip a
+  guidance topic.
+
+**Save compatibility.** `SAVE_VERSION` 58 -> 59, migration 58 added for
+the three new flags. All three default to `true` for any save old
+enough to need migrating -- same reasoning patch 0291's `hasSeenAlchemist`/
+`hasSeenEnchanter` migration already used: a save that predates this
+patch has, by definition, already been well past its own first quest
+and Vendors tab for a long time, so there's nothing for any of these to
+retroactively fire from, and defaulting to `false` would misfire the
+nudges (and the board-size restriction) on a veteran save instead of a
+genuinely new one.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh pull of `main`
+(confirmed patch 0307 was already live and this patch is rebased on top
+of it). Beyond type-checking: a real runtime simulation, not just
+inferred -- `createInitialState`, `QuestManager.start`/`resolve`, and
+`isNavTabUnread` bundled and executed directly under `tsx` against this
+patch's actual code, confirming end to end: the starter board's sole
+offer is genuinely the tutorial quest and the Quests tab genuinely
+shimmers before it's sent; the board is genuinely empty (not
+regenerated) the instant it's sent, and the tab shimmer clears with it;
+resolving it is a genuine guaranteed win that sets
+`hasCompletedFirstQuest`, arms `pendingBurstQuestSpotlight`, and credits
+exactly one `strength_potion`; the post-tutorial board-size gate
+genuinely produces a single burst-mode offer, not a full board; and a
+manually-constructed pre-patch (version 58) save genuinely migrates all
+three new flags to `true`, landing on version 59. Worth a real playtest
+on top of this: start a brand-new guild and confirm the Quests tab and
+tutorial quest card both shimmer immediately, send the tutorial quest
+and confirm the board stays empty (not just visually, actually check no
+extra offers appear) until it resolves, confirm the vendor nudge toast
+appears right after closing the result, confirm Vendors gives its own
+explainer on first visit, confirm exactly one more (burst) offer shows
+up afterward and nothing else until it's sent, and confirm using the
+new Strength Potion pops the consumable-use explainer.

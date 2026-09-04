@@ -1346,6 +1346,19 @@ export const QuestManager = {
     // mid-resolve.
     if (isTutorialQuest) {
       state.pendingBurstQuestSpotlight = true;
+      // Patch 0308. Set alongside pendingBurstQuestSpotlight -- see its
+      // own comment in types.ts for why these are two separate flags.
+      // Drives the post-tutorial GuidanceManager nudge pointing a new
+      // player at Vendors ("first_quest_complete_vendor_nudge").
+      state.hasCompletedFirstQuest = true;
+      // A guaranteed starter Strength Potion, on top of the quest's own
+      // normal 40g/20xp reward (tutorialQuestOffer's rewardGold/rewardXp,
+      // untouched by this) -- the base tier (vs. grand_strength_potion),
+      // i.e. exactly "a lesser strength potion" per the design ask. Sets
+      // a new player up to actually have a consumable worth trying once
+      // the first_consumable_used guidance topic below has something to
+      // fire from.
+      InventoryManager.add(state, 'strength_potion', 1);
     }
 
     // Grimsby's cooldown counter, same account-wide shape -- doesn't care
