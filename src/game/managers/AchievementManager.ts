@@ -63,11 +63,17 @@ const CHECKS: Record<string, Check> = {
 
   RAID_HEROIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('heroic'),
 
+  // New in patch 0317, alongside the raid-tier rename (RAID_DIFFICULTIES'
+  // own comment in raids.ts has the full history) -- 'mythic' is the
+  // renamed old top tier, so this fills the gap RAID_LEGENDARY_CLEARED
+  // used to cover before a genuinely new top tier existed above it.
+  RAID_MYTHIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('mythic'),
+
   RAID_LEGENDARY_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('legendary'),
 
   RAID_ALL_DIFFICULTIES: (state) => {
     const cleared = new Set(state.completedRaidDifficulties ?? []);
-    return cleared.has('normal') && cleared.has('heroic') && cleared.has('legendary');
+    return cleared.has('normal') && cleared.has('heroic') && cleared.has('mythic') && cleared.has('legendary');
   },
 
   /* ------------------------- vendor / guild completion ------------------------- */

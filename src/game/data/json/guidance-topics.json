@@ -57,9 +57,9 @@
     "targetTab": "raids"
   },
   {
-    "id": "raids_legendary_unlocked",
+    "id": "raids_mythic_unlocked",
     "messages": [
-      "Legendary raids are open. the hardest content in the game, and the only tier where the very best loot drops."
+      "Mythic raids are open. brutal odds, and loot to match."
     ],
     "targetTab": "raids"
   },

@@ -120,7 +120,7 @@ function upgradeEntries(
     ...(def.unlocks === 'blackMarket' ? [{ text: 'Unlocks the Black Market', gold: true }] : []),
     ...(def.unlocks === 'raids' ? [{ text: 'Unlocks Normal-difficulty raids', gold: true }] : []),
     ...(def.unlocks === 'raidsHeroic' ? [{ text: 'Unlocks Heroic raid difficulty', gold: true }] : []),
-    ...(def.unlocks === 'raidsLegendary' ? [{ text: 'Unlocks Legendary raid difficulty', gold: true }] : []),
+    ...(def.unlocks === 'raidsMythic' ? [{ text: 'Unlocks Mythic raid difficulty', gold: true }] : []),
     ...(def.unlocks === 'training' ? [{ text: 'Unlocks the Training sub-tab under Heroes -- reassign any hero\'s role', gold: true }] : []),
     ...(def.unlocks === 'autoChain' && level > 0
       ? [{ text: `Currently chains ${chainRangeText(level)} quests per streak`, gold: true }] : []),

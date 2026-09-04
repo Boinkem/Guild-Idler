@@ -1,4 +1,7 @@
-import { GuildDef, HeroClass, Modifiers, QuestTag, RenownPerkDef, Role, RoleDef, Stats, UpgradeDef, VendorId } from '../types';
+import {
+  ChainReplayDifficulty, GuildDef, HeroClass, HeroRenownPerkDef, Modifiers, QuestTag, RaidDifficulty,
+  RenownPerkDef, Role, RoleDef, Stats, UpgradeDef, VendorId,
+} from '../types';
 import { Tuning } from './tuning';
 import { RAIDS, RAID_ENCOUNTER_BY_ID } from './raids';
 
@@ -177,12 +180,23 @@ export const UPGRADES: UpgradeDef[] = [
     // that no save has this upgrade purchased yet, so no migration needed
     // for the id change itself. See guild-idler-status.md's patch 0166
     // entry for the full sweep this was part of.
-    id: 'raid_legendary_clearance', name: 'Legendary Clearance',
-    description: "The guild's word that it can handle Legendary difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
+    //
+    // Patch 0317 (Prestige/Retirement Rework): renamed back to
+    // 'raid_mythic_clearance' -- the tier this gates is now called
+    // Mythic again (RAID_DIFFICULTIES' own comment has the full history).
+    // A brand-new Legendary tier sits above it and auto-unlocks once
+    // Mythic is cleared once, rather than getting its own Clearance
+    // purchase -- see RaidManager.canStart. Any existing save with levels
+    // in the old 'raid_legendary_clearance' id simply stops matching a
+    // def (ModifierManager.upgradeMods already no-ops on an unknown id);
+    // no migration written, same "all current players are testers"
+    // reasoning the rest of this patch relies on.
+    id: 'raid_mythic_clearance', name: 'Mythic Clearance',
+    description: "The guild's word that it can handle Mythic difficulty -- brutally harsh odds, and loot worth the extra risk.",
     baseCost: Tuning.get('upgrade.raid_legendary_clearance.baseCost'),
     costGrowth: Tuning.get('upgrade.raid_legendary_clearance.costGrowth'),
     maxLevel: Tuning.get('upgrade.raid_legendary_clearance.maxLevel'),
-    modsPerLevel: {}, unlocks: 'raidsLegendary', category: 'Unlocks',
+    modsPerLevel: {}, unlocks: 'raidsMythic', category: 'Unlocks',
   },
   {
     id: 'potion_belt', name: 'Potion Belt',
@@ -1405,56 +1419,82 @@ export function xpForLevel(level: number): number {
   return Math.floor(XP_CURVE_BASE * Math.pow(level, XP_CURVE_EXPONENT) * xpCurveMultiplier(level));
 }
 
+/**
+ * As of patch 0317, this is no longer "the level Retirement requires" --
+ * classic Retire is cut. It's repurposed as the level a hero must hold to
+ * spend Renown in the new per-hero tree (HERO_RENOWN_PERKS below) --
+ * framed as a way of getting extra power through endgame content for a
+ * hero who's done leveling, same MAX_HERO_LEVEL gate the old system used
+ * for essentially the same reason (a hero isn't "done" until capped).
+ * Left as the same Tuning-backed constant rather than renamed, to avoid
+ * touching every call site for a symbol rename alone.
+ */
 export const PRESTIGE_MIN_LEVEL = Tuning.get('progression.prestigeMinLevel');
 
 /**
- * Historical retirement gate this file's own patch-0178 comment flagged --
- * NOT the current gate (PRESTIGE_MIN_LEVEL, now 55, same as MAX_HERO_LEVEL).
- * Before 0178, a hero could retire the moment they hit level 30; the old
- * formula's level-scaling term was Math.pow(level - 30 + 1, 0.75), so
- * cashing out the instant you became eligible earned exactly 1 renown from
- * that term (Math.pow(1, 0.75)), while holding off all the way to the level
- * cap (55) earned Math.pow(26, 0.75) ≈ 11.51 -- roughly 10.51 renown of
- * "extra" purely for waiting. Kept as its own constant (not derived from
- * PRESTIGE_MIN_LEVEL) because it describes a fact about the OLD system; it
- * must NOT silently track PRESTIGE_MIN_LEVEL if that's retuned again later.
+ * Prestige/Retirement Rework (patch 0317). Classic Retire is cut --
+ * Early Retirement (PrestigeManager.earlyRetire) is now the only way to
+ * remove a hero from the roster, and it stays reward-free by design.
+ * Renown income moves entirely to playing capped (MAX_HERO_LEVEL) heroes
+ * through the hardest available endgame content instead: a raid or
+ * Replay Memories chain cleared at Mythic or Legendary now pays Renown
+ * directly (Normal/Heroic stay gold-only, unchanged). See
+ * PrestigeManager.retire's old comment history (removed this patch) and
+ * guild-idler-status.md's patch-0317 entry for the full rework writeup.
+ *
+ * First-pass numbers, explicitly not tuned yet (see decision 5 in the
+ * design brief this patch was scoped from) -- deliberately modest
+ * relative to RENOWN_PERKS/HERO_RENOWN_PERKS' own tier2 costs (hundreds
+ * to well over a million Renown for a maxed perk), so a single clear
+ * still reads as a grind, not an instant unlock. Both trees draw from
+ * this same income, so there's no separate balancing needed per tree.
+ * Edit via the Tuning tab (category 'renown_income') without touching
+ * this file once real balance passes start.
  */
-const PRE_LEVEL_CAP_RETIRE_MIN_LEVEL = 30;
+export function renownForRaidClear(difficulty: RaidDifficulty): number {
+  if (difficulty === 'mythic') return Tuning.get('renown_income.raid.mythic');
+  if (difficulty === 'legendary') return Tuning.get('renown_income.raid.legendary');
+  return 0;
+}
+
+/** Chain-replay twin of renownForRaidClear above -- same Mythic/Legendary-
+ *  only, Normal/Heroic-stay-gold-only shape. */
+export function renownForChainReplayClear(difficulty: ChainReplayDifficulty): number {
+  if (difficulty === 'mythic') return Tuning.get('renown_income.chainReplay.mythic');
+  if (difficulty === 'legendary') return Tuning.get('renown_income.chainReplay.legendary');
+  return 0;
+}
+
+/* --------------------------- per-hero renown perks -------------------------- */
 
 /**
- * Once 0178 pinned every retirement to the level cap (PRESTIGE_MIN_LEVEL
- * === MAX_HERO_LEVEL), the old level-scaling term above degenerated into a
- * flat constant (Math.pow(1, 0.75) = 1 every single time) -- flagged in
- * that patch's own status.md entry as "a real interaction, not fixed here."
- * Direct follow-up instruction: since retiring below the cap is no longer
- * possible, replace that dead term with a new flat baseline equal to 3/4 of
- * the "extra" a hero would have earned under the OLD formula for holding
- * off and retiring at 55 instead of cashing out the moment they hit the
- * OLD minimum (see PRE_LEVEL_CAP_RETIRE_MIN_LEVEL above) -- i.e. 3/4 of
- * (Math.pow(26, 0.75) - 1) ≈ 3/4 of 10.51 ≈ 7.89. The totalQuests/150 term
- * is untouched; only the level-scaling half of the old formula is being
- * replaced here.
+ * New in patch 0317, alongside the Prestige/Retirement Rework -- see
+ * HeroRenownPerkDef's own comment in types.ts for how this tree relates
+ * to the existing guild-wide RENOWN_PERKS above (same currency, separate
+ * spend, separate storage on the hero itself).
+ *
+ * PLACEHOLDER CONTENT. The actual per-hero effects list is still being
+ * designed (explicitly deferred in the design brief this patch was
+ * scoped from -- "new hero-specific effects, described separately") and
+ * will land as a follow-up patch. This single entry exists only so the
+ * mechanism (storage, cost curve, buy flow, UI hookup) is real and
+ * testable end to end in the meantime -- treat its name/description/
+ * numbers as scaffolding, not final content.
  */
-const RETIREMENT_LEVEL_BONUS = 0.75
-  * (Math.pow(MAX_HERO_LEVEL - PRE_LEVEL_CAP_RETIRE_MIN_LEVEL + 1, 0.75) - 1);
+export const HERO_RENOWN_PERKS: HeroRenownPerkDef[] = [
+  {
+    id: 'veteran_instinct', name: 'Veteran Instinct',
+    description: '[Placeholder perk -- real per-hero effects still being designed.] This hero has seen enough endgame content to trust their gut.',
+    cost: Tuning.get('hero_renown_perk.veteran_instinct.cost'),
+    costGrowth: Tuning.get('hero_renown_perk.veteran_instinct.costGrowth'),
+    maxLevel: Tuning.get('hero_renown_perk.veteran_instinct.maxLevel'),
+    modsPerLevel: { success: Tuning.get('hero_renown_perk.veteran_instinct.successPerLevel') },
+  },
+];
 
-/** Renown granted for retiring a hero at a given level. */
-export function renownForRetirement(level: number, totalQuests: number): number {
-  if (level < PRESTIGE_MIN_LEVEL) return 0;
-  return Math.max(1, Math.floor(RETIREMENT_LEVEL_BONUS + totalQuests / 150));
-}
-
-/* ------------------------------ prestige streak ---------------------------- */
-
-/** Retiring again within this window of the last retirement extends the streak. */
-export const PRESTIGE_STREAK_WINDOW_MS = Tuning.get('progression.prestigeStreakWindowMs');
-const PRESTIGE_STREAK_BONUS_PER_STEP = Tuning.get('progression.prestigeStreakBonusPerStep'); // percent
-const PRESTIGE_STREAK_BONUS_CAP = Tuning.get('progression.prestigeStreakBonusCap'); // percent, reached at streak 11 at the default 5%/step
-
-/** Percentage bonus applied to renown gained, based on the current streak. */
-export function prestigeStreakBonusPct(streak: number): number {
-  return Math.min((Math.max(1, streak) - 1) * PRESTIGE_STREAK_BONUS_PER_STEP, PRESTIGE_STREAK_BONUS_CAP);
-}
+export const HERO_RENOWN_BY_ID: Record<string, HeroRenownPerkDef> = Object.fromEntries(
+  HERO_RENOWN_PERKS.map((p) => [p.id, p]),
+);
 
 /* -------------------------------- ascension -------------------------------- */
 

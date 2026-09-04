@@ -62,7 +62,13 @@ const CHECKS: Record<string, Check> = {
   black_market_unlocked: (state) => ModifierManager.hasUnlock(state, 'blackMarket'),
   legendary_quests_unlocked: (state) => ModifierManager.hasUnlock(state, 'legendaryQuests'),
   raids_heroic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsHeroic'),
-  raids_legendary_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsLegendary'),
+  // Renamed raids_legendary_unlocked -> raids_mythic_unlocked in patch
+  // 0317, matching the raidsLegendary -> raidsMythic unlock rename (see
+  // RAID_DIFFICULTIES' own comment in raids.ts for the full history). No
+  // guidance entry added for the new Legendary tier -- it auto-unlocks
+  // off a raid clear, not a purchase, so there's no "you can afford this
+  // now" moment for a guidance nudge to fire on.
+  raids_mythic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsMythic'),
   // The Training tab's own nav visibility gate (MenuWindow.tsx) reads
   // completedRaids directly rather than a dedicated boolean -- this check
   // mirrors that exact same condition rather than introducing a second

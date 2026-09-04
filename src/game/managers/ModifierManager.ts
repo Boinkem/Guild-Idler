@@ -1,4 +1,4 @@
-import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE, BASE_STASH_CAPACITY } from '../data/progression';
+import { GUILD_BY_ID, RENOWN_BY_ID, HERO_RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE, BASE_STASH_CAPACITY } from '../data/progression';
 import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
 import { BASE_INCUBATION_SLOTS } from '../data/pets';
 import { GameState, Hero, Modifiers, VendorId } from '../types';
@@ -41,6 +41,24 @@ export const ModifierManager = {
     return sumMods(
       ...Object.entries(state.renownPerks).map(([id, level]) => {
         const def = RENOWN_BY_ID[id];
+        return def ? scaleMods(def.modsPerLevel, level) : {};
+      }),
+    );
+  },
+
+  /**
+   * Per-hero Renown perk mods (HERO_RENOWN_PERKS, patch 0317) -- reads
+   * `hero.renownPerks` instead of `state.renownPerks`, same "own dedicated
+   * pool, folded in per-hero" shape petModsForHero below already uses.
+   * NOT included in global() -- like petModsForHero, this only applies to
+   * the specific hero it's computed for, so callers need to fold it in
+   * alongside petModsForHero wherever per-hero mods are aggregated (see
+   * HeroManager.heroMods).
+   */
+  heroRenownMods(hero: Hero): Partial<Modifiers> {
+    return sumMods(
+      ...Object.entries(hero.renownPerks ?? {}).map(([id, level]) => {
+        const def = HERO_RENOWN_BY_ID[id];
         return def ? scaleMods(def.modsPerLevel, level) : {};
       }),
     );
@@ -216,7 +234,7 @@ export const ModifierManager = {
     return BASE_STASH_CAPACITY + bonus;
   },
 
-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training' | 'autoChainTactics'): boolean {
+  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics'): boolean {
     return Object.entries(state.upgrades).some(([id, level]) => {
       const def = UPGRADE_BY_ID[id];
       return !!def && def.unlocks === unlock && level > 0;

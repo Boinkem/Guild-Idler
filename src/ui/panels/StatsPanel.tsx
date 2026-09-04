@@ -22,7 +22,7 @@ import { CURIO_BY_ID } from '../../game/data/curios';
  *  how OfflineReportModal already duplicates this same small map rather
  *  than importing it from RaidsPanel. */
 const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
+  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic, legendary: RARITY_COLOR.legendary,
 };
 
 /** One row of the merged Recent Results feed -- a quest and a raid outcome

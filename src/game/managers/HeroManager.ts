@@ -648,6 +648,10 @@ export const HeroManager = {
    * guild-wide passive the way it used to be. Signature grew a `state`
    * param purely for that lookup (pets live in state.pets, not on the
    * hero object) -- every call site already had `state` in scope.
+   *
+   * heroRenownMods (patch 0317) folded in the same way -- the new
+   * per-hero Renown perk tree only ever affects the specific hero that
+   * bought into it, same "own dedicated pool, read here" shape as pets.
    */
   heroMods(state: GameState, hero: Hero, now: number): Modifiers {
     const classDef = HERO_CLASSES[hero.heroClass];
@@ -658,6 +662,7 @@ export const HeroManager = {
       HeroManager.injuryMods(hero, now),
       HeroManager.healthMods(hero),
       ModifierManager.petModsForHero(state, hero, now),
+      ModifierManager.heroRenownMods(hero),
       { success: hero.level * 0.4 },
     );
   },

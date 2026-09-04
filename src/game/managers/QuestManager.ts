@@ -2,7 +2,7 @@ import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHAN
 import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
 } from '../data/quests';
-import { HERO_CLASSES, questGoldBaseline, questXpBaseline } from '../data/progression';
+import { HERO_CLASSES, questGoldBaseline, questXpBaseline, renownForChainReplayClear } from '../data/progression';
 import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
 import { CURIOS, questCurioDropChance } from '../data/curios';
@@ -620,7 +620,7 @@ export const QuestManager = {
       // replay difficulty tag stays attached to `name` (still a compact,
       // glanceable "what am I looking at" label), the stage name moves to
       // `stageName`.
-      name: `${chain.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : 'Legendary'}]` : ' [Replay]'}`,
+      name: `${chain.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : difficulty === 'mythic' ? 'Mythic' : 'Legendary'}]` : ' [Replay]'}`,
       stageName: stageDef.name,
       flavour: stageDef.flavour,
       difficulty: stageDef.difficulty,
@@ -1444,7 +1444,7 @@ export const QuestManager = {
               const dedicatedDef = EQUIPMENT_BY_ID[dedicatedId];
               const item = EquipmentManager.instantiate(dedicatedId, {
                 itemLevel: chain.reqLevel,
-                sourceTag: difficulty === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary',
+                sourceTag: difficulty === 'heroic' ? 'chainReplayHeroic' : difficulty === 'mythic' ? 'chainReplayMythic' : 'chainReplayLegendary',
                 rng, heroLevel: hero?.level,
               });
               if (item && dedicatedDef) {
@@ -1464,6 +1464,12 @@ export const QuestManager = {
           if (!recorded.includes(difficulty)) {
             state.chainReplayCompletions[chainId] = [...recorded, difficulty];
           }
+          // Prestige/Retirement Rework (patch 0317) -- a completed Mythic
+          // or Legendary replay now pays Renown directly, same "repeats
+          // every clear, not just the first" shape as RaidManager's own
+          // renownForRaidClear hookup. Normal/Heroic stay gold-only.
+          const renownGained = renownForChainReplayClear(difficulty);
+          if (renownGained > 0) state.renown += renownGained;
         } else {
           activeReplay.stage = nextStage;
         }

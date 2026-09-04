@@ -560,10 +560,11 @@ new tunables in the `quests` category (`quest.easyBurstChanceTier1-4`,
 `quest.easyMediumChanceTier1-4`).
 
 **Heroes** — recruiting, leveling, stat allocation, injuries, skins,
-ascension/prestige, retirement with streak bonus. Each class now carries
-its own DevTool-editable color + optional icon (patch 0269), surfaced as
-a colored avatar circle on the new roster/companion "Status bars" views
--- see "Hero status bars" below.
+ascension/prestige (frozen as of patch 0317, see Renown / Prestige
+below), Early Retirement (roster-slot removal only, no reward). Each
+class now carries its own DevTool-editable color + optional icon (patch
+0269), surfaced as a colored avatar circle on the new roster/companion
+"Status bars" views -- see "Hero status bars" below.
 
 **Equipment** — rarities, set bonuses, repair/refine, shop + black market
 rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
@@ -742,8 +743,13 @@ pieces covering the 35-43 stretch). **46-54 is still an open gap** --
 nothing from this pass was earmarked for it; worth its own idea whenever
 there's time before the level-55 finale raid.
 
-**Renown / Prestige** — retirement, renown perks (two-tier, gold-then-
-renown cost curves), prestige streak bonus.
+**Renown / Prestige** — Prestige/Retirement Rework (patch 0317): classic
+Retire is cut; Early Retirement is the sole roster-removal path. Renown
+now comes from clearing raids/Replay Memories at Mythic or Legendary
+with a capped hero, and spends into two trees off one shared pool --
+the existing guild-wide perks (two-tier, gold-then-renown cost curves)
+plus a new per-hero tree (single tier, placeholder content pending a
+follow-up patch). See this patch's own entry below for the full writeup.
 
 **Achievements** — Steam-stub integration, dedicated unlock popup
 (non-blocking, separate from the toast queue), hidden achievements
@@ -25758,3 +25764,136 @@ never part of this bug and is unchanged.
 already live) before editing. `npx tsc --noEmit` and a full `vite
 build` passing clean against a fresh clone -- CSS-only change, no
 `.tsx` touched this patch.
+
+### Prestige/Retirement Rework: classic Retire cut, endgame raids/Memories pay Renown, new per-hero perk tree, raid/replay ladders unified to four tiers (patch 0317)
+
+```discord-update
+Dev Update | Prestige/Retirement Rework
+
+- Removed classic hero Retirement -- Early Retirement is now the only way to free a roster slot, still with no reward attached
+- Changed Heroic Renown to come from clearing raids and Replay Memories at Mythic or Legendary with a capped hero, instead of from retiring
+- Added a new Legendary raid tier above Mythic, and a new Mythic tier to Replay Memories between Heroic and Legendary -- both ladders now read Normal / Heroic / Mythic / Legendary
+- Added a new per-hero Renown perk tree (Prestige tab) alongside the existing guild-wide one -- same Renown, a second place to spend it
+- Fixed Every Banner Flying to require a Mythic clear too, and added a Mythic Reckoning achievement
+```
+
+Scoped from a design brief (prestige-retirement-rework-brief.pdf) written
+up in a prior chat after playtest feedback boiled down to "why would I
+retire?" -- wiping a hero's level and gear for Renown read as destroying
+an asset for a currency, not a reward, and patch 0179 already had to
+patch around a side effect of pinning retirement to the level cap (see
+that patch's own `RETIREMENT_LEVEL_BONUS` comment in progression.ts,
+removed this patch) -- a sign this was overdue for a rework, not a fresh
+problem.
+
+**Classic Retire is gone.** `PrestigeManager.retire`, `canRetire`,
+`renownPreview`, `streakPreview`, `projectedStreak`, and the prestige-
+streak system entirely (`PRESTIGE_STREAK_WINDOW_MS`,
+`prestigeStreakBonusPct`, the old `RETIREMENT_LEVEL_BONUS` formula) are
+all removed from `PrestigeManager.ts`/`progression.ts`. `engine.retire()`
+is gone from `engine.ts`. Early Retirement (`PrestigeManager.earlyRetire`)
+is unchanged in behaviour -- no reward, any level, roster-slot-only --
+and is now the sole removal path; `PrestigePanel.tsx` lost its Retire
+button, streak card, and per-hero renown-preview row entirely.
+`GameState.prestigeStreak`/`lastPrestigeAt` and `Hero.ascension` are all
+left in place (no migration needed) but frozen: nothing increments them
+going forward. Existing already-ascended heroes keep their rank display
+and `bonusStats` exactly as before.
+
+**Renown income moved to endgame content.** `renownForRaidClear`/
+`renownForChainReplayClear` (progression.ts) pay Renown on every full
+Mythic/Legendary clear -- repeatable, not first-clear-only, wired into
+`RaidManager.resolve` and `QuestManager`'s chain-replay resolution.
+Normal/Heroic stay gold-only in both systems, unchanged. First-pass
+numbers (Tuning category `renown_income`): raid Mythic 10 / Legendary 22,
+Memories Mythic 6 / Legendary 14 -- sized against the existing guild-wide
+perk tree's own tier2 costs (2.5k-1.3M+ Renown for a maxed perk) so
+repeated clears still read as a grind rather than an instant unlock. Real
+balance pass is explicitly backlogged, same treatment every other new
+economy number in this codebase gets.
+
+**Raid and Replay Memories ladders are now the same four names in the
+same order: Normal / Heroic / Mythic / Legendary.** This is a rename,
+not a pure addition, on the raid side specifically: the design brief
+this was scoped from assumed live raids were still "Normal/Heroic/
+Mythic" going in, but the live repo had already renamed that top tier to
+`'legendary'` back in patch 0166 (see `RAID_DIFFICULTIES`' own comment
+in raids.ts) -- so this patch renames that same tier's internal id AGAIN,
+back to `'mythic'`, and adds a genuinely new, harsher `'legendary'` above
+it. `RaidDifficulty`/`ChainReplayDifficulty` are both 4-value unions now
+(`types.ts`). Every exhaustive `Record<RaidDifficulty, ...>` /
+`Record<ChainReplayDifficulty, ...>` across the codebase got a fourth
+entry -- difficulty labels/colors/icons/order in `raids.ts`,
+`chainReplay.ts`, `RaidsPanel.tsx`, `DiscoveredQuestsPanel.tsx`,
+`StatsPanel.tsx`, `OfflineReportModal.tsx`; the `LootSourceTag` union and
+both its budget-multiplier and dedicated-item-scaling switches in
+`proceduralLoot.ts`; every `'heroic' ? X : 'legendary' ? Y : Z`-shaped
+sourceTag ternary in `RaidManager.ts`/`QuestManager.ts`. Loot fields
+`lootLegendary`/`eggLootLegendary` on `RaidEncounterDef` were renamed to
+`lootMythic`/`eggLootMythic` (same fallback-to-`loot` behaviour) with
+fresh `lootLegendary`/`eggLootLegendary` fields added for the new top
+tier -- no existing encounter actually populates a tiered loot pool yet
+(that's still the open "Heroic/Mythic tiered loot for the Last God raid"
+Cleanup item below), so this was a pure type-level rename with zero data
+migration needed.
+
+**Raid Legendary auto-unlocks off a clear, not a purchase.** Heroic and
+Mythic still gate behind their own Clearance upgrade (`raid_heroic_
+clearance`, and `raid_legendary_clearance` renamed back to `raid_mythic_
+clearance` -- it was `raid_mythic_clearance` originally too, pre-0166,
+see that upgrade's own comment for the full back-and-forth); Legendary
+has no Clearance purchase at all and unlocks the moment
+`state.completedRaidDifficulties` includes `'mythic'` (`RaidManager.
+canStart`, `RaidsPanel.tsx`'s difficulty circles). Confirmed design
+decision from the brief, not a placeholder for a future upgrade.
+
+**New per-hero Renown perk tree** (`HeroRenownPerkDef`, types.ts;
+`HERO_RENOWN_PERKS`, progression.ts; `Hero.renownPerks`) sits alongside
+the existing guild-wide `RENOWN_PERKS` tree, spending from the exact same
+`state.renown` pool -- deliberately no second currency, so every point of
+Renown income is a real choice between guild-wide and hero-specific
+power. Gated behind `PRESTIGE_MIN_LEVEL` (repurposed from its old
+"retirement requires this level" meaning to "spend in the per-hero tree
+requires this level" -- still `MAX_HERO_LEVEL`, still the same exported
+constant, comment updated rather than the symbol renamed). Applied via a
+new `ModifierManager.heroRenownMods(hero)`, folded into `HeroManager.
+heroMods` alongside `petModsForHero`. **Content is a placeholder as of
+this patch** -- one scaffolding perk (`veteran_instinct`, a flat success
+bonus) exists purely so the mechanism (storage, cost curve reusing
+`renownCost`, buy flow, `PrestigePanel.tsx`'s new "Spend renown -- per
+hero" section) is real and testable end to end. The actual per-hero
+effects list is still being designed and will land as a follow-up patch
+on top of this.
+
+**Verified:** pulled `PrestigeManager.ts`, `progression.ts`, `types.ts`,
+`chainReplay.ts`, `raids.ts`, `RaidManager.ts`, `QuestManager.ts`,
+`tuning.ts`/`tuning.json`, `ModifierManager.ts`, `HeroManager.ts`,
+`EquipmentManager.ts`, `proceduralLoot.ts`, `engine.ts`, and every UI
+file touched fresh from `main` via `raw.githubusercontent.com`
+immediately before editing (patch 0316 was already live). Full repo
+tarball pulled separately to grep every real call site of the removed/
+renamed symbols across the whole `src` tree, not just the files the
+original design brief named. `npm install` + `npx tsc --noEmit` clean
+across the whole project under `strict`/`noUnusedLocals`/
+`noUnusedParameters` (169 files). Full `vite build` (web target) passing
+clean as well.
+
+**Still open** (flagged in the original design brief, not resolved by
+this patch):
+- The actual per-hero perk effects list -- content design, not just the
+  data shape. Does it mirror the guild-wide tree's categories (success/
+  gold/xp/speed/loot) or introduce new hero-specific effects? Needs its
+  own follow-up.
+- Real tuning for the four new `renown_income.*` numbers and the new
+  Legendary-tier raid/Memories difficulty numbers -- first-pass only,
+  same as every other new economy number here.
+- `RAID_ALL_DIFFICULTIES`/`RAID_MYTHIC_CLEARED` achievements: `RAID_
+  MYTHIC_CLEARED` shipped with no `unlocksTrackId` (every existing bard
+  track is already claimed by another achievement) -- a real track for
+  it is a small, independent follow-up whenever new music exists to
+  assign.
+- Whether the old `RETIREMENT_PARTY`/`VETERAN_RETIREE`/`minotaur`
+  achievements (all keyed off `state.stats.prestigeCount`, which nothing
+  increments anymore) should be repointed at Early Retirement counts,
+  retired outright, or left as "only earnable pre-0317" -- not decided
+  here, flagging so it isn't silently forgotten.

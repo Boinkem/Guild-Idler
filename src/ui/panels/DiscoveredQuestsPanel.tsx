@@ -20,20 +20,21 @@ import {
 } from '../../game/util';
 import { Tuning } from '../../game/data/tuning';
 
-const REPLAY_DIFFICULTY_ORDER: ChainReplayDifficulty[] = ['normal', 'heroic', 'legendary'];
-const REPLAY_DIFFICULTY_LABEL: Record<ChainReplayDifficulty, string> = { normal: 'N', heroic: 'H', legendary: 'L' };
-const REPLAY_DIFFICULTY_NAME: Record<ChainReplayDifficulty, string> = { normal: 'Normal', heroic: 'Heroic', legendary: 'Legendary' };
+const REPLAY_DIFFICULTY_ORDER: ChainReplayDifficulty[] = ['normal', 'heroic', 'mythic', 'legendary'];
+const REPLAY_DIFFICULTY_LABEL: Record<ChainReplayDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M', legendary: 'L' };
+const REPLAY_DIFFICULTY_NAME: Record<ChainReplayDifficulty, string> = { normal: 'Normal', heroic: 'Heroic', mythic: 'Mythic', legendary: 'Legendary' };
 const REPLAY_DIFFICULTY_COLOR: Record<ChainReplayDifficulty, string> = {
-  normal: 'var(--parchment)', heroic: 'var(--brass)', legendary: 'var(--violet)',
+  normal: 'var(--parchment)', heroic: 'var(--brass)', mythic: 'var(--crimson, #a83232)', legendary: 'var(--violet)',
 };
 /** Same graceful icon-with-text-fallback shape RAID_DIFFICULTY_ICON already
  *  uses (see RaidsPanel's own DifficultyCircle) -- dedicated icon assets
- *  for these three are still to come; until they land in
- *  public/chain-replay-icons/, every circle just shows its N/H/L letter,
+ *  for these four are still to come; until they land in
+ *  public/chain-replay-icons/, every circle just shows its N/H/M/L letter,
  *  same as a raid difficulty circle would before its own icon loaded. */
 const REPLAY_DIFFICULTY_ICON: Record<ChainReplayDifficulty, string> = {
   normal: './chain-replay-icons/normal.png',
   heroic: './chain-replay-icons/heroic.png',
+  mythic: './chain-replay-icons/mythic.png',
   legendary: './chain-replay-icons/legendary.png',
 };
 
@@ -521,7 +522,7 @@ function TierCard({ tier, hero, onOpenChain }: { tier: ChainReplayTierDef; hero:
             <div className="row spread" style={{ alignItems: 'center', margin: '4px 0' }}>
               <div className="row" style={{ gap: 4, alignItems: 'center' }}>
                 <span className="tiny muted">Cleared at:</span>
-                {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
+                {(['normal', 'heroic', 'mythic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
                   <button
                     key={d}
                     className="btn-ghost tiny"
@@ -567,7 +568,7 @@ function TierCard({ tier, hero, onOpenChain }: { tier: ChainReplayTierDef; hero:
               <div className="row spread" style={{ alignItems: 'center', marginTop: 8, gap: 6 }}>
                 <div className="row" style={{ gap: 4, alignItems: 'center' }}>
                   <span className="tiny muted">Auto-Pilot:</span>
-                  {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
+                  {(['normal', 'heroic', 'mythic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
                     <button
                       key={d}
                       className="btn-ghost tiny"
@@ -783,9 +784,9 @@ function ChainReplayDetailModal({
                 </span>
                 <span className="tiny muted">Already claimed, guaranteed once</span>
               </div>
-              {(['heroic', 'legendary'] as const).map((d) => {
+              {(['heroic', 'mythic', 'legendary'] as const).map((d) => {
                 const diffCfg = CHAIN_REPLAY_DIFFICULTIES[d];
-                const scaled = scaleDedicatedItem(dedicatedDef, hero.level, d === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary');
+                const scaled = scaleDedicatedItem(dedicatedDef, hero.level, d === 'heroic' ? 'chainReplayHeroic' : d === 'mythic' ? 'chainReplayMythic' : 'chainReplayLegendary');
                 const modLines = describeMods(scaled.mods);
                 const statLines = describeStats(scaled.rolledStats, true);
                 return (

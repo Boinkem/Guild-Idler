@@ -105,43 +105,43 @@
     "description": "Multiplies gold/xp rewards at Heroic difficulty."
   },
   {
-    "id": "raid_difficulty.legendary.successPenalty",
-    "label": "Legendary: success penalty",
+    "id": "raid_difficulty.mythic.successPenalty",
+    "label": "Mythic: success penalty",
     "category": "raid_difficulty",
     "value": 50,
     "default": 50,
     "min": 0,
     "max": 95,
-    "description": "Flat percentage points subtracted from every Legendary encounter's success chance. Deliberately brutal -- see 0059's design note before softening."
+    "description": "Flat percentage points subtracted from every Mythic encounter's success chance. Deliberately brutal -- see 0059's design note before softening."
   },
   {
-    "id": "raid_difficulty.legendary.lootBonus",
-    "label": "Legendary: loot bonus",
+    "id": "raid_difficulty.mythic.lootBonus",
+    "label": "Mythic: loot bonus",
     "category": "raid_difficulty",
     "value": 15,
     "default": 15,
     "min": 0,
-    "description": "Flat percentage points added to every Legendary loot roll."
+    "description": "Flat percentage points added to every Mythic loot roll."
   },
   {
-    "id": "raid_difficulty.legendary.durationMultiplier",
-    "label": "Legendary: duration multiplier",
+    "id": "raid_difficulty.mythic.durationMultiplier",
+    "label": "Mythic: duration multiplier",
     "category": "raid_difficulty",
     "value": 1.3,
     "default": 1.3,
     "min": 0.5,
     "max": 3,
-    "description": "Multiplies total raid duration at Legendary difficulty."
+    "description": "Multiplies total raid duration at Mythic difficulty."
   },
   {
-    "id": "raid_difficulty.legendary.rewardMultiplier",
-    "label": "Legendary: reward multiplier",
+    "id": "raid_difficulty.mythic.rewardMultiplier",
+    "label": "Mythic: reward multiplier",
     "category": "raid_difficulty",
     "value": 4,
     "default": 4,
     "min": 0.5,
     "max": 10,
-    "description": "Multiplies gold/xp rewards at Legendary difficulty."
+    "description": "Multiplies gold/xp rewards at Mythic difficulty."
   },
   {
     "id": "raid_difficulty.heroic.roleMismatchCap",
@@ -154,14 +154,14 @@
     "description": "Hard ceiling on final per-encounter success at Heroic while the party doesn't meet the raid's requiredRoles minimums. Layered on top of raid.roleMismatchPenaltyPerSlot, not a replacement for it -- gear/level can't push success above this no matter how far over the ordinary formula would otherwise go."
   },
   {
-    "id": "raid_difficulty.legendary.roleMismatchCap",
-    "label": "Legendary: role mismatch success cap",
+    "id": "raid_difficulty.mythic.roleMismatchCap",
+    "label": "Mythic: role mismatch success cap",
     "category": "raid_difficulty",
     "value": 45,
     "default": 45,
     "min": 5,
     "max": 95,
-    "description": "Same as Heroic's role mismatch success cap, deliberately lower -- Legendary is meant to punish an unmet role requirement harder than Heroic does, same relationship its successPenalty already has."
+    "description": "Same as Heroic's role mismatch success cap, deliberately lower -- Mythic is meant to punish an unmet role requirement harder than Heroic does, same relationship its successPenalty already has."
   },
   {
     "id": "guild_facility.barracks.baseCost",
@@ -4415,14 +4415,14 @@
     "description": "Applied on top of the normal rarity/level budget for items generated from a Heroic raid encounter."
   },
   {
-    "id": "loot_procedural.raidLegendaryBudgetMultiplier",
-    "label": "Procedural loot: Legendary raid budget multiplier",
+    "id": "loot_procedural.raidMythicBudgetMultiplier",
+    "label": "Procedural loot: Mythic raid budget multiplier",
     "category": "loot_procedural",
     "value": 2.2,
     "default": 2.2,
     "min": 1,
     "max": 10,
-    "description": "Applied on top of the normal rarity/level budget for items generated from a Legendary raid encounter."
+    "description": "Applied on top of the normal rarity/level budget for items generated from a Mythic raid encounter."
   },
   {
     "id": "loot_procedural.hardQuestBudgetMultiplier",
@@ -4541,34 +4541,34 @@
     "description": "Multiplies total replay duration at Heroic."
   },
   {
-    "id": "chain_replay_difficulty.legendary.successPenalty",
-    "label": "Chain Replay Legendary: success penalty",
+    "id": "chain_replay_difficulty.mythic.successPenalty",
+    "label": "Chain Replay Mythic: success penalty",
     "category": "chain_replay_difficulty",
     "value": 35,
     "default": 35,
     "min": 0,
     "max": 95,
-    "description": "Flat percentage points subtracted from every stage's success chance throughout a Legendary chain replay."
+    "description": "Flat percentage points subtracted from every stage's success chance throughout a Mythic chain replay."
   },
   {
-    "id": "chain_replay_difficulty.legendary.lootBonus",
-    "label": "Chain Replay Legendary: loot bonus",
+    "id": "chain_replay_difficulty.mythic.lootBonus",
+    "label": "Chain Replay Mythic: loot bonus",
     "category": "chain_replay_difficulty",
     "value": 25,
     "default": 25,
     "min": 0,
     "max": 100,
-    "description": "Flat percentage points added to the dedicated item's drop chance, and passed to the procedural padding-loot budget multiplier, at Legendary."
+    "description": "Flat percentage points added to the dedicated item's drop chance, and passed to the procedural padding-loot budget multiplier, at Mythic."
   },
   {
-    "id": "chain_replay_difficulty.legendary.durationMultiplier",
-    "label": "Chain Replay Legendary: duration multiplier",
+    "id": "chain_replay_difficulty.mythic.durationMultiplier",
+    "label": "Chain Replay Mythic: duration multiplier",
     "category": "chain_replay_difficulty",
     "value": 1.35,
     "default": 1.35,
     "min": 1,
     "max": 3,
-    "description": "Multiplies total replay duration at Legendary."
+    "description": "Multiplies total replay duration at Mythic."
   },
   {
     "id": "chain_replay_tier.master.goldCost",
@@ -4661,14 +4661,14 @@
     "description": "Multiplies a Heroic chain replay stage's ordinary procedural padding-loot budget (whatever the normal pool-pick already selected)."
   },
   {
-    "id": "loot_procedural.chainReplayLegendaryBudgetMultiplier",
-    "label": "Chain Replay Legendary: padding loot budget multiplier",
+    "id": "loot_procedural.chainReplayMythicBudgetMultiplier",
+    "label": "Chain Replay Mythic: padding loot budget multiplier",
     "category": "loot_procedural",
     "value": 1.8,
     "default": 1.8,
     "min": 1,
     "max": 5,
-    "description": "Multiplies a Legendary chain replay stage's ordinary procedural padding-loot budget (whatever the normal pool-pick already selected)."
+    "description": "Multiplies a Mythic chain replay stage's ordinary procedural padding-loot budget (whatever the normal pool-pick already selected)."
   },
   {
     "id": "chain_replay_dedicated.heroicMultiplier",
@@ -4681,14 +4681,14 @@
     "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Heroic replay."
   },
   {
-    "id": "chain_replay_dedicated.legendaryMultiplier",
-    "label": "Chain Replay Legendary: dedicated item stat multiplier",
+    "id": "chain_replay_dedicated.mythicMultiplier",
+    "label": "Chain Replay Mythic: dedicated item stat multiplier",
     "category": "chain_replay_dedicated",
     "value": 1.7,
     "default": 1.7,
     "min": 1,
     "max": 3,
-    "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Legendary replay."
+    "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Mythic replay."
   },
   {
     "id": "chain_replay_dedicated.levelScaleBudgetMultiplier",
@@ -4711,14 +4711,14 @@
     "description": "Patch 0258. Multiplies a raid's own hand-authored Set-piece drop (not procedural padding loot, which has its own loot_procedural.raidHeroicBudgetMultiplier) on top of its hero-level-scaled budget when it drops from a Heroic encounter. Matches loot_procedural.raidHeroicBudgetMultiplier's own value -- same premium raids already give procedural loot, now extended to raids' own named gear too."
   },
   {
-    "id": "raid_dedicated.legendaryMultiplier",
-    "label": "Raid Legendary: dedicated item stat multiplier",
+    "id": "raid_dedicated.mythicMultiplier",
+    "label": "Raid Mythic: dedicated item stat multiplier",
     "category": "raid_dedicated",
     "value": 2.2,
     "default": 2.2,
     "min": 1,
     "max": 4,
-    "description": "Patch 0258. Multiplies a raid's own hand-authored Set-piece drop (not procedural padding loot, which has its own loot_procedural.raidLegendaryBudgetMultiplier) on top of its hero-level-scaled budget when it drops from a Legendary encounter. Matches loot_procedural.raidLegendaryBudgetMultiplier's own value -- same premium raids already give procedural loot, now extended to raids' own named gear too."
+    "description": "Patch 0258. Multiplies a raid's own hand-authored Set-piece drop (not procedural padding loot, which has its own loot_procedural.raidMythicBudgetMultiplier) on top of its hero-level-scaled budget when it drops from a Mythic encounter. Matches loot_procedural.raidMythicBudgetMultiplier's own value -- same premium raids already give procedural loot, now extended to raids' own named gear too."
   },
   {
     "id": "vendorRep.goldPerLevelBase",
@@ -4841,5 +4841,193 @@
     "min": 0,
     "max": 100,
     "description": "Base percent chance a chain's dedicated reward item drops on a successful Heroic/Legendary replay completion, before the difficulty's own lootBonus is added. Never rolls at Normal."
+  },
+  {
+    "id": "raid_difficulty.legendary.successPenalty",
+    "label": "Legendary: success penalty",
+    "category": "raid_difficulty",
+    "value": 70,
+    "default": 70,
+    "min": 0,
+    "max": 95,
+    "description": "Flat percentage points subtracted from every Legendary encounter's success chance. First-pass number for the new top raid tier (patch 0317) -- deliberately harsher than Mythic's, real tuning backlogged."
+  },
+  {
+    "id": "raid_difficulty.legendary.lootBonus",
+    "label": "Legendary: loot bonus",
+    "category": "raid_difficulty",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "description": "Flat percentage points added to every Legendary loot roll. First-pass, patch 0317."
+  },
+  {
+    "id": "raid_difficulty.legendary.durationMultiplier",
+    "label": "Legendary: duration multiplier",
+    "category": "raid_difficulty",
+    "value": 1.5,
+    "default": 1.5,
+    "min": 0.5,
+    "max": 3,
+    "description": "Multiplies total raid duration at Legendary difficulty. First-pass, patch 0317."
+  },
+  {
+    "id": "raid_difficulty.legendary.rewardMultiplier",
+    "label": "Legendary: reward multiplier",
+    "category": "raid_difficulty",
+    "value": 6,
+    "default": 6,
+    "min": 0.5,
+    "max": 10,
+    "description": "Multiplies gold/xp rewards at Legendary difficulty. First-pass, patch 0317."
+  },
+  {
+    "id": "raid_difficulty.legendary.roleMismatchCap",
+    "label": "Legendary: role mismatch success cap",
+    "category": "raid_difficulty",
+    "value": 30,
+    "default": 30,
+    "min": 5,
+    "max": 95,
+    "description": "Same as Mythic's role mismatch success cap, deliberately lower -- Legendary is meant to punish an unmet role requirement harder than any tier below it. First-pass, patch 0317."
+  },
+  {
+    "id": "chain_replay_difficulty.legendary.successPenalty",
+    "label": "Chain Replay Legendary: success penalty",
+    "category": "chain_replay_difficulty",
+    "value": 50,
+    "default": 50,
+    "min": 0,
+    "max": 95,
+    "description": "Flat percentage points subtracted from every stage's success chance throughout a replay attempt at Legendary. First-pass number for the new top chain-replay tier (patch 0317)."
+  },
+  {
+    "id": "chain_replay_difficulty.legendary.lootBonus",
+    "label": "Chain Replay Legendary: loot bonus",
+    "category": "chain_replay_difficulty",
+    "value": 35,
+    "default": 35,
+    "min": 0,
+    "description": "Flat percentage points added to the dedicated item's drop chance at Legendary. First-pass, patch 0317."
+  },
+  {
+    "id": "chain_replay_difficulty.legendary.durationMultiplier",
+    "label": "Chain Replay Legendary: duration multiplier",
+    "category": "chain_replay_difficulty",
+    "value": 1.5,
+    "default": 1.5,
+    "min": 0.5,
+    "max": 3,
+    "description": "Multiplies total replay duration at Legendary. First-pass, patch 0317."
+  },
+  {
+    "id": "renown_income.raid.mythic",
+    "label": "Renown income: Raid Mythic clear",
+    "category": "renown_income",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
+  },
+  {
+    "id": "renown_income.raid.legendary",
+    "label": "Renown income: Raid Legendary clear",
+    "category": "renown_income",
+    "value": 22,
+    "default": 22,
+    "min": 0,
+    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
+  },
+  {
+    "id": "renown_income.chainReplay.mythic",
+    "label": "Renown income: Chain Replay Mythic clear",
+    "category": "renown_income",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
+  },
+  {
+    "id": "renown_income.chainReplay.legendary",
+    "label": "Renown income: Chain Replay Legendary clear",
+    "category": "renown_income",
+    "value": 14,
+    "default": 14,
+    "min": 0,
+    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
+  },
+  {
+    "id": "hero_renown_perk.veteran_instinct.cost",
+    "label": "Veteran Instinct: cost",
+    "category": "hero_renown_perk",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
+  },
+  {
+    "id": "hero_renown_perk.veteran_instinct.costGrowth",
+    "label": "Veteran Instinct: cost growth",
+    "category": "hero_renown_perk",
+    "value": 1.35,
+    "default": 1.35,
+    "min": 1,
+    "max": 3,
+    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
+  },
+  {
+    "id": "hero_renown_perk.veteran_instinct.maxLevel",
+    "label": "Veteran Instinct: max level",
+    "category": "hero_renown_perk",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "max": 50,
+    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
+  },
+  {
+    "id": "hero_renown_perk.veteran_instinct.successPerLevel",
+    "label": "Veteran Instinct: success per level",
+    "category": "hero_renown_perk",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
+  },
+  {
+    "id": "loot_procedural.raidLegendaryBudgetMultiplier",
+    "label": "Procedural loot: Legendary raid budget multiplier",
+    "category": "loot_procedural",
+    "value": 3.0,
+    "default": 3.0,
+    "min": 1,
+    "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
+  },
+  {
+    "id": "loot_procedural.chainReplayLegendaryBudgetMultiplier",
+    "label": "Chain Replay Legendary: padding loot budget multiplier",
+    "category": "loot_procedural",
+    "value": 2.3,
+    "default": 2.3,
+    "min": 1,
+    "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
+  },
+  {
+    "id": "raid_dedicated.legendaryMultiplier",
+    "label": "Raid Legendary: dedicated item stat multiplier",
+    "category": "raid_dedicated",
+    "value": 3.0,
+    "default": 3.0,
+    "min": 1,
+    "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
+  },
+  {
+    "id": "chain_replay_dedicated.legendaryMultiplier",
+    "label": "Chain Replay Legendary: dedicated item stat multiplier",
+    "category": "chain_replay_dedicated",
+    "value": 2.2,
+    "default": 2.2,
+    "min": 1,
+    "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
   }
 ]

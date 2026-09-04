@@ -37,9 +37,9 @@ export const EquipmentManager = {
    * Level Scaling, see guild-idler-status.md): any hand-authored item
    * (`!isProceduralTemplate` -- chainExclusive rewards AND ordinary raid
    * Set pieces alike, extended from chainExclusive-only in patch 0258)
-   * gets real level-scaling when `roll.sourceTag` is one of the four
-   * Heroic/Legendary tags (`chainReplayHeroic/Legendary`,
-   * `raidHeroic/Legendary`) AND `roll.heroLevel` is provided -- see
+   * gets real level-scaling when `roll.sourceTag` is one of the six
+   * Heroic/Mythic/Legendary tags (`chainReplayHeroic/Mythic/Legendary`,
+   * `raidHeroic/Mythic/Legendary`) AND `roll.heroLevel` is provided -- see
    * scaleDedicatedItem's own comment in proceduralLoot.ts for the full
    * formula. `rolledItemLevel` IS now set to the hero's level at drop
    * time (patch 0258 reversed the old "deliberately does NOT set" -- see
@@ -58,7 +58,7 @@ export const EquipmentManager = {
     const def = EQUIPMENT_BY_ID[defId];
     if (!def) return null;
     const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
-    const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayLegendary', 'raidHeroic', 'raidLegendary'];
+    const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayMythic', 'chainReplayLegendary', 'raidHeroic', 'raidMythic', 'raidLegendary'];
     if (roll && isProceduralTemplate(def)) {
       const result = rollProceduralItem(
         def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng, roll.weightedKey, roll.weightMultiplier,
@@ -74,7 +74,7 @@ export const EquipmentManager = {
       && (dedicatedTags as string[]).includes(roll.sourceTag)) {
       const result = scaleDedicatedItem(
         def, roll.heroLevel,
-        roll.sourceTag as 'chainReplayHeroic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidLegendary',
+        roll.sourceTag as 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidMythic' | 'raidLegendary',
       );
       item.rolledStats = result.rolledStats;
       // patch 0256/0257: def.mods on a hand-authored item is now only

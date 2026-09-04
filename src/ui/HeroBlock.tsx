@@ -195,14 +195,27 @@ export function HeroBlock({
             <div><span>Quests won</span><b>{hero.questsSucceeded} / {hero.questsCompleted}</b></div>
             <div><span>Lifetime gold</span><b>{formatGold(hero.goldEarnedLifetime)}</b></div>
             <div><span>Lifetime xp</span><b>{formatNumber(hero.xpEarnedLifetime)}</b></div>
-            {/* Renown-from-retirement preview (patch 0295) -- reuses the
-                exact same PrestigeManager call PrestigePanel's own retire
-                list already uses, just surfaced here too so a player
-                doesn't have to leave the Heroes tab to check whether a
-                hero's worth retiring yet. Shown regardless of eligibility
-                (same as PrestigePanel), since watching it grow while
-                under-level is itself part of the motivation. */}
-            <div><span>Retire for</span><b className="gold-text">✦ {formatNumber(PrestigeManager.streakPreview(state, hero, now).total)}</b></div>
+            {/* Per-hero Renown perk levels (patch 0317) -- replaces the
+                old "Retire for" renown-preview row, which read off
+                PrestigeManager.streakPreview/renownForRetirement, both
+                gone now that classic Retire is cut. Renown no longer has
+                a per-hero "would grant" preview at all (it comes from
+                raid/Replay Memories clears, not from a hero-level
+                formula); this instead surfaces how much this specific
+                hero has invested in the new per-hero tree, so a player
+                can tell at a glance which capped heroes still have room
+                to spend into. Only shown once the hero is actually
+                eligible to buy in (PrestigeManager.heroPerkEligible) --
+                showing "0 levels" for every under-level hero would just
+                be noise. */}
+            {PrestigeManager.heroPerkEligible(hero) && (
+              <div>
+                <span>Renown perks</span>
+                <b className="gold-text">
+                  {PrestigeManager.heroPerks().reduce((sum, def) => sum + PrestigeManager.heroPerkLevel(hero, def.id), 0)} levels
+                </b>
+              </div>
+            )}
           </div>
         </div>
 

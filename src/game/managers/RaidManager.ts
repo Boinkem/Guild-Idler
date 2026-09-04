@@ -2,6 +2,7 @@ import {
   ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
 } from '../types';
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
+import { renownForRaidClear } from '../data/progression';
 import { Tuning } from '../data/tuning';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
@@ -257,8 +258,17 @@ export const RaidManager = {
     if (difficulty === 'heroic' && !ModifierManager.hasUnlock(state, 'raidsHeroic')) {
       return { ok: false, error: 'Heroic Clearance is required to raid at this difficulty.' };
     }
-    if (difficulty === 'legendary' && !ModifierManager.hasUnlock(state, 'raidsLegendary')) {
-      return { ok: false, error: 'Legendary Clearance is required to raid at this difficulty.' };
+    if (difficulty === 'mythic' && !ModifierManager.hasUnlock(state, 'raidsMythic')) {
+      return { ok: false, error: 'Mythic Clearance is required to raid at this difficulty.' };
+    }
+    // Legendary (patch 0317's new top tier) deliberately has no Clearance
+    // purchase of its own -- it auto-unlocks the moment Mythic has been
+    // full-cleared once, anywhere (state.completedRaidDifficulties is the
+    // existing "any raid, any difficulty" global flag -- see its own
+    // comment in types.ts). Confirmed design decision, not a placeholder
+    // for a future Clearance upgrade.
+    if (difficulty === 'legendary' && !state.completedRaidDifficulties.includes('mythic')) {
+      return { ok: false, error: 'Clear a raid at Mythic difficulty first to unlock Legendary.' };
     }
 
     const cfg = RAID_DIFFICULTIES[difficulty];
@@ -339,10 +349,19 @@ export const RaidManager = {
     // shared by both the wear formula below and the injury roll further
     // down (was previously computed fresh, inline, just for injury;
     // hoisted here in patch 0284 so applyWear can reuse the exact same
-    // mapping rather than duplicating the ternary). Raid legendary (was
-    // 'mythic' pre-0166) maps to quest legendary, the toughest of both
-    // ladders, same relative mapping as before the rename.
-    const questDifficulty = active.difficulty === 'legendary' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
+    // mapping rather than duplicating the ternary).
+    //
+    // Patch 0317: Mythic and the new top Legendary raid tier both map to
+    // quest 'legendary' -- the quest-tier Difficulty ladder (Easy/Normal/
+    // Hard/Epic/Legendary) has no rung above 'legendary' to give
+    // Legendary its own harsher wear/injury bucket, so it's clamped at
+    // the same ceiling Mythic already used pre-0317 (when Mythic was
+    // still this game's top raid tier, called 'legendary' internally).
+    // A dedicated 6th Difficulty rung for wear/injury specifically is a
+    // reasonable follow-up if Legendary's wear/injury feel needs to
+    // diverge from Mythic's -- not done here, first-pass scope.
+    const questDifficulty = (active.difficulty === 'legendary' || active.difficulty === 'mythic') ? 'legendary'
+      : active.difficulty === 'heroic' ? 'epic' : 'hard';
     // Read once, reused by both the wear formula in the encounter loop
     // below and the injury resist calc further down -- same "computed
     // once, not re-derived per encounter" convention roleMismatched/
@@ -409,12 +428,14 @@ export const RaidManager = {
         // PROCEDURAL raid drop's budget still uses, unchanged; a
         // hand-authored Set piece ignores it in favor of `heroLevel`
         // (patch 0258, see EquipmentManager.instantiate's own comment) --
-        // sourceTag maps Heroic/Legendary to their own budget multiplier
-        // + bracketed tag either way; Normal raid drops get neither
-        // (same as an ordinary Easy/Normal quest drop, and a Normal
-        // Set-piece drop stays at its own unscaled authored numbers).
+        // sourceTag maps Heroic/Mythic/Legendary to their own budget
+        // multiplier + bracketed tag either way; Normal raid drops get
+        // neither (same as an ordinary Easy/Normal quest drop, and a
+        // Normal Set-piece drop stays at its own unscaled authored
+        // numbers).
         const raidSourceTag = active.difficulty === 'heroic' ? 'raidHeroic'
-          : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
+          : active.difficulty === 'mythic' ? 'raidMythic'
+            : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
         const item = EquipmentManager.instantiate(parsed.defId, {
           itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng, heroLevel: partyLevel,
         });
@@ -480,6 +501,18 @@ export const RaidManager = {
     const storage = ModifierManager.goldStorage(state);
     state.gold = Math.min(storage, state.gold + gold);
     state.stats.goldBySource.raids += gold;
+
+    // Prestige/Retirement Rework (patch 0317) -- Mythic/Legendary clears
+    // now pay Renown directly, replacing classic hero Retirement as the
+    // income source. Gated on fullClear (a partial clear earns nothing,
+    // same as every other raid reward here) but NOT on completedRaidDifficulties
+    // -- unlike the title/completedRaids "first time only" grants above,
+    // this is meant to be repeatable every clear, the actual endgame
+    // grind loop the rework is built around.
+    if (fullClear) {
+      const renownGained = renownForRaidClear(active.difficulty);
+      if (renownGained > 0) state.renown += renownGained;
+    }
 
     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
       state.completedRaids.push(raid.id);

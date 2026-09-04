@@ -648,11 +648,27 @@ export interface Hero {
    */
   unlockedRoles?: Role[];
   /**
-   * Times this specific hero identity has been retired. Persists and grows
-   * across retirements (unlike title, which is cleared), and grants a small
-   * permanent stat bonus via bonusStats — see PrestigeManager.retire.
+   * Times this specific hero identity was retired under the OLD classic-
+   * Retire flow, before patch 0317 cut it. Frozen at whatever value it
+   * held when this patch landed -- Early Retirement (the sole remaining
+   * removal path as of 0317) never increments this, since it grants no
+   * reward at all. Kept rather than removed: existing bonusStats/rank
+   * display for already-ascended heroes should keep working exactly as
+   * before, there's just no way to earn more of it going forward.
    */
   ascension: number;
+  /**
+   * Levels bought in the per-hero Renown perk tree (HERO_RENOWN_PERKS,
+   * progression.ts) -- patch 0317. Keyed by perk id, same shape
+   * GameState.renownPerks uses for the guild-wide tree, just scoped to
+   * this specific hero instead. Optional/undefined for any hero who
+   * hasn't bought one yet, same defensive-optional convention as
+   * `role`/`unlockedRoles` above -- PrestigeManager.heroPerkLevel is the
+   * one place the "fall back to 0" default should be applied. No save
+   * migration needed for existing heroes; an absent field already reads
+   * as "no levels bought."
+   */
+  renownPerks?: Record<string, number>;
   /** How many quests this hero has auto-chained in the current streak. */
   autoChainCount: number;
   /**
@@ -1096,7 +1112,16 @@ export interface ActiveChain {
  * rewardMultiplier), and keeping the type distinct means a future change
  * to one can't silently type-check against the other by accident.
  */
-export type ChainReplayDifficulty = 'normal' | 'heroic' | 'legendary';
+/**
+ * Patch 0317 -- inserted 'mythic' between 'heroic' and 'legendary'. The
+ * existing 'legendary' tier keeps its name and stays the top rung; it
+ * just now sits one rung higher on a longer ladder, matching the same
+ * four-name vocabulary (Normal/Heroic/Mythic/Legendary) RaidDifficulty
+ * uses. Mythic and Legendary both pay Renown on a clear (Legendary
+ * faster); Normal/Heroic stay gold-only, unchanged. See
+ * renownForChainReplayClear in progression.ts.
+ */
+export type ChainReplayDifficulty = 'normal' | 'heroic' | 'mythic' | 'legendary';
 
 export interface ChainReplayDifficultyConfig {
   difficulty: ChainReplayDifficulty;
@@ -1204,7 +1229,18 @@ export interface ChainReplayTierDef {
 
 /* -------------------------------- raids -------------------------------- */
 
-export type RaidDifficulty = 'normal' | 'heroic' | 'legendary';
+/**
+ * Patch 0317 -- what used to be this game's top raid tier is renamed
+ * 'mythic' (it was already internally 'legendary' since patch 0166; see
+ * that patch's comment on RAID_DIFFICULTY_LABEL below -- this is a
+ * second rename, not a reversal of that one), and a genuinely new,
+ * harsher 'legendary' tier is added above it. Same shared four-tier
+ * vocabulary ChainReplayDifficulty now uses. No back-compat handling for
+ * old save data that has 'legendary' recorded where 'mythic' is now
+ * meant (completedRaidDifficulties, raidClearsByDifficulty) -- all
+ * current players are testers, confirmed acceptable to skip migration.
+ */
+export type RaidDifficulty = 'normal' | 'heroic' | 'mythic' | 'legendary';
 
 export interface RaidEncounterDef {
   id: string;
@@ -1231,6 +1267,13 @@ export interface RaidEncounterDef {
    * before this existed. See lootForDifficulty in raids.ts.
    */
   lootHeroic?: string[];
+  /** Renamed from lootLegendary in patch 0317, alongside the mythic/
+   *  legendary raid-tier rename -- same field, same fallback-to-`loot`
+   *  behaviour, just tracking the tier that's now called Mythic. */
+  lootMythic?: string[];
+  /** New in patch 0317, for the new top Legendary tier. Falls back to
+   *  `loot` the same way lootHeroic/lootMythic do until an encounter
+   *  defines its own list -- see lootForDifficulty in raids.ts. */
   lootLegendary?: string[];
   /**
    * "<rarity>[:<dedicatedPetId>]@chance" strings -- same reused-string-list
@@ -1252,6 +1295,9 @@ export interface RaidEncounterDef {
    */
   eggLoot?: string[];
   eggLootHeroic?: string[];
+  /** Renamed from eggLootLegendary in patch 0317 -- see lootMythic above. */
+  eggLootMythic?: string[];
+  /** New in patch 0317, for the new top Legendary tier. */
   eggLootLegendary?: string[];
   /**
    * Authored, not rolled -- raid encounters are a small curated list
@@ -1566,7 +1612,10 @@ export interface UpgradeDef {
   costGrowth: number;
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training' | 'autoChainTactics';
+  // 'raidsLegendary' renamed to 'raidsMythic' in patch 0317 -- it gates
+  // the raid tier now called Mythic; the new top Legendary tier auto-
+  // unlocks once Mythic is cleared instead of needing its own purchase.
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics';
   /**
    * Which vendor offers this upgrade. Undefined means it's a general guild
    * upgrade with no vendor attached (unlocks like Guild Charter or Black
@@ -1741,6 +1790,34 @@ export interface RenownPerkDef {
    * get one; extra hero slots stay a deliberately fixed, small number.
    */
   tier2?: RenownPerkTier2;
+}
+
+/**
+ * Patch 0317 -- a new, second Renown-spending tree alongside RENOWN_PERKS
+ * above. Deliberately NOT a replacement: RENOWN_PERKS stays guild-wide
+ * (every hero benefits); this tree is bought per capped hero, on that
+ * hero's own permanent power, and lives on the hero itself
+ * (Hero.renownPerks) rather than in GameState the way guild perks do.
+ * Both trees draw from the same single `state.renown` pool -- no second
+ * currency -- so every point of Renown income is a real choice between
+ * "guild-wide" and "this specific hero." Simpler shape than
+ * RenownPerkDef on purpose: single tier, no tier2, no heroSlotsPerLevel
+ * (that concept doesn't make sense scoped to one hero). Content
+ * (HERO_RENOWN_PERKS in progression.ts) is a placeholder as of this
+ * patch -- see that file's own comment; the real per-hero effects list
+ * is still being designed and will land as a follow-up patch on top of
+ * this mechanism.
+ */
+export interface HeroRenownPerkDef {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  costGrowth: number;
+  maxLevel: number;
+  /** Applied only to the hero that bought it -- see HeroManager.heroMods
+   *  folding in ModifierManager.heroRenownMods for the read side. */
+  modsPerLevel: Partial<Modifiers>;
 }
 
 export interface ShopStock {
@@ -2146,9 +2223,14 @@ export interface GameState {
    * Null falls back to heroes[0].
    */
   focusedHeroId: string | null;
-  /** Consecutive retirements performed within the streak window of each other. */
+  /**
+   * Dead as of patch 0317 -- classic Retire (the only thing that ever
+   * grew these) is cut, and there's no more streak-bonus-on-retire
+   * system for them to feed. Kept on GameState rather than removed, so
+   * an existing save's already-earned streak value doesn't need a
+   * migration; nothing writes to either field anymore.
+   */
   prestigeStreak: number;
-  /** Epoch ms of the last retirement, or null if none yet. */
   lastPrestigeAt: number | null;
   /** Achievement id -> epoch ms when it unlocked. */
   unlockedAchievements: Record<string, number>;

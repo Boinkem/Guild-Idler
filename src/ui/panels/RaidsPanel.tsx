@@ -24,37 +24,44 @@ import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } 
 
 // Single-letter fallback badge (used only if the icon art at
 // public/raid-icons/<difficulty>.png is missing).
-const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', legendary: 'L' };
+const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M', legendary: 'L' };
 /** Reuses the existing rarity palette rather than inventing a new colour
- *  scheme -- Normal/Heroic/Legendary roughly parallel uncommon/rare/epic
- *  stakes, so the same visual language already trained elsewhere applies. */
+ *  scheme -- Normal/Heroic/Mythic/Legendary roughly parallel uncommon/
+ *  rare/epic/legendary stakes, so the same visual language already
+ *  trained elsewhere applies. Patch 0317: Legendary (the new top tier)
+ *  moved up to RARITY_COLOR.legendary; Mythic (the renamed old top tier)
+ *  took over RARITY_COLOR.epic, its old slot. */
 const DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
+  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic, legendary: RARITY_COLOR.legendary,
 };
 
 /** Which upgrade unlocks each difficulty tier -- Normal comes from the base
  *  Raid Charter (the same unlock that already gates raids existing at
- *  all); Heroic and Legendary each need their own separate Clearance
- *  upgrade, rather than the old single Charter purchase unlocking every
- *  tier at once. */
-const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raidsLegendary'> = {
-  normal: 'raids', heroic: 'raidsHeroic', legendary: 'raidsLegendary',
+ *  all); Heroic and Mythic each need their own separate Clearance
+ *  upgrade. Legendary (patch 0317's new top tier) deliberately has NO
+ *  upgrade-based unlock at all -- it auto-unlocks once Mythic is cleared
+ *  once (see RaidManager.canStart) -- so it's left out of this map and
+ *  handled as a special case everywhere this map is read. */
+const DIFFICULTY_UNLOCK: Record<Exclude<RaidDifficulty, 'legendary'>, 'raids' | 'raidsHeroic' | 'raidsMythic'> = {
+  normal: 'raids', heroic: 'raidsHeroic', mythic: 'raidsMythic',
 };
 const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
-  normal: 'Raid Charter', heroic: 'Heroic Clearance', legendary: 'Legendary Clearance',
+  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Mythic Clearance', legendary: 'Mythic difficulty cleared',
 };
 /** The actual GuildPanel upgrade `def.id` behind each difficulty gate --
- *  same three general upgrades DIFFICULTY_UNLOCK_LABEL above already
- *  names (raid_charter/raid_heroic_clearance/raid_legendary_clearance,
- *  see progression.ts's UPGRADES list), kept as its own map rather than
+ *  same as DIFFICULTY_UNLOCK_LABEL above names for Normal/Heroic/Mythic
+ *  (raid_charter/raid_heroic_clearance/raid_mythic_clearance, see
+ *  progression.ts's UPGRADES list), kept as its own map rather than
  *  reused off DIFFICULTY_UNLOCK because that one holds the `unlocks`
- *  field's value ('raids'/'raidsHeroic'/'raidsLegendary'), not the
+ *  field's value ('raids'/'raidsHeroic'/'raidsMythic'), not the
  *  upgrade's own id -- two different strings that happen to describe the
  *  same upgrade. Used to drive engine.requestTab('guild', id) below, so
  *  a locked difficulty can jump straight to (and highlight) the exact
- *  Guild Hall card that unlocks it. */
-const DIFFICULTY_UNLOCK_ID: Record<RaidDifficulty, string> = {
-  normal: 'raid_charter', heroic: 'raid_heroic_clearance', legendary: 'raid_legendary_clearance',
+ *  Guild Hall card that unlocks it. Legendary has no such card -- see
+ *  DIFFICULTY_UNLOCK's own comment -- so its "Unlock →" jump link is
+ *  hidden entirely rather than pointing this map at an empty string. */
+const DIFFICULTY_UNLOCK_ID: Record<Exclude<RaidDifficulty, 'legendary'>, string> = {
+  normal: 'raid_charter', heroic: 'raid_heroic_clearance', mythic: 'raid_mythic_clearance',
 };
 
 /**
@@ -428,7 +435,7 @@ function DifficultyCircle({
        *  exact upgrade card, same "jump to and highlight the requirement"
        *  treatment HeroesPanel's locked recruit cards already got
        *  (patch 0179). */}
-      {!unlocked && (
+      {!unlocked && difficulty !== 'legendary' && (
         <button
           className="btn-ghost"
           style={{ fontSize: '0.5625rem', padding: '1px 4px', minHeight: 0 }}
@@ -661,7 +668,9 @@ function RaidDetailModal({
                     key={d}
                     difficulty={d}
                     active={difficulty === d}
-                    unlocked={ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
+                    unlocked={d === 'legendary'
+                      ? state.completedRaidDifficulties.includes('mythic')
+                      : ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
                     cleared={(state.raidClearsByDifficulty[raid.id] ?? []).includes(d)}
                     onClick={() => pickDifficulty(d)}
                   />

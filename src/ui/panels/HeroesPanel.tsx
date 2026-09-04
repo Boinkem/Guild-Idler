@@ -285,9 +285,9 @@ function HeroesRosterView() {
       {state.heroes.length >= slots && (
         <>
           <p className="small muted">
-            No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
-            level {PRESTIGE_MIN_LEVEL}+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
-            (up to 4 more). {slots} is not necessarily your ceiling.
+            No free slots. The Tavern adds one per level up to 5; beyond that, earn Heroic Renown by
+            clearing raids or Replay Memories at Mythic or Legendary with a capped ({PRESTIGE_MIN_LEVEL}+)
+            hero, then spend it on Extra Banner (up to 4 more). {slots} is not necessarily your ceiling.
           </p>
           {/* Two possible paths named in the prose above, so two links --
               same "jump to and highlight the requirement" treatment every

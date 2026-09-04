@@ -2849,23 +2849,28 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  retire(heroId: string) {
+  /**
+   * Per-hero Renown perk tree (patch 0317) -- see
+   * PrestigeManager.buyHeroPerk's own comment. Separate from buyPerk
+   * above since it needs a heroId, not just a perk id.
+   */
+  buyHeroPerk(heroId: string, id: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
-    const outcome = PrestigeManager.retire(this.state, hero, createRng(uid('retire')), Date.now());
-    if ('error' in outcome) return this.say(outcome.error);
-    const streakNote = outcome.streak > 1 ? ` Streak ×${outcome.streak}!` : '';
-    playSound(outcome.streak > 3 ? 'chain_complete' : 'level_up');
-    this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.${streakNote}`);
-    this.reportAchievements(AchievementManager.checkAll(this.state));
-    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    const error = PrestigeManager.buyHeroPerk(this.state, hero, id);
+    if (error) return this.say(error);
+    playSound('prestige_upgrade');
+    this.notify();
     void this.saveNow();
   }
 
   /**
    * Early Retirement -- see PrestigeManager.earlyRetire's own comment for
-   * why this exists. No renown, no ascension, no streak; just frees the
-   * slot immediately regardless of level.
+   * why this exists, and for why it's the ONLY retirement path as of
+   * patch 0317 (classic Retire, and the `retire()` method that used to
+   * live here, are both gone -- see guild-idler-status.md's patch-0317
+   * entry). No renown, no ascension, no streak; just frees the slot
+   * immediately regardless of level.
    */
   earlyRetire(heroId: string) {
     const hero = this.hero(heroId);
@@ -2873,8 +2878,7 @@ export class GameEngine {
     const outcome = PrestigeManager.earlyRetire(this.state, hero);
     if (outcome && 'error' in outcome) return this.say(outcome.error);
     // Reuses `depart` -- a hero leaving the guild, same shape as a hero
-    // leaving on a quest, deliberately not the triumphant cue retire()
-    // gets, since this earns no renown or streak.
+    // leaving on a quest.
     playSound('depart');
     this.say(`${hero.name} leaves the guild. The slot is free.`);
     void this.saveNow();

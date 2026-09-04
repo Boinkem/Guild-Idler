@@ -167,7 +167,11 @@ export function TestingPanel() {
 
       <div className="section-heading">Current state</div>
       <p className="small muted">
-        Gold: {formatGold(state.gold)} · Renown: {state.renown} · Prestige streak: {state.prestigeStreak}
+        {/* Prestige streak dropped from this readout in patch 0317 --
+            the field's still on GameState (frozen, unused, see its own
+            comment in types.ts) but there's no live streak system left
+            to report on. */}
+        Gold: {formatGold(state.gold)} · Renown: {state.renown}
       </p>
     </>
   );

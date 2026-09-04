@@ -1,0 +1,2440 @@
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/guild-idler-status.md repo/guild-idler-status.md
+--- orig/guild-idler-status.md	2026-09-04 08:30:51.000000000 +0000
++++ repo/guild-idler-status.md	2026-09-04 11:34:10.430923248 +0000
+@@ -560,10 +560,11 @@
+ `quest.easyMediumChanceTier1-4`).
+ 
+ **Heroes** — recruiting, leveling, stat allocation, injuries, skins,
+-ascension/prestige, retirement with streak bonus. Each class now carries
+-its own DevTool-editable color + optional icon (patch 0269), surfaced as
+-a colored avatar circle on the new roster/companion "Status bars" views
+--- see "Hero status bars" below.
++ascension/prestige (frozen as of patch 0317, see Renown / Prestige
++below), Early Retirement (roster-slot removal only, no reward). Each
++class now carries its own DevTool-editable color + optional icon (patch
++0269), surfaced as a colored avatar circle on the new roster/companion
++"Status bars" views -- see "Hero status bars" below.
+ 
+ **Equipment** — rarities, set bonuses, repair/refine, shop + black market
+ rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
+@@ -742,8 +743,13 @@
+ nothing from this pass was earmarked for it; worth its own idea whenever
+ there's time before the level-55 finale raid.
+ 
+-**Renown / Prestige** — retirement, renown perks (two-tier, gold-then-
+-renown cost curves), prestige streak bonus.
++**Renown / Prestige** — Prestige/Retirement Rework (patch 0317): classic
++Retire is cut; Early Retirement is the sole roster-removal path. Renown
++now comes from clearing raids/Replay Memories at Mythic or Legendary
++with a capped hero, and spends into two trees off one shared pool --
++the existing guild-wide perks (two-tier, gold-then-renown cost curves)
++plus a new per-hero tree (single tier, placeholder content pending a
++follow-up patch). See this patch's own entry below for the full writeup.
+ 
+ **Achievements** — Steam-stub integration, dedicated unlock popup
+ (non-blocking, separate from the toast queue), hidden achievements
+@@ -25758,3 +25764,136 @@
+ already live) before editing. `npx tsc --noEmit` and a full `vite
+ build` passing clean against a fresh clone -- CSS-only change, no
+ `.tsx` touched this patch.
++
++### Prestige/Retirement Rework: classic Retire cut, endgame raids/Memories pay Renown, new per-hero perk tree, raid/replay ladders unified to four tiers (patch 0317)
++
++```discord-update
++Dev Update | Prestige/Retirement Rework
++
++- Removed classic hero Retirement -- Early Retirement is now the only way to free a roster slot, still with no reward attached
++- Changed Heroic Renown to come from clearing raids and Replay Memories at Mythic or Legendary with a capped hero, instead of from retiring
++- Added a new Legendary raid tier above Mythic, and a new Mythic tier to Replay Memories between Heroic and Legendary -- both ladders now read Normal / Heroic / Mythic / Legendary
++- Added a new per-hero Renown perk tree (Prestige tab) alongside the existing guild-wide one -- same Renown, a second place to spend it
++- Fixed Every Banner Flying to require a Mythic clear too, and added a Mythic Reckoning achievement
++```
++
++Scoped from a design brief (prestige-retirement-rework-brief.pdf) written
++up in a prior chat after playtest feedback boiled down to "why would I
++retire?" -- wiping a hero's level and gear for Renown read as destroying
++an asset for a currency, not a reward, and patch 0179 already had to
++patch around a side effect of pinning retirement to the level cap (see
++that patch's own `RETIREMENT_LEVEL_BONUS` comment in progression.ts,
++removed this patch) -- a sign this was overdue for a rework, not a fresh
++problem.
++
++**Classic Retire is gone.** `PrestigeManager.retire`, `canRetire`,
++`renownPreview`, `streakPreview`, `projectedStreak`, and the prestige-
++streak system entirely (`PRESTIGE_STREAK_WINDOW_MS`,
++`prestigeStreakBonusPct`, the old `RETIREMENT_LEVEL_BONUS` formula) are
++all removed from `PrestigeManager.ts`/`progression.ts`. `engine.retire()`
++is gone from `engine.ts`. Early Retirement (`PrestigeManager.earlyRetire`)
++is unchanged in behaviour -- no reward, any level, roster-slot-only --
++and is now the sole removal path; `PrestigePanel.tsx` lost its Retire
++button, streak card, and per-hero renown-preview row entirely.
++`GameState.prestigeStreak`/`lastPrestigeAt` and `Hero.ascension` are all
++left in place (no migration needed) but frozen: nothing increments them
++going forward. Existing already-ascended heroes keep their rank display
++and `bonusStats` exactly as before.
++
++**Renown income moved to endgame content.** `renownForRaidClear`/
++`renownForChainReplayClear` (progression.ts) pay Renown on every full
++Mythic/Legendary clear -- repeatable, not first-clear-only, wired into
++`RaidManager.resolve` and `QuestManager`'s chain-replay resolution.
++Normal/Heroic stay gold-only in both systems, unchanged. First-pass
++numbers (Tuning category `renown_income`): raid Mythic 10 / Legendary 22,
++Memories Mythic 6 / Legendary 14 -- sized against the existing guild-wide
++perk tree's own tier2 costs (2.5k-1.3M+ Renown for a maxed perk) so
++repeated clears still read as a grind rather than an instant unlock. Real
++balance pass is explicitly backlogged, same treatment every other new
++economy number in this codebase gets.
++
++**Raid and Replay Memories ladders are now the same four names in the
++same order: Normal / Heroic / Mythic / Legendary.** This is a rename,
++not a pure addition, on the raid side specifically: the design brief
++this was scoped from assumed live raids were still "Normal/Heroic/
++Mythic" going in, but the live repo had already renamed that top tier to
++`'legendary'` back in patch 0166 (see `RAID_DIFFICULTIES`' own comment
++in raids.ts) -- so this patch renames that same tier's internal id AGAIN,
++back to `'mythic'`, and adds a genuinely new, harsher `'legendary'` above
++it. `RaidDifficulty`/`ChainReplayDifficulty` are both 4-value unions now
++(`types.ts`). Every exhaustive `Record<RaidDifficulty, ...>` /
++`Record<ChainReplayDifficulty, ...>` across the codebase got a fourth
++entry -- difficulty labels/colors/icons/order in `raids.ts`,
++`chainReplay.ts`, `RaidsPanel.tsx`, `DiscoveredQuestsPanel.tsx`,
++`StatsPanel.tsx`, `OfflineReportModal.tsx`; the `LootSourceTag` union and
++both its budget-multiplier and dedicated-item-scaling switches in
++`proceduralLoot.ts`; every `'heroic' ? X : 'legendary' ? Y : Z`-shaped
++sourceTag ternary in `RaidManager.ts`/`QuestManager.ts`. Loot fields
++`lootLegendary`/`eggLootLegendary` on `RaidEncounterDef` were renamed to
++`lootMythic`/`eggLootMythic` (same fallback-to-`loot` behaviour) with
++fresh `lootLegendary`/`eggLootLegendary` fields added for the new top
++tier -- no existing encounter actually populates a tiered loot pool yet
++(that's still the open "Heroic/Mythic tiered loot for the Last God raid"
++Cleanup item below), so this was a pure type-level rename with zero data
++migration needed.
++
++**Raid Legendary auto-unlocks off a clear, not a purchase.** Heroic and
++Mythic still gate behind their own Clearance upgrade (`raid_heroic_
++clearance`, and `raid_legendary_clearance` renamed back to `raid_mythic_
++clearance` -- it was `raid_mythic_clearance` originally too, pre-0166,
++see that upgrade's own comment for the full back-and-forth); Legendary
++has no Clearance purchase at all and unlocks the moment
++`state.completedRaidDifficulties` includes `'mythic'` (`RaidManager.
++canStart`, `RaidsPanel.tsx`'s difficulty circles). Confirmed design
++decision from the brief, not a placeholder for a future upgrade.
++
++**New per-hero Renown perk tree** (`HeroRenownPerkDef`, types.ts;
++`HERO_RENOWN_PERKS`, progression.ts; `Hero.renownPerks`) sits alongside
++the existing guild-wide `RENOWN_PERKS` tree, spending from the exact same
++`state.renown` pool -- deliberately no second currency, so every point of
++Renown income is a real choice between guild-wide and hero-specific
++power. Gated behind `PRESTIGE_MIN_LEVEL` (repurposed from its old
++"retirement requires this level" meaning to "spend in the per-hero tree
++requires this level" -- still `MAX_HERO_LEVEL`, still the same exported
++constant, comment updated rather than the symbol renamed). Applied via a
++new `ModifierManager.heroRenownMods(hero)`, folded into `HeroManager.
++heroMods` alongside `petModsForHero`. **Content is a placeholder as of
++this patch** -- one scaffolding perk (`veteran_instinct`, a flat success
++bonus) exists purely so the mechanism (storage, cost curve reusing
++`renownCost`, buy flow, `PrestigePanel.tsx`'s new "Spend renown -- per
++hero" section) is real and testable end to end. The actual per-hero
++effects list is still being designed and will land as a follow-up patch
++on top of this.
++
++**Verified:** pulled `PrestigeManager.ts`, `progression.ts`, `types.ts`,
++`chainReplay.ts`, `raids.ts`, `RaidManager.ts`, `QuestManager.ts`,
++`tuning.ts`/`tuning.json`, `ModifierManager.ts`, `HeroManager.ts`,
++`EquipmentManager.ts`, `proceduralLoot.ts`, `engine.ts`, and every UI
++file touched fresh from `main` via `raw.githubusercontent.com`
++immediately before editing (patch 0316 was already live). Full repo
++tarball pulled separately to grep every real call site of the removed/
++renamed symbols across the whole `src` tree, not just the files the
++original design brief named. `npm install` + `npx tsc --noEmit` clean
++across the whole project under `strict`/`noUnusedLocals`/
++`noUnusedParameters` (169 files). Full `vite build` (web target) passing
++clean as well.
++
++**Still open** (flagged in the original design brief, not resolved by
++this patch):
++- The actual per-hero perk effects list -- content design, not just the
++  data shape. Does it mirror the guild-wide tree's categories (success/
++  gold/xp/speed/loot) or introduce new hero-specific effects? Needs its
++  own follow-up.
++- Real tuning for the four new `renown_income.*` numbers and the new
++  Legendary-tier raid/Memories difficulty numbers -- first-pass only,
++  same as every other new economy number here.
++- `RAID_ALL_DIFFICULTIES`/`RAID_MYTHIC_CLEARED` achievements: `RAID_
++  MYTHIC_CLEARED` shipped with no `unlocksTrackId` (every existing bard
++  track is already claimed by another achievement) -- a real track for
++  it is a small, independent follow-up whenever new music exists to
++  assign.
++- Whether the old `RETIREMENT_PARTY`/`VETERAN_RETIREE`/`minotaur`
++  achievements (all keyed off `state.stats.prestigeCount`, which nothing
++  increments anymore) should be repointed at Early Retirement counts,
++  retired outright, or left as "only earnable pre-0317" -- not decided
++  here, flagging so it isn't silently forgotten.
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/data/chainReplay.ts repo/src/game/data/chainReplay.ts
+--- orig/src/game/data/chainReplay.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/data/chainReplay.ts	2026-09-04 11:01:58.681703839 +0000
+@@ -23,6 +23,36 @@
+  * same "flagged for Balance Sandbox verification before treated as
+  * final" caveat every other new economy number in this codebase gets.
+  */
++/**
++ * Replayable Quest Chains (patch 0224 on) -- see guild-idler-status.md's
++ * Backlog entry for the full design. Lives in its own file for the same
++ * reason RAID_DIFFICULTIES/RAID_UPGRADES live apart from the general
++ * quest data: this is a deliberately separable system, not an extension
++ * of ordinary quest-chain logic.
++ *
++ * Normal's numbers are all baseline zero-point (no penalty, no bonus,
++ * x1 duration) rather than meaningfully "tunable" values, so they stay
++ * literal here, same precedent RAID_DIFFICULTIES' own `normal` entry
++ * already established. Heroic/Mythic/Legendary read every field from
++ * the tuning registry -- editable live via the devtool's Tuning tab, see
++ * tuning.ts and tuning.json.
++ *
++ * Deliberately softer than RAID_DIFFICULTIES' own Heroic/Mythic/Legendary
++ * (20/50/70 successPenalty there vs 15/35/50 here) -- raids' brutal curve
++ * was an explicit design choice for genuinely hard party content; chain
++ * replay is meant to be a lighter-weight, solo-hero repeatable activity,
++ * not a second raid ladder wearing a different name. First-pass numbers,
++ * same "flagged for Balance Sandbox verification before treated as
++ * final" caveat every other new economy number in this codebase gets.
++ *
++ * Patch 0317 (Prestige/Retirement Rework): 'mythic' is new, inserted
++ * between 'heroic' and 'legendary' -- the existing 'legendary' entry
++ * below keeps its name/tuning keys/values unchanged, it's just one rung
++ * higher on a longer ladder now, same shared vocabulary as raids' own
++ * Normal/Heroic/Mythic/Legendary. Mythic and Legendary both now pay
++ * Renown on a clear (see renownForChainReplayClear in progression.ts);
++ * Normal/Heroic stay gold-only, unchanged.
++ */
+ export const CHAIN_REPLAY_DIFFICULTIES: Record<ChainReplayDifficulty, ChainReplayDifficultyConfig> = {
+   normal: { difficulty: 'normal', successPenalty: 0, lootBonus: 0, durationMultiplier: 1 },
+   heroic: {
+@@ -31,6 +61,12 @@
+     lootBonus: Tuning.get('chain_replay_difficulty.heroic.lootBonus'),
+     durationMultiplier: Tuning.get('chain_replay_difficulty.heroic.durationMultiplier'),
+   },
++  mythic: {
++    difficulty: 'mythic',
++    successPenalty: Tuning.get('chain_replay_difficulty.mythic.successPenalty'),
++    lootBonus: Tuning.get('chain_replay_difficulty.mythic.lootBonus'),
++    durationMultiplier: Tuning.get('chain_replay_difficulty.mythic.durationMultiplier'),
++  },
+   legendary: {
+     difficulty: 'legendary',
+     successPenalty: Tuning.get('chain_replay_difficulty.legendary.successPenalty'),
+@@ -58,7 +94,7 @@
+     id: 'master',
+     sagaName: 'Replay Memories',
+     levelRange: '',
+-    description: 'Unlocks the Replay Memories tab -- revisit completed story chains for a chance at Heroic and Legendary gear.',
++    description: 'Unlocks the Replay Memories tab -- revisit completed story chains for a chance at Heroic, Mythic, and Legendary gear.',
+     chainIds: [],
+     goldCost: Tuning.get('chain_replay_tier.master.goldCost'),
+   },
+@@ -84,7 +120,7 @@
+     id: 'band1',
+     sagaName: 'The Founding Days',
+     levelRange: 'Levels 1-7',
+-    description: 'Lets your guild replay The Founding Days (The First Haul, The Miller\'s Problem, Bandits on the Old Road, The Last Clutch, The Man Who Sells "Maybe", Goblin Warband, The Third Crown) for a chance at Heroic and Legendary gear.',
++    description: 'Lets your guild replay The Founding Days (The First Haul, The Miller\'s Problem, Bandits on the Old Road, The Last Clutch, The Man Who Sells "Maybe", Goblin Warband, The Third Crown) for a chance at Heroic, Mythic, and Legendary gear.',
+     chainIds: [
+       'the_first_haul', 'millers_problem', 'bandits_on_the_old_road', 'the_last_clutch',
+       'the_man_who_sells_maybe', 'goblin_warband', 'the_gathering_horde',
+@@ -95,7 +131,7 @@
+     id: 'band2',
+     sagaName: "The Harrower's Shadow",
+     levelRange: 'Levels 8-14',
+-    description: "Lets your guild replay The Harrower's Shadow (Crow's Warning, Search for the Ancient Crown, Harrower's Foot, Something Big in the Foothills, Lost Kingdom Expedition) for a chance at Heroic and Legendary gear.",
++    description: "Lets your guild replay The Harrower's Shadow (Crow's Warning, Search for the Ancient Crown, Harrower's Foot, Something Big in the Foothills, Lost Kingdom Expedition) for a chance at Heroic, Mythic, and Legendary gear.",
+     chainIds: [
+       'crows_warning', 'ancient_crown', 'harrowers_foot', 'something_big_in_the_foothills', 'lost_kingdom',
+     ],
+@@ -105,7 +141,7 @@
+     id: 'band3',
+     sagaName: 'The Wyrmfire Years',
+     levelRange: 'Levels 15-19',
+-    description: "Lets your guild replay The Wyrmfire Years (The Demon General's Ledger, Proving the Bastion, Full Moon Over Ashvale, Dragon Hunt, What the Culled Become) for a chance at Heroic and Legendary gear.",
++    description: "Lets your guild replay The Wyrmfire Years (The Demon General's Ledger, Proving the Bastion, Full Moon Over Ashvale, Dragon Hunt, What the Culled Become) for a chance at Heroic, Mythic, and Legendary gear.",
+     chainIds: [
+       'demon_generals_ledger', 'proving_the_bastion', 'full_moon_over_ashvale', 'dragon_hunt', 'what_the_culled_become',
+     ],
+@@ -115,7 +151,7 @@
+     id: 'band4',
+     sagaName: 'The Fortress Campaign',
+     levelRange: 'Levels 20-26',
+-    description: 'Lets your guild replay The Fortress Campaign (Granite Crossing, Demon Fortress Assault, Farm at the Edge, The Hollow Choir) for a chance at Heroic and Legendary gear.',
++    description: 'Lets your guild replay The Fortress Campaign (Granite Crossing, Demon Fortress Assault, Farm at the Edge, The Hollow Choir) for a chance at Heroic, Mythic, and Legendary gear.',
+     chainIds: ['granite_crossing', 'demon_fortress', 'farm_at_the_edge', 'hollow_choir'],
+     goldCost: Tuning.get('chain_replay_tier.band4.goldCost'),
+   },
+@@ -123,7 +159,7 @@
+     id: 'band5',
+     sagaName: 'The Ashen Vigil',
+     levelRange: 'Levels 29-35',
+-    description: 'Lets your guild replay The Ashen Vigil (The Body Snatcher Problem, The Pale Rider, World-Ender, Quiet in Millbrook) for a chance at Heroic and Legendary gear.',
++    description: 'Lets your guild replay The Ashen Vigil (The Body Snatcher Problem, The Pale Rider, World-Ender, Quiet in Millbrook) for a chance at Heroic, Mythic, and Legendary gear.',
+     chainIds: ['body_snatcher_problem', 'the_pale_rider', 'world_ender', 'quiet_in_millbrook'],
+     goldCost: Tuning.get('chain_replay_tier.band5.goldCost'),
+   },
+@@ -131,7 +167,7 @@
+     id: 'band6',
+     sagaName: 'The Last Reckoning',
+     levelRange: 'Levels 37-45',
+-    description: 'Lets your guild replay The Last Reckoning (Hunt-a-Lich, The Loom Beneath, The Last Pilgrimage, The Hollow King) for a chance at Heroic and Legendary gear.',
++    description: 'Lets your guild replay The Last Reckoning (Hunt-a-Lich, The Loom Beneath, The Last Pilgrimage, The Hollow King) for a chance at Heroic, Mythic, and Legendary gear.',
+     chainIds: ['hunt_a_lich', 'the_loom_beneath', 'last_pilgrimage', 'hollow_king'],
+     goldCost: Tuning.get('chain_replay_tier.band6.goldCost'),
+   },
+@@ -166,7 +202,8 @@
+   if (!band || band.chainIds.length === 0) return 0;
+   const atLeast = (cleared: ChainReplayDifficulty[]) => {
+     if (difficulty === 'normal') return cleared.length > 0;
+-    if (difficulty === 'heroic') return cleared.includes('heroic') || cleared.includes('legendary');
++    if (difficulty === 'heroic') return cleared.includes('heroic') || cleared.includes('mythic') || cleared.includes('legendary');
++    if (difficulty === 'mythic') return cleared.includes('mythic') || cleared.includes('legendary');
+     return cleared.includes('legendary');
+   };
+   const done = band.chainIds.filter((id) => atLeast(state.chainReplayCompletions[id] ?? [])).length;
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/data/json/achievements.json repo/src/game/data/json/achievements.json
+--- orig/src/game/data/json/achievements.json	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/data/json/achievements.json	2026-09-04 11:19:43.527784010 +0000
+@@ -91,6 +91,13 @@
+     "unlocksTrackId": "hymn_of_valor"
+   },
+   {
++    "id": "RAID_MYTHIC_CLEARED",
++    "name": "Mythic Reckoning",
++    "description": "Full-clear a raid on Mythic difficulty.",
++    "hidden": false,
++    "unlocksTrackId": ""
++  },
++  {
+     "id": "RAID_LEGENDARY_CLEARED",
+     "name": "Legendary Reckoning",
+     "description": "Full-clear a raid on Legendary difficulty.",
+@@ -100,7 +107,7 @@
+   {
+     "id": "RAID_ALL_DIFFICULTIES",
+     "name": "Every Banner Flying",
+-    "description": "Full-clear a raid at every difficulty -- Normal, Heroic, and Legendary.",
++    "description": "Full-clear a raid at every difficulty -- Normal, Heroic, Mythic, and Legendary.",
+     "hidden": false,
+     "unlocksTrackId": "the_broken_crown"
+   },
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/data/json/guidance-topics.json repo/src/game/data/json/guidance-topics.json
+--- orig/src/game/data/json/guidance-topics.json	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/data/json/guidance-topics.json	2026-09-04 11:18:09.480853104 +0000
+@@ -57,9 +57,9 @@
+     "targetTab": "raids"
+   },
+   {
+-    "id": "raids_legendary_unlocked",
++    "id": "raids_mythic_unlocked",
+     "messages": [
+-      "Legendary raids are open. the hardest content in the game, and the only tier where the very best loot drops."
++      "Mythic raids are open. brutal odds, and loot to match."
+     ],
+     "targetTab": "raids"
+   },
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/data/json/raid-difficulty-icons.json repo/src/game/data/json/raid-difficulty-icons.json
+--- orig/src/game/data/json/raid-difficulty-icons.json	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/data/json/raid-difficulty-icons.json	2026-09-04 11:01:36.815578668 +0000
+@@ -12,9 +12,12 @@
+     }
+   },
+   {
+-    "id": "legendary",
++    "id": "mythic",
+     "icon": {
+       "path": "raid-difficulty-icons/legendary.png"
+     }
++  },
++  {
++    "id": "legendary"
+   }
+ ]
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/data/json/tuning.json repo/src/game/data/json/tuning.json
+--- orig/src/game/data/json/tuning.json	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/data/json/tuning.json	2026-09-04 11:05:39.287296459 +0000
+@@ -105,43 +105,43 @@
+     "description": "Multiplies gold/xp rewards at Heroic difficulty."
+   },
+   {
+-    "id": "raid_difficulty.legendary.successPenalty",
+-    "label": "Legendary: success penalty",
++    "id": "raid_difficulty.mythic.successPenalty",
++    "label": "Mythic: success penalty",
+     "category": "raid_difficulty",
+     "value": 50,
+     "default": 50,
+     "min": 0,
+     "max": 95,
+-    "description": "Flat percentage points subtracted from every Legendary encounter's success chance. Deliberately brutal -- see 0059's design note before softening."
++    "description": "Flat percentage points subtracted from every Mythic encounter's success chance. Deliberately brutal -- see 0059's design note before softening."
+   },
+   {
+-    "id": "raid_difficulty.legendary.lootBonus",
+-    "label": "Legendary: loot bonus",
++    "id": "raid_difficulty.mythic.lootBonus",
++    "label": "Mythic: loot bonus",
+     "category": "raid_difficulty",
+     "value": 15,
+     "default": 15,
+     "min": 0,
+-    "description": "Flat percentage points added to every Legendary loot roll."
++    "description": "Flat percentage points added to every Mythic loot roll."
+   },
+   {
+-    "id": "raid_difficulty.legendary.durationMultiplier",
+-    "label": "Legendary: duration multiplier",
++    "id": "raid_difficulty.mythic.durationMultiplier",
++    "label": "Mythic: duration multiplier",
+     "category": "raid_difficulty",
+     "value": 1.3,
+     "default": 1.3,
+     "min": 0.5,
+     "max": 3,
+-    "description": "Multiplies total raid duration at Legendary difficulty."
++    "description": "Multiplies total raid duration at Mythic difficulty."
+   },
+   {
+-    "id": "raid_difficulty.legendary.rewardMultiplier",
+-    "label": "Legendary: reward multiplier",
++    "id": "raid_difficulty.mythic.rewardMultiplier",
++    "label": "Mythic: reward multiplier",
+     "category": "raid_difficulty",
+     "value": 4,
+     "default": 4,
+     "min": 0.5,
+     "max": 10,
+-    "description": "Multiplies gold/xp rewards at Legendary difficulty."
++    "description": "Multiplies gold/xp rewards at Mythic difficulty."
+   },
+   {
+     "id": "raid_difficulty.heroic.roleMismatchCap",
+@@ -154,14 +154,14 @@
+     "description": "Hard ceiling on final per-encounter success at Heroic while the party doesn't meet the raid's requiredRoles minimums. Layered on top of raid.roleMismatchPenaltyPerSlot, not a replacement for it -- gear/level can't push success above this no matter how far over the ordinary formula would otherwise go."
+   },
+   {
+-    "id": "raid_difficulty.legendary.roleMismatchCap",
+-    "label": "Legendary: role mismatch success cap",
++    "id": "raid_difficulty.mythic.roleMismatchCap",
++    "label": "Mythic: role mismatch success cap",
+     "category": "raid_difficulty",
+     "value": 45,
+     "default": 45,
+     "min": 5,
+     "max": 95,
+-    "description": "Same as Heroic's role mismatch success cap, deliberately lower -- Legendary is meant to punish an unmet role requirement harder than Heroic does, same relationship its successPenalty already has."
++    "description": "Same as Heroic's role mismatch success cap, deliberately lower -- Mythic is meant to punish an unmet role requirement harder than Heroic does, same relationship its successPenalty already has."
+   },
+   {
+     "id": "guild_facility.barracks.baseCost",
+@@ -4415,14 +4415,14 @@
+     "description": "Applied on top of the normal rarity/level budget for items generated from a Heroic raid encounter."
+   },
+   {
+-    "id": "loot_procedural.raidLegendaryBudgetMultiplier",
+-    "label": "Procedural loot: Legendary raid budget multiplier",
++    "id": "loot_procedural.raidMythicBudgetMultiplier",
++    "label": "Procedural loot: Mythic raid budget multiplier",
+     "category": "loot_procedural",
+     "value": 2.2,
+     "default": 2.2,
+     "min": 1,
+     "max": 10,
+-    "description": "Applied on top of the normal rarity/level budget for items generated from a Legendary raid encounter."
++    "description": "Applied on top of the normal rarity/level budget for items generated from a Mythic raid encounter."
+   },
+   {
+     "id": "loot_procedural.hardQuestBudgetMultiplier",
+@@ -4541,34 +4541,34 @@
+     "description": "Multiplies total replay duration at Heroic."
+   },
+   {
+-    "id": "chain_replay_difficulty.legendary.successPenalty",
+-    "label": "Chain Replay Legendary: success penalty",
++    "id": "chain_replay_difficulty.mythic.successPenalty",
++    "label": "Chain Replay Mythic: success penalty",
+     "category": "chain_replay_difficulty",
+     "value": 35,
+     "default": 35,
+     "min": 0,
+     "max": 95,
+-    "description": "Flat percentage points subtracted from every stage's success chance throughout a Legendary chain replay."
++    "description": "Flat percentage points subtracted from every stage's success chance throughout a Mythic chain replay."
+   },
+   {
+-    "id": "chain_replay_difficulty.legendary.lootBonus",
+-    "label": "Chain Replay Legendary: loot bonus",
++    "id": "chain_replay_difficulty.mythic.lootBonus",
++    "label": "Chain Replay Mythic: loot bonus",
+     "category": "chain_replay_difficulty",
+     "value": 25,
+     "default": 25,
+     "min": 0,
+     "max": 100,
+-    "description": "Flat percentage points added to the dedicated item's drop chance, and passed to the procedural padding-loot budget multiplier, at Legendary."
++    "description": "Flat percentage points added to the dedicated item's drop chance, and passed to the procedural padding-loot budget multiplier, at Mythic."
+   },
+   {
+-    "id": "chain_replay_difficulty.legendary.durationMultiplier",
+-    "label": "Chain Replay Legendary: duration multiplier",
++    "id": "chain_replay_difficulty.mythic.durationMultiplier",
++    "label": "Chain Replay Mythic: duration multiplier",
+     "category": "chain_replay_difficulty",
+     "value": 1.35,
+     "default": 1.35,
+     "min": 1,
+     "max": 3,
+-    "description": "Multiplies total replay duration at Legendary."
++    "description": "Multiplies total replay duration at Mythic."
+   },
+   {
+     "id": "chain_replay_tier.master.goldCost",
+@@ -4661,14 +4661,14 @@
+     "description": "Multiplies a Heroic chain replay stage's ordinary procedural padding-loot budget (whatever the normal pool-pick already selected)."
+   },
+   {
+-    "id": "loot_procedural.chainReplayLegendaryBudgetMultiplier",
+-    "label": "Chain Replay Legendary: padding loot budget multiplier",
++    "id": "loot_procedural.chainReplayMythicBudgetMultiplier",
++    "label": "Chain Replay Mythic: padding loot budget multiplier",
+     "category": "loot_procedural",
+     "value": 1.8,
+     "default": 1.8,
+     "min": 1,
+     "max": 5,
+-    "description": "Multiplies a Legendary chain replay stage's ordinary procedural padding-loot budget (whatever the normal pool-pick already selected)."
++    "description": "Multiplies a Mythic chain replay stage's ordinary procedural padding-loot budget (whatever the normal pool-pick already selected)."
+   },
+   {
+     "id": "chain_replay_dedicated.heroicMultiplier",
+@@ -4681,14 +4681,14 @@
+     "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Heroic replay."
+   },
+   {
+-    "id": "chain_replay_dedicated.legendaryMultiplier",
+-    "label": "Chain Replay Legendary: dedicated item stat multiplier",
++    "id": "chain_replay_dedicated.mythicMultiplier",
++    "label": "Chain Replay Mythic: dedicated item stat multiplier",
+     "category": "chain_replay_dedicated",
+     "value": 1.7,
+     "default": 1.7,
+     "min": 1,
+     "max": 3,
+-    "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Legendary replay."
++    "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Mythic replay."
+   },
+   {
+     "id": "chain_replay_dedicated.levelScaleBudgetMultiplier",
+@@ -4711,14 +4711,14 @@
+     "description": "Patch 0258. Multiplies a raid's own hand-authored Set-piece drop (not procedural padding loot, which has its own loot_procedural.raidHeroicBudgetMultiplier) on top of its hero-level-scaled budget when it drops from a Heroic encounter. Matches loot_procedural.raidHeroicBudgetMultiplier's own value -- same premium raids already give procedural loot, now extended to raids' own named gear too."
+   },
+   {
+-    "id": "raid_dedicated.legendaryMultiplier",
+-    "label": "Raid Legendary: dedicated item stat multiplier",
++    "id": "raid_dedicated.mythicMultiplier",
++    "label": "Raid Mythic: dedicated item stat multiplier",
+     "category": "raid_dedicated",
+     "value": 2.2,
+     "default": 2.2,
+     "min": 1,
+     "max": 4,
+-    "description": "Patch 0258. Multiplies a raid's own hand-authored Set-piece drop (not procedural padding loot, which has its own loot_procedural.raidLegendaryBudgetMultiplier) on top of its hero-level-scaled budget when it drops from a Legendary encounter. Matches loot_procedural.raidLegendaryBudgetMultiplier's own value -- same premium raids already give procedural loot, now extended to raids' own named gear too."
++    "description": "Patch 0258. Multiplies a raid's own hand-authored Set-piece drop (not procedural padding loot, which has its own loot_procedural.raidMythicBudgetMultiplier) on top of its hero-level-scaled budget when it drops from a Mythic encounter. Matches loot_procedural.raidMythicBudgetMultiplier's own value -- same premium raids already give procedural loot, now extended to raids' own named gear too."
+   },
+   {
+     "id": "vendorRep.goldPerLevelBase",
+@@ -4841,5 +4841,193 @@
+     "min": 0,
+     "max": 100,
+     "description": "Base percent chance a chain's dedicated reward item drops on a successful Heroic/Legendary replay completion, before the difficulty's own lootBonus is added. Never rolls at Normal."
++  },
++  {
++    "id": "raid_difficulty.legendary.successPenalty",
++    "label": "Legendary: success penalty",
++    "category": "raid_difficulty",
++    "value": 70,
++    "default": 70,
++    "min": 0,
++    "max": 95,
++    "description": "Flat percentage points subtracted from every Legendary encounter's success chance. First-pass number for the new top raid tier (patch 0317) -- deliberately harsher than Mythic's, real tuning backlogged."
++  },
++  {
++    "id": "raid_difficulty.legendary.lootBonus",
++    "label": "Legendary: loot bonus",
++    "category": "raid_difficulty",
++    "value": 25,
++    "default": 25,
++    "min": 0,
++    "description": "Flat percentage points added to every Legendary loot roll. First-pass, patch 0317."
++  },
++  {
++    "id": "raid_difficulty.legendary.durationMultiplier",
++    "label": "Legendary: duration multiplier",
++    "category": "raid_difficulty",
++    "value": 1.5,
++    "default": 1.5,
++    "min": 0.5,
++    "max": 3,
++    "description": "Multiplies total raid duration at Legendary difficulty. First-pass, patch 0317."
++  },
++  {
++    "id": "raid_difficulty.legendary.rewardMultiplier",
++    "label": "Legendary: reward multiplier",
++    "category": "raid_difficulty",
++    "value": 6,
++    "default": 6,
++    "min": 0.5,
++    "max": 10,
++    "description": "Multiplies gold/xp rewards at Legendary difficulty. First-pass, patch 0317."
++  },
++  {
++    "id": "raid_difficulty.legendary.roleMismatchCap",
++    "label": "Legendary: role mismatch success cap",
++    "category": "raid_difficulty",
++    "value": 30,
++    "default": 30,
++    "min": 5,
++    "max": 95,
++    "description": "Same as Mythic's role mismatch success cap, deliberately lower -- Legendary is meant to punish an unmet role requirement harder than any tier below it. First-pass, patch 0317."
++  },
++  {
++    "id": "chain_replay_difficulty.legendary.successPenalty",
++    "label": "Chain Replay Legendary: success penalty",
++    "category": "chain_replay_difficulty",
++    "value": 50,
++    "default": 50,
++    "min": 0,
++    "max": 95,
++    "description": "Flat percentage points subtracted from every stage's success chance throughout a replay attempt at Legendary. First-pass number for the new top chain-replay tier (patch 0317)."
++  },
++  {
++    "id": "chain_replay_difficulty.legendary.lootBonus",
++    "label": "Chain Replay Legendary: loot bonus",
++    "category": "chain_replay_difficulty",
++    "value": 35,
++    "default": 35,
++    "min": 0,
++    "description": "Flat percentage points added to the dedicated item's drop chance at Legendary. First-pass, patch 0317."
++  },
++  {
++    "id": "chain_replay_difficulty.legendary.durationMultiplier",
++    "label": "Chain Replay Legendary: duration multiplier",
++    "category": "chain_replay_difficulty",
++    "value": 1.5,
++    "default": 1.5,
++    "min": 0.5,
++    "max": 3,
++    "description": "Multiplies total replay duration at Legendary. First-pass, patch 0317."
++  },
++  {
++    "id": "renown_income.raid.mythic",
++    "label": "Renown income: Raid Mythic clear",
++    "category": "renown_income",
++    "value": 10,
++    "default": 10,
++    "min": 0,
++    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
++  },
++  {
++    "id": "renown_income.raid.legendary",
++    "label": "Renown income: Raid Legendary clear",
++    "category": "renown_income",
++    "value": 22,
++    "default": 22,
++    "min": 0,
++    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
++  },
++  {
++    "id": "renown_income.chainReplay.mythic",
++    "label": "Renown income: Chain Replay Mythic clear",
++    "category": "renown_income",
++    "value": 6,
++    "default": 6,
++    "min": 0,
++    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
++  },
++  {
++    "id": "renown_income.chainReplay.legendary",
++    "label": "Renown income: Chain Replay Legendary clear",
++    "category": "renown_income",
++    "value": 14,
++    "default": 14,
++    "min": 0,
++    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
++  },
++  {
++    "id": "hero_renown_perk.veteran_instinct.cost",
++    "label": "Veteran Instinct: cost",
++    "category": "hero_renown_perk",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
++  },
++  {
++    "id": "hero_renown_perk.veteran_instinct.costGrowth",
++    "label": "Veteran Instinct: cost growth",
++    "category": "hero_renown_perk",
++    "value": 1.35,
++    "default": 1.35,
++    "min": 1,
++    "max": 3,
++    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
++  },
++  {
++    "id": "hero_renown_perk.veteran_instinct.maxLevel",
++    "label": "Veteran Instinct: max level",
++    "category": "hero_renown_perk",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 50,
++    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
++  },
++  {
++    "id": "hero_renown_perk.veteran_instinct.successPerLevel",
++    "label": "Veteran Instinct: success per level",
++    "category": "hero_renown_perk",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "description": "Placeholder per-hero Renown perk (patch 0317) -- real per-hero effects list is still being designed and will replace this. Deliberately small/cheap relative to the guild-wide tree so the mechanism is testable without a long grind in the meantime."
++  },
++  {
++    "id": "loot_procedural.raidLegendaryBudgetMultiplier",
++    "label": "Procedural loot: Legendary raid budget multiplier",
++    "category": "loot_procedural",
++    "value": 3.0,
++    "default": 3.0,
++    "min": 1,
++    "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
++  },
++  {
++    "id": "loot_procedural.chainReplayLegendaryBudgetMultiplier",
++    "label": "Chain Replay Legendary: padding loot budget multiplier",
++    "category": "loot_procedural",
++    "value": 2.3,
++    "default": 2.3,
++    "min": 1,
++    "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
++  },
++  {
++    "id": "raid_dedicated.legendaryMultiplier",
++    "label": "Raid Legendary: dedicated item stat multiplier",
++    "category": "raid_dedicated",
++    "value": 3.0,
++    "default": 3.0,
++    "min": 1,
++    "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
++  },
++  {
++    "id": "chain_replay_dedicated.legendaryMultiplier",
++    "label": "Chain Replay Legendary: dedicated item stat multiplier",
++    "category": "chain_replay_dedicated",
++    "value": 2.2,
++    "default": 2.2,
++    "min": 1,
++    "description": "Patch 0317 (Prestige/Retirement Rework) -- first-pass number for the new top tier, harsher than Mythic's own value. Real tuning backlogged."
+   }
+-]
++]
+\ No newline at end of file
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/data/proceduralLoot.ts repo/src/game/data/proceduralLoot.ts
+--- orig/src/game/data/proceduralLoot.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/data/proceduralLoot.ts	2026-09-04 11:06:07.953659981 +0000
+@@ -41,22 +41,23 @@
+  *  because a player might reasonably want to know an Epic-quest drop
+  *  from a Hard-quest one at the same rarity).
+  *
+- *  `chainReplayHeroic`/`chainReplayLegendary` (patch 0225, Replayable
+- *  Quest Chains -- see guild-idler-status.md's Backlog entry) cover a
+- *  chain replay's *padding* loot only -- whatever a stage's ordinary
++ *  `chainReplayHeroic`/`chainReplayMythic`/`chainReplayLegendary` (patch
++ *  0225, Replayable Quest Chains -- see guild-idler-status.md's Backlog
++ *  entry; Mythic added patch 0317 alongside the raid-tier rename) cover
++ *  a chain replay's *padding* loot only -- whatever a stage's ordinary
+  *  procedural pool-pick already selected, same mechanism `raidHeroic`/
+- *  `raidLegendary` already use for raids. Deliberately separate budget
+- *  multipliers and separate display labels from the raid tags, even
+- *  though the underlying mechanism is identical -- see their own
+- *  comments below for why. The chain's own *dedicated* reward item is a
+- *  different, deliberately non-procedural mechanism entirely (see
+- *  scaleDedicatedItem below) -- these two tags never reach that
+- *  path, since dedicated rewards are chainExclusive and therefore never
++ *  `raidMythic`/`raidLegendary` already use for raids. Deliberately
++ *  separate budget multipliers and separate display labels from the raid
++ *  tags, even though the underlying mechanism is identical -- see their
++ *  own comments below for why. The chain's own *dedicated* reward item is
++ *  a different, deliberately non-procedural mechanism entirely (see
++ *  scaleDedicatedItem below) -- these tags never reach that path, since
++ *  dedicated rewards are chainExclusive and therefore never
+  *  isProceduralTemplate() in the first place. */
+ export type LootSourceTag =
+   | 'easy' | 'normal' | 'hard' | 'epic' | 'legendary'
+-  | 'raidHeroic' | 'raidLegendary'
+-  | 'chainReplayHeroic' | 'chainReplayLegendary';
++  | 'raidHeroic' | 'raidMythic' | 'raidLegendary'
++  | 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary';
+ 
+ export type BonusRollTier = 'none' | 'fortunate' | 'charmed';
+ 
+@@ -84,15 +85,16 @@
+ function sourceBudgetMultiplier(sourceTag: LootSourceTag): number {
+   switch (sourceTag) {
+     case 'raidHeroic': return Tuning.get('loot_procedural.raidHeroicBudgetMultiplier');
++    case 'raidMythic': return Tuning.get('loot_procedural.raidMythicBudgetMultiplier');
+     case 'raidLegendary': return Tuning.get('loot_procedural.raidLegendaryBudgetMultiplier');
+     case 'hard': return Tuning.get('loot_procedural.hardQuestBudgetMultiplier');
+     // Deliberately their own tuning ids, not a reuse of the raid ones --
+     // chain replay is meant to be lighter-weight solo-hero repeatable
+     // content, not a second raid ladder (same reasoning
+     // CHAIN_REPLAY_DIFFICULTIES' own successPenalty/lootBonus already
+-    // used, softer than RAID_DIFFICULTIES' equivalents). Values sit
+-    // between hardQuest's 1.15x and raid's 1.5x/2.2x.
++    // used, softer than RAID_DIFFICULTIES' equivalents).
+     case 'chainReplayHeroic': return Tuning.get('loot_procedural.chainReplayHeroicBudgetMultiplier');
++    case 'chainReplayMythic': return Tuning.get('loot_procedural.chainReplayMythicBudgetMultiplier');
+     case 'chainReplayLegendary': return Tuning.get('loot_procedural.chainReplayLegendaryBudgetMultiplier');
+     default: return 1;
+   }
+@@ -113,8 +115,10 @@
+     case 'epic': return 'Epic';
+     case 'legendary': return 'Legendary';
+     case 'raidHeroic': return 'Heroic';
++    case 'raidMythic': return 'Mythic';
+     case 'raidLegendary': return 'Legendary';
+     case 'chainReplayHeroic': return 'Replay: Heroic';
++    case 'chainReplayMythic': return 'Replay: Mythic';
+     case 'chainReplayLegendary': return 'Replay: Legendary';
+     default: return null; // easy, normal
+   }
+@@ -273,13 +277,15 @@
+ export function scaleDedicatedItem(
+   def: { name: string; rarity: Rarity; mods?: Partial<Modifiers>; stats?: Partial<Stats> },
+   heroLevel: number,
+-  sourceTag: 'chainReplayHeroic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidLegendary',
++  sourceTag: 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidMythic' | 'raidLegendary',
+ ): DedicatedItemScale {
+-  const isRaid = sourceTag === 'raidHeroic' || sourceTag === 'raidLegendary';
++  const isRaid = sourceTag === 'raidHeroic' || sourceTag === 'raidMythic' || sourceTag === 'raidLegendary';
+   const isLegendaryTier = sourceTag === 'chainReplayLegendary' || sourceTag === 'raidLegendary';
++  const isMythicTier = sourceTag === 'chainReplayMythic' || sourceTag === 'raidMythic';
++  const tierKey = isLegendaryTier ? 'legendaryMultiplier' : isMythicTier ? 'mythicMultiplier' : 'heroicMultiplier';
+   const tierMultiplier = isRaid
+-    ? Tuning.get(isLegendaryTier ? 'raid_dedicated.legendaryMultiplier' : 'raid_dedicated.heroicMultiplier')
+-    : Tuning.get(isLegendaryTier ? 'chain_replay_dedicated.legendaryMultiplier' : 'chain_replay_dedicated.heroicMultiplier');
++    ? Tuning.get(`raid_dedicated.${tierKey}`)
++    : Tuning.get(`chain_replay_dedicated.${tierKey}`);
+ 
+   const originalStats = def.stats ?? {};
+   const originalTotal = Object.values(originalStats).reduce((a, b) => a + b, 0);
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/data/progression.ts repo/src/game/data/progression.ts
+--- orig/src/game/data/progression.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/data/progression.ts	2026-09-04 11:02:56.133359675 +0000
+@@ -1,4 +1,7 @@
+-import { GuildDef, HeroClass, Modifiers, QuestTag, RenownPerkDef, Role, RoleDef, Stats, UpgradeDef, VendorId } from '../types';
++import {
++  ChainReplayDifficulty, GuildDef, HeroClass, HeroRenownPerkDef, Modifiers, QuestTag, RaidDifficulty,
++  RenownPerkDef, Role, RoleDef, Stats, UpgradeDef, VendorId,
++} from '../types';
+ import { Tuning } from './tuning';
+ import { RAIDS, RAID_ENCOUNTER_BY_ID } from './raids';
+ 
+@@ -177,12 +180,23 @@
+     // that no save has this upgrade purchased yet, so no migration needed
+     // for the id change itself. See guild-idler-status.md's patch 0166
+     // entry for the full sweep this was part of.
+-    id: 'raid_legendary_clearance', name: 'Legendary Clearance',
+-    description: "The guild's word that it can handle Legendary difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
++    //
++    // Patch 0317 (Prestige/Retirement Rework): renamed back to
++    // 'raid_mythic_clearance' -- the tier this gates is now called
++    // Mythic again (RAID_DIFFICULTIES' own comment has the full history).
++    // A brand-new Legendary tier sits above it and auto-unlocks once
++    // Mythic is cleared once, rather than getting its own Clearance
++    // purchase -- see RaidManager.canStart. Any existing save with levels
++    // in the old 'raid_legendary_clearance' id simply stops matching a
++    // def (ModifierManager.upgradeMods already no-ops on an unknown id);
++    // no migration written, same "all current players are testers"
++    // reasoning the rest of this patch relies on.
++    id: 'raid_mythic_clearance', name: 'Mythic Clearance',
++    description: "The guild's word that it can handle Mythic difficulty -- brutally harsh odds, and loot worth the extra risk.",
+     baseCost: Tuning.get('upgrade.raid_legendary_clearance.baseCost'),
+     costGrowth: Tuning.get('upgrade.raid_legendary_clearance.costGrowth'),
+     maxLevel: Tuning.get('upgrade.raid_legendary_clearance.maxLevel'),
+-    modsPerLevel: {}, unlocks: 'raidsLegendary', category: 'Unlocks',
++    modsPerLevel: {}, unlocks: 'raidsMythic', category: 'Unlocks',
+   },
+   {
+     id: 'potion_belt', name: 'Potion Belt',
+@@ -1405,56 +1419,82 @@
+   return Math.floor(XP_CURVE_BASE * Math.pow(level, XP_CURVE_EXPONENT) * xpCurveMultiplier(level));
+ }
+ 
++/**
++ * As of patch 0317, this is no longer "the level Retirement requires" --
++ * classic Retire is cut. It's repurposed as the level a hero must hold to
++ * spend Renown in the new per-hero tree (HERO_RENOWN_PERKS below) --
++ * framed as a way of getting extra power through endgame content for a
++ * hero who's done leveling, same MAX_HERO_LEVEL gate the old system used
++ * for essentially the same reason (a hero isn't "done" until capped).
++ * Left as the same Tuning-backed constant rather than renamed, to avoid
++ * touching every call site for a symbol rename alone.
++ */
+ export const PRESTIGE_MIN_LEVEL = Tuning.get('progression.prestigeMinLevel');
+ 
+ /**
+- * Historical retirement gate this file's own patch-0178 comment flagged --
+- * NOT the current gate (PRESTIGE_MIN_LEVEL, now 55, same as MAX_HERO_LEVEL).
+- * Before 0178, a hero could retire the moment they hit level 30; the old
+- * formula's level-scaling term was Math.pow(level - 30 + 1, 0.75), so
+- * cashing out the instant you became eligible earned exactly 1 renown from
+- * that term (Math.pow(1, 0.75)), while holding off all the way to the level
+- * cap (55) earned Math.pow(26, 0.75) ≈ 11.51 -- roughly 10.51 renown of
+- * "extra" purely for waiting. Kept as its own constant (not derived from
+- * PRESTIGE_MIN_LEVEL) because it describes a fact about the OLD system; it
+- * must NOT silently track PRESTIGE_MIN_LEVEL if that's retuned again later.
+- */
+-const PRE_LEVEL_CAP_RETIRE_MIN_LEVEL = 30;
+-
+-/**
+- * Once 0178 pinned every retirement to the level cap (PRESTIGE_MIN_LEVEL
+- * === MAX_HERO_LEVEL), the old level-scaling term above degenerated into a
+- * flat constant (Math.pow(1, 0.75) = 1 every single time) -- flagged in
+- * that patch's own status.md entry as "a real interaction, not fixed here."
+- * Direct follow-up instruction: since retiring below the cap is no longer
+- * possible, replace that dead term with a new flat baseline equal to 3/4 of
+- * the "extra" a hero would have earned under the OLD formula for holding
+- * off and retiring at 55 instead of cashing out the moment they hit the
+- * OLD minimum (see PRE_LEVEL_CAP_RETIRE_MIN_LEVEL above) -- i.e. 3/4 of
+- * (Math.pow(26, 0.75) - 1) ≈ 3/4 of 10.51 ≈ 7.89. The totalQuests/150 term
+- * is untouched; only the level-scaling half of the old formula is being
+- * replaced here.
+- */
+-const RETIREMENT_LEVEL_BONUS = 0.75
+-  * (Math.pow(MAX_HERO_LEVEL - PRE_LEVEL_CAP_RETIRE_MIN_LEVEL + 1, 0.75) - 1);
+-
+-/** Renown granted for retiring a hero at a given level. */
+-export function renownForRetirement(level: number, totalQuests: number): number {
+-  if (level < PRESTIGE_MIN_LEVEL) return 0;
+-  return Math.max(1, Math.floor(RETIREMENT_LEVEL_BONUS + totalQuests / 150));
+-}
+-
+-/* ------------------------------ prestige streak ---------------------------- */
+-
+-/** Retiring again within this window of the last retirement extends the streak. */
+-export const PRESTIGE_STREAK_WINDOW_MS = Tuning.get('progression.prestigeStreakWindowMs');
+-const PRESTIGE_STREAK_BONUS_PER_STEP = Tuning.get('progression.prestigeStreakBonusPerStep'); // percent
+-const PRESTIGE_STREAK_BONUS_CAP = Tuning.get('progression.prestigeStreakBonusCap'); // percent, reached at streak 11 at the default 5%/step
+-
+-/** Percentage bonus applied to renown gained, based on the current streak. */
+-export function prestigeStreakBonusPct(streak: number): number {
+-  return Math.min((Math.max(1, streak) - 1) * PRESTIGE_STREAK_BONUS_PER_STEP, PRESTIGE_STREAK_BONUS_CAP);
+-}
++ * Prestige/Retirement Rework (patch 0317). Classic Retire is cut --
++ * Early Retirement (PrestigeManager.earlyRetire) is now the only way to
++ * remove a hero from the roster, and it stays reward-free by design.
++ * Renown income moves entirely to playing capped (MAX_HERO_LEVEL) heroes
++ * through the hardest available endgame content instead: a raid or
++ * Replay Memories chain cleared at Mythic or Legendary now pays Renown
++ * directly (Normal/Heroic stay gold-only, unchanged). See
++ * PrestigeManager.retire's old comment history (removed this patch) and
++ * guild-idler-status.md's patch-0317 entry for the full rework writeup.
++ *
++ * First-pass numbers, explicitly not tuned yet (see decision 5 in the
++ * design brief this patch was scoped from) -- deliberately modest
++ * relative to RENOWN_PERKS/HERO_RENOWN_PERKS' own tier2 costs (hundreds
++ * to well over a million Renown for a maxed perk), so a single clear
++ * still reads as a grind, not an instant unlock. Both trees draw from
++ * this same income, so there's no separate balancing needed per tree.
++ * Edit via the Tuning tab (category 'renown_income') without touching
++ * this file once real balance passes start.
++ */
++export function renownForRaidClear(difficulty: RaidDifficulty): number {
++  if (difficulty === 'mythic') return Tuning.get('renown_income.raid.mythic');
++  if (difficulty === 'legendary') return Tuning.get('renown_income.raid.legendary');
++  return 0;
++}
++
++/** Chain-replay twin of renownForRaidClear above -- same Mythic/Legendary-
++ *  only, Normal/Heroic-stay-gold-only shape. */
++export function renownForChainReplayClear(difficulty: ChainReplayDifficulty): number {
++  if (difficulty === 'mythic') return Tuning.get('renown_income.chainReplay.mythic');
++  if (difficulty === 'legendary') return Tuning.get('renown_income.chainReplay.legendary');
++  return 0;
++}
++
++/* --------------------------- per-hero renown perks -------------------------- */
++
++/**
++ * New in patch 0317, alongside the Prestige/Retirement Rework -- see
++ * HeroRenownPerkDef's own comment in types.ts for how this tree relates
++ * to the existing guild-wide RENOWN_PERKS above (same currency, separate
++ * spend, separate storage on the hero itself).
++ *
++ * PLACEHOLDER CONTENT. The actual per-hero effects list is still being
++ * designed (explicitly deferred in the design brief this patch was
++ * scoped from -- "new hero-specific effects, described separately") and
++ * will land as a follow-up patch. This single entry exists only so the
++ * mechanism (storage, cost curve, buy flow, UI hookup) is real and
++ * testable end to end in the meantime -- treat its name/description/
++ * numbers as scaffolding, not final content.
++ */
++export const HERO_RENOWN_PERKS: HeroRenownPerkDef[] = [
++  {
++    id: 'veteran_instinct', name: 'Veteran Instinct',
++    description: '[Placeholder perk -- real per-hero effects still being designed.] This hero has seen enough endgame content to trust their gut.',
++    cost: Tuning.get('hero_renown_perk.veteran_instinct.cost'),
++    costGrowth: Tuning.get('hero_renown_perk.veteran_instinct.costGrowth'),
++    maxLevel: Tuning.get('hero_renown_perk.veteran_instinct.maxLevel'),
++    modsPerLevel: { success: Tuning.get('hero_renown_perk.veteran_instinct.successPerLevel') },
++  },
++];
++
++export const HERO_RENOWN_BY_ID: Record<string, HeroRenownPerkDef> = Object.fromEntries(
++  HERO_RENOWN_PERKS.map((p) => [p.id, p]),
++);
+ 
+ /* -------------------------------- ascension -------------------------------- */
+ 
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/data/raids.ts repo/src/game/data/raids.ts
+--- orig/src/game/data/raids.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/data/raids.ts	2026-09-04 11:01:32.542312048 +0000
+@@ -47,27 +47,43 @@
+  */
+ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
+   // successPenalty raised (12->20, 24->50) and lootBonus introduced --
+-  // Legendary in particular is meant to be genuinely brutal, not just "harder
+-  // than Heroic": a 50-point penalty can push an encounter's baseline
+-  // success below the floor before the party's own bonus even applies.
+-  // The 9-hero party bonus is the intended counterweight, not a numbers
+-  // mistake -- confirmed as the deliberate design, not something to soften.
++  // Mythic (formerly this game's top tier, called 'legendary' internally
++  // from patch 0166 to patch 0317 -- see RAID_DIFFICULTY_LABEL's own
++  // comment) in particular is meant to be genuinely brutal, not just
++  // "harder than Heroic": a 50-point penalty can push an encounter's
++  // baseline success below the floor before the party's own bonus even
++  // applies. The 9-hero party bonus is the intended counterweight, not a
++  // numbers mistake -- confirmed as the deliberate design, not something
++  // to soften.
+   // durationMultiplier: harder tiers take longer too -- normal 2h becomes
+-  // 2.3h at Heroic, 2.6h at Legendary (i.e. x1.15 / x1.3), matching the given
++  // 2.3h at Heroic, 2.6h at Mythic (i.e. x1.15 / x1.3), matching the given
+   // example exactly.
+   // Normal's own numbers are all baseline zero-points (no penalty, x1
+   // everything) rather than meaningfully "tunable" values, so they stay
+-  // literal here. Heroic/Legendary's four fields each read from the tuning
+-  // registry instead -- editable live via the devtool's Tuning tab. See
+-  // tuning.ts and tuning.json.
++  // literal here. Heroic/Mythic/Legendary's four fields each read from the
++  // tuning registry instead -- editable live via the devtool's Tuning tab.
++  // See tuning.ts and tuning.json.
+   // roleMismatchCap: Normal deliberately has none at all (undefined, not
+   // just a high number) -- a mismatched Normal party still only eats the
+   // ordinary per-slot roleMismatchPenalty subtraction and can climb back
+   // up to MAX_SUCCESS on gear/level alone, same as before this existed.
+-  // Heroic/Legendary read theirs from the tuning registry like their other
+-  // three fields -- Legendary's is deliberately the lower of the two, same
+-  // "genuinely brutal, not just harder than Heroic" intent as its
+-  // successPenalty above.
++  // Heroic/Mythic/Legendary read theirs from the tuning registry like
++  // their other three fields -- each successive tier's is deliberately
++  // lower than the last, same "genuinely brutal, not just harder" intent
++  // as successPenalty above.
++  //
++  // Patch 0317 (Prestige/Retirement Rework): 'legendary' below is a
++  // brand-new top tier, not the old one under a new name -- the old
++  // 'legendary' entry was renamed to 'mythic', values unchanged, reading
++  // from the same-shaped raid_difficulty.mythic.* tuning keys (renamed
++  // from raid_difficulty.legendary.* -- see tuning.json). Legendary's own
++  // numbers are first-pass and deliberately harsher across the board;
++  // real tuning is backlogged (see renownForRaidClear's comment in
++  // progression.ts for the same caveat on its Renown payout). Legendary
++  // auto-unlocks once Mythic is cleared once (state.completedRaidDifficulties
++  // includes 'mythic') -- no separate Charter/Clearance purchase, unlike
++  // Heroic/Mythic's own raidsHeroic/raidsMythic upgrade gates. See
++  // RaidManager.canStart.
+   normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
+   heroic: {
+     difficulty: 'heroic', partySize: 6,
+@@ -77,6 +93,14 @@
+     durationMultiplier: Tuning.get('raid_difficulty.heroic.durationMultiplier'),
+     roleMismatchCap: Tuning.get('raid_difficulty.heroic.roleMismatchCap'),
+   },
++  mythic: {
++    difficulty: 'mythic', partySize: 9,
++    successPenalty: Tuning.get('raid_difficulty.mythic.successPenalty'),
++    rewardMultiplier: Tuning.get('raid_difficulty.mythic.rewardMultiplier'),
++    lootBonus: Tuning.get('raid_difficulty.mythic.lootBonus'),
++    durationMultiplier: Tuning.get('raid_difficulty.mythic.durationMultiplier'),
++    roleMismatchCap: Tuning.get('raid_difficulty.mythic.roleMismatchCap'),
++  },
+   legendary: {
+     difficulty: 'legendary', partySize: 9,
+     successPenalty: Tuning.get('raid_difficulty.legendary.successPenalty'),
+@@ -87,21 +111,22 @@
+   },
+ };
+ 
+-export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'legendary'];
++export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic', 'legendary'];
+ 
+ /**
+  * Player-facing display label per raid difficulty. As of patch 0166 the
+- * internal id is 'legendary' too (full internal rename from the patch
+- * 0165 display-only version -- ids, item suffixes, tuning keys, and the
+- * upgrade id all now say `legendary`, not just this label), so this map
+- * is trivial today. Kept rather than removed: it's the correct pattern
+- * for whenever a genuinely new fourth tier lands above this one, and every
+- * UI call site already reads through it instead of deriving a label by
+- * capitalizing the raw id.
++ * internal id for what was then the top tier was 'legendary' too (full
++ * internal rename from the patch 0165 display-only version). Patch 0317
++ * renamed that same tier's internal id again, to 'mythic', and this map
++ * now covers a genuinely new top tier that IS called 'legendary'
++ * internally -- see RAID_DIFFICULTIES' own comment for the full history.
++ * Kept rather than removed: every UI call site already reads through
++ * this instead of deriving a label by capitalizing the raw id.
+  */
+ export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
+   normal: 'Normal',
+   heroic: 'Heroic',
++  mythic: 'Mythic',
+   legendary: 'Legendary',
+ };
+ 
+@@ -177,28 +202,34 @@
+ }
+ 
+ /** The loot pool actually in play for a given difficulty -- lootHeroic/
+- *  lootLegendary if the encounter defines one, otherwise the same base
+- *  `loot` every difficulty used before tiered pools existed. Used
++ *  lootMythic/lootLegendary if the encounter defines one, otherwise the
++ *  same base `loot` every difficulty used before tiered pools existed.
++ *  Each tier falls back to `loot` independently (not chained through the
++ *  tier below it), same flat-fallback shape this always had. Used
+  *  identically by both the real roll (RaidManager.resolve) and the UI
+  *  preview, so what's shown always matches what can actually drop. */
+ export function lootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
+   if (difficulty === 'heroic') return encounter.lootHeroic ?? encounter.loot;
++  if (difficulty === 'mythic') return encounter.lootMythic ?? encounter.loot;
+   if (difficulty === 'legendary') return encounter.lootLegendary ?? encounter.loot;
+   return encounter.loot;
+ }
+ 
+ /**
+  * Same fallback shape as lootForDifficulty above, for eggLoot -- added in
+- * patch 0250 alongside eggLootHeroic/eggLootLegendary on RaidEncounterDef.
+- * The one difference from equipment loot: `loot` itself is required (every
+- * encounter has one, even if empty), while `eggLoot` is optional and most
+- * encounters have none at all -- so this returns `[]` rather than `encounter.
+- * loot`'s always-defined fallback when nothing applies at any level. A
+- * species meant to be Heroic-onward only (see PetDef -- Dragonling) simply
+- * leaves eggLoot unset and relies on this returning [] at Normal.
++ * patch 0250 alongside eggLootHeroic/eggLootLegendary on RaidEncounterDef
++ * (eggLootMythic added patch 0317, alongside the mythic/legendary raid-
++ * tier rename). The one difference from equipment loot: `loot` itself is
++ * required (every encounter has one, even if empty), while `eggLoot` is
++ * optional and most encounters have none at all -- so this returns `[]`
++ * rather than `encounter.loot`'s always-defined fallback when nothing
++ * applies at any level. A species meant to be Heroic-onward only (see
++ * PetDef -- Dragonling) simply leaves eggLoot unset and relies on this
++ * returning [] at Normal.
+  */
+ export function eggLootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
+   if (difficulty === 'heroic') return encounter.eggLootHeroic ?? encounter.eggLoot ?? [];
++  if (difficulty === 'mythic') return encounter.eggLootMythic ?? encounter.eggLoot ?? [];
+   if (difficulty === 'legendary') return encounter.eggLootLegendary ?? encounter.eggLoot ?? [];
+   return encounter.eggLoot ?? [];
+ }
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/engine.ts repo/src/game/engine.ts
+--- orig/src/game/engine.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/engine.ts	2026-09-04 11:04:36.897753809 +0000
+@@ -2849,23 +2849,28 @@
+     void this.saveNow();
+   }
+ 
+-  retire(heroId: string) {
++  /**
++   * Per-hero Renown perk tree (patch 0317) -- see
++   * PrestigeManager.buyHeroPerk's own comment. Separate from buyPerk
++   * above since it needs a heroId, not just a perk id.
++   */
++  buyHeroPerk(heroId: string, id: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+-    const outcome = PrestigeManager.retire(this.state, hero, createRng(uid('retire')), Date.now());
+-    if ('error' in outcome) return this.say(outcome.error);
+-    const streakNote = outcome.streak > 1 ? ` Streak ×${outcome.streak}!` : '';
+-    playSound(outcome.streak > 3 ? 'chain_complete' : 'level_up');
+-    this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.${streakNote}`);
+-    this.reportAchievements(AchievementManager.checkAll(this.state));
+-    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    const error = PrestigeManager.buyHeroPerk(this.state, hero, id);
++    if (error) return this.say(error);
++    playSound('prestige_upgrade');
++    this.notify();
+     void this.saveNow();
+   }
+ 
+   /**
+    * Early Retirement -- see PrestigeManager.earlyRetire's own comment for
+-   * why this exists. No renown, no ascension, no streak; just frees the
+-   * slot immediately regardless of level.
++   * why this exists, and for why it's the ONLY retirement path as of
++   * patch 0317 (classic Retire, and the `retire()` method that used to
++   * live here, are both gone -- see guild-idler-status.md's patch-0317
++   * entry). No renown, no ascension, no streak; just frees the slot
++   * immediately regardless of level.
+    */
+   earlyRetire(heroId: string) {
+     const hero = this.hero(heroId);
+@@ -2873,8 +2878,7 @@
+     const outcome = PrestigeManager.earlyRetire(this.state, hero);
+     if (outcome && 'error' in outcome) return this.say(outcome.error);
+     // Reuses `depart` -- a hero leaving the guild, same shape as a hero
+-    // leaving on a quest, deliberately not the triumphant cue retire()
+-    // gets, since this earns no renown or streak.
++    // leaving on a quest.
+     playSound('depart');
+     this.say(`${hero.name} leaves the guild. The slot is free.`);
+     void this.saveNow();
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/managers/AchievementManager.ts repo/src/game/managers/AchievementManager.ts
+--- orig/src/game/managers/AchievementManager.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/managers/AchievementManager.ts	2026-09-04 11:19:50.354422505 +0000
+@@ -63,11 +63,17 @@
+ 
+   RAID_HEROIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('heroic'),
+ 
++  // New in patch 0317, alongside the raid-tier rename (RAID_DIFFICULTIES'
++  // own comment in raids.ts has the full history) -- 'mythic' is the
++  // renamed old top tier, so this fills the gap RAID_LEGENDARY_CLEARED
++  // used to cover before a genuinely new top tier existed above it.
++  RAID_MYTHIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('mythic'),
++
+   RAID_LEGENDARY_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('legendary'),
+ 
+   RAID_ALL_DIFFICULTIES: (state) => {
+     const cleared = new Set(state.completedRaidDifficulties ?? []);
+-    return cleared.has('normal') && cleared.has('heroic') && cleared.has('legendary');
++    return cleared.has('normal') && cleared.has('heroic') && cleared.has('mythic') && cleared.has('legendary');
+   },
+ 
+   /* ------------------------- vendor / guild completion ------------------------- */
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/managers/EquipmentManager.ts repo/src/game/managers/EquipmentManager.ts
+--- orig/src/game/managers/EquipmentManager.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/managers/EquipmentManager.ts	2026-09-04 11:17:00.381811428 +0000
+@@ -37,9 +37,9 @@
+    * Level Scaling, see guild-idler-status.md): any hand-authored item
+    * (`!isProceduralTemplate` -- chainExclusive rewards AND ordinary raid
+    * Set pieces alike, extended from chainExclusive-only in patch 0258)
+-   * gets real level-scaling when `roll.sourceTag` is one of the four
+-   * Heroic/Legendary tags (`chainReplayHeroic/Legendary`,
+-   * `raidHeroic/Legendary`) AND `roll.heroLevel` is provided -- see
++   * gets real level-scaling when `roll.sourceTag` is one of the six
++   * Heroic/Mythic/Legendary tags (`chainReplayHeroic/Mythic/Legendary`,
++   * `raidHeroic/Mythic/Legendary`) AND `roll.heroLevel` is provided -- see
+    * scaleDedicatedItem's own comment in proceduralLoot.ts for the full
+    * formula. `rolledItemLevel` IS now set to the hero's level at drop
+    * time (patch 0258 reversed the old "deliberately does NOT set" -- see
+@@ -58,7 +58,7 @@
+     const def = EQUIPMENT_BY_ID[defId];
+     if (!def) return null;
+     const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
+-    const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayLegendary', 'raidHeroic', 'raidLegendary'];
++    const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayMythic', 'chainReplayLegendary', 'raidHeroic', 'raidMythic', 'raidLegendary'];
+     if (roll && isProceduralTemplate(def)) {
+       const result = rollProceduralItem(
+         def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng, roll.weightedKey, roll.weightMultiplier,
+@@ -74,7 +74,7 @@
+       && (dedicatedTags as string[]).includes(roll.sourceTag)) {
+       const result = scaleDedicatedItem(
+         def, roll.heroLevel,
+-        roll.sourceTag as 'chainReplayHeroic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidLegendary',
++        roll.sourceTag as 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidMythic' | 'raidLegendary',
+       );
+       item.rolledStats = result.rolledStats;
+       // patch 0256/0257: def.mods on a hand-authored item is now only
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/managers/GuidanceManager.ts repo/src/game/managers/GuidanceManager.ts
+--- orig/src/game/managers/GuidanceManager.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/managers/GuidanceManager.ts	2026-09-04 11:18:01.835203320 +0000
+@@ -62,7 +62,13 @@
+   black_market_unlocked: (state) => ModifierManager.hasUnlock(state, 'blackMarket'),
+   legendary_quests_unlocked: (state) => ModifierManager.hasUnlock(state, 'legendaryQuests'),
+   raids_heroic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsHeroic'),
+-  raids_legendary_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsLegendary'),
++  // Renamed raids_legendary_unlocked -> raids_mythic_unlocked in patch
++  // 0317, matching the raidsLegendary -> raidsMythic unlock rename (see
++  // RAID_DIFFICULTIES' own comment in raids.ts for the full history). No
++  // guidance entry added for the new Legendary tier -- it auto-unlocks
++  // off a raid clear, not a purchase, so there's no "you can afford this
++  // now" moment for a guidance nudge to fire on.
++  raids_mythic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsMythic'),
+   // The Training tab's own nav visibility gate (MenuWindow.tsx) reads
+   // completedRaids directly rather than a dedicated boolean -- this check
+   // mirrors that exact same condition rather than introducing a second
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/managers/HeroManager.ts repo/src/game/managers/HeroManager.ts
+--- orig/src/game/managers/HeroManager.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/managers/HeroManager.ts	2026-09-04 11:03:21.954423102 +0000
+@@ -648,6 +648,10 @@
+    * guild-wide passive the way it used to be. Signature grew a `state`
+    * param purely for that lookup (pets live in state.pets, not on the
+    * hero object) -- every call site already had `state` in scope.
++   *
++   * heroRenownMods (patch 0317) folded in the same way -- the new
++   * per-hero Renown perk tree only ever affects the specific hero that
++   * bought into it, same "own dedicated pool, read here" shape as pets.
+    */
+   heroMods(state: GameState, hero: Hero, now: number): Modifiers {
+     const classDef = HERO_CLASSES[hero.heroClass];
+@@ -658,6 +662,7 @@
+       HeroManager.injuryMods(hero, now),
+       HeroManager.healthMods(hero),
+       ModifierManager.petModsForHero(state, hero, now),
++      ModifierManager.heroRenownMods(hero),
+       { success: hero.level * 0.4 },
+     );
+   },
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/managers/ModifierManager.ts repo/src/game/managers/ModifierManager.ts
+--- orig/src/game/managers/ModifierManager.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/managers/ModifierManager.ts	2026-09-04 11:03:10.589721360 +0000
+@@ -1,4 +1,4 @@
+-import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE, BASE_STASH_CAPACITY } from '../data/progression';
++import { GUILD_BY_ID, RENOWN_BY_ID, HERO_RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE, BASE_STASH_CAPACITY } from '../data/progression';
+ import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
+ import { BASE_INCUBATION_SLOTS } from '../data/pets';
+ import { GameState, Hero, Modifiers, VendorId } from '../types';
+@@ -47,6 +47,24 @@
+   },
+ 
+   /**
++   * Per-hero Renown perk mods (HERO_RENOWN_PERKS, patch 0317) -- reads
++   * `hero.renownPerks` instead of `state.renownPerks`, same "own dedicated
++   * pool, folded in per-hero" shape petModsForHero below already uses.
++   * NOT included in global() -- like petModsForHero, this only applies to
++   * the specific hero it's computed for, so callers need to fold it in
++   * alongside petModsForHero wherever per-hero mods are aggregated (see
++   * HeroManager.heroMods).
++   */
++  heroRenownMods(hero: Hero): Partial<Modifiers> {
++    return sumMods(
++      ...Object.entries(hero.renownPerks ?? {}).map(([id, level]) => {
++        const def = HERO_RENOWN_BY_ID[id];
++        return def ? scaleMods(def.modsPerLevel, level) : {};
++      }),
++    );
++  },
++
++  /**
+    * Raid-only bonuses -- deliberately NOT folded into global(). This is
+    * the dedicated channel RAID_UPGRADES writes into; RaidManager reads
+    * this separately (see partyEconomyMods), so raid progression never
+@@ -216,7 +234,7 @@
+     return BASE_STASH_CAPACITY + bonus;
+   },
+ 
+-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training' | 'autoChainTactics'): boolean {
++  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics'): boolean {
+     return Object.entries(state.upgrades).some(([id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+       return !!def && def.unlocks === unlock && level > 0;
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/managers/PrestigeManager.ts repo/src/game/managers/PrestigeManager.ts
+--- orig/src/game/managers/PrestigeManager.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/managers/PrestigeManager.ts	2026-09-04 11:04:20.436435883 +0000
+@@ -1,36 +1,41 @@
+ import {
+-  PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, RENOWN_BY_ID, RENOWN_PERKS,
+-  ASCENSION_STAT_BONUS, ascensionRank, prestigeStreakBonusPct, renownCost,
+-  renownEffectiveMaxLevel, renownForRetirement,
++  HERO_RENOWN_BY_ID, HERO_RENOWN_PERKS, PRESTIGE_MIN_LEVEL, RENOWN_BY_ID, RENOWN_PERKS,
++  ascensionRank, renownCost, renownEffectiveMaxLevel,
+ } from '../data/progression';
+ import { GameState, Hero } from '../types';
+-import { Rng } from '../rng';
+-import { HeroManager } from './HeroManager';
+ 
++/**
++ * Prestige/Retirement Rework (patch 0317). Classic Retire -- level-cap
++ * the hero, wipe them, get Renown + a streak bonus -- is cut entirely.
++ * It read as destroying an asset for a currency, not a reward (direct
++ * playtest feedback), and patch 0179 already had to patch around a
++ * side-effect of pinning it to the level cap, a sign this was overdue
++ * for a rework rather than a fresh problem. See
++ * guild-idler-status.md's patch-0317 entry for the full writeup.
++ *
++ * Early Retirement (below) is now the ONLY way to remove a hero from
++ * the roster -- still reward-free by design, still available at any
++ * level, unchanged from before this patch. Renown income moves
++ * entirely to playing capped heroes through top-tier raids/Replay
++ * Memories instead (see renownForRaidClear/renownForChainReplayClear
++ * in progression.ts, and RaidManager.resolve/QuestManager's chain-
++ * replay resolution for where it's actually granted).
++ */
+ export const PrestigeManager = {
+-  canRetire(hero: Hero): boolean {
+-    return hero.level >= PRESTIGE_MIN_LEVEL && hero.status !== 'questing';
+-  },
+-
+   canEarlyRetire(hero: Hero): boolean {
+     return hero.status !== 'questing';
+   },
+ 
+   /**
+    * Frees up a hero slot immediately, at any level, with no reward at all
+-   * -- no renown, no ascension, no prestige streak credit. A normal Retire
+-   * (below) requires level 30, which is the right gate for the *reward*
+-   * (renown scales off level and quest count, so an under-levelled retire
+-   * genuinely isn't worth much yet) but was also, incidentally, the only
+-   * way to ever get a hero slot back at all. That's a real trap: recruit
+-   * the wrong class, or just decide you don't want that slot filled right
+-   * now, and there was no way out of it short of levelling that specific
+-   * hero all the way to 30 first. Early Retirement exists purely to
+-   * un-stick that -- deliberately worse than waiting for a real Retire
+-   * (nothing gained), but always available. Unlike Retire, which replaces
+-   * the hero in place (same slot, same id, reset to level 1), this
+-   * removes them from the roster outright, actually shrinking
+-   * `state.heroes` so the freed slot can be spent on a different recruit.
++   * -- no renown, no ascension, no prestige streak credit (the streak
++   * system itself is gone as of this patch too). As of patch 0317 this
++   * is the only way to remove a hero from the roster; there is no
++   * "better" alternative sitting next to it anymore. Unlike the old
++   * classic Retire, which replaced the hero in place (same slot, same
++   * id, reset to level 1), this removes them from the roster outright,
++   * actually shrinking `state.heroes` so the freed slot can be spent on
++   * a different recruit.
+    */
+   earlyRetire(state: GameState, hero: Hero): { error: string } | null {
+     if (hero.status === 'questing') return { error: `${hero.name} is out on a quest.` };
+@@ -41,79 +46,14 @@
+     return null;
+   },
+ 
+-  /** Base renown, before any streak bonus. Shown as the "guaranteed" part of the preview. */
+-  renownPreview(hero: Hero): number {
+-    return renownForRetirement(hero.level, hero.questsCompleted);
+-  },
+-
+-  /** What the streak bonus would add right now if this hero retired this instant. */
+-  streakPreview(state: GameState, hero: Hero, now: number): { streak: number; bonusPct: number; total: number } {
+-    const streak = PrestigeManager.projectedStreak(state, now);
+-    const bonusPct = prestigeStreakBonusPct(streak);
+-    const base = PrestigeManager.renownPreview(hero);
+-    return { streak, bonusPct, total: Math.floor(base * (1 + bonusPct / 100)) };
+-  },
+-
+-  /** What the streak WOULD become if a retirement happened right now. */
+-  projectedStreak(state: GameState, now: number): number {
+-    if (state.lastPrestigeAt === null) return 1;
+-    return now - state.lastPrestigeAt <= PRESTIGE_STREAK_WINDOW_MS ? state.prestigeStreak + 1 : 1;
+-  },
+-
+-  /**
+-   * Retiring wipes the hero's level, xp, equipped gear, and every title
+-   * they've earned (titles/activeTitle both reset via HeroManager.create
+-   * below), but keeps everything the guild owns: upgrades, facilities,
+-   * discovered items, and renown perks. Two things persist for this
+-   * specific hero identity across the reset: ascension count (and the
+-   * small permanent stat bonus it grants), and — guild-wide — the
+-   * prestige streak, which rewards retiring again soon rather than
+-   * letting months pass between retirements.
+-   */
+-  retire(state: GameState, hero: Hero, rng: Rng, now: number): { renownGained: number; streak: number; ascension: number } | { error: string } {
+-    if (hero.status === 'questing') return { error: `${hero.name} is out on a quest.` };
+-    if (hero.level < PRESTIGE_MIN_LEVEL) {
+-      return { error: `Heroes retire at level ${PRESTIGE_MIN_LEVEL}. ${hero.name} is level ${hero.level}.` };
+-    }
+-
+-    const streak = PrestigeManager.projectedStreak(state, now);
+-    const bonusPct = prestigeStreakBonusPct(streak);
+-    const baseRenown = PrestigeManager.renownPreview(hero);
+-    const renownGained = Math.floor(baseRenown * (1 + bonusPct / 100));
+-
+-    // Their gear goes back to the guild stash rather than vanishing.
+-    for (const item of Object.values(hero.equipment)) {
+-      if (item) state.stash.push(item);
+-    }
+-
+-    const ascension = hero.ascension + 1;
+-    const replacement = HeroManager.create(hero.heroClass, rng);
+-    replacement.id = hero.id;
+-    replacement.name = hero.name;
+-    replacement.ascension = ascension;
+-    replacement.bonusStats = {
+-      strength: ascension * ASCENSION_STAT_BONUS,
+-      endurance: ascension * ASCENSION_STAT_BONUS,
+-      luck: ascension * ASCENSION_STAT_BONUS,
+-      wisdom: ascension * ASCENSION_STAT_BONUS,
+-    };
+-    const index = state.heroes.findIndex((h) => h.id === hero.id);
+-    state.heroes[index] = replacement;
+-
+-    state.renown += renownGained;
+-    state.stats.prestigeCount += 1;
+-    state.prestigeStreak = streak;
+-    state.lastPrestigeAt = now;
+-    state.stats.bestPrestigeStreak = Math.max(state.stats.bestPrestigeStreak, streak);
+-
+-    return { renownGained, streak, ascension };
+-  },
+-
+-  /** Display label for a hero's ascension rank, or null if not yet ranked. */
++  /** Display label for a hero's ascension rank (from the old classic-
++   *  Retire system, frozen as of patch 0317), or null if never ascended. */
+   rankFor(hero: Hero): string | null {
+     return ascensionRank(hero.ascension);
+   },
+ 
++  /* ------------------------------ guild-wide tree ----------------------------- */
++
+   perkLevel(state: GameState, id: string): number {
+     return state.renownPerks[id] ?? 0;
+   },
+@@ -156,4 +96,55 @@
+   perks() {
+     return RENOWN_PERKS;
+   },
++
++  /* ------------------------------- per-hero tree ------------------------------ */
++
++  /**
++   * New in patch 0317, alongside the guild-wide tree above. Same shape,
++   * scoped to one hero instead of the whole guild -- see
++   * HeroRenownPerkDef's own comment in types.ts for the full reasoning
++   * (single shared Renown currency, no second pool). Gated behind
++   * MAX_HERO_LEVEL (PRESTIGE_MIN_LEVEL, same constant the old classic-
++   * Retire gate used) -- framed as "extra power through endgame" for a
++   * hero who's done leveling, so a mid-level hero can't sink Renown into
++   * a perk they'll outgrow the moment they hit the cap anyway.
++   */
++  heroPerkEligible(hero: Hero): boolean {
++    return hero.level >= PRESTIGE_MIN_LEVEL;
++  },
++
++  heroPerkLevel(hero: Hero, id: string): number {
++    return hero.renownPerks?.[id] ?? 0;
++  },
++
++  nextHeroPerkCost(hero: Hero, id: string): number | null {
++    const def = HERO_RENOWN_BY_ID[id];
++    const level = PrestigeManager.heroPerkLevel(hero, id);
++    if (!def || level >= def.maxLevel) return null;
++    // HeroRenownPerkDef has no tier2/heroSlotsPerLevel, but every field
++    // renownCost actually reads (cost/costGrowth/maxLevel) is present, so
++    // it structurally satisfies RenownPerkDef and reuses the exact same
++    // cost curve (including earlyTierDiscount) the guild-wide tree gets.
++    return renownCost(def, level);
++  },
++
++  buyHeroPerk(state: GameState, hero: Hero, id: string): string | null {
++    const def = HERO_RENOWN_BY_ID[id];
++    if (!def) return 'Unknown perk.';
++    if (!PrestigeManager.heroPerkEligible(hero)) {
++      return `${hero.name} needs to reach level ${PRESTIGE_MIN_LEVEL} first.`;
++    }
++    const level = PrestigeManager.heroPerkLevel(hero, id);
++    if (level >= def.maxLevel) return 'Already at maximum.';
++    const cost = PrestigeManager.nextHeroPerkCost(hero, id);
++    if (cost === null) return 'Already at maximum.';
++    if (state.renown < cost) return 'Not enough Heroic Renown.';
++    state.renown -= cost;
++    hero.renownPerks = { ...(hero.renownPerks ?? {}), [id]: level + 1 };
++    return null;
++  },
++
++  heroPerks() {
++    return HERO_RENOWN_PERKS;
++  },
+ };
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/managers/QuestManager.ts repo/src/game/managers/QuestManager.ts
+--- orig/src/game/managers/QuestManager.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/managers/QuestManager.ts	2026-09-04 11:19:00.788856154 +0000
+@@ -2,7 +2,7 @@
+ import {
+   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
+ } from '../data/quests';
+-import { HERO_CLASSES, questGoldBaseline, questXpBaseline } from '../data/progression';
++import { HERO_CLASSES, questGoldBaseline, questXpBaseline, renownForChainReplayClear } from '../data/progression';
+ import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
+ import { questEggDropChance } from '../data/pets';
+ import { CURIOS, questCurioDropChance } from '../data/curios';
+@@ -620,7 +620,7 @@
+       // replay difficulty tag stays attached to `name` (still a compact,
+       // glanceable "what am I looking at" label), the stage name moves to
+       // `stageName`.
+-      name: `${chain.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : 'Legendary'}]` : ' [Replay]'}`,
++      name: `${chain.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : difficulty === 'mythic' ? 'Mythic' : 'Legendary'}]` : ' [Replay]'}`,
+       stageName: stageDef.name,
+       flavour: stageDef.flavour,
+       difficulty: stageDef.difficulty,
+@@ -1444,7 +1444,7 @@
+               const dedicatedDef = EQUIPMENT_BY_ID[dedicatedId];
+               const item = EquipmentManager.instantiate(dedicatedId, {
+                 itemLevel: chain.reqLevel,
+-                sourceTag: difficulty === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary',
++                sourceTag: difficulty === 'heroic' ? 'chainReplayHeroic' : difficulty === 'mythic' ? 'chainReplayMythic' : 'chainReplayLegendary',
+                 rng, heroLevel: hero?.level,
+               });
+               if (item && dedicatedDef) {
+@@ -1464,6 +1464,12 @@
+           if (!recorded.includes(difficulty)) {
+             state.chainReplayCompletions[chainId] = [...recorded, difficulty];
+           }
++          // Prestige/Retirement Rework (patch 0317) -- a completed Mythic
++          // or Legendary replay now pays Renown directly, same "repeats
++          // every clear, not just the first" shape as RaidManager's own
++          // renownForRaidClear hookup. Normal/Heroic stay gold-only.
++          const renownGained = renownForChainReplayClear(difficulty);
++          if (renownGained > 0) state.renown += renownGained;
+         } else {
+           activeReplay.stage = nextStage;
+         }
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/managers/RaidManager.ts repo/src/game/managers/RaidManager.ts
+--- orig/src/game/managers/RaidManager.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/managers/RaidManager.ts	2026-09-04 11:16:44.079059907 +0000
+@@ -2,6 +2,7 @@
+   ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
+ } from '../types';
+ import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
++import { renownForRaidClear } from '../data/progression';
+ import { Tuning } from '../data/tuning';
+ import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
+ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+@@ -257,8 +258,17 @@
+     if (difficulty === 'heroic' && !ModifierManager.hasUnlock(state, 'raidsHeroic')) {
+       return { ok: false, error: 'Heroic Clearance is required to raid at this difficulty.' };
+     }
+-    if (difficulty === 'legendary' && !ModifierManager.hasUnlock(state, 'raidsLegendary')) {
+-      return { ok: false, error: 'Legendary Clearance is required to raid at this difficulty.' };
++    if (difficulty === 'mythic' && !ModifierManager.hasUnlock(state, 'raidsMythic')) {
++      return { ok: false, error: 'Mythic Clearance is required to raid at this difficulty.' };
++    }
++    // Legendary (patch 0317's new top tier) deliberately has no Clearance
++    // purchase of its own -- it auto-unlocks the moment Mythic has been
++    // full-cleared once, anywhere (state.completedRaidDifficulties is the
++    // existing "any raid, any difficulty" global flag -- see its own
++    // comment in types.ts). Confirmed design decision, not a placeholder
++    // for a future Clearance upgrade.
++    if (difficulty === 'legendary' && !state.completedRaidDifficulties.includes('mythic')) {
++      return { ok: false, error: 'Clear a raid at Mythic difficulty first to unlock Legendary.' };
+     }
+ 
+     const cfg = RAID_DIFFICULTIES[difficulty];
+@@ -339,10 +349,19 @@
+     // shared by both the wear formula below and the injury roll further
+     // down (was previously computed fresh, inline, just for injury;
+     // hoisted here in patch 0284 so applyWear can reuse the exact same
+-    // mapping rather than duplicating the ternary). Raid legendary (was
+-    // 'mythic' pre-0166) maps to quest legendary, the toughest of both
+-    // ladders, same relative mapping as before the rename.
+-    const questDifficulty = active.difficulty === 'legendary' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
++    // mapping rather than duplicating the ternary).
++    //
++    // Patch 0317: Mythic and the new top Legendary raid tier both map to
++    // quest 'legendary' -- the quest-tier Difficulty ladder (Easy/Normal/
++    // Hard/Epic/Legendary) has no rung above 'legendary' to give
++    // Legendary its own harsher wear/injury bucket, so it's clamped at
++    // the same ceiling Mythic already used pre-0317 (when Mythic was
++    // still this game's top raid tier, called 'legendary' internally).
++    // A dedicated 6th Difficulty rung for wear/injury specifically is a
++    // reasonable follow-up if Legendary's wear/injury feel needs to
++    // diverge from Mythic's -- not done here, first-pass scope.
++    const questDifficulty = (active.difficulty === 'legendary' || active.difficulty === 'mythic') ? 'legendary'
++      : active.difficulty === 'heroic' ? 'epic' : 'hard';
+     // Read once, reused by both the wear formula in the encounter loop
+     // below and the injury resist calc further down -- same "computed
+     // once, not re-derived per encounter" convention roleMismatched/
+@@ -409,12 +428,14 @@
+         // PROCEDURAL raid drop's budget still uses, unchanged; a
+         // hand-authored Set piece ignores it in favor of `heroLevel`
+         // (patch 0258, see EquipmentManager.instantiate's own comment) --
+-        // sourceTag maps Heroic/Legendary to their own budget multiplier
+-        // + bracketed tag either way; Normal raid drops get neither
+-        // (same as an ordinary Easy/Normal quest drop, and a Normal
+-        // Set-piece drop stays at its own unscaled authored numbers).
++        // sourceTag maps Heroic/Mythic/Legendary to their own budget
++        // multiplier + bracketed tag either way; Normal raid drops get
++        // neither (same as an ordinary Easy/Normal quest drop, and a
++        // Normal Set-piece drop stays at its own unscaled authored
++        // numbers).
+         const raidSourceTag = active.difficulty === 'heroic' ? 'raidHeroic'
+-          : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
++          : active.difficulty === 'mythic' ? 'raidMythic'
++            : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
+         const item = EquipmentManager.instantiate(parsed.defId, {
+           itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng, heroLevel: partyLevel,
+         });
+@@ -481,6 +502,18 @@
+     state.gold = Math.min(storage, state.gold + gold);
+     state.stats.goldBySource.raids += gold;
+ 
++    // Prestige/Retirement Rework (patch 0317) -- Mythic/Legendary clears
++    // now pay Renown directly, replacing classic hero Retirement as the
++    // income source. Gated on fullClear (a partial clear earns nothing,
++    // same as every other raid reward here) but NOT on completedRaidDifficulties
++    // -- unlike the title/completedRaids "first time only" grants above,
++    // this is meant to be repeatable every clear, the actual endgame
++    // grind loop the rework is built around.
++    if (fullClear) {
++      const renownGained = renownForRaidClear(active.difficulty);
++      if (renownGained > 0) state.renown += renownGained;
++    }
++
+     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
+       state.completedRaids.push(raid.id);
+     }
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/game/types.ts repo/src/game/types.ts
+--- orig/src/game/types.ts	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/game/types.ts	2026-09-04 10:43:09.422631761 +0000
+@@ -648,11 +648,27 @@
+    */
+   unlockedRoles?: Role[];
+   /**
+-   * Times this specific hero identity has been retired. Persists and grows
+-   * across retirements (unlike title, which is cleared), and grants a small
+-   * permanent stat bonus via bonusStats — see PrestigeManager.retire.
++   * Times this specific hero identity was retired under the OLD classic-
++   * Retire flow, before patch 0317 cut it. Frozen at whatever value it
++   * held when this patch landed -- Early Retirement (the sole remaining
++   * removal path as of 0317) never increments this, since it grants no
++   * reward at all. Kept rather than removed: existing bonusStats/rank
++   * display for already-ascended heroes should keep working exactly as
++   * before, there's just no way to earn more of it going forward.
+    */
+   ascension: number;
++  /**
++   * Levels bought in the per-hero Renown perk tree (HERO_RENOWN_PERKS,
++   * progression.ts) -- patch 0317. Keyed by perk id, same shape
++   * GameState.renownPerks uses for the guild-wide tree, just scoped to
++   * this specific hero instead. Optional/undefined for any hero who
++   * hasn't bought one yet, same defensive-optional convention as
++   * `role`/`unlockedRoles` above -- PrestigeManager.heroPerkLevel is the
++   * one place the "fall back to 0" default should be applied. No save
++   * migration needed for existing heroes; an absent field already reads
++   * as "no levels bought."
++   */
++  renownPerks?: Record<string, number>;
+   /** How many quests this hero has auto-chained in the current streak. */
+   autoChainCount: number;
+   /**
+@@ -1096,7 +1112,16 @@
+  * rewardMultiplier), and keeping the type distinct means a future change
+  * to one can't silently type-check against the other by accident.
+  */
+-export type ChainReplayDifficulty = 'normal' | 'heroic' | 'legendary';
++/**
++ * Patch 0317 -- inserted 'mythic' between 'heroic' and 'legendary'. The
++ * existing 'legendary' tier keeps its name and stays the top rung; it
++ * just now sits one rung higher on a longer ladder, matching the same
++ * four-name vocabulary (Normal/Heroic/Mythic/Legendary) RaidDifficulty
++ * uses. Mythic and Legendary both pay Renown on a clear (Legendary
++ * faster); Normal/Heroic stay gold-only, unchanged. See
++ * renownForChainReplayClear in progression.ts.
++ */
++export type ChainReplayDifficulty = 'normal' | 'heroic' | 'mythic' | 'legendary';
+ 
+ export interface ChainReplayDifficultyConfig {
+   difficulty: ChainReplayDifficulty;
+@@ -1204,7 +1229,18 @@
+ 
+ /* -------------------------------- raids -------------------------------- */
+ 
+-export type RaidDifficulty = 'normal' | 'heroic' | 'legendary';
++/**
++ * Patch 0317 -- what used to be this game's top raid tier is renamed
++ * 'mythic' (it was already internally 'legendary' since patch 0166; see
++ * that patch's comment on RAID_DIFFICULTY_LABEL below -- this is a
++ * second rename, not a reversal of that one), and a genuinely new,
++ * harsher 'legendary' tier is added above it. Same shared four-tier
++ * vocabulary ChainReplayDifficulty now uses. No back-compat handling for
++ * old save data that has 'legendary' recorded where 'mythic' is now
++ * meant (completedRaidDifficulties, raidClearsByDifficulty) -- all
++ * current players are testers, confirmed acceptable to skip migration.
++ */
++export type RaidDifficulty = 'normal' | 'heroic' | 'mythic' | 'legendary';
+ 
+ export interface RaidEncounterDef {
+   id: string;
+@@ -1231,6 +1267,13 @@
+    * before this existed. See lootForDifficulty in raids.ts.
+    */
+   lootHeroic?: string[];
++  /** Renamed from lootLegendary in patch 0317, alongside the mythic/
++   *  legendary raid-tier rename -- same field, same fallback-to-`loot`
++   *  behaviour, just tracking the tier that's now called Mythic. */
++  lootMythic?: string[];
++  /** New in patch 0317, for the new top Legendary tier. Falls back to
++   *  `loot` the same way lootHeroic/lootMythic do until an encounter
++   *  defines its own list -- see lootForDifficulty in raids.ts. */
+   lootLegendary?: string[];
+   /**
+    * "<rarity>[:<dedicatedPetId>]@chance" strings -- same reused-string-list
+@@ -1252,6 +1295,9 @@
+    */
+   eggLoot?: string[];
+   eggLootHeroic?: string[];
++  /** Renamed from eggLootLegendary in patch 0317 -- see lootMythic above. */
++  eggLootMythic?: string[];
++  /** New in patch 0317, for the new top Legendary tier. */
+   eggLootLegendary?: string[];
+   /**
+    * Authored, not rolled -- raid encounters are a small curated list
+@@ -1566,7 +1612,10 @@
+   costGrowth: number;
+   maxLevel: number;
+   modsPerLevel: Partial<Modifiers>;
+-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training' | 'autoChainTactics';
++  // 'raidsLegendary' renamed to 'raidsMythic' in patch 0317 -- it gates
++  // the raid tier now called Mythic; the new top Legendary tier auto-
++  // unlocks once Mythic is cleared instead of needing its own purchase.
++  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics';
+   /**
+    * Which vendor offers this upgrade. Undefined means it's a general guild
+    * upgrade with no vendor attached (unlocks like Guild Charter or Black
+@@ -1743,6 +1792,34 @@
+   tier2?: RenownPerkTier2;
+ }
+ 
++/**
++ * Patch 0317 -- a new, second Renown-spending tree alongside RENOWN_PERKS
++ * above. Deliberately NOT a replacement: RENOWN_PERKS stays guild-wide
++ * (every hero benefits); this tree is bought per capped hero, on that
++ * hero's own permanent power, and lives on the hero itself
++ * (Hero.renownPerks) rather than in GameState the way guild perks do.
++ * Both trees draw from the same single `state.renown` pool -- no second
++ * currency -- so every point of Renown income is a real choice between
++ * "guild-wide" and "this specific hero." Simpler shape than
++ * RenownPerkDef on purpose: single tier, no tier2, no heroSlotsPerLevel
++ * (that concept doesn't make sense scoped to one hero). Content
++ * (HERO_RENOWN_PERKS in progression.ts) is a placeholder as of this
++ * patch -- see that file's own comment; the real per-hero effects list
++ * is still being designed and will land as a follow-up patch on top of
++ * this mechanism.
++ */
++export interface HeroRenownPerkDef {
++  id: string;
++  name: string;
++  description: string;
++  cost: number;
++  costGrowth: number;
++  maxLevel: number;
++  /** Applied only to the hero that bought it -- see HeroManager.heroMods
++   *  folding in ModifierManager.heroRenownMods for the read side. */
++  modsPerLevel: Partial<Modifiers>;
++}
++
+ export interface ShopStock {
+   refreshedAt: number;
+   consumables: { defId: string; stock: number }[];
+@@ -2146,9 +2223,14 @@
+    * Null falls back to heroes[0].
+    */
+   focusedHeroId: string | null;
+-  /** Consecutive retirements performed within the streak window of each other. */
++  /**
++   * Dead as of patch 0317 -- classic Retire (the only thing that ever
++   * grew these) is cut, and there's no more streak-bonus-on-retire
++   * system for them to feed. Kept on GameState rather than removed, so
++   * an existing save's already-earned streak value doesn't need a
++   * migration; nothing writes to either field anymore.
++   */
+   prestigeStreak: number;
+-  /** Epoch ms of the last retirement, or null if none yet. */
+   lastPrestigeAt: number | null;
+   /** Achievement id -> epoch ms when it unlocked. */
+   unlockedAchievements: Record<string, number>;
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/HeroBlock.tsx repo/src/ui/HeroBlock.tsx
+--- orig/src/ui/HeroBlock.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/HeroBlock.tsx	2026-09-04 11:31:27.697238898 +0000
+@@ -195,14 +195,27 @@
+             <div><span>Quests won</span><b>{hero.questsSucceeded} / {hero.questsCompleted}</b></div>
+             <div><span>Lifetime gold</span><b>{formatGold(hero.goldEarnedLifetime)}</b></div>
+             <div><span>Lifetime xp</span><b>{formatNumber(hero.xpEarnedLifetime)}</b></div>
+-            {/* Renown-from-retirement preview (patch 0295) -- reuses the
+-                exact same PrestigeManager call PrestigePanel's own retire
+-                list already uses, just surfaced here too so a player
+-                doesn't have to leave the Heroes tab to check whether a
+-                hero's worth retiring yet. Shown regardless of eligibility
+-                (same as PrestigePanel), since watching it grow while
+-                under-level is itself part of the motivation. */}
+-            <div><span>Retire for</span><b className="gold-text">✦ {formatNumber(PrestigeManager.streakPreview(state, hero, now).total)}</b></div>
++            {/* Per-hero Renown perk levels (patch 0317) -- replaces the
++                old "Retire for" renown-preview row, which read off
++                PrestigeManager.streakPreview/renownForRetirement, both
++                gone now that classic Retire is cut. Renown no longer has
++                a per-hero "would grant" preview at all (it comes from
++                raid/Replay Memories clears, not from a hero-level
++                formula); this instead surfaces how much this specific
++                hero has invested in the new per-hero tree, so a player
++                can tell at a glance which capped heroes still have room
++                to spend into. Only shown once the hero is actually
++                eligible to buy in (PrestigeManager.heroPerkEligible) --
++                showing "0 levels" for every under-level hero would just
++                be noise. */}
++            {PrestigeManager.heroPerkEligible(hero) && (
++              <div>
++                <span>Renown perks</span>
++                <b className="gold-text">
++                  {PrestigeManager.heroPerks().reduce((sum, def) => sum + PrestigeManager.heroPerkLevel(hero, def.id), 0)} levels
++                </b>
++              </div>
++            )}
+           </div>
+         </div>
+ 
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/OfflineReportModal.tsx repo/src/ui/OfflineReportModal.tsx
+--- orig/src/ui/OfflineReportModal.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/OfflineReportModal.tsx	2026-09-04 11:18:16.900888866 +0000
+@@ -14,7 +14,7 @@
+  *  already duplicates its own small particle arrays rather than importing
+  *  them from QuestResultModal. */
+ const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
+-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
++  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic, legendary: RARITY_COLOR.legendary,
+ };
+ 
+ const COIN_PARTICLES = [
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/panels/DiscoveredQuestsPanel.tsx repo/src/ui/panels/DiscoveredQuestsPanel.tsx
+--- orig/src/ui/panels/DiscoveredQuestsPanel.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/panels/DiscoveredQuestsPanel.tsx	2026-09-04 11:18:47.645783222 +0000
+@@ -20,20 +20,21 @@
+ } from '../../game/util';
+ import { Tuning } from '../../game/data/tuning';
+ 
+-const REPLAY_DIFFICULTY_ORDER: ChainReplayDifficulty[] = ['normal', 'heroic', 'legendary'];
+-const REPLAY_DIFFICULTY_LABEL: Record<ChainReplayDifficulty, string> = { normal: 'N', heroic: 'H', legendary: 'L' };
+-const REPLAY_DIFFICULTY_NAME: Record<ChainReplayDifficulty, string> = { normal: 'Normal', heroic: 'Heroic', legendary: 'Legendary' };
++const REPLAY_DIFFICULTY_ORDER: ChainReplayDifficulty[] = ['normal', 'heroic', 'mythic', 'legendary'];
++const REPLAY_DIFFICULTY_LABEL: Record<ChainReplayDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M', legendary: 'L' };
++const REPLAY_DIFFICULTY_NAME: Record<ChainReplayDifficulty, string> = { normal: 'Normal', heroic: 'Heroic', mythic: 'Mythic', legendary: 'Legendary' };
+ const REPLAY_DIFFICULTY_COLOR: Record<ChainReplayDifficulty, string> = {
+-  normal: 'var(--parchment)', heroic: 'var(--brass)', legendary: 'var(--violet)',
++  normal: 'var(--parchment)', heroic: 'var(--brass)', mythic: 'var(--crimson, #a83232)', legendary: 'var(--violet)',
+ };
+ /** Same graceful icon-with-text-fallback shape RAID_DIFFICULTY_ICON already
+  *  uses (see RaidsPanel's own DifficultyCircle) -- dedicated icon assets
+- *  for these three are still to come; until they land in
+- *  public/chain-replay-icons/, every circle just shows its N/H/L letter,
++ *  for these four are still to come; until they land in
++ *  public/chain-replay-icons/, every circle just shows its N/H/M/L letter,
+  *  same as a raid difficulty circle would before its own icon loaded. */
+ const REPLAY_DIFFICULTY_ICON: Record<ChainReplayDifficulty, string> = {
+   normal: './chain-replay-icons/normal.png',
+   heroic: './chain-replay-icons/heroic.png',
++  mythic: './chain-replay-icons/mythic.png',
+   legendary: './chain-replay-icons/legendary.png',
+ };
+ 
+@@ -521,7 +522,7 @@
+             <div className="row spread" style={{ alignItems: 'center', margin: '4px 0' }}>
+               <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+                 <span className="tiny muted">Cleared at:</span>
+-                {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
++                {(['normal', 'heroic', 'mythic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
+                   <button
+                     key={d}
+                     className="btn-ghost tiny"
+@@ -567,7 +568,7 @@
+               <div className="row spread" style={{ alignItems: 'center', marginTop: 8, gap: 6 }}>
+                 <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+                   <span className="tiny muted">Auto-Pilot:</span>
+-                  {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
++                  {(['normal', 'heroic', 'mythic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
+                     <button
+                       key={d}
+                       className="btn-ghost tiny"
+@@ -783,9 +784,9 @@
+                 </span>
+                 <span className="tiny muted">Already claimed, guaranteed once</span>
+               </div>
+-              {(['heroic', 'legendary'] as const).map((d) => {
++              {(['heroic', 'mythic', 'legendary'] as const).map((d) => {
+                 const diffCfg = CHAIN_REPLAY_DIFFICULTIES[d];
+-                const scaled = scaleDedicatedItem(dedicatedDef, hero.level, d === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary');
++                const scaled = scaleDedicatedItem(dedicatedDef, hero.level, d === 'heroic' ? 'chainReplayHeroic' : d === 'mythic' ? 'chainReplayMythic' : 'chainReplayLegendary');
+                 const modLines = describeMods(scaled.mods);
+                 const statLines = describeStats(scaled.rolledStats, true);
+                 return (
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/panels/GuildPanel.tsx repo/src/ui/panels/GuildPanel.tsx
+--- orig/src/ui/panels/GuildPanel.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/panels/GuildPanel.tsx	2026-09-04 11:17:55.264001812 +0000
+@@ -120,7 +120,7 @@
+     ...(def.unlocks === 'blackMarket' ? [{ text: 'Unlocks the Black Market', gold: true }] : []),
+     ...(def.unlocks === 'raids' ? [{ text: 'Unlocks Normal-difficulty raids', gold: true }] : []),
+     ...(def.unlocks === 'raidsHeroic' ? [{ text: 'Unlocks Heroic raid difficulty', gold: true }] : []),
+-    ...(def.unlocks === 'raidsLegendary' ? [{ text: 'Unlocks Legendary raid difficulty', gold: true }] : []),
++    ...(def.unlocks === 'raidsMythic' ? [{ text: 'Unlocks Mythic raid difficulty', gold: true }] : []),
+     ...(def.unlocks === 'training' ? [{ text: 'Unlocks the Training sub-tab under Heroes -- reassign any hero\'s role', gold: true }] : []),
+     ...(def.unlocks === 'autoChain' && level > 0
+       ? [{ text: `Currently chains ${chainRangeText(level)} quests per streak`, gold: true }] : []),
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/panels/HeroesPanel.tsx repo/src/ui/panels/HeroesPanel.tsx
+--- orig/src/ui/panels/HeroesPanel.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/panels/HeroesPanel.tsx	2026-09-04 11:31:37.078999094 +0000
+@@ -285,9 +285,9 @@
+       {state.heroes.length >= slots && (
+         <>
+           <p className="small muted">
+-            No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
+-            level {PRESTIGE_MIN_LEVEL}+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
+-            (up to 4 more). {slots} is not necessarily your ceiling.
++            No free slots. The Tavern adds one per level up to 5; beyond that, earn Heroic Renown by
++            clearing raids or Replay Memories at Mythic or Legendary with a capped ({PRESTIGE_MIN_LEVEL}+)
++            hero, then spend it on Extra Banner (up to 4 more). {slots} is not necessarily your ceiling.
+           </p>
+           {/* Two possible paths named in the prose above, so two links --
+               same "jump to and highlight the requirement" treatment every
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/panels/PrestigePanel.tsx repo/src/ui/panels/PrestigePanel.tsx
+--- orig/src/ui/panels/PrestigePanel.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/panels/PrestigePanel.tsx	2026-09-04 11:20:41.484862140 +0000
+@@ -3,28 +3,29 @@
+ import { useSettings } from '../useSettings';
+ import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel } from '../../game/data/progression';
+-import { describeMods, formatDuration, formatNumber } from '../../game/util';
++import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
++import { describeMods, formatNumber } from '../../game/util';
+ import { usePulsesOnChange } from '../maxFlash';
+ import { Hero } from '../../game/types';
+ import { backgroundSrc } from '../../game/settings';
+ 
+ /**
+- * Replaces the native browser confirm() previously used for both Retire
+- * and Early Retire -- a plain OS dialog box read as visually broken next
+- * to everything else in this game having its own themed chrome ("card is
+- * unstyled" was the actual feedback). Same .overlay/.modal shape every
+- * other in-game confirmation/detail popup already uses (PeddlerCard's
+- * detail overlay, the Vendors shop item modals). `tone` picks which
+- * button color signals the stakes: 'primary' (pink, patch 0297 -- direct
+- * request for Retire to get its own colour) for the real Retire, which is
+- * a genuine reward; 'ghost' (plain) for Early Retire, which gives up the
+- * renown/streak entirely and shouldn't look inviting.
++ * Replaces the native browser confirm() previously used for Retire and
++ * Early Retire both -- a plain OS dialog box read as visually broken
++ * next to everything else in this game having its own themed chrome
++ * ("card is unstyled" was the actual feedback). Same .overlay/.modal
++ * shape every other in-game confirmation/detail popup already uses
++ * (PeddlerCard's detail overlay, the Vendors shop item modals).
++ *
++ * Patch 0317 (Prestige/Retirement Rework): classic Retire is gone, so
++ * this only ever confirms Early Retirement now -- kept as its own
++ * component rather than inlined, since a future second confirm-needing
++ * action (should one ever exist here again) can reuse it.
+  */
+ function RetireConfirmModal({
+-  title, body, confirmLabel, tone, onConfirm, onCancel,
++  title, body, confirmLabel, onConfirm, onCancel,
+ }: {
+-  title: string; body: string; confirmLabel: string; tone: 'primary' | 'ghost';
++  title: string; body: string; confirmLabel: string;
+   onConfirm: () => void; onCancel: () => void;
+ }) {
+   return (
+@@ -34,7 +35,7 @@
+         <p className="small muted">{body}</p>
+         <div className="row end" style={{ gap: 8, marginTop: 12 }}>
+           <button onClick={onCancel}>Cancel</button>
+-          <button className={tone === 'primary' ? 'btn-pink' : 'btn-ghost'} onClick={onConfirm}>
++          <button className="btn-ghost" onClick={onConfirm}>
+             {confirmLabel}
+           </button>
+         </div>
+@@ -43,35 +44,28 @@
+   );
+ }
+ 
+-/** One hero's retire row -- owns its own confirm-modal visibility (which
+- *  of Retire/Early Retire, if either, is currently confirming) rather
+- *  than PrestigePanel tracking that per-hero itself. */
++/**
++ * One hero's row -- Early Retirement is the only removal path as of
++ * patch 0317 (classic Retire, and this card's old renown-preview/streak
++ * math, are both gone -- see guild-idler-status.md's patch-0317 entry).
++ * A hero's ascension rank (from the OLD system, frozen at whatever it
++ * held when this patch landed) still displays, since it's still real,
++ * earned history -- there's just no way to earn more of it now.
++ */
+ function HeroRetireCard({
+-  hero, state, now, confirmRetire, justRetired, onRetire, onEarlyRetire,
++  hero, confirmRetire, onEarlyRetire,
+ }: {
+   hero: Hero;
+-  state: Parameters<typeof PrestigeManager.streakPreview>[0];
+-  now: number;
+   confirmRetire: boolean;
+-  justRetired: { heroId: string; amount: number; key: number } | null;
+-  onRetire: (heroId: string, amount: number) => void;
+   onEarlyRetire: (heroId: string) => void;
+ }) {
+-  const [confirming, setConfirming] = useState<'retire' | 'early' | null>(null);
+-  const eligible = PrestigeManager.canRetire(hero);
+-  const preview = PrestigeManager.streakPreview(state, hero, now);
++  const [confirming, setConfirming] = useState(false);
+   const rank = PrestigeManager.rankFor(hero);
+ 
+-  const doRetire = () => { setConfirming(null); onRetire(hero.id, preview.total); };
+-  const doEarlyRetire = () => { setConfirming(null); onEarlyRetire(hero.id); };
++  const doEarlyRetire = () => { setConfirming(false); onEarlyRetire(hero.id); };
+ 
+   return (
+-    <div className="spread card" style={{ position: 'relative' }}>
+-      {justRetired?.heroId === hero.id && (
+-        <span key={justRetired.key} className="retire-burst" aria-hidden="true">
+-          +{justRetired.amount} ✦
+-        </span>
+-      )}
++    <div className="spread card">
+       <div>
+         <div className="card-title">
+           {rank && <span className="hero-rank-badge">{rank}</span>}
+@@ -79,48 +73,27 @@
+           {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
+         </div>
+         <div className="tiny muted">
+-          Level {hero.level} · {hero.questsCompleted} quests · would grant{' '}
+-          <b className="gold-text">✦ {formatNumber(preview.total)}</b>
+-          {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
++          Level {hero.level} · {hero.questsCompleted} quests
+         </div>
+       </div>
+       <div className="row" style={{ gap: 6 }}>
+-        <button
+-          className="btn-pink"
+-          disabled={!eligible}
+-          onClick={() => { if (confirmRetire) setConfirming('retire'); else doRetire(); }}
+-        >
+-          {eligible ? 'Retire' : `Needs level ${PRESTIGE_MIN_LEVEL}`}
+-        </button>
+-        {/* Only offered before a hero actually qualifies for a real
+-            Retire -- once eligible, early retirement is strictly
+-            worse (same freed slot, nothing gained), so there's
+-            nothing left for this to usefully offer. */}
+-        {!eligible && PrestigeManager.canEarlyRetire(hero) && (
+-          <button className="btn-ghost" onClick={() => setConfirming('early')}>
++        {PrestigeManager.canEarlyRetire(hero) && (
++          <button
++            className="btn-ghost"
++            onClick={() => { if (confirmRetire) setConfirming(true); else doEarlyRetire(); }}
++          >
+             Early Retire
+           </button>
+         )}
+       </div>
+ 
+-      {confirming === 'retire' && (
+-        <RetireConfirmModal
+-          title={`Retire ${hero.name}?`}
+-          body={`They return to level 1 and the guild gains ${formatNumber(preview.total)} renown. This can't be undone.`}
+-          confirmLabel="Retire"
+-          tone="primary"
+-          onConfirm={doRetire}
+-          onCancel={() => setConfirming(null)}
+-        />
+-      )}
+-      {confirming === 'early' && (
++      {confirming && (
+         <RetireConfirmModal
+           title={`Early-retire ${hero.name}?`}
+-          body={`No renown, no bonus -- this just frees the slot right now instead of waiting for level ${PRESTIGE_MIN_LEVEL}.`}
++          body="No renown, no bonus -- this just frees the slot right now. This can't be undone."
+           confirmLabel="Early Retire"
+-          tone="ghost"
+           onConfirm={doEarlyRetire}
+-          onCancel={() => setConfirming(null)}
++          onCancel={() => setConfirming(false)}
+         />
+       )}
+     </div>
+@@ -181,21 +154,62 @@
+   );
+ }
+ 
++/**
++ * New in patch 0317 -- one capped hero's row in the per-hero Renown perk
++ * tree (HERO_RENOWN_PERKS, progression.ts). Deliberately a flatter, less
++ * ornamented card than RenownPerkCard above: this tree's real content is
++ * still being designed (see HERO_RENOWN_PERKS' own comment), so the
++ * layout here favors "obviously functional" over "obviously finished."
++ */
++function HeroPerkRow({ hero, onBuy }: { hero: Hero; onBuy: (heroId: string, perkId: string) => void }) {
++  const engine = useEngine();
++  const state = engine.state;
++  const eligible = PrestigeManager.heroPerkEligible(hero);
++  return (
++    <div className="card">
++      <div className="spread">
++        <span className="card-title">{hero.name}</span>
++        <span className="tiny muted">Level {hero.level}</span>
++      </div>
++      {!eligible ? (
++        <p className="small muted" style={{ margin: '6px 0 0' }}>
++          Needs level {PRESTIGE_MIN_LEVEL} before spending Renown here.
++        </p>
++      ) : (
++        <div className="stat-row" style={{ marginTop: 6, flexWrap: 'wrap', gap: 8 }}>
++          {PrestigeManager.heroPerks().map((def) => {
++            const level = PrestigeManager.heroPerkLevel(hero, def.id);
++            const cost = PrestigeManager.nextHeroPerkCost(hero, def.id);
++            const maxed = cost === null;
++            const affordable = !maxed && state.renown >= cost;
++            return (
++              <div key={def.id} className="row spread" style={{ width: '100%', alignItems: 'center' }}>
++                <span className="tiny">
++                  {def.name} ({level}/{def.maxLevel})
++                  {describeMods(def.modsPerLevel).map((line) => ` · ${line}/level`).join('')}
++                </span>
++                <button
++                  className="btn-yellow"
++                  disabled={maxed || !affordable}
++                  onClick={() => onBuy(hero.id, def.id)}
++                >
++                  {maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
++                </button>
++              </div>
++            );
++          })}
++        </div>
++      )}
++    </div>
++  );
++}
++
+ export function PrestigePanel() {
+   const engine = useEngine();
+   const { settings } = useSettings();
+-  const now = useNow();
++  useNow();
+   const state = engine.state;
+ 
+-  // Retirement has no dedicated overlay -- a brief inline burst on the
+-  // specific hero's card instead, matching the reward-burst treatment
+-  // elsewhere but sized for a card rather than a modal. Amount is captured
+-  // at click time rather than read back afterward, since engine.retire()
+-  // immediately resets the hero to level 1 -- by the time this re-renders,
+-  // `preview.total` for that hero id would already be recomputed against
+-  // the now-reset hero and show the wrong (tiny) number.
+-  const [justRetired, setJustRetired] = useState<{ heroId: string; amount: number; key: number } | null>(null);
+-
+   // "Jump to and highlight the requirement" landing -- same consume-once
+   // shape GuildPanel's own highlightId already uses (patch 0179), reused
+   // here so a locked-purchase link elsewhere in the game (e.g. HeroesPanel's
+@@ -216,20 +230,21 @@
+     PrestigeManager.perks().map((def) => ({ id: def.id, value: PrestigeManager.perkLevel(state, def.id) })),
+   );
+ 
+-  const streakActive = state.lastPrestigeAt !== null
+-    && now - state.lastPrestigeAt <= PRESTIGE_STREAK_WINDOW_MS;
+-  const streakExpiresIn = state.lastPrestigeAt !== null
+-    ? PRESTIGE_STREAK_WINDOW_MS - (now - state.lastPrestigeAt)
+-    : 0;
+-
+   return (
+     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/prestige.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+       <h2>Prestige</h2>
++      {/*
++        Prestige/Retirement Rework (patch 0317). Classic Retire is gone --
++        Early Retirement is the only way to remove a hero from the
++        roster now, and it stays reward-free by design. Renown comes
++        from playing capped heroes through Mythic/Legendary raids and
++        Replay Memories instead -- see the Raids and Replay Memories tabs.
++      */}
+       <p className="subtitle">
+-        Retire a hero at level {PRESTIGE_MIN_LEVEL} or above. They hand in their level, XP, and gear;
+-        the guild keeps everything else, and gains Heroic Renown. Not there yet? Early Retirement frees
+-        the slot immediately instead, with no renown or bonus attached.
++        Early Retirement frees a hero's slot immediately, at any level -- no renown, no bonus attached.
++        Heroic Renown itself comes from clearing raids and Replay Memories at Mythic or Legendary difficulty
++        with your capped ({PRESTIGE_MIN_LEVEL}+) heroes.
+       </p>
+ 
+       <div className="card">
+@@ -242,44 +257,17 @@
+         </div>
+       </div>
+ 
+-      <div className="card">
+-        <div className="spread">
+-          <span className="card-title">Prestige Streak</span>
+-          <b style={{ color: streakActive ? 'var(--brass)' : 'var(--muted)' }}>
+-            {streakActive ? `×${state.prestigeStreak}` : 'inactive'}
+-          </b>
+-        </div>
+-        <p className="small muted" style={{ margin: '6px 0 0' }}>
+-          {streakActive
+-            ? `Retiring again within ${formatDuration(streakExpiresIn)} keeps it going and pushes the bonus higher. Let it lapse and the next retirement starts a fresh streak.`
+-            : state.stats.prestigeCount === 0
+-              ? 'Your first retirement starts a streak. Keep retiring within three days of the last one to build a renown bonus, up to +50%.'
+-              : 'The streak lapsed. Your next retirement starts a new one from scratch.'}
+-        </p>
+-        {state.stats.bestPrestigeStreak > 0 && (
+-          <p className="tiny muted" style={{ margin: '4px 0 0' }}>Best streak so far: ×{state.stats.bestPrestigeStreak}</p>
+-        )}
+-      </div>
+-
+-      <div className="section-heading">Retire a hero</div>
++      <div className="section-heading">Remove a hero</div>
+       {state.heroes.map((hero) => (
+         <HeroRetireCard
+           key={hero.id}
+           hero={hero}
+-          state={state}
+-          now={now}
+           confirmRetire={settings.confirmRetire}
+-          justRetired={justRetired}
+-          onRetire={(heroId, amount) => {
+-            setJustRetired({ heroId, amount, key: Date.now() });
+-            window.setTimeout(() => setJustRetired(null), 2200);
+-            engine.retire(heroId);
+-          }}
+           onEarlyRetire={(heroId) => engine.earlyRetire(heroId)}
+         />
+       ))}
+ 
+-      <div className="section-heading">Spend renown</div>
++      <div className="section-heading">Spend renown -- guild-wide</div>
+       <div className="grid two">
+         {PrestigeManager.perks().map((def) => {
+           const level = PrestigeManager.perkLevel(state, def.id);
+@@ -308,6 +296,25 @@
+           );
+         })}
+       </div>
++
++      {/*
++        New in patch 0317 -- see HeroPerkRow's own comment. Only shown at
++        all once at least one hero exists, same "nothing to show yet"
++        guard the rest of this panel doesn't otherwise need (Early
++        Retirement/guild perks both render fine with zero heroes/zero
++        renown).
++      */}
++      {state.heroes.length > 0 && (
++        <>
++          <div className="section-heading">Spend renown -- per hero</div>
++          <p className="small muted" style={{ marginTop: -4 }}>
++            Extra power for a specific hero who&apos;s done leveling. Content here is still being expanded.
++          </p>
++          {state.heroes.map((hero) => (
++            <HeroPerkRow key={hero.id} hero={hero} onBuy={(heroId, perkId) => engine.buyHeroPerk(heroId, perkId)} />
++          ))}
++        </>
++      )}
+       </div>
+     </div>
+   );
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/panels/RaidsPanel.tsx repo/src/ui/panels/RaidsPanel.tsx
+--- orig/src/ui/panels/RaidsPanel.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/panels/RaidsPanel.tsx	2026-09-04 11:17:47.974786780 +0000
+@@ -24,37 +24,44 @@
+ 
+ // Single-letter fallback badge (used only if the icon art at
+ // public/raid-icons/<difficulty>.png is missing).
+-const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', legendary: 'L' };
++const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M', legendary: 'L' };
+ /** Reuses the existing rarity palette rather than inventing a new colour
+- *  scheme -- Normal/Heroic/Legendary roughly parallel uncommon/rare/epic
+- *  stakes, so the same visual language already trained elsewhere applies. */
++ *  scheme -- Normal/Heroic/Mythic/Legendary roughly parallel uncommon/
++ *  rare/epic/legendary stakes, so the same visual language already
++ *  trained elsewhere applies. Patch 0317: Legendary (the new top tier)
++ *  moved up to RARITY_COLOR.legendary; Mythic (the renamed old top tier)
++ *  took over RARITY_COLOR.epic, its old slot. */
+ const DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
+-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
++  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic, legendary: RARITY_COLOR.legendary,
+ };
+ 
+ /** Which upgrade unlocks each difficulty tier -- Normal comes from the base
+  *  Raid Charter (the same unlock that already gates raids existing at
+- *  all); Heroic and Legendary each need their own separate Clearance
+- *  upgrade, rather than the old single Charter purchase unlocking every
+- *  tier at once. */
+-const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raidsLegendary'> = {
+-  normal: 'raids', heroic: 'raidsHeroic', legendary: 'raidsLegendary',
++ *  all); Heroic and Mythic each need their own separate Clearance
++ *  upgrade. Legendary (patch 0317's new top tier) deliberately has NO
++ *  upgrade-based unlock at all -- it auto-unlocks once Mythic is cleared
++ *  once (see RaidManager.canStart) -- so it's left out of this map and
++ *  handled as a special case everywhere this map is read. */
++const DIFFICULTY_UNLOCK: Record<Exclude<RaidDifficulty, 'legendary'>, 'raids' | 'raidsHeroic' | 'raidsMythic'> = {
++  normal: 'raids', heroic: 'raidsHeroic', mythic: 'raidsMythic',
+ };
+ const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
+-  normal: 'Raid Charter', heroic: 'Heroic Clearance', legendary: 'Legendary Clearance',
++  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Mythic Clearance', legendary: 'Mythic difficulty cleared',
+ };
+ /** The actual GuildPanel upgrade `def.id` behind each difficulty gate --
+- *  same three general upgrades DIFFICULTY_UNLOCK_LABEL above already
+- *  names (raid_charter/raid_heroic_clearance/raid_legendary_clearance,
+- *  see progression.ts's UPGRADES list), kept as its own map rather than
++ *  same as DIFFICULTY_UNLOCK_LABEL above names for Normal/Heroic/Mythic
++ *  (raid_charter/raid_heroic_clearance/raid_mythic_clearance, see
++ *  progression.ts's UPGRADES list), kept as its own map rather than
+  *  reused off DIFFICULTY_UNLOCK because that one holds the `unlocks`
+- *  field's value ('raids'/'raidsHeroic'/'raidsLegendary'), not the
++ *  field's value ('raids'/'raidsHeroic'/'raidsMythic'), not the
+  *  upgrade's own id -- two different strings that happen to describe the
+  *  same upgrade. Used to drive engine.requestTab('guild', id) below, so
+  *  a locked difficulty can jump straight to (and highlight) the exact
+- *  Guild Hall card that unlocks it. */
+-const DIFFICULTY_UNLOCK_ID: Record<RaidDifficulty, string> = {
+-  normal: 'raid_charter', heroic: 'raid_heroic_clearance', legendary: 'raid_legendary_clearance',
++ *  Guild Hall card that unlocks it. Legendary has no such card -- see
++ *  DIFFICULTY_UNLOCK's own comment -- so its "Unlock →" jump link is
++ *  hidden entirely rather than pointing this map at an empty string. */
++const DIFFICULTY_UNLOCK_ID: Record<Exclude<RaidDifficulty, 'legendary'>, string> = {
++  normal: 'raid_charter', heroic: 'raid_heroic_clearance', mythic: 'raid_mythic_clearance',
+ };
+ 
+ /**
+@@ -428,7 +435,7 @@
+        *  exact upgrade card, same "jump to and highlight the requirement"
+        *  treatment HeroesPanel's locked recruit cards already got
+        *  (patch 0179). */}
+-      {!unlocked && (
++      {!unlocked && difficulty !== 'legendary' && (
+         <button
+           className="btn-ghost"
+           style={{ fontSize: '0.5625rem', padding: '1px 4px', minHeight: 0 }}
+@@ -661,7 +668,9 @@
+                     key={d}
+                     difficulty={d}
+                     active={difficulty === d}
+-                    unlocked={ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
++                    unlocked={d === 'legendary'
++                      ? state.completedRaidDifficulties.includes('mythic')
++                      : ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
+                     cleared={(state.raidClearsByDifficulty[raid.id] ?? []).includes(d)}
+                     onClick={() => pickDifficulty(d)}
+                   />
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/panels/StatsPanel.tsx repo/src/ui/panels/StatsPanel.tsx
+--- orig/src/ui/panels/StatsPanel.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/panels/StatsPanel.tsx	2026-09-04 11:18:16.900448136 +0000
+@@ -22,7 +22,7 @@
+  *  how OfflineReportModal already duplicates this same small map rather
+  *  than importing it from RaidsPanel. */
+ const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
+-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
++  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic, legendary: RARITY_COLOR.legendary,
+ };
+ 
+ /** One row of the merged Recent Results feed -- a quest and a raid outcome
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' orig/src/ui/panels/TestingPanel.tsx repo/src/ui/panels/TestingPanel.tsx
+--- orig/src/ui/panels/TestingPanel.tsx	2026-09-04 08:30:51.000000000 +0000
++++ repo/src/ui/panels/TestingPanel.tsx	2026-09-04 11:31:43.023372862 +0000
+@@ -167,7 +167,11 @@
+ 
+       <div className="section-heading">Current state</div>
+       <p className="small muted">
+-        Gold: {formatGold(state.gold)} · Renown: {state.renown} · Prestige streak: {state.prestigeStreak}
++        {/* Prestige streak dropped from this readout in patch 0317 --
++            the field's still on GameState (frozen, unused, see its own
++            comment in types.ts) but there's no live streak system left
++            to report on. */}
++        Gold: {formatGold(state.gold)} · Renown: {state.renown}
+       </p>
+     </>
+   );

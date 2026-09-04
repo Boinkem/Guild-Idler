@@ -14,7 +14,7 @@ import { measureFlyOffset } from './flyTarget';
  *  already duplicates its own small particle arrays rather than importing
  *  them from QuestResultModal. */
 const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
+  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic, legendary: RARITY_COLOR.legendary,
 };
 
 const COIN_PARTICLES = [

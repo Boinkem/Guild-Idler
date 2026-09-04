@@ -41,22 +41,23 @@ import { Tuning } from './tuning';
  *  because a player might reasonably want to know an Epic-quest drop
  *  from a Hard-quest one at the same rarity).
  *
- *  `chainReplayHeroic`/`chainReplayLegendary` (patch 0225, Replayable
- *  Quest Chains -- see guild-idler-status.md's Backlog entry) cover a
- *  chain replay's *padding* loot only -- whatever a stage's ordinary
+ *  `chainReplayHeroic`/`chainReplayMythic`/`chainReplayLegendary` (patch
+ *  0225, Replayable Quest Chains -- see guild-idler-status.md's Backlog
+ *  entry; Mythic added patch 0317 alongside the raid-tier rename) cover
+ *  a chain replay's *padding* loot only -- whatever a stage's ordinary
  *  procedural pool-pick already selected, same mechanism `raidHeroic`/
- *  `raidLegendary` already use for raids. Deliberately separate budget
- *  multipliers and separate display labels from the raid tags, even
- *  though the underlying mechanism is identical -- see their own
- *  comments below for why. The chain's own *dedicated* reward item is a
- *  different, deliberately non-procedural mechanism entirely (see
- *  scaleDedicatedItem below) -- these two tags never reach that
- *  path, since dedicated rewards are chainExclusive and therefore never
+ *  `raidMythic`/`raidLegendary` already use for raids. Deliberately
+ *  separate budget multipliers and separate display labels from the raid
+ *  tags, even though the underlying mechanism is identical -- see their
+ *  own comments below for why. The chain's own *dedicated* reward item is
+ *  a different, deliberately non-procedural mechanism entirely (see
+ *  scaleDedicatedItem below) -- these tags never reach that path, since
+ *  dedicated rewards are chainExclusive and therefore never
  *  isProceduralTemplate() in the first place. */
 export type LootSourceTag =
   | 'easy' | 'normal' | 'hard' | 'epic' | 'legendary'
-  | 'raidHeroic' | 'raidLegendary'
-  | 'chainReplayHeroic' | 'chainReplayLegendary';
+  | 'raidHeroic' | 'raidMythic' | 'raidLegendary'
+  | 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary';
 
 export type BonusRollTier = 'none' | 'fortunate' | 'charmed';
 
@@ -84,15 +85,16 @@ function levelFactor(itemLevel: number): number {
 function sourceBudgetMultiplier(sourceTag: LootSourceTag): number {
   switch (sourceTag) {
     case 'raidHeroic': return Tuning.get('loot_procedural.raidHeroicBudgetMultiplier');
+    case 'raidMythic': return Tuning.get('loot_procedural.raidMythicBudgetMultiplier');
     case 'raidLegendary': return Tuning.get('loot_procedural.raidLegendaryBudgetMultiplier');
     case 'hard': return Tuning.get('loot_procedural.hardQuestBudgetMultiplier');
     // Deliberately their own tuning ids, not a reuse of the raid ones --
     // chain replay is meant to be lighter-weight solo-hero repeatable
     // content, not a second raid ladder (same reasoning
     // CHAIN_REPLAY_DIFFICULTIES' own successPenalty/lootBonus already
-    // used, softer than RAID_DIFFICULTIES' equivalents). Values sit
-    // between hardQuest's 1.15x and raid's 1.5x/2.2x.
+    // used, softer than RAID_DIFFICULTIES' equivalents).
     case 'chainReplayHeroic': return Tuning.get('loot_procedural.chainReplayHeroicBudgetMultiplier');
+    case 'chainReplayMythic': return Tuning.get('loot_procedural.chainReplayMythicBudgetMultiplier');
     case 'chainReplayLegendary': return Tuning.get('loot_procedural.chainReplayLegendaryBudgetMultiplier');
     default: return 1;
   }
@@ -113,8 +115,10 @@ function sourceTagLabel(sourceTag: LootSourceTag): string | null {
     case 'epic': return 'Epic';
     case 'legendary': return 'Legendary';
     case 'raidHeroic': return 'Heroic';
+    case 'raidMythic': return 'Mythic';
     case 'raidLegendary': return 'Legendary';
     case 'chainReplayHeroic': return 'Replay: Heroic';
+    case 'chainReplayMythic': return 'Replay: Mythic';
     case 'chainReplayLegendary': return 'Replay: Legendary';
     default: return null; // easy, normal
   }
@@ -273,13 +277,15 @@ export interface DedicatedItemScale {
 export function scaleDedicatedItem(
   def: { name: string; rarity: Rarity; mods?: Partial<Modifiers>; stats?: Partial<Stats> },
   heroLevel: number,
-  sourceTag: 'chainReplayHeroic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidLegendary',
+  sourceTag: 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidMythic' | 'raidLegendary',
 ): DedicatedItemScale {
-  const isRaid = sourceTag === 'raidHeroic' || sourceTag === 'raidLegendary';
+  const isRaid = sourceTag === 'raidHeroic' || sourceTag === 'raidMythic' || sourceTag === 'raidLegendary';
   const isLegendaryTier = sourceTag === 'chainReplayLegendary' || sourceTag === 'raidLegendary';
+  const isMythicTier = sourceTag === 'chainReplayMythic' || sourceTag === 'raidMythic';
+  const tierKey = isLegendaryTier ? 'legendaryMultiplier' : isMythicTier ? 'mythicMultiplier' : 'heroicMultiplier';
   const tierMultiplier = isRaid
-    ? Tuning.get(isLegendaryTier ? 'raid_dedicated.legendaryMultiplier' : 'raid_dedicated.heroicMultiplier')
-    : Tuning.get(isLegendaryTier ? 'chain_replay_dedicated.legendaryMultiplier' : 'chain_replay_dedicated.heroicMultiplier');
+    ? Tuning.get(`raid_dedicated.${tierKey}`)
+    : Tuning.get(`chain_replay_dedicated.${tierKey}`);
 
   const originalStats = def.stats ?? {};
   const originalTotal = Object.values(originalStats).reduce((a, b) => a + b, 0);

@@ -47,27 +47,43 @@ export const RAID_BY_ID: Record<string, RaidDef> = Object.fromEntries(RAIDS.map(
  */
 export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
   // successPenalty raised (12->20, 24->50) and lootBonus introduced --
-  // Legendary in particular is meant to be genuinely brutal, not just "harder
-  // than Heroic": a 50-point penalty can push an encounter's baseline
-  // success below the floor before the party's own bonus even applies.
-  // The 9-hero party bonus is the intended counterweight, not a numbers
-  // mistake -- confirmed as the deliberate design, not something to soften.
+  // Mythic (formerly this game's top tier, called 'legendary' internally
+  // from patch 0166 to patch 0317 -- see RAID_DIFFICULTY_LABEL's own
+  // comment) in particular is meant to be genuinely brutal, not just
+  // "harder than Heroic": a 50-point penalty can push an encounter's
+  // baseline success below the floor before the party's own bonus even
+  // applies. The 9-hero party bonus is the intended counterweight, not a
+  // numbers mistake -- confirmed as the deliberate design, not something
+  // to soften.
   // durationMultiplier: harder tiers take longer too -- normal 2h becomes
-  // 2.3h at Heroic, 2.6h at Legendary (i.e. x1.15 / x1.3), matching the given
+  // 2.3h at Heroic, 2.6h at Mythic (i.e. x1.15 / x1.3), matching the given
   // example exactly.
   // Normal's own numbers are all baseline zero-points (no penalty, x1
   // everything) rather than meaningfully "tunable" values, so they stay
-  // literal here. Heroic/Legendary's four fields each read from the tuning
-  // registry instead -- editable live via the devtool's Tuning tab. See
-  // tuning.ts and tuning.json.
+  // literal here. Heroic/Mythic/Legendary's four fields each read from the
+  // tuning registry instead -- editable live via the devtool's Tuning tab.
+  // See tuning.ts and tuning.json.
   // roleMismatchCap: Normal deliberately has none at all (undefined, not
   // just a high number) -- a mismatched Normal party still only eats the
   // ordinary per-slot roleMismatchPenalty subtraction and can climb back
   // up to MAX_SUCCESS on gear/level alone, same as before this existed.
-  // Heroic/Legendary read theirs from the tuning registry like their other
-  // three fields -- Legendary's is deliberately the lower of the two, same
-  // "genuinely brutal, not just harder than Heroic" intent as its
-  // successPenalty above.
+  // Heroic/Mythic/Legendary read theirs from the tuning registry like
+  // their other three fields -- each successive tier's is deliberately
+  // lower than the last, same "genuinely brutal, not just harder" intent
+  // as successPenalty above.
+  //
+  // Patch 0317 (Prestige/Retirement Rework): 'legendary' below is a
+  // brand-new top tier, not the old one under a new name -- the old
+  // 'legendary' entry was renamed to 'mythic', values unchanged, reading
+  // from the same-shaped raid_difficulty.mythic.* tuning keys (renamed
+  // from raid_difficulty.legendary.* -- see tuning.json). Legendary's own
+  // numbers are first-pass and deliberately harsher across the board;
+  // real tuning is backlogged (see renownForRaidClear's comment in
+  // progression.ts for the same caveat on its Renown payout). Legendary
+  // auto-unlocks once Mythic is cleared once (state.completedRaidDifficulties
+  // includes 'mythic') -- no separate Charter/Clearance purchase, unlike
+  // Heroic/Mythic's own raidsHeroic/raidsMythic upgrade gates. See
+  // RaidManager.canStart.
   normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
   heroic: {
     difficulty: 'heroic', partySize: 6,
@@ -76,6 +92,14 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
     lootBonus: Tuning.get('raid_difficulty.heroic.lootBonus'),
     durationMultiplier: Tuning.get('raid_difficulty.heroic.durationMultiplier'),
     roleMismatchCap: Tuning.get('raid_difficulty.heroic.roleMismatchCap'),
+  },
+  mythic: {
+    difficulty: 'mythic', partySize: 9,
+    successPenalty: Tuning.get('raid_difficulty.mythic.successPenalty'),
+    rewardMultiplier: Tuning.get('raid_difficulty.mythic.rewardMultiplier'),
+    lootBonus: Tuning.get('raid_difficulty.mythic.lootBonus'),
+    durationMultiplier: Tuning.get('raid_difficulty.mythic.durationMultiplier'),
+    roleMismatchCap: Tuning.get('raid_difficulty.mythic.roleMismatchCap'),
   },
   legendary: {
     difficulty: 'legendary', partySize: 9,
@@ -87,21 +111,22 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
   },
 };
 
-export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'legendary'];
+export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic', 'legendary'];
 
 /**
  * Player-facing display label per raid difficulty. As of patch 0166 the
- * internal id is 'legendary' too (full internal rename from the patch
- * 0165 display-only version -- ids, item suffixes, tuning keys, and the
- * upgrade id all now say `legendary`, not just this label), so this map
- * is trivial today. Kept rather than removed: it's the correct pattern
- * for whenever a genuinely new fourth tier lands above this one, and every
- * UI call site already reads through it instead of deriving a label by
- * capitalizing the raw id.
+ * internal id for what was then the top tier was 'legendary' too (full
+ * internal rename from the patch 0165 display-only version). Patch 0317
+ * renamed that same tier's internal id again, to 'mythic', and this map
+ * now covers a genuinely new top tier that IS called 'legendary'
+ * internally -- see RAID_DIFFICULTIES' own comment for the full history.
+ * Kept rather than removed: every UI call site already reads through
+ * this instead of deriving a label by capitalizing the raw id.
  */
 export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
   normal: 'Normal',
   heroic: 'Heroic',
+  mythic: 'Mythic',
   legendary: 'Legendary',
 };
 
@@ -177,28 +202,34 @@ export function parseEggLootEntry(entry: string): { rarity: Rarity; dedicatedPet
 }
 
 /** The loot pool actually in play for a given difficulty -- lootHeroic/
- *  lootLegendary if the encounter defines one, otherwise the same base
- *  `loot` every difficulty used before tiered pools existed. Used
+ *  lootMythic/lootLegendary if the encounter defines one, otherwise the
+ *  same base `loot` every difficulty used before tiered pools existed.
+ *  Each tier falls back to `loot` independently (not chained through the
+ *  tier below it), same flat-fallback shape this always had. Used
  *  identically by both the real roll (RaidManager.resolve) and the UI
  *  preview, so what's shown always matches what can actually drop. */
 export function lootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
   if (difficulty === 'heroic') return encounter.lootHeroic ?? encounter.loot;
+  if (difficulty === 'mythic') return encounter.lootMythic ?? encounter.loot;
   if (difficulty === 'legendary') return encounter.lootLegendary ?? encounter.loot;
   return encounter.loot;
 }
 
 /**
  * Same fallback shape as lootForDifficulty above, for eggLoot -- added in
- * patch 0250 alongside eggLootHeroic/eggLootLegendary on RaidEncounterDef.
- * The one difference from equipment loot: `loot` itself is required (every
- * encounter has one, even if empty), while `eggLoot` is optional and most
- * encounters have none at all -- so this returns `[]` rather than `encounter.
- * loot`'s always-defined fallback when nothing applies at any level. A
- * species meant to be Heroic-onward only (see PetDef -- Dragonling) simply
- * leaves eggLoot unset and relies on this returning [] at Normal.
+ * patch 0250 alongside eggLootHeroic/eggLootLegendary on RaidEncounterDef
+ * (eggLootMythic added patch 0317, alongside the mythic/legendary raid-
+ * tier rename). The one difference from equipment loot: `loot` itself is
+ * required (every encounter has one, even if empty), while `eggLoot` is
+ * optional and most encounters have none at all -- so this returns `[]`
+ * rather than `encounter.loot`'s always-defined fallback when nothing
+ * applies at any level. A species meant to be Heroic-onward only (see
+ * PetDef -- Dragonling) simply leaves eggLoot unset and relies on this
+ * returning [] at Normal.
  */
 export function eggLootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
   if (difficulty === 'heroic') return encounter.eggLootHeroic ?? encounter.eggLoot ?? [];
+  if (difficulty === 'mythic') return encounter.eggLootMythic ?? encounter.eggLoot ?? [];
   if (difficulty === 'legendary') return encounter.eggLootLegendary ?? encounter.eggLoot ?? [];
   return encounter.eggLoot ?? [];
 }
