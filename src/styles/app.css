@@ -1727,11 +1727,34 @@ button:focus-visible, [tabindex]:focus-visible {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
+/*
+ * Patch 0321, direct report (screenshots across four tabs, root cause
+ * traced to this one shared rule -- 17 panels all pull their subtitle
+ * from here). .panel h2 right above already carries a text-shadow;
+ * this had NONE at all -- just --muted color and nothing else,
+ * against nothing but .tab-scene-content's own flat 25% dark tint
+ * over this tab's background art. Fine against a plain dark panel,
+ * nowhere near enough once that art gets bright or busy (worst case
+ * in the reports: a light wood/foliage background). A shadow alone
+ * wasn't going to hold up against art that busy, so this gets the
+ * same real backing plaque every other bare-text-on-art bug in this
+ * game got (Guild Hall's rows/chips, item-card rarity banners) --
+ * inline-block so it hugs its own text width, same shape
+ * .guild-storage-plaque and every other snug plaque in this game
+ * already uses, rather than a full-width strip. h2 itself is
+ * untouched -- it already reads fine in every report screenshot, this
+ * was specifically the subtitle line under it.
+ */
 .panel .subtitle {
   color: var(--muted);
   font-size: 0.6875rem;
   margin: 0 0 14px;
   letter-spacing: 0.01em;
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--night) 55%, transparent);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 .section-heading {
@@ -3192,6 +3215,86 @@ input[type='range'] {
   opacity: 0.5;
   border-style: dashed;
 }
+
+/*
+ * Shared "dense upgrade row" visual language (patch 0321) -- same shape
+ * Guild Hall's own .guild-upgrade-row already established (patch 0314):
+ * name/level on one line, a one-line effect summary, a thin progress
+ * rule, a compact Buy button, click-through to a detail modal for the
+ * full flavour text. Generalized here under a plain "upgrade-row" name
+ * so Prestige's Renown perks, the Raid Quartermaster's Den, Harvest's
+ * tools/Overseer, and each Vendor's own Upgrades tree can all use it
+ * instead of the old full .card (title + flavour paragraph + stat-row +
+ * button) every one of them used before.
+ *
+ * Deliberately NOT unified with Guild Hall's own .guild-* classes --
+ * that code already shipped and is independently verified; this
+ * duplicates the same handful of rules under a generic name rather than
+ * risk touching it. Worth merging into one shared set later if the
+ * duplication ever becomes a real maintenance problem, but four call
+ * sites landing in one patch already felt like enough surface area for
+ * one change.
+ */
+.upgrade-row-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+}
+@media (max-width: 640px) {
+  .upgrade-row-list { grid-template-columns: 1fr; }
+}
+.upgrade-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 8px 8px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-bottom: 1px solid var(--panel-2);
+  cursor: pointer;
+}
+.upgrade-row:hover { background: var(--panel-2); }
+.upgrade-row-head { display: flex; align-items: baseline; gap: 7px; }
+.upgrade-row-name { font-size: 0.75rem; font-weight: 700; }
+.upgrade-row-level { font-size: 0.5625rem; color: var(--muted); margin-left: auto; }
+.upgrade-row-effect {
+  display: block;
+  font-size: 0.625rem;
+  color: var(--muted);
+  margin: 3px 0 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upgrade-row-rule { display: block; height: 2px; background: var(--edge); }
+.upgrade-row-rule > span { display: block; height: 100%; transition: width 500ms ease-out; }
+.upgrade-buy-btn {
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 6px 9px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--panel-3);
+  cursor: default;
+  min-height: 0;
+  box-shadow: none;
+}
+.upgrade-buy-btn.affordable {
+  background: var(--brass);
+  color: var(--ink);
+  border-color: var(--brass);
+  cursor: pointer;
+}
+/* Vendors' own "not unlocked yet" placeholder row (the old "???"
+   lockedCard) -- dashed, dimmed, no click affordance since there's
+   nothing behind it to open yet. */
+.upgrade-row.locked {
+  cursor: default;
+  opacity: 0.55;
+  border-style: dashed;
+}
+.upgrade-row.locked:hover { background: color-mix(in srgb, var(--panel) 88%, transparent); }
 
 /* ---------------------------------- lore ----------------------------------- */
 

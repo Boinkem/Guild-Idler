@@ -26153,3 +26153,101 @@ than a per-file exact match. Legendary crops a little more than the
 others as a result (~7% off vs ~2-4% for the rest) -- not enough to
 be worth a per-rarity CSS value, but worth knowing if legendary gear
 specifically still looks off after this patch.
+
+### Every panel's subtitle line fixed (missing shadow/backing, root cause traced to one shared rule) + Prestige/Raids/Harvest/Vendors upgrade cards converted to Guild Hall's dense row style (patch 0321)
+
+```discord-update
+Dev Update | Bug Fix / Features
+
+- Fixed every tab's subtitle line reading as unreadable white text over busy background art -- one shared CSS rule, now fixed everywhere at once
+- Changed Prestige, the Raid Quartermaster's Den, Harvest's tools/Overseer, and every Vendor's Upgrades tab from big cards to Guild Hall's compact row style
+```
+
+Two unrelated fixes landing together since both came out of the same
+review pass.
+
+**Subtitle fix.** Direct report with screenshots across four tabs.
+Root cause: `.panel .subtitle` -- the one shared rule every panel's
+`<h2>Title</h2><p className="subtitle">...</p>` pulls from (17 panels
+checked, all confirmed using it) -- had no `text-shadow` at all, unlike
+`.panel h2` right above it in the file, and nothing behind it but
+`.tab-scene-content`'s own flat 25% dark tint over that tab's
+background art. Fine against a plain dark panel, nowhere near enough
+against a bright or busy patch of art (worst case in the reports: a
+light wood/foliage background, nearly unreadable). Rather than a
+shadow alone -- which wasn't going to hold up given how busy some of
+this art gets -- `.subtitle` now gets a real backing plaque, same "give
+it actual backing" fix as Guild Hall's rows/chips and the item-card
+rarity banners before it: `display: inline-block` (hugs its own text
+width, same as `.guild-storage-plaque` and every other snug plaque in
+this game, rather than a full-width strip), a translucent `--night`
+backdrop, and a shadow to match. `h2` itself untouched -- every report
+screenshot showed the title reading fine, this was specifically the
+line underneath it.
+
+**Upgrade cards -> rows.** Same shape Guild Hall's own dense list
+established (patch 0314) -- name/level on one line, a one-line effect
+summary, a thin progress rule, a compact Buy button, click-through to a
+detail modal for the full flavour text -- generalized under new,
+Guild-Hall-agnostic classes (`.upgrade-row`, `.upgrade-row-list`,
+`.upgrade-buy-btn`, etc. -- see their own comment in app.css) rather
+than reusing Guild Hall's own `.guild-*` classes directly, so already-
+shipped, independently-verified code didn't need touching. No filter
+chips or collapsed "fully built" section anywhere here -- every one of
+these catalogs is small enough (3-6 items) that Guild Hall's extra
+apparatus, built specifically for its own 27-item list, wasn't needed.
+
+- **Prestige** (`RenownPerkCard` -> `RenownPerkRow`, `PrestigePanel.tsx`)
+  -- 6 guild-wide Renown perks. Tier II tag and the "jump to and
+  highlight" landing both carried over unchanged. Progress rule uses
+  `--violet` (Renown's own established color throughout this tab)
+  instead of Guild Hall's brass. `HeroPerkRow` (the per-hero perk tree)
+  was already its own flat row shape and wasn't touched.
+- **Raids** (`RaidUpgradeCard` -> `RaidUpgradeRow`, `RaidsPanel.tsx`)
+  -- the 3-upgrade Quartermaster's Den (Speed/Loot/Recovery). Each
+  upgrade's own room sprite (rack/skull/shelf, filling in per level)
+  still renders above it exactly as before -- only what used to sit
+  below the sprite changed.
+- **Harvest** (`ToolUpgradeCard` -> `ToolUpgradeRow`, `OverseerCard` ->
+  `OverseerRow`, `HarvestPanel.tsx`) -- the 4 material-node tools plus
+  Overseer, 5 rows total. Overseer's row-level effect text is now a
+  short live stat ("Rescuing X% -> Y% next level") rather than the
+  longer flavour paragraph, which moved into the detail modal alongside
+  the unchanged pre-hire flavour text. Warehouse's own card (embedded
+  material stock bars, a genuinely different shape than a plain leveled
+  upgrade) and Trade Route (a one-time unlock + trading utility, not a
+  leveled upgrade at all) were both deliberately left as cards --
+  neither fits the row pattern without a much bigger restructure than
+  this patch was scoped for.
+- **Vendors** (`upgradeCard()`/`lockedCard()` -> `VendorUpgradeRow`/
+  `VendorLockedRow`, `VendorsPanel.tsx`) -- every vendor's own per-page
+  Upgrades tree (Blacksmith/Alchemist/Enchanter), including the "???"
+  locked-tier placeholder as its own dashed/dimmed row variant
+  (`.upgrade-row.locked`). Wasn't named directly in the original report
+  but is the exact same card shape as the other three, so went in with
+  them. Worth flagging: `upgradeCard`/`lockedCard` used to be plain
+  helper *functions* called from inside `VendorPage`'s own `.map()` --
+  had to become real standalone components here (`VendorUpgradeRow`),
+  since the detail modal needs its own `useState`, and a hook called
+  from a function invoked once per list item in someone else's render
+  is exactly the "hook in a loop" shape the rules of hooks forbid.
+
+**Verified:** pulled `app.css`, `PrestigePanel.tsx`, `RaidsPanel.tsx`,
+`HarvestPanel.tsx`, and `VendorsPanel.tsx` fresh from `main` via
+`raw.githubusercontent.com` immediately before editing (patch 0320 was
+already live). Grepped every `.tsx` file under `src/ui` for
+`className="subtitle"` first to confirm the full 17-panel list before
+touching the shared rule, and grepped again afterward for every old
+component name (`RenownPerkCard`, `RaidUpgradeCard`, `ToolUpgradeCard`,
+`OverseerCard`, `upgradeCard(`, `lockedCard(`) to confirm no stale
+references were left behind anywhere. `npx tsc --noEmit` (clean under
+`strict`/`noUnusedLocals`/`noUnusedParameters` -- would have caught a
+leftover reference to any removed function) and a full `vite build`
+(web + both Electron entries) passing clean against a fresh clone with
+every file applied together.
+
+**Still open:** whether to eventually merge Guild Hall's own `.guild-*`
+row classes and this patch's generic `.upgrade-*` ones into a single
+shared set -- deliberately kept separate this patch to avoid touching
+already-verified Guild Hall code, but five call sites now exist across
+the two nearly-identical class sets.

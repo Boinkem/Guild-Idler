@@ -473,33 +473,68 @@ function NodeLane({ nodeId, onCatch }: { nodeId: MaterialId; onCatch: (materialI
   );
 }
 
-function ToolUpgradeCard({ nodeId }: { nodeId: MaterialId }) {
+/**
+ * Patch 0321: converted from a full .card to the shared dense upgrade
+ * row -- see .upgrade-row's own comment in app.css. Only 4 of these
+ * exist (one per material node), same as Overseer right below it.
+ */
+function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
   const engine = useEngine();
   const state = engine.state;
+  const [showDetail, setShowDetail] = useState(false);
   const tool = HARVEST_TOOL_BY_NODE[nodeId];
   const level = state.harvestTools[nodeId] ?? 0;
   const cost = harvestToolCost(nodeId, level);
   const maxed = cost === null;
   const { flashes, dismiss } = useMaxFlash([{ id: nodeId, name: tool.name, level, maxLevel: tool.maxLevel }]);
   const flash = flashes[nodeId];
-  // Same "only pulse on a real change, not on every tab-switch remount"
-  // fix as Guild Hall/Vendors -- see usePulsesOnChange's own doc comment
-  // in maxFlash.tsx.
   const levelPulses = usePulsesOnChange([{ id: nodeId, value: level }]);
-
+  const effectText = `+${tool.yieldBonusPerLevel} yield and a faster respawn per level`;
+  const pctFill = Math.min(100, (level / tool.maxLevel) * 100);
+  const buyLabel = maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`;
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
-      <div className="spread">
-        <span className="card-title">{tool.name}</span>
-        <span className={`small muted ${levelPulses[nodeId] ? 'purchase-pulse' : ''}`}>Level {level}/{tool.maxLevel}</span>
-      </div>
-      <p className="card-flavour">
-        +{tool.yieldBonusPerLevel} yield and a faster respawn per level. ({MATERIAL_BY_ID[nodeId].nodeName})
-      </p>
-      <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>
-        {maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`}
+    <div
+      className="upgrade-row"
+      onClick={() => setShowDetail(true)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span className="upgrade-row-head">
+          <span className="upgrade-row-name">{tool.name}</span>
+          <span className={`upgrade-row-level ${levelPulses[nodeId] ? 'purchase-pulse' : ''}`}>Lv {level}/{tool.maxLevel}</span>
+        </span>
+        <span className="upgrade-row-effect">{effectText}</span>
+        <span className="upgrade-row-rule">
+          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+        </span>
+      </span>
+      <button
+        className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
+        disabled={maxed || state.gold < (cost ?? 0)}
+        onClick={(e) => { e.stopPropagation(); engine.upgradeHarvestTool(nodeId); }}
+      >
+        {buyLabel}
       </button>
       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(nodeId)} />}
+      {showDetail && (
+        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="spread">
+              <span className="card-title">{tool.name}</span>
+              <span className="small muted">Lv {level}/{tool.maxLevel}</span>
+            </div>
+            <p className="card-flavour" style={{ marginTop: 6 }}>
+              {effectText}. ({MATERIAL_BY_ID[nodeId].nodeName})
+            </p>
+            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+              <button onClick={() => setShowDetail(false)}>Close</button>
+              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>{buyLabel}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -550,23 +585,31 @@ function WarehouseTab() {
       </div>
 
       <TradeRouteCard />
-      <OverseerCard />
+      <OverseerRow />
 
       <div className="section-heading">Tools</div>
       <p className="tiny muted" style={{ marginBottom: 8 }}>
         Moved here from each node's own view -- one shared spot for every tool upgrade, same as everything
         else Warehouse-related.
       </p>
-      <div className="grid two">
-        {NODE_ORDER.map((nodeId) => <ToolUpgradeCard key={nodeId} nodeId={nodeId} />)}
+      <div className="upgrade-row-list">
+        {NODE_ORDER.map((nodeId) => <ToolUpgradeRow key={nodeId} nodeId={nodeId} />)}
       </div>
     </>
   );
 }
 
-function OverseerCard() {
+/**
+ * Patch 0321: converted from a full .card to the shared dense upgrade
+ * row -- see .upgrade-row's own comment in app.css. The row's own
+ * effect line is a short live stat once hired (rescuing X% -> next
+ * level's Y%) rather than the longer flavour text, which moves to the
+ * detail modal along with the pre-hire flavour paragraph, unchanged.
+ */
+function OverseerRow() {
   const engine = useEngine();
   const state = engine.state;
+  const [showDetail, setShowDetail] = useState(false);
   const level = state.overseerLevel;
   const cost = overseerUpgradeCost(level);
   const maxed = cost === null;
@@ -575,24 +618,53 @@ function OverseerCard() {
   const { flashes, dismiss } = useMaxFlash([{ id: 'overseer', name: OVERSEER_UPGRADE.name, level, maxLevel: OVERSEER_UPGRADE.maxLevel }]);
   const flash = flashes.overseer;
   const levelPulses = usePulsesOnChange([{ id: 'overseer', value: level }]);
-
+  const description = level === 0
+    ? 'Hire someone to keep an eye on the Fields. A spawn that would otherwise despawn unclicked gets a chance to be caught anyway -- never the bonus glint, and never as reliable as watching yourself, but nothing goes to waste while you\u2019re elsewhere.'
+    : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`;
+  const effectText = level === 0 ? 'Catches missed spawns while you\u2019re away' : `Rescuing ${chance}% of misses \u2192 ${nextChance}% next level`;
+  const pctFill = Math.min(100, (level / OVERSEER_UPGRADE.maxLevel) * 100);
+  const buyLabel = maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
   return (
-    <div className="card" style={{ marginBottom: 12 }}>
-      <div className="spread">
-        <span className="card-title">Overseer</span>
-        <span className={`small muted ${levelPulses.overseer ? 'purchase-pulse' : ''}`}>
-          Level {level}/{OVERSEER_UPGRADE.maxLevel}
+    <div
+      className="upgrade-row"
+      onClick={() => setShowDetail(true)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span className="upgrade-row-head">
+          <span className="upgrade-row-name">Overseer</span>
+          <span className={`upgrade-row-level ${levelPulses.overseer ? 'purchase-pulse' : ''}`}>Lv {level}/{OVERSEER_UPGRADE.maxLevel}</span>
         </span>
-      </div>
-      <p className="card-flavour">
-        {level === 0
-          ? 'Hire someone to keep an eye on the Fields. A spawn that would otherwise despawn unclicked gets a chance to be caught anyway -- never the bonus glint, and never as reliable as watching yourself, but nothing goes to waste while you\u2019re elsewhere.'
-          : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`}
-      </p>
-      <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeOverseer()}>
-        {maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)} (${chance}% \u2192 ${nextChance}%)`}
+        <span className="upgrade-row-effect">{effectText}</span>
+        <span className="upgrade-row-rule">
+          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+        </span>
+      </span>
+      <button
+        className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
+        disabled={maxed || state.gold < (cost ?? 0)}
+        onClick={(e) => { e.stopPropagation(); engine.upgradeOverseer(); }}
+      >
+        {buyLabel}
       </button>
       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss('overseer')} />}
+      {showDetail && (
+        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="spread">
+              <span className="card-title">Overseer</span>
+              <span className="small muted">Lv {level}/{OVERSEER_UPGRADE.maxLevel}</span>
+            </div>
+            <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
+            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+              <button onClick={() => setShowDetail(false)}>Close</button>
+              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeOverseer()}>{buyLabel}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

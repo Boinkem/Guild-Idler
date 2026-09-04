@@ -124,6 +124,100 @@ export function VendorsPanel() {
   );
 }
 
+/**
+ * Patch 0321: converted from the old inline `upgradeCard()` helper
+ * (a plain function returning a full .card, called from a `.map()`
+ * inside VendorPage's own render) to a proper standalone component
+ * using the shared dense upgrade row -- see .upgrade-row's own comment
+ * in app.css. Had to become a real component rather than staying a
+ * helper function: it now needs its own `useState` for the detail
+ * modal, and a hook called from inside a function invoked once per
+ * list item in someone else's render is exactly the "hook in a loop"
+ * shape the rules of hooks forbid -- a real component per row sidesteps
+ * that entirely, each instance owning its own hook call.
+ */
+function VendorUpgradeRow({
+  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy,
+}: {
+  def: UpgradeDef; level: number; cost: number | null; scrapCost: number; maxed: boolean; affordable: boolean;
+  flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void; onBuy: () => void;
+}) {
+  const [showDetail, setShowDetail] = useState(false);
+  const entries = [
+    ...describeMods(def.modsPerLevel).map((line) => `${line} per level`),
+    ...(def.unlocks === 'legendaryQuests' ? ['Unlocks Legendary quests'] : []),
+    ...(def.unlocks === 'blackMarket' ? ['Unlocks the Black Market'] : []),
+  ];
+  const effectText = entries.join(' · ');
+  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
+  const buyLabel = maxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
+  return (
+    <div
+      className="upgrade-row"
+      onClick={() => setShowDetail(true)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span className="upgrade-row-head">
+          <span className="upgrade-row-name">{def.name}</span>
+          <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+        </span>
+        <span className="upgrade-row-effect">{effectText}</span>
+        <span className="upgrade-row-rule">
+          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+        </span>
+      </span>
+      <button
+        className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
+        disabled={maxed || !affordable}
+        onClick={(e) => { e.stopPropagation(); onBuy(); }}
+      >
+        {buyLabel}
+      </button>
+      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
+      {showDetail && (
+        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="spread">
+              <span className="card-title">{def.name}</span>
+              <span className="small muted">{level}/{def.maxLevel}</span>
+            </div>
+            <p className="card-flavour" style={{ marginTop: 6 }}>{def.description}</p>
+            {entries.length > 0 && (
+              <div className="stat-row" style={{ marginBottom: 4 }}>
+                {entries.map((line) => <span key={line}>{line}</span>)}
+              </div>
+            )}
+            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+              <button onClick={() => setShowDetail(false)}>Close</button>
+              <button className="btn-yellow" disabled={maxed || !affordable} onClick={onBuy}>{buyLabel}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Row version of the old `lockedCard()` "???" placeholder -- no hooks
+ *  needed here, so this stays a plain component rather than needing
+ *  the same rules-of-hooks fix VendorUpgradeRow above needed. */
+function VendorLockedRow({ requiredLevel, vendorName }: { requiredLevel: number; vendorName: string }) {
+  return (
+    <div className="upgrade-row locked">
+      <span style={{ minWidth: 0 }}>
+        <span className="upgrade-row-head">
+          <span className="upgrade-row-name muted">???</span>
+        </span>
+        <span className="upgrade-row-effect">Level up {vendorName} to level {requiredLevel} to see this.</span>
+        <span className="upgrade-row-rule"><span style={{ width: '0%' }} /></span>
+      </span>
+    </div>
+  );
+}
+
 function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const engine = useEngine();
   const state = engine.state;
@@ -159,47 +253,6 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
     { id: `vendor:${vendorId}`, value: level },
     ...upgradeList.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
   ]);
-
-  function upgradeCard(def: UpgradeDef) {
-    const upLevel = GuildManager.upgradeLevel(state, def.id);
-    const upCost = GuildManager.nextUpgradeCost(state, def.id);
-    const upScrapCost = GuildManager.nextUpgradeScrapCost(state, def.id) ?? 0;
-    const upMaxed = upCost === null && upLevel >= def.maxLevel;
-    const upAffordable = upCost !== null && state.gold >= upCost && state.scrap >= upScrapCost;
-    const flash = flashes[def.id];
-    const pulsing = levelPulses[def.id];
-    return (
-      <div key={def.id} className="card" style={{ marginBottom: 0 }}>
-        <div className="spread">
-          <span className="card-title">{def.name}</span>
-          <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{upLevel}/{def.maxLevel}</span>
-        </div>
-        <p className="card-flavour">{def.description}</p>
-        <div className="stat-row" style={{ marginBottom: 8 }}>
-          {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-          {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
-          {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
-        </div>
-        <button
-          className="btn-yellow"
-          disabled={upMaxed || !upAffordable}
-          onClick={() => engine.buyUpgrade(def.id)}
-        >
-          {upMaxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(upCost ?? 0)} + ${upScrapCost} Scrap`}
-        </button>
-        {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
-      </div>
-    );
-  }
-
-  function lockedCard(requiredLevel: number) {
-    return (
-      <div key={`locked-${requiredLevel}`} className="card locked-upgrade" style={{ marginBottom: 0 }}>
-        <div className="card-title muted">???</div>
-        <p className="card-flavour muted">Level up {vendorDef.name} to level {requiredLevel} to see this.</p>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -271,8 +324,32 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
       </div>
 
       <div className="section-heading">Upgrades</div>
-      <div className="grid two">
-        {upgradeList.map((def, index) => (level >= index + 1 ? upgradeCard(def) : lockedCard(index + 1)))}
+      <div className="upgrade-row-list">
+        {upgradeList.map((def, index) => {
+          if (level < index + 1) {
+            return <VendorLockedRow key={`locked-${index}`} requiredLevel={index + 1} vendorName={vendorDef.name} />;
+          }
+          const upLevel = GuildManager.upgradeLevel(state, def.id);
+          const upCost = GuildManager.nextUpgradeCost(state, def.id);
+          const upScrapCost = GuildManager.nextUpgradeScrapCost(state, def.id) ?? 0;
+          const upMaxed = upCost === null && upLevel >= def.maxLevel;
+          const upAffordable = upCost !== null && state.gold >= upCost && state.scrap >= upScrapCost;
+          return (
+            <VendorUpgradeRow
+              key={def.id}
+              def={def}
+              level={upLevel}
+              cost={upCost}
+              scrapCost={upScrapCost}
+              maxed={upMaxed}
+              affordable={upAffordable}
+              flash={flashes[def.id]}
+              pulsing={levelPulses[def.id]}
+              onDismissFlash={() => dismiss(def.id)}
+              onBuy={() => engine.buyUpgrade(def.id)}
+            />
+          );
+        })}
       </div>
 
       <div className="section-heading">Stock</div>

@@ -101,55 +101,88 @@ function HeroRetireCard({
 }
 
 /**
- * One renown perk's card -- pulled out of PrestigePanel's own inline
- * `.map()` so it can own a ref for the "jump to and highlight" treatment
- * (`highlighted`/`onDismissHighlight`), same shape GuildPanel's
- * UpgradeCard already established for the exact same feature (patch
- * 0179/0180) -- scrolls itself into view and glows briefly when it's the
- * answer to a locked-purchase link elsewhere (e.g. HeroesPanel's "No free
- * slots" message pointing at Extra Banner). Every prop here is exactly
- * what the old inline block already computed per-def; nothing about the
- * markup itself changed.
+ * Patch 0321: converted from a full .card (title, flavour paragraph,
+ * stat-row, button all inline) to the same dense row + click-through
+ * detail modal Guild Hall's rows use -- see .upgrade-row's own comment
+ * in app.css. Only 6 of these exist, nowhere near Guild Hall's 27, so
+ * this brings just the row/modal shape over, not the filter chips or
+ * collapsed "fully built" section that catalog size actually needed.
+ * "Jump to and highlight" (highlighted/onDismissHighlight) still
+ * scrolls the row itself into view and opens the modal on click, same
+ * as before.
  */
-function RenownPerkCard({
+function RenownPerkRow({
   def, level, cost, maxed, affordable, cap, inTier2, justUnlocked, pulsing, onBuy, highlighted, onDismissHighlight,
 }: {
   def: ReturnType<typeof PrestigeManager.perks>[number];
   level: number; cost: number | null; maxed: boolean; affordable: boolean; cap: number; inTier2: boolean; justUnlocked: boolean;
   pulsing?: boolean; onBuy: () => void; highlighted?: boolean; onDismissHighlight?: () => void;
 }) {
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (highlighted) cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (highlighted) rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [highlighted]);
+  const entries = [
+    ...describeMods(def.modsPerLevel).map((line) => `${line} per level`),
+    ...(def.heroSlotsPerLevel ? ['+1 hero slot per level'] : []),
+  ];
+  const effectText = entries.join(' · ');
+  const description = justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description;
+  const pctFill = Math.min(100, (level / cap) * 100);
+  const buyLabel = maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`;
   return (
     <div
-      ref={cardRef}
-      className={`card ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'requirement-highlight' : ''}`}
-      style={{ marginBottom: 0 }}
-      onClick={onDismissHighlight}
+      ref={rowRef}
+      className={`upgrade-row ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'card requirement-highlight' : ''}`}
+      onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); onDismissHighlight?.(); } }}
     >
-      <div className="spread">
-        <span className="card-title">
-          {def.name}
-          {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
+      <span style={{ minWidth: 0 }}>
+        <span className="upgrade-row-head">
+          <span className="upgrade-row-name">
+            {def.name}
+            {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
+          </span>
+          <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
         </span>
-        <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
-      </div>
-      <p className="card-flavour">
-        {justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description}
-      </p>
-      <div className="stat-row" style={{ marginBottom: 8 }}>
-        {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-        {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
-      </div>
+        <span className="upgrade-row-effect">{effectText}</span>
+        <span className="upgrade-row-rule">
+          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--violet)' }} />
+        </span>
+      </span>
       <button
-        className="btn-yellow"
+        className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
         disabled={maxed || !affordable}
         onClick={(e) => { e.stopPropagation(); onBuy(); }}
       >
-        {maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
+        {buyLabel}
       </button>
+      {showDetail && (
+        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="spread">
+              <span className="card-title">
+                {def.name}
+                {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
+              </span>
+              <span className="small muted">{level}/{cap}</span>
+            </div>
+            <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
+            {entries.length > 0 && (
+              <div className="stat-row" style={{ marginBottom: 4 }}>
+                {entries.map((line) => <span key={line}>{line}</span>)}
+              </div>
+            )}
+            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+              <button onClick={() => setShowDetail(false)}>Close</button>
+              <button className="btn-yellow" disabled={maxed || !affordable} onClick={onBuy}>{buyLabel}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -278,7 +311,7 @@ export function PrestigePanel() {
       ))}
 
       <div className="section-heading">Spend renown -- guild-wide</div>
-      <div className="grid two">
+      <div className="upgrade-row-list">
         {PrestigeManager.perks().map((def) => {
           const level = PrestigeManager.perkLevel(state, def.id);
           const cost = PrestigeManager.nextPerkCost(state, def.id);
@@ -288,7 +321,7 @@ export function PrestigePanel() {
           const inTier2 = PrestigeManager.perkInTier2(state, def.id);
           const justUnlocked = PrestigeManager.perkTier2JustUnlocked(state, def.id);
           return (
-            <RenownPerkCard
+            <RenownPerkRow
               key={def.id}
               def={def}
               level={level}

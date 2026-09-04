@@ -225,9 +225,17 @@ function EncounterElementTags({ encounter }: { encounter: RaidEncounterDef }) {
 
 /** Shared across every raid card -- clicking a discovered loot entry opens
  *  this instead of each card managing its own overlay state. */
-function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
+/**
+ * Patch 0321: converted from a full .card to the shared dense
+ * upgrade row -- see .upgrade-row's own comment in app.css. Only 3 of
+ * these exist (Speed/Loot/Recovery), each still paired with its own
+ * room sprite rendered above it in RaidQuartermasterDen below, which
+ * this doesn't touch at all -- just what used to sit under the sprite.
+ */
+function RaidUpgradeRow({ def }: { def: RaidUpgradeDef }) {
   const engine = useEngine();
   const state = engine.state;
+  const [showDetail, setShowDetail] = useState(false);
   const level = GuildManager.raidUpgradeLevel(state, def.id);
   const next = GuildManager.nextRaidUpgradeCost(state, def.id);
   const maxed = next === null;
@@ -235,25 +243,60 @@ function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
   const { flashes, dismiss } = useMaxFlash([{ id: def.id, name: def.name, level, maxLevel: def.maxLevel }]);
   const flash = flashes[def.id];
   const levelPulses = usePulsesOnChange([{ id: def.id, value: level }]);
-
+  const entries = describeMods(def.modsPerLevel).map((line) => `${line} per level`);
+  const effectText = entries.join(' · ');
+  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
+  const buyLabel = maxed
+    ? 'Fully upgraded'
+    : next!.currency === 'gold'
+      ? `Buy · ${formatGold(next!.cost)}`
+      : `Buy · ${formatNumber(next!.cost)} renown`;
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
-      <div className="spread">
-        <span className="card-title">{def.name}</span>
-        <span className={`small muted ${levelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
-      </div>
-      <p className="card-flavour">{def.description}</p>
-      <div className="stat-row" style={{ marginBottom: 8 }}>
-        {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-      </div>
-      <button className="btn-yellow" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>
-        {maxed
-          ? 'Fully upgraded'
-          : next!.currency === 'gold'
-            ? `Buy · ${formatGold(next!.cost)}`
-            : `Buy · ${formatNumber(next!.cost)} renown`}
+    <div
+      className="upgrade-row"
+      onClick={() => setShowDetail(true)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span className="upgrade-row-head">
+          <span className="upgrade-row-name">{def.name}</span>
+          <span className={`upgrade-row-level ${levelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+        </span>
+        <span className="upgrade-row-effect">{effectText}</span>
+        <span className="upgrade-row-rule">
+          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+        </span>
+      </span>
+      <button
+        className={`upgrade-buy-btn ${!maxed && afford ? 'affordable' : ''}`}
+        disabled={maxed || !afford}
+        onClick={(e) => { e.stopPropagation(); engine.buyRaidUpgrade(def.id); }}
+      >
+        {buyLabel}
       </button>
       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
+      {showDetail && (
+        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="spread">
+              <span className="card-title">{def.name}</span>
+              <span className="small muted">{level}/{def.maxLevel}</span>
+            </div>
+            <p className="card-flavour" style={{ marginTop: 6 }}>{def.description}</p>
+            {entries.length > 0 && (
+              <div className="stat-row" style={{ marginBottom: 4 }}>
+                {entries.map((line) => <span key={line}>{line}</span>)}
+              </div>
+            )}
+            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+              <button onClick={() => setShowDetail(false)}>Close</button>
+              <button className="btn-yellow" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>{buyLabel}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -304,7 +347,7 @@ function RaidQuartermasterDen() {
             <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
               <RaidRoomSprite kind="rack" level={roomSpriteLevel(speedDef, GuildManager.raidUpgradeLevel(state, speedDef.id))} height={56} title={speedDef.name} />
             </div>
-            <RaidUpgradeCard def={speedDef} />
+            <RaidUpgradeRow def={speedDef} />
           </div>
         )}
         {lootDef && (
@@ -312,7 +355,7 @@ function RaidQuartermasterDen() {
             <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
               <RaidRoomSprite kind="skull" level={roomSpriteLevel(lootDef, GuildManager.raidUpgradeLevel(state, lootDef.id))} height={56} title={lootDef.name} />
             </div>
-            <RaidUpgradeCard def={lootDef} />
+            <RaidUpgradeRow def={lootDef} />
           </div>
         )}
         {recoveryDef && (
@@ -320,7 +363,7 @@ function RaidQuartermasterDen() {
             <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
               <RaidRoomSprite kind="shelf" level={roomSpriteLevel(recoveryDef, GuildManager.raidUpgradeLevel(state, recoveryDef.id))} height={56} title={recoveryDef.name} />
             </div>
-            <RaidUpgradeCard def={recoveryDef} />
+            <RaidUpgradeRow def={recoveryDef} />
           </div>
         )}
       </div>

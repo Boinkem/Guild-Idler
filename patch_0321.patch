@@ -1,0 +1,881 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 20b7c71..b858273 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -26153,3 +26153,101 @@ than a per-file exact match. Legendary crops a little more than the
+ others as a result (~7% off vs ~2-4% for the rest) -- not enough to
+ be worth a per-rarity CSS value, but worth knowing if legendary gear
+ specifically still looks off after this patch.
++
++### Every panel's subtitle line fixed (missing shadow/backing, root cause traced to one shared rule) + Prestige/Raids/Harvest/Vendors upgrade cards converted to Guild Hall's dense row style (patch 0321)
++
++```discord-update
++Dev Update | Bug Fix / Features
++
++- Fixed every tab's subtitle line reading as unreadable white text over busy background art -- one shared CSS rule, now fixed everywhere at once
++- Changed Prestige, the Raid Quartermaster's Den, Harvest's tools/Overseer, and every Vendor's Upgrades tab from big cards to Guild Hall's compact row style
++```
++
++Two unrelated fixes landing together since both came out of the same
++review pass.
++
++**Subtitle fix.** Direct report with screenshots across four tabs.
++Root cause: `.panel .subtitle` -- the one shared rule every panel's
++`<h2>Title</h2><p className="subtitle">...</p>` pulls from (17 panels
++checked, all confirmed using it) -- had no `text-shadow` at all, unlike
++`.panel h2` right above it in the file, and nothing behind it but
++`.tab-scene-content`'s own flat 25% dark tint over that tab's
++background art. Fine against a plain dark panel, nowhere near enough
++against a bright or busy patch of art (worst case in the reports: a
++light wood/foliage background, nearly unreadable). Rather than a
++shadow alone -- which wasn't going to hold up given how busy some of
++this art gets -- `.subtitle` now gets a real backing plaque, same "give
++it actual backing" fix as Guild Hall's rows/chips and the item-card
++rarity banners before it: `display: inline-block` (hugs its own text
++width, same as `.guild-storage-plaque` and every other snug plaque in
++this game, rather than a full-width strip), a translucent `--night`
++backdrop, and a shadow to match. `h2` itself untouched -- every report
++screenshot showed the title reading fine, this was specifically the
++line underneath it.
++
++**Upgrade cards -> rows.** Same shape Guild Hall's own dense list
++established (patch 0314) -- name/level on one line, a one-line effect
++summary, a thin progress rule, a compact Buy button, click-through to a
++detail modal for the full flavour text -- generalized under new,
++Guild-Hall-agnostic classes (`.upgrade-row`, `.upgrade-row-list`,
++`.upgrade-buy-btn`, etc. -- see their own comment in app.css) rather
++than reusing Guild Hall's own `.guild-*` classes directly, so already-
++shipped, independently-verified code didn't need touching. No filter
++chips or collapsed "fully built" section anywhere here -- every one of
++these catalogs is small enough (3-6 items) that Guild Hall's extra
++apparatus, built specifically for its own 27-item list, wasn't needed.
++
++- **Prestige** (`RenownPerkCard` -> `RenownPerkRow`, `PrestigePanel.tsx`)
++  -- 6 guild-wide Renown perks. Tier II tag and the "jump to and
++  highlight" landing both carried over unchanged. Progress rule uses
++  `--violet` (Renown's own established color throughout this tab)
++  instead of Guild Hall's brass. `HeroPerkRow` (the per-hero perk tree)
++  was already its own flat row shape and wasn't touched.
++- **Raids** (`RaidUpgradeCard` -> `RaidUpgradeRow`, `RaidsPanel.tsx`)
++  -- the 3-upgrade Quartermaster's Den (Speed/Loot/Recovery). Each
++  upgrade's own room sprite (rack/skull/shelf, filling in per level)
++  still renders above it exactly as before -- only what used to sit
++  below the sprite changed.
++- **Harvest** (`ToolUpgradeCard` -> `ToolUpgradeRow`, `OverseerCard` ->
++  `OverseerRow`, `HarvestPanel.tsx`) -- the 4 material-node tools plus
++  Overseer, 5 rows total. Overseer's row-level effect text is now a
++  short live stat ("Rescuing X% -> Y% next level") rather than the
++  longer flavour paragraph, which moved into the detail modal alongside
++  the unchanged pre-hire flavour text. Warehouse's own card (embedded
++  material stock bars, a genuinely different shape than a plain leveled
++  upgrade) and Trade Route (a one-time unlock + trading utility, not a
++  leveled upgrade at all) were both deliberately left as cards --
++  neither fits the row pattern without a much bigger restructure than
++  this patch was scoped for.
++- **Vendors** (`upgradeCard()`/`lockedCard()` -> `VendorUpgradeRow`/
++  `VendorLockedRow`, `VendorsPanel.tsx`) -- every vendor's own per-page
++  Upgrades tree (Blacksmith/Alchemist/Enchanter), including the "???"
++  locked-tier placeholder as its own dashed/dimmed row variant
++  (`.upgrade-row.locked`). Wasn't named directly in the original report
++  but is the exact same card shape as the other three, so went in with
++  them. Worth flagging: `upgradeCard`/`lockedCard` used to be plain
++  helper *functions* called from inside `VendorPage`'s own `.map()` --
++  had to become real standalone components here (`VendorUpgradeRow`),
++  since the detail modal needs its own `useState`, and a hook called
++  from a function invoked once per list item in someone else's render
++  is exactly the "hook in a loop" shape the rules of hooks forbid.
++
++**Verified:** pulled `app.css`, `PrestigePanel.tsx`, `RaidsPanel.tsx`,
++`HarvestPanel.tsx`, and `VendorsPanel.tsx` fresh from `main` via
++`raw.githubusercontent.com` immediately before editing (patch 0320 was
++already live). Grepped every `.tsx` file under `src/ui` for
++`className="subtitle"` first to confirm the full 17-panel list before
++touching the shared rule, and grepped again afterward for every old
++component name (`RenownPerkCard`, `RaidUpgradeCard`, `ToolUpgradeCard`,
++`OverseerCard`, `upgradeCard(`, `lockedCard(`) to confirm no stale
++references were left behind anywhere. `npx tsc --noEmit` (clean under
++`strict`/`noUnusedLocals`/`noUnusedParameters` -- would have caught a
++leftover reference to any removed function) and a full `vite build`
++(web + both Electron entries) passing clean against a fresh clone with
++every file applied together.
++
++**Still open:** whether to eventually merge Guild Hall's own `.guild-*`
++row classes and this patch's generic `.upgrade-*` ones into a single
++shared set -- deliberately kept separate this patch to avoid touching
++already-verified Guild Hall code, but five call sites now exist across
++the two nearly-identical class sets.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index a438ddf..d212de5 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1727,11 +1727,34 @@ button:focus-visible, [tabindex]:focus-visible {
+   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+ }
+ 
++/*
++ * Patch 0321, direct report (screenshots across four tabs, root cause
++ * traced to this one shared rule -- 17 panels all pull their subtitle
++ * from here). .panel h2 right above already carries a text-shadow;
++ * this had NONE at all -- just --muted color and nothing else,
++ * against nothing but .tab-scene-content's own flat 25% dark tint
++ * over this tab's background art. Fine against a plain dark panel,
++ * nowhere near enough once that art gets bright or busy (worst case
++ * in the reports: a light wood/foliage background). A shadow alone
++ * wasn't going to hold up against art that busy, so this gets the
++ * same real backing plaque every other bare-text-on-art bug in this
++ * game got (Guild Hall's rows/chips, item-card rarity banners) --
++ * inline-block so it hugs its own text width, same shape
++ * .guild-storage-plaque and every other snug plaque in this game
++ * already uses, rather than a full-width strip. h2 itself is
++ * untouched -- it already reads fine in every report screenshot, this
++ * was specifically the subtitle line under it.
++ */
+ .panel .subtitle {
+   color: var(--muted);
+   font-size: 0.6875rem;
+   margin: 0 0 14px;
+   letter-spacing: 0.01em;
++  display: inline-block;
++  padding: 4px 10px;
++  border-radius: 4px;
++  background: color-mix(in srgb, var(--night) 55%, transparent);
++  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+ }
+ 
+ .section-heading {
+@@ -3193,6 +3216,86 @@ input[type='range'] {
+   border-style: dashed;
+ }
+ 
++/*
++ * Shared "dense upgrade row" visual language (patch 0321) -- same shape
++ * Guild Hall's own .guild-upgrade-row already established (patch 0314):
++ * name/level on one line, a one-line effect summary, a thin progress
++ * rule, a compact Buy button, click-through to a detail modal for the
++ * full flavour text. Generalized here under a plain "upgrade-row" name
++ * so Prestige's Renown perks, the Raid Quartermaster's Den, Harvest's
++ * tools/Overseer, and each Vendor's own Upgrades tree can all use it
++ * instead of the old full .card (title + flavour paragraph + stat-row +
++ * button) every one of them used before.
++ *
++ * Deliberately NOT unified with Guild Hall's own .guild-* classes --
++ * that code already shipped and is independently verified; this
++ * duplicates the same handful of rules under a generic name rather than
++ * risk touching it. Worth merging into one shared set later if the
++ * duplication ever becomes a real maintenance problem, but four call
++ * sites landing in one patch already felt like enough surface area for
++ * one change.
++ */
++.upgrade-row-list {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 0 18px;
++}
++@media (max-width: 640px) {
++  .upgrade-row-list { grid-template-columns: 1fr; }
++}
++.upgrade-row {
++  position: relative;
++  display: grid;
++  grid-template-columns: 1fr auto;
++  align-items: center;
++  gap: 12px;
++  padding: 9px 8px 8px;
++  background: color-mix(in srgb, var(--panel) 88%, transparent);
++  border-bottom: 1px solid var(--panel-2);
++  cursor: pointer;
++}
++.upgrade-row:hover { background: var(--panel-2); }
++.upgrade-row-head { display: flex; align-items: baseline; gap: 7px; }
++.upgrade-row-name { font-size: 0.75rem; font-weight: 700; }
++.upgrade-row-level { font-size: 0.5625rem; color: var(--muted); margin-left: auto; }
++.upgrade-row-effect {
++  display: block;
++  font-size: 0.625rem;
++  color: var(--muted);
++  margin: 3px 0 5px;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++.upgrade-row-rule { display: block; height: 2px; background: var(--edge); }
++.upgrade-row-rule > span { display: block; height: 100%; transition: width 500ms ease-out; }
++.upgrade-buy-btn {
++  font-size: 0.625rem;
++  font-weight: 700;
++  padding: 6px 9px;
++  background: transparent;
++  color: var(--muted);
++  border: 1px solid var(--panel-3);
++  cursor: default;
++  min-height: 0;
++  box-shadow: none;
++}
++.upgrade-buy-btn.affordable {
++  background: var(--brass);
++  color: var(--ink);
++  border-color: var(--brass);
++  cursor: pointer;
++}
++/* Vendors' own "not unlocked yet" placeholder row (the old "???"
++   lockedCard) -- dashed, dimmed, no click affordance since there's
++   nothing behind it to open yet. */
++.upgrade-row.locked {
++  cursor: default;
++  opacity: 0.55;
++  border-style: dashed;
++}
++.upgrade-row.locked:hover { background: color-mix(in srgb, var(--panel) 88%, transparent); }
++
+ /* ---------------------------------- lore ----------------------------------- */
+ 
+ .lore-card { margin-bottom: 10px; }
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index 1a89d2e..a5536ae 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -473,33 +473,68 @@ function NodeLane({ nodeId, onCatch }: { nodeId: MaterialId; onCatch: (materialI
+   );
+ }
+ 
+-function ToolUpgradeCard({ nodeId }: { nodeId: MaterialId }) {
++/**
++ * Patch 0321: converted from a full .card to the shared dense upgrade
++ * row -- see .upgrade-row's own comment in app.css. Only 4 of these
++ * exist (one per material node), same as Overseer right below it.
++ */
++function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
+   const engine = useEngine();
+   const state = engine.state;
++  const [showDetail, setShowDetail] = useState(false);
+   const tool = HARVEST_TOOL_BY_NODE[nodeId];
+   const level = state.harvestTools[nodeId] ?? 0;
+   const cost = harvestToolCost(nodeId, level);
+   const maxed = cost === null;
+   const { flashes, dismiss } = useMaxFlash([{ id: nodeId, name: tool.name, level, maxLevel: tool.maxLevel }]);
+   const flash = flashes[nodeId];
+-  // Same "only pulse on a real change, not on every tab-switch remount"
+-  // fix as Guild Hall/Vendors -- see usePulsesOnChange's own doc comment
+-  // in maxFlash.tsx.
+   const levelPulses = usePulsesOnChange([{ id: nodeId, value: level }]);
+-
++  const effectText = `+${tool.yieldBonusPerLevel} yield and a faster respawn per level`;
++  const pctFill = Math.min(100, (level / tool.maxLevel) * 100);
++  const buyLabel = maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`;
+   return (
+-    <div className="card" style={{ marginBottom: 0 }}>
+-      <div className="spread">
+-        <span className="card-title">{tool.name}</span>
+-        <span className={`small muted ${levelPulses[nodeId] ? 'purchase-pulse' : ''}`}>Level {level}/{tool.maxLevel}</span>
+-      </div>
+-      <p className="card-flavour">
+-        +{tool.yieldBonusPerLevel} yield and a faster respawn per level. ({MATERIAL_BY_ID[nodeId].nodeName})
+-      </p>
+-      <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>
+-        {maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`}
++    <div
++      className="upgrade-row"
++      onClick={() => setShowDetail(true)}
++      role="button"
++      tabIndex={0}
++      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
++    >
++      <span style={{ minWidth: 0 }}>
++        <span className="upgrade-row-head">
++          <span className="upgrade-row-name">{tool.name}</span>
++          <span className={`upgrade-row-level ${levelPulses[nodeId] ? 'purchase-pulse' : ''}`}>Lv {level}/{tool.maxLevel}</span>
++        </span>
++        <span className="upgrade-row-effect">{effectText}</span>
++        <span className="upgrade-row-rule">
++          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
++        </span>
++      </span>
++      <button
++        className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
++        disabled={maxed || state.gold < (cost ?? 0)}
++        onClick={(e) => { e.stopPropagation(); engine.upgradeHarvestTool(nodeId); }}
++      >
++        {buyLabel}
+       </button>
+       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(nodeId)} />}
++      {showDetail && (
++        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="spread">
++              <span className="card-title">{tool.name}</span>
++              <span className="small muted">Lv {level}/{tool.maxLevel}</span>
++            </div>
++            <p className="card-flavour" style={{ marginTop: 6 }}>
++              {effectText}. ({MATERIAL_BY_ID[nodeId].nodeName})
++            </p>
++            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++              <button onClick={() => setShowDetail(false)}>Close</button>
++              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>{buyLabel}</button>
++            </div>
++          </div>
++        </div>
++      )}
+     </div>
+   );
+ }
+@@ -550,23 +585,31 @@ function WarehouseTab() {
+       </div>
+ 
+       <TradeRouteCard />
+-      <OverseerCard />
++      <OverseerRow />
+ 
+       <div className="section-heading">Tools</div>
+       <p className="tiny muted" style={{ marginBottom: 8 }}>
+         Moved here from each node's own view -- one shared spot for every tool upgrade, same as everything
+         else Warehouse-related.
+       </p>
+-      <div className="grid two">
+-        {NODE_ORDER.map((nodeId) => <ToolUpgradeCard key={nodeId} nodeId={nodeId} />)}
++      <div className="upgrade-row-list">
++        {NODE_ORDER.map((nodeId) => <ToolUpgradeRow key={nodeId} nodeId={nodeId} />)}
+       </div>
+     </>
+   );
+ }
+ 
+-function OverseerCard() {
++/**
++ * Patch 0321: converted from a full .card to the shared dense upgrade
++ * row -- see .upgrade-row's own comment in app.css. The row's own
++ * effect line is a short live stat once hired (rescuing X% -> next
++ * level's Y%) rather than the longer flavour text, which moves to the
++ * detail modal along with the pre-hire flavour paragraph, unchanged.
++ */
++function OverseerRow() {
+   const engine = useEngine();
+   const state = engine.state;
++  const [showDetail, setShowDetail] = useState(false);
+   const level = state.overseerLevel;
+   const cost = overseerUpgradeCost(level);
+   const maxed = cost === null;
+@@ -575,24 +618,53 @@ function OverseerCard() {
+   const { flashes, dismiss } = useMaxFlash([{ id: 'overseer', name: OVERSEER_UPGRADE.name, level, maxLevel: OVERSEER_UPGRADE.maxLevel }]);
+   const flash = flashes.overseer;
+   const levelPulses = usePulsesOnChange([{ id: 'overseer', value: level }]);
+-
++  const description = level === 0
++    ? 'Hire someone to keep an eye on the Fields. A spawn that would otherwise despawn unclicked gets a chance to be caught anyway -- never the bonus glint, and never as reliable as watching yourself, but nothing goes to waste while you\u2019re elsewhere.'
++    : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`;
++  const effectText = level === 0 ? 'Catches missed spawns while you\u2019re away' : `Rescuing ${chance}% of misses \u2192 ${nextChance}% next level`;
++  const pctFill = Math.min(100, (level / OVERSEER_UPGRADE.maxLevel) * 100);
++  const buyLabel = maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
+   return (
+-    <div className="card" style={{ marginBottom: 12 }}>
+-      <div className="spread">
+-        <span className="card-title">Overseer</span>
+-        <span className={`small muted ${levelPulses.overseer ? 'purchase-pulse' : ''}`}>
+-          Level {level}/{OVERSEER_UPGRADE.maxLevel}
++    <div
++      className="upgrade-row"
++      onClick={() => setShowDetail(true)}
++      role="button"
++      tabIndex={0}
++      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
++    >
++      <span style={{ minWidth: 0 }}>
++        <span className="upgrade-row-head">
++          <span className="upgrade-row-name">Overseer</span>
++          <span className={`upgrade-row-level ${levelPulses.overseer ? 'purchase-pulse' : ''}`}>Lv {level}/{OVERSEER_UPGRADE.maxLevel}</span>
+         </span>
+-      </div>
+-      <p className="card-flavour">
+-        {level === 0
+-          ? 'Hire someone to keep an eye on the Fields. A spawn that would otherwise despawn unclicked gets a chance to be caught anyway -- never the bonus glint, and never as reliable as watching yourself, but nothing goes to waste while you\u2019re elsewhere.'
+-          : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`}
+-      </p>
+-      <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeOverseer()}>
+-        {maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)} (${chance}% \u2192 ${nextChance}%)`}
++        <span className="upgrade-row-effect">{effectText}</span>
++        <span className="upgrade-row-rule">
++          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
++        </span>
++      </span>
++      <button
++        className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
++        disabled={maxed || state.gold < (cost ?? 0)}
++        onClick={(e) => { e.stopPropagation(); engine.upgradeOverseer(); }}
++      >
++        {buyLabel}
+       </button>
+       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss('overseer')} />}
++      {showDetail && (
++        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="spread">
++              <span className="card-title">Overseer</span>
++              <span className="small muted">Lv {level}/{OVERSEER_UPGRADE.maxLevel}</span>
++            </div>
++            <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
++            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++              <button onClick={() => setShowDetail(false)}>Close</button>
++              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeOverseer()}>{buyLabel}</button>
++            </div>
++          </div>
++        </div>
++      )}
+     </div>
+   );
+ }
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index c10f820..8ea7d36 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -101,55 +101,88 @@ function HeroRetireCard({
+ }
+ 
+ /**
+- * One renown perk's card -- pulled out of PrestigePanel's own inline
+- * `.map()` so it can own a ref for the "jump to and highlight" treatment
+- * (`highlighted`/`onDismissHighlight`), same shape GuildPanel's
+- * UpgradeCard already established for the exact same feature (patch
+- * 0179/0180) -- scrolls itself into view and glows briefly when it's the
+- * answer to a locked-purchase link elsewhere (e.g. HeroesPanel's "No free
+- * slots" message pointing at Extra Banner). Every prop here is exactly
+- * what the old inline block already computed per-def; nothing about the
+- * markup itself changed.
++ * Patch 0321: converted from a full .card (title, flavour paragraph,
++ * stat-row, button all inline) to the same dense row + click-through
++ * detail modal Guild Hall's rows use -- see .upgrade-row's own comment
++ * in app.css. Only 6 of these exist, nowhere near Guild Hall's 27, so
++ * this brings just the row/modal shape over, not the filter chips or
++ * collapsed "fully built" section that catalog size actually needed.
++ * "Jump to and highlight" (highlighted/onDismissHighlight) still
++ * scrolls the row itself into view and opens the modal on click, same
++ * as before.
+  */
+-function RenownPerkCard({
++function RenownPerkRow({
+   def, level, cost, maxed, affordable, cap, inTier2, justUnlocked, pulsing, onBuy, highlighted, onDismissHighlight,
+ }: {
+   def: ReturnType<typeof PrestigeManager.perks>[number];
+   level: number; cost: number | null; maxed: boolean; affordable: boolean; cap: number; inTier2: boolean; justUnlocked: boolean;
+   pulsing?: boolean; onBuy: () => void; highlighted?: boolean; onDismissHighlight?: () => void;
+ }) {
+-  const cardRef = useRef<HTMLDivElement>(null);
++  const [showDetail, setShowDetail] = useState(false);
++  const rowRef = useRef<HTMLDivElement>(null);
+   useEffect(() => {
+-    if (highlighted) cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
++    if (highlighted) rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+   }, [highlighted]);
++  const entries = [
++    ...describeMods(def.modsPerLevel).map((line) => `${line} per level`),
++    ...(def.heroSlotsPerLevel ? ['+1 hero slot per level'] : []),
++  ];
++  const effectText = entries.join(' · ');
++  const description = justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description;
++  const pctFill = Math.min(100, (level / cap) * 100);
++  const buyLabel = maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`;
+   return (
+     <div
+-      ref={cardRef}
+-      className={`card ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'requirement-highlight' : ''}`}
+-      style={{ marginBottom: 0 }}
+-      onClick={onDismissHighlight}
++      ref={rowRef}
++      className={`upgrade-row ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'card requirement-highlight' : ''}`}
++      onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
++      role="button"
++      tabIndex={0}
++      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); onDismissHighlight?.(); } }}
+     >
+-      <div className="spread">
+-        <span className="card-title">
+-          {def.name}
+-          {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
++      <span style={{ minWidth: 0 }}>
++        <span className="upgrade-row-head">
++          <span className="upgrade-row-name">
++            {def.name}
++            {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
++          </span>
++          <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
+         </span>
+-        <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
+-      </div>
+-      <p className="card-flavour">
+-        {justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description}
+-      </p>
+-      <div className="stat-row" style={{ marginBottom: 8 }}>
+-        {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+-        {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
+-      </div>
++        <span className="upgrade-row-effect">{effectText}</span>
++        <span className="upgrade-row-rule">
++          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--violet)' }} />
++        </span>
++      </span>
+       <button
+-        className="btn-yellow"
++        className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
+         disabled={maxed || !affordable}
+         onClick={(e) => { e.stopPropagation(); onBuy(); }}
+       >
+-        {maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
++        {buyLabel}
+       </button>
++      {showDetail && (
++        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="spread">
++              <span className="card-title">
++                {def.name}
++                {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
++              </span>
++              <span className="small muted">{level}/{cap}</span>
++            </div>
++            <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
++            {entries.length > 0 && (
++              <div className="stat-row" style={{ marginBottom: 4 }}>
++                {entries.map((line) => <span key={line}>{line}</span>)}
++              </div>
++            )}
++            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++              <button onClick={() => setShowDetail(false)}>Close</button>
++              <button className="btn-yellow" disabled={maxed || !affordable} onClick={onBuy}>{buyLabel}</button>
++            </div>
++          </div>
++        </div>
++      )}
+     </div>
+   );
+ }
+@@ -278,7 +311,7 @@ export function PrestigePanel() {
+       ))}
+ 
+       <div className="section-heading">Spend renown -- guild-wide</div>
+-      <div className="grid two">
++      <div className="upgrade-row-list">
+         {PrestigeManager.perks().map((def) => {
+           const level = PrestigeManager.perkLevel(state, def.id);
+           const cost = PrestigeManager.nextPerkCost(state, def.id);
+@@ -288,7 +321,7 @@ export function PrestigePanel() {
+           const inTier2 = PrestigeManager.perkInTier2(state, def.id);
+           const justUnlocked = PrestigeManager.perkTier2JustUnlocked(state, def.id);
+           return (
+-            <RenownPerkCard
++            <RenownPerkRow
+               key={def.id}
+               def={def}
+               level={level}
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 9fde839..d4c2b96 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -225,9 +225,17 @@ function EncounterElementTags({ encounter }: { encounter: RaidEncounterDef }) {
+ 
+ /** Shared across every raid card -- clicking a discovered loot entry opens
+  *  this instead of each card managing its own overlay state. */
+-function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
++/**
++ * Patch 0321: converted from a full .card to the shared dense
++ * upgrade row -- see .upgrade-row's own comment in app.css. Only 3 of
++ * these exist (Speed/Loot/Recovery), each still paired with its own
++ * room sprite rendered above it in RaidQuartermasterDen below, which
++ * this doesn't touch at all -- just what used to sit under the sprite.
++ */
++function RaidUpgradeRow({ def }: { def: RaidUpgradeDef }) {
+   const engine = useEngine();
+   const state = engine.state;
++  const [showDetail, setShowDetail] = useState(false);
+   const level = GuildManager.raidUpgradeLevel(state, def.id);
+   const next = GuildManager.nextRaidUpgradeCost(state, def.id);
+   const maxed = next === null;
+@@ -235,25 +243,60 @@ function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
+   const { flashes, dismiss } = useMaxFlash([{ id: def.id, name: def.name, level, maxLevel: def.maxLevel }]);
+   const flash = flashes[def.id];
+   const levelPulses = usePulsesOnChange([{ id: def.id, value: level }]);
+-
++  const entries = describeMods(def.modsPerLevel).map((line) => `${line} per level`);
++  const effectText = entries.join(' · ');
++  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
++  const buyLabel = maxed
++    ? 'Fully upgraded'
++    : next!.currency === 'gold'
++      ? `Buy · ${formatGold(next!.cost)}`
++      : `Buy · ${formatNumber(next!.cost)} renown`;
+   return (
+-    <div className="card" style={{ marginBottom: 0 }}>
+-      <div className="spread">
+-        <span className="card-title">{def.name}</span>
+-        <span className={`small muted ${levelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+-      </div>
+-      <p className="card-flavour">{def.description}</p>
+-      <div className="stat-row" style={{ marginBottom: 8 }}>
+-        {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+-      </div>
+-      <button className="btn-yellow" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>
+-        {maxed
+-          ? 'Fully upgraded'
+-          : next!.currency === 'gold'
+-            ? `Buy · ${formatGold(next!.cost)}`
+-            : `Buy · ${formatNumber(next!.cost)} renown`}
++    <div
++      className="upgrade-row"
++      onClick={() => setShowDetail(true)}
++      role="button"
++      tabIndex={0}
++      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
++    >
++      <span style={{ minWidth: 0 }}>
++        <span className="upgrade-row-head">
++          <span className="upgrade-row-name">{def.name}</span>
++          <span className={`upgrade-row-level ${levelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
++        </span>
++        <span className="upgrade-row-effect">{effectText}</span>
++        <span className="upgrade-row-rule">
++          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
++        </span>
++      </span>
++      <button
++        className={`upgrade-buy-btn ${!maxed && afford ? 'affordable' : ''}`}
++        disabled={maxed || !afford}
++        onClick={(e) => { e.stopPropagation(); engine.buyRaidUpgrade(def.id); }}
++      >
++        {buyLabel}
+       </button>
+       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
++      {showDetail && (
++        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="spread">
++              <span className="card-title">{def.name}</span>
++              <span className="small muted">{level}/{def.maxLevel}</span>
++            </div>
++            <p className="card-flavour" style={{ marginTop: 6 }}>{def.description}</p>
++            {entries.length > 0 && (
++              <div className="stat-row" style={{ marginBottom: 4 }}>
++                {entries.map((line) => <span key={line}>{line}</span>)}
++              </div>
++            )}
++            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++              <button onClick={() => setShowDetail(false)}>Close</button>
++              <button className="btn-yellow" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>{buyLabel}</button>
++            </div>
++          </div>
++        </div>
++      )}
+     </div>
+   );
+ }
+@@ -304,7 +347,7 @@ function RaidQuartermasterDen() {
+             <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+               <RaidRoomSprite kind="rack" level={roomSpriteLevel(speedDef, GuildManager.raidUpgradeLevel(state, speedDef.id))} height={56} title={speedDef.name} />
+             </div>
+-            <RaidUpgradeCard def={speedDef} />
++            <RaidUpgradeRow def={speedDef} />
+           </div>
+         )}
+         {lootDef && (
+@@ -312,7 +355,7 @@ function RaidQuartermasterDen() {
+             <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+               <RaidRoomSprite kind="skull" level={roomSpriteLevel(lootDef, GuildManager.raidUpgradeLevel(state, lootDef.id))} height={56} title={lootDef.name} />
+             </div>
+-            <RaidUpgradeCard def={lootDef} />
++            <RaidUpgradeRow def={lootDef} />
+           </div>
+         )}
+         {recoveryDef && (
+@@ -320,7 +363,7 @@ function RaidQuartermasterDen() {
+             <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+               <RaidRoomSprite kind="shelf" level={roomSpriteLevel(recoveryDef, GuildManager.raidUpgradeLevel(state, recoveryDef.id))} height={56} title={recoveryDef.name} />
+             </div>
+-            <RaidUpgradeCard def={recoveryDef} />
++            <RaidUpgradeRow def={recoveryDef} />
+           </div>
+         )}
+       </div>
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 6e5b57a..d32d457 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -124,6 +124,100 @@ export function VendorsPanel() {
+   );
+ }
+ 
++/**
++ * Patch 0321: converted from the old inline `upgradeCard()` helper
++ * (a plain function returning a full .card, called from a `.map()`
++ * inside VendorPage's own render) to a proper standalone component
++ * using the shared dense upgrade row -- see .upgrade-row's own comment
++ * in app.css. Had to become a real component rather than staying a
++ * helper function: it now needs its own `useState` for the detail
++ * modal, and a hook called from inside a function invoked once per
++ * list item in someone else's render is exactly the "hook in a loop"
++ * shape the rules of hooks forbid -- a real component per row sidesteps
++ * that entirely, each instance owning its own hook call.
++ */
++function VendorUpgradeRow({
++  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy,
++}: {
++  def: UpgradeDef; level: number; cost: number | null; scrapCost: number; maxed: boolean; affordable: boolean;
++  flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void; onBuy: () => void;
++}) {
++  const [showDetail, setShowDetail] = useState(false);
++  const entries = [
++    ...describeMods(def.modsPerLevel).map((line) => `${line} per level`),
++    ...(def.unlocks === 'legendaryQuests' ? ['Unlocks Legendary quests'] : []),
++    ...(def.unlocks === 'blackMarket' ? ['Unlocks the Black Market'] : []),
++  ];
++  const effectText = entries.join(' · ');
++  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
++  const buyLabel = maxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
++  return (
++    <div
++      className="upgrade-row"
++      onClick={() => setShowDetail(true)}
++      role="button"
++      tabIndex={0}
++      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
++    >
++      <span style={{ minWidth: 0 }}>
++        <span className="upgrade-row-head">
++          <span className="upgrade-row-name">{def.name}</span>
++          <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
++        </span>
++        <span className="upgrade-row-effect">{effectText}</span>
++        <span className="upgrade-row-rule">
++          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
++        </span>
++      </span>
++      <button
++        className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
++        disabled={maxed || !affordable}
++        onClick={(e) => { e.stopPropagation(); onBuy(); }}
++      >
++        {buyLabel}
++      </button>
++      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
++      {showDetail && (
++        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="spread">
++              <span className="card-title">{def.name}</span>
++              <span className="small muted">{level}/{def.maxLevel}</span>
++            </div>
++            <p className="card-flavour" style={{ marginTop: 6 }}>{def.description}</p>
++            {entries.length > 0 && (
++              <div className="stat-row" style={{ marginBottom: 4 }}>
++                {entries.map((line) => <span key={line}>{line}</span>)}
++              </div>
++            )}
++            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++              <button onClick={() => setShowDetail(false)}>Close</button>
++              <button className="btn-yellow" disabled={maxed || !affordable} onClick={onBuy}>{buyLabel}</button>
++            </div>
++          </div>
++        </div>
++      )}
++    </div>
++  );
++}
++
++/** Row version of the old `lockedCard()` "???" placeholder -- no hooks
++ *  needed here, so this stays a plain component rather than needing
++ *  the same rules-of-hooks fix VendorUpgradeRow above needed. */
++function VendorLockedRow({ requiredLevel, vendorName }: { requiredLevel: number; vendorName: string }) {
++  return (
++    <div className="upgrade-row locked">
++      <span style={{ minWidth: 0 }}>
++        <span className="upgrade-row-head">
++          <span className="upgrade-row-name muted">???</span>
++        </span>
++        <span className="upgrade-row-effect">Level up {vendorName} to level {requiredLevel} to see this.</span>
++        <span className="upgrade-row-rule"><span style={{ width: '0%' }} /></span>
++      </span>
++    </div>
++  );
++}
++
+ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+   const engine = useEngine();
+   const state = engine.state;
+@@ -160,47 +254,6 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+     ...upgradeList.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
+   ]);
+ 
+-  function upgradeCard(def: UpgradeDef) {
+-    const upLevel = GuildManager.upgradeLevel(state, def.id);
+-    const upCost = GuildManager.nextUpgradeCost(state, def.id);
+-    const upScrapCost = GuildManager.nextUpgradeScrapCost(state, def.id) ?? 0;
+-    const upMaxed = upCost === null && upLevel >= def.maxLevel;
+-    const upAffordable = upCost !== null && state.gold >= upCost && state.scrap >= upScrapCost;
+-    const flash = flashes[def.id];
+-    const pulsing = levelPulses[def.id];
+-    return (
+-      <div key={def.id} className="card" style={{ marginBottom: 0 }}>
+-        <div className="spread">
+-          <span className="card-title">{def.name}</span>
+-          <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{upLevel}/{def.maxLevel}</span>
+-        </div>
+-        <p className="card-flavour">{def.description}</p>
+-        <div className="stat-row" style={{ marginBottom: 8 }}>
+-          {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+-          {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
+-          {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
+-        </div>
+-        <button
+-          className="btn-yellow"
+-          disabled={upMaxed || !upAffordable}
+-          onClick={() => engine.buyUpgrade(def.id)}
+-        >
+-          {upMaxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(upCost ?? 0)} + ${upScrapCost} Scrap`}
+-        </button>
+-        {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
+-      </div>
+-    );
+-  }
+-
+-  function lockedCard(requiredLevel: number) {
+-    return (
+-      <div key={`locked-${requiredLevel}`} className="card locked-upgrade" style={{ marginBottom: 0 }}>
+-        <div className="card-title muted">???</div>
+-        <p className="card-flavour muted">Level up {vendorDef.name} to level {requiredLevel} to see this.</p>
+-      </div>
+-    );
+-  }
+-
+   return (
+     <>
+       <div className="card vendor-card" style={{ marginBottom: 12 }}>
+@@ -271,8 +324,32 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+       </div>
+ 
+       <div className="section-heading">Upgrades</div>
+-      <div className="grid two">
+-        {upgradeList.map((def, index) => (level >= index + 1 ? upgradeCard(def) : lockedCard(index + 1)))}
++      <div className="upgrade-row-list">
++        {upgradeList.map((def, index) => {
++          if (level < index + 1) {
++            return <VendorLockedRow key={`locked-${index}`} requiredLevel={index + 1} vendorName={vendorDef.name} />;
++          }
++          const upLevel = GuildManager.upgradeLevel(state, def.id);
++          const upCost = GuildManager.nextUpgradeCost(state, def.id);
++          const upScrapCost = GuildManager.nextUpgradeScrapCost(state, def.id) ?? 0;
++          const upMaxed = upCost === null && upLevel >= def.maxLevel;
++          const upAffordable = upCost !== null && state.gold >= upCost && state.scrap >= upScrapCost;
++          return (
++            <VendorUpgradeRow
++              key={def.id}
++              def={def}
++              level={upLevel}
++              cost={upCost}
++              scrapCost={upScrapCost}
++              maxed={upMaxed}
++              affordable={upAffordable}
++              flash={flashes[def.id]}
++              pulsing={levelPulses[def.id]}
++              onDismissFlash={() => dismiss(def.id)}
++              onBuy={() => engine.buyUpgrade(def.id)}
++            />
++          );
++        })}
+       </div>
+ 
+       <div className="section-heading">Stock</div>
