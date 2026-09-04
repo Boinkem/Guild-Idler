@@ -469,6 +469,23 @@
     "chainExclusive": true
   },
   {
+    "id": "chieftains_torc",
+    "name": "Chieftain's Torc",
+    "slot": "amulet",
+    "rarity": "uncommon",
+    "reqLevel": 7,
+    "maxDurability": 75,
+    "value": 170,
+    "stats": {
+      "strength": 1,
+      "luck": 1
+    },
+    "icon": "accessories/Accessory_02.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": true
+  },
+  {
     "id": "choir_mask",
     "name": "Mask of the Hollow Choir",
     "slot": "helmet",
@@ -1075,7 +1092,7 @@
   },
   {
     "id": "tollkeepers_signet",
-    "name": "Tollkeeper's Signet",
+    "name": "Tyrant's Seal",
     "slot": "ring",
     "rarity": "uncommon",
     "reqLevel": 7,

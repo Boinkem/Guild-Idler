@@ -255,7 +255,7 @@
     ],
     "rewardRenown": 2,
     "title": "Grave-Watcher",
-    "epilogue": "Whatever the Harrower takes, it does not keep. It returns them as revenants, changed and obedient, still somehow counted in that ledger. East of the culled villages, in an old barrow-ground, something buried long ago has quietly begun to stir. Nobody has connected the two events yet. Somebody should, soon.",
+    "epilogue": "Whatever the Harrower takes, it does not keep. It returns them as revenants, changed and obedient, still somehow counted in that ledger. The barrow-ground sits less than a day's walk from the nearest culled village. No report reaching Ironrest has put the two side by side yet.",
     "requiresChainId": "demon_generals_ledger",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -367,7 +367,7 @@
     ],
     "rewardRenown": 2,
     "title": "Garrick's End",
-    "epilogue": "Garrick's raiders scattered the moment he stopped giving orders, which said everything about what kind of leader he actually was. The Stone Masons Guild has not forgotten who reopened their gate, and has made sure everyone downriver knows it too.",
+    "epilogue": "Garrick's raiders scattered the moment he stopped giving orders -- men who follow a man, not a cause, and never once pretended otherwise. The Stone Masons Guild has not forgotten who reopened their gate, and has made sure everyone downriver knows it too.",
     "requiresChainId": "proving_the_bastion",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -411,7 +411,7 @@
     ],
     "rewardRenown": 2,
     "title": "Farmwarden",
-    "epilogue": "Whatever Vayne was turning into never got to finish. The farmland recovered faster than the stories about what was found in that farmhouse basement. Most people who hear both versions decide they would rather not ask which one is true.",
+    "epilogue": "Whatever Vayne was turning into never got to finish. The farmland recovered faster than the stories about what was found in that farmhouse basement. The two versions don't agree, and nobody who was in that basement has come forward to settle which one is.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -441,7 +441,8 @@
         "durationMinutes": 780,
         "goldMultiplier": 2.5
       }
-    ]
+    ],
+    "requiresChainId": "proving_the_bastion"
   },
   {
     "id": "the_pale_rider",
@@ -471,7 +472,7 @@
     "stages": [
       {
         "name": "The Ashen Hand's Plea",
-        "flavour": "These paladins do not ask for help easily. Years of training see to that. That they are asking at all, standing here in armor that has seen real use, should worry the guild more than it seems to worry them.",
+        "flavour": "These paladins do not ask for help easily. Years of training see to that. That they are asking at all, standing here in armor that has seen real use, and none of them will meet the guild's eyes for longer than a breath.",
         "tag": "defense",
         "difficulty": "epic",
         "durationMinutes": 840,
@@ -501,7 +502,8 @@
         "durationMinutes": 1440,
         "goldMultiplier": 4
       }
-    ]
+    ],
+    "requiresChainId": "proving_the_bastion"
   },
   {
     "id": "dragon_hunt",
@@ -515,7 +517,7 @@
     ],
     "rewardRenown": 2,
     "title": "Dragonbane",
-    "epilogue": "Emberfell does not burn anymore. The dragon's hoard more than covered the cost of rebuilding every farmstead it touched, which several holdfast elders have called, half joking, a strange kind of silver lining to a burned town.",
+    "epilogue": "Emberfell does not burn anymore. The dragon's hoard more than covered the cost of rebuilding every farmstead it touched, enough to rebuild every farmstead twice over -- the holdfast elders have started calling it the dragon's one honest debt.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -566,7 +568,7 @@
   {
     "id": "lost_kingdom",
     "name": "Lost Kingdom Expedition",
-    "description": "A kingdom that every map somehow forgot to mention has surfaced in old records. The road there is long, the ruins are older than anyone can date, and at the center of it all waits a living stone guardian nobody has gotten past yet. The patron funding the expedition is paying well enough that nobody asks too many questions about why.",
+    "description": "A kingdom that every map somehow forgot to mention has surfaced in old records. The road there is long, the ruins are older than anyone can date, and at the center of it all waits a living stone guardian nobody has gotten past yet. The patron funding the expedition has paid three times what an expedition like this should cost, and has never once explained why.",
     "reqLevel": 14,
     "rewardGold": 2800,
     "rewardItems": [
@@ -626,7 +628,7 @@
     ],
     "rewardRenown": 3,
     "title": "Hellgate Breaker",
-    "epilogue": "The demon lord who held that throne will not sit on it again. The gate stands open and the wards lie broken. Whatever was singing behind them is no longer where the guild left it. It escaped in the confusion. It will not get far, but it is not here anymore either, and that is its own kind of unfinished business.",
+    "epilogue": "The demon lord who held that throne is dead, cut down before he reached the gate. Whatever was singing behind the wards is not so easily accounted for -- it escaped in the confusion, and where it went is still unknown.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -683,7 +685,7 @@
     ],
     "rewardRenown": 1,
     "title": "Crownbearer",
-    "epilogue": "Three fragments from three very different hiding places fit together exactly as they should. Nobody involved has explained why the crown was worth hiding in three separate corners of the world, and at this point, nobody is still asking.",
+    "epilogue": "Nobody involved has explained why the crown was worth hiding in three separate corners of the world. The patron paid in full anyway, and left before the fragments had even finished fitting together.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -725,7 +727,7 @@
   {
     "id": "goblin_warband",
     "name": "The Goblin King's Warband",
-    "description": "Three goblin warbands used to raid alone, tripping over each other's territory as often as they hit anything useful. Not anymore. A chieftain with more ambition than sense has welded them into one horde under a single stolen crown. They now move together, burn together, and answer to one voice. Silence that voice, and the horde should come apart again.",
+    "description": "Three goblin warbands used to raid alone, tripping over each other's territory as often as they hit anything useful. Not anymore. A chieftain with more ambition than sense has welded them into one horde by beating every rival who challenged him and taking their weapons as proof. He carries three now, strapped across his back, and the horde follows whoever can carry that many blades and still win.",
     "reqLevel": 6,
     "rewardGold": 440,
     "rewardItems": [
@@ -733,7 +735,7 @@
     ],
     "rewardRenown": 1,
     "title": "Warband-Breaker",
-    "epilogue": "Three warbands, no chieftain, and a confused horde left leaderless in the hills. But the third crown pulled from the wreckage never belonged to any warlord. Whoever it actually came from has a far older claim to settle, and has not started collecting yet.",
+    "epilogue": "Three warbands, no chieftain, and a confused horde left leaderless in the hills. The three cleavers he carried are recovered along with the rest of his hoard -- mismatched, dulled, and worth exactly what looted weapons are worth once the goblin who won them is dead. IronRest keeps them as a reminder of a horde that almost held together, and nothing more.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -756,7 +758,7 @@
       },
       {
         "name": "The Chieftain's Camp",
-        "flavour": "The chieftain holds court under three crowns stacked crooked on a head too small for any of them. They are trophies, not treasures, each looted from someone who mattered more than he ever will. He believes wearing them makes him a king. He is about to learn how wrong that is, right before the horde scatters without him.",
+        "flavour": "The chieftain holds court with three rival chieftains' cleavers lashed across his back, trophies from three duels he wasn't supposed to win. He didn't take the horde by scheming. He took it by beating every goblin who challenged him and making sure the rest were watching when he did. He's about to lose that argument to someone bigger.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 300,
@@ -765,50 +767,50 @@
     ]
   },
   {
-    "id": "third_crown",
-    "name": "The Third Crown",
-    "description": "One of the goblin king's three crowns was not looted from a rival warband or plundered from a manor. It was collected as a toll on the Blackford road, taken from a lord passing through. He was reported dead that same season. He was not. Whoever he is now, he has had a long time to plan what comes next.",
+    "id": "the_gathering_horde",
+    "name": "The Gathering Horde",
+    "description": "The chieftain's horde came apart the moment he died, but a horde that broke once already knows how it's done, and it doesn't take much to try again. One of his old lieutenants has started calling the scattered warbands back in, promising the same deal that worked once: follow the goblin who can out-fight everyone else, and win. If he finishes what he started, IronRest will be facing the same horde all over again -- bigger, angrier, and led by someone who watched exactly how the last one fell.",
     "reqLevel": 7,
     "rewardGold": 711,
     "rewardItems": [
-      "tollkeepers_signet@5"
+      "chieftains_torc@5"
     ],
     "rewardRenown": 1,
-    "title": "Ridge-Watcher",
-    "epilogue": "The crown's true owner is not dead, not landless, and far from finished. Whatever he is quietly building at Blackford Ridge is bigger than one toll gate. Scouting it further is not the guild's job yet, but that may not last.",
+    "title": "Horde-Breaker",
+    "epilogue": "The would-be chieftain is dead before the horde he was building ever finished forming, and the warbands that had started listening to him have gone back to raiding each other instead of anyone else. IronRest doubts this is the last goblin who'll try to repeat what worked once. For now, though, there's no horde left to worry about -- just scattered warbands, same as always.",
     "requiresChainId": "goblin_warband",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/third_crown.png",
+      "path": "chains/the_gathering_horde.png",
       "focusX": 79.6,
       "focusY": 35,
       "scale": 119
     },
     "icon": {
-      "path": "chains-icons/third_crown.png"
+      "path": "chains-icons/the_gathering_horde.png"
     },
     "stages": [
       {
-        "name": "The Toll That Should Not Exist",
-        "flavour": "A toll gate has gone up on the Blackford road again, manned by men who were farming their own fields a season ago and now answer to someone who was never a farmer.",
-        "tag": "combat",
+        "name": "Scattered, Not Gone",
+        "flavour": "The scattered warbands should be raiding on their own again by now, tripping over each other's territory the way they always used to. Instead, goblin messengers keep crossing between old camps, carrying the same offer to every warlord too proud to admit he's listening.",
+        "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 180,
         "goldMultiplier": 1.3
       },
       {
-        "name": "What the Crown Left Behind",
-        "flavour": "The old toll house still keeps records. One name belongs to a lord who lost everything the same season the goblin king acquired his third crown. He was reported dead. He was not, and whoever keeps these records knows it too.",
+        "name": "The New Court",
+        "flavour": "Whoever is doing the recruiting has set up camp in the wreckage of the old chieftain's court, and has already started collecting cleavers off of goblins who challenged him and lost. He's kept just enough of the old ritual to make the offer look inherited rather than invented.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 240,
         "goldMultiplier": 1.5
       },
       {
-        "name": "The Company He Kept",
-        "flavour": "Eighty men stand in real ranks, a granary stocked with grain it never grew itself, and a chain of command running two officers deep. A dispossessed lord does not build an operation like this alone, and clearly does not plan to stay dispossessed much longer.",
+        "name": "Snuff the Ember",
+        "flavour": "He hasn't finished uniting the warbands, not yet, but he's close enough that half of them already answer to him without being asked twice. Cutting him down now costs far less than fighting what he's about to become in a season.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 300,
@@ -1011,7 +1013,7 @@
     ],
     "rewardRenown": 10,
     "title": "Kingslayer Twice Over",
-    "epilogue": "He is buried again, properly this time, under considerably more stone than the last attempt managed. The court that followed him has not been seen since, which is either good news or exactly the kind of quiet that comes before worse news arrives.",
+    "epilogue": "He is buried again, properly this time, under considerably more stone than the last attempt managed. The court that followed him has not been seen since. Whatever bound them to him died when he did.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1035,7 +1037,7 @@
       },
       {
         "name": "The Procession of the Dead Court",
-        "flavour": "Every advisor he ever had executed now walks behind him in perfect procession, and not one of them looks angry about it anymore. That is the part that should worry the guild.",
+        "flavour": "Every advisor he ever had executed now walks behind him in perfect procession -- obedient in death in a way none of them ever managed while they were alive to refuse him.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1320,
@@ -1223,7 +1225,7 @@
     ],
     "rewardRenown": 2,
     "title": "Moonhunter",
-    "epilogue": "The werewolf pack has gone quiet, its alpha put down before the moon finished rising. Ashvale is grateful, if rattled. One of the people the guild was sent to protect did not make it through the last stage of this the way anyone would have wanted. Nobody is saying that part out loud yet.",
+    "epilogue": "The werewolf pack has gone quiet, its alpha put down before the moon finished rising. Ashvale is grateful, if rattled. One of the people the guild was sent to protect did not make it through the last stage of this. Ashvale is still deciding how to grieve someone the guild had to be the one to put down.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1239,7 +1241,7 @@
     "stages": [
       {
         "name": "Not Wolves",
-        "flavour": "The bite radius is wrong for a wolf, and the kills are too organized for a pack of animals. Every attack so far has landed within a day of the moon's phase, which is either an enormous coincidence or exactly what it looks like.",
+        "flavour": "The bite radius is wrong for a wolf, and the kills are too organized for a pack of animals. Every attack so far has landed within a day of the moon's phase, and nothing about a wolf's hunting habits explains a schedule.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 420,
@@ -1274,7 +1276,7 @@
     ],
     "rewardRenown": 3,
     "title": "Unmasker",
-    "epilogue": "The body-thief that had been wearing that household is gone now, and so is whatever it was actually made of underneath. The real question, how long it had been doing this and to how many other households nobody has checked, goes conveniently unasked by everyone who would rather not know the answer.",
+    "epilogue": "The body-thief that had been wearing that household is gone now, and so is whatever it was actually made of underneath. Ironrest's watch has opened an inquiry into how many other households it may have reached first, and how long it had been walking among them before anyone noticed. The guild will hear about it the moment there's something worth acting on.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1325,7 +1327,7 @@
     ],
     "rewardRenown": 5,
     "title": "Grave-Marked",
-    "epilogue": "The guild found where the lich is holed up, an old ossuary nobody has bothered mapping in decades, but not what he is actually planning underneath it. He is confident enough in it to have stopped hiding, and that confidence should worry everyone more than it currently does.",
+    "epilogue": "The guild found where the lich is holed up, an old ossuary nobody has bothered mapping in decades, but not what he is actually planning underneath it. He is confident enough in it to have stopped hiding, and nobody at Ironrest has explained why a man that confident stopped hiding.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1417,7 +1419,7 @@
     ],
     "rewardRenown": 6,
     "title": "Thread-Walker",
-    "epilogue": "The guild has a name for it now, the Loom, for lack of anything it has ever called itself. They have a location, and a fairly complete picture of what it has been doing to Millbrook and probably other towns nobody has checked yet. What the guild does not have is any plan that avoids someone going down there to end it directly.",
+    "epilogue": "The guild has a name for it now, the Loom, for lack of anything it has ever called itself. They have a location, and a fairly complete picture of what it has been doing to Millbrook -- and reports are already coming in from towns along the same road, waiting on someone to compare notes. What the guild does not have is any plan that avoids someone going down there to end it directly.",
     "requiresChainId": "quiet_in_millbrook",
     "grantsHatchery": false,
     "grantsPeddler": false,

@@ -87,7 +87,7 @@ export const CHAIN_REPLAY_TIERS: ChainReplayTierDef[] = [
     description: 'Lets your guild replay The Founding Days (The First Haul, The Miller\'s Problem, Bandits on the Old Road, The Last Clutch, The Man Who Sells "Maybe", Goblin Warband, The Third Crown) for a chance at Heroic and Legendary gear.',
     chainIds: [
       'the_first_haul', 'millers_problem', 'bandits_on_the_old_road', 'the_last_clutch',
-      'the_man_who_sells_maybe', 'goblin_warband', 'third_crown',
+      'the_man_who_sells_maybe', 'goblin_warband', 'the_gathering_horde',
     ],
     goldCost: Tuning.get('chain_replay_tier.band1.goldCost'),
   },

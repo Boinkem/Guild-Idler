@@ -25229,3 +25229,226 @@ worth a real pass confirming: a brand-new guild's board genuinely stays
 tutorial-quest-only through app reload; the four unified shimmer
 locations all visibly rotate rather than sit static; and Raids/Heroes
 both visibly swap art when Guild's Mood is toggled.
+
+### Narrative review pass: quest chain and raid text (patch 0312)
+
+```discord-update
+Dev Update | Patch 0312
+
+- Changed: rewrote the endings of over a dozen quest chains to cut vague, coy phrasing and state things plainly
+- Changed: rewrote all 8 raid descriptions into clearer mission briefings -- who's involved, what happened, and why it matters, up front
+- Changed: The Siege of Blackford Keep is now about a rogue tyrant lord defying the Crown, not a stolen goblin crown
+- Changed: goblins no longer care about crowns -- the Goblin Warband chain now turns on trophy weapons and dueling for leadership
+- Added: a new chain, The Gathering Horde, picking up right after Goblin Warband
+- Fixed: The Pale Rider and The Farm at the Edge now correctly require Proving the Bastion first, since both assume the guild already holds the Keep
+```
+
+Requested directly: a full narrative review of quest chain and raid text,
+prompted by a earlier "review it once already, do another pass" ask.
+Nothing here changes mechanics, tags, durations, or gold/renown values
+except where explicitly noted below -- this patch is prose and two small
+content additions only.
+
+**Coy/dismissive phrasing pass, `quest-chains.json`.** Direct feedback
+against three specific lines ("nobody is still asking," "will not sit on
+it again," "goes conveniently unasked by everyone who would rather not
+know the answer") flagged as reading badly -- a repeated authorial tic
+across roughly a dozen epilogues/stage flavours where the text tells the
+reader someone declined to ask or act, instead of stating what happened.
+Full sweep found every instance of the pattern (`grep` against "nobody
+is/has," "would rather not," "should worry... more than it does," the
+"either X or Y" hedge, and similar constructions) and rewrote each on
+its own terms rather than a single find-and-replace, since several
+needed a genuine tonal shift rather than a synonym swap:
+
+- `what_the_culled_become` epilogue -- states the barrow-ground's
+  distance from the culled village directly instead of "somebody
+  should [connect the dots], soon."
+- `farm_at_the_edge` epilogue -- same fix as `body_snatcher_problem`
+  below: the two conflicting stories about what was in the basement are
+  stated as unresolved, not as something the town has chosen not to ask.
+- `dragon_hunt` epilogue -- dropped the "half joking" aside; the
+  elders' nickname for the dragon's hoard does the same work without
+  narrating the joke.
+- `lost_kingdom` description -- the patron's silence about why he's
+  overpaying is now a concrete fact (paid 3x the going rate) rather than
+  "nobody asks too many questions."
+- `demon_fortress` epilogue -- direct feedback specifically on "will not
+  sit on it again" as a euphemism for the demon lord's death. Now states
+  plainly he's dead; the escaped choir-construct (picked up later by
+  `hollow_choir`) is left as a genuinely open thread instead of the
+  "that is its own kind of unfinished business" hand-wave.
+- `ancient_crown` epilogue -- was closing its own mystery down ("nobody
+  is still asking") rather than leaving it open; now ends on the
+  patron's hasty exit, keeping the unanswered question active instead
+  of telling the reader to stop being curious about it.
+- `granite_crossing` epilogue -- replaced "which said everything about
+  what kind of leader he actually was" (narrator-summary) with a direct
+  characterizing image.
+- `the_pale_rider` stage 1 -- replaced the "should worry the guild more
+  than it seems to worry them" construction (used near-identically
+  three times across this sweep) with a physical, observable detail.
+- `hollow_king` stage 2 -- full tonal rewrite, not just a phrasing
+  swap, per direct instruction that a complete 180 was fine if it read
+  better: the old "that is the part that should worry the guild" beat
+  is replaced with the actual irony (forced loyalty in death from
+  advisors who defied him living), which also ties cleaner into this
+  same chain's own Bridge of Forgotten Oaths stage.
+- `hollow_king` epilogue -- direct request for something as plainly
+  stated as the `demon_fortress` fix above, instead of the "either good
+  news or exactly the kind of quiet..." hedge. Now states outright that
+  whatever bound the dead court to him died when he did.
+- `full_moon_over_ashvale` stage 1 -- dropped the "either an enormous
+  coincidence or exactly what it looks like" hedge for a direct
+  deduction.
+- `full_moon_over_ashvale` epilogue -- "nobody is saying that part out
+  loud yet" replaced with a concrete grief detail (Ashvale mourning
+  someone the guild had to put down), keeping the same restraint
+  without the coy dismissal.
+- `body_snatcher_problem` epilogue -- the worst offender by direct
+  feedback ("goes conveniently unasked by everyone who would rather not
+  know the answer"). Also flagged directly as a bad narrative beat on
+  its own terms: an actual town watch wouldn't shrug this off. Rewrote
+  so Ironrest's watch has opened a real inquiry, which also plants a
+  natural hook for a future chain instead of a dead end.
+- `hunt_a_lich` epilogue -- third instance of the "should worry more
+  than it does" construction, replaced with an unresolved concrete
+  question (why he's stopped hiding) rather than telling the reader to
+  be more worried.
+- `the_loom_beneath` epilogue -- same "someone should be investigating
+  this" fix as `body_snatcher_problem`: reports from other towns along
+  the same road are already coming in, rather than "probably other
+  towns nobody has checked yet."
+
+**All 8 raid descriptions rewritten to a briefing spec, `raids.json`.**
+Direct request, explicit rules: name the antagonist on first mention
+where one isn't deliberately withheld, state what happened before the
+raid, state why intervention is necessary now, state the stakes, avoid
+vague-but-mystical phrasing, avoid excessive pronouns where a subject
+can be named, 80-120 words, third-person, briefing tone rather than
+riddle tone. `frozen_wyrmkeep` now names the Frozen Wyrm directly
+(previously "something"); `bonewrought_vault` gained a concrete reason
+the guild is going in now (three lost scouting parties, previously no
+stated urgency); `what_got_out` names the antagonists as the demon
+lord's surviving lieutenants rather than "something else"; `black_dragon_nest`
+names the Brood Mother and adds a concrete stake (abandoned
+farmsteads); `house_of_bones` keeps the lich's name deliberately withheld
+(an intentional, pre-established mystery from `hunt_a_lich`, not a rule
+violation) but states his goal and timeline plainly; `silence_the_loom`
+names the Loom directly instead of "the thing itself" and states why
+the timing matters (compulsion spreading daily); `requiem_last_god`
+keeps its elegiac tone deliberately (flagged directly as the one raid
+where over-flattening would cost more than it fixed) but still names
+the Last God on first mention and states what happened, why
+intervention matters, and the stakes, same as every other raid here.
+
+**Blackford Keep full redesign -- no longer part of the goblin
+storyline.** Direct feedback: a lord fortifying a toll gate over one
+stolen crown, then getting quietly dispatched by the guild for it,
+doesn't hold together as a motive chain. Reworked into a standalone
+raid: Lord Blackford, a legitimate border lord for three generations,
+has gone rogue -- burning villages outside his own jurisdiction, defying
+a direct order from the King to stand down, and holding the keep against
+the Crown's own soldiers before the guild is sent in. Touches four
+files:
+- `raids.json` -- `blackford_keep`'s description and epilogue fully
+  rewritten around the tyrant-lord premise; `encounterIds` updated to
+  reference the renamed final encounter (below).
+- `raid-encounters.json` -- `blackford_uncrowned` renamed to
+  `blackford_tyrant` ("The Tyrant of Blackford"), flavour text rewritten
+  to match. The other two encounters in this raid (Outer Palisade,
+  Right Hand) never referenced the crown/goblin backstory and needed no
+  changes.
+- `equipment.json` -- `tollkeepers_signet` (the raid's own ring drop,
+  `setId: "blackford"`) renamed to "Tyrant's Seal." Id, slot, stats,
+  and set membership all untouched -- display name only, since it's
+  still the correct drop for this raid, just no longer describes a
+  toll-collector.
+
+**Goblin storyline: crowns removed entirely, per direct
+feedback ("they don't care for crowns").** Checked every goblin-related
+mention across the repo before touching anything -- confirmed the
+"Goblin King" title itself (`achievements.json`, `QUEST-CHAINS.md`, and
+`world-lore-pantheon.md`'s own kingship-motif note) stays as-is; direct
+confirmation this pass that "king" is fine as a loose nickname outsiders
+use for whoever's winning, as long as no actual crown or coronation
+language is attached to it in the goblins' own story.
+- `goblin_warband` -- prologue, stage 2 flavour, and epilogue all
+  rewritten: the chieftain unified the horde by beating rival chieftains
+  in duels and carrying their cleavers as trophies, not by wearing three
+  stolen crowns. The recovered cleavers (plural, from the duels) close
+  the epilogue instead of the old "third crown" mystery hook, and tie
+  thematically into the chain's own `warband_cleaver` reward.
+
+**New chain, `the_gathering_horde`, replacing the old `third_crown`
+slot.** Direct request: repurpose the slot (same reqLevel 7, same
+`requiresChainId: goblin_warband`, same reward economy) for a follow-up
+that focuses on preventing the warband from reforming, rather than
+inventing a new slot. `third_crown`'s entire premise was the
+now-removed crown mystery, so nothing from it was salvageable --
+replaced wholesale rather than patched. New chain: one of the dead
+chieftain's lieutenants starts recruiting the scattered warbands back
+together, repeating the same "follow whoever can out-fight everyone
+else" pitch that worked the first time; the guild kills him before the
+horde reforms. Confirmed via `grep` across the whole repo before
+deciding whether to rename the JSON id or keep it -- `public/chains`/
+`chains-icons` art doesn't exist yet for any chain in this repo (an
+optional, silently-absent-until-supplied asset, same convention noted
+throughout this document), so renaming the id carried zero art risk.
+Touches two files:
+- `quest-chains.json` -- `third_crown` entry fully replaced in place
+  (same list position) with `the_gathering_horde`. `banner`/`icon`
+  paths updated to match the new id (still pointing at not-yet-supplied
+  art, per the convention above). `rewardGold`/`rewardRenown` carried
+  over unchanged from the slot's already-patch-0301-rebalanced values,
+  since this is a narrative pass, not an economy one.
+- `chainReplay.ts` -- the one other live reference to `third_crown` (a
+  list of narrative-style-confirmed chains) updated to
+  `the_gathering_horde`. `guild-idler-status.md`'s own historical
+  patch-log mentions of `third_crown` (this document, `#Internal rename
+  finished` section notwithstanding -- actually the reference is in a
+  much later patch's own writeup) are left untouched on purpose, as a
+  historical record of what existed at the time, not a live reference.
+
+**New item, `chieftains_torc`.** The old `third_crown` reward
+(`tollkeepers_signet`, a `setId: "blackford"` ring) no longer makes
+sense for a chain that has nothing to do with Blackford anymore, and
+every existing chain-exclusive item in the game turned out to already
+be claimed 1:1 by its own chain/encounter (confirmed by cross-referencing
+every `chainExclusive` item against every reward reference in
+`quest-chains.json`/`raid-encounters.json` -- zero orphans available to
+reassign). New amulet, reqLevel 7, uncommon, stats mirroring
+`warband_cleaver`'s own spread (strength 1 / luck 1) for thematic
+consistency with its sibling chain's reward, no `setId`. Reuses an
+already-referenced icon path (`accessories/Accessory_02.png`) rather
+than an unverified new one.
+
+**Two `requiresChainId` additions, chain-gating gap.** `the_pale_rider`
+("A squire is waiting at the Keep on return...") and `farm_at_the_edge`
+("The Keep is sending its own this time...") both presuppose the guild
+already holds IronRest Bastion, established in `proving_the_bastion`,
+but neither had a hard gate enforcing that read order -- a player could
+reach either chain by level alone without the context that makes the
+opening line make sense. Both now set `requiresChainId:
+"proving_the_bastion"`, matching the precedent `granite_crossing`/
+`hollow_choir` already set for chains that explicitly depend on an
+earlier one's outcome.
+
+**Verification.** All four edited JSON files (`quest-chains.json`,
+`raids.json`, `raid-encounters.json`, `equipment.json`) re-parsed clean
+after every edit. Confirmed via `grep` across the whole edited tree: no
+leftover references to the retired `third_crown`/`blackford_uncrowned`
+ids anywhere, and no remaining crown-language overlapping with
+goblin-related content. Pulled every file this patch touches fresh from
+`main` via `raw.githubusercontent.com` immediately before editing
+(confirmed patch 0311 -- a fresh-playtest feedback batch, unrelated --
+was already live; the intervening patch 0301's gold-economy rebalance
+had already changed 23 of 30 chains' `rewardGold` values, none of which
+this patch's text-only edits touch or revert). No `npx tsc --noEmit`/
+`vite build` run in this environment (no Node toolchain available here)
+-- this patch is JSON content plus one string-literal change in
+`chainReplay.ts`, so the real risk surface is JSON validity (checked
+above) rather than type errors; still worth a real build pass before
+merging, and a playtest confirming Blackford Keep's new encounter id
+renders correctly end-to-end and The Gathering Horde offers/completes
+cleanly for a level-7 guild that's already cleared Goblin Warband.

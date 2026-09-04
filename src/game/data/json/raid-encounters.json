@@ -78,9 +78,9 @@
     ]
   },
   {
-    "id": "blackford_uncrowned",
-    "name": "The Uncrowned",
-    "flavour": "He was just a smallholder eighteen months ago, before he lost everything to a goblin with a taste for other people's crowns. Whatever is left of him now has no intention of losing a second time.",
+    "id": "blackford_tyrant",
+    "name": "The Tyrant of Blackford",
+    "flavour": "He was a lawful lord once, sworn to hold this stretch of the border and nothing more. Whatever he has become no longer recognizes a border at all. He does not ask who the guild answers to. He has already stopped believing anyone outranks him.",
     "baseSuccess": 50,
     "durationHours": 4,
     "rewardGold": 1000,

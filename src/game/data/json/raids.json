@@ -2,13 +2,13 @@
   {
     "id": "blackford_keep",
     "name": "The Siege of Blackford Keep",
-    "description": "The lord who lost a crown at Blackford Ridge has spent an entire season turning a simple toll gate into a real holding, brick by brick. He still has no crown to show for it, and has no plans to stay uncrowned much longer. Unlike the goblin king, who already answered for one theft, this lord has no idea who has been quietly deciding his fate the whole time.",
-    "epilogue": "The Uncrowned's second army fared no better than his first. He still does not have his crown back, and still has no idea the guild is the reason why.",
+    "description": "Lord Blackford has held this keep for three generations, and for most of that time it kept the border safe. Something in him has since come apart. Villages well outside his own territory have burned on his standing orders, for offenses nobody but him can name, and the Crown's own investigators have stopped coming back to report why. The King sent formal word for him to stand down and answer for it. He answered by sealing every gate and arming every hand still loyal enough to stay. The Crown's own soldiers tried this keep first, and did not come back either. The guild is going in next.",
+    "epilogue": "Lord Blackford's second stand fared no better than his first defiance of the Crown. The King's investigators finally have the answers they were sent for, and IronRest has one less rogue lord to worry about. Blackford never learned who broke his gates before the end.",
     "reqLevel": 8,
     "encounterIds": [
       "blackford_outer_palisade",
       "blackford_right_hand",
-      "blackford_uncrowned"
+      "blackford_tyrant"
     ],
     "unlocksRaidId": "frozen_wyrmkeep",
     "successModifier": 0,
@@ -23,7 +23,7 @@
   {
     "id": "frozen_wyrmkeep",
     "name": "The Frozen Wyrmkeep",
-    "description": "Something has been nesting in the high passes for longer than anyone noticed, long enough to stop being one dragon and start being a brood. The watch that used to look for avalanches now looks for wings, and lately there have been considerably more wings than before.",
+    "description": "High in the passes above the Reach, one dragon has grown into an entire brood: hatchlings, grown wyrms, and an ancient matriarch the local keepers call the Frozen Wyrm, old enough to remember when the mountain held nothing at all. For years, a band of keepers has hidden the nest and fed it in secret rather than risk killing it, and that secrecy has only let it grow larger. The watch that once scouted for avalanches now counts wings instead, and the count keeps climbing. Left alone, the brood will not stay contained to the high passes much longer. The guild is going in to end it before it comes down the mountain on its own.",
     "epilogue": "The brood is gone, and the ice it nested in is already creeping back over what remains, a tidier ending than Emberfell got. Nothing sings about a mountain that quietly stops being a problem. It just stops.",
     "reqLevel": 18,
     "encounterIds": [
@@ -47,7 +47,7 @@
   {
     "id": "bonewrought_vault",
     "name": "The Bonewrought Vault",
-    "description": "Something has been raising the dead again, not one or two this time but by the vaultful, row after row of them. Whatever is sealed inside is worth enough that a company of risen guards still defends it centuries later, without pay, without rest, and without ever questioning the order. This is not a job for one hero. Bring the whole guild.",
+    "description": "Deep inside an ancient vault, something has begun raising the dead by the row rather than the body. The risen have stood guard for centuries without pay, without rest, and without once questioning the order that put them there. What they are protecting is valuable enough to keep them standing this long, though no one living has seen it. The vault-keeper at the heart of the tomb still counts every soul that passes its gate, and the tally has been wrong for longer than anyone can explain. IronRest has already lost three scouting parties trying to learn what waits inside. This time, the guild is going in with everyone it has, and no plan to send anyone in alone again.",
     "epilogue": "The vault held, in the end, for whoever the guild turned out to be. What was raised here has gone quiet again, for now. Whatever tore open a road between the dead and the living to make this happen is still out there somewhere, and none of this slowed it down.",
     "reqLevel": 22,
     "encounterIds": [
@@ -70,8 +70,8 @@
   {
     "id": "what_got_out",
     "name": "What Got Out",
-    "description": "The demon lord is gone, but the fortress he held still stands empty, its gate broken and its wards down with nobody left to guard whatever else might want it. Word reached the guild slowly that something else moved in behind him during the confusion. It is not interested in ruling anything. It is using the ruin exactly as it always wanted, as somewhere quiet enough to finish a working nobody has stopped it from starting.",
-    "epilogue": "The breach did not open, not all the way, not this time. What was trying to open it scattered the moment the guild reached the chamber. Either it was never as unified as it looked, or whatever is on the other side is not done trying. Either way, the fortress is finally, actually empty. The guild is not taking bets on how long that lasts.",
+    "description": "The demon lord who once held this fortress is dead, cut down when the guild broke his throne room weeks ago. His gate stands broken and his wards are down, but the ruin did not stay empty for long. A council of his surviving lieutenants has gathered in the wreckage, working to finish what their lord started before the guild interrupted him -- a working none of them will name aloud, though all of them agree it is close to completion. IronRest's scouts confirm at least one presence inside that answers to none of the demons still living. If the working finishes, whatever comes through will not stay contained to this fortress. The guild has to reach it first.",
+    "epilogue": "Whether the council was ever truly unified, or just desperate enough to look it, the fortress is empty again. Nobody expects that to last.",
     "reqLevel": 26,
     "encounterIds": [
       "gotout_trail_gone_cold",
@@ -95,8 +95,8 @@
   {
     "id": "black_dragon_nest",
     "name": "The Black Dragon Nest",
-    "description": "A stretch of the eastern ridge has gone black with soot and quiet with fear. Something has nested up there and brought a whole clutch with it, and it does not intend to be a passing problem the way most dragon sightings turn out to be.",
-    "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge is still a mystery nobody is eager to solve. For now, the mountain is quiet again, and that is enough.",
+    "description": "A stretch of the eastern ridge has gone black with soot and empty of anyone still willing to farm it. A dragon clutch has nested there under the watch of the Brood Mother, an elder wyrm old enough to remember the ridge under a different name. Her keepers guard the nest the way the Wyrmkeep's once did -- clearing debris, warming eggs, and driving off anyone who strays too close, guild included. Unlike that earlier brood, this one shows no sign of staying contained to the mountain. Farmsteads along the ridge have already been abandoned, and the Brood Mother has made clear she has no intention of moving on. The guild is going up to make sure she does.",
+    "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge in the first place is still unexplained, and nothing about the empty nest answers it.",
     "reqLevel": 30,
     "encounterIds": [
       "blackdragon_the_keepers",
@@ -121,7 +121,7 @@
   {
     "id": "house_of_bones",
     "name": "The House of Bones",
-    "description": "The ossuary the guild traced the lich to is not a hideout so much as a workshop. Generations of the dead lie sorted, stored, and put to use, all in service of a ritual that was never about raising an army in the first place.",
+    "description": "The lich the guild tracked to this ossuary is not hiding -- he is working, and has been for years. Generations of the dead lie sorted and stored throughout the vault, harvested for a ritual that was never meant to raise an army; his phylactery keeps him alive for something slower and more deliberate than that. He was midway through the working when the guild's scouts found him, and did not stop, confident nothing could reach him in time to matter. IronRest still does not know what he is trying to reach on the other side of that ritual, only that he is now confident enough to have stopped hiding. The guild is here to make sure he never finishes.",
     "epilogue": "The lich is gone, his phylactery in pieces, and whatever he was trying to reach on the other side of that ritual did not get through, not this time. The guild is treating this as a delay, not an ending. Something was listening on the other end of that ritual, and it is unlikely to have forgotten the attempt.",
     "reqLevel": 41,
     "encounterIds": [
@@ -145,8 +145,8 @@
   {
     "id": "silence_the_loom",
     "name": "Silence the Loom",
-    "description": "There is no approach, no outer ring of guards, and no lesser threat to clear first. There is only a long walk down into the dark, and at the end of it, the thing itself, already aware the guild is coming and entirely unbothered by the fact.",
-    "epilogue": "The Loom does not scream when it finally comes apart. It just goes quiet, one borrowed voice at a time, until nothing is left speaking through Millbrook. The town will need a long time to remember how to answer a question honestly again. That is a problem for people who are not the guild to solve now.",
+    "description": "Beneath Millbrook, the entity the guild has named the Loom is still speaking through every voice it has taken, and has been since long before anyone noticed the town had stopped disagreeing about anything. There is no outer ring of guards to clear and no lesser threat standing between the guild and its source, only a long descent straight to the thing itself, already aware the guild is coming. It does not intend to run. Millbrook cannot be freed while the Loom is still speaking through it, and every day it continues is another day the compulsion spreads to someone new. The guild is going down to end it directly, with nothing left to soften the approach.",
+    "epilogue": "The Loom does not scream when it finally comes apart. It just goes quiet, one borrowed voice at a time, until nothing is left speaking through Millbrook. The town will need a long time to remember how to answer a question honestly again. Ironrest is already sending healers and clergy to see to that, now that Millbrook is finally safe enough for them to reach.",
     "reqLevel": 43,
     "encounterIds": [
       "loom_the_presiding_intelligence"
@@ -170,7 +170,7 @@
   {
     "id": "requiem_last_god",
     "name": "Requiem for the Last God",
-    "description": "The road the archive described has no fixed heading and never did. It opens for whoever means to walk it in a dying pilgrim's place, and closes the moment they stop meaning it. It has opened for this guild. Every guild that made this same walk before left something behind to prove it: banners, hulls, and ritual circles abandoned mid-rite, scattered across a shore that should not exist on any chart. Whatever waits at the end of that walk has not been walked to in a very long time, and does not entirely remember why anyone stopped.",
+    "description": "Beneath an old shrine, an archive describes a road with no fixed heading, opening only for someone willing to walk it in a dying pilgrim's place. It has opened for this guild. At its end waits the Last God, a True God of the final mile who once walked the dying gently into death. No pilgrim has completed that rite in centuries; the god has starved on forgotten belief since, still finishing a rite with no one left to receive it. It is not hostile by choice -- it no longer remembers how to be anything else. The guild has come to finish what centuries of neglect left undone: walk the Last God home, the last mercy still owed.",
     "epilogue": "There is a difference between winning and being the one left standing when it is over. What the guild did at the end of that road was not a fight in the way every other fight has been. It was the last mile, walked the hard way, for something too far gone to make it easy. The guild is still deciding what to call that.",
     "reqLevel": 55,
     "encounterIds": [

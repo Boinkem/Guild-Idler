@@ -1,0 +1,634 @@
+diff -ruN a/guild-idler-status.md b/guild-idler-status.md
+--- a/guild-idler-status.md	2026-09-04 04:00:40.877780101 +0000
++++ b/guild-idler-status.md	2026-09-04 04:00:40.889780101 +0000
+@@ -25229,3 +25229,226 @@
+ tutorial-quest-only through app reload; the four unified shimmer
+ locations all visibly rotate rather than sit static; and Raids/Heroes
+ both visibly swap art when Guild's Mood is toggled.
++
++### Narrative review pass: quest chain and raid text (patch 0312)
++
++```discord-update
++Dev Update | Patch 0312
++
++- Changed: rewrote the endings of over a dozen quest chains to cut vague, coy phrasing and state things plainly
++- Changed: rewrote all 8 raid descriptions into clearer mission briefings -- who's involved, what happened, and why it matters, up front
++- Changed: The Siege of Blackford Keep is now about a rogue tyrant lord defying the Crown, not a stolen goblin crown
++- Changed: goblins no longer care about crowns -- the Goblin Warband chain now turns on trophy weapons and dueling for leadership
++- Added: a new chain, The Gathering Horde, picking up right after Goblin Warband
++- Fixed: The Pale Rider and The Farm at the Edge now correctly require Proving the Bastion first, since both assume the guild already holds the Keep
++```
++
++Requested directly: a full narrative review of quest chain and raid text,
++prompted by a earlier "review it once already, do another pass" ask.
++Nothing here changes mechanics, tags, durations, or gold/renown values
++except where explicitly noted below -- this patch is prose and two small
++content additions only.
++
++**Coy/dismissive phrasing pass, `quest-chains.json`.** Direct feedback
++against three specific lines ("nobody is still asking," "will not sit on
++it again," "goes conveniently unasked by everyone who would rather not
++know the answer") flagged as reading badly -- a repeated authorial tic
++across roughly a dozen epilogues/stage flavours where the text tells the
++reader someone declined to ask or act, instead of stating what happened.
++Full sweep found every instance of the pattern (`grep` against "nobody
++is/has," "would rather not," "should worry... more than it does," the
++"either X or Y" hedge, and similar constructions) and rewrote each on
++its own terms rather than a single find-and-replace, since several
++needed a genuine tonal shift rather than a synonym swap:
++
++- `what_the_culled_become` epilogue -- states the barrow-ground's
++  distance from the culled village directly instead of "somebody
++  should [connect the dots], soon."
++- `farm_at_the_edge` epilogue -- same fix as `body_snatcher_problem`
++  below: the two conflicting stories about what was in the basement are
++  stated as unresolved, not as something the town has chosen not to ask.
++- `dragon_hunt` epilogue -- dropped the "half joking" aside; the
++  elders' nickname for the dragon's hoard does the same work without
++  narrating the joke.
++- `lost_kingdom` description -- the patron's silence about why he's
++  overpaying is now a concrete fact (paid 3x the going rate) rather than
++  "nobody asks too many questions."
++- `demon_fortress` epilogue -- direct feedback specifically on "will not
++  sit on it again" as a euphemism for the demon lord's death. Now states
++  plainly he's dead; the escaped choir-construct (picked up later by
++  `hollow_choir`) is left as a genuinely open thread instead of the
++  "that is its own kind of unfinished business" hand-wave.
++- `ancient_crown` epilogue -- was closing its own mystery down ("nobody
++  is still asking") rather than leaving it open; now ends on the
++  patron's hasty exit, keeping the unanswered question active instead
++  of telling the reader to stop being curious about it.
++- `granite_crossing` epilogue -- replaced "which said everything about
++  what kind of leader he actually was" (narrator-summary) with a direct
++  characterizing image.
++- `the_pale_rider` stage 1 -- replaced the "should worry the guild more
++  than it seems to worry them" construction (used near-identically
++  three times across this sweep) with a physical, observable detail.
++- `hollow_king` stage 2 -- full tonal rewrite, not just a phrasing
++  swap, per direct instruction that a complete 180 was fine if it read
++  better: the old "that is the part that should worry the guild" beat
++  is replaced with the actual irony (forced loyalty in death from
++  advisors who defied him living), which also ties cleaner into this
++  same chain's own Bridge of Forgotten Oaths stage.
++- `hollow_king` epilogue -- direct request for something as plainly
++  stated as the `demon_fortress` fix above, instead of the "either good
++  news or exactly the kind of quiet..." hedge. Now states outright that
++  whatever bound the dead court to him died when he did.
++- `full_moon_over_ashvale` stage 1 -- dropped the "either an enormous
++  coincidence or exactly what it looks like" hedge for a direct
++  deduction.
++- `full_moon_over_ashvale` epilogue -- "nobody is saying that part out
++  loud yet" replaced with a concrete grief detail (Ashvale mourning
++  someone the guild had to put down), keeping the same restraint
++  without the coy dismissal.
++- `body_snatcher_problem` epilogue -- the worst offender by direct
++  feedback ("goes conveniently unasked by everyone who would rather not
++  know the answer"). Also flagged directly as a bad narrative beat on
++  its own terms: an actual town watch wouldn't shrug this off. Rewrote
++  so Ironrest's watch has opened a real inquiry, which also plants a
++  natural hook for a future chain instead of a dead end.
++- `hunt_a_lich` epilogue -- third instance of the "should worry more
++  than it does" construction, replaced with an unresolved concrete
++  question (why he's stopped hiding) rather than telling the reader to
++  be more worried.
++- `the_loom_beneath` epilogue -- same "someone should be investigating
++  this" fix as `body_snatcher_problem`: reports from other towns along
++  the same road are already coming in, rather than "probably other
++  towns nobody has checked yet."
++
++**All 8 raid descriptions rewritten to a briefing spec, `raids.json`.**
++Direct request, explicit rules: name the antagonist on first mention
++where one isn't deliberately withheld, state what happened before the
++raid, state why intervention is necessary now, state the stakes, avoid
++vague-but-mystical phrasing, avoid excessive pronouns where a subject
++can be named, 80-120 words, third-person, briefing tone rather than
++riddle tone. `frozen_wyrmkeep` now names the Frozen Wyrm directly
++(previously "something"); `bonewrought_vault` gained a concrete reason
++the guild is going in now (three lost scouting parties, previously no
++stated urgency); `what_got_out` names the antagonists as the demon
++lord's surviving lieutenants rather than "something else"; `black_dragon_nest`
++names the Brood Mother and adds a concrete stake (abandoned
++farmsteads); `house_of_bones` keeps the lich's name deliberately withheld
++(an intentional, pre-established mystery from `hunt_a_lich`, not a rule
++violation) but states his goal and timeline plainly; `silence_the_loom`
++names the Loom directly instead of "the thing itself" and states why
++the timing matters (compulsion spreading daily); `requiem_last_god`
++keeps its elegiac tone deliberately (flagged directly as the one raid
++where over-flattening would cost more than it fixed) but still names
++the Last God on first mention and states what happened, why
++intervention matters, and the stakes, same as every other raid here.
++
++**Blackford Keep full redesign -- no longer part of the goblin
++storyline.** Direct feedback: a lord fortifying a toll gate over one
++stolen crown, then getting quietly dispatched by the guild for it,
++doesn't hold together as a motive chain. Reworked into a standalone
++raid: Lord Blackford, a legitimate border lord for three generations,
++has gone rogue -- burning villages outside his own jurisdiction, defying
++a direct order from the King to stand down, and holding the keep against
++the Crown's own soldiers before the guild is sent in. Touches four
++files:
++- `raids.json` -- `blackford_keep`'s description and epilogue fully
++  rewritten around the tyrant-lord premise; `encounterIds` updated to
++  reference the renamed final encounter (below).
++- `raid-encounters.json` -- `blackford_uncrowned` renamed to
++  `blackford_tyrant` ("The Tyrant of Blackford"), flavour text rewritten
++  to match. The other two encounters in this raid (Outer Palisade,
++  Right Hand) never referenced the crown/goblin backstory and needed no
++  changes.
++- `equipment.json` -- `tollkeepers_signet` (the raid's own ring drop,
++  `setId: "blackford"`) renamed to "Tyrant's Seal." Id, slot, stats,
++  and set membership all untouched -- display name only, since it's
++  still the correct drop for this raid, just no longer describes a
++  toll-collector.
++
++**Goblin storyline: crowns removed entirely, per direct
++feedback ("they don't care for crowns").** Checked every goblin-related
++mention across the repo before touching anything -- confirmed the
++"Goblin King" title itself (`achievements.json`, `QUEST-CHAINS.md`, and
++`world-lore-pantheon.md`'s own kingship-motif note) stays as-is; direct
++confirmation this pass that "king" is fine as a loose nickname outsiders
++use for whoever's winning, as long as no actual crown or coronation
++language is attached to it in the goblins' own story.
++- `goblin_warband` -- prologue, stage 2 flavour, and epilogue all
++  rewritten: the chieftain unified the horde by beating rival chieftains
++  in duels and carrying their cleavers as trophies, not by wearing three
++  stolen crowns. The recovered cleavers (plural, from the duels) close
++  the epilogue instead of the old "third crown" mystery hook, and tie
++  thematically into the chain's own `warband_cleaver` reward.
++
++**New chain, `the_gathering_horde`, replacing the old `third_crown`
++slot.** Direct request: repurpose the slot (same reqLevel 7, same
++`requiresChainId: goblin_warband`, same reward economy) for a follow-up
++that focuses on preventing the warband from reforming, rather than
++inventing a new slot. `third_crown`'s entire premise was the
++now-removed crown mystery, so nothing from it was salvageable --
++replaced wholesale rather than patched. New chain: one of the dead
++chieftain's lieutenants starts recruiting the scattered warbands back
++together, repeating the same "follow whoever can out-fight everyone
++else" pitch that worked the first time; the guild kills him before the
++horde reforms. Confirmed via `grep` across the whole repo before
++deciding whether to rename the JSON id or keep it -- `public/chains`/
++`chains-icons` art doesn't exist yet for any chain in this repo (an
++optional, silently-absent-until-supplied asset, same convention noted
++throughout this document), so renaming the id carried zero art risk.
++Touches two files:
++- `quest-chains.json` -- `third_crown` entry fully replaced in place
++  (same list position) with `the_gathering_horde`. `banner`/`icon`
++  paths updated to match the new id (still pointing at not-yet-supplied
++  art, per the convention above). `rewardGold`/`rewardRenown` carried
++  over unchanged from the slot's already-patch-0301-rebalanced values,
++  since this is a narrative pass, not an economy one.
++- `chainReplay.ts` -- the one other live reference to `third_crown` (a
++  list of narrative-style-confirmed chains) updated to
++  `the_gathering_horde`. `guild-idler-status.md`'s own historical
++  patch-log mentions of `third_crown` (this document, `#Internal rename
++  finished` section notwithstanding -- actually the reference is in a
++  much later patch's own writeup) are left untouched on purpose, as a
++  historical record of what existed at the time, not a live reference.
++
++**New item, `chieftains_torc`.** The old `third_crown` reward
++(`tollkeepers_signet`, a `setId: "blackford"` ring) no longer makes
++sense for a chain that has nothing to do with Blackford anymore, and
++every existing chain-exclusive item in the game turned out to already
++be claimed 1:1 by its own chain/encounter (confirmed by cross-referencing
++every `chainExclusive` item against every reward reference in
++`quest-chains.json`/`raid-encounters.json` -- zero orphans available to
++reassign). New amulet, reqLevel 7, uncommon, stats mirroring
++`warband_cleaver`'s own spread (strength 1 / luck 1) for thematic
++consistency with its sibling chain's reward, no `setId`. Reuses an
++already-referenced icon path (`accessories/Accessory_02.png`) rather
++than an unverified new one.
++
++**Two `requiresChainId` additions, chain-gating gap.** `the_pale_rider`
++("A squire is waiting at the Keep on return...") and `farm_at_the_edge`
++("The Keep is sending its own this time...") both presuppose the guild
++already holds IronRest Bastion, established in `proving_the_bastion`,
++but neither had a hard gate enforcing that read order -- a player could
++reach either chain by level alone without the context that makes the
++opening line make sense. Both now set `requiresChainId:
++"proving_the_bastion"`, matching the precedent `granite_crossing`/
++`hollow_choir` already set for chains that explicitly depend on an
++earlier one's outcome.
++
++**Verification.** All four edited JSON files (`quest-chains.json`,
++`raids.json`, `raid-encounters.json`, `equipment.json`) re-parsed clean
++after every edit. Confirmed via `grep` across the whole edited tree: no
++leftover references to the retired `third_crown`/`blackford_uncrowned`
++ids anywhere, and no remaining crown-language overlapping with
++goblin-related content. Pulled every file this patch touches fresh from
++`main` via `raw.githubusercontent.com` immediately before editing
++(confirmed patch 0311 -- a fresh-playtest feedback batch, unrelated --
++was already live; the intervening patch 0301's gold-economy rebalance
++had already changed 23 of 30 chains' `rewardGold` values, none of which
++this patch's text-only edits touch or revert). No `npx tsc --noEmit`/
++`vite build` run in this environment (no Node toolchain available here)
++-- this patch is JSON content plus one string-literal change in
++`chainReplay.ts`, so the real risk surface is JSON validity (checked
++above) rather than type errors; still worth a real build pass before
++merging, and a playtest confirming Blackford Keep's new encounter id
++renders correctly end-to-end and The Gathering Horde offers/completes
++cleanly for a level-7 guild that's already cleared Goblin Warband.
+diff -ruN a/src/game/data/chainReplay.ts b/src/game/data/chainReplay.ts
+--- a/src/game/data/chainReplay.ts	2026-09-04 04:00:40.874273610 +0000
++++ b/src/game/data/chainReplay.ts	2026-09-04 04:00:40.887892105 +0000
+@@ -87,7 +87,7 @@
+     description: 'Lets your guild replay The Founding Days (The First Haul, The Miller\'s Problem, Bandits on the Old Road, The Last Clutch, The Man Who Sells "Maybe", Goblin Warband, The Third Crown) for a chance at Heroic and Legendary gear.',
+     chainIds: [
+       'the_first_haul', 'millers_problem', 'bandits_on_the_old_road', 'the_last_clutch',
+-      'the_man_who_sells_maybe', 'goblin_warband', 'third_crown',
++      'the_man_who_sells_maybe', 'goblin_warband', 'the_gathering_horde',
+     ],
+     goldCost: Tuning.get('chain_replay_tier.band1.goldCost'),
+   },
+diff -ruN a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+--- a/src/game/data/json/equipment.json	2026-09-04 04:00:40.873008004 +0000
++++ b/src/game/data/json/equipment.json	2026-09-04 04:00:40.886271807 +0000
+@@ -469,6 +469,23 @@
+     "chainExclusive": true
+   },
+   {
++    "id": "chieftains_torc",
++    "name": "Chieftain's Torc",
++    "slot": "amulet",
++    "rarity": "uncommon",
++    "reqLevel": 7,
++    "maxDurability": 75,
++    "value": 170,
++    "stats": {
++      "strength": 1,
++      "luck": 1
++    },
++    "icon": "accessories/Accessory_02.png",
++    "raidExclusive": false,
++    "craftable": false,
++    "chainExclusive": true
++  },
++  {
+     "id": "choir_mask",
+     "name": "Mask of the Hollow Choir",
+     "slot": "helmet",
+@@ -1075,7 +1092,7 @@
+   },
+   {
+     "id": "tollkeepers_signet",
+-    "name": "Tollkeeper's Signet",
++    "name": "Tyrant's Seal",
+     "slot": "ring",
+     "rarity": "uncommon",
+     "reqLevel": 7,
+diff -ruN a/src/game/data/json/quest-chains.json b/src/game/data/json/quest-chains.json
+--- a/src/game/data/json/quest-chains.json	2026-09-04 04:00:40.868981456 +0000
++++ b/src/game/data/json/quest-chains.json	2026-09-04 04:00:40.882015437 +0000
+@@ -255,7 +255,7 @@
+     ],
+     "rewardRenown": 2,
+     "title": "Grave-Watcher",
+-    "epilogue": "Whatever the Harrower takes, it does not keep. It returns them as revenants, changed and obedient, still somehow counted in that ledger. East of the culled villages, in an old barrow-ground, something buried long ago has quietly begun to stir. Nobody has connected the two events yet. Somebody should, soon.",
++    "epilogue": "Whatever the Harrower takes, it does not keep. It returns them as revenants, changed and obedient, still somehow counted in that ledger. The barrow-ground sits less than a day's walk from the nearest culled village. No report reaching Ironrest has put the two side by side yet.",
+     "requiresChainId": "demon_generals_ledger",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+@@ -367,7 +367,7 @@
+     ],
+     "rewardRenown": 2,
+     "title": "Garrick's End",
+-    "epilogue": "Garrick's raiders scattered the moment he stopped giving orders, which said everything about what kind of leader he actually was. The Stone Masons Guild has not forgotten who reopened their gate, and has made sure everyone downriver knows it too.",
++    "epilogue": "Garrick's raiders scattered the moment he stopped giving orders -- men who follow a man, not a cause, and never once pretended otherwise. The Stone Masons Guild has not forgotten who reopened their gate, and has made sure everyone downriver knows it too.",
+     "requiresChainId": "proving_the_bastion",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+@@ -411,7 +411,7 @@
+     ],
+     "rewardRenown": 2,
+     "title": "Farmwarden",
+-    "epilogue": "Whatever Vayne was turning into never got to finish. The farmland recovered faster than the stories about what was found in that farmhouse basement. Most people who hear both versions decide they would rather not ask which one is true.",
++    "epilogue": "Whatever Vayne was turning into never got to finish. The farmland recovered faster than the stories about what was found in that farmhouse basement. The two versions don't agree, and nobody who was in that basement has come forward to settle which one is.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -441,7 +441,8 @@
+         "durationMinutes": 780,
+         "goldMultiplier": 2.5
+       }
+-    ]
++    ],
++    "requiresChainId": "proving_the_bastion"
+   },
+   {
+     "id": "the_pale_rider",
+@@ -471,7 +472,7 @@
+     "stages": [
+       {
+         "name": "The Ashen Hand's Plea",
+-        "flavour": "These paladins do not ask for help easily. Years of training see to that. That they are asking at all, standing here in armor that has seen real use, should worry the guild more than it seems to worry them.",
++        "flavour": "These paladins do not ask for help easily. Years of training see to that. That they are asking at all, standing here in armor that has seen real use, and none of them will meet the guild's eyes for longer than a breath.",
+         "tag": "defense",
+         "difficulty": "epic",
+         "durationMinutes": 840,
+@@ -501,7 +502,8 @@
+         "durationMinutes": 1440,
+         "goldMultiplier": 4
+       }
+-    ]
++    ],
++    "requiresChainId": "proving_the_bastion"
+   },
+   {
+     "id": "dragon_hunt",
+@@ -515,7 +517,7 @@
+     ],
+     "rewardRenown": 2,
+     "title": "Dragonbane",
+-    "epilogue": "Emberfell does not burn anymore. The dragon's hoard more than covered the cost of rebuilding every farmstead it touched, which several holdfast elders have called, half joking, a strange kind of silver lining to a burned town.",
++    "epilogue": "Emberfell does not burn anymore. The dragon's hoard more than covered the cost of rebuilding every farmstead it touched, enough to rebuild every farmstead twice over -- the holdfast elders have started calling it the dragon's one honest debt.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -566,7 +568,7 @@
+   {
+     "id": "lost_kingdom",
+     "name": "Lost Kingdom Expedition",
+-    "description": "A kingdom that every map somehow forgot to mention has surfaced in old records. The road there is long, the ruins are older than anyone can date, and at the center of it all waits a living stone guardian nobody has gotten past yet. The patron funding the expedition is paying well enough that nobody asks too many questions about why.",
++    "description": "A kingdom that every map somehow forgot to mention has surfaced in old records. The road there is long, the ruins are older than anyone can date, and at the center of it all waits a living stone guardian nobody has gotten past yet. The patron funding the expedition has paid three times what an expedition like this should cost, and has never once explained why.",
+     "reqLevel": 14,
+     "rewardGold": 2800,
+     "rewardItems": [
+@@ -626,7 +628,7 @@
+     ],
+     "rewardRenown": 3,
+     "title": "Hellgate Breaker",
+-    "epilogue": "The demon lord who held that throne will not sit on it again. The gate stands open and the wards lie broken. Whatever was singing behind them is no longer where the guild left it. It escaped in the confusion. It will not get far, but it is not here anymore either, and that is its own kind of unfinished business.",
++    "epilogue": "The demon lord who held that throne is dead, cut down before he reached the gate. Whatever was singing behind the wards is not so easily accounted for -- it escaped in the confusion, and where it went is still unknown.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -683,7 +685,7 @@
+     ],
+     "rewardRenown": 1,
+     "title": "Crownbearer",
+-    "epilogue": "Three fragments from three very different hiding places fit together exactly as they should. Nobody involved has explained why the crown was worth hiding in three separate corners of the world, and at this point, nobody is still asking.",
++    "epilogue": "Nobody involved has explained why the crown was worth hiding in three separate corners of the world. The patron paid in full anyway, and left before the fragments had even finished fitting together.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -725,7 +727,7 @@
+   {
+     "id": "goblin_warband",
+     "name": "The Goblin King's Warband",
+-    "description": "Three goblin warbands used to raid alone, tripping over each other's territory as often as they hit anything useful. Not anymore. A chieftain with more ambition than sense has welded them into one horde under a single stolen crown. They now move together, burn together, and answer to one voice. Silence that voice, and the horde should come apart again.",
++    "description": "Three goblin warbands used to raid alone, tripping over each other's territory as often as they hit anything useful. Not anymore. A chieftain with more ambition than sense has welded them into one horde by beating every rival who challenged him and taking their weapons as proof. He carries three now, strapped across his back, and the horde follows whoever can carry that many blades and still win.",
+     "reqLevel": 6,
+     "rewardGold": 440,
+     "rewardItems": [
+@@ -733,7 +735,7 @@
+     ],
+     "rewardRenown": 1,
+     "title": "Warband-Breaker",
+-    "epilogue": "Three warbands, no chieftain, and a confused horde left leaderless in the hills. But the third crown pulled from the wreckage never belonged to any warlord. Whoever it actually came from has a far older claim to settle, and has not started collecting yet.",
++    "epilogue": "Three warbands, no chieftain, and a confused horde left leaderless in the hills. The three cleavers he carried are recovered along with the rest of his hoard -- mismatched, dulled, and worth exactly what looted weapons are worth once the goblin who won them is dead. IronRest keeps them as a reminder of a horde that almost held together, and nothing more.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -756,7 +758,7 @@
+       },
+       {
+         "name": "The Chieftain's Camp",
+-        "flavour": "The chieftain holds court under three crowns stacked crooked on a head too small for any of them. They are trophies, not treasures, each looted from someone who mattered more than he ever will. He believes wearing them makes him a king. He is about to learn how wrong that is, right before the horde scatters without him.",
++        "flavour": "The chieftain holds court with three rival chieftains' cleavers lashed across his back, trophies from three duels he wasn't supposed to win. He didn't take the horde by scheming. He took it by beating every goblin who challenged him and making sure the rest were watching when he did. He's about to lose that argument to someone bigger.",
+         "tag": "combat",
+         "difficulty": "hard",
+         "durationMinutes": 300,
+@@ -765,50 +767,50 @@
+     ]
+   },
+   {
+-    "id": "third_crown",
+-    "name": "The Third Crown",
+-    "description": "One of the goblin king's three crowns was not looted from a rival warband or plundered from a manor. It was collected as a toll on the Blackford road, taken from a lord passing through. He was reported dead that same season. He was not. Whoever he is now, he has had a long time to plan what comes next.",
++    "id": "the_gathering_horde",
++    "name": "The Gathering Horde",
++    "description": "The chieftain's horde came apart the moment he died, but a horde that broke once already knows how it's done, and it doesn't take much to try again. One of his old lieutenants has started calling the scattered warbands back in, promising the same deal that worked once: follow the goblin who can out-fight everyone else, and win. If he finishes what he started, IronRest will be facing the same horde all over again -- bigger, angrier, and led by someone who watched exactly how the last one fell.",
+     "reqLevel": 7,
+     "rewardGold": 711,
+     "rewardItems": [
+-      "tollkeepers_signet@5"
++      "chieftains_torc@5"
+     ],
+     "rewardRenown": 1,
+-    "title": "Ridge-Watcher",
+-    "epilogue": "The crown's true owner is not dead, not landless, and far from finished. Whatever he is quietly building at Blackford Ridge is bigger than one toll gate. Scouting it further is not the guild's job yet, but that may not last.",
++    "title": "Horde-Breaker",
++    "epilogue": "The would-be chieftain is dead before the horde he was building ever finished forming, and the warbands that had started listening to him have gone back to raiding each other instead of anyone else. IronRest doubts this is the last goblin who'll try to repeat what worked once. For now, though, there's no horde left to worry about -- just scattered warbands, same as always.",
+     "requiresChainId": "goblin_warband",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+     "banner": {
+-      "path": "chains/third_crown.png",
++      "path": "chains/the_gathering_horde.png",
+       "focusX": 79.6,
+       "focusY": 35,
+       "scale": 119
+     },
+     "icon": {
+-      "path": "chains-icons/third_crown.png"
++      "path": "chains-icons/the_gathering_horde.png"
+     },
+     "stages": [
+       {
+-        "name": "The Toll That Should Not Exist",
+-        "flavour": "A toll gate has gone up on the Blackford road again, manned by men who were farming their own fields a season ago and now answer to someone who was never a farmer.",
+-        "tag": "combat",
++        "name": "Scattered, Not Gone",
++        "flavour": "The scattered warbands should be raiding on their own again by now, tripping over each other's territory the way they always used to. Instead, goblin messengers keep crossing between old camps, carrying the same offer to every warlord too proud to admit he's listening.",
++        "tag": "explore",
+         "difficulty": "normal",
+         "durationMinutes": 180,
+         "goldMultiplier": 1.3
+       },
+       {
+-        "name": "What the Crown Left Behind",
+-        "flavour": "The old toll house still keeps records. One name belongs to a lord who lost everything the same season the goblin king acquired his third crown. He was reported dead. He was not, and whoever keeps these records knows it too.",
++        "name": "The New Court",
++        "flavour": "Whoever is doing the recruiting has set up camp in the wreckage of the old chieftain's court, and has already started collecting cleavers off of goblins who challenged him and lost. He's kept just enough of the old ritual to make the offer look inherited rather than invented.",
+         "tag": "explore",
+         "difficulty": "normal",
+         "durationMinutes": 240,
+         "goldMultiplier": 1.5
+       },
+       {
+-        "name": "The Company He Kept",
+-        "flavour": "Eighty men stand in real ranks, a granary stocked with grain it never grew itself, and a chain of command running two officers deep. A dispossessed lord does not build an operation like this alone, and clearly does not plan to stay dispossessed much longer.",
++        "name": "Snuff the Ember",
++        "flavour": "He hasn't finished uniting the warbands, not yet, but he's close enough that half of them already answer to him without being asked twice. Cutting him down now costs far less than fighting what he's about to become in a season.",
+         "tag": "combat",
+         "difficulty": "hard",
+         "durationMinutes": 300,
+@@ -1011,7 +1013,7 @@
+     ],
+     "rewardRenown": 10,
+     "title": "Kingslayer Twice Over",
+-    "epilogue": "He is buried again, properly this time, under considerably more stone than the last attempt managed. The court that followed him has not been seen since, which is either good news or exactly the kind of quiet that comes before worse news arrives.",
++    "epilogue": "He is buried again, properly this time, under considerably more stone than the last attempt managed. The court that followed him has not been seen since. Whatever bound them to him died when he did.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -1035,7 +1037,7 @@
+       },
+       {
+         "name": "The Procession of the Dead Court",
+-        "flavour": "Every advisor he ever had executed now walks behind him in perfect procession, and not one of them looks angry about it anymore. That is the part that should worry the guild.",
++        "flavour": "Every advisor he ever had executed now walks behind him in perfect procession -- obedient in death in a way none of them ever managed while they were alive to refuse him.",
+         "tag": "combat",
+         "difficulty": "legendary",
+         "durationMinutes": 1320,
+@@ -1223,7 +1225,7 @@
+     ],
+     "rewardRenown": 2,
+     "title": "Moonhunter",
+-    "epilogue": "The werewolf pack has gone quiet, its alpha put down before the moon finished rising. Ashvale is grateful, if rattled. One of the people the guild was sent to protect did not make it through the last stage of this the way anyone would have wanted. Nobody is saying that part out loud yet.",
++    "epilogue": "The werewolf pack has gone quiet, its alpha put down before the moon finished rising. Ashvale is grateful, if rattled. One of the people the guild was sent to protect did not make it through the last stage of this. Ashvale is still deciding how to grieve someone the guild had to be the one to put down.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -1239,7 +1241,7 @@
+     "stages": [
+       {
+         "name": "Not Wolves",
+-        "flavour": "The bite radius is wrong for a wolf, and the kills are too organized for a pack of animals. Every attack so far has landed within a day of the moon's phase, which is either an enormous coincidence or exactly what it looks like.",
++        "flavour": "The bite radius is wrong for a wolf, and the kills are too organized for a pack of animals. Every attack so far has landed within a day of the moon's phase, and nothing about a wolf's hunting habits explains a schedule.",
+         "tag": "explore",
+         "difficulty": "normal",
+         "durationMinutes": 420,
+@@ -1274,7 +1276,7 @@
+     ],
+     "rewardRenown": 3,
+     "title": "Unmasker",
+-    "epilogue": "The body-thief that had been wearing that household is gone now, and so is whatever it was actually made of underneath. The real question, how long it had been doing this and to how many other households nobody has checked, goes conveniently unasked by everyone who would rather not know the answer.",
++    "epilogue": "The body-thief that had been wearing that household is gone now, and so is whatever it was actually made of underneath. Ironrest's watch has opened an inquiry into how many other households it may have reached first, and how long it had been walking among them before anyone noticed. The guild will hear about it the moment there's something worth acting on.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -1325,7 +1327,7 @@
+     ],
+     "rewardRenown": 5,
+     "title": "Grave-Marked",
+-    "epilogue": "The guild found where the lich is holed up, an old ossuary nobody has bothered mapping in decades, but not what he is actually planning underneath it. He is confident enough in it to have stopped hiding, and that confidence should worry everyone more than it currently does.",
++    "epilogue": "The guild found where the lich is holed up, an old ossuary nobody has bothered mapping in decades, but not what he is actually planning underneath it. He is confident enough in it to have stopped hiding, and nobody at Ironrest has explained why a man that confident stopped hiding.",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+     "grantsHarvest": false,
+@@ -1417,7 +1419,7 @@
+     ],
+     "rewardRenown": 6,
+     "title": "Thread-Walker",
+-    "epilogue": "The guild has a name for it now, the Loom, for lack of anything it has ever called itself. They have a location, and a fairly complete picture of what it has been doing to Millbrook and probably other towns nobody has checked yet. What the guild does not have is any plan that avoids someone going down there to end it directly.",
++    "epilogue": "The guild has a name for it now, the Loom, for lack of anything it has ever called itself. They have a location, and a fairly complete picture of what it has been doing to Millbrook -- and reports are already coming in from towns along the same road, waiting on someone to compare notes. What the guild does not have is any plan that avoids someone going down there to end it directly.",
+     "requiresChainId": "quiet_in_millbrook",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+diff -ruN a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+--- a/src/game/data/json/raid-encounters.json	2026-09-04 04:00:40.871886070 +0000
++++ b/src/game/data/json/raid-encounters.json	2026-09-04 04:00:40.885034370 +0000
+@@ -78,9 +78,9 @@
+     ]
+   },
+   {
+-    "id": "blackford_uncrowned",
+-    "name": "The Uncrowned",
+-    "flavour": "He was just a smallholder eighteen months ago, before he lost everything to a goblin with a taste for other people's crowns. Whatever is left of him now has no intention of losing a second time.",
++    "id": "blackford_tyrant",
++    "name": "The Tyrant of Blackford",
++    "flavour": "He was a lawful lord once, sworn to hold this stretch of the border and nothing more. Whatever he has become no longer recognizes a border at all. He does not ask who the guild answers to. He has already stopped believing anyone outranks him.",
+     "baseSuccess": 50,
+     "durationHours": 4,
+     "rewardGold": 1000,
+diff -ruN a/src/game/data/json/raids.json b/src/game/data/json/raids.json
+--- a/src/game/data/json/raids.json	2026-09-04 04:00:40.870557037 +0000
++++ b/src/game/data/json/raids.json	2026-09-04 04:00:40.883790118 +0000
+@@ -2,13 +2,13 @@
+   {
+     "id": "blackford_keep",
+     "name": "The Siege of Blackford Keep",
+-    "description": "The lord who lost a crown at Blackford Ridge has spent an entire season turning a simple toll gate into a real holding, brick by brick. He still has no crown to show for it, and has no plans to stay uncrowned much longer. Unlike the goblin king, who already answered for one theft, this lord has no idea who has been quietly deciding his fate the whole time.",
+-    "epilogue": "The Uncrowned's second army fared no better than his first. He still does not have his crown back, and still has no idea the guild is the reason why.",
++    "description": "Lord Blackford has held this keep for three generations, and for most of that time it kept the border safe. Something in him has since come apart. Villages well outside his own territory have burned on his standing orders, for offenses nobody but him can name, and the Crown's own investigators have stopped coming back to report why. The King sent formal word for him to stand down and answer for it. He answered by sealing every gate and arming every hand still loyal enough to stay. The Crown's own soldiers tried this keep first, and did not come back either. The guild is going in next.",
++    "epilogue": "Lord Blackford's second stand fared no better than his first defiance of the Crown. The King's investigators finally have the answers they were sent for, and IronRest has one less rogue lord to worry about. Blackford never learned who broke his gates before the end.",
+     "reqLevel": 8,
+     "encounterIds": [
+       "blackford_outer_palisade",
+       "blackford_right_hand",
+-      "blackford_uncrowned"
++      "blackford_tyrant"
+     ],
+     "unlocksRaidId": "frozen_wyrmkeep",
+     "successModifier": 0,
+@@ -23,7 +23,7 @@
+   {
+     "id": "frozen_wyrmkeep",
+     "name": "The Frozen Wyrmkeep",
+-    "description": "Something has been nesting in the high passes for longer than anyone noticed, long enough to stop being one dragon and start being a brood. The watch that used to look for avalanches now looks for wings, and lately there have been considerably more wings than before.",
++    "description": "High in the passes above the Reach, one dragon has grown into an entire brood: hatchlings, grown wyrms, and an ancient matriarch the local keepers call the Frozen Wyrm, old enough to remember when the mountain held nothing at all. For years, a band of keepers has hidden the nest and fed it in secret rather than risk killing it, and that secrecy has only let it grow larger. The watch that once scouted for avalanches now counts wings instead, and the count keeps climbing. Left alone, the brood will not stay contained to the high passes much longer. The guild is going in to end it before it comes down the mountain on its own.",
+     "epilogue": "The brood is gone, and the ice it nested in is already creeping back over what remains, a tidier ending than Emberfell got. Nothing sings about a mountain that quietly stops being a problem. It just stops.",
+     "reqLevel": 18,
+     "encounterIds": [
+@@ -47,7 +47,7 @@
+   {
+     "id": "bonewrought_vault",
+     "name": "The Bonewrought Vault",
+-    "description": "Something has been raising the dead again, not one or two this time but by the vaultful, row after row of them. Whatever is sealed inside is worth enough that a company of risen guards still defends it centuries later, without pay, without rest, and without ever questioning the order. This is not a job for one hero. Bring the whole guild.",
++    "description": "Deep inside an ancient vault, something has begun raising the dead by the row rather than the body. The risen have stood guard for centuries without pay, without rest, and without once questioning the order that put them there. What they are protecting is valuable enough to keep them standing this long, though no one living has seen it. The vault-keeper at the heart of the tomb still counts every soul that passes its gate, and the tally has been wrong for longer than anyone can explain. IronRest has already lost three scouting parties trying to learn what waits inside. This time, the guild is going in with everyone it has, and no plan to send anyone in alone again.",
+     "epilogue": "The vault held, in the end, for whoever the guild turned out to be. What was raised here has gone quiet again, for now. Whatever tore open a road between the dead and the living to make this happen is still out there somewhere, and none of this slowed it down.",
+     "reqLevel": 22,
+     "encounterIds": [
+@@ -70,8 +70,8 @@
+   {
+     "id": "what_got_out",
+     "name": "What Got Out",
+-    "description": "The demon lord is gone, but the fortress he held still stands empty, its gate broken and its wards down with nobody left to guard whatever else might want it. Word reached the guild slowly that something else moved in behind him during the confusion. It is not interested in ruling anything. It is using the ruin exactly as it always wanted, as somewhere quiet enough to finish a working nobody has stopped it from starting.",
+-    "epilogue": "The breach did not open, not all the way, not this time. What was trying to open it scattered the moment the guild reached the chamber. Either it was never as unified as it looked, or whatever is on the other side is not done trying. Either way, the fortress is finally, actually empty. The guild is not taking bets on how long that lasts.",
++    "description": "The demon lord who once held this fortress is dead, cut down when the guild broke his throne room weeks ago. His gate stands broken and his wards are down, but the ruin did not stay empty for long. A council of his surviving lieutenants has gathered in the wreckage, working to finish what their lord started before the guild interrupted him -- a working none of them will name aloud, though all of them agree it is close to completion. IronRest's scouts confirm at least one presence inside that answers to none of the demons still living. If the working finishes, whatever comes through will not stay contained to this fortress. The guild has to reach it first.",
++    "epilogue": "Whether the council was ever truly unified, or just desperate enough to look it, the fortress is empty again. Nobody expects that to last.",
+     "reqLevel": 26,
+     "encounterIds": [
+       "gotout_trail_gone_cold",
+@@ -95,8 +95,8 @@
+   {
+     "id": "black_dragon_nest",
+     "name": "The Black Dragon Nest",
+-    "description": "A stretch of the eastern ridge has gone black with soot and quiet with fear. Something has nested up there and brought a whole clutch with it, and it does not intend to be a passing problem the way most dragon sightings turn out to be.",
+-    "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge is still a mystery nobody is eager to solve. For now, the mountain is quiet again, and that is enough.",
++    "description": "A stretch of the eastern ridge has gone black with soot and empty of anyone still willing to farm it. A dragon clutch has nested there under the watch of the Brood Mother, an elder wyrm old enough to remember the ridge under a different name. Her keepers guard the nest the way the Wyrmkeep's once did -- clearing debris, warming eggs, and driving off anyone who strays too close, guild included. Unlike that earlier brood, this one shows no sign of staying contained to the mountain. Farmsteads along the ridge have already been abandoned, and the Brood Mother has made clear she has no intention of moving on. The guild is going up to make sure she does.",
++    "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge in the first place is still unexplained, and nothing about the empty nest answers it.",
+     "reqLevel": 30,
+     "encounterIds": [
+       "blackdragon_the_keepers",
+@@ -121,7 +121,7 @@
+   {
+     "id": "house_of_bones",
+     "name": "The House of Bones",
+-    "description": "The ossuary the guild traced the lich to is not a hideout so much as a workshop. Generations of the dead lie sorted, stored, and put to use, all in service of a ritual that was never about raising an army in the first place.",
++    "description": "The lich the guild tracked to this ossuary is not hiding -- he is working, and has been for years. Generations of the dead lie sorted and stored throughout the vault, harvested for a ritual that was never meant to raise an army; his phylactery keeps him alive for something slower and more deliberate than that. He was midway through the working when the guild's scouts found him, and did not stop, confident nothing could reach him in time to matter. IronRest still does not know what he is trying to reach on the other side of that ritual, only that he is now confident enough to have stopped hiding. The guild is here to make sure he never finishes.",
+     "epilogue": "The lich is gone, his phylactery in pieces, and whatever he was trying to reach on the other side of that ritual did not get through, not this time. The guild is treating this as a delay, not an ending. Something was listening on the other end of that ritual, and it is unlikely to have forgotten the attempt.",
+     "reqLevel": 41,
+     "encounterIds": [
+@@ -145,8 +145,8 @@
+   {
+     "id": "silence_the_loom",
+     "name": "Silence the Loom",
+-    "description": "There is no approach, no outer ring of guards, and no lesser threat to clear first. There is only a long walk down into the dark, and at the end of it, the thing itself, already aware the guild is coming and entirely unbothered by the fact.",
+-    "epilogue": "The Loom does not scream when it finally comes apart. It just goes quiet, one borrowed voice at a time, until nothing is left speaking through Millbrook. The town will need a long time to remember how to answer a question honestly again. That is a problem for people who are not the guild to solve now.",
++    "description": "Beneath Millbrook, the entity the guild has named the Loom is still speaking through every voice it has taken, and has been since long before anyone noticed the town had stopped disagreeing about anything. There is no outer ring of guards to clear and no lesser threat standing between the guild and its source, only a long descent straight to the thing itself, already aware the guild is coming. It does not intend to run. Millbrook cannot be freed while the Loom is still speaking through it, and every day it continues is another day the compulsion spreads to someone new. The guild is going down to end it directly, with nothing left to soften the approach.",
++    "epilogue": "The Loom does not scream when it finally comes apart. It just goes quiet, one borrowed voice at a time, until nothing is left speaking through Millbrook. The town will need a long time to remember how to answer a question honestly again. Ironrest is already sending healers and clergy to see to that, now that Millbrook is finally safe enough for them to reach.",
+     "reqLevel": 43,
+     "encounterIds": [
+       "loom_the_presiding_intelligence"
+@@ -170,7 +170,7 @@
+   {
+     "id": "requiem_last_god",
+     "name": "Requiem for the Last God",
+-    "description": "The road the archive described has no fixed heading and never did. It opens for whoever means to walk it in a dying pilgrim's place, and closes the moment they stop meaning it. It has opened for this guild. Every guild that made this same walk before left something behind to prove it: banners, hulls, and ritual circles abandoned mid-rite, scattered across a shore that should not exist on any chart. Whatever waits at the end of that walk has not been walked to in a very long time, and does not entirely remember why anyone stopped.",
++    "description": "Beneath an old shrine, an archive describes a road with no fixed heading, opening only for someone willing to walk it in a dying pilgrim's place. It has opened for this guild. At its end waits the Last God, a True God of the final mile who once walked the dying gently into death. No pilgrim has completed that rite in centuries; the god has starved on forgotten belief since, still finishing a rite with no one left to receive it. It is not hostile by choice -- it no longer remembers how to be anything else. The guild has come to finish what centuries of neglect left undone: walk the Last God home, the last mercy still owed.",
+     "epilogue": "There is a difference between winning and being the one left standing when it is over. What the guild did at the end of that road was not a fight in the way every other fight has been. It was the last mile, walked the hard way, for something too far gone to make it easy. The guild is still deciding what to call that.",
+     "reqLevel": 55,
+     "encounterIds": [
