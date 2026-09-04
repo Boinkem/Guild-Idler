@@ -1,0 +1,189 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 7ac0820..0742c6c 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -24649,3 +24649,62 @@ vite.web.config.ts` both pass clean against a fresh pull of `main`
+ (confirmed patch 0305 was already live and this patch is rebased on top
+ of it). CSS-only change plus a status/backlog update -- no source
+ files touched beyond `app.css` and this document.
++
++### Harvest now shares one whole-panel background across both Warehouse and Fields, instead of a small boxed-in image (patch 0307)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed: the Harvest tab now shows its farmland art as one continuous background across both Warehouse and Fields, instead of only appearing in a small box on the Fields screen
++```
++
++Direct report, discussed before patching (two screenshots showed the same
++farmland art already working correctly inside its own boxed inset on
++Fields, with a completely unrelated backdrop showing everywhere else in
++the tab, including all of Warehouse).
++
++**What actually changed.** `HarvestPanel`'s top-level return was a plain
++fragment before this patch -- unlike every other panel in the game, it
++never had its own `.tab-scene`/`.tab-scene-content` wrapper, so nothing
++ever painted a Harvest-specific background behind its header, sub-tab
++buttons, or the Warehouse sub-tab at all. What showed there was always
++just the generic ambient backdrop `MenuWindow.tsx` shows behind nearly
++every tab (the active Guild Hall Customize theme's own image) -- unrelated
++to Harvest, and not something this patch touches. Meanwhile `FieldsTab`
++carried its own separate, independently-cropped copy of the exact same
++`fields.jpg` inside a small aspect-ratio-locked box (`.harvest-scene`),
++just for the falling-material node area.
++
++Now `HarvestPanel` gets the same `.tab-scene`/`.tab-scene-content` wrapper
++every other panel already uses, reading `fields.jpg`/`bright/fields.jpg`
++through `backgroundSrc()` exactly like the rest of the game -- one
++continuous background behind both sub-tabs, not two independent images in
++two different places. `FieldsTab`'s own `.harvest-scene-bg` layer (the
++private, separately-cropped copy) is gone entirely; `.harvest-scene`
++itself stays as a plain positioned container -- NodeLane's falling items
++are placed by percentage within it, so it still needs a consistently
++sized box to fall within (same locked `1672:941` aspect ratio, same
++border/rounded corners), it just no longer paints its own image into
++that box. With no background of its own, the shared panel background
++shows through it directly instead of a second, independently-cropped
++copy sitting on top.
++
++**Confirmed, not changed:** the actual harvest mechanic -- falling items,
++click-to-catch, the catch-burst/fly-to-counter animation, spawn timers --
++was never a modal and was never at risk; `NodeLane` has always rendered
++directly inline over whatever background sits behind it. Nothing about
++how catching a material works changed in this patch, only where the
++background image itself lives.
++
++**Also noted while in this file, not touched:** `.harvest-scene-empty`
++in `app.css` has no corresponding element anywhere in `HarvestPanel.tsx`
++-- genuinely dead CSS from an earlier version of this screen, unrelated
++to this patch. Flagging for a future cleanup pass rather than removing
++it here, to keep this patch scoped to the one reported issue.
++
++**Verification.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh pull of `main`
++(confirmed patch 0306 was already live and this patch is rebased on top
++of it). No image assets changed in this patch -- same `fields.jpg`/
++`bright/fields.jpg` pair from patch 0305, just wired to one shared
++background instead of two separate ones.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 9f5cfcf..659ff33 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -3416,40 +3416,19 @@ input[type='range'] {
+      panel is wider than ~500px (280 * 1672/941), leaving only a thin
+      horizontal sliver of a much taller scene visible. Locking the aspect
+      ratio and stretching to fill it (same fix CraftingStation's own scene
+-     uses) shows the whole image at any panel width, full height, no crop. */
++     uses) shows the whole image at any panel width, full height, no crop.
++     Kept unchanged even after this box's own background layer was removed
++     (patch 0306, direct report -- see HarvestPanel.tsx's own comment):
++     NodeLane's percentage-based item placement still needs a consistently
++     sized, positioned box to fall within, this just no longer paints its
++     own copy of the image into it -- HarvestPanel's shared tab-scene
++     background shows through instead. */
+   aspect-ratio: 1672 / 941;
+   border-radius: 6px;
+   border: 1px solid var(--edge);
+-  background-color: var(--night);
+   overflow: hidden;
+   margin-bottom: 12px;
+ }
+-/*
+- * The background art on its own layer, dimmed independently of the
+- * interactive items drawn on top -- was the image directly on
+- * `.harvest-scene` itself, which meant dimming it would have dimmed the
+- * falling items and their glow right along with it. Same "fade via a
+- * separate layer, not the image's own opacity" approach the guild-hall
+- * background already uses in MenuWindow.tsx, just a lighter touch here
+- * (0.7, not 0.35) since this art is the actual content being interacted
+- * with, not a decorative backdrop sitting behind opaque cards.
+- */
+-.harvest-scene-bg {
+-  position: absolute;
+-  inset: 0;
+-  background-size: 100% 100%;
+-  background-position: center;
+-  opacity: 0.7;
+-}
+-/* Same Bright-mood reasoning as .tab-scene-content's own comment above
+- * (patch 0306) -- less darkening specifically in Bright mode so the art
+- * actually reads as bright. This one's a plain opacity bump rather than
+- * a tint reduction since harvest-scene-bg dims via its own opacity, not
+- * a separate overlay layer (see this rule's own comment just above for
+- * why that split exists). */
+-[data-background-mood='bright'] .harvest-scene-bg {
+-  opacity: 0.9;
+-}
+ .harvest-scene-empty {
+   position: absolute;
+   inset: 0;
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index b297f44..1a89d2e 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -75,6 +75,7 @@ function HarvestGlyph({ icon, glyph }: { icon: string | null; glyph: string }) {
+ export function HarvestPanel() {
+   const engine = useEngine();
+   const state = engine.state;
++  const { settings } = useSettings();
+   const [subTab, setSubTab] = useState<SubTab>('warehouse');
+ 
+   // Deep-link support for a notification's "Go to Warehouse" button (see
+@@ -94,7 +95,17 @@ export function HarvestPanel() {
+   }, [engine, subTab]);
+ 
+   return (
+-    <>
++    // Whole-panel background (patch 0306, direct report) -- both
++    // sub-tabs now share the one farmland scene, same `.tab-scene`/
++    // `.tab-scene-content` shape every other panel in the game already
++    // uses, rather than a background that only ever lived in a small
++    // boxed inset around the Fields node-clicking area (see FieldsTab's
++    // own comment for what moved out of there). Warehouse had no
++    // background of its own before this -- what showed behind it was
++    // always just the generic ambient menu backdrop bleeding through,
++    // unrelated to Harvest specifically.
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/harvest/fields.jpg', settings.backgroundMood)})` }}>
++      <div className="tab-scene-content">
+       <h2>Harvest</h2>
+       <p className="subtitle">
+         Idle heroes gather instead of doing nothing. Click a shiny while it&rsquo;s here, then spend the stock
+@@ -126,7 +137,8 @@ export function HarvestPanel() {
+         {HarvestManager.idleHeroCount(state)} idle hero{HarvestManager.idleHeroCount(state) === 1 ? '' : 'es'} feeding
+         every node right now -- more idle heroes, faster spawns everywhere, not just here.
+       </p>
+-    </>
++      </div>
++    </div>
+   );
+ }
+ 
+@@ -151,7 +163,6 @@ const HARVEST_FLASH_MS = 700;
+ 
+ function FieldsTab() {
+   const state = useEngine().state;
+-  const { settings } = useSettings();
+   const cap = HarvestManager.capacity(state);
+   const [flashing, setFlashing] = useState<Partial<Record<MaterialId, boolean>>>({});
+   const flashTimeouts = useRef<Partial<Record<MaterialId, number>>>({});
+@@ -177,8 +188,19 @@ function FieldsTab() {
+         ))}
+       </div>
+       <SpawnTimerBar />
++      {/* Own background layer removed (patch 0306, direct report) -- this
++       *  box used to carry its own private copy of fields.jpg, cropped to
++       *  its own locked aspect ratio, sitting inside a panel whose
++       *  surrounding chrome (header, sub-tab buttons, Warehouse) showed a
++       *  completely different, unrelated backdrop. HarvestPanel's own
++       *  wrapper now carries that same image as one continuous background
++       *  for the whole tab (both sub-tabs), so this box just needs to stay
++       *  a positioned, appropriately-sized container for NodeLane's
++       *  percentage-based item placement -- transparent, letting the
++       *  shared panel background show through underneath instead of a
++       *  second independently-cropped copy of it. See this box's own CSS
++       *  comment in app.css for the sizing rationale that's unchanged. */}
+       <div className="harvest-scene">
+-        <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: `url(${backgroundSrc('./lore/harvest/fields.jpg', settings.backgroundMood)})` }} />
+         {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} onCatch={triggerFlash} />)}
+       </div>
+     </>

@@ -24649,3 +24649,62 @@ vite.web.config.ts` both pass clean against a fresh pull of `main`
 (confirmed patch 0305 was already live and this patch is rebased on top
 of it). CSS-only change plus a status/backlog update -- no source
 files touched beyond `app.css` and this document.
+
+### Harvest now shares one whole-panel background across both Warehouse and Fields, instead of a small boxed-in image (patch 0307)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: the Harvest tab now shows its farmland art as one continuous background across both Warehouse and Fields, instead of only appearing in a small box on the Fields screen
+```
+
+Direct report, discussed before patching (two screenshots showed the same
+farmland art already working correctly inside its own boxed inset on
+Fields, with a completely unrelated backdrop showing everywhere else in
+the tab, including all of Warehouse).
+
+**What actually changed.** `HarvestPanel`'s top-level return was a plain
+fragment before this patch -- unlike every other panel in the game, it
+never had its own `.tab-scene`/`.tab-scene-content` wrapper, so nothing
+ever painted a Harvest-specific background behind its header, sub-tab
+buttons, or the Warehouse sub-tab at all. What showed there was always
+just the generic ambient backdrop `MenuWindow.tsx` shows behind nearly
+every tab (the active Guild Hall Customize theme's own image) -- unrelated
+to Harvest, and not something this patch touches. Meanwhile `FieldsTab`
+carried its own separate, independently-cropped copy of the exact same
+`fields.jpg` inside a small aspect-ratio-locked box (`.harvest-scene`),
+just for the falling-material node area.
+
+Now `HarvestPanel` gets the same `.tab-scene`/`.tab-scene-content` wrapper
+every other panel already uses, reading `fields.jpg`/`bright/fields.jpg`
+through `backgroundSrc()` exactly like the rest of the game -- one
+continuous background behind both sub-tabs, not two independent images in
+two different places. `FieldsTab`'s own `.harvest-scene-bg` layer (the
+private, separately-cropped copy) is gone entirely; `.harvest-scene`
+itself stays as a plain positioned container -- NodeLane's falling items
+are placed by percentage within it, so it still needs a consistently
+sized box to fall within (same locked `1672:941` aspect ratio, same
+border/rounded corners), it just no longer paints its own image into
+that box. With no background of its own, the shared panel background
+shows through it directly instead of a second, independently-cropped
+copy sitting on top.
+
+**Confirmed, not changed:** the actual harvest mechanic -- falling items,
+click-to-catch, the catch-burst/fly-to-counter animation, spawn timers --
+was never a modal and was never at risk; `NodeLane` has always rendered
+directly inline over whatever background sits behind it. Nothing about
+how catching a material works changed in this patch, only where the
+background image itself lives.
+
+**Also noted while in this file, not touched:** `.harvest-scene-empty`
+in `app.css` has no corresponding element anywhere in `HarvestPanel.tsx`
+-- genuinely dead CSS from an earlier version of this screen, unrelated
+to this patch. Flagging for a future cleanup pass rather than removing
+it here, to keep this patch scoped to the one reported issue.
+
+**Verification.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh pull of `main`
+(confirmed patch 0306 was already live and this patch is rebased on top
+of it). No image assets changed in this patch -- same `fields.jpg`/
+`bright/fields.jpg` pair from patch 0305, just wired to one shared
+background instead of two separate ones.

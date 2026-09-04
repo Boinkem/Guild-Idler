@@ -3416,39 +3416,18 @@ input[type='range'] {
      panel is wider than ~500px (280 * 1672/941), leaving only a thin
      horizontal sliver of a much taller scene visible. Locking the aspect
      ratio and stretching to fill it (same fix CraftingStation's own scene
-     uses) shows the whole image at any panel width, full height, no crop. */
+     uses) shows the whole image at any panel width, full height, no crop.
+     Kept unchanged even after this box's own background layer was removed
+     (patch 0306, direct report -- see HarvestPanel.tsx's own comment):
+     NodeLane's percentage-based item placement still needs a consistently
+     sized, positioned box to fall within, this just no longer paints its
+     own copy of the image into it -- HarvestPanel's shared tab-scene
+     background shows through instead. */
   aspect-ratio: 1672 / 941;
   border-radius: 6px;
   border: 1px solid var(--edge);
-  background-color: var(--night);
   overflow: hidden;
   margin-bottom: 12px;
-}
-/*
- * The background art on its own layer, dimmed independently of the
- * interactive items drawn on top -- was the image directly on
- * `.harvest-scene` itself, which meant dimming it would have dimmed the
- * falling items and their glow right along with it. Same "fade via a
- * separate layer, not the image's own opacity" approach the guild-hall
- * background already uses in MenuWindow.tsx, just a lighter touch here
- * (0.7, not 0.35) since this art is the actual content being interacted
- * with, not a decorative backdrop sitting behind opaque cards.
- */
-.harvest-scene-bg {
-  position: absolute;
-  inset: 0;
-  background-size: 100% 100%;
-  background-position: center;
-  opacity: 0.7;
-}
-/* Same Bright-mood reasoning as .tab-scene-content's own comment above
- * (patch 0306) -- less darkening specifically in Bright mode so the art
- * actually reads as bright. This one's a plain opacity bump rather than
- * a tint reduction since harvest-scene-bg dims via its own opacity, not
- * a separate overlay layer (see this rule's own comment just above for
- * why that split exists). */
-[data-background-mood='bright'] .harvest-scene-bg {
-  opacity: 0.9;
 }
 .harvest-scene-empty {
   position: absolute;

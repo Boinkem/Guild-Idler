@@ -75,6 +75,7 @@ function HarvestGlyph({ icon, glyph }: { icon: string | null; glyph: string }) {
 export function HarvestPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const [subTab, setSubTab] = useState<SubTab>('warehouse');
 
   // Deep-link support for a notification's "Go to Warehouse" button (see
@@ -94,7 +95,17 @@ export function HarvestPanel() {
   }, [engine, subTab]);
 
   return (
-    <>
+    // Whole-panel background (patch 0306, direct report) -- both
+    // sub-tabs now share the one farmland scene, same `.tab-scene`/
+    // `.tab-scene-content` shape every other panel in the game already
+    // uses, rather than a background that only ever lived in a small
+    // boxed inset around the Fields node-clicking area (see FieldsTab's
+    // own comment for what moved out of there). Warehouse had no
+    // background of its own before this -- what showed behind it was
+    // always just the generic ambient menu backdrop bleeding through,
+    // unrelated to Harvest specifically.
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/harvest/fields.jpg', settings.backgroundMood)})` }}>
+      <div className="tab-scene-content">
       <h2>Harvest</h2>
       <p className="subtitle">
         Idle heroes gather instead of doing nothing. Click a shiny while it&rsquo;s here, then spend the stock
@@ -126,7 +137,8 @@ export function HarvestPanel() {
         {HarvestManager.idleHeroCount(state)} idle hero{HarvestManager.idleHeroCount(state) === 1 ? '' : 'es'} feeding
         every node right now -- more idle heroes, faster spawns everywhere, not just here.
       </p>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -151,7 +163,6 @@ const HARVEST_FLASH_MS = 700;
 
 function FieldsTab() {
   const state = useEngine().state;
-  const { settings } = useSettings();
   const cap = HarvestManager.capacity(state);
   const [flashing, setFlashing] = useState<Partial<Record<MaterialId, boolean>>>({});
   const flashTimeouts = useRef<Partial<Record<MaterialId, number>>>({});
@@ -177,8 +188,19 @@ function FieldsTab() {
         ))}
       </div>
       <SpawnTimerBar />
+      {/* Own background layer removed (patch 0306, direct report) -- this
+       *  box used to carry its own private copy of fields.jpg, cropped to
+       *  its own locked aspect ratio, sitting inside a panel whose
+       *  surrounding chrome (header, sub-tab buttons, Warehouse) showed a
+       *  completely different, unrelated backdrop. HarvestPanel's own
+       *  wrapper now carries that same image as one continuous background
+       *  for the whole tab (both sub-tabs), so this box just needs to stay
+       *  a positioned, appropriately-sized container for NodeLane's
+       *  percentage-based item placement -- transparent, letting the
+       *  shared panel background show through underneath instead of a
+       *  second independently-cropped copy of it. See this box's own CSS
+       *  comment in app.css for the sizing rationale that's unchanged. */}
       <div className="harvest-scene">
-        <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: `url(${backgroundSrc('./lore/harvest/fields.jpg', settings.backgroundMood)})` }} />
         {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} onCatch={triggerFlash} />)}
       </div>
     </>
