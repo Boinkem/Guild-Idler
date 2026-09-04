@@ -1550,6 +1550,14 @@ export interface RoleDef {
   description?: string;
 }
 
+/**
+ * Category used purely by the Guild Hall Upgrades panel's filter chips and
+ * row category labels (patch 0314's dense-list redesign) -- not read by
+ * any game-logic code. Presentation-only, same scope as the
+ * `shortEffect` field on UpgradeDef/GuildDef right below.
+ */
+export type GuildHallCategory = 'Combat' | 'Economy' | 'Roster' | 'Care' | 'Unlocks';
+
 export interface UpgradeDef {
   id: string;
   name: string;
@@ -1600,6 +1608,23 @@ export interface UpgradeDef {
    *  and CraftingManager.craftGear for where the resulting cap is
    *  actually enforced. Only Stash Expansion uses this. */
   stashCapacityPerLevel?: number;
+  /**
+   * Guild Hall Upgrades panel category, for the tab's filter chips and
+   * each row's category label (patch 0314's dense-list redesign) --
+   * Combat/Economy/Roster/Care/Unlocks. Undefined for every vendor-gated
+   * upgrade above, since those never render on this panel in the first
+   * place (see GuildPanel's `!def.vendor` filter) and so have nothing to
+   * be filtered by.
+   */
+  category?: GuildHallCategory;
+  /**
+   * Optional one-line override for the Guild Hall row's compact effect
+   * text, only set where the derived line (every describeMods/slot-count
+   * line joined with " · ") runs past the row's ~46-character budget --
+   * see GuildPanel's upgradeEntries. Every other upgrade derives its row
+   * text automatically and leaves this unset.
+   */
+  shortEffect?: string;
 }
 
 export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel' | 'music_hall' | 'physicians_charity' | 'smiths_charity';
@@ -1672,6 +1697,12 @@ export interface GuildDef {
    * curve every other facility still uses.
    */
   flatCostFromLevel?: number;
+  /** Same Guild Hall Upgrades panel category as UpgradeDef.category --
+   *  see that field's own comment for the full scope note. */
+  category?: GuildHallCategory;
+  /** Same shortEffect override as UpgradeDef.shortEffect -- see that
+   *  field's own comment. */
+  shortEffect?: string;
 }
 
 export interface RenownPerkTier2 {

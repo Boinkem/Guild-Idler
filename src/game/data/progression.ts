@@ -105,7 +105,7 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: Tuning.get('upgrade.guild_charter.baseCost'),
     costGrowth: Tuning.get('upgrade.guild_charter.costGrowth'),
     maxLevel: Tuning.get('upgrade.guild_charter.maxLevel'),
-    modsPerLevel: {}, unlocks: 'chains',
+    modsPerLevel: {}, unlocks: 'chains', category: 'Unlocks',
   },
   {
     id: 'black_market_contact', name: 'Black Market Contact',
@@ -113,7 +113,7 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: Tuning.get('upgrade.black_market_contact.baseCost'),
     costGrowth: Tuning.get('upgrade.black_market_contact.costGrowth'),
     maxLevel: Tuning.get('upgrade.black_market_contact.maxLevel'),
-    modsPerLevel: {}, unlocks: 'blackMarket',
+    modsPerLevel: {}, unlocks: 'blackMarket', category: 'Unlocks',
   },
   {
     id: 'auto_chain', name: 'Auto-Chain',
@@ -121,7 +121,7 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: Tuning.get('upgrade.auto_chain.baseCost'),
     costGrowth: Tuning.get('upgrade.auto_chain.costGrowth'),
     maxLevel: Tuning.get('upgrade.auto_chain.maxLevel'),
-    modsPerLevel: {}, unlocks: 'autoChain',
+    modsPerLevel: {}, unlocks: 'autoChain', category: 'Combat',
   },
   {
     id: 'chain_tactics', name: 'Chain Tactics',
@@ -129,7 +129,7 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: Tuning.get('upgrade.chain_tactics.baseCost'),
     costGrowth: Tuning.get('upgrade.chain_tactics.costGrowth'),
     maxLevel: Tuning.get('upgrade.chain_tactics.maxLevel'),
-    modsPerLevel: {}, unlocks: 'autoChainTactics',
+    modsPerLevel: {}, unlocks: 'autoChainTactics', category: 'Combat',
   },
   {
     id: 'raid_charter', name: 'Raid Charter',
@@ -142,7 +142,7 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: Tuning.get('upgrade.raid_charter.baseCost'),
     costGrowth: Tuning.get('upgrade.raid_charter.costGrowth'),
     maxLevel: Tuning.get('upgrade.raid_charter.maxLevel'),
-    modsPerLevel: {}, unlocks: 'raids',
+    modsPerLevel: {}, unlocks: 'raids', category: 'Unlocks',
   },
   {
     id: 'training_grounds', name: 'Training Grounds',
@@ -157,7 +157,11 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: Tuning.get('upgrade.training_grounds.baseCost'),
     costGrowth: Tuning.get('upgrade.training_grounds.costGrowth'),
     maxLevel: Tuning.get('upgrade.training_grounds.maxLevel'),
-    modsPerLevel: {}, unlocks: 'training',
+    modsPerLevel: {}, unlocks: 'training', category: 'Unlocks',
+    // Derived row text ("Unlocks the Training sub-tab under Heroes --
+    // reassign any hero's role") overflows the row's ~46-char budget --
+    // see GuildDef.shortEffect's own comment.
+    shortEffect: 'Unlocks Training · reassign any role',
   },
   {
     id: 'raid_heroic_clearance', name: 'Heroic Clearance',
@@ -165,7 +169,7 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: Tuning.get('upgrade.raid_heroic_clearance.baseCost'),
     costGrowth: Tuning.get('upgrade.raid_heroic_clearance.costGrowth'),
     maxLevel: Tuning.get('upgrade.raid_heroic_clearance.maxLevel'),
-    modsPerLevel: {}, unlocks: 'raidsHeroic',
+    modsPerLevel: {}, unlocks: 'raidsHeroic', category: 'Unlocks',
   },
   {
     // id fully renamed as of patch 0166 (was 'raid_mythic_clearance',
@@ -178,7 +182,7 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: Tuning.get('upgrade.raid_legendary_clearance.baseCost'),
     costGrowth: Tuning.get('upgrade.raid_legendary_clearance.costGrowth'),
     maxLevel: Tuning.get('upgrade.raid_legendary_clearance.maxLevel'),
-    modsPerLevel: {}, unlocks: 'raidsLegendary',
+    modsPerLevel: {}, unlocks: 'raidsLegendary', category: 'Unlocks',
   },
   {
     id: 'potion_belt', name: 'Potion Belt',
@@ -190,6 +194,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.potion_belt.costGrowth'),
     maxLevel: Tuning.get('upgrade.potion_belt.maxLevel'),
     modsPerLevel: {}, consumableSlotsPerLevel: Tuning.get('upgrade.potion_belt.consumableSlotsPerLevel'),
+    category: 'Roster',
   },
   {
     id: 'nest_expansion', name: 'Nest Expansion',
@@ -202,6 +207,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.nest_expansion.costGrowth'),
     maxLevel: Tuning.get('upgrade.nest_expansion.maxLevel'),
     modsPerLevel: {}, incubationSlotsPerLevel: Tuning.get('upgrade.nest_expansion.incubationSlotsPerLevel'),
+    category: 'Roster',
   },
   {
     id: 'companion_bond', name: 'Companion Bond',
@@ -212,6 +218,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.companion_bond.costGrowth'),
     maxLevel: Tuning.get('upgrade.companion_bond.maxLevel'),
     modsPerLevel: {}, petSlotsPerLevel: Tuning.get('upgrade.companion_bond.petSlotsPerLevel'),
+    category: 'Roster',
   },
   {
     id: 'board_runner', name: 'Board Runner',
@@ -222,6 +229,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.board_runner.costGrowth'),
     maxLevel: Tuning.get('upgrade.board_runner.maxLevel'),
     modsPerLevel: {}, questFreeRerollsPerLevel: Tuning.get('upgrade.board_runner.questFreeRerollsPerLevel'),
+    category: 'Economy',
   },
   {
     id: 'board_warden', name: 'Board Warden',
@@ -238,6 +246,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.board_warden.costGrowth'),
     maxLevel: Tuning.get('upgrade.board_warden.maxLevel'),
     modsPerLevel: {}, freezeChangesPerLevel: Tuning.get('upgrade.board_warden.freezeChangesPerLevel'),
+    category: 'Economy',
   },
   {
     id: 'stash_expansion', name: 'Stash Expansion',
@@ -254,6 +263,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.stash_expansion.costGrowth'),
     maxLevel: Tuning.get('upgrade.stash_expansion.maxLevel'),
     modsPerLevel: {}, stashCapacityPerLevel: Tuning.get('upgrade.stash_expansion.stashCapacityPerLevel'),
+    category: 'Economy',
   },
   {
     id: 'vitality_training', name: 'Vitality Training',
@@ -262,6 +272,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.vitality_training.costGrowth'),
     maxLevel: Tuning.get('upgrade.vitality_training.maxLevel'),
     modsPerLevel: { health: Tuning.get('upgrade.vitality_training.healthPerLevel') },
+    category: 'Combat',
   },
   {
     id: 'undertakers_favor', name: "Undertaker's Favor",
@@ -270,6 +281,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.undertakers_favor.costGrowth'),
     maxLevel: Tuning.get('upgrade.undertakers_favor.maxLevel'),
     modsPerLevel: { revivalDiscount: Tuning.get('upgrade.undertakers_favor.discountPerLevel') },
+    category: 'Care',
   },
   {
     id: 'companion_vitality', name: 'Companion Vitality',
@@ -278,6 +290,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.companion_vitality.costGrowth'),
     maxLevel: Tuning.get('upgrade.companion_vitality.maxLevel'),
     modsPerLevel: { petHealth: Tuning.get('upgrade.companion_vitality.petHealthPerLevel') },
+    category: 'Care',
   },
   {
     id: 'kennel_keepers_favor', name: "Kennel Keeper's Favor",
@@ -286,6 +299,7 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.kennel_keepers_favor.costGrowth'),
     maxLevel: Tuning.get('upgrade.kennel_keepers_favor.maxLevel'),
     modsPerLevel: { petRevivalDiscount: Tuning.get('upgrade.kennel_keepers_favor.discountPerLevel') },
+    category: 'Care',
   },
 ];
 
@@ -429,6 +443,7 @@ export const GUILD_FACILITIES: GuildDef[] = [
     costGrowth: Tuning.get('guild_facility.barracks.costGrowth'),
     maxLevel: Tuning.get('guild_facility.barracks.maxLevel'),
     modsPerLevel: { success: Tuning.get('guild_facility.barracks.successPerLevel') },
+    category: 'Combat',
   },
   {
     id: 'treasury', name: 'Treasury',
@@ -480,6 +495,11 @@ export const GUILD_FACILITIES: GuildDef[] = [
     //    the ~43.3k flat cost every level past it now charges.
     flatCostFromLevel: 12,
     storagePerLevel: 15000,
+    category: 'Economy',
+    // Derived row text ("+12% gold per level · +15.0k storage per level")
+    // overflows the row's ~46-char budget -- see GuildDef.shortEffect's
+    // own comment.
+    shortEffect: '+12% gold · +15k storage per level',
   },
   {
     id: 'workshop', name: 'Workshop',
@@ -494,6 +514,7 @@ export const GUILD_FACILITIES: GuildDef[] = [
     costGrowth: Tuning.get('guild_facility.workshop.costGrowth'),
     maxLevel: Tuning.get('guild_facility.workshop.maxLevel'),
     modsPerLevel: { durability: Tuning.get('guild_facility.workshop.durabilityPerLevel') },
+    category: 'Economy',
   },
   {
     id: 'library', name: 'Library',
@@ -507,6 +528,7 @@ export const GUILD_FACILITIES: GuildDef[] = [
     costGrowth: Tuning.get('guild_facility.library.costGrowth'),
     maxLevel: Tuning.get('guild_facility.library.maxLevel'),
     modsPerLevel: { xp: Tuning.get('guild_facility.library.xpPerLevel') },
+    category: 'Roster',
   },
   {
     id: 'tavern', name: 'Tavern',
@@ -523,6 +545,11 @@ export const GUILD_FACILITIES: GuildDef[] = [
     maxLevel: Tuning.get('guild_facility.tavern.maxLevel'),
     modsPerLevel: { loot: Tuning.get('guild_facility.tavern.lootPerLevel') },
     heroSlotsPerLevel: 1,
+    category: 'Roster',
+    // Derived row text ("+7% loot per level · +1 hero slot per level")
+    // overflows the row's ~46-char budget -- see GuildDef.shortEffect's
+    // own comment.
+    shortEffect: '+7% loot · +1 hero slot per level',
   },
   {
     id: 'infirmary', name: 'Infirmary',
@@ -538,6 +565,7 @@ export const GUILD_FACILITIES: GuildDef[] = [
     // heroSlotsPerLevel already uses instead of a mod.
     modsPerLevel: {},
     healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.infirmary.healTimeReductionMinutesPerLevel'),
+    category: 'Care',
   },
   {
     id: 'kennel', name: 'Kennel',
@@ -551,6 +579,7 @@ export const GUILD_FACILITIES: GuildDef[] = [
     // auto-revive unlock at max level aren't flat Modifiers bonuses.
     modsPerLevel: {},
     healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.kennel.healTimeReductionMinutesPerLevel'),
+    category: 'Care',
   },
   {
     id: 'physicians_charity', name: "Physician's Charity",
@@ -564,6 +593,7 @@ export const GUILD_FACILITIES: GuildDef[] = [
     // comment.
     modsPerLevel: {},
     freeHealsPerLevel: Tuning.get('guild_facility.physicians_charity.freeHealsPerLevel'),
+    category: 'Care',
   },
   {
     id: 'smiths_charity', name: "Smith's Charity",
@@ -574,6 +604,7 @@ export const GUILD_FACILITIES: GuildDef[] = [
     maxLevel: Tuning.get('guild_facility.smiths_charity.maxLevel'),
     modsPerLevel: {},
     freeRepairsPerLevel: Tuning.get('guild_facility.smiths_charity.freeRepairsPerLevel'),
+    category: 'Care',
   },
   // Music Hall (buy a level, unlock a track) removed -- bard tracks are
   // now earned as scattered rewards across quests/raids/achievements/

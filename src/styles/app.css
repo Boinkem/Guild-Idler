@@ -462,20 +462,50 @@
 .raid-result-modal .section-heading { margin-top: 12px; }
 
 /*
- * Guild Hall -- facility and permanent-upgrade cards get their own
- * identity here. Raids built its identity around banner art; Guild Hall
- * has none to build around (no icons, no banners exist for this panel),
- * so the identity comes from a ledger/blueprint motif instead -- a
- * corner-cut "stamped" card shape, a lettered crest standing in for a
- * facility icon, and a tick-marked level rail replacing the plain
- * "Level N/M" text every other leveled thing in the game uses. Guild
- * Hall is the guild's administrative seat (build facilities, bank
- * permanent upgrades), so this leans official/ledger rather than
- * adventurous the way Raids' banner cards do. Scoped entirely to
- * .guild-* classes (plus the .card/.card-title/etc it still layers onto,
- * unmodified) -- Vendors, Stats, and every other shared-class panel are
- * untouched.
+ * Guild Hall -- patch 0314 dense-list redesign (Claude Design handoff,
+ * option 1c: "filtered two-column list, bonuses on top, maxed work
+ * folded away"). Replaces the old lettered-crest/corner-cut card grid
+ * (.guild-facility-card and friends, retired below) with a scannable
+ * two-column row list: name/category/level on one line, a one-line
+ * effect summary, a thin progress rule, and a compact Buy button --
+ * plus a header bonus-chip row and a collapsed "Fully built" strip that
+ * keeps the wax-seal stamp without needing a card underneath it to
+ * stamp. Nothing about game logic, costs, purchase flow, or the detail
+ * modal changed -- see GuildPanel.tsx. Scoped entirely to .guild-*
+ * classes (plus the shared .card/.section-heading/.btn-primary/etc it
+ * still layers onto, unmodified) -- Vendors, Stats, and every other
+ * shared-class panel are untouched.
  */
+
+/* Title + bonus-chip row across the top of the panel. */
+.guild-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.guild-bonus-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.guild-bonus-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 9px;
+  background: var(--panel-2);
+  border-left: 2px solid var(--brass);
+}
+.guild-bonus-chip-label {
+  font-size: 0.53125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.guild-bonus-chip-value {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
 
 /* Gold storage was previously buried mid-sentence in the subtitle
    paragraph -- it's the one number this whole panel is building toward,
@@ -506,122 +536,200 @@
 }
 
 /* Ledger-tab treatment layered on top of the shared .section-heading --
-   a small notched flag rather than plain underlined text, so "Facilities"
-   and "Permanent Upgrades" read as record dividers, not just labels. */
+   a small notched flag rather than plain underlined text. Only the
+   Treasury heading below still uses this -- the old "Facilities"/
+   "Permanent Upgrades" headings are gone, replaced by the filter chips. */
 .guild-section-heading {
   width: max-content;
   padding: 3px 10px 5px 0;
 }
 
-.guild-facility-grid { margin-bottom: 14px; }
-
-.guild-facility-card {
+/* Filter chip bar, plus a compact gold readout pushed to the far right --
+   same number the storage plaque above already shows, just in the row a
+   player's eye is actually on while scanning affordability. */
+.guild-filter-bar {
   display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--panel-3);
+  flex-wrap: wrap;
+}
+.guild-filter-chip {
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--parchment);
+  border: 1px solid var(--panel-3);
+  min-height: 0;
+  box-shadow: none;
+}
+.guild-filter-chip:hover:not(:disabled):not(.active) { border-color: var(--brass); background: transparent; }
+.guild-filter-chip.active {
+  background: var(--brass);
+  color: var(--ink);
+  border-color: var(--brass);
+}
+.guild-filter-gold {
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+.guild-filter-gold-amount { color: var(--brass); }
+
+/* The main two-column row list -- shared by both the active list and the
+   expanded built section below. */
+.guild-upgrade-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+  margin-top: 4px;
+}
+@media (max-width: 640px) {
+  .guild-upgrade-list { grid-template-columns: 1fr; }
+}
+
+/* One row -- name/category/level on line 1, a one-line effect summary on
+   line 2, a thin progress rule on line 3, Buy on the right. Replaces
+   .guild-facility-card's corner-cut tile entirely (retired below).
+   position: relative so a MaxFlash overlay (see GuildPanel.tsx) anchors
+   to this exact row instead of the whole list. */
+.guild-upgrade-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
   gap: 12px;
-  align-items: flex-start;
-  margin-bottom: 0;
-  clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
-  /* Uniform card sizing, requested directly: `.grid` is CSS Grid, which
-     already stretches every item in a row to match its tallest sibling
-     (the default `align-items: stretch`) -- `height: 100%` here is what
-     actually lets this card fill that stretched grid cell instead of
-     staying its own natural (shorter) content height inside a taller
-     box. `min-height` sets a baseline for a short row too (e.g. a lone
-     card with no extra stat lines), so the grid doesn't just look
-     uniform *within* a row but across the whole section. Removing the
-     flavour text from this view (see GuildPanel.tsx's UpgradeCard) was
-     the bigger uniformity win by itself -- variable-length prose was the
-     single biggest source of height variance -- this is what makes the
-     remaining, much smaller variance in stat-line count a non-issue too. */
-  height: 100%;
-  min-height: 168px;
+  padding: 9px 2px 8px;
+  border-bottom: 1px solid var(--panel-2);
   cursor: pointer;
 }
-/* Hover feedback comes free from the existing global
-   `.card[role="button"]:hover` rule -- this card already carries both
-   classes plus `role="button"` (see UpgradeCard in GuildPanel.tsx), same
-   as RaidCard's own clickable card already does. */
-
-/* flex column layout -- was built so the Buy button (then the last
-   child) could anchor to the bottom via margin-top: auto regardless of
-   stat-line count. Direct request moved the button above the stat-row
-   instead (so it reads as "here's the action, here's what it does"
-   rather than requiring a scan past every stat line first) -- the
-   trailing stat-row is now what naturally settles at the bottom of a
-   stretched card, no margin trick needed for that since it's simply the
-   last element in normal flow. */
-.guild-facility-body {
-  flex: 1;
-  min-width: 0;
+.guild-upgrade-row:hover { background: var(--panel-2); }
+.guild-row-head {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 7px;
 }
-
-/* Replaces the plain "Level N/M" text everywhere else in the game uses
-   for a leveled thing with a small tick-marked rail -- distinct from the
-   shared .bar (used for XP/durability/health) so a facility's build
-   progress doesn't read as another one of those. Ticks every 10% give it
-   a ruler/blueprint feel; the corner cut matches the card and icon. */
-.guild-level-rail {
-  position: relative;
-  height: 7px;
-  margin: 7px 0 9px;
-  background: var(--edge);
-  border: 1px solid #000;
-  clip-path: polygon(4px 0, 100% 0, 100% 100%, 0 100%, 0 4px);
+.guild-row-name { font-size: 0.75rem; font-weight: 700; }
+.guild-row-cat {
+  font-size: 0.53125rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.guild-row-level {
+  font-size: 0.5625rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+.guild-row-effect {
+  display: block;
+  font-size: 0.625rem;
+  color: var(--muted);
+  margin: 3px 0 5px;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.guild-level-rail > span {
+/* Replaces .guild-level-rail on this view -- no ticks, no clip-path,
+   just a thin 2px fill so a dense two-column list doesn't feel as heavy
+   as the old blueprint-styled rail did at card scale. */
+.guild-row-rule {
+  display: block;
+  height: 2px;
+  background: var(--edge);
+}
+.guild-row-rule > span {
   display: block;
   height: 100%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 55%), var(--brass);
   transition: width 500ms ease-out;
 }
-.guild-level-rail.maxed > span {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 55%), var(--moss);
-}
-.guild-level-rail::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(0, 0, 0, 0.35) calc(10% - 1px) 10%);
-  pointer-events: none;
-}
 
-/* "Current guild bonuses" -- a small brass plaque rather than a plain
-   .card, since it's a summary of permanent state, not a purchasable
-   thing like the cards around it. */
-.guild-bonus-plaque {
-  margin-bottom: 12px;
-  border-left-width: 3px;
-  border-left-color: var(--brass-dim);
+.guild-buy-btn {
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 6px 9px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--panel-3);
+  cursor: default;
+  min-height: 0;
+  box-shadow: none;
 }
+.guild-buy-btn.affordable {
+  background: var(--brass);
+  color: var(--ink);
+  border-color: var(--brass);
+  cursor: pointer;
+}
+.guild-buy-btn.affordable:hover:not(:disabled) { background: var(--brass); color: var(--ink); }
 
-/* Wax seal stamped on a fully-maxed facility/upgrade card. Lives on a
-   wrapper OUTSIDE .guild-facility-card, not as a child of it -- the
-   card's own corner-cut clip-path would otherwise clip the seal wherever
-   it overhangs the card's edge, and this is meant to sit proudly over
-   the edge like a real stamp, not be boxed in by it. Centered over the
-   card face -- the card itself darkens underneath (.guild-maxed below)
-   so the seal reads as the one bright thing stamped on top. */
-.guild-card-wrap { position: relative; }
-.guild-seal {
+/* "Fully built" summary strip -- where the wax-seal stamp now lives,
+   since fully-built items no longer sit on their own card underneath
+   one. Bright-moss accent instead of brass, echoing .guild-bonus-plaque's
+   old "this is state, not a purchase" treatment. */
+.guild-built-strip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px;
+  background: var(--panel-2);
+  border-left: 2px solid var(--moss);
+}
+.guild-built-seal {
   position: absolute;
-  top: 38%;
-  right: 90px;
-  width: 66px;
-  height: 66px;
-  transform: translateY(-50%) rotate(14deg);
+  top: 50%;
+  right: 74px;
+  width: 46px;
+  height: 46px;
+  transform: translateY(-50%) rotate(-9deg);
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
   pointer-events: none;
-  z-index: 3;
+}
+.guild-built-count { font-size: 0.625rem; font-weight: 700; color: var(--moss); }
+.guild-built-names {
+  flex: 1;
+  font-size: 0.625rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guild-built-toggle {
+  font-size: 0.625rem;
+  padding: 4px 9px;
+  background: transparent;
+  color: var(--parchment);
+  border: 1px solid var(--panel-3);
+  min-height: 0;
+  box-shadow: none;
 }
 
-/* A card whose facility/upgrade is fully maxed dims to read as "settled,
-   nothing left to do here" underneath the bright seal stamped on top --
-   without this the seal was competing with an equally lively card. */
-.guild-facility-card.guild-maxed {
-  filter: brightness(0.6) saturate(0.85);
+/* Expanded built rows -- name/effect/seal only, no level/rule/buy button
+   since there's nothing left to track or buy here. */
+.guild-built-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--panel-2);
+}
+.guild-built-row-name { font-size: 0.6875rem; font-weight: 700; opacity: 0.72; }
+.guild-built-row-effect {
+  font-size: 0.625rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guild-built-row-seal {
+  margin-left: auto;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  transform: rotate(-9deg);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
 }
 
 /* Landing spot for a "jump to the requirement" link elsewhere in the game

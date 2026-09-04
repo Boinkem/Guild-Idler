@@ -6,7 +6,8 @@ import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
-import { describeMods, formatGold } from '../../game/util';
+import { describeMods, formatGold, pct } from '../../game/util';
+import { GuildHallCategory } from '../../game/types';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
 import { FundGuildModal } from '../FundGuildModal';
@@ -19,13 +20,11 @@ function chainRangeText(level: number): string {
 
 /**
  * Full detail behind a click -- name, the flavour text hidden from the
- * compact card below, level/max, every stat line, and the same Buy
- * action the card itself offers (so opening this isn't a dead end if
- * that's how a player happens to get here). Shared by both Facilities
- * and Permanent Upgrades rather than two near-identical modals, the same
- * "generic presentational component fed pre-computed props" shape
- * ResultDetailModal (StatsPanel) already uses for its own two-shape
- * (quest/raid) merge.
+ * compact row below, level/max, every stat line, and the same Buy
+ * action the row itself offers (so opening this isn't a dead end if
+ * that's how a player happens to get here). Unchanged by the patch
+ * 0314 dense-list redesign below -- still shared by both Facilities and
+ * Permanent Upgrades rather than two near-identical modals.
  */
 function GuildUpgradeDetailModal({
   name, description, level, maxLevel, statLines, buyLabel, buyDisabled, onBuy, onClose,
@@ -55,88 +54,168 @@ function GuildUpgradeDetailModal({
   );
 }
 
+/** Row's category label colour -- matches Design Handoff's CAT_FG table
+ *  exactly (Combat -> --blood, Economy -> --brass-dim, Roster -> --sky,
+ *  Care -> --moss, Unlocks -> --violet). */
+const CATEGORY_FG: Record<GuildHallCategory, string> = {
+  Combat: 'var(--blood)',
+  Economy: 'var(--brass-dim)',
+  Roster: 'var(--sky)',
+  Care: 'var(--moss)',
+  Unlocks: 'var(--violet)',
+};
+
+const FILTERS: ('All' | GuildHallCategory)[] = ['All', 'Combat', 'Economy', 'Roster', 'Care', 'Unlocks'];
+
+/** One row's worth of pre-computed data -- built once per render by
+ *  facilityRow/upgradeRow below from a GuildDef or UpgradeDef, so the
+ *  actual row/list-building JSX further down never has to branch on
+ *  "is this a facility or an upgrade" again. */
+interface RowData {
+  id: string;
+  name: string;
+  description: string;
+  category: GuildHallCategory;
+  level: number;
+  maxLevel: number;
+  maxed: boolean;
+  affordable: boolean;
+  cost: number | null;
+  effectText: string;
+  statLines: ReactNode[];
+  buyLabel: string;
+  buyDisabled: boolean;
+  onBuy: () => void;
+}
+
+/** describeMods's own per-line text, plus every field describeMods can't
+ *  see (slot counts, heal-time minutes, unlock lines) -- one shared list
+ *  builder feeding both the detail modal's full stat-row (each entry
+ *  wrapped in a span, unlock/slot lines picking up the same gold-text
+ *  treatment they always have) and the compact row's one-line effect
+ *  text (every entry's plain text joined with " · "). Keeps the two
+ *  views from drifting -- a stat added to one used to mean remembering
+ *  to add it to the other by hand. */
+function facilityEntries(def: ReturnType<typeof GuildManager.facilities>[number]): { text: string; gold?: boolean }[] {
+  return [
+    ...describeMods(def.modsPerLevel).map((line) => ({ text: `${line} per level` })),
+    ...(def.storagePerLevel ? [{ text: `+${formatGold(def.storagePerLevel)} storage per level` }] : []),
+    ...(def.heroSlotsPerLevel ? [{ text: '+1 hero slot per level', gold: true }] : []),
+    // Patch 0287: "-10 min heal time per level" read as cryptic shorthand --
+    // reworded to say plainly what the stat actually does.
+    ...(def.healTimeReductionMinutesPerLevel
+      ? [{ text: `Auto heal time decreased by ${def.healTimeReductionMinutesPerLevel} minutes per level` }] : []),
+    ...(def.freeHealsPerLevel ? [{ text: `+${def.freeHealsPerLevel} free Treat per day, per level` }] : []),
+    ...(def.freeRepairsPerLevel ? [{ text: `+${def.freeRepairsPerLevel} free Repair per day, per level` }] : []),
+  ];
+}
+
+function upgradeEntries(
+  def: ReturnType<typeof GuildManager.upgrades>[number], level: number, maxed: boolean,
+): { text: string; gold?: boolean }[] {
+  return [
+    ...describeMods(def.modsPerLevel).map((line) => ({ text: `${line} per level` })),
+    ...(def.unlocks === 'legendaryQuests' ? [{ text: 'Unlocks Legendary quests', gold: true }] : []),
+    ...(def.unlocks === 'chains' ? [{ text: 'Unlocks multi-day quest chains', gold: true }] : []),
+    ...(def.unlocks === 'blackMarket' ? [{ text: 'Unlocks the Black Market', gold: true }] : []),
+    ...(def.unlocks === 'raids' ? [{ text: 'Unlocks Normal-difficulty raids', gold: true }] : []),
+    ...(def.unlocks === 'raidsHeroic' ? [{ text: 'Unlocks Heroic raid difficulty', gold: true }] : []),
+    ...(def.unlocks === 'raidsLegendary' ? [{ text: 'Unlocks Legendary raid difficulty', gold: true }] : []),
+    ...(def.unlocks === 'training' ? [{ text: 'Unlocks the Training sub-tab under Heroes -- reassign any hero\'s role', gold: true }] : []),
+    ...(def.unlocks === 'autoChain' && level > 0
+      ? [{ text: `Currently chains ${chainRangeText(level)} quests per streak`, gold: true }] : []),
+    ...(def.unlocks === 'autoChain' && !maxed
+      ? [{ text: `Next tier: ${chainRangeText(level + 1)} quests per streak` }] : []),
+    ...(def.unlocks === 'autoChainTactics'
+      ? [{ text: 'Unlocks Chain Tactics -- a success-rate floor and priority weighting for Auto-Chain', gold: true }] : []),
+    ...(def.consumableSlotsPerLevel ? [{ text: `+${def.consumableSlotsPerLevel} consumable slot per level` }] : []),
+    ...(def.incubationSlotsPerLevel ? [{ text: `+${def.incubationSlotsPerLevel} incubation slot per level` }] : []),
+    ...(def.petSlotsPerLevel ? [{ text: `+${def.petSlotsPerLevel} pet slot per level` }] : []),
+    ...(def.questFreeRerollsPerLevel ? [{ text: `+${def.questFreeRerollsPerLevel} free quest board reroll per level` }] : []),
+    ...(def.freezeChangesPerLevel ? [{ text: `+${def.freezeChangesPerLevel} contract freeze per level` }] : []),
+    ...(def.stashCapacityPerLevel ? [{ text: `+${def.stashCapacityPerLevel} stash space per level` }] : []),
+  ];
+}
+
 /**
- * The compact card itself -- icon, name, level, the level rail, stat
- * lines, and Buy, with the flavour text that used to sit between the
- * name and the rail removed entirely (moved into GuildUpgradeDetailModal
- * instead). Direct request: the tab-menu grid should show "what's being
- * upgraded, cost and values," not prose, and every card should read as
- * the same size regardless of how much flavour text its def happens to
- * have -- variable-length flavour text was the single biggest source of
- * card-height variance before this (some descriptions are one line,
- * others three-plus), so removing it from this view was most of the
- * uniformity fix by itself; `.guild-facility-card`'s own `height: 100%`
- * (app.css) handles the rest by stretching every card in a grid row to
- * match its tallest sibling, same as CSS Grid already does by default.
- *
- * The whole card is clickable to open the detail modal (same "collapsed
- * card, click for the rest" shape RaidCard/RaidDetailModal already
- * established) -- except the Buy button itself, which stops propagation
- * so a player can still buy directly off the compact card in one click
- * without being forced through the modal first. Buying is the single
- * most repeated action on this tab; gating it behind an extra click
- * would have been a real regression to the core loop, not just a visual
- * change, so it deliberately stayed on the card itself.
+ * The compact row itself -- name, category label, level, effect line,
+ * progress rule, and Buy, replacing the old UpgradeCard grid tile
+ * (patch 0314). Whole row is clickable to open the detail modal, same
+ * "collapsed row, click for the rest" shape the old card used --
+ * except the Buy button, which stops propagation so a player can still
+ * buy directly off the row without being forced through the modal
+ * first, unchanged from before.
  */
-function UpgradeCard({
-  name, description, level, maxLevel, maxed, affordable, statLines, buyLabel, buyDisabled, onBuy, flash, onDismissFlash, pulsing,
-  highlighted, onDismissHighlight,
+function GuildUpgradeRow({
+  row, flash, onDismissFlash, pulsing, highlighted, onDismissHighlight,
 }: {
-  name: string; description: string; level: number; maxLevel: number; maxed: boolean; affordable: boolean;
-  statLines: ReactNode[]; buyLabel: string; buyDisabled: boolean; onBuy: () => void;
+  row: RowData;
   flash?: { key: number; name: string }; onDismissFlash: () => void; pulsing?: boolean;
   highlighted?: boolean; onDismissHighlight?: () => void;
 }) {
   const [showDetail, setShowDetail] = useState(false);
-  const pct = Math.min(100, (level / maxLevel) * 100);
-  const cardRef = useRef<HTMLDivElement>(null);
-  // Landed here via a "jump to the requirement" link (e.g. HeroesPanel's
-  // recruit cards) -- scroll the exact card into view rather than relying
-  // on the player to spot the glow somewhere off-screen in a long grid.
+  const pct2 = Math.min(100, (row.level / row.maxLevel) * 100);
+  const rowRef = useRef<HTMLDivElement>(null);
+  // Landed here via a "jump to the requirement" link -- scroll the exact
+  // row into view rather than relying on the player to spot the glow
+  // somewhere off-screen in a long list.
   useEffect(() => {
-    if (highlighted) cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (highlighted) rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [highlighted]);
   return (
-    <div className="guild-card-wrap">
-      {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
-      <div
-        ref={cardRef}
-        className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''} ${highlighted ? 'requirement-highlight' : ''}`}
-        onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); onDismissHighlight?.(); } }}
+    <div
+      ref={rowRef}
+      className={`guild-upgrade-row ${highlighted ? 'card requirement-highlight' : ''}`}
+      onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); onDismissHighlight?.(); } }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span className="guild-row-head">
+          <span className="guild-row-name">{row.name}</span>
+          <span className="guild-row-cat" style={{ color: CATEGORY_FG[row.category] }}>{row.category}</span>
+          <span className={`guild-row-level ${pulsing ? 'purchase-pulse' : ''}`}>Lv {row.level}/{row.maxLevel}</span>
+        </span>
+        <span className="guild-row-effect">{row.effectText}</span>
+        <span className="guild-row-rule">
+          <span style={{ width: `${pct2}%`, background: row.maxed ? 'var(--moss)' : 'var(--brass)' }} />
+        </span>
+      </span>
+      <button
+        className={`guild-buy-btn ${!row.buyDisabled ? 'affordable' : ''}`}
+        disabled={row.buyDisabled}
+        onClick={(e) => { e.stopPropagation(); row.onBuy(); }}
       >
-        <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
-          <div className="spread">
-            <span className="card-title">{name}</span>
-            <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{maxLevel}</span>
-          </div>
-          <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
-          <button
-            className="btn-yellow"
-            disabled={buyDisabled}
-            onClick={(e) => { e.stopPropagation(); onBuy(); }}
-          >
-            {buyLabel}
-          </button>
-          <div className="stat-row" style={{ marginTop: 8 }}>{statLines}</div>
-          {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
-        </div>
-      </div>
+        {row.buyLabel}
+      </button>
+      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
       {showDetail && (
         <GuildUpgradeDetailModal
-          name={name}
-          description={description}
-          level={level}
-          maxLevel={maxLevel}
-          statLines={statLines}
-          buyLabel={buyLabel}
-          buyDisabled={buyDisabled}
-          onBuy={onBuy}
+          name={row.name}
+          description={row.description}
+          level={row.level}
+          maxLevel={row.maxLevel}
+          statLines={row.statLines}
+          buyLabel={row.buyLabel}
+          buyDisabled={row.buyDisabled}
+          onBuy={row.onBuy}
           onClose={() => setShowDetail(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** A single collapsed row inside the expanded "Fully built" section --
+ *  name, effect, and the 24px seal, no level/rule/buy button since
+ *  there's nothing left to buy or track here. */
+function GuildBuiltRow({ row }: { row: RowData }) {
+  return (
+    <div className="guild-built-row">
+      <span className="guild-built-row-name">{row.name}</span>
+      <span className="guild-built-row-effect">{row.effectText}</span>
+      <img className="guild-built-row-seal" src={waxSealComplete} alt="Complete" />
     </div>
   );
 }
@@ -147,38 +226,14 @@ export function GuildPanel() {
   const { settings } = useSettings();
   const global = ModifierManager.global(state);
 
-  // Inline "Customize" mode -- per the original design brainstorm's own
-  // pick ("Inline edit mode on Guild Hall tab"), swapping this panel's
-  // normal facility/upgrade content out for GuildHallCustomizeScene
-  // entirely rather than opening a separate window. Local, unpersisted --
-  // same "just a view toggle, not game state" shape `expanded` (a Set)
-  // uses elsewhere in this codebase; leaving Customize mode open when you
-  // switch tabs and back isn't a real requirement here, so it resets on
-  // every remount, same as `highlightId`'s own consume-once shape above.
-  //
-  // The button that flips this used to live on this panel's own header --
-  // moved to the Guild home tab (DashboardPanel, patch 0213) as a bigger,
-  // coloured call-to-action, since Customize is a whole-guild cosmetic
-  // action, not specifically a Guild Hall/facilities one. Getting here
-  // from that new button reuses the existing requestTab(id, highlightId,
-  // subTab) plumbing rather than adding a new one-shot field: Dashboard
-  // calls requestTab('guild', undefined, 'customize'), and this panel
-  // consumes that sentinel via consumeRequestedSubTab the same way
-  // Harvest/Hatchery/Lore/Raids/Stats/Vendors already consume their own
-  // sub-tab requests -- GuildPanel just isn't one of those panels
-  // otherwise, so the id can't collide with a real sub-tab anywhere.
+  // Inline "Customize" mode -- unchanged by this patch, see its own
+  // longer-standing comment history in guild-idler-status.md.
   const [customizing, setCustomizing] = useState(() => engine.consumeRequestedSubTab() === 'customize');
 
-  // "Fund the Guild" modal -- patch 0220, its own local view toggle, same
-  // "just a view flag, not game state" shape `customizing` above uses.
+  // "Fund the Guild" modal -- unchanged.
   const [fundingOpen, setFundingOpen] = useState(false);
 
-  // "Jump to and highlight the requirement" landing -- consumed once on
-  // mount (this panel remounts fresh each time the nav switches to it, so
-  // this only ever fires right after a requestTab(..., highlightId) call
-  // actually brought the player here, not on every re-render). Cleared
-  // automatically a few seconds later, or the instant the highlighted card
-  // itself is opened -- see UpgradeCard's onDismissHighlight.
+  // "Jump to and highlight the requirement" landing -- unchanged.
   const [highlightId, setHighlightId] = useState<string | null>(
     () => engine.consumeRequestedHighlight(),
   );
@@ -188,12 +243,16 @@ export function GuildPanel() {
     return () => window.clearTimeout(timer);
   }, [highlightId]);
 
+  // Category filter chips (patch 0314) -- view-only, same "not game
+  // state" shape `customizing`/`fundingOpen` already use above. Never
+  // persisted, never touches the built section.
+  const [filter, setFilter] = useState<'All' | GuildHallCategory>('All');
+  // Built section starts collapsed; forced open below whenever the
+  // highlighted requirement turns out to already be maxed, so the row
+  // it's pointing at actually exists on screen to scroll to.
+  const [showBuilt, setShowBuilt] = useState(false);
+
   const facilities = GuildManager.facilities();
-  // General upgrades (no vendor field) used to live alone in the old
-  // Upgrades tab -- moved here so upgrades don't need two different
-  // destinations. Vendor-specific upgrades (Blacksmith/Alchemist/
-  // Enchanter) moved onto each vendor's own page in Vendors instead --
-  // see VendorsPanel.tsx.
   const generalUpgrades = GuildManager.upgrades().filter((u) => !u.vendor);
   const { flashes, dismiss } = useMaxFlash([
     ...facilities.map((def) => ({
@@ -205,137 +264,58 @@ export function GuildPanel() {
       level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
     })),
   ]);
-  // Same combined facilities+upgrades list useMaxFlash above already
-  // builds, just tracking every level change (not only "just hit max")
-  // for the "Level N/M" pulse -- see usePulsesOnChange's own doc comment
-  // for why this has to be a single batch hook call rather than one per
-  // card.
   const levelPulses = usePulsesOnChange([
     ...facilities.map((def) => ({ id: def.id, value: GuildManager.facilityLevel(state, def.id) })),
     ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
   ]);
 
-  function generalUpgradeCard(def: (typeof generalUpgrades)[number]) {
-    const level = GuildManager.upgradeLevel(state, def.id);
-    const cost = GuildManager.nextUpgradeCost(state, def.id);
-    const maxed = cost === null && level >= def.maxLevel;
-    // Highlighted the moment it's actually buyable, not just "cheaper than
-    // the most expensive thing in the tab" -- affordable means the exact
-    // next-purchase cost is covered by current gold right now.
-    const affordable = !maxed && cost !== null && state.gold >= cost;
-    const statLines: ReactNode[] = [
-      ...describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>),
-      ...(def.unlocks === 'legendaryQuests' ? [<span key="unlock-lq" className="gold-text">Unlocks Legendary quests</span>] : []),
-      ...(def.unlocks === 'chains' ? [<span key="unlock-chains" className="gold-text">Unlocks multi-day quest chains</span>] : []),
-      ...(def.unlocks === 'blackMarket' ? [<span key="unlock-bm" className="gold-text">Unlocks the Black Market</span>] : []),
-      ...(def.unlocks === 'raids' ? [<span key="unlock-raids" className="gold-text">Unlocks Normal-difficulty raids</span>] : []),
-      ...(def.unlocks === 'raidsHeroic' ? [<span key="unlock-raids-h" className="gold-text">Unlocks Heroic raid difficulty</span>] : []),
-      ...(def.unlocks === 'raidsLegendary' ? [<span key="unlock-raids-l" className="gold-text">Unlocks Legendary raid difficulty</span>] : []),
-      ...(def.unlocks === 'training' ? [<span key="unlock-training" className="gold-text">Unlocks the Training sub-tab under Heroes -- reassign any hero's role</span>] : []),
-      ...(def.unlocks === 'autoChain' && level > 0
-        ? [<span key="ac-current" className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>] : []),
-      ...(def.unlocks === 'autoChain' && !maxed
-        ? [<span key="ac-next" className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>] : []),
-      // Chain Tactics (unlocks: 'autoChainTactics') had no case here at
-      // all -- direct report: its card showed nothing but a Buy button,
-      // same "blank body" bug the slot-upgrade fix just below already
-      // covers for a different cause. Nothing per-level to report (it's a
-      // single-purchase unlock, maxLevel 1), so this is a flat line
-      // rather than a level-scaling one like autoChain's own pair above.
-      ...(def.unlocks === 'autoChainTactics'
-        ? [<span key="unlock-tactics" className="gold-text">Unlocks Chain Tactics -- a success-rate floor and priority weighting for Auto-Chain</span>] : []),
-      // consumableSlotsPerLevel/incubationSlotsPerLevel/petSlotsPerLevel
-      // (Potion Belt/Nest Expansion/Companion Bond) don't route through
-      // modsPerLevel or the unlocks field at all -- ModifierManager reads
-      // them directly (see consumableSlots/incubationSlots/petSlots) -- so
-      // without their own line here these three cards showed nothing but
-      // a Buy button, same blank-body gap the unlocks cases above had.
-      // questFreeRerollsPerLevel/freezeChangesPerLevel (Board Runner/Board
-      // Warden) are the same story -- confirmed neither one was rendered
-      // ANYWHERE in the UI, not just here, before this fix.
-      ...(def.consumableSlotsPerLevel ? [<span key="slots-consumable">+{def.consumableSlotsPerLevel} consumable slot per level</span>] : []),
-      ...(def.incubationSlotsPerLevel ? [<span key="slots-incubation">+{def.incubationSlotsPerLevel} incubation slot per level</span>] : []),
-      ...(def.petSlotsPerLevel ? [<span key="slots-pet">+{def.petSlotsPerLevel} pet slot per level</span>] : []),
-      ...(def.questFreeRerollsPerLevel ? [<span key="slots-reroll">+{def.questFreeRerollsPerLevel} free quest board reroll per level</span>] : []),
-      ...(def.freezeChangesPerLevel ? [<span key="slots-freeze">+{def.freezeChangesPerLevel} contract freeze per level</span>] : []),
-      ...(def.stashCapacityPerLevel ? [<span key="slots-stash">+{def.stashCapacityPerLevel} stash space per level</span>] : []),
-    ];
-    return (
-      <UpgradeCard
-        key={def.id}
-        name={def.name}
-        description={def.description}
-        level={level}
-        maxLevel={def.maxLevel}
-        maxed={maxed}
-        affordable={affordable}
-        statLines={statLines}
-        buyLabel={maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`}
-        buyDisabled={maxed || cost === null || state.gold < cost}
-        onBuy={() => engine.buyUpgrade(def.id)}
-        flash={flashes[def.id]}
-        onDismissFlash={() => dismiss(def.id)}
-        pulsing={levelPulses[def.id]}
-        highlighted={def.id === highlightId}
-        onDismissHighlight={() => setHighlightId(null)}
-      />
-    );
-  }
-
-  function facilityCard(def: (typeof facilities)[number]) {
+  function facilityRow(def: (typeof facilities)[number]): RowData {
     const level = GuildManager.facilityLevel(state, def.id);
     const cost = GuildManager.nextCost(state, def.id);
     const maxed = cost === null;
     const affordable = !maxed && state.gold >= cost;
-    // healTimeReductionMinutesPerLevel/freeHealsPerLevel/freeRepairsPerLevel
-    // (Infirmary, Kennel, Physician's Charity, Smith's Charity) don't route
-    // through modsPerLevel/storagePerLevel/heroSlotsPerLevel at all -- same
-    // "blank body" gap generalUpgradeCard's own statLines had before its
-    // 0199 fix, just on this card function instead. Confirmed via grep none
-    // of these three fields were rendered anywhere else either.
-    const statLines: ReactNode[] = [
-      ...describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>),
-      ...(def.storagePerLevel ? [<span key="storage">+{formatGold(def.storagePerLevel)} storage per level</span>] : []),
-      ...(def.heroSlotsPerLevel ? [<span key="hero-slots" className="gold-text">+1 hero slot per level</span>] : []),
-      // Patch 0287: "-10 min heal time per level" read as cryptic shorthand
-      // (10 minutes off WHAT, exactly?) -- reworded to say plainly what the
-      // stat actually does, matching the plain-verb phrasing every other
-      // line in this list already uses.
-      ...(def.healTimeReductionMinutesPerLevel
-        ? [<span key="heal-time">Auto heal time decreased by {def.healTimeReductionMinutesPerLevel} minutes per level</span>]
-        : []),
-      ...(def.freeHealsPerLevel ? [<span key="free-heals">+{def.freeHealsPerLevel} free Treat per day, per level</span>] : []),
-      ...(def.freeRepairsPerLevel ? [<span key="free-repairs">+{def.freeRepairsPerLevel} free Repair per day, per level</span>] : []),
-    ];
-    return (
-      <UpgradeCard
-        key={def.id}
-        name={def.name}
-        description={def.description}
-        level={level}
-        maxLevel={def.maxLevel}
-        maxed={maxed}
-        affordable={affordable}
-        statLines={statLines}
-        buyLabel={maxed ? 'Fully built' : `Build · ${formatGold(cost ?? 0)}`}
-        buyDisabled={maxed || state.gold < (cost ?? 0)}
-        onBuy={() => engine.upgradeFacility(def.id)}
-        flash={flashes[def.id]}
-        onDismissFlash={() => dismiss(def.id)}
-        pulsing={levelPulses[def.id]}
-        highlighted={def.id === highlightId}
-        onDismissHighlight={() => setHighlightId(null)}
-      />
-    );
+    const entries = facilityEntries(def);
+    return {
+      id: def.id, name: def.name, description: def.description,
+      category: def.category ?? 'Unlocks', level, maxLevel: def.maxLevel, maxed, affordable, cost,
+      effectText: def.shortEffect ?? entries.map((e) => e.text).join(' · '),
+      statLines: entries.map((e) => <span key={e.text} className={e.gold ? 'gold-text' : undefined}>{e.text}</span>),
+      buyLabel: maxed ? 'Fully built' : `Build · ${formatGold(cost ?? 0)}`,
+      buyDisabled: maxed || state.gold < (cost ?? 0),
+      onBuy: () => engine.upgradeFacility(def.id),
+    };
   }
 
-  // Customize mode replaces this entire panel's body -- facility/upgrade
-  // grids, the storage plaque, everything below -- with the full-bleed
-  // decoration scene, exactly the "hide the statistics and other panels...
-  // then when you're done, they can come back" behaviour asked for when
-  // this was first brainstormed. Nothing else on this tab renders at all
-  // while customizing is true; GuildHallCustomizeScene's own "Done" button
-  // is the only way back.
+  function upgradeRow(def: (typeof generalUpgrades)[number]): RowData {
+    const level = GuildManager.upgradeLevel(state, def.id);
+    const cost = GuildManager.nextUpgradeCost(state, def.id);
+    const maxed = cost === null && level >= def.maxLevel;
+    const affordable = !maxed && cost !== null && state.gold >= cost;
+    const entries = upgradeEntries(def, level, maxed);
+    return {
+      id: def.id, name: def.name, description: def.description,
+      category: def.category ?? 'Unlocks', level, maxLevel: def.maxLevel, maxed, affordable, cost,
+      effectText: def.shortEffect ?? entries.map((e) => e.text).join(' · '),
+      statLines: entries.map((e) => <span key={e.text} className={e.gold ? 'gold-text' : undefined}>{e.text}</span>),
+      buyLabel: maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`,
+      buyDisabled: maxed || cost === null || state.gold < cost,
+      onBuy: () => engine.buyUpgrade(def.id),
+    };
+  }
+
+  // Facilities first, then permanent upgrades, source order preserved --
+  // matches the design handoff's "single list, not two grids" spec.
+  const rows: RowData[] = [...facilities.map(facilityRow), ...generalUpgrades.map(upgradeRow)];
+
+  // A row that just hit max stays in the main list for as long as its
+  // MaxFlash is still playing (fires the flash "before it moves", per
+  // the design handoff), then drops into Built on the render right
+  // after MaxFlash's onDone calls dismiss(id).
+  const active = rows.filter((r) => (!r.maxed || flashes[r.id]) && (filter === 'All' || r.category === filter));
+  const built = rows.filter((r) => r.maxed && !flashes[r.id]);
+  const builtHasHighlight = built.some((r) => r.id === highlightId);
+  const builtExpanded = showBuilt || builtHasHighlight;
+
   if (customizing) {
     return <GuildHallCustomizeScene onDone={() => setCustomizing(false)} />;
   }
@@ -343,64 +323,91 @@ export function GuildPanel() {
   return (
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/guildhall.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
-      <div>
-        <h2>Guild Hall</h2>
-        <p className="subtitle">
-          Facility levels apply to every hero, now and after every retirement.
-        </p>
+      <div className="guild-header-row">
+        <div>
+          <h2>Guild Hall</h2>
+          <p className="subtitle">
+            Facility levels apply to every hero, now and after every retirement. Vendor-specific
+            upgrades (Blacksmith, Alchemist, Enchanter) live on each vendor's own page instead.
+          </p>
+        </div>
+        <div className="guild-bonus-row">
+          <span className="guild-bonus-chip" style={{ borderLeftColor: 'var(--blood)' }}>
+            <span className="guild-bonus-chip-label">Success</span>
+            <span className="guild-bonus-chip-value" style={{ color: 'var(--blood)' }}>{pct(global.success)}</span>
+          </span>
+          <span className="guild-bonus-chip" style={{ borderLeftColor: 'var(--brass)' }}>
+            <span className="guild-bonus-chip-label">Gold</span>
+            <span className="guild-bonus-chip-value" style={{ color: 'var(--brass)' }}>{pct(global.gold)}</span>
+          </span>
+          <span className="guild-bonus-chip" style={{ borderLeftColor: 'var(--sky)' }}>
+            <span className="guild-bonus-chip-label">Hero XP</span>
+            <span className="guild-bonus-chip-value" style={{ color: 'var(--sky)' }}>{pct(global.xp)}</span>
+          </span>
+          <span className="guild-bonus-chip" style={{ borderLeftColor: 'var(--moss)' }}>
+            <span className="guild-bonus-chip-label">Durability</span>
+            <span className="guild-bonus-chip-value" style={{ color: 'var(--moss)' }}>{pct(global.durability)}</span>
+          </span>
+        </div>
       </div>
+
       <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
         <div className="guild-storage-plaque" style={{ margin: 0 }}>
-          {/* Patch 0287: was a single bare number ("Gold Storage 10.0k") --
-              read by a player as "the guild starts with 10.0k gold," not as
-              the storage cap it actually is. Now labeled "Cap" explicitly
-              and shown as current/cap, same "X / Y" shape the topbar's own
-              gold readout (MenuWindow.tsx) already uses for the identical
-              number, so this plaque can't be misread as a balance. */}
           <span className="guild-storage-label">Gold Storage Cap</span>
           <span className="guild-storage-amount">
             {formatGold(state.gold)} / {formatGold(ModifierManager.goldStorage(state))}
           </span>
         </div>
-        {/* "Fund the Guild" -- patch 0220, direct request. An open-ended
-            gold sink with no catalog and no max level: opens a modal to
-            enter any amount, which feeds a small, permanently-diminishing
-            slice of Guild Power (see power.ts's donations component) --
-            see GuildManager.donateToGuild's own comment for the full
-            reasoning on why the curve isn't linear. */}
         <button className="btn-primary" onClick={() => setFundingOpen(true)}>
           Fund the Guild
         </button>
       </div>
 
-      <div className="section-heading guild-section-heading">Facilities</div>
-      <div className="grid two guild-facility-grid">
-        {facilities.map(facilityCard)}
+      <div className="guild-filter-bar">
+        {FILTERS.map((f) => (
+          <button
+            key={f}
+            className={`guild-filter-chip ${filter === f ? 'active' : ''}`}
+            onClick={() => setFilter(f)}
+          >
+            {f}
+          </button>
+        ))}
+        <span style={{ flex: 1 }} />
+        <span className="guild-filter-gold">
+          Gold <span className="guild-filter-gold-amount">{formatGold(state.gold)}</span> / {formatGold(ModifierManager.goldStorage(state))}
+        </span>
       </div>
 
-      <div className="section-heading guild-section-heading">Permanent Upgrades</div>
-      <p className="tiny muted" style={{ marginBottom: 10 }}>
-        Bought once, kept forever. Retirement does not take these away. Vendor-specific upgrades
-        (Blacksmith, Alchemist, Enchanter) live on each vendor's own page in Vendors instead.
-      </p>
-      <div className="card guild-bonus-plaque">
-        <div className="card-title">Current guild bonuses</div>
-        <div className="stat-row" style={{ marginTop: 6 }}>
-          {describeMods(global).length === 0
-            ? <span className="muted">None yet.</span>
-            : describeMods(global).map((line) => <span key={line}>{line}</span>)}
+      <div className="guild-upgrade-list">
+        {active.map((row) => (
+          <GuildUpgradeRow
+            key={row.id}
+            row={row}
+            flash={flashes[row.id]}
+            onDismissFlash={() => dismiss(row.id)}
+            pulsing={levelPulses[row.id]}
+            highlighted={row.id === highlightId}
+            onDismissHighlight={() => setHighlightId(null)}
+          />
+        ))}
+      </div>
+
+      <div className="guild-built-strip">
+        <img className="guild-built-seal" src={waxSealComplete} alt="Complete" />
+        <span className="guild-built-count">Fully built · {built.length}</span>
+        <span className="guild-built-names">{built.map((r) => r.name).join(' · ')}</span>
+        <button className="guild-built-toggle" onClick={() => setShowBuilt((v) => !v)}>
+          {builtExpanded ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {builtExpanded && (
+        <div className="guild-upgrade-list">
+          {built.map((row) => <GuildBuiltRow key={row.id} row={row} />)}
         </div>
-      </div>
-      <div className="grid two guild-facility-grid">
-        {generalUpgrades.map(generalUpgradeCard)}
-      </div>
+      )}
 
-      {/* Treasury -- patch 0220, direct request. Gold-for-Renown exchange:
-          a one-time unlock, then a deliberately harsh flat rate (see
-          GuildManager.goldPerRenown's own comment) -- an outlet for
-          genuinely excess gold, never a substitute for actually retiring
-          a hero. Same locked-upgrade card shape Grimsby's own High
-          Roller/Permanent Spot cards use. */}
+      {/* Treasury -- patch 0220, direct request. Unchanged by this patch. */}
       <div className="section-heading guild-section-heading">Treasury</div>
       {!state.goldRenownExchangeUnlocked ? (
         <div className="card locked-upgrade">
@@ -430,12 +437,8 @@ export function GuildPanel() {
 }
 
 /**
- * The exchange itself, once unlocked -- own free-form gold amount input,
- * same string-state shape PeddlerDiceModal's wager field already uses
- * (empty while typing rather than snapping to 0), validated/floored on
- * submit. Split out from GuildPanel's main body purely so its own local
- * `offerText` state doesn't need to live alongside everything else that
- * component already tracks.
+ * The exchange itself, once unlocked -- unchanged by this patch. See its
+ * own original comment history for the offerText/rate/validOffer shape.
  */
 function RenownExchangeCard() {
   const engine = useEngine();

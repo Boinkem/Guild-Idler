@@ -25566,3 +25566,124 @@ each independently reproduced against a stub `steamcmd` script and
 confirmed fixed, not just reasoned about), plus `npx tsc --noEmit` and
 a full `vite build` across the whole project passing clean, confirming
 none of this touched anything outside the DevTool itself.
+
+### Guild Hall Upgrades panel redesign: facility/upgrade cards replaced by a filtered, dense two-column list (patch 0314)
+
+```discord-update
+Dev Update | Guild Hall Upgrades
+
+- Changed the Guild Hall tab from facility/upgrade cards to a compact two-column list
+- Added category filter chips (Combat/Economy/Roster/Care/Unlocks) and a bonus summary up top
+- Added a collapsed "Fully built" strip so maxed-out facilities and upgrades stay out of the way
+```
+
+Claude Design handoff (option 1c of a three-way exploration, "filtered
+two-column list -- bonuses on top, maxed work folded away"), implemented
+as a straight presentation change: no game logic, costs, purchase flow,
+or detail-modal behaviour touched. `GuildPanel.tsx` + `app.css` only,
+plus two small optional data fields threaded through `types.ts`/
+`progression.ts` for the new filter/label needs.
+
+**Facilities and Permanent Upgrades merge into one list.** The old
+`.grid.two` pair (a Facilities grid, then a Permanent Upgrades grid
+below it, each with its own `.section-heading`) is now a single ~54px-
+row list -- facilities first, then general upgrades, source order
+preserved, same combined set `GuildPanel` already read
+(`GuildManager.facilities()` + `GuildManager.upgrades().filter(u =>
+!u.vendor)`; vendor-specific upgrades still live on their own vendor
+page, untouched). Each row: name · category label · level on line one,
+a one-line effect summary on line two, a thin 2px progress rule on line
+three, Buy on the right -- replacing the lettered-crest, corner-cut
+`.guild-facility-card` tile entirely.
+
+**New `category` field (`GuildHallCategory` = `'Combat' | 'Economy' |
+'Roster' | 'Care' | 'Unlocks'`), optional on both `GuildDef` and
+`UpgradeDef` in `types.ts`, filled per-entry in `progression.ts`** --
+kept with the rest of each item's content (DevTool-editable like every
+other data field) rather than a lookup table living in the panel.
+Drives both the filter chips (`All` default, client-side only, same
+"view flag, not game state" convention `customizing`/`fundingOpen`
+already use in this panel) and each row's category-label colour
+(Combat -> `--blood`, Economy -> `--brass-dim`, Roster -> `--sky`, Care
+-> `--moss`, Unlocks -> `--violet`, matching the handoff's design-token
+table exactly). Filtering never touches the built section. Every
+vendor-gated upgrade is left with `category` unset -- they never render
+on this panel in the first place, so there's nothing to filter them by.
+
+**New `shortEffect` field, same two interfaces, set only on the three
+items whose derived effect line overflows the row's ~46-character
+budget** (Tavern, Treasury, Training Grounds) -- everywhere else the
+row's line-two text derives automatically from the same
+`describeMods`/slot-count/unlock-line logic the old card's stat-row
+already built, just refactored into a shared `facilityEntries`/
+`upgradeEntries` list (plain `{text, gold?}` entries) that now feeds
+*both* the detail modal's full stat-row (unchanged) and the row's
+one-line summary (`shortEffect ?? entries.map(e => e.text).join(' · ')`)
+from one place, so a stat added to one can't drift from the other by
+being forgotten in the second.
+
+**"Fully built" section** replaces the old per-card dimming
+(`.guild-facility-card.guild-maxed`, `filter: brightness(.6)`) and
+floating seal (`.guild-seal`, absolutely positioned over each maxed
+card) with a single collapsed strip -- `Fully built · N`, a `·`-joined
+name list, and a Show/Hide toggle (collapsed by default) -- followed by
+the same two-column list shape showing name/effect/seal-only rows when
+expanded. The wax-seal stamp (`wax-seal-complete.png`, unchanged asset,
+already in the repo) now lives on that strip at 46px, and at 24px per
+expanded built row, rather than centered over a card that no longer
+exists to stamp.
+
+**Reaching max level still fires the existing `useMaxFlash` "Fully
+upgraded" burst *on the row*, before it moves** -- the active/built
+split is `level < maxLevel OR flashes[id]` for active,
+`level >= maxLevel AND !flashes[id]` for built, so a row that just
+maxed stays visible in the main list with its flash playing for the
+full 1400ms, then drops into Built (still hidden by default) on the
+render right after `MaxFlash`'s `onDone` clears it. `usePulsesOnChange`
+on the level text is untouched.
+
+**Requirement-highlight landing (`requestTab('guild', highlightId)`)
+still works**, including the one new edge case the handoff called
+out: if the highlighted item is already maxed, the built section
+renders expanded (`showBuilt || builtHasHighlight`, computed at render
+time rather than a separate effect) so the row it's pointing at
+actually exists on screen for the existing `scrollIntoView`-on-mount
+behaviour to find. `.card.requirement-highlight`'s shimmer is applied
+to the row wrapper now instead of the card -- that class itself is
+untouched (still shared with `PrestigePanel`, per its own comment).
+
+**Dropped:** the standalone "Current guild bonuses" full-list plaque
+(`.guild-bonus-plaque`) -- the new header bonus-chip row (Success/Gold/
+Hero XP/Durability, read straight off `ModifierManager.global(state)`)
+covers the same "what am I building toward" purpose the handoff called
+out, and the per-row effect lines already say what each individual
+item contributes. The handoff left this "your call, or keep it under
+the built section" -- dropped rather than kept, since between the chips
+and the row lines it read as pure duplication. Kept exactly as-is:
+`GuildUpgradeDetailModal`, `useMaxFlash`, `usePulsesOnChange`,
+`highlightId`, the Gold Storage Cap plaque, Fund the Guild, and the
+whole Treasury section (locked-upgrade card / `RenownExchangeCard`)
+below the list.
+
+**Retired CSS** (confirmed via a full repo grep first that nothing else
+references any of them): `.guild-facility-card`, `.guild-facility-body`,
+`.guild-card-wrap`, `.guild-level-rail`, `.guild-facility-card.guild-
+maxed`, `.guild-facility-grid`, `.guild-bonus-plaque`. `.guild-seal` is
+gone too, replaced by the built-strip/built-row seal classes above.
+`.card.requirement-highlight` (shared with PrestigePanel) and
+`.guild-section-heading` (still used by the untouched Treasury heading)
+were deliberately left alone, per the handoff's own note.
+
+**Verified:** pulled `GuildPanel.tsx`, `app.css`, `types.ts`, and
+`progression.ts` fresh from `main` via `raw.githubusercontent.com`
+immediately before editing (patch 0313's DevTool Steam-upload work was
+already live and untouched by this patch, which doesn't go near the
+DevTool). Confirmed via a fresh shallow clone + repo-wide grep that
+every retired CSS class above has no reference anywhere outside
+`GuildPanel.tsx`/`app.css` before removing it. `npm install` +
+`npx tsc --noEmit` clean across the whole project (catches the new
+`category`/`shortEffect` fields against both call sites, and would have
+caught any leftover reference to a retired class name or removed prop).
+Full `vite build` (web + both Electron entries) passing clean as well,
+confirming the CSS/asset pipeline resolves `wax-seal-complete.png` at
+its new sizes with no missing-import regressions.
