@@ -535,6 +535,38 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
+/* "Gold Donated" tracker, next to the Fund the Guild button -- direct
+   request, so a player can see their lifetime Fund the Guild total
+   (state.guildDonationsTotal, already tracked for the Guild Power
+   donations component -- see GuildManager.donateToGuild's own comment)
+   at a glance rather than it being an invisible number behind the
+   modal. Same plaque shape as .guild-storage-plaque right above, moss
+   accent instead of brass so it reads as its own distinct stat rather
+   than a second gold readout. */
+.guild-donation-plaque {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--moss) 45%, var(--edge));
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+}
+.guild-donation-plaque .guild-donation-label {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.guild-donation-plaque .guild-donation-amount {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--moss);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
 /* Ledger-tab treatment layered on top of the shared .section-heading --
    a small notched flag rather than plain underlined text. Only the
    Treasury heading below still uses this -- the old "Facilities"/
@@ -600,7 +632,12 @@
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 9px 2px 8px;
+  padding: 9px 8px 8px;
+  /* Same 88%-opaque panel wash every other .card already uses (see its
+     own comment on this exact color-mix) -- without it the busy Guild
+     Hall background art behind this tab bled straight through every
+     row, badly hurting text legibility. Direct report. */
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
   border-bottom: 1px solid var(--panel-2);
   cursor: pointer;
 }
@@ -712,7 +749,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 2px;
+  padding: 7px 8px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
   border-bottom: 1px solid var(--panel-2);
 }
 .guild-built-row-name { font-size: 0.6875rem; font-weight: 700; opacity: 0.72; }

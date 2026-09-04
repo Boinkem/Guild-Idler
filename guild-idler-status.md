@@ -25687,3 +25687,50 @@ caught any leftover reference to a retired class name or removed prop).
 Full `vite build` (web + both Electron entries) passing clean as well,
 confirming the CSS/asset pipeline resolves `wax-seal-complete.png` at
 its new sizes with no missing-import regressions.
+
+### Guild Hall row background fix + a "Gold Donated" lifetime tracker next to Fund the Guild (patch 0315)
+
+```discord-update
+Dev Update | Bug Fix / Features
+
+- Fixed the Guild Hall Upgrades list's row background bleeding through to the artwork behind it, making rows hard to read
+- Added a "Gold Donated" tracker next to Fund the Guild, showing your lifetime total at a glance
+```
+
+Two small follow-ups off patch 0314's dense-list redesign, both direct
+reports/requests.
+
+**Row background bleed-through, bug fix.** `.guild-upgrade-row` and
+`.guild-built-row` had no `background` of their own -- fine against the
+old panel backdrop, but the Guild Hall tab's background art (busy stone/
+timber scaffolding, patch-0305-era Guild's Mood art) showed straight
+through every row, badly hurting text legibility, worst on the lighter
+Bright-mood variant. Both now carry the same `color-mix(in srgb,
+var(--panel) 88%, transparent)` 88%-opaque wash `.card` already uses
+everywhere else in the game (see that class's own comment on why
+color-mix over a flat `rgba()` -- keeps it theme-aware) rather than
+inventing a new one-off treatment. Row padding widened slightly (2px ->
+8px horizontal) to match -- text sitting flush against the edge of a
+now-visible filled row read as cramped in a way it didn't against a
+fully transparent one. `:hover`'s existing solid `var(--panel-2)` swap
+is unchanged.
+
+**"Gold Donated" tracker.** New `.guild-donation-plaque`, same shape as
+the existing Gold Storage Cap plaque right next to it, moss-accented
+instead of brass so it reads as its own stat rather than a second gold
+readout. Reads `state.guildDonationsTotal` directly -- no new state
+needed, that field already existed and was already being incremented on
+every `GuildManager.donateToGuild` call (it feeds the Guild Power
+donations component, a deliberately diminishing sqrt of this same
+total -- see that method's own comment), it just wasn't surfaced
+anywhere in the UI before now. Sits directly after the Fund the Guild
+button in the same row.
+
+**Verified:** pulled `GuildPanel.tsx`, `app.css`, `types.ts`,
+`FundGuildModal.tsx`, `engine.ts`, and `GuildManager.ts` fresh from
+`main` via `raw.githubusercontent.com` immediately before editing
+(patch 0314 was already live). Confirmed `guildDonationsTotal` is a
+plain required `GameState` field, already written on every donation, so
+no migration or default-value work was needed for existing saves.
+`npx tsc --noEmit` and a full `vite build` (web + both Electron
+entries) passing clean against a fresh clone with both files applied.

@@ -1,0 +1,140 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 139811d..424629b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -25687,3 +25687,50 @@ caught any leftover reference to a retired class name or removed prop).
+ Full `vite build` (web + both Electron entries) passing clean as well,
+ confirming the CSS/asset pipeline resolves `wax-seal-complete.png` at
+ its new sizes with no missing-import regressions.
++
++### Guild Hall row background fix + a "Gold Donated" lifetime tracker next to Fund the Guild (patch 0315)
++
++```discord-update
++Dev Update | Bug Fix / Features
++
++- Fixed the Guild Hall Upgrades list's row background bleeding through to the artwork behind it, making rows hard to read
++- Added a "Gold Donated" tracker next to Fund the Guild, showing your lifetime total at a glance
++```
++
++Two small follow-ups off patch 0314's dense-list redesign, both direct
++reports/requests.
++
++**Row background bleed-through, bug fix.** `.guild-upgrade-row` and
++`.guild-built-row` had no `background` of their own -- fine against the
++old panel backdrop, but the Guild Hall tab's background art (busy stone/
++timber scaffolding, patch-0305-era Guild's Mood art) showed straight
++through every row, badly hurting text legibility, worst on the lighter
++Bright-mood variant. Both now carry the same `color-mix(in srgb,
++var(--panel) 88%, transparent)` 88%-opaque wash `.card` already uses
++everywhere else in the game (see that class's own comment on why
++color-mix over a flat `rgba()` -- keeps it theme-aware) rather than
++inventing a new one-off treatment. Row padding widened slightly (2px ->
++8px horizontal) to match -- text sitting flush against the edge of a
++now-visible filled row read as cramped in a way it didn't against a
++fully transparent one. `:hover`'s existing solid `var(--panel-2)` swap
++is unchanged.
++
++**"Gold Donated" tracker.** New `.guild-donation-plaque`, same shape as
++the existing Gold Storage Cap plaque right next to it, moss-accented
++instead of brass so it reads as its own stat rather than a second gold
++readout. Reads `state.guildDonationsTotal` directly -- no new state
++needed, that field already existed and was already being incremented on
++every `GuildManager.donateToGuild` call (it feeds the Guild Power
++donations component, a deliberately diminishing sqrt of this same
++total -- see that method's own comment), it just wasn't surfaced
++anywhere in the UI before now. Sits directly after the Fund the Guild
++button in the same row.
++
++**Verified:** pulled `GuildPanel.tsx`, `app.css`, `types.ts`,
++`FundGuildModal.tsx`, `engine.ts`, and `GuildManager.ts` fresh from
++`main` via `raw.githubusercontent.com` immediately before editing
++(patch 0314 was already live). Confirmed `guildDonationsTotal` is a
++plain required `GameState` field, already written on every donation, so
++no migration or default-value work was needed for existing saves.
++`npx tsc --noEmit` and a full `vite build` (web + both Electron
++entries) passing clean against a fresh clone with both files applied.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 6a7e759..2d77125 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -535,6 +535,38 @@
+   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+ }
+ 
++/* "Gold Donated" tracker, next to the Fund the Guild button -- direct
++   request, so a player can see their lifetime Fund the Guild total
++   (state.guildDonationsTotal, already tracked for the Guild Power
++   donations component -- see GuildManager.donateToGuild's own comment)
++   at a glance rather than it being an invisible number behind the
++   modal. Same plaque shape as .guild-storage-plaque right above, moss
++   accent instead of brass so it reads as its own distinct stat rather
++   than a second gold readout. */
++.guild-donation-plaque {
++  display: inline-flex;
++  align-items: baseline;
++  gap: 8px;
++  margin: 0;
++  padding: 5px 10px;
++  border: 1px solid color-mix(in srgb, var(--moss) 45%, var(--edge));
++  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
++  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
++}
++.guild-donation-plaque .guild-donation-label {
++  font-size: 0.5625rem;
++  text-transform: uppercase;
++  letter-spacing: 0.08em;
++  color: var(--muted);
++}
++.guild-donation-plaque .guild-donation-amount {
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  font-weight: 700;
++  color: var(--moss);
++  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
++}
++
+ /* Ledger-tab treatment layered on top of the shared .section-heading --
+    a small notched flag rather than plain underlined text. Only the
+    Treasury heading below still uses this -- the old "Facilities"/
+@@ -600,7 +632,12 @@
+   grid-template-columns: 1fr auto;
+   align-items: center;
+   gap: 12px;
+-  padding: 9px 2px 8px;
++  padding: 9px 8px 8px;
++  /* Same 88%-opaque panel wash every other .card already uses (see its
++     own comment on this exact color-mix) -- without it the busy Guild
++     Hall background art behind this tab bled straight through every
++     row, badly hurting text legibility. Direct report. */
++  background: color-mix(in srgb, var(--panel) 88%, transparent);
+   border-bottom: 1px solid var(--panel-2);
+   cursor: pointer;
+ }
+@@ -712,7 +749,8 @@
+   display: flex;
+   align-items: center;
+   gap: 8px;
+-  padding: 7px 2px;
++  padding: 7px 8px;
++  background: color-mix(in srgb, var(--panel) 88%, transparent);
+   border-bottom: 1px solid var(--panel-2);
+ }
+ .guild-built-row-name { font-size: 0.6875rem; font-weight: 700; opacity: 0.72; }
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index bdb3aac..604faca 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -361,6 +361,13 @@ export function GuildPanel() {
+         <button className="btn-primary" onClick={() => setFundingOpen(true)}>
+           Fund the Guild
+         </button>
++        {/* Lifetime Fund the Guild total -- direct request, so a player
++            can see at a glance how much they've given away without
++            having to open the modal to find the number. */}
++        <div className="guild-donation-plaque">
++          <span className="guild-donation-label">Gold Donated</span>
++          <span className="guild-donation-amount">{formatGold(state.guildDonationsTotal)}</span>
++        </div>
+       </div>
+ 
+       <div className="guild-filter-bar">

@@ -361,6 +361,13 @@ export function GuildPanel() {
         <button className="btn-primary" onClick={() => setFundingOpen(true)}>
           Fund the Guild
         </button>
+        {/* Lifetime Fund the Guild total -- direct request, so a player
+            can see at a glance how much they've given away without
+            having to open the modal to find the number. */}
+        <div className="guild-donation-plaque">
+          <span className="guild-donation-label">Gold Donated</span>
+          <span className="guild-donation-amount">{formatGold(state.guildDonationsTotal)}</span>
+        </div>
       </div>
 
       <div className="guild-filter-bar">
