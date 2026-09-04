@@ -1,0 +1,267 @@
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a2/guild-idler-status.md b2/guild-idler-status.md
+--- a2/guild-idler-status.md	2026-09-04 01:41:02.525593418 +0000
++++ b2/guild-idler-status.md	2026-09-04 01:44:39.013606286 +0000
+@@ -24928,3 +24928,83 @@
+ fresh pull specifically, since 0308 also touched app.css, though not
+ anywhere near `.tab-scene-content`/`.vendor-scene-content`). No image
+ assets changed in this patch.
++
++### Bug Fix: the post-tutorial consumable nudge fired on first USE, not first OBTAIN (patch 0310)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed: the new "here's what a consumable does" prompt now appears the moment you get your first one, not after you've already used it
++- Changed the wording on the "you found gear" prompt to match, as a clearer "go do something with this now" nudge
++```
++
++Direct feedback right after patch 0308 shipped: the new consumable
++guidance topic should fire "on first obtain, not use... more like a
++'you got a potion, this is what they do, equip one now'", and the same
++should apply to the existing equipment-found prompt. Patch 0308's own
++version had set the trigger inside `engine.useConsumable`, firing only
++after a player had already worked out how to use one on their own --
++backwards from the intent.
++
++**The fix.** `GameState.hasUsedConsumable` renamed to
++`hasObtainedConsumable`, and its set-site moved out of
++`engine.useConsumable` entirely and into `QuestManager.resolve`'s
++`isTutorialQuest` branch -- the exact same line that already grants the
++guaranteed starter Strength Potion (patch 0308). The
++`first_consumable_obtained` GuidanceManager topic (renamed from
++`first_consumable_used`) now fires in the very same `checkAll` batch as
++`first_quest_complete_vendor_nudge`, right after the tutorial quest
++resolves, rather than waiting on a separate later action. Message
++rewritten to match: "You picked up a Strength Potion! ... equip one from
++their card in the Heroes tab before you send them out," pointed at
++Heroes (where a consumable actually gets equipped onto a hero) rather
++than the old use-only framing. `engine.useConsumable` itself reverted to
++its exact pre-0308 form -- it no longer sets or reads anything related
++to this topic.
++
++Equipment's own `first_equipment_found` message (unrelated flag, no
++trigger change -- it already fired on first loot drop, which was
++already "on obtain") got the same wording pass for consistency: "You
++picked up your first piece of gear! ... head to the Inventory tab and
++equip it now," replacing the previous more passive "sits in the stash
++until you equip it" phrasing.
++
++**Save compatibility, handled as a real migration rather than an
++in-place rename.** Patch 0308 had already shipped and bumped
++`SAVE_VERSION` 58 -> 59 with `hasUsedConsumable` baked into that
++step's own migration output -- simply renaming the key inside
++migration 58 would have silently orphaned `hasObtainedConsumable` for
++any save that had *already* migrated through it (a save already
++sitting at real version 59 skips migration 58 entirely on its next
++load, since the migrate loop only runs steps `>= its own version`;
++spreading that save over `createInitialState`'s own `false` default
++for a key it doesn't have would leave it `false`, misfiring the
++corrected topic on a save that's actually long past its first
++consumable). Migration 58 is left byte-for-byte as originally shipped,
++`hasUsedConsumable` key included. A new migration 59 (`SAVE_VERSION`
++59 -> 60) carries that value forward under the new name for every save
++reaching this step, whichever path got it there -- a fresh pre-0308
++save flowing straight through 58 then 59 in the same `migrate()` call,
++or a save that was already sitting at a real version 59 from an actual
++0308 install. The old key is left behind, unread from here on --
++`GameState` no longer declares it.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh pull of `main`
++(confirmed patch 0309 -- Guild's Mood System option, unrelated -- was
++already live; that patch didn't touch `SAVE_VERSION` or any of the
++files this one does, no conflicts). Beyond type-checking: a real
++runtime simulation under `tsx`, confirming: a fresh tutorial-quest
++resolve sets `hasObtainedConsumable` true and the very next
++`GuidanceManager.checkAll` includes `first_consumable_obtained`
++alongside `first_quest_complete_vendor_nudge` in the same batch, before
++any consumable has actually been used; a save starting from before
++0308 (version 57) migrates straight through to version 60 with
++`hasObtainedConsumable: true`; and, specifically, a save already
++sitting at a genuine version 59 with the old `hasUsedConsumable: true`
++baked in (the exact real-world case this migration exists for) also
++lands on `hasObtainedConsumable: true` rather than being silently
++orphaned to `false`. Worth a real playtest: on a brand-new guild, send
++and resolve the tutorial quest and confirm the potion prompt appears
++immediately alongside the vendor nudge, before ever opening a hero's
++card to use it.
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a2/src/game/data/json/guidance-topics.json b2/src/game/data/json/guidance-topics.json
+--- a2/src/game/data/json/guidance-topics.json	2026-09-04 01:41:02.953133298 +0000
++++ b2/src/game/data/json/guidance-topics.json	2026-09-04 01:42:51.779355789 +0000
+@@ -10,7 +10,7 @@
+   {
+     "id": "first_equipment_found",
+     "messages": [
+-      "New gear! Anything you find sits in the stash until you equip it. check the Inventory tab."
++      "You picked up your first piece of gear! It won't do anything sitting in the stash -- head to the Inventory tab and equip it now."
+     ],
+     "targetTab": "equipment"
+   },
+@@ -135,9 +135,9 @@
+     ]
+   },
+   {
+-    "id": "first_consumable_used",
++    "id": "first_consumable_obtained",
+     "messages": [
+-      "That takes effect right away. Check a hero's own card in the Heroes tab to see anything currently active on them."
++      "You picked up a Strength Potion! Consumables like this give your hero a temporary boost -- equip one from their card in the Heroes tab before you send them out."
+     ],
+     "targetTab": "heroes"
+   }
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a2/src/game/engine.ts b2/src/game/engine.ts
+--- a2/src/game/engine.ts	2026-09-04 01:41:02.955672864 +0000
++++ b2/src/game/engine.ts	2026-09-04 01:42:40.485579761 +0000
+@@ -2386,11 +2386,6 @@
+     // item refine landing. Previously silent.
+     playSound('enhance');
+     this.say(`${hero.name} is patched up.`);
+-    // Patch 0308. Set before the guidance check right below so a
+-    // player's very first successful use is the one that actually
+-    // trips first_consumable_used, not the one after.
+-    this.state.hasUsedConsumable = true;
+-    this.reportGuidance(GuidanceManager.checkAll(this.state));
+     void this.saveNow();
+   }
+ 
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a2/src/game/managers/GuidanceManager.ts b2/src/game/managers/GuidanceManager.ts
+--- a2/src/game/managers/GuidanceManager.ts	2026-09-04 01:41:02.956747823 +0000
++++ b2/src/game/managers/GuidanceManager.ts	2026-09-04 01:42:43.533165130 +0000
+@@ -109,7 +109,7 @@
+   // each flag's own comment in types.ts for the full reasoning.
+   first_quest_complete_vendor_nudge: (state) => state.hasCompletedFirstQuest,
+   first_vendors_visit: (state) => state.hasVisitedVendorsTab,
+-  first_consumable_used: (state) => state.hasUsedConsumable,
++  first_consumable_obtained: (state) => state.hasObtainedConsumable,
+ };
+ 
+ export const GuidanceManager = {
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a2/src/game/managers/QuestManager.ts b2/src/game/managers/QuestManager.ts
+--- a2/src/game/managers/QuestManager.ts	2026-09-04 01:41:02.957572937 +0000
++++ b2/src/game/managers/QuestManager.ts	2026-09-04 01:42:31.370381697 +0000
+@@ -1354,11 +1354,17 @@
+       // A guaranteed starter Strength Potion, on top of the quest's own
+       // normal 40g/20xp reward (tutorialQuestOffer's rewardGold/rewardXp,
+       // untouched by this) -- the base tier (vs. grand_strength_potion),
+-      // i.e. exactly "a lesser strength potion" per the design ask. Sets
+-      // a new player up to actually have a consumable worth trying once
+-      // the first_consumable_used guidance topic below has something to
+-      // fire from.
++      // i.e. exactly "a lesser strength potion" per the design ask.
+       InventoryManager.add(state, 'strength_potion', 1);
++      // Patch 0310: flags the nudge right here, at the grant, rather
++      // than waiting for the player to actually use it (0308's
++      // original version set this in engine.useConsumable instead --
++      // moved after direct feedback that "here's what this does, go
++      // use it" should fire the moment they first HAVE a consumable,
++      // not only after they've already figured out how on their own).
++      // See GameState.hasObtainedConsumable's own comment for why this
++      // isn't just an inventory-count check instead.
++      state.hasObtainedConsumable = true;
+     }
+ 
+     // Grimsby's cooldown counter, same account-wide shape -- doesn't care
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a2/src/game/managers/SaveManager.ts b2/src/game/managers/SaveManager.ts
+--- a2/src/game/managers/SaveManager.ts	2026-09-04 01:41:02.958195654 +0000
++++ b2/src/game/managers/SaveManager.ts	2026-09-04 01:42:05.960435721 +0000
+@@ -179,7 +179,7 @@
+     hasSeenEnchanter: false,
+     hasCompletedFirstQuest: false,
+     hasVisitedVendorsTab: false,
+-    hasUsedConsumable: false,
++    hasObtainedConsumable: false,
+     peddlerTab: null,
+     guildName: '',
+     notifiedSetBonuses: [],
+@@ -1264,12 +1264,47 @@
+     // for either flag to retroactively fire from, and defaulting to
+     // false would misfire the new nudge/board-restriction on a
+     // veteran save instead of a genuinely new one.
++    //
++    // Deliberately left exactly as originally shipped in patch 0308,
++    // including the now-superseded `hasUsedConsumable` key -- a save
++    // that already migrated through this exact step before patch 0310
++    // landed has that key permanently baked into its JSON at version
++    // 59, so rewriting this step in place would silently orphan
++    // `hasObtainedConsumable` for anyone in that position (spreading a
++    // save that lacks the new key over createInitialState's own
++    // `false` default would leave it false, misfiring the corrected
++    // topic on a save that's actually long past its first quest). See
++    // migration 59 just below for the actual rename, forward-only.
+     ...save,
+     version: 59,
+     hasCompletedFirstQuest: (save.hasCompletedFirstQuest as boolean | undefined) ?? true,
+     hasVisitedVendorsTab: (save.hasVisitedVendorsTab as boolean | undefined) ?? true,
+     hasUsedConsumable: (save.hasUsedConsumable as boolean | undefined) ?? true,
+   }),
++  59: (save) => ({
++    // Patch 0310. Renames patch 0308's `hasUsedConsumable` to
++    // `hasObtainedConsumable` -- see that field's own comment in
++    // types.ts for why the trigger moved from first-use to
++    // first-obtain. Covers every save reaching this step regardless of
++    // how it got here: a save migrating straight through from
++    // pre-0308 already has `hasUsedConsumable` set by migration 58
++    // just above (within this same migrate() run, right before this
++    // step); a save that was already sitting at version 59 from a real
++    // 0308 install has it from whenever it last saved. Either way, the
++    // old value carries forward as the new key's value rather than
++    // being reset to a fresh default -- a save where a consumable was
++    // already genuinely used (old key true) has certainly also already
++    // obtained one, and a save where it's still false gets the new
++    // one-time nudge on its next real consumable grant, exactly the
++    // outcome patch 0308's own "don't misfire on a veteran save"
++    // reasoning already called for. The old key itself is simply left
++    // behind, unread from here on -- GameState no longer declares it,
++    // so nothing looks at it again.
++    ...save,
++    version: 60,
++    hasObtainedConsumable: (save.hasUsedConsumable as boolean | undefined)
++      ?? (save.hasObtainedConsumable as boolean | undefined) ?? true,
++  }),
+ };
+ 
+ export const SaveManager = {
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=dist-electron' '--exclude=package-lock.json' -x '*.tar.gz' a2/src/game/types.ts b2/src/game/types.ts
+--- a2/src/game/types.ts	2026-09-04 01:41:02.958964451 +0000
++++ b2/src/game/types.ts	2026-09-04 01:42:16.961849371 +0000
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 59;
++export const SAVE_VERSION = 60;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -2417,14 +2417,24 @@
+    */
+   hasVisitedVendorsTab: boolean;
+   /**
+-   * Patch 0308. Set the first time engine.useConsumable actually
+-   * succeeds (InventoryManager.useOnHero returns no error) -- drives
+-   * the one-time `first_consumable_used` GuidanceManager topic. Doesn't
+-   * care which consumable, just that using one worked at least once;
+-   * same "first X ever happened" shape every other GuidanceManager-
+-   * backed flag in this file already uses.
++   * Patch 0310. Corrects patch 0308's original version of this flag,
++   * which set it inside engine.useConsumable -- direct feedback after
++   * 0308 shipped: the nudge should fire the moment a player first GETS
++   * a consumable, not only after they've already figured out how to
++   * use one on their own. Set in QuestManager.resolve's isTutorialQuest
++   * branch, the same moment the guaranteed starter Strength Potion is
++   * granted -- drives the one-time `first_consumable_obtained`
++   * GuidanceManager topic ("here's what this does, go use it"),
++   * pointing the player at the consumable itself rather than
++   * explaining it only after the fact. Not derived from inventory
++   * counts (e.g. `inventory.strength_potion >= 1`) even though that
++   * would also work today -- an explicit flag set exactly at the grant
++   * site is the same convention every other GuidanceManager-backed
++   * flag in this file already uses, and stays correct even if a
++   * second, non-tutorial source of consumables is ever added later
++   * without also being a "first ever" moment worth re-explaining.
+    */
+-  hasUsedConsumable: boolean;
++  hasObtainedConsumable: boolean;
+   /**
+    * Levels bought in the Overseer upgrade (0-3), Warehouse sub-tab. Each
+    * level gives every node a chance to auto-catch a spawn that would

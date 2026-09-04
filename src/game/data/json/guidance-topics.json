@@ -10,7 +10,7 @@
   {
     "id": "first_equipment_found",
     "messages": [
-      "New gear! Anything you find sits in the stash until you equip it. check the Inventory tab."
+      "You picked up your first piece of gear! It won't do anything sitting in the stash -- head to the Inventory tab and equip it now."
     ],
     "targetTab": "equipment"
   },
@@ -135,9 +135,9 @@
     ]
   },
   {
-    "id": "first_consumable_used",
+    "id": "first_consumable_obtained",
     "messages": [
-      "That takes effect right away. Check a hero's own card in the Heroes tab to see anything currently active on them."
+      "You picked up a Strength Potion! Consumables like this give your hero a temporary boost -- equip one from their card in the Heroes tab before you send them out."
     ],
     "targetTab": "heroes"
   }

@@ -109,7 +109,7 @@ const CHECKS: Record<string, Check> = {
   // each flag's own comment in types.ts for the full reasoning.
   first_quest_complete_vendor_nudge: (state) => state.hasCompletedFirstQuest,
   first_vendors_visit: (state) => state.hasVisitedVendorsTab,
-  first_consumable_used: (state) => state.hasUsedConsumable,
+  first_consumable_obtained: (state) => state.hasObtainedConsumable,
 };
 
 export const GuidanceManager = {

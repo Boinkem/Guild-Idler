@@ -24928,3 +24928,83 @@ live; this patch's own app.css changes were double-checked against that
 fresh pull specifically, since 0308 also touched app.css, though not
 anywhere near `.tab-scene-content`/`.vendor-scene-content`). No image
 assets changed in this patch.
+
+### Bug Fix: the post-tutorial consumable nudge fired on first USE, not first OBTAIN (patch 0310)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: the new "here's what a consumable does" prompt now appears the moment you get your first one, not after you've already used it
+- Changed the wording on the "you found gear" prompt to match, as a clearer "go do something with this now" nudge
+```
+
+Direct feedback right after patch 0308 shipped: the new consumable
+guidance topic should fire "on first obtain, not use... more like a
+'you got a potion, this is what they do, equip one now'", and the same
+should apply to the existing equipment-found prompt. Patch 0308's own
+version had set the trigger inside `engine.useConsumable`, firing only
+after a player had already worked out how to use one on their own --
+backwards from the intent.
+
+**The fix.** `GameState.hasUsedConsumable` renamed to
+`hasObtainedConsumable`, and its set-site moved out of
+`engine.useConsumable` entirely and into `QuestManager.resolve`'s
+`isTutorialQuest` branch -- the exact same line that already grants the
+guaranteed starter Strength Potion (patch 0308). The
+`first_consumable_obtained` GuidanceManager topic (renamed from
+`first_consumable_used`) now fires in the very same `checkAll` batch as
+`first_quest_complete_vendor_nudge`, right after the tutorial quest
+resolves, rather than waiting on a separate later action. Message
+rewritten to match: "You picked up a Strength Potion! ... equip one from
+their card in the Heroes tab before you send them out," pointed at
+Heroes (where a consumable actually gets equipped onto a hero) rather
+than the old use-only framing. `engine.useConsumable` itself reverted to
+its exact pre-0308 form -- it no longer sets or reads anything related
+to this topic.
+
+Equipment's own `first_equipment_found` message (unrelated flag, no
+trigger change -- it already fired on first loot drop, which was
+already "on obtain") got the same wording pass for consistency: "You
+picked up your first piece of gear! ... head to the Inventory tab and
+equip it now," replacing the previous more passive "sits in the stash
+until you equip it" phrasing.
+
+**Save compatibility, handled as a real migration rather than an
+in-place rename.** Patch 0308 had already shipped and bumped
+`SAVE_VERSION` 58 -> 59 with `hasUsedConsumable` baked into that
+step's own migration output -- simply renaming the key inside
+migration 58 would have silently orphaned `hasObtainedConsumable` for
+any save that had *already* migrated through it (a save already
+sitting at real version 59 skips migration 58 entirely on its next
+load, since the migrate loop only runs steps `>= its own version`;
+spreading that save over `createInitialState`'s own `false` default
+for a key it doesn't have would leave it `false`, misfiring the
+corrected topic on a save that's actually long past its first
+consumable). Migration 58 is left byte-for-byte as originally shipped,
+`hasUsedConsumable` key included. A new migration 59 (`SAVE_VERSION`
+59 -> 60) carries that value forward under the new name for every save
+reaching this step, whichever path got it there -- a fresh pre-0308
+save flowing straight through 58 then 59 in the same `migrate()` call,
+or a save that was already sitting at a real version 59 from an actual
+0308 install. The old key is left behind, unread from here on --
+`GameState` no longer declares it.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh pull of `main`
+(confirmed patch 0309 -- Guild's Mood System option, unrelated -- was
+already live; that patch didn't touch `SAVE_VERSION` or any of the
+files this one does, no conflicts). Beyond type-checking: a real
+runtime simulation under `tsx`, confirming: a fresh tutorial-quest
+resolve sets `hasObtainedConsumable` true and the very next
+`GuidanceManager.checkAll` includes `first_consumable_obtained`
+alongside `first_quest_complete_vendor_nudge` in the same batch, before
+any consumable has actually been used; a save starting from before
+0308 (version 57) migrates straight through to version 60 with
+`hasObtainedConsumable: true`; and, specifically, a save already
+sitting at a genuine version 59 with the old `hasUsedConsumable: true`
+baked in (the exact real-world case this migration exists for) also
+lands on `hasObtainedConsumable: true` rather than being silently
+orphaned to `false`. Worth a real playtest: on a brand-new guild, send
+and resolve the tutorial quest and confirm the potion prompt appears
+immediately alongside the vendor nudge, before ever opening a hero's
+card to use it.

@@ -2386,11 +2386,6 @@ export class GameEngine {
     // item refine landing. Previously silent.
     playSound('enhance');
     this.say(`${hero.name} is patched up.`);
-    // Patch 0308. Set before the guidance check right below so a
-    // player's very first successful use is the one that actually
-    // trips first_consumable_used, not the one after.
-    this.state.hasUsedConsumable = true;
-    this.reportGuidance(GuidanceManager.checkAll(this.state));
     void this.saveNow();
   }
 

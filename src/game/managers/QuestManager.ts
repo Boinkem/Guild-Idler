@@ -1354,11 +1354,17 @@ export const QuestManager = {
       // A guaranteed starter Strength Potion, on top of the quest's own
       // normal 40g/20xp reward (tutorialQuestOffer's rewardGold/rewardXp,
       // untouched by this) -- the base tier (vs. grand_strength_potion),
-      // i.e. exactly "a lesser strength potion" per the design ask. Sets
-      // a new player up to actually have a consumable worth trying once
-      // the first_consumable_used guidance topic below has something to
-      // fire from.
+      // i.e. exactly "a lesser strength potion" per the design ask.
       InventoryManager.add(state, 'strength_potion', 1);
+      // Patch 0310: flags the nudge right here, at the grant, rather
+      // than waiting for the player to actually use it (0308's
+      // original version set this in engine.useConsumable instead --
+      // moved after direct feedback that "here's what this does, go
+      // use it" should fire the moment they first HAVE a consumable,
+      // not only after they've already figured out how on their own).
+      // See GameState.hasObtainedConsumable's own comment for why this
+      // isn't just an inventory-count check instead.
+      state.hasObtainedConsumable = true;
     }
 
     // Grimsby's cooldown counter, same account-wide shape -- doesn't care

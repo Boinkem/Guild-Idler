@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 59;
+export const SAVE_VERSION = 60;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2417,14 +2417,24 @@ export interface GameState {
    */
   hasVisitedVendorsTab: boolean;
   /**
-   * Patch 0308. Set the first time engine.useConsumable actually
-   * succeeds (InventoryManager.useOnHero returns no error) -- drives
-   * the one-time `first_consumable_used` GuidanceManager topic. Doesn't
-   * care which consumable, just that using one worked at least once;
-   * same "first X ever happened" shape every other GuidanceManager-
-   * backed flag in this file already uses.
+   * Patch 0310. Corrects patch 0308's original version of this flag,
+   * which set it inside engine.useConsumable -- direct feedback after
+   * 0308 shipped: the nudge should fire the moment a player first GETS
+   * a consumable, not only after they've already figured out how to
+   * use one on their own. Set in QuestManager.resolve's isTutorialQuest
+   * branch, the same moment the guaranteed starter Strength Potion is
+   * granted -- drives the one-time `first_consumable_obtained`
+   * GuidanceManager topic ("here's what this does, go use it"),
+   * pointing the player at the consumable itself rather than
+   * explaining it only after the fact. Not derived from inventory
+   * counts (e.g. `inventory.strength_potion >= 1`) even though that
+   * would also work today -- an explicit flag set exactly at the grant
+   * site is the same convention every other GuidanceManager-backed
+   * flag in this file already uses, and stays correct even if a
+   * second, non-tutorial source of consumables is ever added later
+   * without also being a "first ever" moment worth re-explaining.
    */
-  hasUsedConsumable: boolean;
+  hasObtainedConsumable: boolean;
   /**
    * Levels bought in the Overseer upgrade (0-3), Warehouse sub-tab. Each
    * level gives every node a chance to auto-catch a spawn that would

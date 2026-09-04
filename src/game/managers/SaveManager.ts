@@ -179,7 +179,7 @@ export function createInitialState(now = Date.now()): GameState {
     hasSeenEnchanter: false,
     hasCompletedFirstQuest: false,
     hasVisitedVendorsTab: false,
-    hasUsedConsumable: false,
+    hasObtainedConsumable: false,
     peddlerTab: null,
     guildName: '',
     notifiedSetBonuses: [],
@@ -1264,11 +1264,46 @@ const MIGRATIONS: Record<number, Migration> = {
     // for either flag to retroactively fire from, and defaulting to
     // false would misfire the new nudge/board-restriction on a
     // veteran save instead of a genuinely new one.
+    //
+    // Deliberately left exactly as originally shipped in patch 0308,
+    // including the now-superseded `hasUsedConsumable` key -- a save
+    // that already migrated through this exact step before patch 0310
+    // landed has that key permanently baked into its JSON at version
+    // 59, so rewriting this step in place would silently orphan
+    // `hasObtainedConsumable` for anyone in that position (spreading a
+    // save that lacks the new key over createInitialState's own
+    // `false` default would leave it false, misfiring the corrected
+    // topic on a save that's actually long past its first quest). See
+    // migration 59 just below for the actual rename, forward-only.
     ...save,
     version: 59,
     hasCompletedFirstQuest: (save.hasCompletedFirstQuest as boolean | undefined) ?? true,
     hasVisitedVendorsTab: (save.hasVisitedVendorsTab as boolean | undefined) ?? true,
     hasUsedConsumable: (save.hasUsedConsumable as boolean | undefined) ?? true,
+  }),
+  59: (save) => ({
+    // Patch 0310. Renames patch 0308's `hasUsedConsumable` to
+    // `hasObtainedConsumable` -- see that field's own comment in
+    // types.ts for why the trigger moved from first-use to
+    // first-obtain. Covers every save reaching this step regardless of
+    // how it got here: a save migrating straight through from
+    // pre-0308 already has `hasUsedConsumable` set by migration 58
+    // just above (within this same migrate() run, right before this
+    // step); a save that was already sitting at version 59 from a real
+    // 0308 install has it from whenever it last saved. Either way, the
+    // old value carries forward as the new key's value rather than
+    // being reset to a fresh default -- a save where a consumable was
+    // already genuinely used (old key true) has certainly also already
+    // obtained one, and a save where it's still false gets the new
+    // one-time nudge on its next real consumable grant, exactly the
+    // outcome patch 0308's own "don't misfire on a veteran save"
+    // reasoning already called for. The old key itself is simply left
+    // behind, unread from here on -- GameState no longer declares it,
+    // so nothing looks at it again.
+    ...save,
+    version: 60,
+    hasObtainedConsumable: (save.hasUsedConsumable as boolean | undefined)
+      ?? (save.hasObtainedConsumable as boolean | undefined) ?? true,
   }),
 };
 
