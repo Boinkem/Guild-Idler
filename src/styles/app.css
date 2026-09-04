@@ -591,13 +591,17 @@
   font-size: 0.625rem;
   letter-spacing: 0.04em;
   padding: 4px 10px;
-  background: transparent;
+  /* Same 88%-opaque panel wash as .guild-upgrade-row/.card (see either's
+     own comment) -- inactive chips were fully transparent, same
+     background-art-bleeds-through problem as the rows next to them,
+     same direct report. */
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
   color: var(--parchment);
   border: 1px solid var(--panel-3);
   min-height: 0;
   box-shadow: none;
 }
-.guild-filter-chip:hover:not(:disabled):not(.active) { border-color: var(--brass); background: transparent; }
+.guild-filter-chip:hover:not(:disabled):not(.active) { border-color: var(--brass); background: var(--panel-2); }
 .guild-filter-chip.active {
   background: var(--brass);
   color: var(--ink);

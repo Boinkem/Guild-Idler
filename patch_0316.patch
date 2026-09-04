@@ -1,0 +1,56 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 424629b..fd0f24e 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -25734,3 +25734,27 @@ plain required `GameState` field, already written on every donation, so
+ no migration or default-value work was needed for existing saves.
+ `npx tsc --noEmit` and a full `vite build` (web + both Electron
+ entries) passing clean against a fresh clone with both files applied.
++
++### Guild Hall filter chips get the same background-bleed fix as patch 0315's rows (patch 0316)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed the Guild Hall filter chips (All/Combat/Economy/Roster/Care/Unlocks) bleeding the background art through, same as the row fix last patch
++```
++
++Same bug patch 0315 fixed on `.guild-upgrade-row`/`.guild-built-row`,
++spotted on the one row of controls that patch missed: the inactive
++filter chips were still `background: transparent`, so the Guild Hall
++art behind the tab showed straight through them too. Now carries the
++same `color-mix(in srgb, var(--panel) 88%, transparent)` wash as
++everything else on this tab. Hover on an inactive chip swaps to solid
++`var(--panel-2)` now (was `transparent` before, which combined with the
++border-only hover feedback read as barely-there) -- matches the row
++hover treatment right below it. The active chip's solid brass fill was
++never part of this bug and is unchanged.
++
++**Verified:** pulled `app.css` fresh from `main` (patch 0315 was
++already live) before editing. `npx tsc --noEmit` and a full `vite
++build` passing clean against a fresh clone -- CSS-only change, no
++`.tsx` touched this patch.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 2d77125..9b1f4d7 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -591,13 +591,17 @@
+   font-size: 0.625rem;
+   letter-spacing: 0.04em;
+   padding: 4px 10px;
+-  background: transparent;
++  /* Same 88%-opaque panel wash as .guild-upgrade-row/.card (see either's
++     own comment) -- inactive chips were fully transparent, same
++     background-art-bleeds-through problem as the rows next to them,
++     same direct report. */
++  background: color-mix(in srgb, var(--panel) 88%, transparent);
+   color: var(--parchment);
+   border: 1px solid var(--panel-3);
+   min-height: 0;
+   box-shadow: none;
+ }
+-.guild-filter-chip:hover:not(:disabled):not(.active) { border-color: var(--brass); background: transparent; }
++.guild-filter-chip:hover:not(:disabled):not(.active) { border-color: var(--brass); background: var(--panel-2); }
+ .guild-filter-chip.active {
+   background: var(--brass);
+   color: var(--ink);
