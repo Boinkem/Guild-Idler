@@ -1,0 +1,315 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 27ee7c7..31e832c 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -24855,3 +24855,76 @@ appears right after closing the result, confirm Vendors gives its own
+ explainer on first visit, confirm exactly one more (burst) offer shows
+ up afterward and nothing else until it's sent, and confirm using the
+ new Strength Potion pops the consumable-use explainer.
++
++### Guild's Mood gains a "System" option (auto by local clock), and the Dim/Bright tint split is simplified back to one flat value (patch 0309)
++
++```discord-update
++Dev Update | Guild's Mood: System
++
++- Added: Guild's Mood now has a third option, System -- automatically switches between Moody and Bright off your own clock (bright 6am-6pm, moody the rest of the day), live, without needing to restart
++- Changed: simplified how the background tint works under the hood -- Guild's Mood is now carried entirely by which art is showing, not by the tint also changing
++```
++
++Direct request, discussed before patching. Two decisions came out of that
++discussion and both landed in this same patch: dropping the Dim/Bright
++tint split patch 0306 introduced (in favor of a single flat value,
++letting the art itself carry the whole mood signal), and building System
++mode so it actually updates live rather than only resolving once per
++launch.
++
++**System mode (`BackgroundMoodId`, `resolveBackgroundMood()`,
++`backgroundSrc()`, all in `settings.ts`).** `'system'` is a third valid
++value alongside `'dim'`/`'bright'` -- what's actually persisted to
++Settings, never resolved-and-stored. `resolveBackgroundMood(mood, now?)`
++is the one place that turns it into an actual `'dim'`/`'bright'` choice:
++local device time (`Date.getHours()`, not UTC -- "bright during the day"
++means the player's own day), flat 6am-6pm window as requested, no
++sunrise/sunset calculation (would need location data this game has no
++other reason to ask for). `backgroundSrc()` calls that resolver
++internally before doing its usual path rewrite, so all 18 existing call
++sites across the game -- every panel, `MenuWindow.tsx`'s ambient
++backdrop -- needed zero changes; they still just pass
++`settings.backgroundMood` straight through exactly as before patch 0305,
++with no awareness 'system' exists.
++
++**Making it live, not just resolved-at-launch (`useSettings.tsx`).**
++`resolveBackgroundMood` is a plain function of the current time, so it
++already returns a fresh answer on every call -- the missing piece was
++giving mounted components a reason to actually *call it again* once the
++6am/6pm boundary passes during a session left open, which nothing
++otherwise guarantees (React doesn't re-render a component just because
++time passed with no other state change). `SettingsProvider` now carries
++a `tick` counter that increments once a minute, but *only* while
++`backgroundMood === 'system'` -- the interval doesn't exist at all in
++Dim or Bright mode, so those cost nothing. `tick` sits in the memoized
++context value's own dependency list without ever touching `settings`
++itself, so every consumer re-renders on that minute tick without
++triggering an unnecessary settings save.
++
++**Tint simplified back to one flat value (`app.css`).** Patch 0306 split
++`.tab-scene-content`/`.vendor-scene-content` into two values gated by a
++`[data-background-mood='bright']` selector (45% Dim, 15% Bright) to fix
++Bright art reading as dull. Direct feedback this patch: drop that split
++entirely and let the dim/bright *art itself* carry the mood, rather than
++the tint also changing per mode -- both rules are back to one shared
++value (25%, a middle point between the old 45%/15%) with no
++mood-specific override at all. This also sidesteps a real wrinkle System
++mode would otherwise have introduced: a mood-*specific* tint would have
++needed its own live-updating mechanism kept in sync with the exact same
++6am/6pm boundary `resolveBackgroundMood` tracks, doubling the surface
++area for the live-update work above. A flat, mood-independent tint has
++nothing left to keep in sync.
++
++**Onboarding and Settings.** `GuildNamingModal`'s "What's your guild's
++vibe?" step and `SettingsPanel`'s Guild's Mood row both gained System as
++a third option alongside Moody/Bright -- added to onboarding rather than
++left Settings-only, so a new guild can pick "just handle it
++automatically" on day one.
++
++**Verification.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh pull of `main`
++(confirmed patch 0308 -- a guided-intro rework, unrelated -- was already
++live; this patch's own app.css changes were double-checked against that
++fresh pull specifically, since 0308 also touched app.css, though not
++anywhere near `.tab-scene-content`/`.vendor-scene-content`). No image
++assets changed in this patch.
+diff --git a/src/game/settings.ts b/src/game/settings.ts
+index bae2191..997ced9 100644
+--- a/src/game/settings.ts
++++ b/src/game/settings.ts
+@@ -58,8 +58,43 @@ export type CompanionBackdropId = 'off' | 'subtle' | 'strong';
+  * image -- the browser's own 404-on-missing-image is the fallback, no
+  * special-case code needed, same "ship safely before art lands" shape
+  * MenuWindow.tsx's raids/hatchery/peddler backdrop comment already uses.
++ *
++ * 'system' (patch 0309, direct request) -- picks 'bright' or 'dim'
++ * automatically based on the player's own local clock (see
++ * resolveBackgroundMood below), rather than a fixed manual choice.
++ * Never stored as the *resolved* value anywhere -- the raw 'system'
++ * choice is what's persisted, and every consumer still just calls
++ * backgroundSrc(path, settings.backgroundMood) exactly as before; the
++ * resolution happens inside that one function, so none of this game's
++ * 18 existing call sites needed to change for this to work.
++ */
++export type BackgroundMoodId = 'dim' | 'bright' | 'system';
++
++/**
++ * Local-clock day/night split for 'system' mode -- flat 6am-6pm window,
++ * direct request, no sunrise/sunset calculation (would need the
++ * player's location, which this game has no reason to ask for). Reads
++ * the browser's own local time (`getHours()`), not UTC -- "bright
++ * during the day" should track the player's own day, not a fixed
++ * server-side window that could be the middle of their night.
++ */
++function isDaytime(now: Date = new Date()): boolean {
++  const hour = now.getHours();
++  return hour >= 6 && hour < 18;
++}
++
++/**
++ * Resolves 'system' down to an actual 'dim'/'bright' choice; 'dim' and
++ * 'bright' just pass through unchanged. Exported separately from
++ * backgroundSrc (which calls this internally) so anything that needs to
++ * know the *resolved* mood without also needing an image path -- e.g. a
++ * future CSS-driven effect -- has a single source of truth to call
++ * rather than reimplementing the 6am/6pm check.
+  */
+-export type BackgroundMoodId = 'dim' | 'bright';
++export function resolveBackgroundMood(mood: BackgroundMoodId, now?: Date): 'dim' | 'bright' {
++  if (mood !== 'system') return mood;
++  return isDaytime(now) ? 'bright' : 'dim';
++}
+ 
+ export interface Theme {
+   id: ThemeId;
+@@ -402,9 +437,20 @@ function prefersReducedMotionByDefault(): boolean {
+  * own directory, inserting a `bright/` segment right before it, so it works
+  * unchanged for any of this game's background folders without needing to
+  * know which one it's looking at.
++ *
++ * `mood` can be 'system' -- resolveBackgroundMood handles that resolution
++ * right here, so every call site in the game (all 18 of them, unchanged
++ * since patch 0309) can keep passing settings.backgroundMood straight
++ * through exactly as before, with no awareness that 'system' exists.
++ * Being a plain function of the current time, this naturally returns a
++ * fresh answer on every call -- SettingsProvider's own periodic tick (see
++ * useSettings.tsx) is what makes sure components actually re-render often
++ * enough for that freshness to reach the screen while a session is left
++ * open across the 6am/6pm boundary, rather than only updating on the next
++ * unrelated re-render.
+  */
+ export function backgroundSrc(dimPath: string, mood: BackgroundMoodId): string {
+-  if (mood === 'dim') return dimPath;
++  if (resolveBackgroundMood(mood) === 'dim') return dimPath;
+   const slash = dimPath.lastIndexOf('/');
+   if (slash === -1) return dimPath;
+   return `${dimPath.slice(0, slash)}/bright${dimPath.slice(slash)}`;
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 659ff33..47586a0 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2844,15 +2844,21 @@ input[type='range'] {
+ .vendor-scene-content {
+   position: relative;
+   padding: 14px 16px 24px;
+-  background: color-mix(in srgb, var(--night) 45%, transparent);
+-}
+-/* Same Bright-mood tint reduction as .tab-scene-content above (patch
+- * 0306) -- kept as its own separate rule rather than merging the two
+- * selectors, matching how .tab-scene-content/.vendor-scene-content have
+- * always been declared as two independent (if identical-valued) rules
+- * throughout this file rather than a shared class. */
+-[data-background-mood='bright'] .vendor-scene-content {
+-  background: color-mix(in srgb, var(--night) 15%, transparent);
++  /* Patch 0306 briefly split this into two mood-specific values (45%
++   * Dim, 15% Bright) via a [data-background-mood='bright'] override --
++   * simplified back to one flat value in patch 0308, direct request
++   * ("just use the background images, make it easier"): rather than the
++   * tint itself trying to carry part of the mood signal, the dim/bright
++   * ART does that entirely now, and this tint's only job goes back to
++   * being what it always was before Guild's Mood existed -- enough
++   * darkening for text legibility over busy artwork, nothing more. Also
++   * sidesteps a real wrinkle patch 0306 introduced: a mood-specific tint
++   * needs to stay in sync with "System" mode's own time-of-day
++   * resolution (patch 0308), which would have meant this CSS attribute
++   * needing its own live update on the same 6am/6pm boundary
++   * backgroundSrc() already tracks -- a flat, mood-independent value
++   * has nothing to keep in sync at all. */
++  background: color-mix(in srgb, var(--night) 25%, transparent);
+ }
+ 
+ /*
+@@ -2898,20 +2904,10 @@ input[type='range'] {
+ .tab-scene-content {
+   position: relative;
+   padding: 14px 16px 24px;
+-  background: color-mix(in srgb, var(--night) 45%, transparent);
+-}
+-/* Bright mood (patch 0306, direct report) -- the flat 45% dark tint above
+- * was applied identically regardless of Guild's Mood, which meant a
+- * Bright background could never actually read as bright: the same
+- * darkening sat over it as over the Dim art it was meant to replace,
+- * capping how vivid ANY background could look. Cut substantially just
+- * for Bright mode via the data-background-mood attribute
+- * SettingsStore.apply already sets on <html> -- Dim is completely
+- * unaffected (same 45% as always, no regression to the established
+- * look). Still not 0% -- text drawn on top of a busy, colorful Bright
+- * image needs *some* darkening to stay legible, just far less of it. */
+-[data-background-mood='bright'] .tab-scene-content {
+-  background: color-mix(in srgb, var(--night) 15%, transparent);
++  /* Flat value, same reasoning as .vendor-scene-content's own comment
++   * above -- Guild's Mood is carried entirely by which art is showing
++   * now (patch 0308), not by this tint also changing per mood. */
++  background: color-mix(in srgb, var(--night) 25%, transparent);
+ }
+ 
+ .locked-upgrade {
+diff --git a/src/ui/GuildNamingModal.tsx b/src/ui/GuildNamingModal.tsx
+index d4d2c95..3d54abc 100644
+--- a/src/ui/GuildNamingModal.tsx
++++ b/src/ui/GuildNamingModal.tsx
+@@ -168,7 +168,7 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+               <button
+                 className="btn-primary"
+                 onClick={() => confirmVibe('dim')}
+-                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
++                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
+                 title="Candlelit halls, torchlit chambers -- the classic look"
+               >
+                 🕯️<br />Moody
+@@ -176,11 +176,23 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+               <button
+                 className="btn-primary"
+                 onClick={() => confirmVibe('bright')}
+-                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
++                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
+                 title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
+               >
+                 ☀️<br />Bright
+               </button>
++              {/* System (patch 0309) -- added here alongside Moody/Bright
++               *  rather than left Settings-only, so a new guild can pick
++               *  the "just do it automatically" option on day one instead
++               *  of discovering it later. */}
++              <button
++                className="btn-primary"
++                onClick={() => confirmVibe('system')}
++                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
++                title="Switches automatically -- bright by day, moody by night, off your own clock"
++              >
++                🕐<br />System
++              </button>
+             </div>
+ 
+             <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index adbdd6e..a3dc633 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -104,14 +104,20 @@ export function SettingsPanel() {
+        *  tab/vendor/menu background reads from (see BackgroundMoodId's own
+        *  comment) -- a tab with no Bright counterpart yet just keeps
+        *  showing its dim image, so toggling this is always safe even while
+-       *  the Bright set is still being filled in. */}
+-      <Row label="Guild's Mood" hint="Moody is candlelit halls and torchlit chambers. Bright swaps in sunlit daytime art for the same rooms.">
++       *  the Bright set is still being filled in. 'System' (patch 0309)
++       *  picks Moody/Bright automatically off the player's own clock,
++       *  6am-6pm counting as day -- resolveBackgroundMood/backgroundSrc
++       *  in settings.ts do the actual resolution, this is just the third
++       *  option that lets the raw setting be 'system' in the first
++       *  place. */}
++      <Row label="Guild's Mood" hint="Moody is candlelit halls and torchlit chambers. Bright swaps in sunlit daytime art for the same rooms. System switches automatically between the two, 6am-6pm counting as day.">
+         <Segmented
+           value={settings.backgroundMood}
+           onChange={set('backgroundMood')}
+           options={[
+             { label: 'Moody', value: 'dim' },
+             { label: 'Bright', value: 'bright' },
++            { label: 'System', value: 'system' },
+           ]}
+         />
+       </Row>
+diff --git a/src/ui/useSettings.tsx b/src/ui/useSettings.tsx
+index af81070..2cc4df6 100644
+--- a/src/ui/useSettings.tsx
++++ b/src/ui/useSettings.tsx
+@@ -26,13 +26,32 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
+     SettingsStore.save(settings);
+   }, [settings]);
+ 
++  // Guild's Mood "System" (patch 0309) -- backgroundSrc()'s own
++  // resolveBackgroundMood check is a plain function of the current time,
++  // so it already returns a fresh answer on every call; what it needs
++  // from here is just a reason to actually be CALLED again once the
++  // 6am/6pm boundary passes while a session is sitting open. `tick`
++  // exists purely to give the memoized context value below a new
++  // reference every minute while System mode is active, which forces
++  // every settings consumer to re-render and recompute its own
++  // backgroundSrc() calls -- settings itself never changes here, so this
++  // never triggers an unnecessary save. Inert (no interval at all)
++  // whenever backgroundMood isn't 'system', so Dim/Bright players pay
++  // nothing for this.
++  const [tick, setTick] = useState(0);
++  useEffect(() => {
++    if (settings.backgroundMood !== 'system') return undefined;
++    const interval = window.setInterval(() => setTick((t) => t + 1), 60_000);
++    return () => window.clearInterval(interval);
++  }, [settings.backgroundMood]);
++
+   const update = useCallback(<K extends keyof Settings>(key: K, value: Settings[K]) => {
+     setSettings((current) => ({ ...current, [key]: value }));
+   }, []);
+ 
+   const reset = useCallback(() => setSettings({ ...DEFAULT_SETTINGS }), []);
+ 
+-  const value = useMemo(() => ({ settings, update, reset }), [settings, update, reset]);
++  const value = useMemo(() => ({ settings, update, reset }), [settings, update, reset, tick]);
+   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+ }
+ 

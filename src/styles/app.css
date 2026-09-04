@@ -2844,15 +2844,21 @@ input[type='range'] {
 .vendor-scene-content {
   position: relative;
   padding: 14px 16px 24px;
-  background: color-mix(in srgb, var(--night) 45%, transparent);
-}
-/* Same Bright-mood tint reduction as .tab-scene-content above (patch
- * 0306) -- kept as its own separate rule rather than merging the two
- * selectors, matching how .tab-scene-content/.vendor-scene-content have
- * always been declared as two independent (if identical-valued) rules
- * throughout this file rather than a shared class. */
-[data-background-mood='bright'] .vendor-scene-content {
-  background: color-mix(in srgb, var(--night) 15%, transparent);
+  /* Patch 0306 briefly split this into two mood-specific values (45%
+   * Dim, 15% Bright) via a [data-background-mood='bright'] override --
+   * simplified back to one flat value in patch 0308, direct request
+   * ("just use the background images, make it easier"): rather than the
+   * tint itself trying to carry part of the mood signal, the dim/bright
+   * ART does that entirely now, and this tint's only job goes back to
+   * being what it always was before Guild's Mood existed -- enough
+   * darkening for text legibility over busy artwork, nothing more. Also
+   * sidesteps a real wrinkle patch 0306 introduced: a mood-specific tint
+   * needs to stay in sync with "System" mode's own time-of-day
+   * resolution (patch 0308), which would have meant this CSS attribute
+   * needing its own live update on the same 6am/6pm boundary
+   * backgroundSrc() already tracks -- a flat, mood-independent value
+   * has nothing to keep in sync at all. */
+  background: color-mix(in srgb, var(--night) 25%, transparent);
 }
 
 /*
@@ -2898,20 +2904,10 @@ input[type='range'] {
 .tab-scene-content {
   position: relative;
   padding: 14px 16px 24px;
-  background: color-mix(in srgb, var(--night) 45%, transparent);
-}
-/* Bright mood (patch 0306, direct report) -- the flat 45% dark tint above
- * was applied identically regardless of Guild's Mood, which meant a
- * Bright background could never actually read as bright: the same
- * darkening sat over it as over the Dim art it was meant to replace,
- * capping how vivid ANY background could look. Cut substantially just
- * for Bright mode via the data-background-mood attribute
- * SettingsStore.apply already sets on <html> -- Dim is completely
- * unaffected (same 45% as always, no regression to the established
- * look). Still not 0% -- text drawn on top of a busy, colorful Bright
- * image needs *some* darkening to stay legible, just far less of it. */
-[data-background-mood='bright'] .tab-scene-content {
-  background: color-mix(in srgb, var(--night) 15%, transparent);
+  /* Flat value, same reasoning as .vendor-scene-content's own comment
+   * above -- Guild's Mood is carried entirely by which art is showing
+   * now (patch 0308), not by this tint also changing per mood. */
+  background: color-mix(in srgb, var(--night) 25%, transparent);
 }
 
 .locked-upgrade {

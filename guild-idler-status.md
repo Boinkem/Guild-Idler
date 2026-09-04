@@ -24855,3 +24855,76 @@ appears right after closing the result, confirm Vendors gives its own
 explainer on first visit, confirm exactly one more (burst) offer shows
 up afterward and nothing else until it's sent, and confirm using the
 new Strength Potion pops the consumable-use explainer.
+
+### Guild's Mood gains a "System" option (auto by local clock), and the Dim/Bright tint split is simplified back to one flat value (patch 0309)
+
+```discord-update
+Dev Update | Guild's Mood: System
+
+- Added: Guild's Mood now has a third option, System -- automatically switches between Moody and Bright off your own clock (bright 6am-6pm, moody the rest of the day), live, without needing to restart
+- Changed: simplified how the background tint works under the hood -- Guild's Mood is now carried entirely by which art is showing, not by the tint also changing
+```
+
+Direct request, discussed before patching. Two decisions came out of that
+discussion and both landed in this same patch: dropping the Dim/Bright
+tint split patch 0306 introduced (in favor of a single flat value,
+letting the art itself carry the whole mood signal), and building System
+mode so it actually updates live rather than only resolving once per
+launch.
+
+**System mode (`BackgroundMoodId`, `resolveBackgroundMood()`,
+`backgroundSrc()`, all in `settings.ts`).** `'system'` is a third valid
+value alongside `'dim'`/`'bright'` -- what's actually persisted to
+Settings, never resolved-and-stored. `resolveBackgroundMood(mood, now?)`
+is the one place that turns it into an actual `'dim'`/`'bright'` choice:
+local device time (`Date.getHours()`, not UTC -- "bright during the day"
+means the player's own day), flat 6am-6pm window as requested, no
+sunrise/sunset calculation (would need location data this game has no
+other reason to ask for). `backgroundSrc()` calls that resolver
+internally before doing its usual path rewrite, so all 18 existing call
+sites across the game -- every panel, `MenuWindow.tsx`'s ambient
+backdrop -- needed zero changes; they still just pass
+`settings.backgroundMood` straight through exactly as before patch 0305,
+with no awareness 'system' exists.
+
+**Making it live, not just resolved-at-launch (`useSettings.tsx`).**
+`resolveBackgroundMood` is a plain function of the current time, so it
+already returns a fresh answer on every call -- the missing piece was
+giving mounted components a reason to actually *call it again* once the
+6am/6pm boundary passes during a session left open, which nothing
+otherwise guarantees (React doesn't re-render a component just because
+time passed with no other state change). `SettingsProvider` now carries
+a `tick` counter that increments once a minute, but *only* while
+`backgroundMood === 'system'` -- the interval doesn't exist at all in
+Dim or Bright mode, so those cost nothing. `tick` sits in the memoized
+context value's own dependency list without ever touching `settings`
+itself, so every consumer re-renders on that minute tick without
+triggering an unnecessary settings save.
+
+**Tint simplified back to one flat value (`app.css`).** Patch 0306 split
+`.tab-scene-content`/`.vendor-scene-content` into two values gated by a
+`[data-background-mood='bright']` selector (45% Dim, 15% Bright) to fix
+Bright art reading as dull. Direct feedback this patch: drop that split
+entirely and let the dim/bright *art itself* carry the mood, rather than
+the tint also changing per mode -- both rules are back to one shared
+value (25%, a middle point between the old 45%/15%) with no
+mood-specific override at all. This also sidesteps a real wrinkle System
+mode would otherwise have introduced: a mood-*specific* tint would have
+needed its own live-updating mechanism kept in sync with the exact same
+6am/6pm boundary `resolveBackgroundMood` tracks, doubling the surface
+area for the live-update work above. A flat, mood-independent tint has
+nothing left to keep in sync.
+
+**Onboarding and Settings.** `GuildNamingModal`'s "What's your guild's
+vibe?" step and `SettingsPanel`'s Guild's Mood row both gained System as
+a third option alongside Moody/Bright -- added to onboarding rather than
+left Settings-only, so a new guild can pick "just handle it
+automatically" on day one.
+
+**Verification.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh pull of `main`
+(confirmed patch 0308 -- a guided-intro rework, unrelated -- was already
+live; this patch's own app.css changes were double-checked against that
+fresh pull specifically, since 0308 also touched app.css, though not
+anywhere near `.tab-scene-content`/`.vendor-scene-content`). No image
+assets changed in this patch.

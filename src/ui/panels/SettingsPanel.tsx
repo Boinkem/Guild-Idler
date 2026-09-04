@@ -104,14 +104,20 @@ export function SettingsPanel() {
        *  tab/vendor/menu background reads from (see BackgroundMoodId's own
        *  comment) -- a tab with no Bright counterpart yet just keeps
        *  showing its dim image, so toggling this is always safe even while
-       *  the Bright set is still being filled in. */}
-      <Row label="Guild's Mood" hint="Moody is candlelit halls and torchlit chambers. Bright swaps in sunlit daytime art for the same rooms.">
+       *  the Bright set is still being filled in. 'System' (patch 0309)
+       *  picks Moody/Bright automatically off the player's own clock,
+       *  6am-6pm counting as day -- resolveBackgroundMood/backgroundSrc
+       *  in settings.ts do the actual resolution, this is just the third
+       *  option that lets the raw setting be 'system' in the first
+       *  place. */}
+      <Row label="Guild's Mood" hint="Moody is candlelit halls and torchlit chambers. Bright swaps in sunlit daytime art for the same rooms. System switches automatically between the two, 6am-6pm counting as day.">
         <Segmented
           value={settings.backgroundMood}
           onChange={set('backgroundMood')}
           options={[
             { label: 'Moody', value: 'dim' },
             { label: 'Bright', value: 'bright' },
+            { label: 'System', value: 'system' },
           ]}
         />
       </Row>

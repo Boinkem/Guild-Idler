@@ -58,8 +58,43 @@ export type CompanionBackdropId = 'off' | 'subtle' | 'strong';
  * image -- the browser's own 404-on-missing-image is the fallback, no
  * special-case code needed, same "ship safely before art lands" shape
  * MenuWindow.tsx's raids/hatchery/peddler backdrop comment already uses.
+ *
+ * 'system' (patch 0309, direct request) -- picks 'bright' or 'dim'
+ * automatically based on the player's own local clock (see
+ * resolveBackgroundMood below), rather than a fixed manual choice.
+ * Never stored as the *resolved* value anywhere -- the raw 'system'
+ * choice is what's persisted, and every consumer still just calls
+ * backgroundSrc(path, settings.backgroundMood) exactly as before; the
+ * resolution happens inside that one function, so none of this game's
+ * 18 existing call sites needed to change for this to work.
  */
-export type BackgroundMoodId = 'dim' | 'bright';
+export type BackgroundMoodId = 'dim' | 'bright' | 'system';
+
+/**
+ * Local-clock day/night split for 'system' mode -- flat 6am-6pm window,
+ * direct request, no sunrise/sunset calculation (would need the
+ * player's location, which this game has no reason to ask for). Reads
+ * the browser's own local time (`getHours()`), not UTC -- "bright
+ * during the day" should track the player's own day, not a fixed
+ * server-side window that could be the middle of their night.
+ */
+function isDaytime(now: Date = new Date()): boolean {
+  const hour = now.getHours();
+  return hour >= 6 && hour < 18;
+}
+
+/**
+ * Resolves 'system' down to an actual 'dim'/'bright' choice; 'dim' and
+ * 'bright' just pass through unchanged. Exported separately from
+ * backgroundSrc (which calls this internally) so anything that needs to
+ * know the *resolved* mood without also needing an image path -- e.g. a
+ * future CSS-driven effect -- has a single source of truth to call
+ * rather than reimplementing the 6am/6pm check.
+ */
+export function resolveBackgroundMood(mood: BackgroundMoodId, now?: Date): 'dim' | 'bright' {
+  if (mood !== 'system') return mood;
+  return isDaytime(now) ? 'bright' : 'dim';
+}
 
 export interface Theme {
   id: ThemeId;
@@ -402,9 +437,20 @@ function prefersReducedMotionByDefault(): boolean {
  * own directory, inserting a `bright/` segment right before it, so it works
  * unchanged for any of this game's background folders without needing to
  * know which one it's looking at.
+ *
+ * `mood` can be 'system' -- resolveBackgroundMood handles that resolution
+ * right here, so every call site in the game (all 18 of them, unchanged
+ * since patch 0309) can keep passing settings.backgroundMood straight
+ * through exactly as before, with no awareness that 'system' exists.
+ * Being a plain function of the current time, this naturally returns a
+ * fresh answer on every call -- SettingsProvider's own periodic tick (see
+ * useSettings.tsx) is what makes sure components actually re-render often
+ * enough for that freshness to reach the screen while a session is left
+ * open across the 6am/6pm boundary, rather than only updating on the next
+ * unrelated re-render.
  */
 export function backgroundSrc(dimPath: string, mood: BackgroundMoodId): string {
-  if (mood === 'dim') return dimPath;
+  if (resolveBackgroundMood(mood) === 'dim') return dimPath;
   const slash = dimPath.lastIndexOf('/');
   if (slash === -1) return dimPath;
   return `${dimPath.slice(0, slash)}/bright${dimPath.slice(slash)}`;

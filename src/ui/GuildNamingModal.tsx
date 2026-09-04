@@ -168,7 +168,7 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
               <button
                 className="btn-primary"
                 onClick={() => confirmVibe('dim')}
-                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
+                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
                 title="Candlelit halls, torchlit chambers -- the classic look"
               >
                 🕯️<br />Moody
@@ -176,10 +176,22 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
               <button
                 className="btn-primary"
                 onClick={() => confirmVibe('bright')}
-                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
+                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
                 title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
               >
                 ☀️<br />Bright
+              </button>
+              {/* System (patch 0309) -- added here alongside Moody/Bright
+               *  rather than left Settings-only, so a new guild can pick
+               *  the "just do it automatically" option on day one instead
+               *  of discovering it later. */}
+              <button
+                className="btn-primary"
+                onClick={() => confirmVibe('system')}
+                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
+                title="Switches automatically -- bright by day, moody by night, off your own clock"
+              >
+                🕐<br />System
               </button>
             </div>
 
