@@ -4,6 +4,7 @@ import {
 } from '../types';
 import { Tuning } from './tuning';
 import { RAIDS, RAID_ENCOUNTER_BY_ID } from './raids';
+import { HOUR } from '../util';
 
 /* --------------------------- permanent upgrades --------------------------- */
 
@@ -1442,28 +1443,74 @@ export const PRESTIGE_MIN_LEVEL = Tuning.get('progression.prestigeMinLevel');
  * PrestigeManager.retire's old comment history (removed this patch) and
  * guild-idler-status.md's patch-0317 entry for the full rework writeup.
  *
- * First-pass numbers, explicitly not tuned yet (see decision 5 in the
- * design brief this patch was scoped from) -- deliberately modest
- * relative to RENOWN_PERKS/HERO_RENOWN_PERKS' own tier2 costs (hundreds
- * to well over a million Renown for a maxed perk), so a single clear
- * still reads as a grind, not an instant unlock. Both trees draw from
- * this same income, so there's no separate balancing needed per tree.
- * Edit via the Tuning tab (category 'renown_income') without touching
- * this file once real balance passes start.
+ * Rate reworked in patch 0319 -- see that patch's own status.md entry
+ * for the full sim. Original 0317 numbers were flat Renown-per-clear,
+ * which meant Renown/hour varied wildly by which raid/chain you picked
+ * (a level-1 chain replay paid ~7.5x better per hour than the intended
+ * level-55 endgame raid, since neither scaled with the content's own
+ * duration). Both functions below are now Renown-PER-HOUR rates,
+ * multiplied by the clear's actual duration by the caller (RaidManager.
+ * resolve / QuestManager's replay resolution) -- see each Tuning entry's
+ * own description for the exact per-hero-hour reasoning. Renown_income.*
+ * ids/values are unchanged from 0317 (1.2/2.4 raid, 0.8/1.6 chainReplay)
+ * -- only their *meaning* changed, from "per clear" to "per hour," and
+ * the raid caller now additionally multiplies by party size (see
+ * renownForRaidClear's own comment) to fix a parallelism gap 0319's sim
+ * surfaced: a raid's reward didn't scale with the 9 heroes it locks up,
+ * so a large capped roster could out-earn raiding ~8.7x just by having
+ * every hero solo Replay Memories in parallel instead. Deliberately
+ * still not a "real" tuned balance pass -- same caveat every other new
+ * economy number in this codebase gets -- just no longer structurally
+ * broken by which content happens to be shortest.
  */
-export function renownForRaidClear(difficulty: RaidDifficulty): number {
+export function renownPerHourForRaidDifficulty(difficulty: RaidDifficulty): number {
   if (difficulty === 'mythic') return Tuning.get('renown_income.raid.mythic');
   if (difficulty === 'legendary') return Tuning.get('renown_income.raid.legendary');
   return 0;
 }
 
-/** Chain-replay twin of renownForRaidClear above -- same Mythic/Legendary-
- *  only, Normal/Heroic-stay-gold-only shape. */
-export function renownForChainReplayClear(difficulty: ChainReplayDifficulty): number {
+/**
+ * Renown for one full raid clear -- rate (per hero, per hour) × party
+ * size × actual clear duration. Party-size multiplication is the 0319
+ * fix: previously this paid the same regardless of whether 3 or 9 heroes
+ * were committed, so a raid was worth drastically less per hero-hour
+ * than soloing Replay Memories once a guild had more capped heroes than
+ * one raid party needs. Scaling by party size makes raiding pay ~1.5x
+ * chain replay's own per-hero-hour rate (1.2/0.8 = 2.4/1.6 = 1.5) for
+ * the SAME hero-hour commitment -- reflecting raids being the harder,
+ * more coordinated content, while no longer being strictly dominated by
+ * parallel solo farming. `durationMs` is the raid's actual resolved
+ * clear time (RaidManager.resolve's `active.endsAt - active.startedAt`),
+ * not RaidDef's nominal duration -- so a Raid Speed upgrade shortens
+ * individual clears without changing the guild's steady-state Renown/
+ * hour, same as it already does for gold/xp.
+ */
+export function renownForRaidClear(difficulty: RaidDifficulty, partySize: number, durationMs: number): number {
+  const perHour = renownPerHourForRaidDifficulty(difficulty);
+  if (perHour <= 0) return 0;
+  return Math.floor(perHour * partySize * (durationMs / HOUR));
+}
+
+/** Chain-replay twin of renownPerHourForRaidDifficulty above -- same
+ *  Mythic/Legendary-only, Normal/Heroic-stay-gold-only shape. No party-
+ *  size multiplication needed here -- a replay is always one hero, so
+ *  "per hero-hour" and "per clear-hour" are already the same number. */
+export function renownPerHourForChainReplayDifficulty(difficulty: ChainReplayDifficulty): number {
   if (difficulty === 'mythic') return Tuning.get('renown_income.chainReplay.mythic');
   if (difficulty === 'legendary') return Tuning.get('renown_income.chainReplay.legendary');
   return 0;
 }
+
+/** Renown for one full chain-replay clear -- rate × actual total replay
+ *  duration (every stage's duration at this difficulty, summed). See
+ *  renownForRaidClear's own comment for why this moved from a flat
+ *  per-clear number to a per-hour rate in patch 0319. */
+export function renownForChainReplayClear(difficulty: ChainReplayDifficulty, durationMs: number): number {
+  const perHour = renownPerHourForChainReplayDifficulty(difficulty);
+  if (perHour <= 0) return 0;
+  return Math.floor(perHour * (durationMs / HOUR));
+}
+
 
 /* --------------------------- per-hero renown perks -------------------------- */
 

@@ -25970,3 +25970,100 @@ build` (web target) passing clean as well.
   perk (tying into the now-frozen classic-ascension flavour) is worth
   adding later -- floated during scoping, not built this patch, no
   decision made either way.
+
+### Renown income: flat per-clear rewards reworked into per-hour rates, raid reward now scales by party size (patch 0319)
+
+```discord-update
+Dev Update | Renown Income Rework
+
+- Changed raid and Replay Memories Renown rewards to scale with how long the clear actually took, instead of a flat amount per clear
+- Changed raid Renown to also scale with party size, so a full 9-hero raid earns proportionally more than it used to
+- Fixed a gap where a short, low-level chain replay could out-earn Renown far faster than the intended endgame raid
+```
+
+Direct follow-up to patch 0317/0318's Renown numbers, prompted by
+actually simming "how long does it take to earn things" before calling
+those numbers final.
+
+**The gap.** 0317 shipped flat Renown-per-clear rewards (raid Mythic 10
+/ Legendary 22, Memories Mythic 6 / Legendary 14) with no duration or
+level scaling. Simmed against real content: Requiem for the Last God
+(reqLevel 55, the intended endgame raid) paid 0.98 Renown/hour at
+Legendary, while The First Haul (reqLevel 1, Replay Memories' shortest
+chain) paid 7.5 Renown/hour at Legendary -- a level-1 chain replay was
+the best Renown farm in the game by a wide margin, directly against the
+"capped heroes playing endgame content" framing the whole rework was
+built around. Neither `renownForRaidClear` nor `renownForChainReplayClear`
+checked hero level or scaled with the content's own duration, only with
+which difficulty tier was cleared.
+
+**A second gap, found while fixing the first:** raids lock a full party
+into one shared reward, while Replay Memories lets every hero solo one
+in parallel. Once duration-scaling closed the first gap, sending all 13
+possible roster slots to solo Replay Memories in parallel came out to
+~8.7x more Renown/hour than raiding continuously -- a raid's reward
+never scaled with the 9 heroes it ties up, so it could never compete
+with parallel solo farming once a guild's roster grew past one raid
+party's size.
+
+**Fix, in two parts:**
+
+1. `renownPerHourForRaidDifficulty`/`renownPerHourForChainReplayDifficulty`
+   (progression.ts) -- the existing `renown_income.*` Tuning values
+   (1.2/2.4 raid, 0.8/1.6 chainReplay) are unchanged in number, but
+   reinterpreted as Renown-PER-HOUR rates instead of flat per-clear
+   amounts. `renownForChainReplayClear(difficulty, durationMs)` now
+   multiplies by the chain's actual total replay duration (every stage's
+   duration at this difficulty, summed -- `QuestManager`'s replay
+   resolution computes this itself, no new state needed).
+   `renownForRaidClear(difficulty, partySize, durationMs)` does the same
+   using the raid's actual resolved clear time
+   (`resolvedAt - active.startedAt`, so a Raid Speed upgrade shortens
+   individual clears without changing steady-state Renown/hour, same as
+   it already does for gold/xp).
+2. Raid's reward ALSO multiplies by `heroes.length` (the actually-
+   committed party, always 9 for Mythic/Legendary today) -- this is what
+   closes the parallelism gap. Since raid's per-hero-hour rate is
+   already 1.5x chain replay's (1.2/0.8 = 2.4/1.6 = 1.5, unchanged from
+   0317), multiplying by party size makes a continuously-run raid
+   (21.6 Renown/hour, 9 heroes committed) roughly match 13 heroes
+   soloing Replay Memories (20.8/hour) -- and running a raid WITH spare
+   heroes replaying in parallel (28/hour, 4 spare heroes on a 13-slot
+   roster) is now clearly the best strategy, which is the actual
+   intended play pattern for an idle guild game.
+
+**Sim, at these final numbers** (see this patch's git history/PR
+discussion for the full worked table): a maxed 13-hero roster running
+the optimal raid+spares strategy earns roughly 28 Renown/hour.
+Extra Banner (cheapest guild perk, fully maxed) -- about 13 hours.
+One hero's full personal Renown-perk tree -- about 46 hours (under two
+days). All 13 capped heroes' personal trees -- about 25 days. Legacy of
+Wealth (priciest single guild perk, fully maxed) -- about 4.7 months.
+Every guild perk fully maxed -- about a year and a half, a deliberate
+long-tail sink, same as any idle game's "for the truly committed"
+top-end goal.
+
+**Still not a real tuning pass** -- same caveat every patch in this
+rework has carried. What changed here is the SHAPE of the formula (now
+consistent per-hour regardless of which content you pick, and
+proportional to party commitment for raids); the actual rate constants
+are unchanged from 0317 and still first-pass.
+
+**Verified:** pulled `progression.ts`, `RaidManager.ts`, `QuestManager.ts`,
+`tuning.json`, `types.ts`, `chainReplay.ts`, `raids.ts`, and this file
+fresh from `main` via `raw.githubusercontent.com` immediately before
+editing (patch 0318 was already live and matched the working copy
+exactly on every file touched). `npm install` + `npx tsc --noEmit`
+clean under `strict`/`noUnusedLocals`/`noUnusedParameters`. Full `vite
+build` (web target) passing clean as well.
+
+**Still open:**
+- The parallelism fix assumes a raid's `heroes.length` always equals
+  `diffCfg.partySize` (true today, since `canStart` requires an exact
+  match) -- if raids ever allow a flexible party size, the reward
+  formula already reads the real committed count, so no further change
+  would be needed there.
+- Whether capping how many heroes can solo-replay in parallel (a
+  guild upgrade, a shared "replay slot" pool, etc.) is worth adding
+  later instead of/alongside the party-size scaling here -- discussed
+  as an alternative during scoping, not built.

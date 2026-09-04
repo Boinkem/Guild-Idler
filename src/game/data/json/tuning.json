@@ -4922,39 +4922,39 @@
   },
   {
     "id": "renown_income.raid.mythic",
-    "label": "Renown income: Raid Mythic clear",
+    "label": "Renown/hour: Raid Mythic clear",
     "category": "renown_income",
     "value": 10,
     "default": 10,
     "min": 0,
-    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
+    "description": "Patch 0319 -- reinterpreted from a flat Renown-per-clear number (0317) to a Renown-PER-HOUR rate, multiplied by the clear's actual duration (and, for raids, party size too) by the caller. Same numeric values as 0317's flat numbers, but the meaning changed -- see renownForRaidClear/renownForChainReplayClear's own comments in progression.ts for why (0317's flat-per-clear shape let short content wildly out-earn the intended endgame raid on a Renown/hour basis)."
   },
   {
     "id": "renown_income.raid.legendary",
-    "label": "Renown income: Raid Legendary clear",
+    "label": "Renown/hour: Raid Legendary clear",
     "category": "renown_income",
     "value": 22,
     "default": 22,
     "min": 0,
-    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
+    "description": "Patch 0319 -- reinterpreted from a flat Renown-per-clear number (0317) to a Renown-PER-HOUR rate, multiplied by the clear's actual duration (and, for raids, party size too) by the caller. Same numeric values as 0317's flat numbers, but the meaning changed -- see renownForRaidClear/renownForChainReplayClear's own comments in progression.ts for why (0317's flat-per-clear shape let short content wildly out-earn the intended endgame raid on a Renown/hour basis)."
   },
   {
     "id": "renown_income.chainReplay.mythic",
-    "label": "Renown income: Chain Replay Mythic clear",
+    "label": "Renown/hour: Chain Replay Mythic clear",
     "category": "renown_income",
     "value": 6,
     "default": 6,
     "min": 0,
-    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
+    "description": "Patch 0319 -- reinterpreted from a flat Renown-per-clear number (0317) to a Renown-PER-HOUR rate, multiplied by the clear's actual duration (and, for raids, party size too) by the caller. Same numeric values as 0317's flat numbers, but the meaning changed -- see renownForRaidClear/renownForChainReplayClear's own comments in progression.ts for why (0317's flat-per-clear shape let short content wildly out-earn the intended endgame raid on a Renown/hour basis)."
   },
   {
     "id": "renown_income.chainReplay.legendary",
-    "label": "Renown income: Chain Replay Legendary clear",
+    "label": "Renown/hour: Chain Replay Legendary clear",
     "category": "renown_income",
     "value": 14,
     "default": 14,
     "min": 0,
-    "description": "First-pass Renown-per-clear number, patch 0317 (Prestige/Retirement Rework) -- classic hero Retirement is cut, this is the replacement income source. Deliberately modest next to a maxed Renown perk's own cost (into the hundreds of thousands to over a million for some guild-wide perks' tier2) so repeated clears still read as a grind. Real balance pass is backlogged, same as every other new economy number here."
+    "description": "Patch 0319 -- reinterpreted from a flat Renown-per-clear number (0317) to a Renown-PER-HOUR rate, multiplied by the clear's actual duration (and, for raids, party size too) by the caller. Same numeric values as 0317's flat numbers, but the meaning changed -- see renownForRaidClear/renownForChainReplayClear's own comments in progression.ts for why (0317's flat-per-clear shape let short content wildly out-earn the intended endgame raid on a Renown/hour basis)."
   },
   {
     "id": "hero_renown_perk.veteran_instinct.cost",

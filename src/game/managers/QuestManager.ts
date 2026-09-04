@@ -1438,8 +1438,8 @@ export const QuestManager = {
           // design decision, now the real behavior matching it).
           const dedicatedId = chain?.rewardItems[0];
           if (dedicatedId && difficulty !== 'normal') {
-            const diffCfg = CHAIN_REPLAY_DIFFICULTIES[difficulty];
-            const dropChance = Tuning.get('chain_replay_dedicated.baseDropChance') + diffCfg.lootBonus;
+            const dedicatedDiffCfg = CHAIN_REPLAY_DIFFICULTIES[difficulty];
+            const dropChance = Tuning.get('chain_replay_dedicated.baseDropChance') + dedicatedDiffCfg.lootBonus;
             if (rng.chance(dropChance)) {
               const dedicatedDef = EQUIPMENT_BY_ID[dedicatedId];
               const item = EquipmentManager.instantiate(dedicatedId, {
@@ -1468,7 +1468,27 @@ export const QuestManager = {
           // or Legendary replay now pays Renown directly, same "repeats
           // every clear, not just the first" shape as RaidManager's own
           // renownForRaidClear hookup. Normal/Heroic stay gold-only.
-          const renownGained = renownForChainReplayClear(difficulty);
+          //
+          // Patch 0319: reward now scales by this chain's actual total
+          // replay duration (every stage's own duration at this
+          // difficulty, summed) rather than a flat per-clear number --
+          // see renownForChainReplayClear's own comment in progression.ts
+          // for why (0317's flat shape let a short chain wildly out-earn
+          // a long one per hour). `chain.stages[*].duration` is already
+          // in ms at runtime (converted from the authored durationMinutes
+          // at load time, see the ChainDefJson mapping in this file) --
+          // multiplied by diffCfg.durationMultiplier here, the exact same
+          // per-stage scaling chainReplayOffer already applies when
+          // building each stage's own offer, just summed across the
+          // whole chain instead of read one stage at a time. Recomputes
+          // its own diffCfg (`dedicatedDiffCfg` above is scoped to the
+          // dedicated-item branch only, and 'normal' is a valid lookup
+          // here too, unlike there).
+          const replayDiffCfg = CHAIN_REPLAY_DIFFICULTIES[difficulty];
+          const replayDurationMs = chain
+            ? chain.stages.reduce((sum, s) => sum + s.duration, 0) * replayDiffCfg.durationMultiplier
+            : 0;
+          const renownGained = renownForChainReplayClear(difficulty, replayDurationMs);
           if (renownGained > 0) state.renown += renownGained;
         } else {
           activeReplay.stage = nextStage;

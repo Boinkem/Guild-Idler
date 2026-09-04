@@ -509,8 +509,22 @@ export const RaidManager = {
     // -- unlike the title/completedRaids "first time only" grants above,
     // this is meant to be repeatable every clear, the actual endgame
     // grind loop the rework is built around.
+    //
+    // Patch 0319: reward now scales by party size × actual clear
+    // duration (resolvedAt - active.startedAt), not a flat per-clear
+    // number -- see renownForRaidClear's own comment in progression.ts
+    // for why (0317's flat shape let a short raid wildly out-earn the
+    // intended endgame one per hour, and didn't scale with the 9 heroes
+    // a raid locks up the way Replay Memories effectively does by
+    // letting every hero solo one in parallel). `heroes.length` (the
+    // actually-committed party) is used rather than diffCfg.partySize --
+    // identical today since canStart already requires an exact match,
+    // but this reads as "pays for the heroes actually locked up," not
+    // "pays for whatever this tier's config says," should that config
+    // ever decouple from the real committed roster.
     if (fullClear) {
-      const renownGained = renownForRaidClear(active.difficulty);
+      const clearDurationMs = resolvedAt - active.startedAt;
+      const renownGained = renownForRaidClear(active.difficulty, heroes.length, clearDurationMs);
       if (renownGained > 0) state.renown += renownGained;
     }
 
