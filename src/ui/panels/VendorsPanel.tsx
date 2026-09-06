@@ -14,7 +14,7 @@ import { scrapIconFor } from '../../game/data/elements';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
 import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity } from '../../game/types';
-import { describeMods, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+import { describeMods, describeStats, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
@@ -27,7 +27,7 @@ import { ScrapStation } from '../ScrapStation';
 import { ReputationRing } from '../ReputationRing';
 import { ConfirmModal } from '../ConfirmModal';
 import { RewardGlowParticle } from '../RewardGlowParticle';
-import { useFlyTargetRef, getFlyTargetCenter } from '../flyTarget';
+import { getFlyTargetCenter } from '../flyTarget';
 import { backgroundSrc } from '../../game/settings';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
@@ -459,14 +459,13 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
     pushRewardFlight(x, y, 'gold', 'gold');
   };
   /**
-   * Scrap gets the real long-distance flight here too, unlike on
-   * Inventory -- this page has a genuine persistent Scrap total on
-   * screen (the counter just below, `scrapRef`), so there's actually
-   * somewhere for it to fly toward, matching Gold's own treatment
-   * rather than staying local-burst-only the way it had to on
-   * Inventory (no equivalent counter shown there at all).
+   * Scrap gets the real long-distance flight here too -- patch 0323
+   * moved the persistent Scrap counter itself into the header (next to
+   * Gold), so the 'scrap' fly target is now registered there instead of
+   * locally on this page (see MenuWindow.tsx's own scrapRef) -- this
+   * page no longer needs its own registration, just the flight/burst
+   * trigger, same as Gold's own treatment.
    */
-  const scrapRef = useFlyTargetRef<HTMLSpanElement>('scrap');
   const pushScrapFlight = (x: number, y: number, gained: number, icon: string) => {
     pushBurst(x, y, gained, 'scrap', icon);
     pushRewardFlight(x, y, 'scrap', 'scrap');
@@ -617,10 +616,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
         ))}
       </div>
 
-      <div className="spread" style={{ alignItems: 'center' }}>
-        <div className="section-heading" style={{ marginBottom: 0 }}>Sell from the stash</div>
-        <span ref={scrapRef} className="tiny muted">Scrap: {state.scrap}</span>
-      </div>
+      <div className="section-heading" style={{ marginBottom: 0 }}>Sell from the stash</div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare to sell.</p>}
       {state.stash.length > 0 && (
         <div className="row wrap" style={{ gap: 6, alignItems: 'center', marginBottom: 8 }}>
@@ -781,6 +777,19 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
  * is just the icon/name header plus the Lock/Sell/Scrap quick-action
  * row, nothing to expand into.
  */
+/**
+ * Patch 0323: converted from a persistent 4-button action row baked
+ * into the collapsed card to a click-through modal, same shape
+ * StashCard (EquipmentPanel.tsx) already uses -- direct request ("need
+ * to be 1:1 to the Stock cards, for the artwork to work"). The
+ * Lock/Sell/Scrap/Repair row below WAS a deliberate patch 0265/0267
+ * design choice specifically to avoid a modal here (see its own now-
+ * removed comment) -- overridden by this later, more specific request;
+ * the quick-action convenience trades for the same collapsed-card shape
+ * every other rarity-bearing card in the game now uses. Description
+ * text (never shown anywhere on this card before, in any form) comes
+ * along for free once there's a modal to put it in.
+ */
 function ArmourStashCard({
   item, confirmSell, engine, scrapBonus, onSell, onScrap, onRepair,
 }: {
@@ -789,22 +798,19 @@ function ArmourStashCard({
   onScrap: (x: number, y: number, gained: number, icon: string) => void;
   onRepair: (x: number, y: number, free: boolean) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const [pendingSell, setPendingSell] = useState<{ x: number; y: number } | null>(null);
   const [pendingScrap, setPendingScrap] = useState<{ x: number; y: number } | null>(null);
   const def = EQUIPMENT_BY_ID[item.defId];
   if (!def) return null;
   const scrapValue = EquipmentManager.scrapValue(item, scrapBonus);
 
-  // Repair, folded into this row at patch 0300 -- same single-button,
-  // dynamic-label shape Lock/Sell/Scrap already use here, not the
-  // primary+secondary split EquipmentPanel.tsx's SlotCard modal gets
-  // below (that view already had the room and precedent for a second
-  // button; this compact 4-across row doesn't). A stashed item has no
-  // owning hero, so only the guild's own daily allowance can make this
-  // free (Repair's per-hero one-time freebie is charged to whichever
-  // hero currently has the piece equipped -- see consumeFreeRepair's own
-  // comment in engine.ts), read here without consuming it, same
-  // "compute the priority, don't spend it" pattern the modal below uses.
+  // A stashed item has no owning hero, so only the guild's own daily
+  // allowance can make Repair free here (a hero's own one-time freebie
+  // is charged to whichever hero currently has the piece equipped --
+  // see consumeFreeRepair's own comment in engine.ts), read without
+  // consuming it, same "compute the priority, don't spend it" pattern
+  // SlotCard's modal uses.
   const workshop = engine.state.guild.workshop ?? 0;
   const repairDiscount = ModifierManager.global(engine.state).repairDiscount ?? 0;
   const repairCost = EquipmentManager.repairCost(item, workshop, repairDiscount);
@@ -820,11 +826,13 @@ function ArmourStashCard({
     onSell(pos.x, pos.y, EquipmentManager.sellValue(item));
     engine.sellItem(item.uid);
     setPendingSell(null);
+    setOpen(false);
   };
   const doScrap = (pos: { x: number; y: number }) => {
     onScrap(pos.x, pos.y, scrapValue, scrapIconFor(Date.now()));
     engine.scrapItem(item.uid);
     setPendingScrap(null);
+    setOpen(false);
   };
   const doRepair = (pos: { x: number; y: number }) => {
     onRepair(pos.x, pos.y, stashFreeRepairAvailable);
@@ -833,7 +841,14 @@ function ArmourStashCard({
 
   return (
     <>
-      <div className="item-card rarity-card" data-stash-uid={item.uid}>
+      <div
+        className="item-card rarity-card"
+        data-stash-uid={item.uid}
+        onClick={() => setOpen(true)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+      >
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} />
@@ -845,49 +860,75 @@ function ArmourStashCard({
             </div>
           </div>
         </div>
-        <div className="item-card-actions">
-          <button
-            type="button"
-            onClick={() => engine.toggleItemLock(item.uid)}
-            title={item.locked
-              ? 'Unlock -- Sell, Sell Junk, and Scrap can reach this item again'
-              : 'Lock in the Vault -- protects this item from Sell, Sell Junk, and Scrap'}
-          >
-            {item.locked ? '\uD83D\uDD13' : '\uD83D\uDD12'}<br />{item.locked ? 'Unlock' : 'Lock'}
-          </button>
-          <button
-            type="button"
-            disabled={item.locked}
-            title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
-            onClick={(e) => {
-              const pos = centerOf(e.currentTarget);
-              if (!confirmSell) doSell(pos); else setPendingSell(pos);
-            }}
-          >
-            <span style={{ color: item.locked ? undefined : 'var(--brass)' }}>{'\u25c6'} {formatGold(EquipmentManager.sellValue(item))}</span><br />Sell
-          </button>
-          <button
-            type="button"
-            disabled={item.locked}
-            title={item.locked ? 'Locked in the Vault -- unlock it first to scrap' : 'Breaks the item down for Scrap materials. This cannot be undone.'}
-            onClick={(e) => setPendingScrap(centerOf(e.currentTarget))}
-          >
-            <span style={{ color: item.locked ? undefined : 'var(--violet)' }}>{'\u2699'} {scrapValue}</span><br />Scrap
-          </button>
-          <button
-            type="button"
-            disabled={repairCost === 0}
-            title={repairCost === 0
-              ? 'Already in perfect condition.'
-              : stashFreeRepairAvailable ? 'Free, from today\'s guild-wide allowance' : undefined}
-            onClick={(e) => doRepair(centerOf(e.currentTarget))}
-          >
-            <span style={{ color: repairCost === 0 ? undefined : 'var(--teal)' }}>
-              {'\u2692'} {repairCost === 0 ? '--' : stashFreeRepairAvailable ? 'Free' : `${formatGold(repairCost)} +${repairScrapCost}`}
-            </span><br />Repair
-          </button>
-        </div>
       </div>
+
+      {open && (
+        <div className="overlay" onClick={(e) => { e.stopPropagation(); setOpen(false); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+            <div className="modal-banner-scrim">
+              <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
+                {itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}
+              </span>
+              <div style={{ marginTop: 4 }}>
+                <span className="rarity-pill" style={{ color: RARITY_COLOR[def.rarity], borderColor: RARITY_COLOR[def.rarity] }}>{def.rarity}</span>
+                {item.locked && <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)', marginLeft: 6 }}>{'\uD83D\uDD12'} vaulted</span>}
+              </div>
+              <p className="card-flavour" style={{ marginTop: 8 }}>
+                {(() => {
+                  const modLines = describeMods(item.customMods ?? def.mods ?? {});
+                  const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
+                  const lines = [...modLines, ...rolledLines];
+                  return lines.length > 0 ? lines.join(' · ') : 'No bonuses';
+                })()}
+              </p>
+              <div className="row wrap" style={{ gap: 6, marginTop: 12 }}>
+                <button
+                  className="btn-ghost"
+                  onClick={() => engine.toggleItemLock(item.uid)}
+                  title={item.locked
+                    ? 'Unlock -- Sell, Sell Junk, and Scrap can reach this item again'
+                    : 'Lock in the Vault -- protects this item from Sell, Sell Junk, and Scrap'}
+                >
+                  {item.locked ? '\uD83D\uDD13 Unlock' : '\uD83D\uDD12 Lock'}
+                </button>
+                <button
+                  className="btn-green"
+                  disabled={item.locked}
+                  title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
+                  onClick={(e) => {
+                    const pos = centerOf(e.currentTarget);
+                    if (!confirmSell) doSell(pos); else setPendingSell(pos);
+                  }}
+                >
+                  {'\u25c6'} Sell · {formatGold(EquipmentManager.sellValue(item))}
+                </button>
+                <button
+                  className="btn-purple"
+                  disabled={item.locked}
+                  title={item.locked ? 'Locked in the Vault -- unlock it first to scrap' : 'Breaks the item down for Scrap materials. This cannot be undone.'}
+                  onClick={(e) => setPendingScrap(centerOf(e.currentTarget))}
+                >
+                  {'\u2699'} Scrap · {scrapValue}
+                </button>
+                <button
+                  className="btn-teal"
+                  disabled={repairCost === 0}
+                  title={repairCost === 0
+                    ? 'Already in perfect condition.'
+                    : stashFreeRepairAvailable ? 'Free, from today\'s guild-wide allowance' : undefined}
+                  onClick={(e) => doRepair(centerOf(e.currentTarget))}
+                >
+                  {'\u2692'} Repair{repairCost === 0 ? '' : ` · ${stashFreeRepairAvailable ? 'Free' : `${formatGold(repairCost)} +${repairScrapCost}`}`}
+                </button>
+              </div>
+              <div className="row end" style={{ marginTop: 12 }}>
+                <button onClick={() => setOpen(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {pendingSell && (
         <ConfirmModal
           title="Sell item"

@@ -26358,3 +26358,83 @@ already live). `npx tsc --noEmit` clean (would have caught, and did
 catch, the syntax slip above) and a full `vite build` (web + both
 Electron entries) passing clean against a fresh clone with every file
 applied together.
+
+### Sell-from-stash cards get a real 1:1 match (actions move to a modal), Scrap counter moves to the header, dropdowns actually restyled this time (patch 0323)
+
+```discord-update
+Dev Update | Bug Fix / Features
+
+- Changed the Blacksmith's Sell-from-stash cards to match the Stock cards exactly -- Lock/Sell/Scrap/Repair now live behind a click, same as every other item card
+- Moved the Scrap counter up to the header, next to Gold, so it's visible from anywhere
+- Fixed the rarity/Scrap dropdowns still showing no visible styling despite last patch's fix
+```
+
+Three follow-up reports off patch 0322, all confirmed against the
+currently-live code (0322 was already merged before this patch started)
+rather than assumed stale.
+
+**Sell-from-stash cards, real fix this time.** 0322 widened
+`ArmourStashCard`'s grid and consolidated its pills, but explicitly
+documented that it couldn't match `.vendor-stock-card`'s proportions
+exactly because of the 4-button Lock/Sell/Scrap/Repair row baked into
+the collapsed view -- direct follow-up: "need to be 1:1 to the Stock
+cards, for the artwork to work." That row was a deliberate patch
+0265/0267 decision specifically to avoid a modal on this card -- overridden
+now by this more specific, more recent request. Collapsed view is icon/
+name/meta-row only, identical shape to `StashCard`; clicking opens a
+modal with the item's real mods/stats breakdown (this card had never
+shown that anywhere, in any form, before now) and the four actions as a
+proper button row (`.btn-green`/`.btn-purple`/`.btn-teal`/`.btn-ghost`,
+matching Sell Junk/Scrap All/Repair All's own colours elsewhere on this
+same page) instead of squeezed into a 4-across compact strip. The
+quick-action convenience trades for genuine 1:1 sizing with Stock, same
+trade-off StashCard/SlotCard already made. `.item-card-actions` is now
+unused CSS -- left in place rather than deleted, same "flag it, don't
+chase it" call as other orphaned classes in this file's history.
+
+**Scrap counter relocated to the header.** Direct request, "for easier
+viewing" -- was a small `tiny muted` counter living only on the Vendors
+page (`ArmourStock`'s own `scrapRef`); now sits in `MenuWindow.tsx`'s
+`.resources` row next to Gold and Renown, visible from any tab, silver-
+coloured (`--silver`, matching Scrap's colour everywhere else it shows
+up). The 'scrap' fly-target registration (see flyTarget.ts) moved along
+with it rather than being duplicated -- `VendorsPanel.tsx`'s own
+Sell/Scrap flourishes now fly to the header instead of a page-local
+counter, and as a real side benefit, any future scrap-earning surface
+outside Vendors (Harvest's Scrap Station, say) now has an actual
+persistent target to fly toward, which flat-out didn't exist before
+this moved (see `pushScrapFlight`'s own updated comment).
+
+**Dropdowns, actually restyled.** 0322's fix (border-radius + box-
+shadow on the shared `select` rule) turned out not to be enough on its
+own -- direct follow-up, still reading as unstyled. Root cause: Chromium
+renders a native `<select>` through its own platform widget layer,
+which picks up border-radius reliably but not custom box-shadow, so the
+rounding was there but far too subtle next to a full custom-box
+`.btn-*` (real gradient, real bevel) to register as "styled." Fixed
+with `appearance: none`, which hands the whole box over to this CSS
+instead of the native widget -- now genuinely gets the same gradient/
+bevel treatment `button` gets. That also deletes the native dropdown
+arrow, so a small inline SVG chevron (parchment-coloured) replaces it
+via `background-image`, with padding cleared to make room for it on the
+right.
+
+**Not touched -- already correct on inspection:** Inventory's equipped-
+gear cards (`SlotCard`), flagged as needing the same adjustment as
+Stash/Consumables -- checked the currently-live code line by line first
+rather than assuming, and it already carries `rarity-card` plus
+`gear-card-grid` from patches 0320/0322, identically to `StashCard`
+(which was confirmed fixed). If this still looks wrong in-game, it's
+likely a different card than `SlotCard` -- a screenshot would help
+pin down exactly which one.
+
+**Verified:** pulled `app.css`, `VendorsPanel.tsx`, and `MenuWindow.tsx`
+fresh from `main` via `raw.githubusercontent.com` immediately before
+editing (patch 0322 was already live). Caught a real `EquipmentDef` has
+no `.description` field mistake in `ArmourStashCard`'s new modal on the
+very first `tsc --noEmit` pass -- gear items only ever expose flavour
+via their real mods/stats (`describeMods`/`describeStats`), unlike
+`ConsumableDef`, which does carry `.description`; fixed to show the
+same real breakdown `SlotCard`'s own modal already computes, and
+re-verified clean before shipping. Full `vite build` (web + both
+Electron entries) passing clean as well.

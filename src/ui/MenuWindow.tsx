@@ -348,6 +348,18 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const displayGold = useCountUp(engine.state.gold);
   const goldRef = useFlyTargetRef<HTMLSpanElement>('gold');
   const displayRenown = useCountUp(engine.state.renown);
+  /**
+   * Patch 0323, direct request -- Scrap moved up here next to Gold/
+   * Renown for easier at-a-glance viewing, always visible regardless of
+   * tab, rather than living only on the Vendors page. Also registers
+   * the 'scrap' fly target globally now (see flyTarget.ts's own doc
+   * comment) -- VendorsPanel's own Sell/Scrap flourishes fly here
+   * instead of to a local counter that only existed on that one page,
+   * and any future scrap-earning surface elsewhere in the game
+   * (Harvest's Scrap Station, say) gets a real destination to fly
+   * toward for free, which didn't exist before this moved.
+   */
+  const scrapRef = useFlyTargetRef<HTMLSpanElement>('scrap');
   const unreadCount = engine.unreadNotificationCount;
 
   // The default (non-Raids/Hatchery/Peddler) menu backdrop is the same
@@ -427,6 +439,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <h1>{engine.state.guildName || 'Guildbound'}</h1>
         <div className="resources">
           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+          <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>
           <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
           <button
             className={`header-notif-icon ${unreadCount > 0 ? 'header-notif-unread' : ''}`}

@@ -1422,6 +1422,7 @@ button:focus-visible, [tabindex]:focus-visible {
 
 .resources { display: flex; gap: 12px; font-size: 0.6875rem; -webkit-app-region: no-drag; align-items: center; }
 .resources .gold { color: var(--brass); }
+.resources .scrap { color: var(--silver); }
 .resources .renown { color: var(--violet); }
 
 /* Window controls cluster (Minimise / Windowed / Close) -- patch 0213.
@@ -2662,25 +2663,37 @@ button:focus-visible, [tabindex]:focus-visible {
  * just inheritance from `select` -- most browsers render the open
  * dropdown's option list outside the normal styling cascade.
  */
+/*
+ * Patch 0323, direct follow-up report -- 0322's select fix
+ * (border-radius/box-shadow added to the shared rule) turned out not to
+ * be enough on its own: Chromium renders a native <select>'s internal
+ * box through its own platform widget layer, which reliably picks up
+ * border-radius but not custom box-shadow, so the rounding was there
+ * but so subtle next to a full custom-box .btn-* (real gradient, real
+ * bevel) that it still read as "no style" in practice. `appearance:
+ * none` hands the whole box over to this CSS instead of the native
+ * widget, which is what actually makes the border-radius/box-shadow/
+ * gradient render the same way a button's does -- but that also
+ * deletes the native dropdown arrow, so a small inline SVG chevron
+ * (parchment-coloured, matching the text) replaces it via
+ * background-image, with padding-right cleared to make room for it.
+ */
 select {
-  background: var(--panel-2);
-  border: 1px solid var(--panel-3);
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel-3) 55%, var(--panel-2)), var(--panel-2))
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0L5 6L10 0Z' fill='%23e8dcc4'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  background-size: 9px 6px;
+  border: 1px solid color-mix(in srgb, var(--brass-dim) 30%, var(--edge));
   color: var(--parchment);
-  /* Patch 0322, direct report ("dropdowns have no style") -- every
-     other clickable control in this game (button, .chip, .btn-*) gets
-     rounded corners via --radius plus a subtle bevel shadow; select was
-     the one plain flat-cornered rectangle left standing next to them.
-     Padding/font-size matched to the compact inline dropdowns that
-     actually prompted the report (VendorsPanel's Sell Junk/Scrap All
-     rarity pickers) rather than the larger default -- still just a
-     min/baseline, any inline font-size override still wins. */
   border-radius: var(--radius);
-  box-shadow: var(--bevel);
-  padding: 3px 6px;
+  box-shadow: var(--bevel), var(--carved-line);
+  padding: 3px 22px 3px 8px;
   font-size: 0.625rem;
   cursor: pointer;
 }
-select:hover { border-color: var(--brass-dim); }
+select:hover { border-color: var(--brass-dim); background-color: var(--panel-3); }
 select option {
   background: var(--panel-2);
   color: var(--parchment);
