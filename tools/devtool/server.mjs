@@ -176,7 +176,14 @@ const SCHEMAS = {
     // hand for now; a dedicated picker rooted at public/hero-status/
     // (same shape bannerImage already has for public/lore/) would be a
     // reasonable follow-up if that folder ever grows past a handful of
-    // files, but isn't needed yet for four entries.
+    // files, but isn't needed yet for a dozen entries.
+    //
+    // Patch 0335: `unlockRaidDifficulty` added -- a style with this set
+    // is earned by full-clearing a raid at that difficulty for the
+    // first time ever (RaidManager.resolve), never buyable regardless
+    // of its own `cost` (always 0 for these). `required: false` so
+    // every purchasable style's entry (no such field at all) keeps
+    // saving exactly as before.
     fields: {
       // Missing entirely until this pass -- idField pointed at 'id' for
       // lookups, but 'id' was never actually in this schema's own fields
@@ -191,6 +198,7 @@ const SCHEMAS = {
       description: { type: 'string', required: true },
       cost: { type: 'number', required: true, min: 0 },
       icon: { type: 'string', required: true },
+      unlockRaidDifficulty: { type: 'enum', required: false, options: ['normal', 'heroic', 'mythic', 'legendary'] },
     },
   },
   'hero-classes': {

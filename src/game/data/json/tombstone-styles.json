@@ -26,5 +26,65 @@
     "description": "Something about it makes people not want to look at it directly.",
     "cost": 3000,
     "icon": "tombstone-cursed.png"
+  },
+  {
+    "id": "ablaze",
+    "name": "Ever-Burning Marker",
+    "description": "Lit the day it was raised. Nobody's found what's actually fueling it, and nobody's checked too closely.",
+    "cost": 2200,
+    "icon": "tombstone-ablaze.png"
+  },
+  {
+    "id": "knight",
+    "name": "Fallen Knight's Rest",
+    "description": "Sword, shield, and helm laid at the base -- the old way of marking someone who died with their armor still on.",
+    "cost": 1800,
+    "icon": "tombstone-knight.png"
+  },
+  {
+    "id": "runic",
+    "name": "Runestone",
+    "description": "Carved in a script nobody in the guild can read, with a tankard left at the foot out of habit more than tradition.",
+    "cost": 1500,
+    "icon": "tombstone-runic.png"
+  },
+  {
+    "id": "blossom",
+    "name": "Blossom Shrine",
+    "description": "A quieter marker than most -- a blade, a sash, and a tree that only ever blooms here.",
+    "cost": 2600,
+    "icon": "tombstone-blossom.png"
+  },
+  {
+    "id": "frost",
+    "name": "Frostbound Marker",
+    "description": "Earned the first time the guild full-clears a Normal raid. Ice doesn't melt here, whatever the season.",
+    "cost": 0,
+    "icon": "tombstone-frost.png",
+    "unlockRaidDifficulty": "normal"
+  },
+  {
+    "id": "dragon",
+    "name": "Dragon's Hoard Marker",
+    "description": "Earned the first time the guild full-clears a Heroic raid. Something old and scaled has decided this grave is worth guarding.",
+    "cost": 0,
+    "icon": "tombstone-dragon.png",
+    "unlockRaidDifficulty": "heroic"
+  },
+  {
+    "id": "arcane",
+    "name": "Archmage's Sigil",
+    "description": "Earned the first time the guild full-clears a Mythic raid. The candles never seem to burn down.",
+    "cost": 0,
+    "icon": "tombstone-arcane.png",
+    "unlockRaidDifficulty": "mythic"
+  },
+  {
+    "id": "abyssal",
+    "name": "Abyssal Ward",
+    "description": "Earned the first time the guild full-clears a Legendary raid. Something on the other side of that eye is still watching.",
+    "cost": 0,
+    "icon": "tombstone-abyssal.png",
+    "unlockRaidDifficulty": "legendary"
   }
 ]

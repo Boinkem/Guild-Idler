@@ -27538,3 +27538,110 @@ switched to the card treatment.
   might not.
 
 **Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+
+### Tombstone styles: 8 new markers, real art for 3 existing ones, raid rewards, dropdown UI (patch 0335)
+
+```discord-update
+Dev Update | Tombstones
+- Added 8 new tombstone styles -- 4 purchasable (Ever-Burning, Fallen Knight's Rest, Runestone, Blossom Shrine), 4 earned by clearing a raid at a new difficulty for the first time
+- Finally shipped real art for Mossy Marker, Ornate Monument, and Cursed Headstone -- they only ever had a placeholder skull icon before
+- Tombstone style picker is now a proper dropdown with an explanation of what it's for, not a row of chips that stopped fitting
+```
+
+Direct delivery of two sprite sheets ("tombs1 are purchasable, tombs2
+are from completing raids"), with the acquisition split for the raid
+sheet inferred and confirmed against the game's own structure rather
+than guessed at random: exactly 4 raid difficulty tiers already exist
+(RaidDifficulty: normal/heroic/mythic/legendary), a clean 1:1 match for
+the 4 raid-sheet tombstones.
+
+**Art processing.** Both sheets have transparent backgrounds, so each
+sprite was isolated via connected-component analysis on the alpha
+channel (scipy.ndimage) rather than hand-measured grid math -- tombs1's
+7 sprites separated cleanly this way in one pass (uneven row heights
+would have made a fixed grid brittle). tombs2's 4 sprites needed a
+different approach: their linework (tails, smoke, robes) bleeds close
+enough across the row boundary that connected-component detection
+merged top+bottom sprites in the same column into one region regardless
+of dilation kernel size -- switched to a straight quadrant split (the
+sheet is a clean 2x2 layout) with a tight content-bbox crop inside each
+quadrant instead. Verified each of the 11 crops visually before wiring
+any of them in, not just trusting the bounding boxes. All resized to a
+consistent 150px height (matching the existing tombstone.png's own
+scale) and saved to public/hero-status/.
+
+**Mapping, purchasable (tombs1.png).** The first three sprites read as
+direct art for styles that already existed in tombstone-styles.json but
+had never actually shipped real icons -- `mossy`/`ornate`/`cursed` all
+just fell back to the Tombstone component's plain-skull-glyph fallback
+(HeroBlock.tsx) until now, confirmed by checking public/hero-status/
+directly (only the base tombstone.png existed). Their `icon` fields
+updated to point at the new files; ids/costs/descriptions untouched.
+The remaining 4 sprites are genuinely new purchasable styles -- Ever-
+Burning Marker (2200g), Fallen Knight's Rest (1800g), Runestone (1500g),
+Blossom Shrine (2600g) -- costs spread across the existing 400-3000
+range the original 3 styles already established.
+
+**Mapping, raid rewards (Tombs2.png), and the new acquisition path.**
+`TombstoneStyleDef` (progression.ts) gains `unlockRaidDifficulty?:
+RaidDifficulty` -- when set, `cost` is ignored entirely and the style is
+never buyable through `buyTombstoneStyle` (explicit guard added: without
+it, the gold check `state.gold < 0` would trivially pass and hand out a
+still-unearned style for free). Frostbound Marker -> Normal, Dragon's
+Hoard Marker -> Heroic, Archmage's Sigil -> Mythic, Abyssal Ward ->
+Legendary -- assigned by rough thematic escalation (icy/plain -> real
+dragon -> arcane/lich -> full cosmic-horror) matching the actual
+difficulty progression, not arbitrarily.
+
+**The grant itself hooks into an already-existing tracker, not a new
+one.** `state.completedRaidDifficulties` already recorded "has ANY raid
+been full-cleared at this difficulty, ever" for achievement purposes
+(RaidManager.resolve). The exact same `if (fullClear && !state.
+completedRaidDifficulties.includes(active.difficulty))` branch now also
+looks up any TOMBSTONE_STYLES entry with a matching
+`unlockRaidDifficulty` and grants it if not already unlocked -- same
+one-time gate, no separate flag to keep in sync, and immune to double-
+granting on a save reload since it's checked against
+`unlockedTombstoneStyles` directly, not just "did this difficulty
+appear before." New `RaidResult.tombstoneStyleUnlocked?: string`
+carries the style's display name back out to both call sites in
+engine.ts that already handle `titleGranted` the same way -- the live
+online-completion path (`say()`, banner-worthy, matching how a title
+grant is announced) and the offline catch-up loop (`archive()` only, no
+toast spam for something that happened while the app was closed, same
+quiet treatment titles already get there).
+
+**Dropdown UI, direct request.** The old picker was a flat `.row wrap`
+of chip buttons -- fine for 4 styles, unworkable for 12. Replaced with
+`TombstoneStyleDropdown` (HeroesPanel.tsx), same "button toggles a
+floating card" shape MenuWindow's own panel-help-btn/panel-help-card
+popover already established, reused rather than a native `<select>`:
+a native select can't cleanly branch between "select this owned style,"
+"buy this unowned one," and "show this raid-locked one as a distinct
+non-purchasable state" the way a custom popover can. Opens on a button
+showing the currently-selected style's own icon + name. The card itself
+leads with the requested explanation ("The marker shown if a hero ever
+falls in the field -- purely cosmetic... Buy new styles with gold, or
+clear a raid at a new difficulty for the first time to earn one for
+free"), then lists every style with its own 32px icon, name, and either
+a Select/Selected button (owned), a Buy · cost button (purchasable,
+disabled if unaffordable), or a "🔒 Locked" state with "Clear a
+{Difficulty} raid to unlock" in place of the description (raid-locked,
+not yet earned) -- using the same RAID_DIFFICULTY_LABEL raid UI already
+displays elsewhere, not a hand-typed string.
+
+**DevTool schema updated too, not left to rot.** tombstone-styles'
+generic-editor schema (server.mjs) rebuilds each entry from exactly its
+own field list on save -- the schema's own comment already documents a
+past real bug from this exact class (an earlier missing `id` field
+silently corrupting every edited entry). Added `unlockRaidDifficulty`
+as an optional enum field (same `type: 'enum', required: false`
+convention every other optional difficulty-like field in this schema
+already uses) specifically so opening a raid-earned style in the
+DevTool and saving an unrelated tweak can't silently strip its unlock
+link the same way that earlier bug stripped `id`.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+Every one of the 11 cropped images opened and visually confirmed before
+committing to a filename/mapping, not just trusted from bounding-box
+coordinates.

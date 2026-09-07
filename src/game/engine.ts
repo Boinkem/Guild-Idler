@@ -740,6 +740,12 @@ export class GameEngine {
         const verb = names.length === 1 ? 'has' : 'have';
         this.say(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes', isFirst);
       }
+      // Patch 0335 -- new tombstone cosmetic, same banner treatment as a
+      // title grant just above (both are "the guild just earned
+      // something permanent and cosmetic" moments).
+      if (raidResult.tombstoneStyleUnlocked) {
+        this.say(`New tombstone style unlocked: ${raidResult.tombstoneStyleUnlocked}. Pick it from the Heroes tab.`, 'heroes', true);
+      }
       // Same "Fallen earns its own prominent callout" treatment as the
       // quest path above -- see that comment for the full reasoning.
       // Grouped into one toast per kind (heroes / pets) rather than one
@@ -1098,6 +1104,12 @@ export class GameEngine {
           : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
         const verb = names.length === 1 ? 'has' : 'have';
         this.archive(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes');
+      }
+      // Patch 0335 -- same quiet offline treatment as titles/fallen just
+      // above, see the live-path version of this same check for the
+      // reasoning on why this is worth a callout at all.
+      if (raidResult.tombstoneStyleUnlocked) {
+        this.archive(`New tombstone style unlocked: ${raidResult.tombstoneStyleUnlocked}. Pick it from the Heroes tab.`, 'heroes');
       }
       // Same quiet treatment as titles/fallen just above -- see the live-
       // resolve path's own comment for the full reasoning behind this toast.
@@ -3095,6 +3107,14 @@ export class GameEngine {
     if (unlocked.includes(styleId)) return this.say('Already owned.');
     const def = TOMBSTONE_STYLE_BY_ID[styleId];
     if (!def) return this.say('Unknown style.');
+    // Patch 0335 -- raid-earned styles (unlockRaidDifficulty set) are
+    // never buyable here regardless of their own `cost` (always 0 for
+    // these, see TombstoneStyleDef's own comment) -- without this guard
+    // the gold check just below would trivially pass (0 < 0 is false)
+    // and hand out a still-unearned raid reward for free.
+    if (def.unlockRaidDifficulty) {
+      return this.say(`Earned by full-clearing a ${def.unlockRaidDifficulty} raid, not for sale.`);
+    }
     if (this.state.gold < def.cost) return this.say('Not enough gold.');
     playSound('purchase');
     this.state.gold -= def.cost;

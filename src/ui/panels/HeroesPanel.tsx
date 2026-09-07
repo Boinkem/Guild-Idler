@@ -9,10 +9,11 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { isTabUnread } from '../../game/attention';
 import { TrainingPanel } from './TrainingPanel';
 import { HERO_CLASSES, HeroClassDef, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { heroMilestoneUnlocked } from '../../game/data/heroMilestones';
 import { Tuning } from '../../game/data/tuning';
 import type { GameEngine } from '../../game/engine';
-import { HeroClass, Hero } from '../../game/types';
+import { HeroClass, Hero, GameState } from '../../game/types';
 import { describeMods, formatGold } from '../../game/util';
 import { HeroStatusList } from '../HeroStatusBar';
 import { GearScoreBadge } from '../GearScoreBadge';
@@ -104,6 +105,111 @@ function recruitStatusFor(
  * below that if the actual unlock upgrade hasn't been bought yet --
  * unrelated, unchanged gate one layer deeper.
  */
+/**
+ * Patch 0335, direct request: with 12 tombstone styles now (up from 4),
+ * a flat row of chip buttons stopped scaling -- converted to a proper
+ * dropdown. Same "button toggles a floating card" pattern MenuWindow's
+ * own panel-help-btn/panel-help-card already established, reused here
+ * rather than a native `<select>`: a native select can't cleanly branch
+ * between "select this owned style" and "buy this unowned one" (or show
+ * a raid-locked style as a distinct, non-purchasable disabled state)
+ * the way a custom popover can.
+ */
+function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: GameState }) {
+  const [open, setOpen] = useState(false);
+  const unlockedTombstoneStyles = state.unlockedTombstoneStyles ?? ['plain'];
+  const selectedId = state.selectedTombstoneStyle ?? 'plain';
+  const selected = TOMBSTONE_STYLE_BY_ID[selectedId];
+  return (
+    <div style={{ position: 'relative', marginBottom: 12 }}>
+      <button
+        className="btn-ghost"
+        style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <img
+          src={`./hero-status/${selected?.icon ?? 'tombstone.png'}`}
+          alt=""
+          style={{ height: 20, width: 'auto' }}
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
+        <span className="tiny muted">Tombstone style:</span>
+        <span className="small">{selected?.name ?? 'Plain Marker'}</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="card" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: 340, maxWidth: '90vw', zIndex: 6 }}>
+          <div className="spread">
+            <span className="card-title">Tombstone Style</span>
+            <button className="btn-ghost" onClick={() => setOpen(false)} aria-label="Close">×</button>
+          </div>
+          {/* The explanation, direct request. */}
+          <p className="tiny muted" style={{ margin: '4px 0 10px' }}>
+            The marker shown if a hero ever falls in the field -- purely cosmetic, doesn't affect anything else.
+            Buy new styles with gold, or clear a raid at a new difficulty for the first time to earn one for free.
+          </p>
+          <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {TOMBSTONE_STYLES.map((style) => {
+              const owned = style.id === 'plain' || unlockedTombstoneStyles.includes(style.id);
+              const active = selectedId === style.id;
+              const raidLocked = !owned && !!style.unlockRaidDifficulty;
+              const afford = state.gold >= style.cost;
+              return (
+                <div
+                  key={style.id}
+                  className="row"
+                  style={{
+                    alignItems: 'center', gap: 8, padding: '4px 6px', borderRadius: 4,
+                    background: active ? 'var(--panel-3)' : 'transparent',
+                  }}
+                >
+                  <img
+                    src={`./hero-status/${style.icon}`}
+                    alt=""
+                    style={{ height: 32, width: 32, objectFit: 'contain', flex: 'none', opacity: owned ? 1 : 0.5 }}
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="small" style={{ display: 'block', color: owned ? undefined : 'var(--muted)' }}>{style.name}</span>
+                    <span className="tiny muted" style={{ display: 'block' }}>
+                      {raidLocked
+                        ? `Clear a ${RAID_DIFFICULTY_LABEL[style.unlockRaidDifficulty!]} raid to unlock`
+                        : style.description}
+                    </span>
+                  </span>
+                  {owned ? (
+                    <button
+                      className={`chip ${active ? 'on' : ''}`}
+                      style={{ flex: 'none' }}
+                      onClick={() => engine.selectTombstoneStyle(style.id)}
+                      disabled={active}
+                    >
+                      {active ? 'Selected' : 'Select'}
+                    </button>
+                  ) : raidLocked ? (
+                    <span className="tiny muted" style={{ flex: 'none' }}>🔒 Locked</span>
+                  ) : (
+                    <button
+                      className="chip"
+                      style={{ flex: 'none' }}
+                      onClick={() => engine.buyTombstoneStyle(style.id)}
+                      disabled={!afford}
+                      title={!afford ? 'Not enough gold' : undefined}
+                    >
+                      Buy · {formatGold(style.cost)}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HeroesPanel() {
   const engine = useEngine();
   const [subTab, setSubTab] = useState<'heroes' | 'training'>('heroes');
@@ -194,7 +300,6 @@ function HeroesRosterView() {
     fallenHeroes.reduce((sum, h) => sum + HeroManager.revivalCost(h, revivalDiscount), 0)
       * (1 - Tuning.get('health.bulkReviveDiscount')),
   );
-  const unlockedTombstoneStyles = state.unlockedTombstoneStyles ?? ['plain'];
   const selectedTombstoneStyleId = state.selectedTombstoneStyle ?? 'plain';
   const tombstoneIcon = TOMBSTONE_STYLE_BY_ID[selectedTombstoneStyleId]?.icon ?? 'tombstone.png';
 
@@ -227,24 +332,7 @@ function HeroesRosterView() {
         </button>
       )}
 
-      <div className="row wrap" style={{ marginBottom: 12, alignItems: 'center' }}>
-        <span className="tiny muted">Tombstone style:</span>
-        {TOMBSTONE_STYLES.map((style) => {
-          const owned = style.id === 'plain' || unlockedTombstoneStyles.includes(style.id);
-          const active = selectedTombstoneStyleId === style.id;
-          return (
-            <button
-              key={style.id}
-              className={`chip ${active ? 'on' : ''}`}
-              title={owned ? style.description : `${style.description}, ${formatGold(style.cost)}`}
-              onClick={() => (owned ? engine.selectTombstoneStyle(style.id) : engine.buyTombstoneStyle(style.id))}
-              disabled={!owned && state.gold < style.cost}
-            >
-              {style.name}{!owned && ` · ${formatGold(style.cost)}`}
-            </button>
-          );
-        })}
-      </div>
+      <TombstoneStyleDropdown engine={engine} state={state} />
 
       {settings.heroStatusBars ? (
         // Status bars (Settings > Knight) -- a compact, sorted list of

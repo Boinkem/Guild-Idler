@@ -2,7 +2,7 @@ import {
   ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
 } from '../types';
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
-import { renownForRaidClear } from '../data/progression';
+import { renownForRaidClear, TOMBSTONE_STYLES } from '../data/progression';
 import { Tuning } from '../data/tuning';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
@@ -535,8 +535,23 @@ export const RaidManager = {
     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
       state.completedRaids.push(raid.id);
     }
+    let tombstoneStyleUnlocked: string | undefined;
     if (fullClear && !state.completedRaidDifficulties.includes(active.difficulty)) {
       state.completedRaidDifficulties.push(active.difficulty);
+      // Patch 0335 -- the exact same "first ever clear of this
+      // difficulty" moment above also auto-grants any tombstone style
+      // tied to it (TombstoneStyleDef.unlockRaidDifficulty), gold-free.
+      // Guarded against re-granting the same way buyTombstoneStyle
+      // itself is (checked against unlockedTombstoneStyles, not just
+      // "does this difficulty have a matching style"), so replaying
+      // this exact branch a second time for any reason can never
+      // duplicate the entry.
+      const unlocked = state.unlockedTombstoneStyles ?? ['plain'];
+      const style = TOMBSTONE_STYLES.find((s) => s.unlockRaidDifficulty === active.difficulty);
+      if (style && !unlocked.includes(style.id)) {
+        state.unlockedTombstoneStyles = [...unlocked, style.id];
+        tombstoneStyleUnlocked = style.name;
+      }
     }
     // Per-raid clear tracker (patch 0303) -- same fullClear gate as
     // completedRaids/completedRaidDifficulties just above, but keyed by
@@ -652,6 +667,7 @@ export const RaidManager = {
       heroesFallen: heroesFallen.length > 0 ? heroesFallen : undefined,
       petsFallen: petsFallen.length > 0 ? petsFallen : undefined,
       heroesLeveledUp: heroesLeveledUp.length > 0 ? heroesLeveledUp : undefined,
+      tombstoneStyleUnlocked,
     };
 
     state.raidLog.unshift(result);

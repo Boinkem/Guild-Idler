@@ -1171,9 +1171,18 @@ export const SKIN_BY_ID: Record<string, SkinDef> = Object.fromEntries(SKINS.map(
  * Purely cosmetic -- a global choice (not per-hero, unlike skins above),
  * since going Fallen is meant to stay rare enough that a per-hero
  * picker would be overkill. One style applies to whichever hero falls.
- * Same gold-sink shape as skins (buy once, unlocked forever, pick freely
- * among owned styles) -- see engine.buyTombstoneStyle/selectTombstoneStyle
- * and guild-idler-status.md's Health-related gold sinks entry.
+ * Two acquisition paths now (patch 0335, direct delivery of real art
+ * for a batch of new styles): most are the original gold-sink shape
+ * (buy once, unlocked forever, pick freely among owned styles -- see
+ * engine.buyTombstoneStyle/selectTombstoneStyle and guild-idler-
+ * status.md's Health-related gold sinks entry), but a style with
+ * `unlockRaidDifficulty` set is instead auto-granted the first time
+ * ANY raid is full-cleared at that difficulty (RaidManager.resolve,
+ * right alongside completedRaidDifficulties -- the exact same "first
+ * ever clear of this difficulty" moment already tracked there) --
+ * never purchasable with gold regardless of its `cost` field, which
+ * stays 0 for these entries purely so TombstoneStyleDef doesn't need a
+ * second optional cost type.
  */
 export interface TombstoneStyleDef {
   id: string;
@@ -1184,6 +1193,17 @@ export interface TombstoneStyleDef {
    *  own comment in HeroesPanel.tsx for the graceful-missing-asset
    *  fallback (shows a plain skull glyph until the real file exists). */
   icon: string;
+  /**
+   * Patch 0335. When set, this style is earned by full-clearing ANY
+   * raid at this difficulty for the first time ever (guild-wide, same
+   * scope as GameState.completedRaidDifficulties) -- never buyable with
+   * gold, `cost` is ignored entirely for these. One-to-one with
+   * RaidDifficulty today (each of the 4 tiers grants exactly one
+   * themed tombstone), but nothing enforces that 1:1 shape structurally
+   * -- a future difficulty or a second reward at an existing one both
+   * work fine as-is.
+   */
+  unlockRaidDifficulty?: RaidDifficulty;
 }
 
 // Lives in json/tombstone-styles.json, same devtool-editable-content-file

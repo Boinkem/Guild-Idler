@@ -1631,6 +1631,16 @@ export interface RaidResult {
    *  earned it, never the roster at large. */
   titleGranted?: string;
   titledHeroNames?: string[];
+  /**
+   * Patch 0335. Set when this clear was the guild's first-ever
+   * full-clear at this difficulty AND a TombstoneStyleDef exists with a
+   * matching `unlockRaidDifficulty` that wasn't already unlocked --
+   * carries the style's own display name (not its id) so engine.ts can
+   * announce it directly without a second lookup. Same "only fires on
+   * the actual first time" gate completedRaidDifficulties itself
+   * already uses, not a separate flag to keep in sync.
+   */
+  tombstoneStyleUnlocked?: string;
   /** Heroes whose own health damage this run dropped to 0, flipping them
    *  to 'fallen' -- a subset of `injuries` above (a heroId can appear in
    *  both), kept as its own field for the same reason
