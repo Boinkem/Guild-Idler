@@ -195,6 +195,7 @@ export function createInitialState(now = Date.now()): GameState {
     lastBannerShownId: null,
     seenGuidance: [],
     raidUpgrades: {},
+    questFastUpgrades: {},
     seenOnboarding: false,
     // See GameState.guidedOnboarding's own comment (types.ts) for the
     // full reasoning -- true here is just the pre-modal default; the
@@ -215,7 +216,7 @@ export function createInitialState(now = Date.now()): GameState {
     tradeRouteUnlocked: false,
     harvestUnlocked: false,
     pendingHarvestSpotlight: false,
-    pendingBurstQuestSpotlight: false,
+    pendingQuestBoardIntro: false,
     overseerLevel: 0,
     harvestTraderGold: 0,
     harvestTraderGoldAt: now,
@@ -1345,6 +1346,25 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     version: 62,
     guidedOnboarding: (save.guidedOnboarding as boolean | undefined) ?? true,
+  }),
+  // Patch 0332 -- the Fast-quest redesign (guild-idler-status.md's patch
+  // 0332 writeup has the full before/after). questFastUpgrades is a
+  // brand-new Record, same "no prior data to backfill from, start empty"
+  // reasoning raidUpgrades' own migration (17->18, above) used the first
+  // time that pattern showed up in this file. pendingQuestBoardIntro
+  // replaces the retired pendingBurstQuestSpotlight -- defaults false
+  // for every existing save (an old save's tutorial quest, if any, has
+  // already long since resolved, so there's no "board intro" moment left
+  // to show retroactively). The dead pendingBurstQuestSpotlight key
+  // itself is deliberately NOT stripped from an old save here -- an
+  // unread extra key on the object is harmless forever, same "migrations
+  // only ever backfill, never clean up" precedent every other migration
+  // in this file already follows.
+  62: (save) => ({
+    ...save,
+    version: 63,
+    questFastUpgrades: (save.questFastUpgrades as Record<string, number> | undefined) ?? {},
+    pendingQuestBoardIntro: (save.pendingQuestBoardIntro as boolean | undefined) ?? false,
   }),
 };
 

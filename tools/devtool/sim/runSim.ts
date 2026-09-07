@@ -14,14 +14,22 @@
  * the other -- not a workaround, the actual correct isolation boundary.
  *
  * Deliberately reuses the real formula modules directly (DIFFICULTIES,
- * bestUnlockedTier, expectedRatePerHour, xpForLevel, guildCost, upgradeCost,
- * fastQuestCapsPerHour/fastQuestFloorPerHour, easyFastModeChances) rather
- * than re-deriving any of this math -- a second copy of a formula the game
- * already isolated into a pure function is exactly the kind of drift risk
- * flagged elsewhere in this project (see guild-idler-status.md's DevTool
- * scalability discussion), and it's avoidable here since every formula this
- * sim needs already lives in an engine-independent module (no GameState,
- * no Hero object, no manager class required to call any of them).
+ * bestUnlockedTier, expectedRatePerHour, xpForLevel, guildCost,
+ * upgradeCost) rather than re-deriving any of this math -- a second copy
+ * of a formula the game already isolated into a pure function is exactly
+ * the kind of drift risk flagged elsewhere in this project (see
+ * guild-idler-status.md's DevTool scalability discussion), and it's
+ * avoidable here since every formula this sim needs already lives in an
+ * engine-independent module (no GameState, no Hero object, no manager
+ * class required to call any of them).
+ *
+ * Fast-quest income (patch 0332) is NOT modeled here -- same "flagged
+ * rather than silently approximated" treatment as raids/chains below.
+ * Fast rolls are rare (1-5% per offer, tier-dependent) and reward-neutral
+ * on average (time-scaled off the same baseline this sim already uses,
+ * floored but not inflated), so their effect on aggregate gold/xp *rate*
+ * is small; a proper model would need per-offer RNG this expected-value
+ * sim deliberately doesn't do anywhere else either.
  *
  * Phase 1 scope, explicitly NOT modeled (flagged rather than silently
  * approximated):
@@ -331,29 +339,6 @@ async function main() {
     };
   }
 
-  // -------------------------------------------------- burst dominance check --
-  // Sanity check carried over from balance.ts's own documented invariant
-  // (fastQuestFloorPerHour can never exceed the real best-unlocked tier's
-  // own rate) -- re-checked here against whatever tuning is active in THIS
-  // process, so a proposed change that breaks the invariant shows up as a
-  // real, flagged regression instead of silently shipping. Passes `lvl`
-  // into expectedRatePerHour now (patch 0217 fix) -- this check is about
-  // a specific hero level's real experience, not the tier's own fixed
-  // reference point.
-  const burstCheck = [5, 10, 15, 20, 25, 30, 40, 50].map((lvl) => {
-    const tier = balance.bestUnlockedTier(lvl, false);
-    const cfg = DIFFICULTIES[tier];
-    const caps = balance.fastQuestCapsPerHour(lvl, false);
-    const tierGoldPerHour = balance.expectedRatePerHour(cfg, 'gold', lvl);
-    return {
-      level: lvl,
-      tier,
-      capGoldPerHour: Math.round(caps.gold * 100) / 100,
-      tierGoldPerHour: Math.round(tierGoldPerHour * 100) / 100,
-      dominant: caps.gold > tierGoldPerHour,
-    };
-  });
-
   const result = {
     preset: input.preset.id,
     heroCount: liveHeroCount,
@@ -373,7 +358,6 @@ async function main() {
     ),
     allSpentDay: allSpent() ? Math.round(day) : null,
     tierRates,
-    burstCheck,
   };
 
   process.stdout.write(JSON.stringify(result));

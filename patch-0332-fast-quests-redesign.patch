@@ -1,0 +1,2159 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index b3b4eba..696e4ab 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -27135,3 +27135,192 @@ and every button still works, it just falls back to the system
+ sans-serif font and loses the tab icons. Self-hosting both is a
+ reasonable follow-up if that ever becomes a real problem, not urgent
+ enough to hold this patch on.
++
++### Fast quests: difficulty-scaled redesign, retiring Burst/Medium (patch 0332)
++
++```discord-update
++Dev Update | Fast Quests
++- Reworked how difficulty scales quests -- Easy is short, and each tier up runs longer with bigger rewards, more consistently than before
++- Replaced Burst and Medium quests with a single "Fast" roll that can now happen on ANY difficulty, not just Easy
++- Fast quests are rare on purpose -- shorter than normal for their difficulty, paying at least half of what the full-length version would, easy more common than legendary
++- Added Lucky Streak, a new upgrade that raises your odds of a Fast roll on every difficulty
++- Quests now explain themselves -- the tutorial quest reads as "Fast" from day one, and a new one-time explainer covers the whole board once your real contracts start rolling in
++```
++
++Direct tester feedback and an extended design discussion, not a quick
++tuning pass -- "low level bursts are still a problem," specifically
++"very insulting, 1xp or gold, and 1 or 0 xp gold for rewards." Worked
++through collaboratively over several rounds before any code was written:
++what "still a problem" actually meant in practice, whether a Fast roll's
++reward should stay flat or scale down with its shorter time, whether
++Fast should stay Easy-only or spread to every tier, how rare "rare"
++should actually be, and -- after an initial design of a forced
++guaranteed-Fast second quest was floated and then explicitly walked back
++("I only disagree on the forced second quest, that was my mistake") --
++what should replace it to make sure a new player still discovers the
++mechanic without it being scripted.
++
++**The actual diagnosis.** The old Burst/Medium system already had FOUR
++separate guardrail layers stacked on each other by this point: a live
++per-hour cap (`fastQuestCapsPerHour`), a matching floor
++(`fastQuestFloorPerHour`), a level-based taper shifting weight from Burst
++to Medium (`easyFastModeChances`), and a final flat reward-payout floor
++(`rewardPayoutFloor`, patch 0325) added specifically because the first
++three still weren't fully preventing rewards rounding down to "1 gold, 0
++xp." That's not a sign any one number was wrong -- it's a sign the
++*shape* (a separate, hand-tuned, explicitly-generous mini reward table
++bolted onto Easy specifically) was the actual problem. Confirmed directly
++during the design discussion: even after patch 0325's floor, the
++guaranteed minimum was only 2 gold / 1 xp -- technically nonzero, but
++functionally the same insult the original complaint described. A floor
++that's barely above zero isn't a fix; it just moves the goalpost by one
++integer.
++
++**The redesign, difficulty scales everything now, Fast included.**
++`DifficultyConfig` (quests.ts) drops `burstChance/burstMin.../
++mediumChance/medium...` entirely, replaced with three fields per tier
++(`difficulties.json`): `fastChance` (5/4/3/2/1% across Easy through
++Legendary -- direct request, "Id like easy ones to be more common than
++legendarys"), and `fastMinDurationPct`/`fastMaxDurationPct` (10/40 on
++every tier). A Fast roll's duration is a PERCENTAGE of that tier's own
++normal min/maxDuration range now, not an absolute duration -- the old
++system's fixed 2-8min window only ever made sense pinned to Easy;
++stretched naively to Legendary it would mean "finish a 24-hour quest in
++3 minutes," which breaks the whole point of this redesign. Reward is
++computed with the EXACT SAME formula every standard offer uses (no
++separate burst/medium reward table left to drift out of balance
++against it), then scaled by how much time was actually saved relative to
++that tier's own average duration, floored at `quest.
++fastRewardFloorFraction` (0.5) of the full-duration reward -- direct
++answer to "scaled down to 50% floor perhaps." Checked by hand against
++the live tuning values: the floor dominates almost the entire Fast
++range on every tier (payout lands at 50-53% everywhere), so a Fast roll
++reliably reads as "shorter AND still a real number," never the old
++rounds-to-1 result. A Fast Legendary roll can land in as little as 1.2
++hours instead of up to 24, still guaranteeing half a Legendary reward.
++
++**Rarity is the only guardrail now, on purpose.** Every layer of the old
++cap/floor/taper stack is gone (`fastQuestCapsPerHour`,
++`fastQuestFloorPerHour`, `easyFastModeChances`, and their
++`MIN_LEVEL_FOR_CAP`/`BURST_CAP_FRACTION` tuning constants all deleted
++from `balance.ts`). Confirmed directly rather than assumed safe: "it was
++to prevent bursts from being the farming/most gold per hour but if they
++are rare then its exciting to get one" -- and explicitly no backstop
++either ("Rarity alone is fine, no backstop"). This also meant dropping
++`generateContractsForHero`'s old "guarantee at least one burst offer on
++the board" forcing -- a guaranteed-to-appear "rare" roll isn't actually
++rare from the player's perspective, so nothing replaces it. The
++"guarantee at least one genuine full-length offer" and "guarantee at
++least one on-level offer" guarantees survive unchanged (unrelated
++correctness nets, not reward guardrails).
++
++**`QuestOffer.fast?: boolean`, patch 0332's one new save field on
++individual offers.** Replaces the old duration-range sniff test
++(`QuestManager.isBurstOffer`, inferring "is this Burst?" from whether an
++offer's duration happened to fall inside a tier's burstMaxDuration) with
++an explicit flag set once at generation time -- `isBurstOffer` is now
++`isFastOffer`, just reads `offer.fast === true`. `tutorialQuestOffer()`
++sets it directly too, so the tutorial quest reads as Fast from a
++player's very first contract onward, not as an accident of its 5-minute
++duration -- direct request: "Tutorial quest is perfect... it needs to
++still be a burst quest first of all."
++
++**The forced-second-quest walkthrough, added then explicitly reverted.**
++An earlier version of this design forced the guild's second-ever quest
++to be a single guaranteed Fast offer with nothing else on the board,
++reusing the existing `pendingBurstQuestSpotlight` machinery (patch 0308)
++just repointed at the new system. Walked back after direct feedback --
++"I only disagree on the forced second quest, that was my mistake."
++`GameEngine.refreshWorld` now always calls
++`QuestManager.generateContractsForHero` normally, tutorial quest
++included, no special-cased single-offer board. `GameState.
++pendingBurstQuestSpotlight` is retired (dead key left in old saves,
++never stripped -- same "migrations only ever backfill, never clean up"
++convention every other field in this file already follows) in favor of
++`GameState.pendingQuestBoardIntro`.
++
++**What replaced it instead: a real "how the board works" explainer, not
++a scripted second quest.** Direct ask: "Tutorial quest finishes, straight
++into a rolled board with explainer." New `QuestBoardIntroModal.tsx`, same
++"promote a guidance moment to a standalone modal instead of a toast"
++treatment `ChainDiscoveryModal` already established for the first quest
++chain discovery. Fires the instant the scripted tutorial quest resolves
++(`QuestManager.resolve`'s own `isTutorialQuest` branch) and ONLY when
++`guidedOnboarding` is true (patch 0330's guide-mode toggle) -- an
++experienced player who opted out of guidance never had a scripted
++tutorial quest to begin with, so this can only ever fire for someone
++still in guided mode. Explains difficulty scaling across the whole board
++plus the ⚡ Fast mechanic in plain language, non-timed (stays open until
++dismissed, same "timed text vanishing before it could be read" lesson
++patch 0330 already learned from tester feedback).
++
++**Fast is visible everywhere now, not just a one-shot hint.** The old
++`pendingBurstQuestSpotlight` card shimmer (a one-time "try this" nudge
++that had to arm and clear via GameState) is gone entirely, replaced with
++a permanent "⚡ Fast" tag on `QuestRow`'s meta line and
++`QuestDetailModal`'s header whenever `offer.fast` is true -- a recurring
++mechanic reads better as a stable badge than a fading shimmer, and
++doesn't need any one-shot flag bookkeeping to arm or clear. A short
++non-timed note in `QuestDetailModal` explains the tradeoff for any
++ordinary Fast offer (skipped on the tutorial quest itself, which already
++has its own dedicated "How to read a contract" callout from patch 0330).
++
++**New "Lucky Streak" upgrade, direct request: "a new expensive upgrade to
++increase chances."** New `src/game/data/questFastUpgrades.ts`, mirroring
++`raidUpgrades.ts`'s gold-then-Renown shape exactly (`QuestFastUpgradeDef`,
++`QUEST_FAST_UPGRADE_BY_ID`, `questFastUpgradeCost` -- same
++`goldTierMaxLevel`/`maxLevel` split logic as `raidUpgradeCost`, its
++direct precedent). +1% flat to EVERY tier's `fastChance` per level (so
++the Easy > Legendary shape never inverts regardless of level), 5 levels
++total -- 3 gold (5000 base, ×1.9/level) then 2 Renown (6 base, ×1.35/
++level), same order-of-magnitude curve `raid_speed`'s own upgrade already
++uses. `GameState.questFastUpgrades: Record<string, number>`, same shape
++as `raidUpgrades`. New `GuildManager.questFastUpgradeLevel/
++nextQuestFastUpgradeCost/buyQuestFastUpgrade` trio, mirroring the raid
++upgrade trio exactly. `GameEngine.buyQuestFastUpgrade` passthrough.
++Rendered as a single compact `.upgrade-row` (reusing `RaidsPanel`'s own
++row styling, no separate detail modal needed for a one-entry tree) at
++the top of the Quests tab.
++
++**Save compatibility.** `SAVE_VERSION` 62 -> 63. Migration 62 adds
++`questFastUpgrades: {}` (brand-new Record, same "no prior data to
++backfill from, start empty" reasoning `raidUpgrades`' own original
++migration used) and `pendingQuestBoardIntro: false` (an existing save's
++tutorial quest, if any, has already long since resolved, so there's no
++board-intro moment left to show retroactively) for every pre-existing
++save.
++
++**Also cleaned up while touching this code, not left stale:**
++`HarvestManager.sellGoldPerHourTarget`'s Trade Route gold cap genuinely
++depends on `bestUnlockedTier`/`expectedRatePerHour` (balance.ts) for an
++unrelated reason (a completely different feature reusing the same "what
++does a hero earn at the guild's best-unlocked tier" formula) -- caught
++during removal and both functions kept, only the actually-Fast-specific
++`fastQuestCapsPerHour`/`fastQuestFloorPerHour`/`easyFastModeChances`
++removed. The DevTool's Balance Sandbox sim (`tools/devtool/sim/
++runSim.ts`) had its own "burst dominance check" sanity block testing an
++invariant against the now-deleted cap functions -- removed along with
++the `burstCheck` field it added to the sim's result output; the sim's
++main income-simulation loop was already independent of those functions
++(picks tiers via `expectedRatePerHour` directly) so needed no other
++changes. Fast-quest income is explicitly NOT modeled in the sim (noted
++in its own header comment, same "flagged rather than silently
++approximated" treatment already used there for raids/chains/pets) --
++Fast rolls are rare and reward-neutral on average, and a proper model
++would need real per-offer RNG this expected-value sim deliberately
++doesn't do anywhere else either.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean
++(204 modules, the +2 being the new `questFastUpgrades.ts` and
++`QuestBoardIntroModal.tsx`). Hand-computed the actual Fast duration/
++reward numbers for all 5 tiers against the live `difficulties.json`
++values before writing this up, not just trusting the formula looked
++right on paper -- confirmed the 50% floor genuinely dominates the whole
++Fast range as designed. Full repo-wide grep for every retired
++identifier (`isBurstOffer`, `pendingBurstQuestSpotlight`,
++`easyFastModeChances`, `fastQuestCapsPerHour`, `fastQuestFloorPerHour`,
++every `burst*`/`medium*` DifficultyConfig field) turned up nothing left
++outside historical comments and the one intentionally-preserved old
++migration (patch 0288's, which only ever backfills the now-dead
++`pendingBurstQuestSpotlight` key on an old save -- harmless, matches
++this file's own "never clean up, only backfill" convention).
+diff --git a/src/game/data/balance.ts b/src/game/data/balance.ts
+index 6d2b90e..e82239b 100644
+--- a/src/game/data/balance.ts
++++ b/src/game/data/balance.ts
+@@ -5,19 +5,21 @@ import { Tuning } from './tuning';
+ import { questGoldBaseline, questXpBaseline } from './progression';
+ 
+ /**
+- * Replaces the old flat burstTaper(topLevel) curve in QuestManager with a
+- * live cap computed directly from DIFFICULTIES, separately for gold and
+- * XP. The flat curve had two confirmed problems: its floor (0.2) never
+- * actually dropped burst below the best unlocked tier until very late,
+- * making burst-spamming the mathematically dominant strategy from level 1
+- * to roughly 25-30; and a single shared curve couldn't correctly gate both
+- * currencies at once, since legendary quests are gold-heavy but XP-light
+- * relative to hard/epic -- tightening the curve for XP purposes measurably
+- * loosened effective gold-farming speed in testing.
+- *
+- * Tying the cap to live tier data instead of a fixed curve also means it
+- * self-corrects if DIFFICULTIES changes later (bump hard's maxGold, the
+- * cap recalculates) without needing to re-derive a curve by hand.
++ * Patch 0332 retired this file's old burst/medium per-hour cap/floor/
++ * taper system (fastQuestCapsPerHour, fastQuestFloorPerHour,
++ * easyFastModeChances) entirely -- direct feedback that the guardrail
++ * stack itself, not any one number in it, was the recurring problem
++ * (four separate systems all fighting the same "burst became the
++ * mathematically dominant strategy" fire). Fast quests
++ * (QuestManager.generateOffer) now use the same reward formula every
++ * other quest does, time-scaled and rarity-gated instead of a separate
++ * hand-tuned mini-economy -- see quests.ts's own DifficultyConfig.
++ * fastChance comment and guild-idler-status.md's patch 0332 writeup for
++ * the full redesign. `bestUnlockedTier`/`expectedRatePerHour` below both
++ * survive that removal -- bestUnlockedTier is still load-bearing for
++ * HarvestManager.sellGoldPerHourTarget's Trade Route cap (unrelated to
++ * quests entirely), and expectedRatePerHour for that same caller plus
++ * the DevTool's Balance Sandbox sim's own income-curve estimates.
+  */
+ 
+ /** Matches QuestManager.resolve's actual failure payout exactly -- a failed
+@@ -39,19 +41,16 @@ const XP_FAILURE_MULTIPLIER = Tuning.get('balance.xpFailureMultiplier');
+  * `atLevel` lets a caller estimate this tier's rate for a hero at a
+  * SPECIFIC level, rather than the tier's own fixed `referenceLevel` --
+  * needed for anything tracking a leveling hero's actual income over time
+- * (the Balance Sandbox sim), since reward now scales continuously with
+- * the rolled reqLevel (near hero.level, patch 0214), not with a fixed
+- * per-tier constant. Defaults to `cfg.referenceLevel` when omitted,
+- * preserving the exact existing behavior for fastQuestCapsPerHour/
+- * fastQuestFloorPerHour below, which deliberately DO want a fixed,
+- * level-independent ceiling reference rather than tracking a specific
+- * hero -- see this function's own callers for which is which. Found and
+- * fixed while auditing reward-scaling consistency (patch 0217): the
+- * Balance Sandbox sim was calling this with no `atLevel`, silently
+- * pinning every tier's income estimate to its referenceLevel forever
+- * regardless of how high the simulated hero actually leveled, which
+- * would have made the "days to level 55" simulation meaningless post-
+- * patch-0214 without this.
++ * (the Balance Sandbox sim, HarvestManager.sellGoldPerHourTarget), since
++ * reward now scales continuously with the rolled reqLevel (near
++ * hero.level, patch 0214), not with a fixed per-tier constant. Defaults
++ * to `cfg.referenceLevel` when omitted -- see this function's own
++ * callers for which is which. Found and fixed while auditing reward-
++ * scaling consistency (patch 0217): the Balance Sandbox sim was calling
++ * this with no `atLevel`, silently pinning every tier's income estimate
++ * to its referenceLevel forever regardless of how high the simulated
++ * hero actually leveled, which would have made the "days to level 55"
++ * simulation meaningless post-patch-0214 without this.
+  */
+ export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp', atLevel?: number): number {
+   const avgDurationHours = (cfg.minDuration + cfg.maxDuration) / 2 / HOUR;
+@@ -71,20 +70,18 @@ export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp',
+ }
+ 
+ /**
+- * Highest difficulty tier currently "available" at a given level -- used
+- * only by the burst/medium fast-quest per-hour cap system
+- * (fastQuestCapsPerHour/fastQuestFloorPerHour below), which is
+- * deliberately untouched by the reqLevel-roll rework (see
+- * guild-idler-status.md's patch 0214 writeup). Real quest offers no
+- * longer have a difficulty-based level gate at all (every difficulty's
+- * reqLevel now rolls near hero.level regardless of tier) -- this keeps
+- * reading each tier's `referenceLevel` (the old reqLevel's numeric value,
+- * renamed and repurposed, see DifficultyConfig's own comment) purely as
+- * a "typical level for this tier" heuristic so burst/medium's cap
+- * behaves exactly as it did before, rather than suddenly referencing
+- * Epic/Legendary per-hour rates for a level-1 hero now that nothing
+- * actually blocks those tiers from generating early. Called with a
+- * specific hero's own level, not the guild's top hero. */
++ * Highest difficulty tier currently "available" at a given level.
++ * Formerly also used by the burst/medium fast-quest per-hour cap system,
++ * retired in patch 0332 (see this file's own header comment) -- its one
++ * remaining caller is HarvestManager.sellGoldPerHourTarget, unrelated to
++ * quests, which still needs "what does a hero currently earn at the
++ * guild's own best-unlocked tier" as its Trade Route gold-per-hour
++ * target. Reads each tier's `referenceLevel` (a "typical level for this
++ * tier" heuristic, see DifficultyConfig's own comment) purely as that --
++ * quest offers themselves have had no difficulty-based level gate since
++ * patch 0214. Called with a specific hero's own level, not the guild's
++ * top hero, by that one remaining caller.
++ */
+ export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean): Difficulty {
+   let best: Difficulty = 'easy';
+   for (const id of DIFFICULTY_ORDER) {
+@@ -94,89 +91,6 @@ export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean):
+   return best;
+ }
+ 
+-/** Below this level, burst keeps its full, uncapped reward -- the
+- *  deliberate onboarding hook, confirmed not to be the problem. */
+-const MIN_LEVEL_FOR_CAP = Tuning.get('balance.minLevelForCap');
+-/** Midpoint of the requested 80-85% range: clearly still worthwhile as a
+- *  quick top-up, never the rational default strategy over the board. */
+-const BURST_CAP_FRACTION = Tuning.get('balance.burstCapFraction');
+-
+-/**
+- * Shared by both fast-completion modes (burst AND medium -- see
+- * DifficultyConfig's own comment on mediumChance for why medium needs the
+- * same guardrail burst already has). Kept as one function/one cap fraction
+- * rather than two separate curves: both modes exist for the same reason
+- * (an explicit, generous-feeling reward range reads better than a
+- * proportional slice of the full range), so both need the same protection
+- * against becoming the dominant strategy once out-leveled.
+- *
+- * Passes topLevel through to expectedRatePerHour explicitly (patch 0230) --
+- * previously didn't, which meant this silently fell back to the best-
+- * unlocked tier's own static referenceLevel forever, not the player's
+- * actual current level. Harmless right at the moment a tier is first
+- * unlocked (level ≈ that tier's referenceLevel by definition), but for
+- * anyone who keeps leveling within the same best-unlocked-tier bracket --
+- * which is most play, tiers aren't unlocked every level -- the cap stayed
+- * pinned to that stale reference point instead of climbing with them,
+- * quietly throttling the cap further below what it was actually meant to
+- * represent the longer someone stayed in a bracket.
+- */
+-export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolean): { gold: number; xp: number } {
+-  if (topLevel < MIN_LEVEL_FOR_CAP) return { gold: Infinity, xp: Infinity };
+-  const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
+-  return {
+-    gold: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'gold', topLevel),
+-    xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp', topLevel),
+-  };
+-}
+-
+-/**
+- * A floor, not a ceiling -- the counterpart to fastQuestCapsPerHour above,
+- * closing the "worthless reward" complaint that motivated adding this at
+- * all. Anchored to the offer's OWN tier's rate (not the player's current
+- * best-unlocked tier the way the cap is) -- a deliberately safe choice:
+- * every tier's own rate is, by construction, no higher than any harder
+- * tier's rate (DIFFICULTIES only gets more generous per hour going up),
+- * so flooring an Easy offer at Easy's own rate can never let it out-earn
+- * whatever the player's actual best-unlocked tier currently pays.
+- *
+- * Now takes atLevel explicitly (patch 0230) -- previously omitted it
+- * entirely, which meant expectedRatePerHour silently defaulted to Easy's
+- * own static referenceLevel (1) FOREVER, regardless of the player's real
+- * level. This is what actually produced the reported "1-5 gold Medium
+- * quests at level 15" complaint: at level 15, Easy's real per-hour rate is
+- * roughly 3x what it is at level 1 (confirmed by hand-computing both from
+- * the live tuning values -- ~4.5 gold/hr at level 1 vs ~14.5 gold/hr at
+- * level 15), so the floor was quietly capping itself at a fraction of what
+- * it was supposed to guarantee, for every level above 1. Callers now pass
+- * the player's real topLevel, same as fastQuestCapsPerHour's own tier rate
+- * already did (independently) get right.
+- *
+- * The "never lets Easy out-earn the real best-unlocked tier" invariant
+- * this file's own history checked by simulation was verified against the
+- * OLD (referenceLevel-anchored) version of this function -- evaluating
+- * both sides of that comparison at the SAME real level rather than two
+- * different fixed reference points, as this fix now does, should if
+- * anything make the comparison more apples-to-apples, not less safe (Easy
+- * keeps the lowest rewardMultiplier of any tier at every level, per
+- * DIFFICULTIES itself). Flagged rather than re-asserted as proven: this
+- * specific invariant deserves a fresh run through `npm run sim` before
+- * being trusted the same way the original claim was.
+- *
+- * This does NOT fully close the residual overshoot at the very shortest
+- * durations (see QuestManager.generateOffer's own comment on why a
+- * positive-integer floor divided by an arbitrarily short duration can
+- * never be made airtight) -- it meaningfully shrinks it. That's a
+- * confirmed, accepted tradeoff, not an oversight, and unrelated to the
+- * level-anchoring fix above.
+- */
+-export function fastQuestFloorPerHour(cfg: DifficultyConfig, atLevel: number): { gold: number; xp: number } {
+-  return {
+-    gold: expectedRatePerHour(cfg, 'gold', atLevel),
+-    xp: expectedRatePerHour(cfg, 'xp', atLevel),
+-  };
+-}
+-
+ /** Reward floor (patch 0325) -- fraction/absolute-minimum pair, see
+  *  rewardPayoutFloor's own comment for what these actually fix. */
+ const REWARD_FLOOR_FRACTION_GOLD = Tuning.get('balance.rewardFloorFractionGold');
+@@ -217,52 +131,3 @@ export function rewardPayoutFloor(offerRewardGold: number, offerRewardXp: number
+     xp: Math.max(REWARD_FLOOR_MIN_XP, Math.round(offerRewardXp * REWARD_FLOOR_FRACTION_XP)),
+   };
+ }
+-
+-/**
+- * Burst/medium chance taper for the Easy tier, by hero level -- see
+- * guild-idler-status.md's "Burst quest reward taper" writeup for the full
+- * before/after numbers this was checked against. Burst's own duration is
+- * short enough (2-8min) that even a level-appropriate live per-hour cap
+- * (fastQuestCapsPerHour above) rounds down to a trivial 1 gold / 1-2 xp
+- * once a hero is a handful of levels in -- confirmed directly against a
+- * real playtest report, not assumed. Stretching burst's own duration
+- * range doesn't fix this: the cap itself is the bottleneck, not the
+- * rounding window, and a duration long enough to clear it (~20min+) is
+- * just Medium's own range already. So the fix shifts weight away from
+- * burst and toward Medium as a hero levels, rather than growing burst's
+- * own duration -- Medium already produces healthy absolute numbers at
+- * its 20-40min range with no changes needed there.
+- *
+- * Untouched through level 5, same onboarding-hook reasoning
+- * MIN_LEVEL_FOR_CAP above already uses -- burst is still the deliberate
+- * fast-turnaround hook for a brand new guild. From level 16 on, burst is
+- * retired entirely (0% chance): by that point a hero has Hard and likely
+- * Epic unlocked, and a sub-10-minute Easy quest can never pay a
+- * respectable absolute reward under the live cap regardless of how it's
+- * tuned, so the board stops offering it rather than offering something
+- * that reads as broken.
+- */
+-export function easyFastModeChances(level: number): { burstChance: number; mediumChance: number } {
+-  if (level <= 5) {
+-    return {
+-      burstChance: Tuning.get('quest.easyBurstChanceTier1'),
+-      mediumChance: Tuning.get('quest.easyMediumChanceTier1'),
+-    };
+-  }
+-  if (level <= 10) {
+-    return {
+-      burstChance: Tuning.get('quest.easyBurstChanceTier2'),
+-      mediumChance: Tuning.get('quest.easyMediumChanceTier2'),
+-    };
+-  }
+-  if (level <= 15) {
+-    return {
+-      burstChance: Tuning.get('quest.easyBurstChanceTier3'),
+-      mediumChance: Tuning.get('quest.easyMediumChanceTier3'),
+-    };
+-  }
+-  return {
+-    burstChance: Tuning.get('quest.easyBurstChanceTier4'),
+-    mediumChance: Tuning.get('quest.easyMediumChanceTier4'),
+-  };
+-}
+diff --git a/src/game/data/json/difficulties.json b/src/game/data/json/difficulties.json
+index 9deb4ce..11cc2cb 100644
+--- a/src/game/data/json/difficulties.json
++++ b/src/game/data/json/difficulties.json
+@@ -5,26 +5,15 @@
+     "baseSuccess": 70,
+     "minDurationHours": 1,
+     "maxDurationHours": 2,
+-    "burstChance": 45,
+-    "burstMinDurationMinutes": 2,
+-    "burstMaxDurationMinutes": 8,
+-    "burstMinGold": 6,
+-    "burstMaxGold": 12,
+-    "burstMinXp": 8,
+-    "burstMaxXp": 14,
+-    "mediumChance": 35,
+-    "mediumMinDurationMinutes": 20,
+-    "mediumMaxDurationMinutes": 40,
+-    "mediumMinGold": 14,
+-    "mediumMaxGold": 30,
+-    "mediumMinXp": 14,
+-    "mediumMaxXp": 22,
+     "xpMultiplier": 1,
+     "lootChance": 12,
+     "weight": 30,
+     "color": "#79a86b",
+     "referenceLevel": 1,
+-    "rewardMultiplier": 0.6
++    "rewardMultiplier": 0.6,
++    "fastChance": 5,
++    "fastMinDurationPct": 10,
++    "fastMaxDurationPct": 40
+   },
+   {
+     "id": "normal",
+@@ -32,19 +21,15 @@
+     "baseSuccess": 60,
+     "minDurationHours": 2,
+     "maxDurationHours": 4,
+-    "mediumChance": 25,
+-    "mediumMinDurationMinutes": 20,
+-    "mediumMaxDurationMinutes": 40,
+-    "mediumMinGold": 20,
+-    "mediumMaxGold": 45,
+-    "mediumMinXp": 20,
+-    "mediumMaxXp": 32,
+     "xpMultiplier": 2.4,
+     "lootChance": 20,
+     "weight": 28,
+     "color": "#5b8fd6",
+     "referenceLevel": 3,
+-    "rewardMultiplier": 1.5
++    "rewardMultiplier": 1.5,
++    "fastChance": 4,
++    "fastMinDurationPct": 10,
++    "fastMaxDurationPct": 40
+   },
+   {
+     "id": "hard",
+@@ -57,7 +42,10 @@
+     "weight": 22,
+     "color": "#c98b3a",
+     "referenceLevel": 8,
+-    "rewardMultiplier": 3.2
++    "rewardMultiplier": 3.2,
++    "fastChance": 3,
++    "fastMinDurationPct": 10,
++    "fastMaxDurationPct": 40
+   },
+   {
+     "id": "epic",
+@@ -70,7 +58,10 @@
+     "weight": 14,
+     "color": "#a874d6",
+     "referenceLevel": 15,
+-    "rewardMultiplier": 7.3
++    "rewardMultiplier": 7.3,
++    "fastChance": 2,
++    "fastMinDurationPct": 10,
++    "fastMaxDurationPct": 40
+   },
+   {
+     "id": "legendary",
+@@ -83,6 +74,9 @@
+     "weight": 6,
+     "color": "#d9a441",
+     "referenceLevel": 25,
+-    "rewardMultiplier": 19.5
++    "rewardMultiplier": 19.5,
++    "fastChance": 1,
++    "fastMinDurationPct": 10,
++    "fastMaxDurationPct": 40
+   }
+-]
+\ No newline at end of file
++]
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index eb0749c..2692b76 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -3290,86 +3290,6 @@
+     "min": 0,
+     "description": "Ceiling on the total bad-luck-protection bonus previewSuccess can add, regardless of how long the fail streak runs."
+   },
+-  {
+-    "id": "quest.easyBurstChanceTier1",
+-    "label": "Easy burst chance: level 1-5",
+-    "category": "quests",
+-    "value": 45,
+-    "default": 45,
+-    "min": 0,
+-    "max": 100,
+-    "description": "Burst-mode chance on Easy offers for a hero at level 1-5 -- unchanged from the original onboarding-hook value. See balance.ts's easyFastModeChances."
+-  },
+-  {
+-    "id": "quest.easyMediumChanceTier1",
+-    "label": "Easy medium chance: level 1-5",
+-    "category": "quests",
+-    "value": 35,
+-    "default": 35,
+-    "min": 0,
+-    "max": 100,
+-    "description": "Medium-mode chance on Easy offers for a hero at level 1-5 (only rolled if burst didn't hit) -- unchanged from the original value."
+-  },
+-  {
+-    "id": "quest.easyBurstChanceTier2",
+-    "label": "Easy burst chance: level 6-10",
+-    "category": "quests",
+-    "value": 30,
+-    "default": 30,
+-    "min": 0,
+-    "max": 100,
+-    "description": "Burst-mode chance on Easy offers for a hero at level 6-10 -- first taper step, shifting weight toward Medium as burst's own short duration starts producing trivial absolute rewards under the live per-hour cap."
+-  },
+-  {
+-    "id": "quest.easyMediumChanceTier2",
+-    "label": "Easy medium chance: level 6-10",
+-    "category": "quests",
+-    "value": 45,
+-    "default": 45,
+-    "min": 0,
+-    "max": 100,
+-    "description": "Medium-mode chance on Easy offers for a hero at level 6-10 -- raised to absorb the share tapered off burst."
+-  },
+-  {
+-    "id": "quest.easyBurstChanceTier3",
+-    "label": "Easy burst chance: level 11-15",
+-    "category": "quests",
+-    "value": 15,
+-    "default": 15,
+-    "min": 0,
+-    "max": 100,
+-    "description": "Burst-mode chance on Easy offers for a hero at level 11-15 -- burst becomes rare."
+-  },
+-  {
+-    "id": "quest.easyMediumChanceTier3",
+-    "label": "Easy medium chance: level 11-15",
+-    "category": "quests",
+-    "value": 55,
+-    "default": 55,
+-    "min": 0,
+-    "max": 100,
+-    "description": "Medium-mode chance on Easy offers for a hero at level 11-15."
+-  },
+-  {
+-    "id": "quest.easyBurstChanceTier4",
+-    "label": "Easy burst chance: level 16+",
+-    "category": "quests",
+-    "value": 0,
+-    "default": 0,
+-    "min": 0,
+-    "max": 100,
+-    "description": "Burst-mode chance on Easy offers for a hero at level 16+ -- retired entirely. Standard/Medium fully take over; see easyFastModeChances and generateContractsForHero's own guard against forcing a burst guarantee once this is 0."
+-  },
+-  {
+-    "id": "quest.easyMediumChanceTier4",
+-    "label": "Easy medium chance: level 16+",
+-    "category": "quests",
+-    "value": 60,
+-    "default": 60,
+-    "min": 0,
+-    "max": 100,
+-    "description": "Medium-mode chance on Easy offers for a hero at level 16+, absorbing burst's entire retired share."
+-  },
+   {
+     "id": "upgrade.master_adventurer.blackMarketDiscountPerLevel",
+     "label": "Enchanted Seal: Black Market discount per level",
+@@ -3714,26 +3634,6 @@
+     "max": 1,
+     "description": "Fraction of the rolled xp a failed quest still pays out. Matches QuestManager.resolve's actual formula exactly."
+   },
+-  {
+-    "id": "balance.minLevelForCap",
+-    "label": "Balance: min level for burst/medium cap",
+-    "category": "balance",
+-    "value": 5,
+-    "default": 5,
+-    "min": 0,
+-    "max": 50,
+-    "description": "Below this hero level, burst/medium quests keep their full uncapped reward -- the deliberate onboarding hook."
+-  },
+-  {
+-    "id": "balance.burstCapFraction",
+-    "label": "Balance: burst/medium cap fraction",
+-    "category": "balance",
+-    "value": 0.825,
+-    "default": 0.825,
+-    "min": 0,
+-    "max": 2,
+-    "description": "Burst/medium's live per-hour reward cap, as a fraction of the best-unlocked tier's own per-hour rate."
+-  },
+   {
+     "id": "balance.rewardFloorFractionGold",
+     "label": "Balance: reward floor, gold fraction",
+@@ -5291,5 +5191,81 @@
+     "default": 1,
+     "min": 0,
+     "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
++  },
++  {
++    "id": "quest.fastRewardFloorFraction",
++    "label": "Fast quest: reward floor fraction",
++    "category": "quest",
++    "value": 0.5,
++    "default": 0.5,
++    "min": 0,
++    "max": 1,
++    "description": "Patch 0332. A Fast-roll offer's reward scales down proportionally with its shorter duration (relative to that tier's own average normal duration), but never below this fraction of the FULL-duration reward for that tier/level -- e.g. 0.5 guarantees at least half. Replaces the old burst/medium separate reward-table system entirely."
++  },
++  {
++    "id": "quest_fast_upgrade.fastChancePctPerLevel",
++    "label": "Lucky Streak: fast-chance % per level",
++    "category": "quest_fast_upgrade",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "max": 20,
++    "description": "Flat percentage points added to EVERY difficulty tier's own base fastChance (difficulties.json) per level of the Lucky Streak upgrade."
++  },
++  {
++    "id": "quest_fast_upgrade.goldBaseCost",
++    "label": "Lucky Streak: gold tier base cost",
++    "category": "quest_fast_upgrade",
++    "value": 5000,
++    "default": 5000,
++    "min": 0,
++    "description": "Cost of the first (level 0) gold-tier purchase."
++  },
++  {
++    "id": "quest_fast_upgrade.goldCostGrowth",
++    "label": "Lucky Streak: gold tier cost growth",
++    "category": "quest_fast_upgrade",
++    "value": 1.9,
++    "default": 1.9,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier applied per level within the gold tier."
++  },
++  {
++    "id": "quest_fast_upgrade.goldTierMaxLevel",
++    "label": "Lucky Streak: gold tier level count",
++    "category": "quest_fast_upgrade",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "description": "How many levels cost gold before switching to Renown."
++  },
++  {
++    "id": "quest_fast_upgrade.renownBaseCost",
++    "label": "Lucky Streak: renown tier base cost",
++    "category": "quest_fast_upgrade",
++    "value": 6,
++    "default": 6,
++    "min": 0,
++    "description": "Cost of the first Renown-tier level (i.e. level = goldTierMaxLevel)."
++  },
++  {
++    "id": "quest_fast_upgrade.renownCostGrowth",
++    "label": "Lucky Streak: renown tier cost growth",
++    "category": "quest_fast_upgrade",
++    "value": 1.35,
++    "default": 1.35,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier applied per level within the Renown tier."
++  },
++  {
++    "id": "quest_fast_upgrade.maxLevel",
++    "label": "Lucky Streak: max level",
++    "category": "quest_fast_upgrade",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Absolute level cap across both tiers combined. At max, every tier's fastChance is +5 percentage points over its difficulties.json base."
+   }
+-]
+\ No newline at end of file
++]
+diff --git a/src/game/data/questFastUpgrades.ts b/src/game/data/questFastUpgrades.ts
+new file mode 100644
+index 0000000..5c1cd5a
+--- /dev/null
++++ b/src/game/data/questFastUpgrades.ts
+@@ -0,0 +1,50 @@
++import { QuestFastUpgradeDef } from '../types';
++import { Tuning } from './tuning';
++
++/**
++ * Patch 0332, direct request: "a new expensive upgrade to increase
++ * chances" for how often a quest offer rolls Fast. Its own small file,
++ * same reasoning RAID_UPGRADES (raidUpgrades.ts) already established for
++ * living apart from the general UPGRADES/GUILD_FACILITIES/RENOWN_PERKS
++ * tree in progression.ts -- this affects quest-board generation directly
++ * (QuestManager.generateOffer), not a hero stat, so it doesn't belong in
++ * ModifierManager's general mod system either.
++ *
++ * Starts as a single entry -- same "starter set, grows over time"
++ * precedent RAID_UPGRADES's own header comment already notes for itself.
++ */
++export const QUEST_FAST_UPGRADES: QuestFastUpgradeDef[] = [
++  {
++    id: 'lucky_streak',
++    name: 'Lucky Streak',
++    description: 'Word gets around the guild hall about which contracts wrap up early -- a small, permanent nudge to how often ANY quest, at any difficulty, rolls Fast.',
++    fastChancePctPerLevel: Tuning.get('quest_fast_upgrade.fastChancePctPerLevel'),
++    goldBaseCost: Tuning.get('quest_fast_upgrade.goldBaseCost'),
++    goldCostGrowth: Tuning.get('quest_fast_upgrade.goldCostGrowth'),
++    goldTierMaxLevel: Tuning.get('quest_fast_upgrade.goldTierMaxLevel'),
++    renownBaseCost: Tuning.get('quest_fast_upgrade.renownBaseCost'),
++    renownCostGrowth: Tuning.get('quest_fast_upgrade.renownCostGrowth'),
++    maxLevel: Tuning.get('quest_fast_upgrade.maxLevel'),
++  },
++];
++
++export const QUEST_FAST_UPGRADE_BY_ID: Record<string, QuestFastUpgradeDef> = Object.fromEntries(
++  QUEST_FAST_UPGRADES.map((u) => [u.id, u]),
++);
++
++/**
++ * Identical shape to raidUpgradeCost (raidUpgrades.ts) -- levels below
++ * goldTierMaxLevel cost gold on the usual baseCost*growth^level curve,
++ * every level from goldTierMaxLevel onward costs Renown instead on its
++ * own independent curve. Returns null once maxLevel is reached.
++ */
++export function questFastUpgradeCost(
++  def: QuestFastUpgradeDef, currentLevel: number,
++): { cost: number; currency: 'gold' | 'renown' } | null {
++  if (currentLevel >= def.maxLevel) return null;
++  if (currentLevel < def.goldTierMaxLevel) {
++    return { cost: Math.floor(def.goldBaseCost * Math.pow(def.goldCostGrowth, currentLevel)), currency: 'gold' };
++  }
++  const renownLevel = currentLevel - def.goldTierMaxLevel;
++  return { cost: Math.floor(def.renownBaseCost * Math.pow(def.renownCostGrowth, renownLevel)), currency: 'renown' };
++}
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 14718a7..c8318e0 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -32,86 +32,63 @@ export interface DifficultyConfig {
+   weight: number;
+   color: string;
+   /**
+-   * A second, short duration range rolled with `burstChance` probability
+-   * instead of the normal min/maxDuration. A single wide uniform range
+-   * mostly rolls near its own middle — verified directly, widening Easy's
+-   * floor to 90s on its own left the *typical* roll still around an hour,
+-   * so a genuinely fast early hook needs a guaranteed-frequent short mode,
+-   * not just a wider tail on the existing one.
++   * Patch 0332 -- replaces the old two-tier burst/medium system entirely
++   * (see this file's own header comment for the full redesign reasoning
++   * and guild-idler-status.md's patch 0332 writeup for the before/after).
++   * One roll, one chance, on EVERY difficulty tier now (not Easy-only) --
++   * this is the base chance before GameState.questFastUpgrades' Lucky
++   * Streak bonus (QuestManager.generateOffer adds that on top). Kept
++   * deliberately low and DECREASING per tier (Easy highest, Legendary
++   * lowest, direct request: "Id like easy ones to be more common than
++   * legendarys") -- rarity is the ONLY guardrail against a fast roll
++   * becoming the dominant per-hour strategy now that the old cap/floor/
++   * taper stack (balance.ts's fastQuestCapsPerHour/fastQuestFloorPerHour/
++   * easyFastModeChances) is gone, a deliberate choice confirmed directly
++   * rather than assumed safe.
+    */
+-  burstChance?: number;
+-  burstMinDuration?: number;
+-  burstMaxDuration?: number;
++  fastChance: number;
+   /**
+-   * Burst quests get their OWN reward range rather than a proportional slice
+-   * of the full range. A strict proportional slice was tried first and
+-   * measured directly: it rounded to 1-2 XP per burst quest, which is
+-   * mathematically fair but reads as insulting rather than "numbers going
+-   * up" -- exactly what this was supposed to deliver. Onboarding rewards get
+-   * to be a little generous on purpose.
++   * A Fast roll's duration is a PERCENTAGE of this tier's own normal
++   * min/maxDuration range, not an absolute duration -- the old burst
++   * system's fixed 2-8min window only ever made sense pinned to Easy;
++   * stretched naively up to Legendary it would mean "finish a 24-hour
++   * quest in 3 minutes," which breaks the "difficulty scales everything"
++   * redesign this whole patch is built around. fastMinDurationPct anchors
++   * off minDuration, fastMaxDurationPct off maxDuration -- both fields
++   * are percentages (10 means 10%), not fractions.
+    */
+-  burstMinGold?: number;
+-  burstMaxGold?: number;
+-  burstMinXp?: number;
+-  burstMaxXp?: number;
+-  /**
+-   * A third duration mode, same shape as burst (own chance, own duration
+-   * range, own reward range) but landing in the gap burst and the normal
+-   * range left open -- burst tops out at 8 minutes, and the normal range
+-   * starts at a full hour, so there was nowhere for a genuinely "half an
+-   * hour, check back on your break" contract to live. Rolled independently
+-   * of burst (burst is checked first; medium only gets a chance if burst
+-   * didn't hit), so the two never compete for the same slot on a given
+-   * offer. Subject to the same live per-hour cap burst gets (see
+-   * balance.ts's fastQuestCapsPerHour) for the same reason: an explicit
+-   * reward range read as more satisfying than a proportional slice of the
+-   * full range when burst was first added, but that same generosity needs
+-   * the same guardrail against becoming the dominant strategy.
+-   */
+-  mediumChance?: number;
+-  mediumMinDuration?: number;
+-  mediumMaxDuration?: number;
+-  mediumMinGold?: number;
+-  mediumMaxGold?: number;
+-  mediumMinXp?: number;
+-  mediumMaxXp?: number;
++  fastMinDurationPct: number;
++  fastMaxDurationPct: number;
+ }
+ 
+ /**
+  * DIFFICULTIES lives in json/difficulties.json so it can be edited via
+  * tools/devtool without touching TypeScript -- same pattern
+- * QUEST_TEMPLATES/QUEST_PREFIXES/QUEST_CHAINS above already use. This was
+- * the single largest remaining DevTool coverage gap (see
+- * guild-idler-status.md's backlog), tracked separately from the
+- * quest-chains migration specifically because of its own scope: ~100
+- * tunable values across 5 tiers, with dense balance rationale attached to
+- * several of them individually (the burst-floor and Epic/Legendary
+- * xpMultiplier fixes below).
++ * QUEST_TEMPLATES/QUEST_PREFIXES/QUEST_CHAINS above already use.
+  *
+  * Duration fields use the same "friendly unit on disk, converted to ms at
+  * import" convention raid-encounters.json (durationHours) and
+  * quest-chains.json (durationMinutes) already established: the main
+  * min/maxDuration range is always a whole number of hours across all 5
+- * tiers, so it's stored as *Hours; burst/medium durations are always a
+- * whole number of minutes, so those are stored as *Minutes. Both convert
+- * to the millisecond values DifficultyConfig actually needs below.
++ * tiers, so it's stored as *Hours.
+  *
+  * Per-tier balance history worth keeping, since it doesn't fit anywhere
+  * in a JSON file with no comments (full detail also in
+- * guild-idler-status.md's migration writeup):
+- * - Easy's burst floor was bumped from 90s to 2min -- a sub-2-minute
+- *   duration divided into any positive-integer reward implies a per-hour
+- *   rate no live cap can safely contain. Confirmed by direct simulation,
+- *   not assumed.
+- * - Easy's medium tier is rolled only when burst doesn't hit (45% burst,
+- *   then 35% of the remainder), Normal's less often (25%) since Normal is
+- *   already a step up from "quick check-in" territory.
++ * guild-idler-status.md's patch 0332 writeup):
++ * - Patch 0332 replaced the old burst/medium two-tier system (own
++ *   fastChance/fastMinDurationPct/fastMaxDurationPct fields per tier now,
++ *   see DifficultyConfig's own comment) after direct feedback that the
++ *   old system's guardrail stack (a live per-hour cap, a matching floor,
++ *   a level-based taper, ALL fighting the same "burst became the
++ *   mathematically dominant strategy at low levels" fire) was itself the
++ *   problem -- burst's reward table was a separate, generous, easily-
++ *   exploited mini-economy bolted onto Easy specifically. Fast quests now
++ *   use the SAME reward formula every other quest does, just time-scaled
++ *   and rarity-gated instead.
+  * - Epic's xpMultiplier was raised 11 -> 12 and Legendary's 26 -> 30 --
+  *   verified directly that both tiers' xp/hr had fallen BELOW Hard's at
+  *   their old values, the opposite of what progressing through
+- *   difficulty should feel like. The live per-hour cap in balance.ts is
+- *   what keeps burst/medium's own explicit reward ranges honest against
+- *   whichever tier ends up paying the most per hour.
++ *   difficulty should feel like.
+  */
+ interface DifficultyConfigJson {
+   id: Difficulty;
+@@ -125,20 +102,9 @@ interface DifficultyConfigJson {
+   rewardMultiplier: number;
+   weight: number;
+   color: string;
+-  burstChance?: number;
+-  burstMinDurationMinutes?: number;
+-  burstMaxDurationMinutes?: number;
+-  burstMinGold?: number;
+-  burstMaxGold?: number;
+-  burstMinXp?: number;
+-  burstMaxXp?: number;
+-  mediumChance?: number;
+-  mediumMinDurationMinutes?: number;
+-  mediumMaxDurationMinutes?: number;
+-  mediumMinGold?: number;
+-  mediumMaxGold?: number;
+-  mediumMinXp?: number;
+-  mediumMaxXp?: number;
++  fastChance: number;
++  fastMinDurationPct: number;
++  fastMaxDurationPct: number;
+ }
+ 
+ import difficultiesJson from './json/difficulties.json';
+@@ -151,29 +117,8 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = Object.fromEnt
+       xpMultiplier: d.xpMultiplier,
+       lootChance: d.lootChance, referenceLevel: d.referenceLevel, rewardMultiplier: d.rewardMultiplier,
+       weight: d.weight, color: d.color,
+-      // Gated on `> 0`, not `!== undefined` -- the DevTool's own generic
+-      // number-field editor always renders/saves an untouched optional
+-      // number as 0 rather than leaving it absent (see app.js's
+-      // fieldControl/readField), so simply opening Hard/Epic/Legendary in
+-      // the editor and hitting Save would otherwise write a spurious
+-      // burstChance: 0 (and matching 0-value siblings) into the JSON. A
+-      // 0% burst/medium chance is functionally identical to the field
+-      // being absent either way, so this guard is free insurance against
+-      // that DevTool quirk, not a behavior change for real data.
+-      ...(d.burstChance !== undefined && d.burstChance > 0 ? {
+-        burstChance: d.burstChance,
+-        burstMinDuration: d.burstMinDurationMinutes! * MINUTE,
+-        burstMaxDuration: d.burstMaxDurationMinutes! * MINUTE,
+-        burstMinGold: d.burstMinGold, burstMaxGold: d.burstMaxGold,
+-        burstMinXp: d.burstMinXp, burstMaxXp: d.burstMaxXp,
+-      } : {}),
+-      ...(d.mediumChance !== undefined && d.mediumChance > 0 ? {
+-        mediumChance: d.mediumChance,
+-        mediumMinDuration: d.mediumMinDurationMinutes! * MINUTE,
+-        mediumMaxDuration: d.mediumMaxDurationMinutes! * MINUTE,
+-        mediumMinGold: d.mediumMinGold, mediumMaxGold: d.mediumMaxGold,
+-        mediumMinXp: d.mediumMinXp, mediumMaxXp: d.mediumMaxXp,
+-      } : {}),
++      fastChance: d.fastChance,
++      fastMinDurationPct: d.fastMinDurationPct, fastMaxDurationPct: d.fastMaxDurationPct,
+     },
+   ]),
+ ) as Record<Difficulty, DifficultyConfig>;
+@@ -430,5 +375,11 @@ export function tutorialQuestOffer(): QuestOffer {
+     rewardXp: 20,
+     loot: [],
+     reqLevel: 1,
++    // Patch 0332, direct request: the tutorial quest should read as this
++    // same category of quest from a new player's very first contract
++    // onward -- explicit now rather than an accident of its 5-minute
++    // duration happening to fall under some threshold (see QuestOffer.
++    // fast's own comment for why this moved to an explicit flag).
++    fast: true,
+   };
+ }
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 9059f9a..c3d4c07 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -330,6 +330,15 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Dismisses QuestBoardIntroModal -- same shape as dismissChainDiscovery
++   *  just above (its direct precedent), triggered by QuestManager.
++   *  resolve's own isTutorialQuest branch instead of a board roll. See
++   *  GameState.pendingQuestBoardIntro's own comment. */
++  dismissQuestBoardIntro() {
++    this.state.pendingQuestBoardIntro = false;
++    void this.saveNow();
++  }
++
+   /**
+    * Sound, the dedicated popup queue, the Guide notification log, and the
+    * Steam stub, for every achievement id that just unlocked. Archives
+@@ -834,29 +843,16 @@ export class GameEngine {
+       if (onTutorialQuest || hasUnsentTutorialQuest) continue;
+       const existing = this.state.questBoards[hero.id];
+       if (windowRolledOver || !existing || existing.length === 0) {
+-        // Patch 0308: pendingBurstQuestSpotlight (armed the instant the
+-        // tutorial quest resolves, cleared the instant any burst offer
+-        // is sent -- see its own comment in types.ts) also gates board
+-        // SIZE here now, not just the card shimmer QuestRow already
+-        // reads it for -- a brand-new guild's second quest should be
+-        // the one scripted burst nudge and nothing else competing for
+-        // attention, the same "only one thing on the board" shape the
+-        // tutorial quest itself used. Deterministic per (window, hero,
+-        // this specific seed tag) the same way every other offer here
+-        // already is, so it survives a reload identically. Scoped to
+-        // every hero rather than just the starter one -- a genuinely
+-        // new guild can't afford a second hero slot this early
+-        // regardless (that needs a Tavern upgrade, not just gold), so
+-        // in practice this only ever narrows the one hero who matters
+-        // at this stage.
+-        const generated = this.state.pendingBurstQuestSpotlight
+-          ? [QuestManager.generateOffer(
+-            'easy',
+-            createRng(`board:${window}:${hero.id}:${this.state.createdAt}:tutorialBurst`),
+-            `q:${window}:${hero.id}:tutorialBurst`,
+-            hero.level, true, ModifierManager.hasUnlock(this.state, 'legendaryQuests'),
+-          )]
+-          : QuestManager.generateContractsForHero(this.state, hero, now);
++        // Patch 0332 dropped the old "force the second quest to be a
++        // single guaranteed Fast offer" special case that used to sit
++        // here (pendingBurstQuestSpotlight-gated) -- direct correction:
++        // "I only disagree on the forced second quest, that was my
++        // mistake." The board regenerates the normal way every time now,
++        // tutorial quest included -- straight into a real, ordinary
++        // multi-offer board the moment it resolves (see QuestManager.
++        // resolve's own isTutorialQuest branch for the new
++        // pendingQuestBoardIntro modal that replaced this instead).
++        const generated = QuestManager.generateContractsForHero(this.state, hero, now);
+         // Frozen offer (if any) survives this regeneration too -- see
+         // QuestManager.applyFrozenOffer, the same splice used by a paid
+         // reroll and an Auto-Chain restock.
+@@ -2590,6 +2586,16 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Patch 0332 -- Lucky Streak, the Fast-quest-chance upgrade tree. Same
++   *  shape as buyRaidUpgrade just above (its direct precedent). */
++  buyQuestFastUpgrade(id: string) {
++    const error = GuildManager.buyQuestFastUpgrade(this.state, id);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.notify();
++    void this.saveNow();
++  }
++
+   levelUpVendor(vendorId: Parameters<typeof GuildManager.levelUpVendor>[1]) {
+     const error = GuildManager.levelUpVendor(this.state, vendorId);
+     if (error) return this.say(error);
+diff --git a/src/game/managers/GuildManager.ts b/src/game/managers/GuildManager.ts
+index eb08ca2..f639ff6 100644
+--- a/src/game/managers/GuildManager.ts
++++ b/src/game/managers/GuildManager.ts
+@@ -3,6 +3,7 @@ import {
+   guildCost, upgradeCost, upgradeScrapCost, vendorLevelCost, vendorLevelScrapCost, isVendorUpgradeUnlocked,
+ } from '../data/progression';
+ import { RAID_UPGRADES, RAID_UPGRADE_BY_ID, raidUpgradeCost } from '../data/raidUpgrades';
++import { QUEST_FAST_UPGRADES, QUEST_FAST_UPGRADE_BY_ID, questFastUpgradeCost } from '../data/questFastUpgrades';
+ import { chainReplayTierForChain, CHAIN_REPLAY_TIER_BY_ID } from '../data/chainReplay';
+ import { heroMilestoneUnlocked } from '../data/heroMilestones';
+ import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
+@@ -277,6 +278,45 @@ export const GuildManager = {
+     return RAID_UPGRADES;
+   },
+ 
++  /* ------------------------ quest fast-chance upgrades ------------------- */
++  // Patch 0332. Same buy/cost shape as the raid upgrades just above (its
++  // direct precedent), reading state.questFastUpgrades instead of
++  // state.raidUpgrades -- see QuestFastUpgradeDef's own comment in
++  // types.ts for why this needed its own small tree rather than folding
++  // into either existing one.
++
++  questFastUpgradeLevel(state: GameState, id: string): number {
++    return state.questFastUpgrades[id] ?? 0;
++  },
++
++  nextQuestFastUpgradeCost(state: GameState, id: string): { cost: number; currency: 'gold' | 'renown' } | null {
++    const def = QUEST_FAST_UPGRADE_BY_ID[id];
++    if (!def) return null;
++    return questFastUpgradeCost(def, GuildManager.questFastUpgradeLevel(state, id));
++  },
++
++  buyQuestFastUpgrade(state: GameState, id: string): string | null {
++    const def = QUEST_FAST_UPGRADE_BY_ID[id];
++    if (!def) return 'Unknown upgrade.';
++    const level = GuildManager.questFastUpgradeLevel(state, id);
++    const next = questFastUpgradeCost(def, level);
++    if (!next) return 'Already at maximum.';
++    if (next.currency === 'gold') {
++      if (state.gold < next.cost) return 'Not enough gold.';
++      state.gold -= next.cost;
++      state.stats.goldSpent += next.cost;
++    } else {
++      if (state.renown < next.cost) return 'Not enough renown.';
++      state.renown -= next.cost;
++    }
++    state.questFastUpgrades[id] = level + 1;
++    return null;
++  },
++
++  questFastUpgrades() {
++    return QUEST_FAST_UPGRADES;
++  },
++
+   /* ------------------------------ treasury ------------------------------ */
+   // Two standalone gold sinks added in patch 0220, neither routed through
+   // the general UPGRADES list above -- same reasoning grimsbyHighRollerUnlocked
+diff --git a/src/game/managers/HarvestManager.ts b/src/game/managers/HarvestManager.ts
+index 352b72f..49131e9 100644
+--- a/src/game/managers/HarvestManager.ts
++++ b/src/game/managers/HarvestManager.ts
+@@ -120,8 +120,7 @@ export const HarvestManager = {
+   /**
+    * Target gold/hr Trade Route selling is capped toward -- exactly what a
+    * hero currently earns at the guild's own best-unlocked quest tier
+-   * (same expectedRatePerHour/bestUnlockedTier formula balance.ts's
+-   * fastQuestCapsPerHour already reuses for the burst-quest cap), not a
++   * (expectedRatePerHour/bestUnlockedTier, balance.ts), not a
+    * separate hand-picked number. Self-corrects automatically if
+    * DIFFICULTIES or the guild's own level ever changes -- no curve here
+    * to re-tune by hand if quest rewards are rebalanced again later. This
+diff --git a/src/game/managers/PeddlerManager.ts b/src/game/managers/PeddlerManager.ts
+index 06f7927..15dbccc 100644
+--- a/src/game/managers/PeddlerManager.ts
++++ b/src/game/managers/PeddlerManager.ts
+@@ -303,9 +303,7 @@ export const PeddlerManager = {
+   /**
+    * Called once per quest resolution (QuestManager.resolve), success or
+    * failure both count the same -- a completed quest is a completed
+-   * quest either way, same "counts regardless of outcome" precedent
+-   * fastQuestCapsPerHour already sets for its own per-hour accounting.
+-   * Burst-mode quests are excluded entirely -- see
++   * quest either way. Fast-mode quests are excluded entirely -- see
+    * GameState.questsSinceGrimsby's own comment for why (the exact class
+    * of exploit the original burst-taper fix already had to correct
+    * once: a cheap, frequent action shouldn't be able to fast-forward a
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 73980b4..6daa666 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -2,8 +2,9 @@ import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHAN
+ import {
+   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
+ } from '../data/quests';
++import { QUEST_FAST_UPGRADE_BY_ID } from '../data/questFastUpgrades';
+ import { HERO_CLASSES, questGoldBaseline, questXpBaseline, renownForChainReplayClear } from '../data/progression';
+-import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances, rewardPayoutFloor } from '../data/balance';
++import { rewardPayoutFloor } from '../data/balance';
+ import { questEggDropChance } from '../data/pets';
+ import { CURIOS, questCurioDropChance } from '../data/curios';
+ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+@@ -90,6 +91,14 @@ export const QuestManager = {
+     const window = Math.floor(now / BOARD_REFRESH_MS);
+     const rng = createRng(`board:${window}:${hero.id}:${state.createdAt}:${salt}`);
+     const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
++    // Patch 0332 -- see QuestFastUpgradeDef's own comment in types.ts.
++    // Computed once here (state is only in scope in this function, not
++    // inside generateOffer/generateGatheringOffer themselves, which stay
++    // plain functions) and threaded through as an already-resolved
++    // percentage-point bonus, not a raw upgrade level, so those two stay
++    // decoupled from the upgrade tree's own data shape.
++    const fastChanceBonus = (state.questFastUpgrades['lucky_streak'] ?? 0)
++      * QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel;
+ 
+     // Difficulty is no longer a level gate at all (patch 0214) -- every
+     // difficulty's reqLevel now rolls near hero.level regardless of tier
+@@ -113,9 +122,9 @@ export const QuestManager = {
+       // per-offer chance in this function would use.
+       const seedTag = `q:${window}:${hero.id}:${salt}:${i}`;
+       if (state.harvestUnlocked && rng.chance(Tuning.get('quest.gatheringBountyChance'))) {
+-        offers.push(QuestManager.generateGatheringOffer(difficulty, rng, seedTag, hero.level, legendaryUnlocked));
++        offers.push(QuestManager.generateGatheringOffer(difficulty, rng, seedTag, hero.level, fastChanceBonus));
+       } else {
+-        offers.push(QuestManager.generateOffer(difficulty, rng, seedTag, hero.level, false, legendaryUnlocked));
++        offers.push(QuestManager.generateOffer(difficulty, rng, seedTag, hero.level, false, false, false, fastChanceBonus));
+       }
+     }
+ 
+@@ -127,41 +136,31 @@ export const QuestManager = {
+     // near hero.level by construction (see rollReqLevel), so that failure
+     // mode can't happen anymore -- nothing to guarantee against.
+ 
+-    // Every hero's board is their own now, so "no second pair of hands to
+-    // fall back on while waiting out a long quest" is true of every hero
+-    // individually, not just a one-hero guild -- guaranteed unconditionally
+-    // (this used to be gated on state.heroes.length <= 1, back when a
+-    // second hero could just pull from the same shared pool instead).
+-    // Skipped once burst itself has been tapered to 0% for this hero's own
+-    // level (see easyFastModeChances) -- forcing one on regardless would
+-    // silently override the taper's whole point. Medium/standard already
+-    // cover the "something to do soon" need by that point.
+-    if (
+-      easyFastModeChances(hero.level).burstChance > 0
+-      && !offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)
+-    ) {
+-      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:${hero.id}:${salt}:guaranteed`, hero.level, true, legendaryUnlocked);
+-    }
+-
+-    // Mirror guarantee for the other end of the spread: a heavy run of
+-    // burst/medium rolls (both explicitly generous per-offer, see quests.ts)
+-    // could otherwise fill a small low-level pool with nothing but short
+-    // contracts, leaving a hero with no genuine full-length quest to send on
+-    // at all -- a real reported gap, not hypothetical, since a fresh
+-    // hero's pool is small and Easy/Normal (the only tiers a low-level hero
+-    // is eligible for) are exactly where burst/medium are heaviest. "Standard"
+-    // here means an offer whose duration falls in its own difficulty's real
+-    // minDuration..maxDuration range -- burst/medium's own ranges never reach
+-    // that far (Easy's medium tops out at 40min, well under its own 1hr
+-    // floor), so checking against the offer's own difficulty is enough to
+-    // tell the modes apart without a dedicated field on QuestOffer. Targets
+-    // the second-to-last slot so it can never collide with the burst
+-    // guarantee above, which always owns the last slot.
++    // Patch 0332 dropped the old "guarantee at least one burst/fast offer
++    // per board" forcing that used to sit here -- direct correction after
++    // the redesign discussion: "I only disagree on the forced second
++    // quest, that was my mistake." Rarity is now the ONLY guardrail
++    // against a fast roll becoming the dominant per-hour strategy (the
++    // old cap/floor/taper stack this file used to lean on is gone too --
++    // see guild-idler-status.md's patch 0332 writeup), and a guaranteed-
++    // to-appear "rare" roll isn't actually rare from the player's
++    // perspective. No replacement guarantee -- Fast is meant to be a
++    // genuine surprise now, not a scheduled beat.
++
++    // A heavy run of Fast rolls (each individually rare, but BOARD_SIZE
++    // offers still gives it room to happen) could otherwise fill a small
++    // low-level pool with nothing but short contracts, leaving a hero
++    // with no genuine full-length quest to send on at all. "Standard"
++    // here means an offer whose duration falls in its own difficulty's
++    // real minDuration..maxDuration range -- a Fast offer's own range
++    // never reaches that far (fastMaxDurationPct tops out well under
++    // 100%), so checking against the offer's own difficulty is enough to
++    // tell them apart without reading offer.fast directly.
+     if (!offers.some((o) => o.duration >= DIFFICULTIES[o.difficulty].minDuration)) {
+       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
+-      const targetIndex = offers.length > 1 ? offers.length - 2 : 0;
++      const targetIndex = offers.length - 1;
+       offers[targetIndex] = QuestManager.generateOffer(
+-        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, legendaryUnlocked, true,
++        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, true, false, fastChanceBonus,
+       );
+     }
+ 
+@@ -175,21 +174,20 @@ export const QuestManager = {
+     // BOARD_SIZE independently-rolled offers, ALL SIX landing above
+     // hero.level happens roughly 1 board generation in 300
+     // (0.386^6 ≈ 0.0033, confirmed by direct calculation from the live
+-    // offsetWeight* tuning values) -- rare, but real, and neither guarantee
+-    // above covers it: the burst guarantee only checks duration/mode, the
+-    // standard-length guarantee only checks duration range, and neither
+-    // looks at reqLevel at all. A board that rolls this way has nothing a
+-    // hero can send on without being under-leveled for it -- reads exactly
+-    // as "no level-appropriate quest available," the direct report this
+-    // responds to. Targets the third-to-last slot so it can never collide
+-    // with either guarantee above (which own the last and second-to-last
+-    // slots respectively); falls back to slot 0 if BOARD_SIZE is ever
+-    // small enough that a distinct third slot doesn't exist.
++    // offsetWeight* tuning values) -- rare, but real, and the standard-
++    // length guarantee above only checks duration, not reqLevel. A board
++    // that rolls this way has nothing a hero can send on without being
++    // under-leveled for it -- reads exactly as "no level-appropriate
++    // quest available," the direct report this responds to. Targets the
++    // second-to-last slot so it can never collide with the guarantee
++    // above, which always owns the last slot; falls back to slot 0 if
++    // BOARD_SIZE is ever small enough that a distinct second slot
++    // doesn't exist.
+     if (!offers.some((o) => hero.level >= o.reqLevel)) {
+       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
+-      const targetIndex = offers.length > 2 ? offers.length - 3 : 0;
++      const targetIndex = offers.length > 1 ? offers.length - 2 : 0;
+       offers[targetIndex] = QuestManager.generateOffer(
+-        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-onlevel`, hero.level, false, legendaryUnlocked, false, true,
++        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-onlevel`, hero.level, false, false, true, fastChanceBonus,
+       );
+     }
+     return offers;
+@@ -387,8 +385,8 @@ export const QuestManager = {
+ 
+   generateOffer(
+     difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
+-    forceBurst = false, legendaryUnlocked = false, forceStandard = false,
+-    forceAtOrUnderLevel = false,
++    forceFast = false, forceStandard = false,
++    forceAtOrUnderLevel = false, fastChanceBonus = 0,
+   ): QuestOffer {
+     const cfg = DIFFICULTIES[difficulty];
+     const reqLevel = QuestManager.rollReqLevel(topLevel, rng, forceAtOrUnderLevel ? 0 : undefined);
+@@ -401,61 +399,53 @@ export const QuestManager = {
+     const subject = rng.pick(template.subjects);
+     const prefix = rng.chance(18) ? `${rng.pick(QUEST_PREFIXES)} ` : '';
+ 
+-    // Duration and reward used to be rolled independently, which meant a
+-    // quest at the short end of a tier's range paid exactly as well as one at
+-    // the long end. Reward now interpolates across whichever range was
+-    // actually rolled. Burst and medium quests each use their own explicit
+-    // reward range (deliberately generous — see the comment on
+-    // burstMinGold) rather than a proportional slice of the full range,
+-    // which measured out to 1-2 XP per burst quest — mathematically fair,
+-    // but reads as insulting rather than the "numbers going up" feeling
+-    // this is supposed to deliver. Burst is checked first, medium only gets
+-    // a chance if burst didn't hit, so an offer is never both at once.
+-    // forceStandard is the mirror image of forceBurst below -- used by
+-    // generateContractsForHero's own "don't run dry on real quests" guarantee
+-    // to force a genuine full-length offer regardless of what the burst/
+-    // medium rolls would have produced.
+-    //
+-    // Easy's own burst/medium chance is overridden by level -- see
+-    // easyFastModeChances's own comment. Every other tier still reads
+-    // straight off DIFFICULTIES, since burst/medium currently only exist
+-    // on Easy at all.
+-    const fastChances = difficulty === 'easy' ? easyFastModeChances(topLevel) : undefined;
+-    const effectiveBurstChance = fastChances ? fastChances.burstChance : cfg.burstChance;
+-    const effectiveMediumChance = fastChances ? fastChances.mediumChance : cfg.mediumChance;
+-    const useBurst = !forceStandard && (forceBurst || (
+-      effectiveBurstChance !== undefined && effectiveBurstChance > 0 && rng.chance(effectiveBurstChance)
+-    ));
+-    const useMedium = !forceStandard && !useBurst
+-      && effectiveMediumChance !== undefined && effectiveMediumChance > 0 && rng.chance(effectiveMediumChance);
+-    const durMin = useBurst ? cfg.burstMinDuration! : useMedium ? cfg.mediumMinDuration! : cfg.minDuration;
+-    const durMax = useBurst ? cfg.burstMaxDuration! : useMedium ? cfg.mediumMaxDuration! : cfg.maxDuration;
+-    const duration = rng.int(durMin, durMax);
+-    const span = durMax - durMin;
+-    const t = span > 0 ? (duration - durMin) / span : 1;
+-    // Burst/medium keep their own explicit reward ranges exactly as
+-    // before -- deliberately untouched by the reqLevel-roll rework (see
+-    // guild-idler-status.md's patch 0214 writeup). Only the STANDARD
+-    // branch changed: it used to read a flat cfg.minGold/maxGold range
+-    // calibrated once around this difficulty's old fixed reqLevel; now it
+-    // reads the level-scaled baseline curve at the roll's own reqLevel,
+-    // times this difficulty's rewardMultiplier, with the same t (duration
+-    // position within this tier's own min/max range) still driving a
+-    // +-15% band so a longer standard quest still pays a bit more than a
+-    // shorter one of the same difficulty -- same flavor as before, new
+-    // source of the absolute number.
++    // Reward baseline computed identically regardless of Fast or not --
++    // patch 0332's whole point (see quests.ts's own header comment for
++    // the full redesign reasoning) is that a Fast quest is the SAME
++    // quest a standard offer would have been, just compressed in time,
++    // not a separate hand-tuned mini-economy the way the old burst/
++    // medium reward tables were.
++    const goldBaseline = questGoldBaseline(reqLevel) * cfg.rewardMultiplier;
++    const xpBaseline = questXpBaseline(reqLevel) * cfg.rewardMultiplier;
++
++    // One roll, one chance, every tier (not Easy-only) -- see
++    // DifficultyConfig.fastChance's own comment in quests.ts for the
++    // rarity reasoning. fastChanceBonus is the already-computed Lucky
++    // Streak upgrade bonus (GameState.questFastUpgrades), added flat on
++    // top so the relative Easy>Legendary shape never inverts regardless
++    // of upgrade level.
++    const useFast = !forceStandard && (forceFast || rng.chance(cfg.fastChance + fastChanceBonus));
++
++    let duration: number;
+     let rewardGold: number;
+     let rewardXp: number;
+-    if (useBurst || useMedium) {
+-      const goldMin = useBurst ? cfg.burstMinGold! : cfg.mediumMinGold!;
+-      const goldMax = useBurst ? cfg.burstMaxGold! : cfg.mediumMaxGold!;
+-      const xpMin = useBurst ? cfg.burstMinXp! : cfg.mediumMinXp!;
+-      const xpMax = useBurst ? cfg.burstMaxXp! : cfg.mediumMaxXp!;
+-      rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
+-      rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
++    if (useFast) {
++      // Percentage of THIS tier's own normal range, not an absolute
++      // duration -- see DifficultyConfig.fastMinDurationPct's own
++      // comment for why (a fixed 2-8min window made sense pinned to
++      // Easy; naively stretched to Legendary it would mean "finish a
++      // 24-hour quest in 3 minutes," breaking the whole "difficulty
++      // scales everything" redesign this is built around).
++      const fastMin = Math.round(cfg.minDuration * (cfg.fastMinDurationPct / 100));
++      const fastMax = Math.round(cfg.maxDuration * (cfg.fastMaxDurationPct / 100));
++      duration = rng.int(fastMin, fastMax);
++      // Reward scales down proportionally with the time actually saved
++      // (relative to this tier's own average normal duration), floored
++      // at fastRewardFloorFraction of the FULL-duration reward -- direct
++      // request: "scaled down to 50% floor perhaps." A strict
++      // proportional slice with no floor was the old burst system's
++      // first draft, confirmed by direct measurement to round down to
++      // 1-2 XP and read as insulting; this floor is what keeps a Fast
++      // roll feeling like a real, if smaller, windfall instead.
++      const normalAvgDuration = (cfg.minDuration + cfg.maxDuration) / 2;
++      const timeFraction = Math.min(1, duration / normalAvgDuration);
++      const payoutFraction = Math.max(Tuning.get('quest.fastRewardFloorFraction'), timeFraction);
++      rewardGold = Math.max(1, Math.round(goldBaseline * payoutFraction));
++      rewardXp = Math.max(1, Math.round(xpBaseline * payoutFraction));
+     } else {
+-      const goldBaseline = questGoldBaseline(reqLevel) * cfg.rewardMultiplier;
+-      const xpBaseline = questXpBaseline(reqLevel) * cfg.rewardMultiplier;
++      duration = rng.int(cfg.minDuration, cfg.maxDuration);
++      const span = cfg.maxDuration - cfg.minDuration;
++      const t = span > 0 ? (duration - cfg.minDuration) / span : 1;
+       const bandLow = 0.85;
+       const bandHigh = 1.15;
+       const factor = bandLow + t * (bandHigh - bandLow);
+@@ -463,57 +453,6 @@ export const QuestManager = {
+       rewardXp = Math.max(1, Math.round(xpBaseline * factor));
+     }
+ 
+-    // Both fast-completion modes are capped at ~80-85% of whatever the best
+-    // currently-unlocked tier pays per hour -- live, computed from
+-    // DIFFICULTIES itself rather than a flat decay curve, so neither can
+-    // silently become the mathematically dominant strategy the way the old
+-    // flat burst taper did (confirmed directly: its 0.2 floor never
+-    // actually dropped burst below the best unlocked tier until very
+-    // late). Untouched below level 5 -- the deliberate onboarding hook,
+-    // confirmed not the problem.
+-    if (useBurst || useMedium) {
+-      const rawGold = rewardGold;
+-      const rawXp = rewardXp;
+-      const durationHours = duration / HOUR;
+-      const caps = fastQuestCapsPerHour(topLevel, legendaryUnlocked);
+-      const capCeilingGold = Math.max(1, Math.round(caps.gold * durationHours));
+-      const capCeilingXp = Math.floor(caps.xp * durationHours);
+-      rewardGold = Math.min(rawGold, capCeilingGold);
+-      rewardXp = Math.min(rawXp, capCeilingXp);
+-
+-      // The cap above can legitimately crush a very short duration down to
+-      // the bare "1" minimum -- mathematically necessary for the cap to
+-      // mean anything, but reads as insulting rather than "a smaller but
+-      // real reward" (this was the actual player-reported complaint that
+-      // led here). Floors it back up to at least what the offer's OWN
+-      // tier would pay for this same duration at its own uncapped rate --
+-      // see fastQuestFloorPerHour's own comment for why this specific
+-      // anchor can never let a fast-mode offer out-earn the player's real
+-      // best-unlocked tier, even though it visibly improves the worst
+-      // case. Clamped to never exceed the raw pre-cap roll -- a floor,
+-      // not a second, looser cap.
+-      //
+-      // ALSO explicitly clamped to capCeilingGold/capCeilingXp (patch
+-      // 0230) -- with the floor now tracking the player's real level
+-      // (see fastQuestFloorPerHour's own comment on why it didn't before),
+-      // right at the exact level a tier first becomes the best-unlocked
+-      // one, BURST_CAP_FRACTION's own ~82.5% discount on that tier's rate
+-      // can briefly land BELOW Easy's own full, undiscounted rate --
+-      // confirmed by direct calculation, not theoretical: level 5, Normal
+-      // just unlocked, Normal's discounted cap (6.14g/hr) actually sits
+-      // below Easy's own floor rate (6.72g/hr) at that same level. Without
+-      // this clamp, the floor would win that Math.max below and push the
+-      // reward ABOVE the cap it's supposed to sit under -- exactly the
+-      // "out-earn the real best-unlocked tier" outcome the floor's whole
+-      // design is built to prevent. This makes the floor a true floor
+-      // UNDER the cap, not just under the raw pre-cap roll.
+-      const floor = fastQuestFloorPerHour(cfg, topLevel);
+-      const floorGold = Math.min(capCeilingGold, Math.max(1, Math.round(floor.gold * durationHours)));
+-      const floorXp = Math.min(capCeilingXp, Math.max(1, Math.round(floor.xp * durationHours)));
+-      rewardGold = Math.max(rewardGold, Math.min(rawGold, floorGold));
+-      rewardXp = Math.max(rewardXp, Math.min(rawXp, floorXp));
+-    }
+-
+     return {
+       id: `${seedTag}:${difficulty}:${subject.replace(/\s+/g, '_')}`,
+       name: `${prefix}${template.verb} ${subject}`,
+@@ -528,6 +467,7 @@ export const QuestManager = {
+       reqLevel,
+       vulnerableTo: rollElementTags(rng, difficulty),
+       dealsElement: rollElementTags(rng, difficulty),
++      ...(useFast ? { fast: true } : {}),
+     };
+   },
+ 
+@@ -548,9 +488,9 @@ export const QuestManager = {
+    * below optimal manual clicking" math it's calibrated against.
+    */
+   generateGatheringOffer(
+-    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, legendaryUnlocked = false,
++    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, fastChanceBonus = 0,
+   ): QuestOffer {
+-    const base = QuestManager.generateOffer(difficulty, rng, seedTag, topLevel, false, legendaryUnlocked);
++    const base = QuestManager.generateOffer(difficulty, rng, seedTag, topLevel, false, false, false, fastChanceBonus);
+     const materialId: MaterialId = rng.pick(NODE_ORDER);
+     const materialName = MATERIAL_BY_ID[materialId]?.name ?? materialId;
+     const perHour = Tuning.get('quest.gatheringMaterialPerHour');
+@@ -929,25 +869,20 @@ export const QuestManager = {
+   },
+ 
+   /**
+-   * Whether `offer` is a burst-mode roll. QuestOffer carries no explicit
+-   * "which mode generated this" field (generateOffer's own comment: not
+-   * worth adding just to remember it) -- so this infers it the same way
+-   * three previously-independent inline checks already did: only a
+-   * difficulty tier with its own `burstMaxDuration` can ever roll burst at
+-   * all (currently just 'easy', see difficulties.json), and a real burst
+-   * roll's duration always lands inside that tier's own burst window,
+-   * which never overlaps its ordinary or medium ranges (burst tops out at
+-   * 8 minutes on Easy; medium starts at 20). Patch 0288 pulled this out
+-   * into one shared helper -- resolve()'s own dailyBurstBonus check and
+-   * its Grimsby-cooldown `isBurstQuest` check both used to compute this
+-   * independently inline, and the new burst-quest-spotlight check
+-   * (QuestRow in QuestPanel.tsx, and QuestManager.start below) needed the
+-   * identical definition a third time, which is what actually prompted
+-   * pulling it out rather than copying it a third time.
++   * Whether `offer` is a Fast roll. Patch 0332 replaced the old duration-
++   * range sniff test (three previously-independent inline checks, then
++   * one shared inference helper as of patch 0288) with an explicit
++   * `offer.fast` flag set once at generation time by generateOffer's own
++   * fast roll (and by tutorialQuestOffer directly) -- simpler and
++   * correct by construction rather than reverse-engineered from a
++   * duration range that now varies by tier (see DifficultyConfig.
++   * fastMinDurationPct/fastMaxDurationPct). Kept as a helper (not just
++   * `offer.fast` inline everywhere) purely so every call site reads the
++   * same, in case a future patch needs a fallback for old saved
++   * ActiveQuest/notification data generated before this flag existed.
+    */
+-  isBurstOffer(offer: QuestOffer): boolean {
+-    const cfg = DIFFICULTIES[offer.difficulty];
+-    return cfg.burstMaxDuration !== undefined && offer.duration <= cfg.burstMaxDuration;
++  isFastOffer(offer: QuestOffer): boolean {
++    return offer.fast === true;
+   },
+ 
+   /**
+@@ -972,16 +907,6 @@ export const QuestManager = {
+     if (hero.status === 'questing') return { error: `${hero.name} is already out.` };
+     if (hero.status === 'fallen') return { error: `${hero.name} is Fallen and needs to be revived first.` };
+ 
+-    // Patch 0288: the "try a burst quest next" card shimmer has done its
+-    // job the moment the player actually sends a hero on any burst-mode
+-    // offer -- see GameState.pendingBurstQuestSpotlight's own comment.
+-    // Cleared here (on send) rather than in resolve() (on completion) so
+-    // the shimmer disappears from every other still-shimmering burst
+-    // card on the very next render, not just after this one finishes.
+-    if (state.pendingBurstQuestSpotlight && QuestManager.isBurstOffer(offer)) {
+-      state.pendingBurstQuestSpotlight = false;
+-    }
+-
+     // A hero's equipped consumable slots can end up pointing at an item the
+     // guild no longer actually has -- the previous version of this hard-
+     // failed the whole send with "Not enough consumables for that loadout"
+@@ -1255,15 +1180,13 @@ export const QuestManager = {
+     // entire point of guaranteeing a meaningful first experience. A flat
+     // floor sidesteps that -- it doesn't matter what the underlying roll
+     // or outcome was, the first burst of the day always pays out at
+-    // least this much. Regardless of duration within the burst range --
+-    // simplest possible rule: first burst-mode quest this hero finishes
+-    // each day, full stop. Burst-mode is identified via the shared
+-    // QuestManager.isBurstOffer helper -- the same "duration within the
+-    // tier's own burst range" signal generateOffer's own useBurst check
+-    // rolls against, rather than adding a field to QuestOffer just to
+-    // remember which mode generated it.
++    // least this much. Simplest possible rule: first Fast-mode quest
++    // this hero finishes each day, full stop. Fast-mode is identified
++    // via the shared QuestManager.isFastOffer helper (patch 0332 --
++    // reads the explicit offer.fast flag now, not a duration-range
++    // inference).
+     let dailyBurstBonus = false;
+-    if (hero && QuestManager.isBurstOffer(quest.offer)) {
++    if (hero && QuestManager.isFastOffer(quest.offer)) {
+       const today = rerollDay(resolvedAt);
+       if (hero.lastBurstBonusDay !== today) {
+         hero.lastBurstBonusDay = today;
+@@ -1389,19 +1312,27 @@ export const QuestManager = {
+     const newlyReadyEggs = PetManager.addHatchXp(state, xp);
+     if (newlyReadyEggs.length > 0) state.pendingHatchReadyNotice = true;
+ 
+-    // Patch 0288: the moment the scripted tutorial quest resolves (always
+-    // a guaranteed win, see this function's own isTutorialQuest override
+-    // above), arm the "try a burst quest next" card shimmer -- see
+-    // GameState.pendingBurstQuestSpotlight's own comment for the full
+-    // reasoning and how QuestRow/QuestManager.start use it. Set
++    // Patch 0308, repointed in patch 0332: the moment the scripted
++    // tutorial quest resolves (always a guaranteed win, see this
++    // function's own isTutorialQuest override above), arm the new quest-
++    // board explainer -- see GameState.pendingQuestBoardIntro's own
++    // comment for the full reasoning (direct correction of the earlier
++    // "force the second quest to be Fast" design: "I only disagree on
++    // the forced second quest, that was my mistake. Tutorial quest is
++    // perfect, after that lets still make sure the player knows how
++    // quests work"). Gated on guidedOnboarding, same as every other
++    // onboarding beat since patch 0330 -- an experienced player who
++    // opted out of the guide never had a scripted tutorial quest to
++    // begin with (see engine.ts's setGuidedOnboarding), so this can only
++    // ever fire for someone who's still in guided mode. Set
+     // unconditionally rather than inside the `if (hero)` block above:
+     // this is account-wide UI state, not something that should silently
+     // fail to arm on the one-in-a-million chance `hero` went missing
+     // mid-resolve.
+     if (isTutorialQuest) {
+-      state.pendingBurstQuestSpotlight = true;
+-      // Patch 0308. Set alongside pendingBurstQuestSpotlight -- see its
+-      // own comment in types.ts for why these are two separate flags.
++      if (state.guidedOnboarding) state.pendingQuestBoardIntro = true;
++      // Patch 0308. Set alongside pendingQuestBoardIntro -- see its own
++      // comment in types.ts for why these are two separate flags.
+       // Drives the post-tutorial GuidanceManager nudge pointing a new
+       // player at Vendors ("first_quest_complete_vendor_nudge").
+       state.hasCompletedFirstQuest = true;
+@@ -1422,15 +1353,13 @@ export const QuestManager = {
+     }
+ 
+     // Grimsby's cooldown counter, same account-wide shape -- doesn't care
+-    // which hero completed the quest, only whether it was burst-mode
+-    // (excluded) or not. Identified via the shared QuestManager.isBurstOffer
+-    // helper (patch 0288 pulled this out of its own standalone inline
+-    // check here, and out of dailyBurstBonus's identical inline check
+-    // above, into one place -- both used to compute the exact same
+-    // "duration within the tier's own burst range" condition
+-    // independently, since dailyBurstBonus's own check is gated on
+-    // `hero` existing and this one isn't).
+-    const isBurstQuest = QuestManager.isBurstOffer(quest.offer);
++    // which hero completed the quest, only whether it was Fast-mode
++    // (excluded) or not. Identified via the shared QuestManager.
++    // isFastOffer helper (patch 0288 pulled this out of its own
++    // standalone inline check here, and out of dailyBurstBonus's
++    // identical inline check above, into one place; patch 0332 repointed
++    // both at the new explicit offer.fast flag).
++    const isBurstQuest = QuestManager.isFastOffer(quest.offer);
+     const grimsbyWasPresent = PeddlerManager.isPresent(state);
+     PeddlerManager.registerQuestCompletion(state, isBurstQuest, resolvedAt);
+     const grimsbyArrived = !grimsbyWasPresent && PeddlerManager.isPresent(state);
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index f299ff8..4c18c12 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -195,6 +195,7 @@ export function createInitialState(now = Date.now()): GameState {
+     lastBannerShownId: null,
+     seenGuidance: [],
+     raidUpgrades: {},
++    questFastUpgrades: {},
+     seenOnboarding: false,
+     // See GameState.guidedOnboarding's own comment (types.ts) for the
+     // full reasoning -- true here is just the pre-modal default; the
+@@ -215,7 +216,7 @@ export function createInitialState(now = Date.now()): GameState {
+     tradeRouteUnlocked: false,
+     harvestUnlocked: false,
+     pendingHarvestSpotlight: false,
+-    pendingBurstQuestSpotlight: false,
++    pendingQuestBoardIntro: false,
+     overseerLevel: 0,
+     harvestTraderGold: 0,
+     harvestTraderGoldAt: now,
+@@ -1346,6 +1347,25 @@ const MIGRATIONS: Record<number, Migration> = {
+     version: 62,
+     guidedOnboarding: (save.guidedOnboarding as boolean | undefined) ?? true,
+   }),
++  // Patch 0332 -- the Fast-quest redesign (guild-idler-status.md's patch
++  // 0332 writeup has the full before/after). questFastUpgrades is a
++  // brand-new Record, same "no prior data to backfill from, start empty"
++  // reasoning raidUpgrades' own migration (17->18, above) used the first
++  // time that pattern showed up in this file. pendingQuestBoardIntro
++  // replaces the retired pendingBurstQuestSpotlight -- defaults false
++  // for every existing save (an old save's tutorial quest, if any, has
++  // already long since resolved, so there's no "board intro" moment left
++  // to show retroactively). The dead pendingBurstQuestSpotlight key
++  // itself is deliberately NOT stripped from an old save here -- an
++  // unread extra key on the object is harmless forever, same "migrations
++  // only ever backfill, never clean up" precedent every other migration
++  // in this file already follows.
++  62: (save) => ({
++    ...save,
++    version: 63,
++    questFastUpgrades: (save.questFastUpgrades as Record<string, number> | undefined) ?? {},
++    pendingQuestBoardIntro: (save.pendingQuestBoardIntro as boolean | undefined) ?? false,
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 80f6e68..94e5a0e 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 62;
++export const SAVE_VERSION = 63;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -781,10 +781,12 @@ export interface Hero {
+    * Day window (see data/reroll.ts's rerollDay -- same UTC-epoch-day
+    * division every other daily system in this game already uses) this
+    * hero last received the daily first-burst bonus for. A once-per-day
+-   * event can afford to be generous without reopening the exact
+-   * dominance problem fastQuestCapsPerHour exists to prevent --
+-   * repeating it doesn't get you more of it, unlike every other lever in
+-   * the burst reward formula. Optional/undefined for any hero who hasn't
++   * event can afford to be generous without reopening the dominance
++   * problem the old burst/medium cap/floor/taper stack (retired patch
++   * 0332) existed to prevent -- repeating it doesn't get you more of it,
++   * and rarity (now the sole guardrail on Fast rolls generally, see
++   * DifficultyConfig.fastChance's own comment) already limits how often
++   * this can even trigger. Optional/undefined for any hero who hasn't
+    * claimed it yet, same defensive-optional convention as
+    * equippedConsumables/autoAdvanceChainId above -- no migration needed.
+    */
+@@ -867,6 +869,19 @@ export interface QuestOffer {
+   rewardXp: number;
+   loot: LootRoll[];
+   reqLevel: number;
++  /**
++   * Patch 0332 -- replaces the old duration-range sniff test
++   * (QuestManager's former isBurstOffer) with an explicit flag set once,
++   * at generation time, by QuestManager.generateOffer's own fast roll.
++   * True for the scripted tutorial quest too (tutorialQuestOffer sets it
++   * directly) -- the tutorial IS meant to read as this same category of
++   * quest from a new player's very first contract onward, not a
++   * coincidentally-short one. Undefined (never explicitly false) on
++   * every other offer, same "absent means no" convention chain/stageName
++   * below already use. See QuestManager.isFastOffer, the one place this
++   * should ever be read rather than compared directly.
++   */
++  fast?: boolean;
+   /**
+    * Patch 0275. This stage's own name, distinct from `name` above -- a
+    * chain offer's `name` is now just the chain's own name (e.g. "The
+@@ -1510,6 +1525,36 @@ export interface RaidUpgradeDef {
+   maxLevel: number;
+ }
+ 
++/**
++ * Patch 0332. Same gold-then-Renown, same "own tree, own file" shape as
++ * RaidUpgradeDef immediately above (its direct precedent) -- deliberately
++ * NOT a `Partial<Modifiers>` mod though: what this buys (a flat
++ * percentage-point boost to every difficulty tier's Fast-quest chance,
++ * see QuestManager.generateOffer) isn't a hero stat or anything
++ * ModifierManager's mod system already models, it's a board-generation-
++ * time probability, so it gets its own single-purpose field instead of
++ * being forced into the general Modifiers shape for one number.
++ */
++export interface QuestFastUpgradeDef {
++  id: string;
++  name: string;
++  description: string;
++  /** Flat percentage points added to EVERY tier's own base fastChance
++   *  per level -- Easy and Legendary both get the same +N, so the
++   *  relative "Easy more common than Legendary" shape this upgrade is
++   *  layered on top of never inverts, no matter how many levels are
++   *  bought. */
++  fastChancePctPerLevel: number;
++  goldBaseCost: number;
++  goldCostGrowth: number;
++  /** Levels 0..goldTierMaxLevel-1 cost gold; goldTierMaxLevel is also where the Renown tier's own level-0 begins. */
++  goldTierMaxLevel: number;
++  renownBaseCost: number;
++  renownCostGrowth: number;
++  /** Absolute level cap across both tiers combined. */
++  maxLevel: number;
++}
++
+ /** A raid attempt in progress. Locked in at commit time, resolved encounter by encounter. */
+ export interface ActiveRaid {
+   raidId: string;
+@@ -2443,6 +2488,10 @@ export interface GameState {
+   seenGuidance: string[];
+   /** Levels bought in the dedicated Raid Guild Upgrade tree -- see RaidUpgradeDef. */
+   raidUpgrades: Record<string, number>;
++  /** Levels bought in the dedicated Fast-quest Guild Upgrade tree (patch
++   *  0332) -- see QuestFastUpgradeDef, same shape/reasoning as
++   *  raidUpgrades just above, its own direct precedent. */
++  questFastUpgrades: Record<string, number>;
+   /** True once the scripted first-run tour (or its Skip button) has been
+    *  seen -- never shown again after that, whether finished or skipped.
+    *  Existing saves are migrated straight to true (already onboarded by
+@@ -2556,44 +2605,43 @@ export interface GameState {
+    *  already do. */
+   pendingHarvestSpotlight: boolean;
+   /**
+-   * Patch 0288. A different kind of spotlight from pendingHarvestSpotlight/
+-   * pendingHatcherySpotlight/pendingPeddlerSpotlight just above -- those
+-   * three fire a one-shot OnboardingTour arrow pointing at a whole nav
+-   * tab; this one instead puts the same rotating gold-ring shimmer the
+-   * nav bar already uses for an unread tab (`.nav-tab-unread` in
+-   * app.css) directly onto specific quest CARDS on the board, as a
+-   * "try this next" nudge rather than a tour step.
++   * Patch 0332, replaces the old pendingBurstQuestSpotlight (retired --
++   * see guild-idler-status.md's patch 0332 writeup for why the forced
++   * "second quest is a guaranteed Fast offer" mechanic it drove got
++   * dropped, direct request: "I only disagree on the forced second
++   * quest, that was my mistake"). Fast quests no longer need a one-shot
++   * spotlight at all -- the permanent "⚡ Fast" tag every fast offer's
++   * QuestRow/QuestDetailModal now carries (QuestManager.isFastOffer) is
++   * always visible, not a fading hint.
+    *
+-   * Set true the moment the scripted tutorial quest (see
+-   * quests.ts's tutorialQuestOffer) resolves -- see QuestManager.resolve's
+-   * own tutorial-completion comment. While true, `QuestRow` (QuestPanel.
+-   * tsx) adds the shimmer to every burst-mode offer currently on the
+-   * board (via QuestManager.isBurstOffer), not just one specific offer
+-   * instance -- a board refresh can replace any given offer before the
+-   * player notices it, so the hint targets the whole burst *category*
+-   * until acted on, the same way `.nav-tab-unread` highlights a whole tab
+-   * rather than one specific notification.
+-   *
+-   * Cleared the moment a hero is actually sent on any burst-mode offer
+-   * (QuestManager.start) -- the hint has done its job once the player's
+-   * tried a burst quest at all, whether or not it was the exact instance
+-   * that happened to be shimmering.
+-   */
+-  pendingBurstQuestSpotlight: boolean;
++   * What still needs a one-time explainer is the quest BOARD itself, the
++   * moment it stops being the single scripted tutorial contract and
++   * becomes a real multi-offer board a player has to actually read and
++   * choose from. Set the instant the scripted tutorial quest resolves
++   * (QuestManager.resolve's own isTutorialQuest branch, same trigger
++   * point pendingBurstQuestSpotlight used to use) and ONLY when
++   * `guidedOnboarding` is true -- same gate GuildNamingModal's guide-mode
++   * question (patch 0330) already applies everywhere else onboarding
++   * shows up. Drives QuestBoardIntroModal (same "promote a guidance
++   * moment to a standalone modal instead of a toast" treatment
++   * pendingChainDiscovery already established for the first quest chain)
++   * -- dismissed via GameEngine.dismissQuestBoardIntro, mirroring
++   * dismissChainDiscovery exactly.
++   */
++  pendingQuestBoardIntro: boolean;
+   /**
+    * Patch 0308. Set the instant the scripted tutorial quest resolves
+    * (QuestManager.resolve's own isTutorialQuest branch) -- stays true
+    * for the rest of the save's life from that point on. Drives the
+    * post-tutorial GuidanceManager nudge ("check out the Vendors, or
+    * keep questing") -- see guidance-topics.json's
+-   * `first_quest_complete_vendor_nudge`. `pendingBurstQuestSpotlight`
+-   * just above covers the other half of this same moment (the "try a
+-   * burst quest next" card shimmer and, as of this patch, the
+-   * single-forced-burst-offer board restriction in
+-   * GameEngine.refreshWorld) -- kept as two separate flags rather than
+-   * one, since one drives a GuidanceManager topic condition (a plain
+-   * boolean check) and the other drives UI/board state directly, the
+-   * same split the rest of this file already uses elsewhere.
++   * `first_quest_complete_vendor_nudge`. `pendingQuestBoardIntro` just
++   * above covers the other half of this same moment (the standalone
++   * modal explaining the real quest board) -- kept as two separate
++   * flags rather than one, since one drives a GuidanceManager topic
++   * condition (a plain boolean check) and the other drives modal state
++   * directly, the same split the rest of this file already uses
++   * elsewhere.
+    */
+   hasCompletedFirstQuest: boolean;
+   /**
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 5ba82f2..203402e 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -4,6 +4,7 @@ import { useSettings } from './useSettings';
+ import { backgroundSrc } from '../game/settings';
+ import { OnboardingTour } from './OnboardingTour';
+ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
++import { QuestBoardIntroModal } from './QuestBoardIntroModal';
+ import { formatGold, formatNumber } from '../game/util';
+ import { attentionCounts, isNavTabUnread } from '../game/attention';
+ import { PeddlerManager } from '../game/managers/PeddlerManager';
+@@ -697,6 +698,18 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+           onClose={() => engine.dismissChainDiscovery()}
+         />
+       )}
++      {/* Patch 0332. guidedOnboarding-gated same as the tour above --
++          QuestManager.resolve only ever sets pendingQuestBoardIntro true
++          when guide mode is on, but the check is repeated here too, same
++          defense-in-depth pattern the tour's own render guard already
++          uses, in case guide mode gets turned off in Settings between the
++          flag arming and this actually rendering. */}
++      {engine.state.guildName !== '' && engine.state.guidedOnboarding && engine.state.pendingQuestBoardIntro && (
++        <QuestBoardIntroModal
++          onView={() => { setTab('quests'); engine.dismissQuestBoardIntro(); }}
++          onClose={() => engine.dismissQuestBoardIntro()}
++        />
++      )}
+       {/* One-step reuse of the same OnboardingTour spotlight component,
+           fired the moment the Hatchery chain completes rather than as part
+           of the fixed first-run tour above (its timing depends on when the
+diff --git a/src/ui/QuestBoardIntroModal.tsx b/src/ui/QuestBoardIntroModal.tsx
+new file mode 100644
+index 0000000..642a0b1
+--- /dev/null
++++ b/src/ui/QuestBoardIntroModal.tsx
+@@ -0,0 +1,35 @@
++/**
++ * Patch 0332. Fires the moment the scripted tutorial quest resolves and
++ * the board becomes a real, ordinary multi-offer one for the first time
++ * -- see GameState.pendingQuestBoardIntro's own comment for the full
++ * trigger reasoning. Same "promote a guidance moment to a standalone
++ * modal instead of a toast" treatment ChainDiscoveryModal already
++ * established for the first quest chain discovery -- this is the direct
++ * replacement for what used to be a forced, single guaranteed Fast offer
++ * on that same second board (retired: "I only disagree on the forced
++ * second quest, that was my mistake"). Only ever shown when
++ * guidedOnboarding is true (set by QuestManager.resolve before this ever
++ * arms), so an experienced player who opted out never sees it.
++ */
++export function QuestBoardIntroModal({ onView, onClose }: { onView: () => void; onClose: () => void }) {
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
++        <h3>Reading the Quest Board</h3>
++        <p className="small" style={{ marginTop: 0 }}>
++          From here on your board fills with several contracts at once, across five difficulties -- Easy through
++          Legendary. Harder difficulties pay more and drop better loot, but run longer and succeed less often.
++          Tap any card to see its full odds, time, and reward before sending anyone.
++        </p>
++        <p className="small">
++          Watch for the <b>⚡ Fast</b> tag -- a rare roll on any difficulty that finishes in a fraction of the
++          normal time, still worth a real reward. It can turn up anywhere, so keep an eye on the board.
++        </p>
++        <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++          <button className="btn-primary" onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onView}>View Quest Board</button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index c196e59..a762b31 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -4,13 +4,14 @@ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { backgroundSrc } from '../../game/settings';
+ import { GuildManager } from '../../game/managers/GuildManager';
++import { QUEST_FAST_UPGRADE_BY_ID } from '../../game/data/questFastUpgrades';
+ import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+ import {
+   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
+ } from '../../game/data/quests';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { QuestOffer, Hero, AutoChainWeightBy } from '../../game/types';
+-import { formatDuration, formatGold } from '../../game/util';
++import { formatDuration, formatGold, formatNumber } from '../../game/util';
+ import { RarityPill } from '../RarityPill';
+ import { EggIcon } from '../EggIcon';
+ import { ConfirmModal } from '../ConfirmModal';
+@@ -130,14 +131,16 @@ export function QuestRow({
+     : questTagIconSrc(offer.tag);
+   // Patch 0288: the same rotating gold-ring shimmer a nav tab gets when it
+   // has something unread (.nav-tab-unread in app.css), reused here as a
+-  // "do this next" nudge on specific quest cards -- the scripted tutorial
+-  // quest itself (always the only offer on a fresh guild's board, see
+-  // tutorialQuestOffer), then every burst-mode offer once
+-  // pendingBurstQuestSpotlight arms (see that field's own comment in
+-  // types.ts for why it targets the whole burst category rather than one
+-  // specific offer instance).
+-  const isSpotlighted = offer.id === TUTORIAL_QUEST_ID
+-    || (state.pendingBurstQuestSpotlight && QuestManager.isBurstOffer(offer));
++  // "do this next" nudge -- as of patch 0332 this only ever targets the
++  // scripted tutorial quest itself (always the only offer on a fresh
++  // guild's board, see tutorialQuestOffer), a one-time thing that never
++  // repeats. Every OTHER Fast offer instead gets a permanent, always-on
++  // ⚡ tag in the meta row below (see isFast just below) -- a recurring
++  // mechanic reads better as a stable badge than a fading "new" shimmer,
++  // and it no longer needs any one-shot GameState flag to arm/clear at
++  // all (the old pendingBurstQuestSpotlight this replaced did).
++  const isSpotlighted = offer.id === TUTORIAL_QUEST_ID;
++  const isFast = QuestManager.isFastOffer(offer);
+ 
+   return (
+     <div
+@@ -174,6 +177,15 @@ export function QuestRow({
+         </div>
+         <div className="raid-card-meta">
+           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
++          {isFast && (
++            <span
++              className="tag"
++              style={{ color: 'var(--brass)' }}
++              title="A rare fast roll -- shorter than usual for its difficulty, reward scaled to match but never below half of the full-length version"
++            >
++              ⚡ Fast
++            </span>
++          )}
+           {offer.chain && (
+             <span className="tag" style={{ color: 'var(--blood)' }}>
+               Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
+@@ -244,6 +256,8 @@ export function QuestDetailModal({
+   const completion = chain && offer.chain && offer.chain.stage + 1 === offer.chain.totalStages
+     ? QuestManager.chainCompletionPreview(chain) : null;
+   const tagSrc = !offer.chain ? questTagBannerSrc(offer.tag) : undefined;
++  // Patch 0332.
++  const isFastOffer = QuestManager.isFastOffer(offer);
+ 
+   return (
+     <div className="overlay" onClick={onClose}>
+@@ -255,7 +269,12 @@ export function QuestDetailModal({
+         ) : null}
+         <div className="spread">
+           <span className="card-title hero-card-name">{offer.name}</span>
+-          <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
++          <span>
++            <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
++            {isFastOffer && (
++              <span className="tag" style={{ color: 'var(--brass)', marginLeft: 6 }}>⚡ Fast</span>
++            )}
++          </span>
+         </div>
+         {offer.chain && (
+           // Patch 0275: the stage name lives here now, not glued onto the
+@@ -314,6 +333,19 @@ export function QuestDetailModal({
+           </div>
+         )}
+ 
++        {/* Patch 0332 -- same non-timed inline-callout treatment as the
++            tutorial explainer just above, for the (much more common)
++            case of an ordinary Fast offer. Skipped for the tutorial
++            quest itself (offer.id check) since that card already gets
++            its own dedicated callout above and doesn't need a second,
++            overlapping one. */}
++        {isFastOffer && offer.id !== TUTORIAL_QUEST_ID && (
++          <p className="tiny muted" style={{ margin: '0 0 8px' }}>
++            ⚡ Fast roll -- shorter than a normal {cfg.label} contract, reward scaled to match but never below half
++            of what the full-length version would pay.
++          </p>
++        )}
++
+         {loot.length > 0 && (
+           <>
+             <div className="tiny muted" style={{ marginBottom: 2 }}>Chance to find</div>
+@@ -440,6 +472,52 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
+   );
+ }
+ 
++/**
++ * Patch 0332, direct request: "a new expensive upgrade to increase
++ * chances" for how often a quest offer rolls Fast. Deliberately a
++ * compact single row (not the full detail-modal RaidsPanel's own
++ * upgrade-row pattern uses) -- there's exactly one entry in this tree
++ * (QUEST_FAST_UPGRADES, see that file's own "starter set, grows over
++ * time" comment), so a whole modal-on-click affordance for a single item
++ * would be more chrome than the feature currently needs.
++ */
++function LuckyStreakRow() {
++  const engine = useEngine();
++  const state = engine.state;
++  const def = QUEST_FAST_UPGRADE_BY_ID['lucky_streak'];
++  const level = GuildManager.questFastUpgradeLevel(state, def.id);
++  const next = GuildManager.nextQuestFastUpgradeCost(state, def.id);
++  const maxed = next === null;
++  const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
++  const buyLabel = maxed
++    ? 'Maxed'
++    : next!.currency === 'gold'
++      ? `Buy · ${formatGold(next!.cost)}`
++      : `Buy · ${formatNumber(next!.cost)} renown`;
++  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
++  return (
++    <div className="upgrade-row">
++      <span style={{ minWidth: 0 }}>
++        <span className="upgrade-row-head">
++          <span className="upgrade-row-name">⚡ {def.name}</span>
++          <span className="upgrade-row-level">{level}/{def.maxLevel}</span>
++        </span>
++        <span className="upgrade-row-effect">+{def.fastChancePctPerLevel}% Fast chance per level, every difficulty</span>
++        <span className="upgrade-row-rule">
++          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
++        </span>
++      </span>
++      <button
++        className={`upgrade-buy-btn ${!maxed && afford ? 'affordable' : ''}`}
++        disabled={maxed || !afford}
++        onClick={() => engine.buyQuestFastUpgrade(def.id)}
++      >
++        {buyLabel}
++      </button>
++    </div>
++  );
++}
++
+ export function QuestPanel() {
+   const engine = useEngine();
+   const now = useNow();
+@@ -578,6 +656,8 @@ export function QuestPanel() {
+         what's open to them.
+       </p>
+ 
++      <LuckyStreakRow />
++
+       {/* --------------------------- active quests --------------------------- */}
+       {state.activeQuests.length > 0 && (
+         <>
+diff --git a/tools/devtool/sim/runSim.ts b/tools/devtool/sim/runSim.ts
+index 070d117..44cb2b1 100644
+--- a/tools/devtool/sim/runSim.ts
++++ b/tools/devtool/sim/runSim.ts
+@@ -14,14 +14,22 @@
+  * the other -- not a workaround, the actual correct isolation boundary.
+  *
+  * Deliberately reuses the real formula modules directly (DIFFICULTIES,
+- * bestUnlockedTier, expectedRatePerHour, xpForLevel, guildCost, upgradeCost,
+- * fastQuestCapsPerHour/fastQuestFloorPerHour, easyFastModeChances) rather
+- * than re-deriving any of this math -- a second copy of a formula the game
+- * already isolated into a pure function is exactly the kind of drift risk
+- * flagged elsewhere in this project (see guild-idler-status.md's DevTool
+- * scalability discussion), and it's avoidable here since every formula this
+- * sim needs already lives in an engine-independent module (no GameState,
+- * no Hero object, no manager class required to call any of them).
++ * bestUnlockedTier, expectedRatePerHour, xpForLevel, guildCost,
++ * upgradeCost) rather than re-deriving any of this math -- a second copy
++ * of a formula the game already isolated into a pure function is exactly
++ * the kind of drift risk flagged elsewhere in this project (see
++ * guild-idler-status.md's DevTool scalability discussion), and it's
++ * avoidable here since every formula this sim needs already lives in an
++ * engine-independent module (no GameState, no Hero object, no manager
++ * class required to call any of them).
++ *
++ * Fast-quest income (patch 0332) is NOT modeled here -- same "flagged
++ * rather than silently approximated" treatment as raids/chains below.
++ * Fast rolls are rare (1-5% per offer, tier-dependent) and reward-neutral
++ * on average (time-scaled off the same baseline this sim already uses,
++ * floored but not inflated), so their effect on aggregate gold/xp *rate*
++ * is small; a proper model would need per-offer RNG this expected-value
++ * sim deliberately doesn't do anywhere else either.
+  *
+  * Phase 1 scope, explicitly NOT modeled (flagged rather than silently
+  * approximated):
+@@ -331,29 +339,6 @@ async function main() {
+     };
+   }
+ 
+-  // -------------------------------------------------- burst dominance check --
+-  // Sanity check carried over from balance.ts's own documented invariant
+-  // (fastQuestFloorPerHour can never exceed the real best-unlocked tier's
+-  // own rate) -- re-checked here against whatever tuning is active in THIS
+-  // process, so a proposed change that breaks the invariant shows up as a
+-  // real, flagged regression instead of silently shipping. Passes `lvl`
+-  // into expectedRatePerHour now (patch 0217 fix) -- this check is about
+-  // a specific hero level's real experience, not the tier's own fixed
+-  // reference point.
+-  const burstCheck = [5, 10, 15, 20, 25, 30, 40, 50].map((lvl) => {
+-    const tier = balance.bestUnlockedTier(lvl, false);
+-    const cfg = DIFFICULTIES[tier];
+-    const caps = balance.fastQuestCapsPerHour(lvl, false);
+-    const tierGoldPerHour = balance.expectedRatePerHour(cfg, 'gold', lvl);
+-    return {
+-      level: lvl,
+-      tier,
+-      capGoldPerHour: Math.round(caps.gold * 100) / 100,
+-      tierGoldPerHour: Math.round(tierGoldPerHour * 100) / 100,
+-      dominant: caps.gold > tierGoldPerHour,
+-    };
+-  });
+-
+   const result = {
+     preset: input.preset.id,
+     heroCount: liveHeroCount,
+@@ -373,7 +358,6 @@ async function main() {
+     ),
+     allSpentDay: allSpent() ? Math.round(day) : null,
+     tierRates,
+-    burstCheck,
+   };
+ 
+   process.stdout.write(JSON.stringify(result));

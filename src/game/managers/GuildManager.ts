@@ -3,6 +3,7 @@ import {
   guildCost, upgradeCost, upgradeScrapCost, vendorLevelCost, vendorLevelScrapCost, isVendorUpgradeUnlocked,
 } from '../data/progression';
 import { RAID_UPGRADES, RAID_UPGRADE_BY_ID, raidUpgradeCost } from '../data/raidUpgrades';
+import { QUEST_FAST_UPGRADES, QUEST_FAST_UPGRADE_BY_ID, questFastUpgradeCost } from '../data/questFastUpgrades';
 import { chainReplayTierForChain, CHAIN_REPLAY_TIER_BY_ID } from '../data/chainReplay';
 import { heroMilestoneUnlocked } from '../data/heroMilestones';
 import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
@@ -275,6 +276,45 @@ export const GuildManager = {
 
   raidUpgrades() {
     return RAID_UPGRADES;
+  },
+
+  /* ------------------------ quest fast-chance upgrades ------------------- */
+  // Patch 0332. Same buy/cost shape as the raid upgrades just above (its
+  // direct precedent), reading state.questFastUpgrades instead of
+  // state.raidUpgrades -- see QuestFastUpgradeDef's own comment in
+  // types.ts for why this needed its own small tree rather than folding
+  // into either existing one.
+
+  questFastUpgradeLevel(state: GameState, id: string): number {
+    return state.questFastUpgrades[id] ?? 0;
+  },
+
+  nextQuestFastUpgradeCost(state: GameState, id: string): { cost: number; currency: 'gold' | 'renown' } | null {
+    const def = QUEST_FAST_UPGRADE_BY_ID[id];
+    if (!def) return null;
+    return questFastUpgradeCost(def, GuildManager.questFastUpgradeLevel(state, id));
+  },
+
+  buyQuestFastUpgrade(state: GameState, id: string): string | null {
+    const def = QUEST_FAST_UPGRADE_BY_ID[id];
+    if (!def) return 'Unknown upgrade.';
+    const level = GuildManager.questFastUpgradeLevel(state, id);
+    const next = questFastUpgradeCost(def, level);
+    if (!next) return 'Already at maximum.';
+    if (next.currency === 'gold') {
+      if (state.gold < next.cost) return 'Not enough gold.';
+      state.gold -= next.cost;
+      state.stats.goldSpent += next.cost;
+    } else {
+      if (state.renown < next.cost) return 'Not enough renown.';
+      state.renown -= next.cost;
+    }
+    state.questFastUpgrades[id] = level + 1;
+    return null;
+  },
+
+  questFastUpgrades() {
+    return QUEST_FAST_UPGRADES;
   },
 
   /* ------------------------------ treasury ------------------------------ */

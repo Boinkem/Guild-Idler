@@ -303,9 +303,7 @@ export const PeddlerManager = {
   /**
    * Called once per quest resolution (QuestManager.resolve), success or
    * failure both count the same -- a completed quest is a completed
-   * quest either way, same "counts regardless of outcome" precedent
-   * fastQuestCapsPerHour already sets for its own per-hour accounting.
-   * Burst-mode quests are excluded entirely -- see
+   * quest either way. Fast-mode quests are excluded entirely -- see
    * GameState.questsSinceGrimsby's own comment for why (the exact class
    * of exploit the original burst-taper fix already had to correct
    * once: a cheap, frequent action shouldn't be able to fast-forward a

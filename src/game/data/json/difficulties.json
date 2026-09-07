@@ -5,26 +5,15 @@
     "baseSuccess": 70,
     "minDurationHours": 1,
     "maxDurationHours": 2,
-    "burstChance": 45,
-    "burstMinDurationMinutes": 2,
-    "burstMaxDurationMinutes": 8,
-    "burstMinGold": 6,
-    "burstMaxGold": 12,
-    "burstMinXp": 8,
-    "burstMaxXp": 14,
-    "mediumChance": 35,
-    "mediumMinDurationMinutes": 20,
-    "mediumMaxDurationMinutes": 40,
-    "mediumMinGold": 14,
-    "mediumMaxGold": 30,
-    "mediumMinXp": 14,
-    "mediumMaxXp": 22,
     "xpMultiplier": 1,
     "lootChance": 12,
     "weight": 30,
     "color": "#79a86b",
     "referenceLevel": 1,
-    "rewardMultiplier": 0.6
+    "rewardMultiplier": 0.6,
+    "fastChance": 5,
+    "fastMinDurationPct": 10,
+    "fastMaxDurationPct": 40
   },
   {
     "id": "normal",
@@ -32,19 +21,15 @@
     "baseSuccess": 60,
     "minDurationHours": 2,
     "maxDurationHours": 4,
-    "mediumChance": 25,
-    "mediumMinDurationMinutes": 20,
-    "mediumMaxDurationMinutes": 40,
-    "mediumMinGold": 20,
-    "mediumMaxGold": 45,
-    "mediumMinXp": 20,
-    "mediumMaxXp": 32,
     "xpMultiplier": 2.4,
     "lootChance": 20,
     "weight": 28,
     "color": "#5b8fd6",
     "referenceLevel": 3,
-    "rewardMultiplier": 1.5
+    "rewardMultiplier": 1.5,
+    "fastChance": 4,
+    "fastMinDurationPct": 10,
+    "fastMaxDurationPct": 40
   },
   {
     "id": "hard",
@@ -57,7 +42,10 @@
     "weight": 22,
     "color": "#c98b3a",
     "referenceLevel": 8,
-    "rewardMultiplier": 3.2
+    "rewardMultiplier": 3.2,
+    "fastChance": 3,
+    "fastMinDurationPct": 10,
+    "fastMaxDurationPct": 40
   },
   {
     "id": "epic",
@@ -70,7 +58,10 @@
     "weight": 14,
     "color": "#a874d6",
     "referenceLevel": 15,
-    "rewardMultiplier": 7.3
+    "rewardMultiplier": 7.3,
+    "fastChance": 2,
+    "fastMinDurationPct": 10,
+    "fastMaxDurationPct": 40
   },
   {
     "id": "legendary",
@@ -83,6 +74,9 @@
     "weight": 6,
     "color": "#d9a441",
     "referenceLevel": 25,
-    "rewardMultiplier": 19.5
+    "rewardMultiplier": 19.5,
+    "fastChance": 1,
+    "fastMinDurationPct": 10,
+    "fastMaxDurationPct": 40
   }
 ]

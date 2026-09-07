@@ -32,86 +32,63 @@ export interface DifficultyConfig {
   weight: number;
   color: string;
   /**
-   * A second, short duration range rolled with `burstChance` probability
-   * instead of the normal min/maxDuration. A single wide uniform range
-   * mostly rolls near its own middle — verified directly, widening Easy's
-   * floor to 90s on its own left the *typical* roll still around an hour,
-   * so a genuinely fast early hook needs a guaranteed-frequent short mode,
-   * not just a wider tail on the existing one.
+   * Patch 0332 -- replaces the old two-tier burst/medium system entirely
+   * (see this file's own header comment for the full redesign reasoning
+   * and guild-idler-status.md's patch 0332 writeup for the before/after).
+   * One roll, one chance, on EVERY difficulty tier now (not Easy-only) --
+   * this is the base chance before GameState.questFastUpgrades' Lucky
+   * Streak bonus (QuestManager.generateOffer adds that on top). Kept
+   * deliberately low and DECREASING per tier (Easy highest, Legendary
+   * lowest, direct request: "Id like easy ones to be more common than
+   * legendarys") -- rarity is the ONLY guardrail against a fast roll
+   * becoming the dominant per-hour strategy now that the old cap/floor/
+   * taper stack (balance.ts's fastQuestCapsPerHour/fastQuestFloorPerHour/
+   * easyFastModeChances) is gone, a deliberate choice confirmed directly
+   * rather than assumed safe.
    */
-  burstChance?: number;
-  burstMinDuration?: number;
-  burstMaxDuration?: number;
+  fastChance: number;
   /**
-   * Burst quests get their OWN reward range rather than a proportional slice
-   * of the full range. A strict proportional slice was tried first and
-   * measured directly: it rounded to 1-2 XP per burst quest, which is
-   * mathematically fair but reads as insulting rather than "numbers going
-   * up" -- exactly what this was supposed to deliver. Onboarding rewards get
-   * to be a little generous on purpose.
+   * A Fast roll's duration is a PERCENTAGE of this tier's own normal
+   * min/maxDuration range, not an absolute duration -- the old burst
+   * system's fixed 2-8min window only ever made sense pinned to Easy;
+   * stretched naively up to Legendary it would mean "finish a 24-hour
+   * quest in 3 minutes," which breaks the "difficulty scales everything"
+   * redesign this whole patch is built around. fastMinDurationPct anchors
+   * off minDuration, fastMaxDurationPct off maxDuration -- both fields
+   * are percentages (10 means 10%), not fractions.
    */
-  burstMinGold?: number;
-  burstMaxGold?: number;
-  burstMinXp?: number;
-  burstMaxXp?: number;
-  /**
-   * A third duration mode, same shape as burst (own chance, own duration
-   * range, own reward range) but landing in the gap burst and the normal
-   * range left open -- burst tops out at 8 minutes, and the normal range
-   * starts at a full hour, so there was nowhere for a genuinely "half an
-   * hour, check back on your break" contract to live. Rolled independently
-   * of burst (burst is checked first; medium only gets a chance if burst
-   * didn't hit), so the two never compete for the same slot on a given
-   * offer. Subject to the same live per-hour cap burst gets (see
-   * balance.ts's fastQuestCapsPerHour) for the same reason: an explicit
-   * reward range read as more satisfying than a proportional slice of the
-   * full range when burst was first added, but that same generosity needs
-   * the same guardrail against becoming the dominant strategy.
-   */
-  mediumChance?: number;
-  mediumMinDuration?: number;
-  mediumMaxDuration?: number;
-  mediumMinGold?: number;
-  mediumMaxGold?: number;
-  mediumMinXp?: number;
-  mediumMaxXp?: number;
+  fastMinDurationPct: number;
+  fastMaxDurationPct: number;
 }
 
 /**
  * DIFFICULTIES lives in json/difficulties.json so it can be edited via
  * tools/devtool without touching TypeScript -- same pattern
- * QUEST_TEMPLATES/QUEST_PREFIXES/QUEST_CHAINS above already use. This was
- * the single largest remaining DevTool coverage gap (see
- * guild-idler-status.md's backlog), tracked separately from the
- * quest-chains migration specifically because of its own scope: ~100
- * tunable values across 5 tiers, with dense balance rationale attached to
- * several of them individually (the burst-floor and Epic/Legendary
- * xpMultiplier fixes below).
+ * QUEST_TEMPLATES/QUEST_PREFIXES/QUEST_CHAINS above already use.
  *
  * Duration fields use the same "friendly unit on disk, converted to ms at
  * import" convention raid-encounters.json (durationHours) and
  * quest-chains.json (durationMinutes) already established: the main
  * min/maxDuration range is always a whole number of hours across all 5
- * tiers, so it's stored as *Hours; burst/medium durations are always a
- * whole number of minutes, so those are stored as *Minutes. Both convert
- * to the millisecond values DifficultyConfig actually needs below.
+ * tiers, so it's stored as *Hours.
  *
  * Per-tier balance history worth keeping, since it doesn't fit anywhere
  * in a JSON file with no comments (full detail also in
- * guild-idler-status.md's migration writeup):
- * - Easy's burst floor was bumped from 90s to 2min -- a sub-2-minute
- *   duration divided into any positive-integer reward implies a per-hour
- *   rate no live cap can safely contain. Confirmed by direct simulation,
- *   not assumed.
- * - Easy's medium tier is rolled only when burst doesn't hit (45% burst,
- *   then 35% of the remainder), Normal's less often (25%) since Normal is
- *   already a step up from "quick check-in" territory.
+ * guild-idler-status.md's patch 0332 writeup):
+ * - Patch 0332 replaced the old burst/medium two-tier system (own
+ *   fastChance/fastMinDurationPct/fastMaxDurationPct fields per tier now,
+ *   see DifficultyConfig's own comment) after direct feedback that the
+ *   old system's guardrail stack (a live per-hour cap, a matching floor,
+ *   a level-based taper, ALL fighting the same "burst became the
+ *   mathematically dominant strategy at low levels" fire) was itself the
+ *   problem -- burst's reward table was a separate, generous, easily-
+ *   exploited mini-economy bolted onto Easy specifically. Fast quests now
+ *   use the SAME reward formula every other quest does, just time-scaled
+ *   and rarity-gated instead.
  * - Epic's xpMultiplier was raised 11 -> 12 and Legendary's 26 -> 30 --
  *   verified directly that both tiers' xp/hr had fallen BELOW Hard's at
  *   their old values, the opposite of what progressing through
- *   difficulty should feel like. The live per-hour cap in balance.ts is
- *   what keeps burst/medium's own explicit reward ranges honest against
- *   whichever tier ends up paying the most per hour.
+ *   difficulty should feel like.
  */
 interface DifficultyConfigJson {
   id: Difficulty;
@@ -125,20 +102,9 @@ interface DifficultyConfigJson {
   rewardMultiplier: number;
   weight: number;
   color: string;
-  burstChance?: number;
-  burstMinDurationMinutes?: number;
-  burstMaxDurationMinutes?: number;
-  burstMinGold?: number;
-  burstMaxGold?: number;
-  burstMinXp?: number;
-  burstMaxXp?: number;
-  mediumChance?: number;
-  mediumMinDurationMinutes?: number;
-  mediumMaxDurationMinutes?: number;
-  mediumMinGold?: number;
-  mediumMaxGold?: number;
-  mediumMinXp?: number;
-  mediumMaxXp?: number;
+  fastChance: number;
+  fastMinDurationPct: number;
+  fastMaxDurationPct: number;
 }
 
 import difficultiesJson from './json/difficulties.json';
@@ -151,29 +117,8 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = Object.fromEnt
       xpMultiplier: d.xpMultiplier,
       lootChance: d.lootChance, referenceLevel: d.referenceLevel, rewardMultiplier: d.rewardMultiplier,
       weight: d.weight, color: d.color,
-      // Gated on `> 0`, not `!== undefined` -- the DevTool's own generic
-      // number-field editor always renders/saves an untouched optional
-      // number as 0 rather than leaving it absent (see app.js's
-      // fieldControl/readField), so simply opening Hard/Epic/Legendary in
-      // the editor and hitting Save would otherwise write a spurious
-      // burstChance: 0 (and matching 0-value siblings) into the JSON. A
-      // 0% burst/medium chance is functionally identical to the field
-      // being absent either way, so this guard is free insurance against
-      // that DevTool quirk, not a behavior change for real data.
-      ...(d.burstChance !== undefined && d.burstChance > 0 ? {
-        burstChance: d.burstChance,
-        burstMinDuration: d.burstMinDurationMinutes! * MINUTE,
-        burstMaxDuration: d.burstMaxDurationMinutes! * MINUTE,
-        burstMinGold: d.burstMinGold, burstMaxGold: d.burstMaxGold,
-        burstMinXp: d.burstMinXp, burstMaxXp: d.burstMaxXp,
-      } : {}),
-      ...(d.mediumChance !== undefined && d.mediumChance > 0 ? {
-        mediumChance: d.mediumChance,
-        mediumMinDuration: d.mediumMinDurationMinutes! * MINUTE,
-        mediumMaxDuration: d.mediumMaxDurationMinutes! * MINUTE,
-        mediumMinGold: d.mediumMinGold, mediumMaxGold: d.mediumMaxGold,
-        mediumMinXp: d.mediumMinXp, mediumMaxXp: d.mediumMaxXp,
-      } : {}),
+      fastChance: d.fastChance,
+      fastMinDurationPct: d.fastMinDurationPct, fastMaxDurationPct: d.fastMaxDurationPct,
     },
   ]),
 ) as Record<Difficulty, DifficultyConfig>;
@@ -430,5 +375,11 @@ export function tutorialQuestOffer(): QuestOffer {
     rewardXp: 20,
     loot: [],
     reqLevel: 1,
+    // Patch 0332, direct request: the tutorial quest should read as this
+    // same category of quest from a new player's very first contract
+    // onward -- explicit now rather than an accident of its 5-minute
+    // duration happening to fall under some threshold (see QuestOffer.
+    // fast's own comment for why this moved to an explicit flag).
+    fast: true,
   };
 }

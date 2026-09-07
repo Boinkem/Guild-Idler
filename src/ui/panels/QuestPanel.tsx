@@ -4,13 +4,14 @@ import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
+import { QUEST_FAST_UPGRADE_BY_ID } from '../../game/data/questFastUpgrades';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import {
   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
 } from '../../game/data/quests';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { QuestOffer, Hero, AutoChainWeightBy } from '../../game/types';
-import { formatDuration, formatGold } from '../../game/util';
+import { formatDuration, formatGold, formatNumber } from '../../game/util';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
 import { ConfirmModal } from '../ConfirmModal';
@@ -130,14 +131,16 @@ export function QuestRow({
     : questTagIconSrc(offer.tag);
   // Patch 0288: the same rotating gold-ring shimmer a nav tab gets when it
   // has something unread (.nav-tab-unread in app.css), reused here as a
-  // "do this next" nudge on specific quest cards -- the scripted tutorial
-  // quest itself (always the only offer on a fresh guild's board, see
-  // tutorialQuestOffer), then every burst-mode offer once
-  // pendingBurstQuestSpotlight arms (see that field's own comment in
-  // types.ts for why it targets the whole burst category rather than one
-  // specific offer instance).
-  const isSpotlighted = offer.id === TUTORIAL_QUEST_ID
-    || (state.pendingBurstQuestSpotlight && QuestManager.isBurstOffer(offer));
+  // "do this next" nudge -- as of patch 0332 this only ever targets the
+  // scripted tutorial quest itself (always the only offer on a fresh
+  // guild's board, see tutorialQuestOffer), a one-time thing that never
+  // repeats. Every OTHER Fast offer instead gets a permanent, always-on
+  // ⚡ tag in the meta row below (see isFast just below) -- a recurring
+  // mechanic reads better as a stable badge than a fading "new" shimmer,
+  // and it no longer needs any one-shot GameState flag to arm/clear at
+  // all (the old pendingBurstQuestSpotlight this replaced did).
+  const isSpotlighted = offer.id === TUTORIAL_QUEST_ID;
+  const isFast = QuestManager.isFastOffer(offer);
 
   return (
     <div
@@ -174,6 +177,15 @@ export function QuestRow({
         </div>
         <div className="raid-card-meta">
           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+          {isFast && (
+            <span
+              className="tag"
+              style={{ color: 'var(--brass)' }}
+              title="A rare fast roll -- shorter than usual for its difficulty, reward scaled to match but never below half of the full-length version"
+            >
+              ⚡ Fast
+            </span>
+          )}
           {offer.chain && (
             <span className="tag" style={{ color: 'var(--blood)' }}>
               Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
@@ -244,6 +256,8 @@ export function QuestDetailModal({
   const completion = chain && offer.chain && offer.chain.stage + 1 === offer.chain.totalStages
     ? QuestManager.chainCompletionPreview(chain) : null;
   const tagSrc = !offer.chain ? questTagBannerSrc(offer.tag) : undefined;
+  // Patch 0332.
+  const isFastOffer = QuestManager.isFastOffer(offer);
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -255,7 +269,12 @@ export function QuestDetailModal({
         ) : null}
         <div className="spread">
           <span className="card-title hero-card-name">{offer.name}</span>
-          <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+          <span>
+            <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+            {isFastOffer && (
+              <span className="tag" style={{ color: 'var(--brass)', marginLeft: 6 }}>⚡ Fast</span>
+            )}
+          </span>
         </div>
         {offer.chain && (
           // Patch 0275: the stage name lives here now, not glued onto the
@@ -312,6 +331,19 @@ export function QuestDetailModal({
               you're ready, hit Send below -- there's nothing else to set up first.
             </p>
           </div>
+        )}
+
+        {/* Patch 0332 -- same non-timed inline-callout treatment as the
+            tutorial explainer just above, for the (much more common)
+            case of an ordinary Fast offer. Skipped for the tutorial
+            quest itself (offer.id check) since that card already gets
+            its own dedicated callout above and doesn't need a second,
+            overlapping one. */}
+        {isFastOffer && offer.id !== TUTORIAL_QUEST_ID && (
+          <p className="tiny muted" style={{ margin: '0 0 8px' }}>
+            ⚡ Fast roll -- shorter than a normal {cfg.label} contract, reward scaled to match but never below half
+            of what the full-length version would pay.
+          </p>
         )}
 
         {loot.length > 0 && (
@@ -437,6 +469,52 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
       {hero.status === 'questing' ? ' ⏳' : ''}
       {hero.injuries.length > 0 ? ' ⚑' : ''}
     </button>
+  );
+}
+
+/**
+ * Patch 0332, direct request: "a new expensive upgrade to increase
+ * chances" for how often a quest offer rolls Fast. Deliberately a
+ * compact single row (not the full detail-modal RaidsPanel's own
+ * upgrade-row pattern uses) -- there's exactly one entry in this tree
+ * (QUEST_FAST_UPGRADES, see that file's own "starter set, grows over
+ * time" comment), so a whole modal-on-click affordance for a single item
+ * would be more chrome than the feature currently needs.
+ */
+function LuckyStreakRow() {
+  const engine = useEngine();
+  const state = engine.state;
+  const def = QUEST_FAST_UPGRADE_BY_ID['lucky_streak'];
+  const level = GuildManager.questFastUpgradeLevel(state, def.id);
+  const next = GuildManager.nextQuestFastUpgradeCost(state, def.id);
+  const maxed = next === null;
+  const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
+  const buyLabel = maxed
+    ? 'Maxed'
+    : next!.currency === 'gold'
+      ? `Buy · ${formatGold(next!.cost)}`
+      : `Buy · ${formatNumber(next!.cost)} renown`;
+  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
+  return (
+    <div className="upgrade-row">
+      <span style={{ minWidth: 0 }}>
+        <span className="upgrade-row-head">
+          <span className="upgrade-row-name">⚡ {def.name}</span>
+          <span className="upgrade-row-level">{level}/{def.maxLevel}</span>
+        </span>
+        <span className="upgrade-row-effect">+{def.fastChancePctPerLevel}% Fast chance per level, every difficulty</span>
+        <span className="upgrade-row-rule">
+          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+        </span>
+      </span>
+      <button
+        className={`upgrade-buy-btn ${!maxed && afford ? 'affordable' : ''}`}
+        disabled={maxed || !afford}
+        onClick={() => engine.buyQuestFastUpgrade(def.id)}
+      >
+        {buyLabel}
+      </button>
+    </div>
   );
 }
 
@@ -577,6 +655,8 @@ export function QuestPanel() {
         Each hero keeps their own contracts, scaled to their own level. Pick a hero below to see
         what's open to them.
       </p>
+
+      <LuckyStreakRow />
 
       {/* --------------------------- active quests --------------------------- */}
       {state.activeQuests.length > 0 && (

@@ -5,19 +5,21 @@ import { Tuning } from './tuning';
 import { questGoldBaseline, questXpBaseline } from './progression';
 
 /**
- * Replaces the old flat burstTaper(topLevel) curve in QuestManager with a
- * live cap computed directly from DIFFICULTIES, separately for gold and
- * XP. The flat curve had two confirmed problems: its floor (0.2) never
- * actually dropped burst below the best unlocked tier until very late,
- * making burst-spamming the mathematically dominant strategy from level 1
- * to roughly 25-30; and a single shared curve couldn't correctly gate both
- * currencies at once, since legendary quests are gold-heavy but XP-light
- * relative to hard/epic -- tightening the curve for XP purposes measurably
- * loosened effective gold-farming speed in testing.
- *
- * Tying the cap to live tier data instead of a fixed curve also means it
- * self-corrects if DIFFICULTIES changes later (bump hard's maxGold, the
- * cap recalculates) without needing to re-derive a curve by hand.
+ * Patch 0332 retired this file's old burst/medium per-hour cap/floor/
+ * taper system (fastQuestCapsPerHour, fastQuestFloorPerHour,
+ * easyFastModeChances) entirely -- direct feedback that the guardrail
+ * stack itself, not any one number in it, was the recurring problem
+ * (four separate systems all fighting the same "burst became the
+ * mathematically dominant strategy" fire). Fast quests
+ * (QuestManager.generateOffer) now use the same reward formula every
+ * other quest does, time-scaled and rarity-gated instead of a separate
+ * hand-tuned mini-economy -- see quests.ts's own DifficultyConfig.
+ * fastChance comment and guild-idler-status.md's patch 0332 writeup for
+ * the full redesign. `bestUnlockedTier`/`expectedRatePerHour` below both
+ * survive that removal -- bestUnlockedTier is still load-bearing for
+ * HarvestManager.sellGoldPerHourTarget's Trade Route cap (unrelated to
+ * quests entirely), and expectedRatePerHour for that same caller plus
+ * the DevTool's Balance Sandbox sim's own income-curve estimates.
  */
 
 /** Matches QuestManager.resolve's actual failure payout exactly -- a failed
@@ -39,19 +41,16 @@ const XP_FAILURE_MULTIPLIER = Tuning.get('balance.xpFailureMultiplier');
  * `atLevel` lets a caller estimate this tier's rate for a hero at a
  * SPECIFIC level, rather than the tier's own fixed `referenceLevel` --
  * needed for anything tracking a leveling hero's actual income over time
- * (the Balance Sandbox sim), since reward now scales continuously with
- * the rolled reqLevel (near hero.level, patch 0214), not with a fixed
- * per-tier constant. Defaults to `cfg.referenceLevel` when omitted,
- * preserving the exact existing behavior for fastQuestCapsPerHour/
- * fastQuestFloorPerHour below, which deliberately DO want a fixed,
- * level-independent ceiling reference rather than tracking a specific
- * hero -- see this function's own callers for which is which. Found and
- * fixed while auditing reward-scaling consistency (patch 0217): the
- * Balance Sandbox sim was calling this with no `atLevel`, silently
- * pinning every tier's income estimate to its referenceLevel forever
- * regardless of how high the simulated hero actually leveled, which
- * would have made the "days to level 55" simulation meaningless post-
- * patch-0214 without this.
+ * (the Balance Sandbox sim, HarvestManager.sellGoldPerHourTarget), since
+ * reward now scales continuously with the rolled reqLevel (near
+ * hero.level, patch 0214), not with a fixed per-tier constant. Defaults
+ * to `cfg.referenceLevel` when omitted -- see this function's own
+ * callers for which is which. Found and fixed while auditing reward-
+ * scaling consistency (patch 0217): the Balance Sandbox sim was calling
+ * this with no `atLevel`, silently pinning every tier's income estimate
+ * to its referenceLevel forever regardless of how high the simulated
+ * hero actually leveled, which would have made the "days to level 55"
+ * simulation meaningless post-patch-0214 without this.
  */
 export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp', atLevel?: number): number {
   const avgDurationHours = (cfg.minDuration + cfg.maxDuration) / 2 / HOUR;
@@ -71,20 +70,18 @@ export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp', 
 }
 
 /**
- * Highest difficulty tier currently "available" at a given level -- used
- * only by the burst/medium fast-quest per-hour cap system
- * (fastQuestCapsPerHour/fastQuestFloorPerHour below), which is
- * deliberately untouched by the reqLevel-roll rework (see
- * guild-idler-status.md's patch 0214 writeup). Real quest offers no
- * longer have a difficulty-based level gate at all (every difficulty's
- * reqLevel now rolls near hero.level regardless of tier) -- this keeps
- * reading each tier's `referenceLevel` (the old reqLevel's numeric value,
- * renamed and repurposed, see DifficultyConfig's own comment) purely as
- * a "typical level for this tier" heuristic so burst/medium's cap
- * behaves exactly as it did before, rather than suddenly referencing
- * Epic/Legendary per-hour rates for a level-1 hero now that nothing
- * actually blocks those tiers from generating early. Called with a
- * specific hero's own level, not the guild's top hero. */
+ * Highest difficulty tier currently "available" at a given level.
+ * Formerly also used by the burst/medium fast-quest per-hour cap system,
+ * retired in patch 0332 (see this file's own header comment) -- its one
+ * remaining caller is HarvestManager.sellGoldPerHourTarget, unrelated to
+ * quests, which still needs "what does a hero currently earn at the
+ * guild's own best-unlocked tier" as its Trade Route gold-per-hour
+ * target. Reads each tier's `referenceLevel` (a "typical level for this
+ * tier" heuristic, see DifficultyConfig's own comment) purely as that --
+ * quest offers themselves have had no difficulty-based level gate since
+ * patch 0214. Called with a specific hero's own level, not the guild's
+ * top hero, by that one remaining caller.
+ */
 export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean): Difficulty {
   let best: Difficulty = 'easy';
   for (const id of DIFFICULTY_ORDER) {
@@ -92,89 +89,6 @@ export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean): 
     if (topLevel + 2 >= DIFFICULTIES[id].referenceLevel) best = id;
   }
   return best;
-}
-
-/** Below this level, burst keeps its full, uncapped reward -- the
- *  deliberate onboarding hook, confirmed not to be the problem. */
-const MIN_LEVEL_FOR_CAP = Tuning.get('balance.minLevelForCap');
-/** Midpoint of the requested 80-85% range: clearly still worthwhile as a
- *  quick top-up, never the rational default strategy over the board. */
-const BURST_CAP_FRACTION = Tuning.get('balance.burstCapFraction');
-
-/**
- * Shared by both fast-completion modes (burst AND medium -- see
- * DifficultyConfig's own comment on mediumChance for why medium needs the
- * same guardrail burst already has). Kept as one function/one cap fraction
- * rather than two separate curves: both modes exist for the same reason
- * (an explicit, generous-feeling reward range reads better than a
- * proportional slice of the full range), so both need the same protection
- * against becoming the dominant strategy once out-leveled.
- *
- * Passes topLevel through to expectedRatePerHour explicitly (patch 0230) --
- * previously didn't, which meant this silently fell back to the best-
- * unlocked tier's own static referenceLevel forever, not the player's
- * actual current level. Harmless right at the moment a tier is first
- * unlocked (level ≈ that tier's referenceLevel by definition), but for
- * anyone who keeps leveling within the same best-unlocked-tier bracket --
- * which is most play, tiers aren't unlocked every level -- the cap stayed
- * pinned to that stale reference point instead of climbing with them,
- * quietly throttling the cap further below what it was actually meant to
- * represent the longer someone stayed in a bracket.
- */
-export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolean): { gold: number; xp: number } {
-  if (topLevel < MIN_LEVEL_FOR_CAP) return { gold: Infinity, xp: Infinity };
-  const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
-  return {
-    gold: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'gold', topLevel),
-    xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp', topLevel),
-  };
-}
-
-/**
- * A floor, not a ceiling -- the counterpart to fastQuestCapsPerHour above,
- * closing the "worthless reward" complaint that motivated adding this at
- * all. Anchored to the offer's OWN tier's rate (not the player's current
- * best-unlocked tier the way the cap is) -- a deliberately safe choice:
- * every tier's own rate is, by construction, no higher than any harder
- * tier's rate (DIFFICULTIES only gets more generous per hour going up),
- * so flooring an Easy offer at Easy's own rate can never let it out-earn
- * whatever the player's actual best-unlocked tier currently pays.
- *
- * Now takes atLevel explicitly (patch 0230) -- previously omitted it
- * entirely, which meant expectedRatePerHour silently defaulted to Easy's
- * own static referenceLevel (1) FOREVER, regardless of the player's real
- * level. This is what actually produced the reported "1-5 gold Medium
- * quests at level 15" complaint: at level 15, Easy's real per-hour rate is
- * roughly 3x what it is at level 1 (confirmed by hand-computing both from
- * the live tuning values -- ~4.5 gold/hr at level 1 vs ~14.5 gold/hr at
- * level 15), so the floor was quietly capping itself at a fraction of what
- * it was supposed to guarantee, for every level above 1. Callers now pass
- * the player's real topLevel, same as fastQuestCapsPerHour's own tier rate
- * already did (independently) get right.
- *
- * The "never lets Easy out-earn the real best-unlocked tier" invariant
- * this file's own history checked by simulation was verified against the
- * OLD (referenceLevel-anchored) version of this function -- evaluating
- * both sides of that comparison at the SAME real level rather than two
- * different fixed reference points, as this fix now does, should if
- * anything make the comparison more apples-to-apples, not less safe (Easy
- * keeps the lowest rewardMultiplier of any tier at every level, per
- * DIFFICULTIES itself). Flagged rather than re-asserted as proven: this
- * specific invariant deserves a fresh run through `npm run sim` before
- * being trusted the same way the original claim was.
- *
- * This does NOT fully close the residual overshoot at the very shortest
- * durations (see QuestManager.generateOffer's own comment on why a
- * positive-integer floor divided by an arbitrarily short duration can
- * never be made airtight) -- it meaningfully shrinks it. That's a
- * confirmed, accepted tradeoff, not an oversight, and unrelated to the
- * level-anchoring fix above.
- */
-export function fastQuestFloorPerHour(cfg: DifficultyConfig, atLevel: number): { gold: number; xp: number } {
-  return {
-    gold: expectedRatePerHour(cfg, 'gold', atLevel),
-    xp: expectedRatePerHour(cfg, 'xp', atLevel),
-  };
 }
 
 /** Reward floor (patch 0325) -- fraction/absolute-minimum pair, see
@@ -215,54 +129,5 @@ export function rewardPayoutFloor(offerRewardGold: number, offerRewardXp: number
   return {
     gold: Math.max(REWARD_FLOOR_MIN_GOLD, Math.round(offerRewardGold * REWARD_FLOOR_FRACTION_GOLD)),
     xp: Math.max(REWARD_FLOOR_MIN_XP, Math.round(offerRewardXp * REWARD_FLOOR_FRACTION_XP)),
-  };
-}
-
-/**
- * Burst/medium chance taper for the Easy tier, by hero level -- see
- * guild-idler-status.md's "Burst quest reward taper" writeup for the full
- * before/after numbers this was checked against. Burst's own duration is
- * short enough (2-8min) that even a level-appropriate live per-hour cap
- * (fastQuestCapsPerHour above) rounds down to a trivial 1 gold / 1-2 xp
- * once a hero is a handful of levels in -- confirmed directly against a
- * real playtest report, not assumed. Stretching burst's own duration
- * range doesn't fix this: the cap itself is the bottleneck, not the
- * rounding window, and a duration long enough to clear it (~20min+) is
- * just Medium's own range already. So the fix shifts weight away from
- * burst and toward Medium as a hero levels, rather than growing burst's
- * own duration -- Medium already produces healthy absolute numbers at
- * its 20-40min range with no changes needed there.
- *
- * Untouched through level 5, same onboarding-hook reasoning
- * MIN_LEVEL_FOR_CAP above already uses -- burst is still the deliberate
- * fast-turnaround hook for a brand new guild. From level 16 on, burst is
- * retired entirely (0% chance): by that point a hero has Hard and likely
- * Epic unlocked, and a sub-10-minute Easy quest can never pay a
- * respectable absolute reward under the live cap regardless of how it's
- * tuned, so the board stops offering it rather than offering something
- * that reads as broken.
- */
-export function easyFastModeChances(level: number): { burstChance: number; mediumChance: number } {
-  if (level <= 5) {
-    return {
-      burstChance: Tuning.get('quest.easyBurstChanceTier1'),
-      mediumChance: Tuning.get('quest.easyMediumChanceTier1'),
-    };
-  }
-  if (level <= 10) {
-    return {
-      burstChance: Tuning.get('quest.easyBurstChanceTier2'),
-      mediumChance: Tuning.get('quest.easyMediumChanceTier2'),
-    };
-  }
-  if (level <= 15) {
-    return {
-      burstChance: Tuning.get('quest.easyBurstChanceTier3'),
-      mediumChance: Tuning.get('quest.easyMediumChanceTier3'),
-    };
-  }
-  return {
-    burstChance: Tuning.get('quest.easyBurstChanceTier4'),
-    mediumChance: Tuning.get('quest.easyMediumChanceTier4'),
   };
 }

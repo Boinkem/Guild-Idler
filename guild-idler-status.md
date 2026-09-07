@@ -27135,3 +27135,192 @@ and every button still works, it just falls back to the system
 sans-serif font and loses the tab icons. Self-hosting both is a
 reasonable follow-up if that ever becomes a real problem, not urgent
 enough to hold this patch on.
+
+### Fast quests: difficulty-scaled redesign, retiring Burst/Medium (patch 0332)
+
+```discord-update
+Dev Update | Fast Quests
+- Reworked how difficulty scales quests -- Easy is short, and each tier up runs longer with bigger rewards, more consistently than before
+- Replaced Burst and Medium quests with a single "Fast" roll that can now happen on ANY difficulty, not just Easy
+- Fast quests are rare on purpose -- shorter than normal for their difficulty, paying at least half of what the full-length version would, easy more common than legendary
+- Added Lucky Streak, a new upgrade that raises your odds of a Fast roll on every difficulty
+- Quests now explain themselves -- the tutorial quest reads as "Fast" from day one, and a new one-time explainer covers the whole board once your real contracts start rolling in
+```
+
+Direct tester feedback and an extended design discussion, not a quick
+tuning pass -- "low level bursts are still a problem," specifically
+"very insulting, 1xp or gold, and 1 or 0 xp gold for rewards." Worked
+through collaboratively over several rounds before any code was written:
+what "still a problem" actually meant in practice, whether a Fast roll's
+reward should stay flat or scale down with its shorter time, whether
+Fast should stay Easy-only or spread to every tier, how rare "rare"
+should actually be, and -- after an initial design of a forced
+guaranteed-Fast second quest was floated and then explicitly walked back
+("I only disagree on the forced second quest, that was my mistake") --
+what should replace it to make sure a new player still discovers the
+mechanic without it being scripted.
+
+**The actual diagnosis.** The old Burst/Medium system already had FOUR
+separate guardrail layers stacked on each other by this point: a live
+per-hour cap (`fastQuestCapsPerHour`), a matching floor
+(`fastQuestFloorPerHour`), a level-based taper shifting weight from Burst
+to Medium (`easyFastModeChances`), and a final flat reward-payout floor
+(`rewardPayoutFloor`, patch 0325) added specifically because the first
+three still weren't fully preventing rewards rounding down to "1 gold, 0
+xp." That's not a sign any one number was wrong -- it's a sign the
+*shape* (a separate, hand-tuned, explicitly-generous mini reward table
+bolted onto Easy specifically) was the actual problem. Confirmed directly
+during the design discussion: even after patch 0325's floor, the
+guaranteed minimum was only 2 gold / 1 xp -- technically nonzero, but
+functionally the same insult the original complaint described. A floor
+that's barely above zero isn't a fix; it just moves the goalpost by one
+integer.
+
+**The redesign, difficulty scales everything now, Fast included.**
+`DifficultyConfig` (quests.ts) drops `burstChance/burstMin.../
+mediumChance/medium...` entirely, replaced with three fields per tier
+(`difficulties.json`): `fastChance` (5/4/3/2/1% across Easy through
+Legendary -- direct request, "Id like easy ones to be more common than
+legendarys"), and `fastMinDurationPct`/`fastMaxDurationPct` (10/40 on
+every tier). A Fast roll's duration is a PERCENTAGE of that tier's own
+normal min/maxDuration range now, not an absolute duration -- the old
+system's fixed 2-8min window only ever made sense pinned to Easy;
+stretched naively to Legendary it would mean "finish a 24-hour quest in
+3 minutes," which breaks the whole point of this redesign. Reward is
+computed with the EXACT SAME formula every standard offer uses (no
+separate burst/medium reward table left to drift out of balance
+against it), then scaled by how much time was actually saved relative to
+that tier's own average duration, floored at `quest.
+fastRewardFloorFraction` (0.5) of the full-duration reward -- direct
+answer to "scaled down to 50% floor perhaps." Checked by hand against
+the live tuning values: the floor dominates almost the entire Fast
+range on every tier (payout lands at 50-53% everywhere), so a Fast roll
+reliably reads as "shorter AND still a real number," never the old
+rounds-to-1 result. A Fast Legendary roll can land in as little as 1.2
+hours instead of up to 24, still guaranteeing half a Legendary reward.
+
+**Rarity is the only guardrail now, on purpose.** Every layer of the old
+cap/floor/taper stack is gone (`fastQuestCapsPerHour`,
+`fastQuestFloorPerHour`, `easyFastModeChances`, and their
+`MIN_LEVEL_FOR_CAP`/`BURST_CAP_FRACTION` tuning constants all deleted
+from `balance.ts`). Confirmed directly rather than assumed safe: "it was
+to prevent bursts from being the farming/most gold per hour but if they
+are rare then its exciting to get one" -- and explicitly no backstop
+either ("Rarity alone is fine, no backstop"). This also meant dropping
+`generateContractsForHero`'s old "guarantee at least one burst offer on
+the board" forcing -- a guaranteed-to-appear "rare" roll isn't actually
+rare from the player's perspective, so nothing replaces it. The
+"guarantee at least one genuine full-length offer" and "guarantee at
+least one on-level offer" guarantees survive unchanged (unrelated
+correctness nets, not reward guardrails).
+
+**`QuestOffer.fast?: boolean`, patch 0332's one new save field on
+individual offers.** Replaces the old duration-range sniff test
+(`QuestManager.isBurstOffer`, inferring "is this Burst?" from whether an
+offer's duration happened to fall inside a tier's burstMaxDuration) with
+an explicit flag set once at generation time -- `isBurstOffer` is now
+`isFastOffer`, just reads `offer.fast === true`. `tutorialQuestOffer()`
+sets it directly too, so the tutorial quest reads as Fast from a
+player's very first contract onward, not as an accident of its 5-minute
+duration -- direct request: "Tutorial quest is perfect... it needs to
+still be a burst quest first of all."
+
+**The forced-second-quest walkthrough, added then explicitly reverted.**
+An earlier version of this design forced the guild's second-ever quest
+to be a single guaranteed Fast offer with nothing else on the board,
+reusing the existing `pendingBurstQuestSpotlight` machinery (patch 0308)
+just repointed at the new system. Walked back after direct feedback --
+"I only disagree on the forced second quest, that was my mistake."
+`GameEngine.refreshWorld` now always calls
+`QuestManager.generateContractsForHero` normally, tutorial quest
+included, no special-cased single-offer board. `GameState.
+pendingBurstQuestSpotlight` is retired (dead key left in old saves,
+never stripped -- same "migrations only ever backfill, never clean up"
+convention every other field in this file already follows) in favor of
+`GameState.pendingQuestBoardIntro`.
+
+**What replaced it instead: a real "how the board works" explainer, not
+a scripted second quest.** Direct ask: "Tutorial quest finishes, straight
+into a rolled board with explainer." New `QuestBoardIntroModal.tsx`, same
+"promote a guidance moment to a standalone modal instead of a toast"
+treatment `ChainDiscoveryModal` already established for the first quest
+chain discovery. Fires the instant the scripted tutorial quest resolves
+(`QuestManager.resolve`'s own `isTutorialQuest` branch) and ONLY when
+`guidedOnboarding` is true (patch 0330's guide-mode toggle) -- an
+experienced player who opted out of guidance never had a scripted
+tutorial quest to begin with, so this can only ever fire for someone
+still in guided mode. Explains difficulty scaling across the whole board
+plus the ⚡ Fast mechanic in plain language, non-timed (stays open until
+dismissed, same "timed text vanishing before it could be read" lesson
+patch 0330 already learned from tester feedback).
+
+**Fast is visible everywhere now, not just a one-shot hint.** The old
+`pendingBurstQuestSpotlight` card shimmer (a one-time "try this" nudge
+that had to arm and clear via GameState) is gone entirely, replaced with
+a permanent "⚡ Fast" tag on `QuestRow`'s meta line and
+`QuestDetailModal`'s header whenever `offer.fast` is true -- a recurring
+mechanic reads better as a stable badge than a fading shimmer, and
+doesn't need any one-shot flag bookkeeping to arm or clear. A short
+non-timed note in `QuestDetailModal` explains the tradeoff for any
+ordinary Fast offer (skipped on the tutorial quest itself, which already
+has its own dedicated "How to read a contract" callout from patch 0330).
+
+**New "Lucky Streak" upgrade, direct request: "a new expensive upgrade to
+increase chances."** New `src/game/data/questFastUpgrades.ts`, mirroring
+`raidUpgrades.ts`'s gold-then-Renown shape exactly (`QuestFastUpgradeDef`,
+`QUEST_FAST_UPGRADE_BY_ID`, `questFastUpgradeCost` -- same
+`goldTierMaxLevel`/`maxLevel` split logic as `raidUpgradeCost`, its
+direct precedent). +1% flat to EVERY tier's `fastChance` per level (so
+the Easy > Legendary shape never inverts regardless of level), 5 levels
+total -- 3 gold (5000 base, ×1.9/level) then 2 Renown (6 base, ×1.35/
+level), same order-of-magnitude curve `raid_speed`'s own upgrade already
+uses. `GameState.questFastUpgrades: Record<string, number>`, same shape
+as `raidUpgrades`. New `GuildManager.questFastUpgradeLevel/
+nextQuestFastUpgradeCost/buyQuestFastUpgrade` trio, mirroring the raid
+upgrade trio exactly. `GameEngine.buyQuestFastUpgrade` passthrough.
+Rendered as a single compact `.upgrade-row` (reusing `RaidsPanel`'s own
+row styling, no separate detail modal needed for a one-entry tree) at
+the top of the Quests tab.
+
+**Save compatibility.** `SAVE_VERSION` 62 -> 63. Migration 62 adds
+`questFastUpgrades: {}` (brand-new Record, same "no prior data to
+backfill from, start empty" reasoning `raidUpgrades`' own original
+migration used) and `pendingQuestBoardIntro: false` (an existing save's
+tutorial quest, if any, has already long since resolved, so there's no
+board-intro moment left to show retroactively) for every pre-existing
+save.
+
+**Also cleaned up while touching this code, not left stale:**
+`HarvestManager.sellGoldPerHourTarget`'s Trade Route gold cap genuinely
+depends on `bestUnlockedTier`/`expectedRatePerHour` (balance.ts) for an
+unrelated reason (a completely different feature reusing the same "what
+does a hero earn at the guild's best-unlocked tier" formula) -- caught
+during removal and both functions kept, only the actually-Fast-specific
+`fastQuestCapsPerHour`/`fastQuestFloorPerHour`/`easyFastModeChances`
+removed. The DevTool's Balance Sandbox sim (`tools/devtool/sim/
+runSim.ts`) had its own "burst dominance check" sanity block testing an
+invariant against the now-deleted cap functions -- removed along with
+the `burstCheck` field it added to the sim's result output; the sim's
+main income-simulation loop was already independent of those functions
+(picks tiers via `expectedRatePerHour` directly) so needed no other
+changes. Fast-quest income is explicitly NOT modeled in the sim (noted
+in its own header comment, same "flagged rather than silently
+approximated" treatment already used there for raids/chains/pets) --
+Fast rolls are rare and reward-neutral on average, and a proper model
+would need real per-offer RNG this expected-value sim deliberately
+doesn't do anywhere else either.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean
+(204 modules, the +2 being the new `questFastUpgrades.ts` and
+`QuestBoardIntroModal.tsx`). Hand-computed the actual Fast duration/
+reward numbers for all 5 tiers against the live `difficulties.json`
+values before writing this up, not just trusting the formula looked
+right on paper -- confirmed the 50% floor genuinely dominates the whole
+Fast range as designed. Full repo-wide grep for every retired
+identifier (`isBurstOffer`, `pendingBurstQuestSpotlight`,
+`easyFastModeChances`, `fastQuestCapsPerHour`, `fastQuestFloorPerHour`,
+every `burst*`/`medium*` DifficultyConfig field) turned up nothing left
+outside historical comments and the one intentionally-preserved old
+migration (patch 0288's, which only ever backfills the now-dead
+`pendingBurstQuestSpotlight` key on an old save -- harmless, matches
+this file's own "never clean up, only backfill" convention).

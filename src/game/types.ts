@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 62;
+export const SAVE_VERSION = 63;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -781,10 +781,12 @@ export interface Hero {
    * Day window (see data/reroll.ts's rerollDay -- same UTC-epoch-day
    * division every other daily system in this game already uses) this
    * hero last received the daily first-burst bonus for. A once-per-day
-   * event can afford to be generous without reopening the exact
-   * dominance problem fastQuestCapsPerHour exists to prevent --
-   * repeating it doesn't get you more of it, unlike every other lever in
-   * the burst reward formula. Optional/undefined for any hero who hasn't
+   * event can afford to be generous without reopening the dominance
+   * problem the old burst/medium cap/floor/taper stack (retired patch
+   * 0332) existed to prevent -- repeating it doesn't get you more of it,
+   * and rarity (now the sole guardrail on Fast rolls generally, see
+   * DifficultyConfig.fastChance's own comment) already limits how often
+   * this can even trigger. Optional/undefined for any hero who hasn't
    * claimed it yet, same defensive-optional convention as
    * equippedConsumables/autoAdvanceChainId above -- no migration needed.
    */
@@ -867,6 +869,19 @@ export interface QuestOffer {
   rewardXp: number;
   loot: LootRoll[];
   reqLevel: number;
+  /**
+   * Patch 0332 -- replaces the old duration-range sniff test
+   * (QuestManager's former isBurstOffer) with an explicit flag set once,
+   * at generation time, by QuestManager.generateOffer's own fast roll.
+   * True for the scripted tutorial quest too (tutorialQuestOffer sets it
+   * directly) -- the tutorial IS meant to read as this same category of
+   * quest from a new player's very first contract onward, not a
+   * coincidentally-short one. Undefined (never explicitly false) on
+   * every other offer, same "absent means no" convention chain/stageName
+   * below already use. See QuestManager.isFastOffer, the one place this
+   * should ever be read rather than compared directly.
+   */
+  fast?: boolean;
   /**
    * Patch 0275. This stage's own name, distinct from `name` above -- a
    * chain offer's `name` is now just the chain's own name (e.g. "The
@@ -1500,6 +1515,36 @@ export interface RaidUpgradeDef {
   description: string;
   /** Per raid-upgrade level, applied via ModifierManager.raid(). */
   modsPerLevel: Partial<Modifiers>;
+  goldBaseCost: number;
+  goldCostGrowth: number;
+  /** Levels 0..goldTierMaxLevel-1 cost gold; goldTierMaxLevel is also where the Renown tier's own level-0 begins. */
+  goldTierMaxLevel: number;
+  renownBaseCost: number;
+  renownCostGrowth: number;
+  /** Absolute level cap across both tiers combined. */
+  maxLevel: number;
+}
+
+/**
+ * Patch 0332. Same gold-then-Renown, same "own tree, own file" shape as
+ * RaidUpgradeDef immediately above (its direct precedent) -- deliberately
+ * NOT a `Partial<Modifiers>` mod though: what this buys (a flat
+ * percentage-point boost to every difficulty tier's Fast-quest chance,
+ * see QuestManager.generateOffer) isn't a hero stat or anything
+ * ModifierManager's mod system already models, it's a board-generation-
+ * time probability, so it gets its own single-purpose field instead of
+ * being forced into the general Modifiers shape for one number.
+ */
+export interface QuestFastUpgradeDef {
+  id: string;
+  name: string;
+  description: string;
+  /** Flat percentage points added to EVERY tier's own base fastChance
+   *  per level -- Easy and Legendary both get the same +N, so the
+   *  relative "Easy more common than Legendary" shape this upgrade is
+   *  layered on top of never inverts, no matter how many levels are
+   *  bought. */
+  fastChancePctPerLevel: number;
   goldBaseCost: number;
   goldCostGrowth: number;
   /** Levels 0..goldTierMaxLevel-1 cost gold; goldTierMaxLevel is also where the Renown tier's own level-0 begins. */
@@ -2443,6 +2488,10 @@ export interface GameState {
   seenGuidance: string[];
   /** Levels bought in the dedicated Raid Guild Upgrade tree -- see RaidUpgradeDef. */
   raidUpgrades: Record<string, number>;
+  /** Levels bought in the dedicated Fast-quest Guild Upgrade tree (patch
+   *  0332) -- see QuestFastUpgradeDef, same shape/reasoning as
+   *  raidUpgrades just above, its own direct precedent. */
+  questFastUpgrades: Record<string, number>;
   /** True once the scripted first-run tour (or its Skip button) has been
    *  seen -- never shown again after that, whether finished or skipped.
    *  Existing saves are migrated straight to true (already onboarded by
@@ -2556,44 +2605,43 @@ export interface GameState {
    *  already do. */
   pendingHarvestSpotlight: boolean;
   /**
-   * Patch 0288. A different kind of spotlight from pendingHarvestSpotlight/
-   * pendingHatcherySpotlight/pendingPeddlerSpotlight just above -- those
-   * three fire a one-shot OnboardingTour arrow pointing at a whole nav
-   * tab; this one instead puts the same rotating gold-ring shimmer the
-   * nav bar already uses for an unread tab (`.nav-tab-unread` in
-   * app.css) directly onto specific quest CARDS on the board, as a
-   * "try this next" nudge rather than a tour step.
+   * Patch 0332, replaces the old pendingBurstQuestSpotlight (retired --
+   * see guild-idler-status.md's patch 0332 writeup for why the forced
+   * "second quest is a guaranteed Fast offer" mechanic it drove got
+   * dropped, direct request: "I only disagree on the forced second
+   * quest, that was my mistake"). Fast quests no longer need a one-shot
+   * spotlight at all -- the permanent "⚡ Fast" tag every fast offer's
+   * QuestRow/QuestDetailModal now carries (QuestManager.isFastOffer) is
+   * always visible, not a fading hint.
    *
-   * Set true the moment the scripted tutorial quest (see
-   * quests.ts's tutorialQuestOffer) resolves -- see QuestManager.resolve's
-   * own tutorial-completion comment. While true, `QuestRow` (QuestPanel.
-   * tsx) adds the shimmer to every burst-mode offer currently on the
-   * board (via QuestManager.isBurstOffer), not just one specific offer
-   * instance -- a board refresh can replace any given offer before the
-   * player notices it, so the hint targets the whole burst *category*
-   * until acted on, the same way `.nav-tab-unread` highlights a whole tab
-   * rather than one specific notification.
-   *
-   * Cleared the moment a hero is actually sent on any burst-mode offer
-   * (QuestManager.start) -- the hint has done its job once the player's
-   * tried a burst quest at all, whether or not it was the exact instance
-   * that happened to be shimmering.
+   * What still needs a one-time explainer is the quest BOARD itself, the
+   * moment it stops being the single scripted tutorial contract and
+   * becomes a real multi-offer board a player has to actually read and
+   * choose from. Set the instant the scripted tutorial quest resolves
+   * (QuestManager.resolve's own isTutorialQuest branch, same trigger
+   * point pendingBurstQuestSpotlight used to use) and ONLY when
+   * `guidedOnboarding` is true -- same gate GuildNamingModal's guide-mode
+   * question (patch 0330) already applies everywhere else onboarding
+   * shows up. Drives QuestBoardIntroModal (same "promote a guidance
+   * moment to a standalone modal instead of a toast" treatment
+   * pendingChainDiscovery already established for the first quest chain)
+   * -- dismissed via GameEngine.dismissQuestBoardIntro, mirroring
+   * dismissChainDiscovery exactly.
    */
-  pendingBurstQuestSpotlight: boolean;
+  pendingQuestBoardIntro: boolean;
   /**
    * Patch 0308. Set the instant the scripted tutorial quest resolves
    * (QuestManager.resolve's own isTutorialQuest branch) -- stays true
    * for the rest of the save's life from that point on. Drives the
    * post-tutorial GuidanceManager nudge ("check out the Vendors, or
    * keep questing") -- see guidance-topics.json's
-   * `first_quest_complete_vendor_nudge`. `pendingBurstQuestSpotlight`
-   * just above covers the other half of this same moment (the "try a
-   * burst quest next" card shimmer and, as of this patch, the
-   * single-forced-burst-offer board restriction in
-   * GameEngine.refreshWorld) -- kept as two separate flags rather than
-   * one, since one drives a GuidanceManager topic condition (a plain
-   * boolean check) and the other drives UI/board state directly, the
-   * same split the rest of this file already uses elsewhere.
+   * `first_quest_complete_vendor_nudge`. `pendingQuestBoardIntro` just
+   * above covers the other half of this same moment (the standalone
+   * modal explaining the real quest board) -- kept as two separate
+   * flags rather than one, since one drives a GuidanceManager topic
+   * condition (a plain boolean check) and the other drives modal state
+   * directly, the same split the rest of this file already uses
+   * elsewhere.
    */
   hasCompletedFirstQuest: boolean;
   /**

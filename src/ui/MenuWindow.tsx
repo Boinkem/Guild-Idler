@@ -4,6 +4,7 @@ import { useSettings } from './useSettings';
 import { backgroundSrc } from '../game/settings';
 import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+import { QuestBoardIntroModal } from './QuestBoardIntroModal';
 import { formatGold, formatNumber } from '../game/util';
 import { attentionCounts, isNavTabUnread } from '../game/attention';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
@@ -695,6 +696,18 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <ChainDiscoveryModal
           onView={() => { setTab('quests'); engine.dismissChainDiscovery(); }}
           onClose={() => engine.dismissChainDiscovery()}
+        />
+      )}
+      {/* Patch 0332. guidedOnboarding-gated same as the tour above --
+          QuestManager.resolve only ever sets pendingQuestBoardIntro true
+          when guide mode is on, but the check is repeated here too, same
+          defense-in-depth pattern the tour's own render guard already
+          uses, in case guide mode gets turned off in Settings between the
+          flag arming and this actually rendering. */}
+      {engine.state.guildName !== '' && engine.state.guidedOnboarding && engine.state.pendingQuestBoardIntro && (
+        <QuestBoardIntroModal
+          onView={() => { setTab('quests'); engine.dismissQuestBoardIntro(); }}
+          onClose={() => engine.dismissQuestBoardIntro()}
         />
       )}
       {/* One-step reuse of the same OnboardingTour spotlight component,

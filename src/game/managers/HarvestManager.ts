@@ -120,8 +120,7 @@ export const HarvestManager = {
   /**
    * Target gold/hr Trade Route selling is capped toward -- exactly what a
    * hero currently earns at the guild's own best-unlocked quest tier
-   * (same expectedRatePerHour/bestUnlockedTier formula balance.ts's
-   * fastQuestCapsPerHour already reuses for the burst-quest cap), not a
+   * (expectedRatePerHour/bestUnlockedTier, balance.ts), not a
    * separate hand-picked number. Self-corrects automatically if
    * DIFFICULTIES or the guild's own level ever changes -- no curve here
    * to re-tune by hand if quest rewards are rebalanced again later. This

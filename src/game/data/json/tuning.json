@@ -3291,86 +3291,6 @@
     "description": "Ceiling on the total bad-luck-protection bonus previewSuccess can add, regardless of how long the fail streak runs."
   },
   {
-    "id": "quest.easyBurstChanceTier1",
-    "label": "Easy burst chance: level 1-5",
-    "category": "quests",
-    "value": 45,
-    "default": 45,
-    "min": 0,
-    "max": 100,
-    "description": "Burst-mode chance on Easy offers for a hero at level 1-5 -- unchanged from the original onboarding-hook value. See balance.ts's easyFastModeChances."
-  },
-  {
-    "id": "quest.easyMediumChanceTier1",
-    "label": "Easy medium chance: level 1-5",
-    "category": "quests",
-    "value": 35,
-    "default": 35,
-    "min": 0,
-    "max": 100,
-    "description": "Medium-mode chance on Easy offers for a hero at level 1-5 (only rolled if burst didn't hit) -- unchanged from the original value."
-  },
-  {
-    "id": "quest.easyBurstChanceTier2",
-    "label": "Easy burst chance: level 6-10",
-    "category": "quests",
-    "value": 30,
-    "default": 30,
-    "min": 0,
-    "max": 100,
-    "description": "Burst-mode chance on Easy offers for a hero at level 6-10 -- first taper step, shifting weight toward Medium as burst's own short duration starts producing trivial absolute rewards under the live per-hour cap."
-  },
-  {
-    "id": "quest.easyMediumChanceTier2",
-    "label": "Easy medium chance: level 6-10",
-    "category": "quests",
-    "value": 45,
-    "default": 45,
-    "min": 0,
-    "max": 100,
-    "description": "Medium-mode chance on Easy offers for a hero at level 6-10 -- raised to absorb the share tapered off burst."
-  },
-  {
-    "id": "quest.easyBurstChanceTier3",
-    "label": "Easy burst chance: level 11-15",
-    "category": "quests",
-    "value": 15,
-    "default": 15,
-    "min": 0,
-    "max": 100,
-    "description": "Burst-mode chance on Easy offers for a hero at level 11-15 -- burst becomes rare."
-  },
-  {
-    "id": "quest.easyMediumChanceTier3",
-    "label": "Easy medium chance: level 11-15",
-    "category": "quests",
-    "value": 55,
-    "default": 55,
-    "min": 0,
-    "max": 100,
-    "description": "Medium-mode chance on Easy offers for a hero at level 11-15."
-  },
-  {
-    "id": "quest.easyBurstChanceTier4",
-    "label": "Easy burst chance: level 16+",
-    "category": "quests",
-    "value": 0,
-    "default": 0,
-    "min": 0,
-    "max": 100,
-    "description": "Burst-mode chance on Easy offers for a hero at level 16+ -- retired entirely. Standard/Medium fully take over; see easyFastModeChances and generateContractsForHero's own guard against forcing a burst guarantee once this is 0."
-  },
-  {
-    "id": "quest.easyMediumChanceTier4",
-    "label": "Easy medium chance: level 16+",
-    "category": "quests",
-    "value": 60,
-    "default": 60,
-    "min": 0,
-    "max": 100,
-    "description": "Medium-mode chance on Easy offers for a hero at level 16+, absorbing burst's entire retired share."
-  },
-  {
     "id": "upgrade.master_adventurer.blackMarketDiscountPerLevel",
     "label": "Enchanted Seal: Black Market discount per level",
     "category": "vendor_upgrades",
@@ -3713,26 +3633,6 @@
     "min": 0,
     "max": 1,
     "description": "Fraction of the rolled xp a failed quest still pays out. Matches QuestManager.resolve's actual formula exactly."
-  },
-  {
-    "id": "balance.minLevelForCap",
-    "label": "Balance: min level for burst/medium cap",
-    "category": "balance",
-    "value": 5,
-    "default": 5,
-    "min": 0,
-    "max": 50,
-    "description": "Below this hero level, burst/medium quests keep their full uncapped reward -- the deliberate onboarding hook."
-  },
-  {
-    "id": "balance.burstCapFraction",
-    "label": "Balance: burst/medium cap fraction",
-    "category": "balance",
-    "value": 0.825,
-    "default": 0.825,
-    "min": 0,
-    "max": 2,
-    "description": "Burst/medium's live per-hour reward cap, as a fraction of the best-unlocked tier's own per-hour rate."
   },
   {
     "id": "balance.rewardFloorFractionGold",
@@ -5291,5 +5191,81 @@
     "default": 1,
     "min": 0,
     "description": "Patch 0318 -- per-hero Renown perk tree's real content, replacing 0317's single placeholder. First-pass numbers, same curve as every other perk in this tree for now (cost 5, growth 1.35, 10 levels) -- see HERO_RENOWN_PERKS' own comment in progression.ts."
+  },
+  {
+    "id": "quest.fastRewardFloorFraction",
+    "label": "Fast quest: reward floor fraction",
+    "category": "quest",
+    "value": 0.5,
+    "default": 0.5,
+    "min": 0,
+    "max": 1,
+    "description": "Patch 0332. A Fast-roll offer's reward scales down proportionally with its shorter duration (relative to that tier's own average normal duration), but never below this fraction of the FULL-duration reward for that tier/level -- e.g. 0.5 guarantees at least half. Replaces the old burst/medium separate reward-table system entirely."
+  },
+  {
+    "id": "quest_fast_upgrade.fastChancePctPerLevel",
+    "label": "Lucky Streak: fast-chance % per level",
+    "category": "quest_fast_upgrade",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "Flat percentage points added to EVERY difficulty tier's own base fastChance (difficulties.json) per level of the Lucky Streak upgrade."
+  },
+  {
+    "id": "quest_fast_upgrade.goldBaseCost",
+    "label": "Lucky Streak: gold tier base cost",
+    "category": "quest_fast_upgrade",
+    "value": 5000,
+    "default": 5000,
+    "min": 0,
+    "description": "Cost of the first (level 0) gold-tier purchase."
+  },
+  {
+    "id": "quest_fast_upgrade.goldCostGrowth",
+    "label": "Lucky Streak: gold tier cost growth",
+    "category": "quest_fast_upgrade",
+    "value": 1.9,
+    "default": 1.9,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level within the gold tier."
+  },
+  {
+    "id": "quest_fast_upgrade.goldTierMaxLevel",
+    "label": "Lucky Streak: gold tier level count",
+    "category": "quest_fast_upgrade",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "description": "How many levels cost gold before switching to Renown."
+  },
+  {
+    "id": "quest_fast_upgrade.renownBaseCost",
+    "label": "Lucky Streak: renown tier base cost",
+    "category": "quest_fast_upgrade",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "description": "Cost of the first Renown-tier level (i.e. level = goldTierMaxLevel)."
+  },
+  {
+    "id": "quest_fast_upgrade.renownCostGrowth",
+    "label": "Lucky Streak: renown tier cost growth",
+    "category": "quest_fast_upgrade",
+    "value": 1.35,
+    "default": 1.35,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level within the Renown tier."
+  },
+  {
+    "id": "quest_fast_upgrade.maxLevel",
+    "label": "Lucky Streak: max level",
+    "category": "quest_fast_upgrade",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Absolute level cap across both tiers combined. At max, every tier's fastChance is +5 percentage points over its difficulties.json base."
   }
 ]

@@ -330,6 +330,15 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Dismisses QuestBoardIntroModal -- same shape as dismissChainDiscovery
+   *  just above (its direct precedent), triggered by QuestManager.
+   *  resolve's own isTutorialQuest branch instead of a board roll. See
+   *  GameState.pendingQuestBoardIntro's own comment. */
+  dismissQuestBoardIntro() {
+    this.state.pendingQuestBoardIntro = false;
+    void this.saveNow();
+  }
+
   /**
    * Sound, the dedicated popup queue, the Guide notification log, and the
    * Steam stub, for every achievement id that just unlocked. Archives
@@ -834,29 +843,16 @@ export class GameEngine {
       if (onTutorialQuest || hasUnsentTutorialQuest) continue;
       const existing = this.state.questBoards[hero.id];
       if (windowRolledOver || !existing || existing.length === 0) {
-        // Patch 0308: pendingBurstQuestSpotlight (armed the instant the
-        // tutorial quest resolves, cleared the instant any burst offer
-        // is sent -- see its own comment in types.ts) also gates board
-        // SIZE here now, not just the card shimmer QuestRow already
-        // reads it for -- a brand-new guild's second quest should be
-        // the one scripted burst nudge and nothing else competing for
-        // attention, the same "only one thing on the board" shape the
-        // tutorial quest itself used. Deterministic per (window, hero,
-        // this specific seed tag) the same way every other offer here
-        // already is, so it survives a reload identically. Scoped to
-        // every hero rather than just the starter one -- a genuinely
-        // new guild can't afford a second hero slot this early
-        // regardless (that needs a Tavern upgrade, not just gold), so
-        // in practice this only ever narrows the one hero who matters
-        // at this stage.
-        const generated = this.state.pendingBurstQuestSpotlight
-          ? [QuestManager.generateOffer(
-            'easy',
-            createRng(`board:${window}:${hero.id}:${this.state.createdAt}:tutorialBurst`),
-            `q:${window}:${hero.id}:tutorialBurst`,
-            hero.level, true, ModifierManager.hasUnlock(this.state, 'legendaryQuests'),
-          )]
-          : QuestManager.generateContractsForHero(this.state, hero, now);
+        // Patch 0332 dropped the old "force the second quest to be a
+        // single guaranteed Fast offer" special case that used to sit
+        // here (pendingBurstQuestSpotlight-gated) -- direct correction:
+        // "I only disagree on the forced second quest, that was my
+        // mistake." The board regenerates the normal way every time now,
+        // tutorial quest included -- straight into a real, ordinary
+        // multi-offer board the moment it resolves (see QuestManager.
+        // resolve's own isTutorialQuest branch for the new
+        // pendingQuestBoardIntro modal that replaced this instead).
+        const generated = QuestManager.generateContractsForHero(this.state, hero, now);
         // Frozen offer (if any) survives this regeneration too -- see
         // QuestManager.applyFrozenOffer, the same splice used by a paid
         // reroll and an Auto-Chain restock.
@@ -2584,6 +2580,16 @@ export class GameEngine {
 
   buyRaidUpgrade(id: string) {
     const error = GuildManager.buyRaidUpgrade(this.state, id);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Patch 0332 -- Lucky Streak, the Fast-quest-chance upgrade tree. Same
+   *  shape as buyRaidUpgrade just above (its direct precedent). */
+  buyQuestFastUpgrade(id: string) {
+    const error = GuildManager.buyQuestFastUpgrade(this.state, id);
     if (error) return this.say(error);
     playSound('purchase');
     this.notify();
