@@ -3735,6 +3735,46 @@
     "description": "Burst/medium's live per-hour reward cap, as a fraction of the best-unlocked tier's own per-hour rate."
   },
   {
+    "id": "balance.rewardFloorFractionGold",
+    "label": "Balance: reward floor, gold fraction",
+    "category": "balance",
+    "value": 0.35,
+    "default": 0.35,
+    "min": 0,
+    "max": 1,
+    "description": "Minimum gold a resolved quest pays out, as a fraction of its own offer's rewardGold -- closes the 'rounds down to 1 gold' gap the failure-payout multiplier can otherwise produce."
+  },
+  {
+    "id": "balance.rewardFloorFractionXp",
+    "label": "Balance: reward floor, xp fraction",
+    "category": "balance",
+    "value": 0.35,
+    "default": 0.35,
+    "min": 0,
+    "max": 1,
+    "description": "Minimum xp a resolved quest pays out, as a fraction of its own offer's rewardXp -- closes the 'rounds down to 0 xp' gap the failure-payout multiplier can otherwise produce."
+  },
+  {
+    "id": "balance.rewardFloorMinGold",
+    "label": "Balance: reward floor, absolute gold minimum",
+    "category": "balance",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 100,
+    "description": "Absolute gold floor a resolved quest can ever pay, regardless of the fractional floor -- covers the case where the offer's own rewardGold is itself very small."
+  },
+  {
+    "id": "balance.rewardFloorMinXp",
+    "label": "Balance: reward floor, absolute xp minimum",
+    "category": "balance",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 100,
+    "description": "Absolute xp floor a resolved quest can ever pay, regardless of the fractional floor -- covers the case where the offer's own rewardXp is itself very small."
+  },
+  {
     "id": "progression.skinPrice",
     "label": "Progression: skin price",
     "category": "progression",

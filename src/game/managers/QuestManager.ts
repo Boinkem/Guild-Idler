@@ -3,7 +3,7 @@ import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
 } from '../data/quests';
 import { HERO_CLASSES, questGoldBaseline, questXpBaseline, renownForChainReplayClear } from '../data/progression';
-import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
+import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances, rewardPayoutFloor } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
 import { CURIOS, questCurioDropChance } from '../data/curios';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
@@ -1152,6 +1152,18 @@ export const QuestManager = {
       xp = Math.floor(quest.offer.rewardXp * 0.3 * quest.xpMultiplier);
     }
     gold = Math.max(0, gold);
+
+    // Reward floor (patch 0325) -- guarantees a meaningful minimum payout
+    // even after the failure consolation cut (or an unlucky combination of
+    // multipliers on success) rounds the raw result down toward zero. See
+    // rewardPayoutFloor's own comment in balance.ts for why this is keyed
+    // off the offer's own already-computed rewardGold/rewardXp rather than
+    // a fresh level curve. Applied before critBonus/dailyBurstBonus below,
+    // so both of those still stack normally on top of a floored value
+    // rather than being computed against the pre-floor number.
+    const payoutFloor = rewardPayoutFloor(quest.offer.rewardGold, quest.offer.rewardXp);
+    gold = Math.max(gold, payoutFloor.gold);
+    xp = Math.max(xp, payoutFloor.xp);
 
     /* --------------------------- gathering bounty --------------------------- */
     // Independent of the success/failure gold-xp branch above -- a

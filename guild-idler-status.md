@@ -26489,3 +26489,104 @@ already near a match.
 already live). CSS-only change -- `npx tsc --noEmit` and a full `vite
 build` (web + both Electron entries) passing clean against a fresh
 clone, confirming nothing else was touched.
+
+### Reward floor for near-zero quest payouts, Tier 4 hero balance/bug audit (patch 0325)
+
+```discord-update
+Dev Update | Patch 0325
+
+- Added a reward floor so a resolved quest can no longer round down to a trivial 1 gold / 0 xp
+- Confirmed the Centaur's stats are in line with the other Tier 4 heroes, not an outlier
+- Still tracking down the Werewolf empty-quest-board report -- no reproducible cause found yet, more info needed
+```
+
+Two direct reports: quests still occasionally paying a near-worthless 1
+gold / 0 xp despite reward already scaling with the timer, and a batch of
+Tier 4 hero feedback (Centaur's stat allocation "way higher than the tier
+below," and the Werewolf's quest board coming up empty on return). This
+patch closes the first with a real fix; the second is a confirmed
+non-issue; the third is still open, no root cause found yet.
+
+**Reward floor -- root cause, not the generation-time floor already in
+place.** `fastQuestFloorPerHour` (`balance.ts`) already floors a quest
+OFFER's own `rewardGold`/`rewardXp` at generation time, so what a quest
+is *listed* as paying is never trivially small. The gap is one stage
+later: `QuestManager.resolve` multiplies that already-floored number by a
+success/failure factor -- roughly 100% on success, but a flat 15% (gold)
+/ 30% (xp) consolation on failure -- then `Math.floor`s the result with no
+floor of its own. A legitimately-floored offer (say 6 gold, 2 xp, already
+the correct generation-time minimum for a short/low-tier quest) can still
+resolve to `floor(6 * 0.15) = 0` gold and `floor(2 * 0.3) = 0` xp on a
+failure, or a similarly small number with an unlucky multiplier stack on
+success -- confirmed directly by walking the actual failure-branch math in
+`QuestManager.ts`, not assumed.
+
+**Fix: `rewardPayoutFloor(offerRewardGold, offerRewardXp)`, new export in
+`balance.ts`.** Guarantees the player actually *receives* at least a
+fraction of what the offer's own reward already said it was worth --
+`Math.max(2, round(offerRewardGold * 0.35))` for gold,
+`Math.max(1, round(offerRewardXp * 0.35))` for xp, both new
+`balance.*` Tuning entries (`rewardFloorFractionGold`/`Xp`,
+`rewardFloorMinGold`/`Xp`), same devtool-editable convention every other
+standalone constant in this file already follows. Deliberately keyed off
+the offer's own already-computed reward rather than a fresh level-based
+curve -- an independent curve risks quietly fighting the burst/medium
+anti-dominant-strategy cap (`fastQuestCapsPerHour`) the same way an
+earlier, uncapped floor almost did (see that function's own history in
+this file); reading off the offer's own number means this can never push
+a reward above what every existing cap/taper already decided it should be,
+only guarantee a meaningful floor under it. Wired into
+`QuestManager.resolve` right after the failure branch's own 15%/30% cut,
+before critBonus/dailyBurstBonus, so both of those still stack normally
+on top of a floored value rather than double-dipping against the pre-floor
+number. A success reward is essentially always already well above this
+floor and is never reduced by it (`Math.max` only ever raises) -- this is
+functionally a failure/rounding-edge-case fix, not a broad reward buff.
+
+**Tier 4 audit -- Centaur, confirmed not an outlier.** Summed
+`baseStats`+`growth` across every Tier 3 and Tier 4 hero class
+(`hero-classes.json`) rather than eyeballing one stat at a time. Tier 3's
+highest total (Wizard: 24 base, 3.6 growth) sits right at Tier 4's low end
+(Kobold: 25 base, 3.6 growth) -- a real, expected jump tier-to-tier, same
+as every other tier boundary in this file. Within Tier 4 itself, Centaur
+(27 base, 3.5 growth) is in the middle of the pack, not above it --
+Huge Knight also totals 27 base, Minotaur 26, Werewolf and Kobold both 25.
+`preferredBonus` (16) is likewise right in the 15-18 range every other
+Tier 4 class uses. No disproportionate allocation found anywhere in the
+data -- the "way higher than the tier below" read is almost certainly the
+ordinary, intended Tier 3 -> Tier 4 step, not a Centaur-specific bug.
+Not changed; flagging as confirmed-not-a-bug rather than silently closing
+it, in case there's a specific in-game number this doesn't account for.
+
+**Werewolf empty quest board -- traced, not yet reproduced.** Walked the
+full board-generation/regeneration path (`QuestManager.
+generateContractsForHero`, `engine.ts`'s `refreshWorld`) end to end
+looking for anything Werewolf-specific or class-conditional -- there
+isn't one. Board generation only ever reads `hero.level`/`hero.id`, never
+`hero.classId`; `reqLevel` rolls as `hero.level + offset` (offset -4..+4,
+floored at 1) regardless of class, so nothing in the roll itself can
+special-case a Werewolf into an empty or all-ineligible board. Also
+checked whether recruiting a Tier 4 hero at their real start level (24,
+`recruit-start-level.json`) could interact badly with anything
+level-dependent in the offer roll -- it can't, the math has no upper
+bound that a level-24 start would approach. `RaidManager` doesn't touch
+`state.questBoards` at all, so a raid returning a hero isn't the cause
+either. Nothing found that would produce a genuinely empty board for one
+specific hero or class -- this needs a repro (a save, or the exact
+sequence: recruited fresh vs. leveled into Tier 4, whether it followed a
+raid vs. a quest, whether the board was empty immediately or went empty
+after some time on the tab) before a real fix can be scoped. Not
+guessed at or patched speculatively.
+
+**Verified:** Diffed `balance.ts`, `tuning.json`, and `QuestManager.ts`
+against a fresh pull of `main` immediately before editing. New
+`rewardPayoutFloor` traced by hand against the exact failure-branch
+numbers from the original report (an offer with `rewardGold: 6`,
+`rewardXp: 2` on failure: pre-fix `gold: 0, xp: 0`; post-fix
+`gold: max(2, round(6*0.35))=2, xp: max(1, round(2*0.35))=1`) --
+no `.patch` applied against a live build this session, since this
+environment has no Node/Vite toolchain to run `tsc`/`vite build`
+against; the diff itself only touches typed function signatures/
+arithmetic and a pure-JSON data file, so no `.d.ts`/import-shape issue
+is expected, but a real `npx tsc --noEmit` pass before merging is still
+recommended per this project's own verification convention.

@@ -177,6 +177,47 @@ export function fastQuestFloorPerHour(cfg: DifficultyConfig, atLevel: number): {
   };
 }
 
+/** Reward floor (patch 0325) -- fraction/absolute-minimum pair, see
+ *  rewardPayoutFloor's own comment for what these actually fix. */
+const REWARD_FLOOR_FRACTION_GOLD = Tuning.get('balance.rewardFloorFractionGold');
+const REWARD_FLOOR_FRACTION_XP = Tuning.get('balance.rewardFloorFractionXp');
+const REWARD_FLOOR_MIN_GOLD = Tuning.get('balance.rewardFloorMinGold');
+const REWARD_FLOOR_MIN_XP = Tuning.get('balance.rewardFloorMinXp');
+
+/**
+ * A final, last-mile floor on top of everything else in this file --
+ * closes the specific "1 gold, 0 xp" complaint reported directly, which
+ * fastQuestFloorPerHour above does NOT actually prevent by itself.
+ * fastQuestFloorPerHour only floors the OFFER's own rewardGold/rewardXp at
+ * generation time (what a quest is listed as paying); QuestManager.resolve
+ * then multiplies that by a success/failure factor -- 100%-ish on success,
+ * but a flat 15% (gold) / 30% (xp) consolation on failure -- and a small
+ * pre-floored offer reward (say 6 gold, 2 xp, already the legitimate
+ * generation-time minimum for a short/low-tier quest) can still round all
+ * the way down to 1 gold and 0 xp once that failure multiplier and
+ * Math.floor are applied. That gap, not the generation-time floor, is what
+ * a "reward floor" request is actually about.
+ *
+ * Deliberately keyed off the OFFER's own already-computed rewardGold/
+ * rewardXp (not a fresh level-based curve) so this can never fight the
+ * burst/medium anti-dominant-strategy cap (fastQuestCapsPerHour) the way
+ * an independent level curve could -- whatever the offer's own reward
+ * ended up being, after every existing cap/floor/taper already ran, this
+ * only ever guarantees the player actually RECEIVES a meaningful fraction
+ * of that number, never more than the number itself already implies.
+ * Applied identically to success and failure in QuestManager.resolve, right
+ * after failure's own 15%/30% cut -- a success reward is essentially always
+ * already well above this floor and is never reduced by it (Math.max only
+ * ever raises), so this is functionally a failure/rounding-edge-case fix,
+ * not a broad reward buff.
+ */
+export function rewardPayoutFloor(offerRewardGold: number, offerRewardXp: number): { gold: number; xp: number } {
+  return {
+    gold: Math.max(REWARD_FLOOR_MIN_GOLD, Math.round(offerRewardGold * REWARD_FLOOR_FRACTION_GOLD)),
+    xp: Math.max(REWARD_FLOOR_MIN_XP, Math.round(offerRewardXp * REWARD_FLOOR_FRACTION_XP)),
+  };
+}
+
 /**
  * Burst/medium chance taper for the Easy tier, by hero level -- see
  * guild-idler-status.md's "Burst quest reward taper" writeup for the full
