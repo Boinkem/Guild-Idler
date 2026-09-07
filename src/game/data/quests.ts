@@ -37,14 +37,24 @@ export interface DifficultyConfig {
    * and guild-idler-status.md's patch 0332 writeup for the before/after).
    * One roll, one chance, on EVERY difficulty tier now (not Easy-only) --
    * this is the base chance before GameState.questFastUpgrades' Lucky
-   * Streak bonus (QuestManager.generateOffer adds that on top). Kept
-   * deliberately low and DECREASING per tier (Easy highest, Legendary
-   * lowest, direct request: "Id like easy ones to be more common than
-   * legendarys") -- rarity is the ONLY guardrail against a fast roll
-   * becoming the dominant per-hour strategy now that the old cap/floor/
-   * taper stack (balance.ts's fastQuestCapsPerHour/fastQuestFloorPerHour/
-   * easyFastModeChances) is gone, a deliberate choice confirmed directly
-   * rather than assumed safe.
+   * Streak bonus (QuestManager.generateOffer adds that on top). DECREASING
+   * per tier (Easy highest, Legendary lowest, direct request: "Id like
+   * easy ones to be more common than legendarys"). Raised across the
+   * board in patch 0333 (5/4/3/2/1 -> 20/15/10/6/3) alongside two new
+   * things that keep rarity doing its job at the higher chance: a real
+   * success-chance penalty on every Fast roll (quest.fastSuccessPenalty,
+   * see QuestManager.generateOffer's own comment on where it's applied)
+   * and Steady Hands, the upgrade that partially offsets it. Verified by
+   * direct simulation before raising these, not assumed safe -- the
+   * blended (Fast + standard) gold/xp-per-hour rate stays strictly
+   * increasing tier-to-tier at every level checked, Easy through
+   * Legendary, even before accounting for the new penalty at all; Easy's
+   * own fastChance would need to climb past roughly 35-40% before it
+   * could even catch Normal's blended rate. Rarity is still the primary
+   * guardrail against a Fast roll becoming the dominant per-hour
+   * strategy (the old cap/floor/taper stack -- balance.ts's
+   * fastQuestCapsPerHour/fastQuestFloorPerHour/easyFastModeChances --
+   * stays retired), the success penalty is a second, independent one.
    */
   fastChance: number;
   /**

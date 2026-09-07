@@ -23,7 +23,8 @@ export function QuestBoardIntroModal({ onView, onClose }: { onView: () => void; 
         </p>
         <p className="small">
           Watch for the <b>⚡ Fast</b> tag -- a rare roll on any difficulty that finishes in a fraction of the
-          normal time, still worth a real reward. It can turn up anywhere, so keep an eye on the board.
+          normal time, still worth a real reward. It comes with a real tradeoff too -- lower success odds than
+          the same quest would normally have -- so it's a genuine gamble, not a free bonus.
         </p>
         <div className="row end" style={{ marginTop: 14, gap: 8 }}>
           <button className="btn-primary" onClick={onClose}>Close</button>

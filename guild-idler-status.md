@@ -27324,3 +27324,113 @@ outside historical comments and the one intentionally-preserved old
 migration (patch 0288's, which only ever backfills the now-dead
 `pendingBurstQuestSpotlight` key on an old save -- harmless, matches
 this file's own "never clean up, only backfill" convention).
+
+### Fast quests: raised chances, real success tradeoff, Steady Hands (patch 0333)
+
+```discord-update
+Dev Update | Fast Quests, Round 2
+- Fast quests are noticeably more common now -- Easy 20%, Normal 15%, Hard 10%, Epic 6%, Legendary 3%
+- Fast rolls now carry a real downside: a success chance penalty, since a rushed job is riskier
+- Added Steady Hands, a new upgrade that claws back some of that penalty -- though a Fast roll never gets fully risk-free
+- Verified the math -- higher difficulties still pay more per hour than Easy, even with the higher Fast chance
+```
+
+Direct follow-up to patch 0332's redesign, same session: "lets increase
+the EASY difficulty burst chance baseline, fast roll can happen 20% of
+the time, normal goes to 15, so on... introduce a downside to fast
+rolls, a small success % decrease (5-10%? im thinking) perhaps another
+upgrade path to ease that by 1% per level, another gold sink really...
+make sure that spamming EASY isn't the best method for gold and xp."
+The dominance question was answered with real numbers before any tuning
+value was locked in, not asserted -- see the verification section below.
+
+**Fast chances, `difficulties.json`.** `fastChance` raised on every
+tier: Easy 5 -> 20, Normal 4 -> 15, Hard 3 -> 10, Epic 2 -> 6, Legendary
+1 -> 3 -- explicit values for Easy/Normal, a smooth taper filled in for
+the rest (stated as an assumption at the time, confirmed: "numbers look
+good to me").
+
+**New success penalty, `quest.fastSuccessPenalty` (7 points), the
+"introduce a downside" ask.** Applied directly to `offer.baseSuccess` at
+generation time in `QuestManager.generateOffer`, not as a separate
+adjustment layered on later in `previewSuccess`/`resolve` -- baking it
+into the offer's own `baseSuccess` means every downstream consumer (the
+board card's success%, the detail modal, the actual roll at resolve
+time) automatically sees the already-penalized number with no extra
+"is this a Fast offer" check needed anywhere else in the codebase.
+`Math.max(1, ...)` is a defensive floor only -- at today's tuning even
+Legendary (base 30) minus the full 7-point penalty clears it comfortably;
+`MIN_SUCCESS` (5) remains the real floor, applied later in
+`previewSuccess` same as always.
+
+**New "Steady Hands" upgrade, the "another upgrade path to ease that...
+another gold sink" ask.** Second entry in `QUEST_FAST_UPGRADES`
+(questFastUpgrades.ts), alongside Lucky Streak -- `QuestFastUpgradeDef`
+(types.ts) gained a second optional effect field
+(`successPenaltyRecoveryPerLevel`, Lucky Streak's `fastChancePctPerLevel`
+also made optional) since the tree now has two entries with genuinely
+different effects, each only setting the one field that applies to it.
+Gold-only (`goldTierMaxLevel` set equal to `maxLevel`, which makes
+`questFastUpgradeCost`'s Renown branch mathematically unreachable for
+this entry -- the intended way to express "pure gold sink" without a
+separate boolean). +1% success recovery per level, 5 levels, capped
+BELOW what would fully offset the 7-point base penalty -- direct design
+goal, confirmed during discussion: a Fast roll should stay a real
+tradeoff even fully upgraded, permanent 2-point residual by design, not
+a path to making Fast strictly free. `LuckyStreakRow` generalized into
+`QuestFastUpgradeRow` (`icon`/`effectText` props) so both upgrades
+render off one implementation instead of two near-identical copies.
+
+**Verification, "make sure that spamming EASY isn't the best method for
+gold and xp" -- checked with real numbers before locking in any value,
+not assumed.** Built a blended (Fast + standard) gold/xp-per-hour
+calculator mirroring `balance.ts`'s own `expectedRatePerHour` shape,
+checked at every tier's own referenceLevel AND at a fixed level 30 for a
+direct apples-to-apples comparison across all five tiers -- the
+hierarchy (Easy < Normal < Hard < Epic < Legendary) held cleanly both
+ways, and at every level from 1 through 30 individually, not just those
+two snapshots. Also checked the low-level range specifically (1/3/5/8/
+10/15), since that's exactly where the original burst-dominance
+complaint that led to patch 0332 came from. Stress-tested the actual
+breaking point: Easy's own fastChance would need to reach roughly 35-
+40% before it could even catch Normal's blended rate at Normal's own
+referenceLevel -- 20% has real margin. Interestingly, the hierarchy
+holds even at 0% penalty (checked directly) -- the shorter-duration +
+50%-reward-floor math from patch 0332 already keeps a Fast roll from
+closing the gap between tiers on its own, so the success penalty is a
+real, separate design tradeoff rather than something load-bearing for
+this specific dominance question. Finally cross-checked the analytical
+formula against the REAL patched `QuestManager.generateOffer`
+implementation directly (20,000-sample Monte Carlo per tier at level
+30, temporary scratch script, not shipped) -- empirical fastChance%
+landed within RNG noise of the intended 20/15/10/6/3 targets, average
+Fast `baseSuccess` measured exactly 7 points below average standard
+`baseSuccess` on every tier, and gold/hr stayed strictly increasing
+tier-to-tier using the real code path, not just the hand-derived
+formula.
+
+**Also answered directly, not implemented:** hours-to-level-55 under
+several "always send this difficulty" strategies, simulated with a
+temporary scratch script (continuous 100% uptime, not shipped as a
+permanent tool) reusing the real reward formulas: Always Easy ~3,084h
+(~129 days), Always Normal ~2,781h, Always Hard ~2,447h, Always Epic
+~2,234h, Always Legendary (falls back to Epic before its level-25
+unlock) ~1,994h. "Always best-unlocked" landed on exactly the same
+number as Always Legendary -- once Legendary is available there's never
+a reason to leave it, itself a clean confirmation the reward curve is
+monotonic the whole way up, consistent with the dominance check above.
+
+**Copy updated to be honest about the new tradeoff**, not just the
+upside, everywhere Fast quests are explained: the board-card tooltip,
+`QuestDetailModal`'s inline Fast callout, and `QuestBoardIntroModal`'s
+explainer text all now mention the success penalty alongside the
+reward/duration tradeoff that patch 0332 already covered.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+Every temporary analysis/verification script (dominance calculator,
+level sweep, penalty comparison, hours-to-55 sim, empirical Monte Carlo
+check) was scratch work used to validate this patch's numbers before
+committing to them, then deleted -- none were shipped as permanent
+DevTool/repo files, kept separate from `tools/devtool/sim/runSim.ts`
+(the real, permanent Balance Sandbox sim) which was untouched by this
+patch.

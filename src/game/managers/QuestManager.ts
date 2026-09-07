@@ -98,7 +98,15 @@ export const QuestManager = {
     // percentage-point bonus, not a raw upgrade level, so those two stay
     // decoupled from the upgrade tree's own data shape.
     const fastChanceBonus = (state.questFastUpgrades['lucky_streak'] ?? 0)
-      * QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel;
+      * (QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel ?? 0);
+    // Patch 0333, same threading pattern as fastChanceBonus just above --
+    // net penalty after Steady Hands' recovery, clamped at 0 (never a
+    // bonus) and capped by the base penalty itself (Steady Hands can
+    // claw back UP TO the base penalty at most, per its own maxLevel/
+    // recoveryPctPerLevel tuning -- this clamp is defensive, not the
+    // actual mechanism limiting the residual; that's maxLevel).
+    const fastSuccessPenalty = Math.max(0, Tuning.get('quest.fastSuccessPenalty')
+      - (state.questFastUpgrades['steady_hands'] ?? 0) * (QUEST_FAST_UPGRADE_BY_ID['steady_hands'].successPenaltyRecoveryPerLevel ?? 0));
 
     // Difficulty is no longer a level gate at all (patch 0214) -- every
     // difficulty's reqLevel now rolls near hero.level regardless of tier
@@ -122,9 +130,9 @@ export const QuestManager = {
       // per-offer chance in this function would use.
       const seedTag = `q:${window}:${hero.id}:${salt}:${i}`;
       if (state.harvestUnlocked && rng.chance(Tuning.get('quest.gatheringBountyChance'))) {
-        offers.push(QuestManager.generateGatheringOffer(difficulty, rng, seedTag, hero.level, fastChanceBonus));
+        offers.push(QuestManager.generateGatheringOffer(difficulty, rng, seedTag, hero.level, fastChanceBonus, fastSuccessPenalty));
       } else {
-        offers.push(QuestManager.generateOffer(difficulty, rng, seedTag, hero.level, false, false, false, fastChanceBonus));
+        offers.push(QuestManager.generateOffer(difficulty, rng, seedTag, hero.level, false, false, false, fastChanceBonus, fastSuccessPenalty));
       }
     }
 
@@ -160,7 +168,7 @@ export const QuestManager = {
       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
       const targetIndex = offers.length - 1;
       offers[targetIndex] = QuestManager.generateOffer(
-        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, true, false, fastChanceBonus,
+        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, true, false, fastChanceBonus, fastSuccessPenalty,
       );
     }
 
@@ -187,7 +195,7 @@ export const QuestManager = {
       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
       const targetIndex = offers.length > 1 ? offers.length - 2 : 0;
       offers[targetIndex] = QuestManager.generateOffer(
-        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-onlevel`, hero.level, false, false, true, fastChanceBonus,
+        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-onlevel`, hero.level, false, false, true, fastChanceBonus, fastSuccessPenalty,
       );
     }
     return offers;
@@ -386,7 +394,7 @@ export const QuestManager = {
   generateOffer(
     difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
     forceFast = false, forceStandard = false,
-    forceAtOrUnderLevel = false, fastChanceBonus = 0,
+    forceAtOrUnderLevel = false, fastChanceBonus = 0, fastSuccessPenalty = 0,
   ): QuestOffer {
     const cfg = DIFFICULTIES[difficulty];
     const reqLevel = QuestManager.rollReqLevel(topLevel, rng, forceAtOrUnderLevel ? 0 : undefined);
@@ -460,7 +468,21 @@ export const QuestManager = {
       difficulty,
       tag: template.tag,
       duration,
-      baseSuccess: cfg.baseSuccess,
+      // Patch 0333, direct request: a Fast roll carries a real tradeoff,
+      // not just upside -- its own success chance is reduced by
+      // `fastSuccessPenalty` (already netted against Steady Hands'
+      // recovery by the caller, see generateContractsForHero's own
+      // comment). Baked directly into baseSuccess here rather than
+      // applied later in previewSuccess/resolve, so every downstream
+      // consumer of an offer's success chance (the board card, the
+      // detail modal, the actual roll at resolve time) sees the exact
+      // same already-penalized number automatically, with no separate
+      // "is this a Fast offer" check needed at any of those call sites.
+      // Math.max(1, ...) is defensive, not load-bearing at today's
+      // tuning (worst case Legendary at 30 base minus a 7-point penalty
+      // still clears it comfortably) -- MIN_SUCCESS (5) is still the
+      // real floor applied later in previewSuccess regardless.
+      baseSuccess: useFast ? Math.max(1, cfg.baseSuccess - fastSuccessPenalty) : cfg.baseSuccess,
       rewardGold,
       rewardXp,
       loot: lootTableFor(difficulty, rng),
@@ -488,9 +510,9 @@ export const QuestManager = {
    * below optimal manual clicking" math it's calibrated against.
    */
   generateGatheringOffer(
-    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, fastChanceBonus = 0,
+    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, fastChanceBonus = 0, fastSuccessPenalty = 0,
   ): QuestOffer {
-    const base = QuestManager.generateOffer(difficulty, rng, seedTag, topLevel, false, false, false, fastChanceBonus);
+    const base = QuestManager.generateOffer(difficulty, rng, seedTag, topLevel, false, false, false, fastChanceBonus, fastSuccessPenalty);
     const materialId: MaterialId = rng.pick(NODE_ORDER);
     const materialName = MATERIAL_BY_ID[materialId]?.name ?? materialId;
     const perHour = Tuning.get('quest.gatheringMaterialPerHour');

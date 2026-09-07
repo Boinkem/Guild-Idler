@@ -11,7 +11,7 @@
     "color": "#79a86b",
     "referenceLevel": 1,
     "rewardMultiplier": 0.6,
-    "fastChance": 5,
+    "fastChance": 20,
     "fastMinDurationPct": 10,
     "fastMaxDurationPct": 40
   },
@@ -27,7 +27,7 @@
     "color": "#5b8fd6",
     "referenceLevel": 3,
     "rewardMultiplier": 1.5,
-    "fastChance": 4,
+    "fastChance": 15,
     "fastMinDurationPct": 10,
     "fastMaxDurationPct": 40
   },
@@ -43,7 +43,7 @@
     "color": "#c98b3a",
     "referenceLevel": 8,
     "rewardMultiplier": 3.2,
-    "fastChance": 3,
+    "fastChance": 10,
     "fastMinDurationPct": 10,
     "fastMaxDurationPct": 40
   },
@@ -59,7 +59,7 @@
     "color": "#a874d6",
     "referenceLevel": 15,
     "rewardMultiplier": 7.3,
-    "fastChance": 2,
+    "fastChance": 6,
     "fastMinDurationPct": 10,
     "fastMaxDurationPct": 40
   },
@@ -75,7 +75,7 @@
     "color": "#d9a441",
     "referenceLevel": 25,
     "rewardMultiplier": 19.5,
-    "fastChance": 1,
+    "fastChance": 3,
     "fastMinDurationPct": 10,
     "fastMaxDurationPct": 40
   }

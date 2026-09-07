@@ -1528,12 +1528,18 @@ export interface RaidUpgradeDef {
 /**
  * Patch 0332. Same gold-then-Renown, same "own tree, own file" shape as
  * RaidUpgradeDef immediately above (its direct precedent) -- deliberately
- * NOT a `Partial<Modifiers>` mod though: what this buys (a flat
+ * NOT a `Partial<Modifiers>` mod though: what this tree buys (a flat
  * percentage-point boost to every difficulty tier's Fast-quest chance,
- * see QuestManager.generateOffer) isn't a hero stat or anything
- * ModifierManager's mod system already models, it's a board-generation-
- * time probability, so it gets its own single-purpose field instead of
- * being forced into the general Modifiers shape for one number.
+ * or -- patch 0333 -- clawing back part of the Fast success penalty)
+ * isn't a hero stat or anything ModifierManager's mod system already
+ * models, it's board-generation-time math, so each entry gets its own
+ * single-purpose effect field instead of being forced into the general
+ * Modifiers shape. Both effect fields are optional -- a given entry in
+ * QUEST_FAST_UPGRADES only ever sets the one that actually applies to
+ * it (Lucky Streak sets `fastChancePctPerLevel`, Steady Hands sets
+ * `successPenaltyRecoveryPerLevel`), read by id at each of their own
+ * call sites rather than genericized, since the two effects are
+ * conceptually unrelated beyond both living in this same small tree.
  */
 export interface QuestFastUpgradeDef {
   id: string;
@@ -1543,11 +1549,27 @@ export interface QuestFastUpgradeDef {
    *  per level -- Easy and Legendary both get the same +N, so the
    *  relative "Easy more common than Legendary" shape this upgrade is
    *  layered on top of never inverts, no matter how many levels are
-   *  bought. */
-  fastChancePctPerLevel: number;
+   *  bought. Only set on the 'lucky_streak' entry. */
+  fastChancePctPerLevel?: number;
+  /**
+   * Patch 0333. Flat percentage points clawed back per level from
+   * `quest.fastSuccessPenalty` (see QuestManager.generateOffer's own
+   * comment on where that penalty is actually applied) -- deliberately
+   * never lets the penalty fully cancel out (QUEST_FAST_UPGRADES'
+   * own maxLevel for this entry is set below the number of levels that
+   * WOULD fully offset the base penalty, leaving a permanent residual),
+   * direct design goal: a Fast roll should stay a real tradeoff even
+   * fully upgraded, not become strictly free. Only set on the
+   * 'steady_hands' entry.
+   */
+  successPenaltyRecoveryPerLevel?: number;
   goldBaseCost: number;
   goldCostGrowth: number;
-  /** Levels 0..goldTierMaxLevel-1 cost gold; goldTierMaxLevel is also where the Renown tier's own level-0 begins. */
+  /** Levels 0..goldTierMaxLevel-1 cost gold; goldTierMaxLevel is also where the Renown tier's own level-0 begins.
+   *  Equal to maxLevel for a gold-only entry (Steady Hands) -- the
+   *  Renown-tier branch of questFastUpgradeCost then becomes
+   *  mathematically unreachable, which is the intended way to express
+   *  "this one's a pure gold sink" without a separate boolean flag. */
   goldTierMaxLevel: number;
   renownBaseCost: number;
   renownCostGrowth: number;

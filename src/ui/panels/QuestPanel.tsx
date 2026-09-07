@@ -181,7 +181,7 @@ export function QuestRow({
             <span
               className="tag"
               style={{ color: 'var(--brass)' }}
-              title="A rare fast roll -- shorter than usual for its difficulty, reward scaled to match but never below half of the full-length version"
+              title="A rare fast roll -- shorter than usual for its difficulty, reward scaled to match but never below half of the full-length version. Success chance takes a hit in exchange."
             >
               ⚡ Fast
             </span>
@@ -342,7 +342,8 @@ export function QuestDetailModal({
         {isFastOffer && offer.id !== TUTORIAL_QUEST_ID && (
           <p className="tiny muted" style={{ margin: '0 0 8px' }}>
             ⚡ Fast roll -- shorter than a normal {cfg.label} contract, reward scaled to match but never below half
-            of what the full-length version would pay.
+            of what the full-length version would pay. Success chance is lower too -- a real tradeoff for the
+            time saved, not just a bonus.
           </p>
         )}
 
@@ -474,17 +475,21 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
 
 /**
  * Patch 0332, direct request: "a new expensive upgrade to increase
- * chances" for how often a quest offer rolls Fast. Deliberately a
- * compact single row (not the full detail-modal RaidsPanel's own
- * upgrade-row pattern uses) -- there's exactly one entry in this tree
- * (QUEST_FAST_UPGRADES, see that file's own "starter set, grows over
- * time" comment), so a whole modal-on-click affordance for a single item
- * would be more chrome than the feature currently needs.
+ * chances" for how often a quest offer rolls Fast. Patch 0333 (Steady
+ * Hands) reused this same row rather than copying it -- both entries
+ * are single-effect, single-currency-path upgrades that only differ in
+ * which one number they move and how that number's described, so
+ * `effectText`/`icon` are passed in rather than read off a field this
+ * component would otherwise have to know how to interpret per-id.
+ * Deliberately a compact single row (not the full detail-modal
+ * RaidsPanel's own upgrade-row pattern uses) -- a whole modal-on-click
+ * affordance for a two-entry tree would be more chrome than the feature
+ * currently needs.
  */
-function LuckyStreakRow() {
+function QuestFastUpgradeRow({ id, icon, effectText }: { id: string; icon: string; effectText: string }) {
   const engine = useEngine();
   const state = engine.state;
-  const def = QUEST_FAST_UPGRADE_BY_ID['lucky_streak'];
+  const def = QUEST_FAST_UPGRADE_BY_ID[id];
   const level = GuildManager.questFastUpgradeLevel(state, def.id);
   const next = GuildManager.nextQuestFastUpgradeCost(state, def.id);
   const maxed = next === null;
@@ -499,10 +504,10 @@ function LuckyStreakRow() {
     <div className="upgrade-row">
       <span style={{ minWidth: 0 }}>
         <span className="upgrade-row-head">
-          <span className="upgrade-row-name">⚡ {def.name}</span>
+          <span className="upgrade-row-name">{icon} {def.name}</span>
           <span className="upgrade-row-level">{level}/{def.maxLevel}</span>
         </span>
-        <span className="upgrade-row-effect">+{def.fastChancePctPerLevel}% Fast chance per level, every difficulty</span>
+        <span className="upgrade-row-effect">{effectText}</span>
         <span className="upgrade-row-rule">
           <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
         </span>
@@ -656,7 +661,16 @@ export function QuestPanel() {
         what's open to them.
       </p>
 
-      <LuckyStreakRow />
+      <QuestFastUpgradeRow
+        id="lucky_streak"
+        icon="⚡"
+        effectText={`+${QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel}% Fast chance per level, every difficulty`}
+      />
+      <QuestFastUpgradeRow
+        id="steady_hands"
+        icon="🛡"
+        effectText={`+${QUEST_FAST_UPGRADE_BY_ID['steady_hands'].successPenaltyRecoveryPerLevel}% success back per level on Fast rolls`}
+      />
 
       {/* --------------------------- active quests --------------------------- */}
       {state.activeQuests.length > 0 && (

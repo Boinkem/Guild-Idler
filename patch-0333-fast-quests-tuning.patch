@@ -1,0 +1,561 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 696e4ab..9c06ab9 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -27324,3 +27324,113 @@ outside historical comments and the one intentionally-preserved old
+ migration (patch 0288's, which only ever backfills the now-dead
+ `pendingBurstQuestSpotlight` key on an old save -- harmless, matches
+ this file's own "never clean up, only backfill" convention).
++
++### Fast quests: raised chances, real success tradeoff, Steady Hands (patch 0333)
++
++```discord-update
++Dev Update | Fast Quests, Round 2
++- Fast quests are noticeably more common now -- Easy 20%, Normal 15%, Hard 10%, Epic 6%, Legendary 3%
++- Fast rolls now carry a real downside: a success chance penalty, since a rushed job is riskier
++- Added Steady Hands, a new upgrade that claws back some of that penalty -- though a Fast roll never gets fully risk-free
++- Verified the math -- higher difficulties still pay more per hour than Easy, even with the higher Fast chance
++```
++
++Direct follow-up to patch 0332's redesign, same session: "lets increase
++the EASY difficulty burst chance baseline, fast roll can happen 20% of
++the time, normal goes to 15, so on... introduce a downside to fast
++rolls, a small success % decrease (5-10%? im thinking) perhaps another
++upgrade path to ease that by 1% per level, another gold sink really...
++make sure that spamming EASY isn't the best method for gold and xp."
++The dominance question was answered with real numbers before any tuning
++value was locked in, not asserted -- see the verification section below.
++
++**Fast chances, `difficulties.json`.** `fastChance` raised on every
++tier: Easy 5 -> 20, Normal 4 -> 15, Hard 3 -> 10, Epic 2 -> 6, Legendary
++1 -> 3 -- explicit values for Easy/Normal, a smooth taper filled in for
++the rest (stated as an assumption at the time, confirmed: "numbers look
++good to me").
++
++**New success penalty, `quest.fastSuccessPenalty` (7 points), the
++"introduce a downside" ask.** Applied directly to `offer.baseSuccess` at
++generation time in `QuestManager.generateOffer`, not as a separate
++adjustment layered on later in `previewSuccess`/`resolve` -- baking it
++into the offer's own `baseSuccess` means every downstream consumer (the
++board card's success%, the detail modal, the actual roll at resolve
++time) automatically sees the already-penalized number with no extra
++"is this a Fast offer" check needed anywhere else in the codebase.
++`Math.max(1, ...)` is a defensive floor only -- at today's tuning even
++Legendary (base 30) minus the full 7-point penalty clears it comfortably;
++`MIN_SUCCESS` (5) remains the real floor, applied later in
++`previewSuccess` same as always.
++
++**New "Steady Hands" upgrade, the "another upgrade path to ease that...
++another gold sink" ask.** Second entry in `QUEST_FAST_UPGRADES`
++(questFastUpgrades.ts), alongside Lucky Streak -- `QuestFastUpgradeDef`
++(types.ts) gained a second optional effect field
++(`successPenaltyRecoveryPerLevel`, Lucky Streak's `fastChancePctPerLevel`
++also made optional) since the tree now has two entries with genuinely
++different effects, each only setting the one field that applies to it.
++Gold-only (`goldTierMaxLevel` set equal to `maxLevel`, which makes
++`questFastUpgradeCost`'s Renown branch mathematically unreachable for
++this entry -- the intended way to express "pure gold sink" without a
++separate boolean). +1% success recovery per level, 5 levels, capped
++BELOW what would fully offset the 7-point base penalty -- direct design
++goal, confirmed during discussion: a Fast roll should stay a real
++tradeoff even fully upgraded, permanent 2-point residual by design, not
++a path to making Fast strictly free. `LuckyStreakRow` generalized into
++`QuestFastUpgradeRow` (`icon`/`effectText` props) so both upgrades
++render off one implementation instead of two near-identical copies.
++
++**Verification, "make sure that spamming EASY isn't the best method for
++gold and xp" -- checked with real numbers before locking in any value,
++not assumed.** Built a blended (Fast + standard) gold/xp-per-hour
++calculator mirroring `balance.ts`'s own `expectedRatePerHour` shape,
++checked at every tier's own referenceLevel AND at a fixed level 30 for a
++direct apples-to-apples comparison across all five tiers -- the
++hierarchy (Easy < Normal < Hard < Epic < Legendary) held cleanly both
++ways, and at every level from 1 through 30 individually, not just those
++two snapshots. Also checked the low-level range specifically (1/3/5/8/
++10/15), since that's exactly where the original burst-dominance
++complaint that led to patch 0332 came from. Stress-tested the actual
++breaking point: Easy's own fastChance would need to reach roughly 35-
++40% before it could even catch Normal's blended rate at Normal's own
++referenceLevel -- 20% has real margin. Interestingly, the hierarchy
++holds even at 0% penalty (checked directly) -- the shorter-duration +
++50%-reward-floor math from patch 0332 already keeps a Fast roll from
++closing the gap between tiers on its own, so the success penalty is a
++real, separate design tradeoff rather than something load-bearing for
++this specific dominance question. Finally cross-checked the analytical
++formula against the REAL patched `QuestManager.generateOffer`
++implementation directly (20,000-sample Monte Carlo per tier at level
++30, temporary scratch script, not shipped) -- empirical fastChance%
++landed within RNG noise of the intended 20/15/10/6/3 targets, average
++Fast `baseSuccess` measured exactly 7 points below average standard
++`baseSuccess` on every tier, and gold/hr stayed strictly increasing
++tier-to-tier using the real code path, not just the hand-derived
++formula.
++
++**Also answered directly, not implemented:** hours-to-level-55 under
++several "always send this difficulty" strategies, simulated with a
++temporary scratch script (continuous 100% uptime, not shipped as a
++permanent tool) reusing the real reward formulas: Always Easy ~3,084h
++(~129 days), Always Normal ~2,781h, Always Hard ~2,447h, Always Epic
++~2,234h, Always Legendary (falls back to Epic before its level-25
++unlock) ~1,994h. "Always best-unlocked" landed on exactly the same
++number as Always Legendary -- once Legendary is available there's never
++a reason to leave it, itself a clean confirmation the reward curve is
++monotonic the whole way up, consistent with the dominance check above.
++
++**Copy updated to be honest about the new tradeoff**, not just the
++upside, everywhere Fast quests are explained: the board-card tooltip,
++`QuestDetailModal`'s inline Fast callout, and `QuestBoardIntroModal`'s
++explainer text all now mention the success penalty alongside the
++reward/duration tradeoff that patch 0332 already covered.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
++Every temporary analysis/verification script (dominance calculator,
++level sweep, penalty comparison, hours-to-55 sim, empirical Monte Carlo
++check) was scratch work used to validate this patch's numbers before
++committing to them, then deleted -- none were shipped as permanent
++DevTool/repo files, kept separate from `tools/devtool/sim/runSim.ts`
++(the real, permanent Balance Sandbox sim) which was untouched by this
++patch.
+diff --git a/src/game/data/json/difficulties.json b/src/game/data/json/difficulties.json
+index 11cc2cb..2ef6211 100644
+--- a/src/game/data/json/difficulties.json
++++ b/src/game/data/json/difficulties.json
+@@ -11,7 +11,7 @@
+     "color": "#79a86b",
+     "referenceLevel": 1,
+     "rewardMultiplier": 0.6,
+-    "fastChance": 5,
++    "fastChance": 20,
+     "fastMinDurationPct": 10,
+     "fastMaxDurationPct": 40
+   },
+@@ -27,7 +27,7 @@
+     "color": "#5b8fd6",
+     "referenceLevel": 3,
+     "rewardMultiplier": 1.5,
+-    "fastChance": 4,
++    "fastChance": 15,
+     "fastMinDurationPct": 10,
+     "fastMaxDurationPct": 40
+   },
+@@ -43,7 +43,7 @@
+     "color": "#c98b3a",
+     "referenceLevel": 8,
+     "rewardMultiplier": 3.2,
+-    "fastChance": 3,
++    "fastChance": 10,
+     "fastMinDurationPct": 10,
+     "fastMaxDurationPct": 40
+   },
+@@ -59,7 +59,7 @@
+     "color": "#a874d6",
+     "referenceLevel": 15,
+     "rewardMultiplier": 7.3,
+-    "fastChance": 2,
++    "fastChance": 6,
+     "fastMinDurationPct": 10,
+     "fastMaxDurationPct": 40
+   },
+@@ -75,7 +75,7 @@
+     "color": "#d9a441",
+     "referenceLevel": 25,
+     "rewardMultiplier": 19.5,
+-    "fastChance": 1,
++    "fastChance": 3,
+     "fastMinDurationPct": 10,
+     "fastMaxDurationPct": 40
+   }
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 2692b76..2c62eeb 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -5267,5 +5267,53 @@
+     "default": 5,
+     "min": 1,
+     "description": "Absolute level cap across both tiers combined. At max, every tier's fastChance is +5 percentage points over its difficulties.json base."
++  },
++  {
++    "id": "quest.fastSuccessPenalty",
++    "label": "Fast quest: success penalty",
++    "category": "quest",
++    "value": 7,
++    "default": 7,
++    "min": 0,
++    "max": 30,
++    "description": "Patch 0333, direct request: a Fast roll's own success chance is reduced by this many percentage points off the tier's baseSuccess, before Steady Hands' recovery is applied. A real tradeoff for the shorter time/still-real reward Fast quests already offer, not a free lunch."
++  },
++  {
++    "id": "quest_steady_hands.recoveryPctPerLevel",
++    "label": "Steady Hands: penalty recovery % per level",
++    "category": "quest_steady_hands",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "max": 10,
++    "description": "Flat percentage points clawed back per level from quest.fastSuccessPenalty. maxLevel is deliberately set below what would fully offset the base penalty -- see this upgrade's own comment in questFastUpgrades.ts."
++  },
++  {
++    "id": "quest_steady_hands.goldBaseCost",
++    "label": "Steady Hands: gold base cost",
++    "category": "quest_steady_hands",
++    "value": 4000,
++    "default": 4000,
++    "min": 0,
++    "description": "Cost of the first (level 0) purchase. Gold-only upgrade -- no Renown tier."
++  },
++  {
++    "id": "quest_steady_hands.goldCostGrowth",
++    "label": "Steady Hands: gold cost growth",
++    "category": "quest_steady_hands",
++    "value": 1.85,
++    "default": 1.85,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier applied per level."
++  },
++  {
++    "id": "quest_steady_hands.maxLevel",
++    "label": "Steady Hands: max level",
++    "category": "quest_steady_hands",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Absolute level cap -- also doubles as goldTierMaxLevel since this is a gold-only upgrade (see questFastUpgrades.ts). 5 levels x 1%/level recovery = 5 points clawed back off a 7-point quest.fastSuccessPenalty, leaving a permanent 2-point residual by design."
+   }
+ ]
+diff --git a/src/game/data/questFastUpgrades.ts b/src/game/data/questFastUpgrades.ts
+index 5c1cd5a..e7ce95c 100644
+--- a/src/game/data/questFastUpgrades.ts
++++ b/src/game/data/questFastUpgrades.ts
+@@ -10,8 +10,9 @@ import { Tuning } from './tuning';
+  * (QuestManager.generateOffer), not a hero stat, so it doesn't belong in
+  * ModifierManager's general mod system either.
+  *
+- * Starts as a single entry -- same "starter set, grows over time"
+- * precedent RAID_UPGRADES's own header comment already notes for itself.
++ * Started as a single entry -- same "starter set, grows over time"
++ * precedent RAID_UPGRADES's own header comment already notes for itself
++ * -- Steady Hands (patch 0333) is the first thing to grow it.
+  */
+ export const QUEST_FAST_UPGRADES: QuestFastUpgradeDef[] = [
+   {
+@@ -26,6 +27,30 @@ export const QUEST_FAST_UPGRADES: QuestFastUpgradeDef[] = [
+     renownCostGrowth: Tuning.get('quest_fast_upgrade.renownCostGrowth'),
+     maxLevel: Tuning.get('quest_fast_upgrade.maxLevel'),
+   },
++  /**
++   * Patch 0333, direct request: eases the new Fast success penalty
++   * (quest.fastSuccessPenalty, see QuestManager.generateOffer's own
++   * comment) by 1% per level, "perhaps another upgrade path to ease
++   * that... another gold sink really." Gold-only -- goldTierMaxLevel
++   * equals maxLevel, so questFastUpgradeCost's Renown branch is never
++   * actually reached for this entry (see QuestFastUpgradeDef's own
++   * comment on that field). Capped at 5 levels against a 7-point base
++   * penalty on purpose, direct design goal confirmed during the
++   * discussion: a Fast roll should stay a real tradeoff even fully
++   * upgraded (a permanent 2-point residual), never fully free.
++   */
++  {
++    id: 'steady_hands',
++    name: 'Steady Hands',
++    description: 'Drilled routines shave the risk off a rushed job -- claws back part of the success penalty every Fast roll carries, though a rushed job never gets entirely safe.',
++    successPenaltyRecoveryPerLevel: Tuning.get('quest_steady_hands.recoveryPctPerLevel'),
++    goldBaseCost: Tuning.get('quest_steady_hands.goldBaseCost'),
++    goldCostGrowth: Tuning.get('quest_steady_hands.goldCostGrowth'),
++    goldTierMaxLevel: Tuning.get('quest_steady_hands.maxLevel'),
++    renownBaseCost: 0,
++    renownCostGrowth: 1,
++    maxLevel: Tuning.get('quest_steady_hands.maxLevel'),
++  },
+ ];
+ 
+ export const QUEST_FAST_UPGRADE_BY_ID: Record<string, QuestFastUpgradeDef> = Object.fromEntries(
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index c8318e0..18cf4af 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -37,14 +37,24 @@ export interface DifficultyConfig {
+    * and guild-idler-status.md's patch 0332 writeup for the before/after).
+    * One roll, one chance, on EVERY difficulty tier now (not Easy-only) --
+    * this is the base chance before GameState.questFastUpgrades' Lucky
+-   * Streak bonus (QuestManager.generateOffer adds that on top). Kept
+-   * deliberately low and DECREASING per tier (Easy highest, Legendary
+-   * lowest, direct request: "Id like easy ones to be more common than
+-   * legendarys") -- rarity is the ONLY guardrail against a fast roll
+-   * becoming the dominant per-hour strategy now that the old cap/floor/
+-   * taper stack (balance.ts's fastQuestCapsPerHour/fastQuestFloorPerHour/
+-   * easyFastModeChances) is gone, a deliberate choice confirmed directly
+-   * rather than assumed safe.
++   * Streak bonus (QuestManager.generateOffer adds that on top). DECREASING
++   * per tier (Easy highest, Legendary lowest, direct request: "Id like
++   * easy ones to be more common than legendarys"). Raised across the
++   * board in patch 0333 (5/4/3/2/1 -> 20/15/10/6/3) alongside two new
++   * things that keep rarity doing its job at the higher chance: a real
++   * success-chance penalty on every Fast roll (quest.fastSuccessPenalty,
++   * see QuestManager.generateOffer's own comment on where it's applied)
++   * and Steady Hands, the upgrade that partially offsets it. Verified by
++   * direct simulation before raising these, not assumed safe -- the
++   * blended (Fast + standard) gold/xp-per-hour rate stays strictly
++   * increasing tier-to-tier at every level checked, Easy through
++   * Legendary, even before accounting for the new penalty at all; Easy's
++   * own fastChance would need to climb past roughly 35-40% before it
++   * could even catch Normal's blended rate. Rarity is still the primary
++   * guardrail against a Fast roll becoming the dominant per-hour
++   * strategy (the old cap/floor/taper stack -- balance.ts's
++   * fastQuestCapsPerHour/fastQuestFloorPerHour/easyFastModeChances --
++   * stays retired), the success penalty is a second, independent one.
+    */
+   fastChance: number;
+   /**
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 6daa666..be79f6d 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -98,7 +98,15 @@ export const QuestManager = {
+     // percentage-point bonus, not a raw upgrade level, so those two stay
+     // decoupled from the upgrade tree's own data shape.
+     const fastChanceBonus = (state.questFastUpgrades['lucky_streak'] ?? 0)
+-      * QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel;
++      * (QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel ?? 0);
++    // Patch 0333, same threading pattern as fastChanceBonus just above --
++    // net penalty after Steady Hands' recovery, clamped at 0 (never a
++    // bonus) and capped by the base penalty itself (Steady Hands can
++    // claw back UP TO the base penalty at most, per its own maxLevel/
++    // recoveryPctPerLevel tuning -- this clamp is defensive, not the
++    // actual mechanism limiting the residual; that's maxLevel).
++    const fastSuccessPenalty = Math.max(0, Tuning.get('quest.fastSuccessPenalty')
++      - (state.questFastUpgrades['steady_hands'] ?? 0) * (QUEST_FAST_UPGRADE_BY_ID['steady_hands'].successPenaltyRecoveryPerLevel ?? 0));
+ 
+     // Difficulty is no longer a level gate at all (patch 0214) -- every
+     // difficulty's reqLevel now rolls near hero.level regardless of tier
+@@ -122,9 +130,9 @@ export const QuestManager = {
+       // per-offer chance in this function would use.
+       const seedTag = `q:${window}:${hero.id}:${salt}:${i}`;
+       if (state.harvestUnlocked && rng.chance(Tuning.get('quest.gatheringBountyChance'))) {
+-        offers.push(QuestManager.generateGatheringOffer(difficulty, rng, seedTag, hero.level, fastChanceBonus));
++        offers.push(QuestManager.generateGatheringOffer(difficulty, rng, seedTag, hero.level, fastChanceBonus, fastSuccessPenalty));
+       } else {
+-        offers.push(QuestManager.generateOffer(difficulty, rng, seedTag, hero.level, false, false, false, fastChanceBonus));
++        offers.push(QuestManager.generateOffer(difficulty, rng, seedTag, hero.level, false, false, false, fastChanceBonus, fastSuccessPenalty));
+       }
+     }
+ 
+@@ -160,7 +168,7 @@ export const QuestManager = {
+       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
+       const targetIndex = offers.length - 1;
+       offers[targetIndex] = QuestManager.generateOffer(
+-        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, true, false, fastChanceBonus,
++        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, true, false, fastChanceBonus, fastSuccessPenalty,
+       );
+     }
+ 
+@@ -187,7 +195,7 @@ export const QuestManager = {
+       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
+       const targetIndex = offers.length > 1 ? offers.length - 2 : 0;
+       offers[targetIndex] = QuestManager.generateOffer(
+-        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-onlevel`, hero.level, false, false, true, fastChanceBonus,
++        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-onlevel`, hero.level, false, false, true, fastChanceBonus, fastSuccessPenalty,
+       );
+     }
+     return offers;
+@@ -386,7 +394,7 @@ export const QuestManager = {
+   generateOffer(
+     difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
+     forceFast = false, forceStandard = false,
+-    forceAtOrUnderLevel = false, fastChanceBonus = 0,
++    forceAtOrUnderLevel = false, fastChanceBonus = 0, fastSuccessPenalty = 0,
+   ): QuestOffer {
+     const cfg = DIFFICULTIES[difficulty];
+     const reqLevel = QuestManager.rollReqLevel(topLevel, rng, forceAtOrUnderLevel ? 0 : undefined);
+@@ -460,7 +468,21 @@ export const QuestManager = {
+       difficulty,
+       tag: template.tag,
+       duration,
+-      baseSuccess: cfg.baseSuccess,
++      // Patch 0333, direct request: a Fast roll carries a real tradeoff,
++      // not just upside -- its own success chance is reduced by
++      // `fastSuccessPenalty` (already netted against Steady Hands'
++      // recovery by the caller, see generateContractsForHero's own
++      // comment). Baked directly into baseSuccess here rather than
++      // applied later in previewSuccess/resolve, so every downstream
++      // consumer of an offer's success chance (the board card, the
++      // detail modal, the actual roll at resolve time) sees the exact
++      // same already-penalized number automatically, with no separate
++      // "is this a Fast offer" check needed at any of those call sites.
++      // Math.max(1, ...) is defensive, not load-bearing at today's
++      // tuning (worst case Legendary at 30 base minus a 7-point penalty
++      // still clears it comfortably) -- MIN_SUCCESS (5) is still the
++      // real floor applied later in previewSuccess regardless.
++      baseSuccess: useFast ? Math.max(1, cfg.baseSuccess - fastSuccessPenalty) : cfg.baseSuccess,
+       rewardGold,
+       rewardXp,
+       loot: lootTableFor(difficulty, rng),
+@@ -488,9 +510,9 @@ export const QuestManager = {
+    * below optimal manual clicking" math it's calibrated against.
+    */
+   generateGatheringOffer(
+-    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, fastChanceBonus = 0,
++    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, fastChanceBonus = 0, fastSuccessPenalty = 0,
+   ): QuestOffer {
+-    const base = QuestManager.generateOffer(difficulty, rng, seedTag, topLevel, false, false, false, fastChanceBonus);
++    const base = QuestManager.generateOffer(difficulty, rng, seedTag, topLevel, false, false, false, fastChanceBonus, fastSuccessPenalty);
+     const materialId: MaterialId = rng.pick(NODE_ORDER);
+     const materialName = MATERIAL_BY_ID[materialId]?.name ?? materialId;
+     const perHour = Tuning.get('quest.gatheringMaterialPerHour');
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 94e5a0e..97dd374 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1528,12 +1528,18 @@ export interface RaidUpgradeDef {
+ /**
+  * Patch 0332. Same gold-then-Renown, same "own tree, own file" shape as
+  * RaidUpgradeDef immediately above (its direct precedent) -- deliberately
+- * NOT a `Partial<Modifiers>` mod though: what this buys (a flat
++ * NOT a `Partial<Modifiers>` mod though: what this tree buys (a flat
+  * percentage-point boost to every difficulty tier's Fast-quest chance,
+- * see QuestManager.generateOffer) isn't a hero stat or anything
+- * ModifierManager's mod system already models, it's a board-generation-
+- * time probability, so it gets its own single-purpose field instead of
+- * being forced into the general Modifiers shape for one number.
++ * or -- patch 0333 -- clawing back part of the Fast success penalty)
++ * isn't a hero stat or anything ModifierManager's mod system already
++ * models, it's board-generation-time math, so each entry gets its own
++ * single-purpose effect field instead of being forced into the general
++ * Modifiers shape. Both effect fields are optional -- a given entry in
++ * QUEST_FAST_UPGRADES only ever sets the one that actually applies to
++ * it (Lucky Streak sets `fastChancePctPerLevel`, Steady Hands sets
++ * `successPenaltyRecoveryPerLevel`), read by id at each of their own
++ * call sites rather than genericized, since the two effects are
++ * conceptually unrelated beyond both living in this same small tree.
+  */
+ export interface QuestFastUpgradeDef {
+   id: string;
+@@ -1543,11 +1549,27 @@ export interface QuestFastUpgradeDef {
+    *  per level -- Easy and Legendary both get the same +N, so the
+    *  relative "Easy more common than Legendary" shape this upgrade is
+    *  layered on top of never inverts, no matter how many levels are
+-   *  bought. */
+-  fastChancePctPerLevel: number;
++   *  bought. Only set on the 'lucky_streak' entry. */
++  fastChancePctPerLevel?: number;
++  /**
++   * Patch 0333. Flat percentage points clawed back per level from
++   * `quest.fastSuccessPenalty` (see QuestManager.generateOffer's own
++   * comment on where that penalty is actually applied) -- deliberately
++   * never lets the penalty fully cancel out (QUEST_FAST_UPGRADES'
++   * own maxLevel for this entry is set below the number of levels that
++   * WOULD fully offset the base penalty, leaving a permanent residual),
++   * direct design goal: a Fast roll should stay a real tradeoff even
++   * fully upgraded, not become strictly free. Only set on the
++   * 'steady_hands' entry.
++   */
++  successPenaltyRecoveryPerLevel?: number;
+   goldBaseCost: number;
+   goldCostGrowth: number;
+-  /** Levels 0..goldTierMaxLevel-1 cost gold; goldTierMaxLevel is also where the Renown tier's own level-0 begins. */
++  /** Levels 0..goldTierMaxLevel-1 cost gold; goldTierMaxLevel is also where the Renown tier's own level-0 begins.
++   *  Equal to maxLevel for a gold-only entry (Steady Hands) -- the
++   *  Renown-tier branch of questFastUpgradeCost then becomes
++   *  mathematically unreachable, which is the intended way to express
++   *  "this one's a pure gold sink" without a separate boolean flag. */
+   goldTierMaxLevel: number;
+   renownBaseCost: number;
+   renownCostGrowth: number;
+diff --git a/src/ui/QuestBoardIntroModal.tsx b/src/ui/QuestBoardIntroModal.tsx
+index 642a0b1..7e9f831 100644
+--- a/src/ui/QuestBoardIntroModal.tsx
++++ b/src/ui/QuestBoardIntroModal.tsx
+@@ -23,7 +23,8 @@ export function QuestBoardIntroModal({ onView, onClose }: { onView: () => void;
+         </p>
+         <p className="small">
+           Watch for the <b>⚡ Fast</b> tag -- a rare roll on any difficulty that finishes in a fraction of the
+-          normal time, still worth a real reward. It can turn up anywhere, so keep an eye on the board.
++          normal time, still worth a real reward. It comes with a real tradeoff too -- lower success odds than
++          the same quest would normally have -- so it's a genuine gamble, not a free bonus.
+         </p>
+         <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+           <button className="btn-primary" onClick={onClose}>Close</button>
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index a762b31..8f5c72c 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -181,7 +181,7 @@ export function QuestRow({
+             <span
+               className="tag"
+               style={{ color: 'var(--brass)' }}
+-              title="A rare fast roll -- shorter than usual for its difficulty, reward scaled to match but never below half of the full-length version"
++              title="A rare fast roll -- shorter than usual for its difficulty, reward scaled to match but never below half of the full-length version. Success chance takes a hit in exchange."
+             >
+               ⚡ Fast
+             </span>
+@@ -342,7 +342,8 @@ export function QuestDetailModal({
+         {isFastOffer && offer.id !== TUTORIAL_QUEST_ID && (
+           <p className="tiny muted" style={{ margin: '0 0 8px' }}>
+             ⚡ Fast roll -- shorter than a normal {cfg.label} contract, reward scaled to match but never below half
+-            of what the full-length version would pay.
++            of what the full-length version would pay. Success chance is lower too -- a real tradeoff for the
++            time saved, not just a bonus.
+           </p>
+         )}
+ 
+@@ -474,17 +475,21 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
+ 
+ /**
+  * Patch 0332, direct request: "a new expensive upgrade to increase
+- * chances" for how often a quest offer rolls Fast. Deliberately a
+- * compact single row (not the full detail-modal RaidsPanel's own
+- * upgrade-row pattern uses) -- there's exactly one entry in this tree
+- * (QUEST_FAST_UPGRADES, see that file's own "starter set, grows over
+- * time" comment), so a whole modal-on-click affordance for a single item
+- * would be more chrome than the feature currently needs.
++ * chances" for how often a quest offer rolls Fast. Patch 0333 (Steady
++ * Hands) reused this same row rather than copying it -- both entries
++ * are single-effect, single-currency-path upgrades that only differ in
++ * which one number they move and how that number's described, so
++ * `effectText`/`icon` are passed in rather than read off a field this
++ * component would otherwise have to know how to interpret per-id.
++ * Deliberately a compact single row (not the full detail-modal
++ * RaidsPanel's own upgrade-row pattern uses) -- a whole modal-on-click
++ * affordance for a two-entry tree would be more chrome than the feature
++ * currently needs.
+  */
+-function LuckyStreakRow() {
++function QuestFastUpgradeRow({ id, icon, effectText }: { id: string; icon: string; effectText: string }) {
+   const engine = useEngine();
+   const state = engine.state;
+-  const def = QUEST_FAST_UPGRADE_BY_ID['lucky_streak'];
++  const def = QUEST_FAST_UPGRADE_BY_ID[id];
+   const level = GuildManager.questFastUpgradeLevel(state, def.id);
+   const next = GuildManager.nextQuestFastUpgradeCost(state, def.id);
+   const maxed = next === null;
+@@ -499,10 +504,10 @@ function LuckyStreakRow() {
+     <div className="upgrade-row">
+       <span style={{ minWidth: 0 }}>
+         <span className="upgrade-row-head">
+-          <span className="upgrade-row-name">⚡ {def.name}</span>
++          <span className="upgrade-row-name">{icon} {def.name}</span>
+           <span className="upgrade-row-level">{level}/{def.maxLevel}</span>
+         </span>
+-        <span className="upgrade-row-effect">+{def.fastChancePctPerLevel}% Fast chance per level, every difficulty</span>
++        <span className="upgrade-row-effect">{effectText}</span>
+         <span className="upgrade-row-rule">
+           <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+         </span>
+@@ -656,7 +661,16 @@ export function QuestPanel() {
+         what's open to them.
+       </p>
+ 
+-      <LuckyStreakRow />
++      <QuestFastUpgradeRow
++        id="lucky_streak"
++        icon="⚡"
++        effectText={`+${QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel}% Fast chance per level, every difficulty`}
++      />
++      <QuestFastUpgradeRow
++        id="steady_hands"
++        icon="🛡"
++        effectText={`+${QUEST_FAST_UPGRADE_BY_ID['steady_hands'].successPenaltyRecoveryPerLevel}% success back per level on Fast rolls`}
++      />
+ 
+       {/* --------------------------- active quests --------------------------- */}
+       {state.activeQuests.length > 0 && (

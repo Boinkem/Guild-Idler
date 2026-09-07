@@ -5267,5 +5267,53 @@
     "default": 5,
     "min": 1,
     "description": "Absolute level cap across both tiers combined. At max, every tier's fastChance is +5 percentage points over its difficulties.json base."
+  },
+  {
+    "id": "quest.fastSuccessPenalty",
+    "label": "Fast quest: success penalty",
+    "category": "quest",
+    "value": 7,
+    "default": 7,
+    "min": 0,
+    "max": 30,
+    "description": "Patch 0333, direct request: a Fast roll's own success chance is reduced by this many percentage points off the tier's baseSuccess, before Steady Hands' recovery is applied. A real tradeoff for the shorter time/still-real reward Fast quests already offer, not a free lunch."
+  },
+  {
+    "id": "quest_steady_hands.recoveryPctPerLevel",
+    "label": "Steady Hands: penalty recovery % per level",
+    "category": "quest_steady_hands",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 10,
+    "description": "Flat percentage points clawed back per level from quest.fastSuccessPenalty. maxLevel is deliberately set below what would fully offset the base penalty -- see this upgrade's own comment in questFastUpgrades.ts."
+  },
+  {
+    "id": "quest_steady_hands.goldBaseCost",
+    "label": "Steady Hands: gold base cost",
+    "category": "quest_steady_hands",
+    "value": 4000,
+    "default": 4000,
+    "min": 0,
+    "description": "Cost of the first (level 0) purchase. Gold-only upgrade -- no Renown tier."
+  },
+  {
+    "id": "quest_steady_hands.goldCostGrowth",
+    "label": "Steady Hands: gold cost growth",
+    "category": "quest_steady_hands",
+    "value": 1.85,
+    "default": 1.85,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level."
+  },
+  {
+    "id": "quest_steady_hands.maxLevel",
+    "label": "Steady Hands: max level",
+    "category": "quest_steady_hands",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Absolute level cap -- also doubles as goldTierMaxLevel since this is a gold-only upgrade (see questFastUpgrades.ts). 5 levels x 1%/level recovery = 5 points clawed back off a 7-point quest.fastSuccessPenalty, leaving a permanent 2-point residual by design."
   }
 ]
