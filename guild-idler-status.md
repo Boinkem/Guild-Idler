@@ -26752,3 +26752,78 @@ run `tsc`/`vite build` against -- the diff only touches a data file and a
 handful of lines behind existing, unchanged function signatures, so no
 type issue is expected, but a real `npx tsc --noEmit` pass is still
 recommended before merging, per this project's own convention.
+
+### Saga Auto-Pilot: "Steady Hand" -- a failed replay stage retries in place instead of resetting to stage 1 (patch 0328)
+
+```discord-update
+Dev Update | Steady Hand
+
+- Added a new Replay Memories upgrade: Steady Hand
+- Once owned, a failed Saga Auto-Pilot (or manual Replay Memories) stage retries right where it failed, instead of sending the whole attempt back to stage 1
+- Requires Saga Auto-Pilot first -- it's a direct upgrade to that purchase, not a standalone one
+```
+
+Direct feedback on Saga Auto-Pilot: "would be nice if there was a way to
+continue from where it failed." Confirmed the actual mechanic first --
+Replay Memories' failure handling has behaved this way since the system
+launched (patch 0224+), documented plainly in `ActiveChainReplay.stage`'s
+own comment as "confirmed design decision, not a bug to fix later": a
+failed stage during ANY replay attempt resets the whole thing back to
+stage 0, unlike an ordinary first-clear chain, which just retries the
+failed stage in place. This applies regardless of whether the quest was
+sent manually or via an Auto-Pilot queue -- the reset itself lives in
+`QuestManager.resolve`, which has no idea which one started the quest.
+
+**Sold as a second purchase, not a behavior change to the base system.**
+Replay's harsher failure handling is a real, deliberate difficulty lever
+(see `CHAIN_REPLAY_DIFFICULTIES`' own header comment on why replay is
+tuned softer than raids but still meant to have real teeth) -- flattening
+it for everyone by default would be a balance change nobody asked for.
+Instead, new `ChainReplayTierDef` entry `autopilot_recover` ("Steady
+Hand"), bought exactly like every other Replay Memories tier
+(`GuildManager.buyChainReplayTier`, no new purchase code needed), 12,000g
+first-pass cost, sitting right after Saga Auto-Pilot in the tier list.
+
+**New `requiresTierId` field, generic rather than hardcoded to this one
+case.** Every existing tier only ever required 'master'; Steady Hand
+specifically requires 'autopilot' too (narratively and mechanically a
+direct upgrade to that purchase, not a standalone one). Rather than
+special-casing this single id in `TierCard`, `ChainReplayTierDef` gained
+an optional `requiresTierId?: string` -- `TierCard`'s `canBuy`/`buyTitle`
+now check it generically (`Unlock Saga Auto-Pilot first` when missing),
+so a future tier with its own prerequisite reuses this instead of another
+one-off UI branch. Omitted (every tier but this one), behavior is
+unchanged from before.
+
+**The actual fix, `QuestManager.resolve`'s replay-failure branch.**
+Checks `state.chainReplayTiersOwned.includes('autopilot_recover')`
+directly (matching `GuildManager.hasChainReplayTier`'s own one-line body
+exactly, without importing `GuildManager` into `QuestManager` purely for
+this one call). Owned: `activeReplay.stage` is left untouched and
+`resetCount` isn't incremented either -- nothing was actually reset, so
+counting it as one would make the UI's existing "(reset N×)" display
+describe something that didn't happen. Not owned: unchanged, exactly the
+original reset-to-0-and-count-it behavior.
+
+**UI.** `ChainReplayDetailModal`'s in-progress-attempt notice now states
+outright which behavior applies -- "A failed stage retries in place
+(Steady Hand)" or "A failed stage sends this attempt back to stage 1" --
+rather than leaving the player to infer it from whether Steady Hand
+happens to be owned.
+
+**Verified:** Diffed `types.ts`, `chainReplay.ts`, `tuning.json`,
+`QuestManager.ts`, and `DiscoveredQuestsPanel.tsx` against a fresh pull of
+`main` (through patch 0327) immediately before editing. Confirmed
+`tuning.json` still parses as valid JSON with the new entry. Traced by
+hand: a guild with 'autopilot' but not 'autopilot_recover' sees `canBuy`
+still gate correctly on `requiredTierOwned`; a guild with both owned
+sees `canBuy` gate on gold alone, same as every other tier. Confirmed no
+other reader of `chainReplayAdvanced.reset` or `ActiveChainReplay.
+resetCount` exists anywhere in `engine.ts` that this change could
+silently break -- the only consumer found was `DiscoveredQuestsPanel.
+tsx`'s own display line, updated in this same patch. No Node/Vite
+toolchain in this environment to run `tsc`/`vite build` against -- the
+diff's only new cross-file dependency is `CHAIN_REPLAY_TIER_BY_ID`, which
+already existed and is exported from `chainReplay.ts` unchanged, so no
+import-shape issue is expected, but a real `npx tsc --noEmit` pass is
+still recommended before merging, per this project's own convention.

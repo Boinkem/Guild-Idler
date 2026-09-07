@@ -7,7 +7,7 @@ import {
 } from './QuestPanel';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
-import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain, chainReplayBandPercent } from '../../game/data/chainReplay';
+import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_TIER_BY_ID, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain, chainReplayBandPercent } from '../../game/data/chainReplay';
 import { scaleDedicatedItem } from '../../game/data/proceduralLoot';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { DIFFICULTIES, ChainDef } from '../../game/data/quests';
@@ -468,8 +468,14 @@ function TierCard({ tier, hero, onOpenChain }: { tier: ChainReplayTierDef; hero:
   const isMaster = tier.id === 'master';
   const owned = GuildManager.hasChainReplayTier(state, tier.id);
   const masterOwned = GuildManager.hasChainReplayTier(state, 'master');
+  // Patch 0328 -- a tier can now also require a specific sibling tier
+  // (tier.requiresTierId), not just 'master'. Generic on purpose: today
+  // only 'autopilot_recover' sets this, but any future tier can reuse it
+  // without another UI change.
+  const requiredTierOwned = !tier.requiresTierId || GuildManager.hasChainReplayTier(state, tier.requiresTierId);
+  const requiredTierName = tier.requiresTierId ? CHAIN_REPLAY_TIER_BY_ID[tier.requiresTierId]?.sagaName ?? tier.requiresTierId : undefined;
   const canAfford = state.gold >= tier.goldCost;
-  const canBuy = !owned && canAfford && (isMaster || masterOwned);
+  const canBuy = !owned && canAfford && (isMaster || masterOwned) && requiredTierOwned;
   // Direct request: a "% complete" figure on each saga band, updating as
   // the person switches which difficulty they're checking against --
   // defaults to Legendary since that's the tier most players actually
@@ -500,7 +506,8 @@ function TierCard({ tier, hero, onOpenChain }: { tier: ChainReplayTierDef; hero:
 
   const buyTitle = owned ? undefined
     : !masterOwned && !isMaster ? 'Unlock Replay Memories first'
-      : !canAfford ? 'Not enough gold' : undefined;
+      : !requiredTierOwned ? `Unlock ${requiredTierName} first`
+        : !canAfford ? 'Not enough gold' : undefined;
 
   return (
     <div className="card raid-card" style={{ cursor: 'default' }}>
@@ -763,6 +770,9 @@ function ChainReplayDetailModal({
             stage {existing.stage + 1}/{chain.stages.length}
             {existing.resetCount > 0 ? ` (reset ${existing.resetCount}×)` : ''}. Picking a different
             difficulty starts over from stage 1.
+            {' '}{GuildManager.hasChainReplayTier(state, 'autopilot_recover')
+              ? 'A failed stage retries in place (Steady Hand).'
+              : 'A failed stage sends this attempt back to stage 1.'}
           </p>
         )}
 

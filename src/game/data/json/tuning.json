@@ -4631,6 +4631,16 @@
     "description": "One-time gold cost to unlock Saga Auto-Pilot (queue an entire saga band to run unattended). First-pass number, same Balance Sandbox caveat as every other new economy figure -- priced between band1 and band2 so it's a real early choice, not gatekept behind the whole saga list."
   },
   {
+    "id": "chain_replay_tier.autopilot_recover.goldCost",
+    "label": "Replay tier: Steady Hand cost",
+    "category": "chain_replay_tiers",
+    "value": 12000,
+    "default": 12000,
+    "min": 0,
+    "max": 1000000,
+    "description": "One-time gold cost to unlock Steady Hand (a failed replay stage retries in place instead of resetting the whole attempt to stage 1). Priced above Saga Auto-Pilot itself, since it's a direct follow-on purchase requiring it -- first-pass number, same Balance Sandbox caveat as every other new economy figure."
+  },
+  {
     "id": "chain_replay_tier.band1.goldCost",
     "label": "Replay tier: The Founding Days (1-7) cost",
     "category": "chain_replay_tiers",

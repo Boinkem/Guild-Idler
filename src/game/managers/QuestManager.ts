@@ -1547,9 +1547,31 @@ export const QuestManager = {
           chainId, stage: completed ? totalStages : nextStage, totalStages, completed, reset: false, dedicatedItemDropped,
         };
       } else {
-        activeReplay.stage = 0;
-        activeReplay.resetCount += 1;
-        chainReplayAdvanced = { chainId, stage: 0, totalStages, completed: false, reset: true, dedicatedItemDropped: false };
+        // Steady Hand (patch 0328) -- direct feedback on Saga Auto-Pilot,
+        // "would be nice if there was a way to continue from where it
+        // failed." Owning the 'autopilot_recover' chain-replay tier
+        // changes only this branch: the attempt retries the SAME stage
+        // instead of resetting to stage 0, same as an ordinary
+        // first-clear chain's own failure branch just below already
+        // does. Checked as a plain array membership read (matching
+        // GuildManager.hasChainReplayTier's own one-line implementation
+        // exactly) rather than importing GuildManager here purely for
+        // this one call -- QuestManager doesn't otherwise depend on it,
+        // and state.chainReplayTiersOwned is already the single source
+        // of truth either way.
+        const canRecover = state.chainReplayTiersOwned.includes('autopilot_recover');
+        if (canRecover) {
+          // Stage intentionally left untouched -- a Steady Hand retry
+          // doesn't count toward resetCount either, since nothing was
+          // actually reset (see ActiveChainReplay.resetCount's own "reset
+          // to stage 0" doc comment -- incrementing it here for a retry
+          // that never touched stage would make the UI's "(reset N×)"
+          // display describe something that didn't happen).
+        } else {
+          activeReplay.stage = 0;
+          activeReplay.resetCount += 1;
+        }
+        chainReplayAdvanced = { chainId, stage: canRecover ? stage : 0, totalStages, completed: false, reset: !canRecover, dedicatedItemDropped: false };
       }
     } else if (quest.offer.chain) {
       const { chainId, stage, totalStages } = quest.offer.chain;

@@ -1157,10 +1157,11 @@ export interface ActiveChainReplay {
   heroId: string;
   difficulty: ChainReplayDifficulty;
   /** Which stage (0-indexed, same numbering ActiveChain.stage uses) is
-   *  currently in progress. Unlike ActiveChain, a failed stage during a
-   *  replay does not retry in place -- the whole attempt resets `stage`
-   *  back to 0 (see QuestManager's replay resolution once it lands),
-   *  confirmed design decision, not a bug to fix later. */
+   *  currently in progress. A failed stage during a replay resets `stage`
+   *  back to 0 (see QuestManager's replay resolution) -- UNLESS the
+   *  guild owns the 'autopilot_recover' chain-replay tier (patch 0328,
+   *  "Steady Hand"), in which case it retries in place instead, same as
+   *  an ordinary first-clear chain already does. */
   stage: number;
   startedAt: number;
   /** Total attempts at this replay that have failed at some stage and
@@ -1225,6 +1226,15 @@ export interface ChainReplayTierDef {
    *  specific chains. */
   chainIds: string[];
   goldCost: number;
+  /**
+   * Patch 0328 -- optional prerequisite tier id, beyond the universal
+   * 'master' requirement every non-master entry already has (enforced
+   * separately in TierCard, not here). Currently only set on
+   * 'autopilot_recover' (requires 'autopilot' -- the upgrade it modifies
+   * has to exist first). Omitted, this changes nothing: a tier with no
+   * requiresTierId is gated exactly as before (master-only).
+   */
+  requiresTierId?: string;
 }
 
 /* -------------------------------- raids -------------------------------- */

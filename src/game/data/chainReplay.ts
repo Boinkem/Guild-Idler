@@ -117,6 +117,32 @@ export const CHAIN_REPLAY_TIERS: ChainReplayTierDef[] = [
     goldCost: Tuning.get('chain_replay_tier.autopilot.goldCost'),
   },
   {
+    // Patch 0328 -- direct feedback on Saga Auto-Pilot: "would be nice if
+    // there was a way to continue from where it failed." A failed stage
+    // during ANY replay attempt (autopilot-queued or manually sent -- the
+    // reset happens in QuestManager.resolve, which has no idea which one
+    // started the quest) currently resets the whole attempt back to stage
+    // 0, unlike an ordinary first-clear chain, which just retries the
+    // same stage in place. Rather than changing that base behavior
+    // outright (a real, deliberate difficulty lever for replay content --
+    // see CHAIN_REPLAY_DIFFICULTIES' own header comment on why replay is
+    // tuned softer than raids but still meant to have real teeth), this
+    // is sold as its own follow-on purchase: own it, and a failed replay
+    // stage behaves like a first-clear chain's always has. Requires
+    // 'autopilot' specifically (requiresTierId), not just 'master' --
+    // narratively and mechanically a direct upgrade to that purchase, not
+    // a standalone one (the description says so plainly too, same
+    // "states plainly what buying this does" rule every tier's own
+    // description already follows).
+    id: 'autopilot_recover',
+    sagaName: 'Steady Hand',
+    levelRange: '',
+    description: "Once unlocked, a failed stage during any Replay Memories attempt (Auto-Pilot or manual) no longer sends the whole run back to stage 1 -- it retries that same stage instead, same as an ordinary quest chain already does on a first clear.",
+    chainIds: [],
+    goldCost: Tuning.get('chain_replay_tier.autopilot_recover.goldCost'),
+    requiresTierId: 'autopilot',
+  },
+  {
     id: 'band1',
     sagaName: 'The Founding Days',
     levelRange: 'Levels 1-7',

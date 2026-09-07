@@ -1,0 +1,253 @@
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1157,10 +1157,11 @@
+   heroId: string;
+   difficulty: ChainReplayDifficulty;
+   /** Which stage (0-indexed, same numbering ActiveChain.stage uses) is
+-   *  currently in progress. Unlike ActiveChain, a failed stage during a
+-   *  replay does not retry in place -- the whole attempt resets `stage`
+-   *  back to 0 (see QuestManager's replay resolution once it lands),
+-   *  confirmed design decision, not a bug to fix later. */
++   *  currently in progress. A failed stage during a replay resets `stage`
++   *  back to 0 (see QuestManager's replay resolution) -- UNLESS the
++   *  guild owns the 'autopilot_recover' chain-replay tier (patch 0328,
++   *  "Steady Hand"), in which case it retries in place instead, same as
++   *  an ordinary first-clear chain already does. */
+   stage: number;
+   startedAt: number;
+   /** Total attempts at this replay that have failed at some stage and
+@@ -1225,6 +1226,15 @@
+    *  specific chains. */
+   chainIds: string[];
+   goldCost: number;
++  /**
++   * Patch 0328 -- optional prerequisite tier id, beyond the universal
++   * 'master' requirement every non-master entry already has (enforced
++   * separately in TierCard, not here). Currently only set on
++   * 'autopilot_recover' (requires 'autopilot' -- the upgrade it modifies
++   * has to exist first). Omitted, this changes nothing: a tier with no
++   * requiresTierId is gated exactly as before (master-only).
++   */
++  requiresTierId?: string;
+ }
+ 
+ /* -------------------------------- raids -------------------------------- */
+--- a/src/game/data/chainReplay.ts
++++ b/src/game/data/chainReplay.ts
+@@ -117,6 +117,32 @@
+     goldCost: Tuning.get('chain_replay_tier.autopilot.goldCost'),
+   },
+   {
++    // Patch 0328 -- direct feedback on Saga Auto-Pilot: "would be nice if
++    // there was a way to continue from where it failed." A failed stage
++    // during ANY replay attempt (autopilot-queued or manually sent -- the
++    // reset happens in QuestManager.resolve, which has no idea which one
++    // started the quest) currently resets the whole attempt back to stage
++    // 0, unlike an ordinary first-clear chain, which just retries the
++    // same stage in place. Rather than changing that base behavior
++    // outright (a real, deliberate difficulty lever for replay content --
++    // see CHAIN_REPLAY_DIFFICULTIES' own header comment on why replay is
++    // tuned softer than raids but still meant to have real teeth), this
++    // is sold as its own follow-on purchase: own it, and a failed replay
++    // stage behaves like a first-clear chain's always has. Requires
++    // 'autopilot' specifically (requiresTierId), not just 'master' --
++    // narratively and mechanically a direct upgrade to that purchase, not
++    // a standalone one (the description says so plainly too, same
++    // "states plainly what buying this does" rule every tier's own
++    // description already follows).
++    id: 'autopilot_recover',
++    sagaName: 'Steady Hand',
++    levelRange: '',
++    description: "Once unlocked, a failed stage during any Replay Memories attempt (Auto-Pilot or manual) no longer sends the whole run back to stage 1 -- it retries that same stage instead, same as an ordinary quest chain already does on a first clear.",
++    chainIds: [],
++    goldCost: Tuning.get('chain_replay_tier.autopilot_recover.goldCost'),
++    requiresTierId: 'autopilot',
++  },
++  {
+     id: 'band1',
+     sagaName: 'The Founding Days',
+     levelRange: 'Levels 1-7',
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -4631,6 +4631,16 @@
+     "description": "One-time gold cost to unlock Saga Auto-Pilot (queue an entire saga band to run unattended). First-pass number, same Balance Sandbox caveat as every other new economy figure -- priced between band1 and band2 so it's a real early choice, not gatekept behind the whole saga list."
+   },
+   {
++    "id": "chain_replay_tier.autopilot_recover.goldCost",
++    "label": "Replay tier: Steady Hand cost",
++    "category": "chain_replay_tiers",
++    "value": 12000,
++    "default": 12000,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to unlock Steady Hand (a failed replay stage retries in place instead of resetting the whole attempt to stage 1). Priced above Saga Auto-Pilot itself, since it's a direct follow-on purchase requiring it -- first-pass number, same Balance Sandbox caveat as every other new economy figure."
++  },
++  {
+     "id": "chain_replay_tier.band1.goldCost",
+     "label": "Replay tier: The Founding Days (1-7) cost",
+     "category": "chain_replay_tiers",
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -1547,9 +1547,31 @@
+           chainId, stage: completed ? totalStages : nextStage, totalStages, completed, reset: false, dedicatedItemDropped,
+         };
+       } else {
+-        activeReplay.stage = 0;
+-        activeReplay.resetCount += 1;
+-        chainReplayAdvanced = { chainId, stage: 0, totalStages, completed: false, reset: true, dedicatedItemDropped: false };
++        // Steady Hand (patch 0328) -- direct feedback on Saga Auto-Pilot,
++        // "would be nice if there was a way to continue from where it
++        // failed." Owning the 'autopilot_recover' chain-replay tier
++        // changes only this branch: the attempt retries the SAME stage
++        // instead of resetting to stage 0, same as an ordinary
++        // first-clear chain's own failure branch just below already
++        // does. Checked as a plain array membership read (matching
++        // GuildManager.hasChainReplayTier's own one-line implementation
++        // exactly) rather than importing GuildManager here purely for
++        // this one call -- QuestManager doesn't otherwise depend on it,
++        // and state.chainReplayTiersOwned is already the single source
++        // of truth either way.
++        const canRecover = state.chainReplayTiersOwned.includes('autopilot_recover');
++        if (canRecover) {
++          // Stage intentionally left untouched -- a Steady Hand retry
++          // doesn't count toward resetCount either, since nothing was
++          // actually reset (see ActiveChainReplay.resetCount's own "reset
++          // to stage 0" doc comment -- incrementing it here for a retry
++          // that never touched stage would make the UI's "(reset N×)"
++          // display describe something that didn't happen).
++        } else {
++          activeReplay.stage = 0;
++          activeReplay.resetCount += 1;
++        }
++        chainReplayAdvanced = { chainId, stage: canRecover ? stage : 0, totalStages, completed: false, reset: !canRecover, dedicatedItemDropped: false };
+       }
+     } else if (quest.offer.chain) {
+       const { chainId, stage, totalStages } = quest.offer.chain;
+--- a/src/ui/panels/DiscoveredQuestsPanel.tsx
++++ b/src/ui/panels/DiscoveredQuestsPanel.tsx
+@@ -7,7 +7,7 @@
+ } from './QuestPanel';
+ import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+-import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain, chainReplayBandPercent } from '../../game/data/chainReplay';
++import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_TIER_BY_ID, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain, chainReplayBandPercent } from '../../game/data/chainReplay';
+ import { scaleDedicatedItem } from '../../game/data/proceduralLoot';
+ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+ import { DIFFICULTIES, ChainDef } from '../../game/data/quests';
+@@ -468,8 +468,14 @@
+   const isMaster = tier.id === 'master';
+   const owned = GuildManager.hasChainReplayTier(state, tier.id);
+   const masterOwned = GuildManager.hasChainReplayTier(state, 'master');
++  // Patch 0328 -- a tier can now also require a specific sibling tier
++  // (tier.requiresTierId), not just 'master'. Generic on purpose: today
++  // only 'autopilot_recover' sets this, but any future tier can reuse it
++  // without another UI change.
++  const requiredTierOwned = !tier.requiresTierId || GuildManager.hasChainReplayTier(state, tier.requiresTierId);
++  const requiredTierName = tier.requiresTierId ? CHAIN_REPLAY_TIER_BY_ID[tier.requiresTierId]?.sagaName ?? tier.requiresTierId : undefined;
+   const canAfford = state.gold >= tier.goldCost;
+-  const canBuy = !owned && canAfford && (isMaster || masterOwned);
++  const canBuy = !owned && canAfford && (isMaster || masterOwned) && requiredTierOwned;
+   // Direct request: a "% complete" figure on each saga band, updating as
+   // the person switches which difficulty they're checking against --
+   // defaults to Legendary since that's the tier most players actually
+@@ -500,7 +506,8 @@
+ 
+   const buyTitle = owned ? undefined
+     : !masterOwned && !isMaster ? 'Unlock Replay Memories first'
+-      : !canAfford ? 'Not enough gold' : undefined;
++      : !requiredTierOwned ? `Unlock ${requiredTierName} first`
++        : !canAfford ? 'Not enough gold' : undefined;
+ 
+   return (
+     <div className="card raid-card" style={{ cursor: 'default' }}>
+@@ -763,6 +770,9 @@
+             stage {existing.stage + 1}/{chain.stages.length}
+             {existing.resetCount > 0 ? ` (reset ${existing.resetCount}×)` : ''}. Picking a different
+             difficulty starts over from stage 1.
++            {' '}{GuildManager.hasChainReplayTier(state, 'autopilot_recover')
++              ? 'A failed stage retries in place (Steady Hand).'
++              : 'A failed stage sends this attempt back to stage 1.'}
+           </p>
+         )}
+ 
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -26752,3 +26752,78 @@
+ handful of lines behind existing, unchanged function signatures, so no
+ type issue is expected, but a real `npx tsc --noEmit` pass is still
+ recommended before merging, per this project's own convention.
++
++### Saga Auto-Pilot: "Steady Hand" -- a failed replay stage retries in place instead of resetting to stage 1 (patch 0328)
++
++```discord-update
++Dev Update | Steady Hand
++
++- Added a new Replay Memories upgrade: Steady Hand
++- Once owned, a failed Saga Auto-Pilot (or manual Replay Memories) stage retries right where it failed, instead of sending the whole attempt back to stage 1
++- Requires Saga Auto-Pilot first -- it's a direct upgrade to that purchase, not a standalone one
++```
++
++Direct feedback on Saga Auto-Pilot: "would be nice if there was a way to
++continue from where it failed." Confirmed the actual mechanic first --
++Replay Memories' failure handling has behaved this way since the system
++launched (patch 0224+), documented plainly in `ActiveChainReplay.stage`'s
++own comment as "confirmed design decision, not a bug to fix later": a
++failed stage during ANY replay attempt resets the whole thing back to
++stage 0, unlike an ordinary first-clear chain, which just retries the
++failed stage in place. This applies regardless of whether the quest was
++sent manually or via an Auto-Pilot queue -- the reset itself lives in
++`QuestManager.resolve`, which has no idea which one started the quest.
++
++**Sold as a second purchase, not a behavior change to the base system.**
++Replay's harsher failure handling is a real, deliberate difficulty lever
++(see `CHAIN_REPLAY_DIFFICULTIES`' own header comment on why replay is
++tuned softer than raids but still meant to have real teeth) -- flattening
++it for everyone by default would be a balance change nobody asked for.
++Instead, new `ChainReplayTierDef` entry `autopilot_recover` ("Steady
++Hand"), bought exactly like every other Replay Memories tier
++(`GuildManager.buyChainReplayTier`, no new purchase code needed), 12,000g
++first-pass cost, sitting right after Saga Auto-Pilot in the tier list.
++
++**New `requiresTierId` field, generic rather than hardcoded to this one
++case.** Every existing tier only ever required 'master'; Steady Hand
++specifically requires 'autopilot' too (narratively and mechanically a
++direct upgrade to that purchase, not a standalone one). Rather than
++special-casing this single id in `TierCard`, `ChainReplayTierDef` gained
++an optional `requiresTierId?: string` -- `TierCard`'s `canBuy`/`buyTitle`
++now check it generically (`Unlock Saga Auto-Pilot first` when missing),
++so a future tier with its own prerequisite reuses this instead of another
++one-off UI branch. Omitted (every tier but this one), behavior is
++unchanged from before.
++
++**The actual fix, `QuestManager.resolve`'s replay-failure branch.**
++Checks `state.chainReplayTiersOwned.includes('autopilot_recover')`
++directly (matching `GuildManager.hasChainReplayTier`'s own one-line body
++exactly, without importing `GuildManager` into `QuestManager` purely for
++this one call). Owned: `activeReplay.stage` is left untouched and
++`resetCount` isn't incremented either -- nothing was actually reset, so
++counting it as one would make the UI's existing "(reset N×)" display
++describe something that didn't happen. Not owned: unchanged, exactly the
++original reset-to-0-and-count-it behavior.
++
++**UI.** `ChainReplayDetailModal`'s in-progress-attempt notice now states
++outright which behavior applies -- "A failed stage retries in place
++(Steady Hand)" or "A failed stage sends this attempt back to stage 1" --
++rather than leaving the player to infer it from whether Steady Hand
++happens to be owned.
++
++**Verified:** Diffed `types.ts`, `chainReplay.ts`, `tuning.json`,
++`QuestManager.ts`, and `DiscoveredQuestsPanel.tsx` against a fresh pull of
++`main` (through patch 0327) immediately before editing. Confirmed
++`tuning.json` still parses as valid JSON with the new entry. Traced by
++hand: a guild with 'autopilot' but not 'autopilot_recover' sees `canBuy`
++still gate correctly on `requiredTierOwned`; a guild with both owned
++sees `canBuy` gate on gold alone, same as every other tier. Confirmed no
++other reader of `chainReplayAdvanced.reset` or `ActiveChainReplay.
++resetCount` exists anywhere in `engine.ts` that this change could
++silently break -- the only consumer found was `DiscoveredQuestsPanel.
++tsx`'s own display line, updated in this same patch. No Node/Vite
++toolchain in this environment to run `tsc`/`vite build` against -- the
++diff's only new cross-file dependency is `CHAIN_REPLAY_TIER_BY_ID`, which
++already existed and is exported from `chainReplay.ts` unchanged, so no
++import-shape issue is expected, but a real `npx tsc --noEmit` pass is
++still recommended before merging, per this project's own convention.
