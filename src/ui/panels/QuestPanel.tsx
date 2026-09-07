@@ -294,6 +294,26 @@ export function QuestDetailModal({
           <span>XP <b>{offer.rewardXp}</b></span>
         </div>
 
+        {/* Patch 0330, direct tester feedback -- a walkthrough of what
+            this popup is actually showing, specifically for the
+            scripted Tutorial Quest and only in guided mode. Deliberately
+            plain, non-timed text inside the modal itself (see
+            .quest-tutorial-callout's own comment in app.css) rather than
+            a toast or a spotlight step, since the tester's complaint was
+            specifically that timed text vanished before they finished
+            reading it -- this stays up for as long as the modal is
+            open. */}
+        {offer.id === TUTORIAL_QUEST_ID && state.guidedOnboarding && (
+          <div className="quest-tutorial-callout">
+            <div className="card-title" style={{ marginBottom: 4 }}>How to read a contract</div>
+            <p className="tiny" style={{ margin: 0 }}>
+              Success is the odds this quest goes well. Time is how long {hero.name} will be away.
+              Gold and XP are what you get for sending them, whether or not it succeeds. When
+              you're ready, hit Send below -- there's nothing else to set up first.
+            </p>
+          </div>
+        )}
+
         {loot.length > 0 && (
           <>
             <div className="tiny muted" style={{ marginBottom: 2 }}>Chance to find</div>

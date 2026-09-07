@@ -26932,3 +26932,129 @@ the session (9 touched files plus 2 new ones), so a real
 `npx tsc --noEmit` and `vite build` pass before merging matters more
 here than on any earlier patch this session -- strongly recommended, not
 just noted in passing.
+
+### Guided-tips toggle, non-idle-player onboarding pass (patch 0330)
+
+```discord-update
+Dev Update | Onboarding
+
+- Added a "Do you need a guide to your guild?" choice to guild setup, right after naming and picking your guild's Mood
+- Added a matching "Guided tips" toggle to Settings -> Quality of life, so the choice above is never permanent
+- Choosing "I've got this" skips the tutorial walkthrough and hands you a normal quest board on day one instead of the scripted first quest
+- Added a plain-language explainer inside the first quest's popup (success chance, time, gold, XP) for anyone who kept the guide on
+- Toasts now pause while your mouse or keyboard focus is on them, and can be closed early with a new × button
+```
+
+Direct tester feedback from a non-idle-game, casual player's first
+session: "It is a lot of writing/information all at once... I was
+overwhelmed... Some written parts popped up for only 5 seconds and I
+didn't have time to read it... it would be beneficial to have a setting
+to remove the first step by step instructions for those that are
+natural with idle games." Discussed and scoped collaboratively before
+any code was written -- confirmed the existing onboarding system (the
+shortened 3-tab OnboardingTour and GuidanceManager toasts from patch
+0233) needed a real opt-out, a deeper explanation of the first quest
+specifically, and a fix for timed text disappearing before it could be
+read, and that the opt-out should slot into the existing GuildNamingModal
+Name -> Mood flow (patch 0305) as its natural third step rather than a
+separate prompt.
+
+**New `GameState.guidedOnboarding: boolean`, `SAVE_VERSION` 61 -> 62.**
+Lives on the save (not `settings.ts`'s per-device prefs) because it
+gates real engine/save-side behaviour -- GuidanceManager, the automatic
+OnboardingTour, and the seeded Tutorial Quest board -- not a cosmetic
+preference. Defaults `true` for both a brand-new save (only the naming
+modal's new third step ever flips it to `false`) and every existing
+save via migration 61, same "already past onboarding, zero behaviour
+change for a returning player" reasoning every other seen/hasSeen-style
+field's own migration in `SaveManager.ts` already follows.
+
+**`GuildNamingModal.tsx`'s two-step setup (patch 0305) becomes three.**
+`step` gains a `'guide'` value after `'vibe'`; picking a Mood no longer
+calls `setGuildName` directly, it advances to the new step instead. Two
+big buttons -- "🧭 Guide me" / "⚔️ I've got this" -- mirroring the
+Moody/Bright/System button treatment already used one step earlier, with
+a Back button to return to Mood. `confirmGuide` calls
+`engine.setGuidedOnboarding(guided)` BEFORE `engine.setGuildName(trimmed)`
+-- order matters, since `setGuidedOnboarding`'s own initial-setup branch
+below tells this call apart from a later Settings change by checking
+`guildName === ''`, which is only still true before the second call
+runs.
+
+**`GameEngine.setGuidedOnboarding(guided)` (`engine.ts`), the single
+chokepoint both call sites (the modal and Settings) share.** Always sets
+the flag; additionally, only when called during initial setup
+(`guildName === ''`), sets `seenOnboarding = true` outright (so the
+automatic tour never gets the chance to arm at all -- the manual "❓
+Tour" header button is deliberately untouched, still available on
+request regardless of this flag) and swaps any hero's board that's
+*still exactly* the untouched one-offer Tutorial Quest seed for an
+ordinary freshly-rolled one via
+`QuestManager.generateContractsForHero(state, hero, state.createdAt)` --
+guaranteed to be every hero's board at this exact call site, since
+nothing else can have happened yet before the naming modal resolves. A
+later Settings toggle only ever flips the flag -- it deliberately never
+re-triggers either side effect, so turning guide mode back on mid-save
+can't silently rewrite a board a player has actually been playing on.
+
+**`GuidanceManager.checkAll` gains one line, not a parallel code path.**
+Still marks every topic seen the instant its condition goes true
+regardless of the flag -- only whether a topic is *returned* (and
+therefore surfaced as a toast by any of the 15 existing
+`reportGuidance(GuidanceManager.checkAll(...))` call sites in
+`engine.ts`, none of which needed to change) depends on
+`state.guidedOnboarding`. Deliberately mark-but-don't-surface rather
+than skip the check entirely: it means re-enabling guide mode later
+never dumps a backlog of stale "first X" nudges for conditions that
+became true hours or days earlier while it was off -- only topics that
+haven't already become true yet will ever fire after that point, exactly
+"re-arm going forward," never "rewind."
+
+**`SettingsPanel.tsx`'s new "Guided tips" row**, Quality of life
+section -- reads/writes `engine.state.guidedOnboarding` via
+`engine.setGuidedOnboarding` directly rather than this panel's usual
+`settings`/`update` pair, since (per above) this flag lives on the save,
+not device prefs.
+
+**The first quest's own walkthrough, inside `QuestDetailModal`
+(`QuestPanel.tsx`).** A new `.quest-tutorial-callout` block -- "How to
+read a contract," a plain-language line on what Success/Time/Gold/XP
+each mean -- shown only when `offer.id === TUTORIAL_QUEST_ID &&
+state.guidedOnboarding`. Deliberately lives inside the modal itself
+rather than as a toast or another OnboardingTour spotlight step: the
+tester's specific complaint was timed text vanishing before they could
+read it, so this stays on screen for exactly as long as the modal is
+open, with no timer of its own at all.
+
+**`Toast.tsx` rewritten around a pausable countdown, not just a longer
+fixed one.** `TOAST_DURATION_MS`/`TOAST_DURATION_LONG_MS` are unchanged
+(3200ms/6500ms) -- the actual fix is that hovering or focusing a toast
+now pauses its remaining time (tracked in a ref, not state, since it
+only needs to survive the pause/resume boundary) and leaving/blurring
+resumes the same countdown from wherever it left off, instead of a fixed
+window running out regardless of whether anyone's still reading. Also
+added a small × close button (new `.toast-close` in `app.css`) for the
+opposite case -- dismiss early once you're done, rather than waiting out
+the rest of a toast you've already read. `.toast` itself became a flex
+row to fit the button without disturbing the existing centered look for
+the common case where nobody interacts with it.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean
+against the full 202-module app + Electron main/preload bundles. Traced
+the initial-setup vs. later-Settings branch in
+`setGuidedOnboarding` by hand against every call site: the modal's
+`confirmGuide` always runs with `guildName === ''`, Settings' new Row
+always runs with a guild already named, so the two paths can never cross
+into each other. Confirmed the tutorial-board swap only ever touches a
+board matching `length === 1 && [0].id === TUTORIAL_QUEST_ID` exactly --
+the untouched seed state `createInitialState` produces, and nothing a
+board could still look like after any real interaction.
+
+**Not done / future follow-up:** a deeper in-tab spotlight walkthrough
+(highlighting the Send button itself, or the quest timer once sent) was
+considered but deliberately scoped out of this patch -- `OnboardingTour`
+currently only knows how to spotlight nav tabs (`data-tab-id`), and
+generalizing it to arbitrary in-panel/in-modal elements is a real
+follow-up patch of its own, not a small addition on top of this one. The
+inline `.quest-tutorial-callout` above covers the same "explain before
+you click" ask without it for now.

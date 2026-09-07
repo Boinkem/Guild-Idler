@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 61;
+export const SAVE_VERSION = 62;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2448,6 +2448,39 @@ export interface GameState {
    *  Existing saves are migrated straight to true (already onboarded by
    *  definition); only a genuinely fresh save starts at false. */
   seenOnboarding: boolean;
+  /**
+   * Patch 0330, direct tester feedback ("it would be beneficial to have
+   * a setting to remove the first step by step instructions for those
+   * that are natural with idle games"). Asked once as the third step of
+   * first-time setup (GuildNamingModal, right after naming and picking
+   * the guild's Mood), revisitable anytime from Settings -> Quality of
+   * life, same "asked once, changeable forever after" pattern
+   * backgroundMood already established for that same modal.
+   *
+   * Defaults `true` for both a brand-new save (createInitialState -- the
+   * modal only ever flips it to `false`, never explicitly confirms
+   * `true`) and every existing save migrated in before this field
+   * existed (migration 61 below) -- an existing player is by definition
+   * already past onboarding, so this only starts controlling anything
+   * new the moment a *future* topic's condition becomes true, never
+   * retroactively silences one that already fired under the old
+   * always-on behaviour.
+   *
+   * Gates three separate things, all downstream of this one flag rather
+   * than three separate settings: GuidanceManager.checkAll (still marks
+   * a topic seen when its condition goes true so re-enabling later never
+   * floods the toast queue with a backlog -- see that function's own
+   * comment -- just skips surfacing the toast while this is false), the
+   * automatic first-run OnboardingTour (never gets the chance to arm at
+   * all -- see setGuidedOnboarding's own comment for why `false` also
+   * sets seenOnboarding straight to true), and the scripted Tutorial
+   * Quest (setGuidedOnboarding swaps it for an ordinary rolled board
+   * when turned off during initial setup, before the guild has a name).
+   * The manual "❓ Tour" replay button in the header is deliberately NOT
+   * gated on this -- a player who opted out can still pull it up
+   * on-demand any time they want it, same as before this flag existed.
+   */
+  guidedOnboarding: boolean;
   /**
    * Set the moment GuidanceManager's first_chain_seen topic triggers,
    * instead of that topic going through the normal toast queue like every

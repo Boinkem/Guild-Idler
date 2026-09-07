@@ -196,6 +196,13 @@ export function createInitialState(now = Date.now()): GameState {
     seenGuidance: [],
     raidUpgrades: {},
     seenOnboarding: false,
+    // See GameState.guidedOnboarding's own comment (types.ts) for the
+    // full reasoning -- true here is just the pre-modal default; the
+    // GuildNamingModal's new third step is the only thing that ever
+    // flips this to false, via engine.setGuidedOnboarding, called before
+    // setGuildName while guildName is still '' so that method's own
+    // tutorial-board-swap branch can still tell this is initial setup.
+    guidedOnboarding: true,
     pendingChainDiscovery: false,
     pendingHeroTierUpId: null,
     materials: emptyMaterials(),
@@ -1327,6 +1334,18 @@ const MIGRATIONS: Record<number, Migration> = {
       pendingHeroTierUpId: (save.pendingHeroTierUpId as string | null | undefined) ?? null,
     };
   },
+  // Patch 0330 -- the new guide-mode toggle (GameState.guidedOnboarding's
+  // own comment has the full reasoning). Defaults true for every
+  // pre-existing save, same "already past onboarding, so this only
+  // starts mattering for something new going forward" logic every other
+  // seen/hasSeen-style field's own migration in this file already
+  // follows -- a returning player should see zero behaviour change from
+  // this patch landing under them.
+  61: (save) => ({
+    ...save,
+    version: 62,
+    guidedOnboarding: (save.guidedOnboarding as boolean | undefined) ?? true,
+  }),
 };
 
 export const SaveManager = {

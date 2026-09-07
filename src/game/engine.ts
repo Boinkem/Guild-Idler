@@ -283,6 +283,45 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /**
+   * The guide-mode toggle (GameState.guidedOnboarding's own comment in
+   * types.ts has the full reasoning) -- called from two very different
+   * places, told apart here by whether the guild already has a name:
+   *
+   * - GuildNamingModal's new third step, guildName still `''` at that
+   *   point. Choosing "no" here does two things beyond just setting the
+   *   flag: marks seenOnboarding true outright so the automatic tour
+   *   never gets the chance to arm (same effect dismissOnboarding has,
+   *   just pre-empted rather than played through/skipped), and swaps out
+   *   the scripted Tutorial Quest for an ordinary freshly-rolled board --
+   *   the whole point of opting out is not seeing the forced-injury/
+   *   forced-break beginner lesson, so leaving it seeded would silently
+   *   ignore half the ask. Only ever touches a board that's STILL
+   *   exactly the untouched one-offer tutorial seed (guaranteed true at
+   *   this call site -- nothing else can have happened yet before the
+   *   naming modal resolves), never a board a player has already
+   *   interacted with.
+   * - Settings -> Quality of life, any time after that, guild already
+   *   named. Purely the flag -- re-running the tutorial-board swap or
+   *   forcing seenOnboarding back to false mid-save would undo real
+   *   progress/state a player might not want touched just for flipping a
+   *   preference, so neither happens here.
+   */
+  setGuidedOnboarding(guided: boolean) {
+    this.state.guidedOnboarding = guided;
+    if (!guided && this.state.guildName === '') {
+      this.state.seenOnboarding = true;
+      for (const hero of this.state.heroes) {
+        const board = this.state.questBoards[hero.id];
+        if (board && board.length === 1 && board[0].id === TUTORIAL_QUEST_ID) {
+          this.state.questBoards[hero.id] = QuestManager.generateContractsForHero(this.state, hero, this.state.createdAt);
+        }
+      }
+    }
+    this.notify();
+    void this.saveNow();
+  }
+
   /** Dismisses the "you've discovered a quest chain" modal -- the tour's
    *  own finale, triggered independently of the scripted steps since it
    *  depends on the board actually rolling a chain, not a fixed step count. */

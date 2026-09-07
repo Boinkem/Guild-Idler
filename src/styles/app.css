@@ -2396,12 +2396,28 @@ button:focus-visible, [tabindex]:focus-visible {
   transform: translateX(-50%);
   background: var(--panel-2);
   border: 1px solid var(--brass-dim);
-  padding: 7px 12px;
+  padding: 7px 8px 7px 12px;
   font-size: 0.625rem;
   z-index: 50;
   max-width: 90%;
   text-align: center;
+  /* Patch 0330 -- fits the new manual close button (×) next to the
+     message without disturbing the existing centered single-line look
+     for the common case where nobody interacts with it at all. */
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.toast-close {
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+.toast-close:hover { color: var(--parchment); }
 
 /* --------------------------- notification banner --------------------------- */
 /* Pops in from the top, near the header -- deliberately a different
@@ -2507,6 +2523,22 @@ button:focus-visible, [tabindex]:focus-visible {
   width: 260px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
 }
+
+/* Patch 0330 -- the Tutorial Quest's own inline walkthrough callout
+   inside QuestDetailModal (guided mode only). Deliberately NOT part of
+   the timed toast/OnboardingTour system above -- direct tester feedback
+   was specifically that timed text disappeared before it could be read,
+   so this stays on screen for exactly as long as the modal itself is
+   open, dismissed only by closing/sending like everything else in the
+   modal. */
+.quest-tutorial-callout {
+  border: 1px dashed var(--brass);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  background: var(--panel-3);
+}
+.quest-tutorial-callout .card-title { font-size: 0.7rem; }
 
 /* --------------------------- achievement popup ------------------------------ */
 /* Deliberately its own richer treatment, not just a bigger toast -- these are

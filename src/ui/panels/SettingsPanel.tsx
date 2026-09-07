@@ -316,6 +316,26 @@ export function SettingsPanel() {
 
       <div className="section-heading">Quality of life</div>
 
+      {/* Guide-mode toggle (patch 0330, direct tester feedback). Deliberately
+       *  reads/writes engine.state.guidedOnboarding rather than this panel's
+       *  usual `settings`/`update` -- unlike everything else here, this one
+       *  isn't a per-device cosmetic preference, it's the same flag
+       *  GuidanceManager/OnboardingTour/the Tutorial Quest all gate on (see
+       *  GameState.guidedOnboarding's own comment in types.ts), so it has to
+       *  live on the actual save via engine.setGuidedOnboarding, same as
+       *  guildName itself. First asked during initial setup
+       *  (GuildNamingModal's third step); this is just the "changeable
+       *  anytime" half of that promise. */}
+      <Row
+        label="Guided tips"
+        hint="Shows the first-run walkthrough and helpful nudges as new systems come up. Turning this off doesn't undo any tips already shown -- it only stops new ones."
+      >
+        <Toggle
+          value={engine.state.guidedOnboarding}
+          onChange={(v) => engine.setGuidedOnboarding(v)}
+        />
+      </Row>
+
       <Row label="Offline summary on launch" hint="Show what happened while the app was closed.">
         <Toggle value={settings.offlineReportOnLaunch} onChange={set('offlineReportOnLaunch')} />
       </Row>

@@ -21,18 +21,22 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
   const [draft, setDraft] = useState('');
   const unnamed = engine.state.guildName === '';
   const inputRef = useRef<HTMLInputElement>(null);
-  // Two-step setup (patch 0305, direct request: "Guild's Mood" toggle
-  // during first-time setup) -- 'name' first, then 'vibe'. Both steps
-  // live in this one component/gate (unnamed) rather than splitting vibe
-  // into its own separately-gated modal, since a second gate would need
-  // its own "have we asked yet" flag persisted somewhere, and the guild
-  // not being named yet is already exactly the right one-shot condition
-  // for "this is a brand-new guild that hasn't finished setup." Picking a
+  // Three-step setup: 'name', then 'vibe' (patch 0305, direct request:
+  // "Guild's Mood" toggle during first-time setup), then 'guide' (patch
+  // 0330, direct tester feedback -- a non-idle-game player felt
+  // overwhelmed by the amount of onboarding text, and asked for a way
+  // for a more experienced player to skip it). All three steps live in
+  // this one component/gate (unnamed) rather than splitting each into
+  // its own separately-gated modal, since a second gate would need its
+  // own "have we asked yet" flag persisted somewhere, and the guild not
+  // being named yet is already exactly the right one-shot condition for
+  // "this is a brand-new guild that hasn't finished setup." Picking a
   // name on step 1 no longer immediately calls setGuildName -- it now
   // only advances `step`, holding the trimmed name in `draft` (already
-  // local state) until the vibe is picked too, since setGuildName is what
-  // flips `unnamed` false and closes this modal entirely.
-  const [step, setStep] = useState<'name' | 'vibe'>('name');
+  // local state) until the vibe and guide preference are picked too,
+  // since setGuildName is what flips `unnamed` false and closes this
+  // modal entirely.
+  const [step, setStep] = useState<'name' | 'vibe' | 'guide'>('name');
 
   // Forces full menu size before this modal has to render at all -- lives
   // here rather than in App.tsx specifically because this component
@@ -102,6 +106,17 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
 
   const confirmVibe = (mood: BackgroundMoodId) => {
     updateSettings('backgroundMood', mood);
+    setStep('guide');
+  };
+
+  // Order matters: setGuidedOnboarding has to run while guildName is
+  // still '' so its own "is this initial setup" check (see its comment
+  // in engine.ts) can tell this call apart from a later Settings toggle
+  // and swap the seeded Tutorial Quest board for an ordinary one when
+  // guided is false. setGuildName is what closes this modal, so it has
+  // to run second either way.
+  const confirmGuide = (guided: boolean) => {
+    engine.setGuidedOnboarding(guided);
     engine.setGuildName(trimmed);
   };
 
@@ -157,7 +172,7 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
               </button>
             </div>
           </>
-        ) : (
+        ) : step === 'vibe' ? (
           <>
             <h3 style={{ textAlign: 'center' }}>What's your guild's vibe?</h3>
             <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
@@ -197,6 +212,45 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
 
             <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
               <button className="btn-ghost tiny" onClick={() => setStep('name')}>
+                ← Back
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Guide-mode step (patch 0330). Deliberately plain yes/no
+             *  rather than a Segmented/THEMES-style picker -- this isn't a
+             *  cosmetic preference, it's "how much hand-holding do you
+             *  want," and framing it as two big buttons (matching
+             *  QuestResultModal's own outcome-choice weight) reads more
+             *  like a real decision than a settings row would. */}
+            <h3 style={{ textAlign: 'center' }}>Do you need a guide to your guild?</h3>
+            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
+              A short walkthrough covers the basics on your first quest. You can turn it
+              back on or off anytime from Settings.
+            </p>
+
+            <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
+              <button
+                className="btn-primary"
+                onClick={() => confirmGuide(true)}
+                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
+                title="Show a short walkthrough and helpful nudges as you play"
+              >
+                🧭<br />Guide me
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => confirmGuide(false)}
+                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
+                title="Skip the walkthrough -- jump straight into a normal quest board"
+              >
+                ⚔️<br />I've got this
+              </button>
+            </div>
+
+            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+              <button className="btn-ghost tiny" onClick={() => setStep('vibe')}>
                 ← Back
               </button>
             </div>

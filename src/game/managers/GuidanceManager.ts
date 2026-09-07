@@ -174,6 +174,17 @@ export const GuidanceManager = {
    * Same reasoning as AchievementManager.checkAll: cheap, state-only reads,
    * safe to call after any action that could plausibly satisfy one rather
    * than needing to know which specific action maps to which topic.
+   *
+   * Patch 0330: still marks a topic seen the moment its condition goes
+   * true even while `state.guidedOnboarding` is false -- only whether it
+   * gets returned (and therefore actually surfaced as a toast, via every
+   * call site's reportGuidance) depends on that flag. Marking-but-not-
+   * returning is deliberate: it means turning guide mode back on later
+   * never dumps a backlog of "first X" nudges for conditions that became
+   * true hours or days ago while it was off -- re-enabling only starts
+   * surfacing whichever topics haven't already become true yet, exactly
+   * the "re-arm going forward, don't rewind" behaviour the toggle's own
+   * doc comment in types.ts promises.
    */
   checkAll(state: GameState): GuidanceTopic[] {
     const triggered: GuidanceTopic[] = [];
@@ -182,7 +193,7 @@ export const GuidanceManager = {
       const check = CHECKS[topic.id];
       if (!check || !check(state)) continue;
       state.seenGuidance.push(topic.id);
-      triggered.push(topic);
+      if (state.guidedOnboarding) triggered.push(topic);
     }
     return triggered;
   },
