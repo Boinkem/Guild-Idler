@@ -26666,3 +26666,89 @@ entirely to typed function signatures with new optional trailing
 parameters and one new `Array.prototype.some`/`filter` each, so no type
 or import-shape issue is expected, but a real `npx tsc --noEmit` pass is
 still recommended before merging, per this project's own convention.
+
+### First-purchase discount + affordability toasts confirmed/fixed for the three "important" upgrades (patch 0327)
+
+```discord-update
+Dev Update | Patch 0327
+
+- Fixed a real bug: the "hero slots full" notification could never actually fire, for any save, ever
+- Added a toast for the moment you can afford Guild Charter (Story Quests) or Auto-Chain, so you don't have to notice it by browsing Guild Hall
+- Confirmed the game-wide early-purchase discount and gold Buy-button highlight already cover Guild Charter, Auto-Chain, and the Tavern -- nothing else needed there
+```
+
+Direct follow-up on a request to lower the barrier to entry on three
+"most important" upgrades -- Hero Slot (Tavern), Quest Chaining
+(Auto-Chain), and Story Quests (Guild Charter) -- with a first-purchase
+discount and purchase-availability notifications (toast + gold shimmer on
+both the tab and the upgrade card). Investigated all three pieces before
+changing anything; two already existed project-wide, one had a real bug.
+
+**Discount -- already exists, confirmed rather than reinvented.**
+`earlyTierDiscount(level)` (`progression.ts`) is already applied to every
+single leveled cost formula in the game -- `upgradeCost`, `guildCost`,
+`vendorLevelCost`, all of it -- via the shared `EARLY_TIER_DISCOUNT`
+table: a guild's first purchase of anything costs 15% of face value,
+second 35%, third 60%, fourth 85%, full price from the fifth level on.
+This already applies to Guild Charter, Auto-Chain, and Tavern
+automatically, no special-casing needed -- at the live tuning values,
+Guild Charter's real first cost is 450g (not its 3,000g `baseCost`),
+Auto-Chain's is 525g (not 3,500g), and Tavern's first hero-slot level is
+112g (not 750g). Nothing changed here; flagging this as confirmed rather
+than silently ignoring the request, since it's a substantial discount
+that may not have been visible from the sticker price alone.
+
+**Gold "shimmer" on the upgrade card -- already exists too.** Guild
+Hall's current dense-row layout (`GuildPanel.tsx`, patch 0314) already
+gives every row's Buy button a solid brass/gold fill
+(`.guild-buy-btn.affordable` in `app.css`) the moment `state.gold` covers
+its cost -- applies uniformly to every row including these three, no
+changes needed.
+
+**Toast + tab notification -- one real bug, one real gap, both fixed.**
+`GuidanceManager`'s existing `hero_slots_full` topic was meant to cover
+the Hero Slot case (fires once the roster is full and the guild can
+afford Tavern's next level) but never could: its check called
+`GuildManager.nextUpgradeCost(state, 'tavern')`, which only ever reads
+`UPGRADE_BY_ID` (the general/vendor `UPGRADES` array) -- Tavern is a
+`GUILD_FACILITIES` entry, mapped to the separate `GUILD_BY_ID`, so that
+lookup always returned `null` and the check silently reduced to
+`state.gold >= Infinity` -- always false, for every save, forever.
+Confirmed directly against `GuildManager.ts` rather than assumed; fixed
+by switching to `GuildManager.nextCost`, the correct facility-level
+lookup. Quest Chaining and Story Quests had no equivalent topic at all --
+added `auto_chain_affordable` and `guild_charter_affordable`
+(`guidance-topics.json` + matching `CHECKS` entries), same one-time
+toast-plus-notification-log shape every other `GuidanceTopic` already
+uses, both gated on the upgrade sitting at level 0 (i.e. not yet owned,
+correct for a maxLevel-1 purchase) and the guild affording its next
+level. All three fire through the existing `reportGuidance` path, which
+already gives a `banner: true` toast and archives into the Notifications
+log with `targetTab: 'guild'` -- and an archived log entry against a tab
+is exactly what already drives that tab's own rotating shimmer ring
+(`nav-tab-unread`, patch 0191), so the Guild Hall tab shimmer the request
+asked for comes free from existing infrastructure once the notification
+itself exists; no new CSS or tab-signal plumbing needed.
+
+**Not touched:** the discount curve's own numbers, and the Buy-button
+gold-fill styling -- both already do the job asked for. If the discount
+still feels too shallow even at 15% of face value, or a *different*,
+more prominent highlight is wanted specifically for these three cards
+(distinct from the ordinary affordable-row gold fill every other Guild
+Hall row already gets), that's a further, separate ask worth confirming
+before building -- not assumed here.
+
+**Verified:** Diffed `GuidanceManager.ts` and `guidance-topics.json`
+against a fresh pull of `main` (through patch 0326) immediately before
+editing. Confirmed `guidance-topics.json` still parses as valid JSON (23
+entries, up from 21) and that both new ids have a matching `CHECKS` entry
+(`GuidanceManager.checkAll` silently no-ops any topic without one, so a
+mismatched id would fail silently rather than crash -- checked by hand
+that this isn't the case here). Confirmed `GuildManager.nextCost` is the
+correct, already-existing facility-cost lookup (used identically
+elsewhere, e.g. `GuildPanel.tsx`'s own row-cost display) rather than
+introducing a new helper. No Node/Vite toolchain in this environment to
+run `tsc`/`vite build` against -- the diff only touches a data file and a
+handful of lines behind existing, unchanged function signatures, so no
+type issue is expected, but a real `npx tsc --noEmit` pass is still
+recommended before merging, per this project's own convention.

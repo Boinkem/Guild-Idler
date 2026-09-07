@@ -29,6 +29,20 @@
     "targetTab": "guild"
   },
   {
+    "id": "guild_charter_affordable",
+    "messages": [
+      "The guild can afford a Guild Charter now -- it unlocks Story Quests, multi-day contracts that continue right on the Quest Board."
+    ],
+    "targetTab": "guild"
+  },
+  {
+    "id": "auto_chain_affordable",
+    "messages": [
+      "Enough gold for Auto-Chain now -- a hero can keep taking the next contract on their own for a while, instead of waiting for fresh orders each time."
+    ],
+    "targetTab": "guild"
+  },
+  {
     "id": "raids_unlocked",
     "messages": [
       "Raids are open. multi-hero expeditions with bigger rewards and longer odds. You'll need a full, exact-size party before sending one out."

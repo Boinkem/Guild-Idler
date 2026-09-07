@@ -51,13 +51,34 @@ const CHECKS: Record<string, Check> = {
   // ways to open a slot (see HeroesPanel's own "Go to Tavern"/"Go to
   // Prestige" links), so its own next-level cost is the right threshold
   // rather than Prestige's (which needs a full retirement first, a much
-  // later-game action a brand-new guild can't take regardless). Reuses
-  // GuildManager.nextUpgradeCost rather than reaching for guildCost/
-  // GUILD_BY_ID directly, same helper TrainingPanel's own "Fund
-  // Training" cost display already calls for the identical "what would
-  // the next level of this facility cost right now" question.
+  // later-game action a brand-new guild can't take regardless).
+  //
+  // Bug fix (patch 0327), found while wiring up the two new
+  // *_affordable topics just below: this used to call
+  // GuildManager.nextUpgradeCost(state, 'tavern') -- but nextUpgradeCost
+  // only ever reads UPGRADE_BY_ID (the general/vendor UPGRADES array),
+  // and Tavern is a GUILD_FACILITIES entry, not an UPGRADES one. Looking
+  // it up there always returned null, so this check was really
+  // `state.gold >= Infinity` -- always false, meaning this topic could
+  // never fire, for any save, ever. GuildManager.nextCost is the
+  // correct facility-level lookup (same one TrainingPanel would use for
+  // a facility, if it had one) -- confirmed against GuildManager.ts
+  // directly rather than assumed.
   hero_slots_full: (state) => state.heroes.length >= ModifierManager.heroSlots(state)
-    && state.gold >= (GuildManager.nextUpgradeCost(state, 'tavern') ?? Infinity),
+    && state.gold >= (GuildManager.nextCost(state, 'tavern') ?? Infinity),
+  // Two direct requests, same shape as second_hero_affordable above:
+  // notify the moment the guild can afford Guild Charter (unlocks Story
+  // Quests) or Auto-Chain, rather than leaving it to be noticed by
+  // browsing Guild Hall. Both gated on upgradeLevel === 0 specifically
+  // (not "not yet unlocked" via hasUnlock) -- both are single-level
+  // (maxLevel 1) purchases, so "not owned yet" and "level 0" are the
+  // same condition here; written the more direct way since neither
+  // 'chains' nor 'autoChain' need ModifierManager.hasUnlock's own wider
+  // unlock-flag machinery for a same-tick, single-read check like this.
+  guild_charter_affordable: (state) => GuildManager.upgradeLevel(state, 'guild_charter') === 0
+    && state.gold >= (GuildManager.nextUpgradeCost(state, 'guild_charter') ?? Infinity),
+  auto_chain_affordable: (state) => GuildManager.upgradeLevel(state, 'auto_chain') === 0
+    && state.gold >= (GuildManager.nextUpgradeCost(state, 'auto_chain') ?? Infinity),
   raids_unlocked: (state) => ModifierManager.hasUnlock(state, 'raids'),
   black_market_unlocked: (state) => ModifierManager.hasUnlock(state, 'blackMarket'),
   legendary_quests_unlocked: (state) => ModifierManager.hasUnlock(state, 'legendaryQuests'),
