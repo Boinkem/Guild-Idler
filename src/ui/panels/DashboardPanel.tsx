@@ -232,7 +232,9 @@ export function DashboardPanel() {
       <div className="spread" style={{ alignItems: 'flex-start' }}>
         <div>
           <h2>The Guild</h2>
-          <p className="subtitle">Everything the guild has built, at a glance.</p>
+          <div className="card">
+            <p className="small muted" style={{ margin: 0 }}>Everything the guild has built, at a glance.</p>
+          </div>
         </div>
         {/* Customize entry point turned off (patch 0305, direct request) --
             hidden here rather than removed. GuildHallCustomizeScene, its

@@ -370,7 +370,16 @@ export function tutorialQuestOffer(): QuestOffer {
   return {
     id: TUTORIAL_QUEST_ID,
     name: 'A Guild\u2019s First Job',
-    flavour: 'Nothing grand -- a cellar full of rats, or so the farmer swears. Every guild starts somewhere, and it is rarely anywhere glamorous.',
+    // Patch 0334, direct report: the old flavour text ("a cellar full of
+    // rats, or so the farmer swears") read as a near-duplicate of the
+    // Miller's Problem chain's own premise (quest-chains.json), which a
+    // player who later ran into that chain for real would recognize --
+    // confusing, not a coincidence worth keeping. Goblins instead,
+    // deliberately small-scale/low-stakes (not the goblin_warband chain's
+    // premise either) -- "just slaying a goblin or two" per the direct
+    // suggestion, kept the "every guild starts somewhere" closing line
+    // since that part wasn't the problem.
+    flavour: 'Nothing grand -- a goblin or two causing trouble on the road out of town, more nuisance than threat. Every guild starts somewhere, and it is rarely anywhere glamorous.',
     difficulty: 'easy',
     tag: 'combat',
     duration: 5 * MINUTE,

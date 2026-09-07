@@ -326,10 +326,12 @@ export function GuildPanel() {
       <div className="guild-header-row">
         <div>
           <h2>Guild Hall</h2>
-          <p className="subtitle">
-            Facility levels apply to every hero, now and after every retirement. Vendor-specific
-            upgrades (Blacksmith, Alchemist, Enchanter) live on each vendor's own page instead.
-          </p>
+          <div className="card">
+            <p className="small muted" style={{ margin: 0 }}>
+              Facility levels apply to every hero, now and after every retirement. Vendor-specific
+              upgrades (Blacksmith, Alchemist, Enchanter) live on each vendor's own page instead.
+            </p>
+          </div>
         </div>
         <div className="guild-bonus-row">
           <span className="guild-bonus-chip" style={{ borderLeftColor: 'var(--blood)' }}>

@@ -202,7 +202,11 @@ function HeroesRosterView() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/heroes.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Heroes</h2>
-      <p className="subtitle">{state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.</p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          {state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.
+        </p>
+      </div>
 
       {state.heroes.length > 1 && (
         <button className="chip chip-blue" style={{ marginBottom: 10 }} onClick={() => setShowComparison(true)}>

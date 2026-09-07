@@ -92,7 +92,9 @@ export function VendorsPanel() {
     <div className="vendor-scene" style={{ backgroundImage: `url(${backgroundSrc(VENDOR_BG[tab], settings.backgroundMood)})` }}>
       <div className="vendor-scene-content">
         <h2>Vendors</h2>
-        <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>
+        <div className="card">
+          <p className="small muted" style={{ margin: 0 }}>Upgrades, stock, and Crafting all live on each vendor's own page now.</p>
+        </div>
 
         <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
           {VENDORS.map((v) => {

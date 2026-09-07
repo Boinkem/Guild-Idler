@@ -27434,3 +27434,107 @@ committing to them, then deleted -- none were shipped as permanent
 DevTool/repo files, kept separate from `tools/devtool/sim/runSim.ts`
 (the real, permanent Balance Sandbox sim) which was untouched by this
 patch.
+
+### UI polish pass: tutorial text, reroll safety, subtitle cards, help button (patch 0334)
+
+```discord-update
+Dev Update | Polish Pass
+- Fixed the tutorial quest's flavour text -- it was accidentally near-identical to the Miller's Problem story quest
+- The Reroll button is now blocked while your tutorial quest is still waiting to be sent (guided mode only), so it can't be accidentally rerolled away
+- Reroll now has a proper colored button, and the "freezes left today" text has a readable background
+- Every tab's description text now sits in the same readable card the Story Quests empty-state already used
+- Each tab's [?] help button now has a real dark background and a red question mark, instead of blending into the background
+```
+
+Ten direct reports from a single testing pass, worked through one at a
+time. Two of the eleven originally reported are deliberately NOT in this
+patch -- see "Left open" below.
+
+**Tutorial quest flavour text.** `tutorialQuestOffer()` (quests.ts) used
+to read "a cellar full of rats, or so the farmer swears" -- close enough
+to the Miller's Problem chain's own premise ("A miller reports strange
+noises... believes it's rats") that a player who ran into that chain for
+real would notice the déjà vu. Replaced with a small goblin skirmish
+("a goblin or two causing trouble on the road out of town"), direct
+suggestion, deliberately distinct from the existing `goblin_warband`
+chain's own bigger-stakes premise too. Kept the "every guild starts
+somewhere" closing line -- that part wasn't the problem.
+
+**Reroll protected during the tutorial quest.** QuestPanel.tsx's reroll
+toolbar only hides itself while a hero is actively `questing` -- which a
+brand-new hero isn't yet while the scripted tutorial quest just sits on
+the board, unsent. A guided-onboarding player could reroll it away before
+ever seeing it. New `tutorialQuestPending` check (guidedOnboarding true
+AND the tutorial offer still present in this hero's contracts) disables
+the button with a "Complete the tutorial quest first" tooltip. Only
+gates guided saves -- an opted-out player never had a scripted tutorial
+quest to begin with (patch 0330's setGuidedOnboarding).
+
+**Reroll button color, freeze text background.** Reroll switched from
+`btn-ghost` (transparent) to `btn-primary` (the brass-gradient button
+already used for every other paid action). The "❄ N freezes left today"
+readout gained a `var(--panel-2)` background chip with padding/border --
+previously bare `.tiny` text sitting directly on the tab's own
+background art, unreadable on busier art.
+
+**Panel-help "?" button, real styling.** `.panel-help-btn` (MenuWindow.
+tsx's per-tab "what can I do here" popover trigger) had no dedicated CSS
+at all -- riding entirely on `.btn-ghost`'s plain transparent look, easy
+to miss in a panel's corner. New dedicated rule: a filled dark circle
+(`var(--night)`) with a `var(--blood)` (red) question mark -- red rather
+than the game's usual brass accent specifically so it reads
+unambiguously as "info," not blending in among every other gold-accented
+button in the game.
+
+**Subtitle text upgraded to the Story Quests card treatment, direct
+request across seven tabs.** The existing `.panel .subtitle` rule (an
+inline-block "plaque" -- background wash, padding, no border/shadow) IS
+correctly scoped and was already applying everywhere it's used (traced
+carefully before touching anything, including checking MenuWindow.tsx's
+`<main className="panel">` wrapper that every tab's Panel renders
+inside) -- this was never a dead-CSS bug, despite that being the first,
+incorrect diagnosis reached and then caught and reverted before
+shipping. What was actually being asked for is a deliberately heavier,
+more clearly "boxed" treatment -- the same `<div className="card"><p
+className="small muted">...</p></div>` pattern DiscoveredQuestsPanel's
+own "You have yet to unlock a story quest" empty state already uses.
+Applied to all seven named tabs' own top description text: Quest Board
+("Each hero keeps their own contracts..."), Guide ("A running log of
+what's happened..."), Heroes ("N of N slots filled..."), Inventory
+("Everything the guild owns..."), Vendors ("Upgrades, stock, and
+Crafting..."), Guild Hall ("Facility levels apply to every hero..."),
+and The Guild ("Everything the guild has built..."). Also applied to
+Raids' own "Requires the Raid Charter upgrade" line (a `small muted`
+paragraph, not `subtitle`-classed, but the same ask). The `subtitle`
+class itself is untouched and still used as-is elsewhere (Settings,
+Statistics, Lore, etc.) -- only the seven tabs directly named got
+switched to the card treatment.
+
+**Left open, not implemented this patch:**
+
+- **Vendor first-visit double notification.** Traced to `GameEngine.say()`
+  itself, not a vendor-specific bug -- every GuidanceManager "how to"
+  topic (banner: true) intentionally fires both a Toast AND a 10-second
+  persistent top NotificationBanner for the exact same message, by
+  design, documented that way across several earlier patches. Making
+  this toast-only for JUST the first-vendor-visit topic would make it
+  inconsistent with every other guidance topic; making it toast-only
+  for ALL of them is a real, broader design change. Needs a direct
+  answer on which before touching it.
+- **Nav-tab shimmer reading as a static corner instead of visibly
+  rotating.** Investigated at length: the animation technique
+  (`@property --nav-tab-shimmer-angle`, a registered CSS custom
+  property smoothly interpolated via `conic-gradient(from
+  var(--nav-tab-shimmer-angle), ...)`) is registered exactly once, no
+  duplicate-registration conflict. Checked the React wiring in
+  MenuWindow.tsx too -- stable `key={t.id}`, unchanged element type,
+  and the `nav-tab-unread` className shouldn't be flickering across
+  renders, so a React-remount-restarts-the-animation theory doesn't
+  hold up either. No static-analysis bug found in either the CSS or the
+  component. Left unfixed rather than guessing -- needs either a live
+  screen recording to see the actual frames, or confirmation that a
+  visually bolder version of the same effect (wider bright arc, more
+  contrast) actually reads as "moving" where the current subtle one
+  might not.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.

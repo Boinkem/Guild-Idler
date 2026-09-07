@@ -641,6 +641,16 @@ export function QuestPanel() {
   const rerollCost = QuestManager.questRerollCost(state, now);
   const reroll = () => engine.rerollQuestBoard(selectedHero.id);
 
+  // Patch 0334, direct report: a guided-onboarding player could reroll
+  // away the scripted tutorial quest before ever sending it -- the
+  // toolbar above only hides itself while a hero is actively
+  // `questing`, which the tutorial quest's own hero isn't yet while its
+  // one-offer board just sits there unsent. Only relevant in guided mode
+  // (an opted-out player never had a scripted tutorial quest to begin
+  // with -- see engine.ts's setGuidedOnboarding).
+  const tutorialQuestPending = state.guidedOnboarding
+    && contractOffers.some((o) => o.id === TUTORIAL_QUEST_ID);
+
   // Freeze/unfreeze -- one slot per hero. Freezing is gated on a shared
   // daily allowance (more via Board Warden); unfreezing is always free and
   // never blocked by it, so running out of freezes can't trap a player
@@ -656,10 +666,12 @@ export function QuestPanel() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Quest Board</h2>
-      <p className="subtitle">
-        Each hero keeps their own contracts, scaled to their own level. Pick a hero below to see
-        what's open to them.
-      </p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Each hero keeps their own contracts, scaled to their own level. Pick a hero below to see
+          what's open to them.
+        </p>
+      </div>
 
       <QuestFastUpgradeRow
         id="lucky_streak"
@@ -819,17 +831,26 @@ export function QuestPanel() {
                 <option value="reward">Sort: Best reward</option>
               </select>
               <button
-                className="btn-ghost"
+                className="btn-primary"
                 style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
                 onClick={reroll}
-                disabled={rerollCost > state.gold}
-                title={rerollCost > 0
-                  ? `Reroll this hero's contracts for ${rerollCost} gold`
-                  : "Reroll this hero's contracts -- free today"}
+                disabled={tutorialQuestPending || rerollCost > state.gold}
+                title={tutorialQuestPending
+                  ? 'Complete the tutorial quest first'
+                  : rerollCost > 0
+                    ? `Reroll this hero's contracts for ${rerollCost} gold`
+                    : "Reroll this hero's contracts -- free today"}
               >
                 {rerollCost > 0 ? `Reroll · ${formatGold(rerollCost)}` : 'Reroll · Free'}
               </button>
-              <span className="tiny" style={{ color: 'var(--sky)' }} title="Freezes left today -- unfreezing is always free">
+              <span
+                className="tiny"
+                style={{
+                  color: 'var(--sky)', background: 'var(--panel-2)',
+                  padding: '3px 8px', borderRadius: 4, border: '1px solid var(--panel-3)',
+                }}
+                title="Freezes left today -- unfreezing is always free"
+              >
                 ❄ {freezeChangesLeft} freeze{freezeChangesLeft === 1 ? '' : 's'} left today
               </span>
               {autoChainOwned && contractOffers.length > 0 && (

@@ -1008,9 +1008,11 @@ export function RaidsPanel() {
         <div className="tab-scene-content">
         <h2>Raids</h2>
         <p className="subtitle">Send the whole guild, not just one hero.</p>
-        <p className="small muted">
-          Requires the Raid Charter upgrade -- check the Guild Hall tab once the guild can field a real force.
-        </p>
+        <div className="card">
+          <p className="small muted" style={{ margin: 0 }}>
+            Requires the Raid Charter upgrade -- check the Guild Hall tab once the guild can field a real force.
+          </p>
+        </div>
         <button
           className="btn-primary"
           onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID.normal)}

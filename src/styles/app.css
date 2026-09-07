@@ -924,6 +924,30 @@ button:focus-visible, [tabindex]:focus-visible {
 
 .btn-ghost { background: transparent; border-color: var(--panel-3); }
 
+/* Patch 0334, direct report: the per-tab "?" breakdown button (MenuWindow.
+ * tsx) had no dedicated styling at all -- just riding on .btn-ghost's
+ * plain transparent/low-contrast look, easy to miss sitting in a
+ * panel's corner. A real, deliberately distinct treatment now: a dark
+ * filled circle (not transparent, so it reads as a clickable control
+ * against any background art) with a red question mark, --blood rather
+ * than --brass so it doesn't get lost among the game's many other gold-
+ * accented buttons and reads unambiguously as "info," not an action. */
+.panel-help-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--night);
+  border: 1px solid var(--panel-3);
+  color: var(--blood);
+  font-weight: 700;
+  font-size: 0.8125rem;
+}
+.panel-help-btn:hover { background: var(--panel-2); border-color: var(--blood); }
+
 /* Crafting/Enchanting/Enhance are deliberately styled apart from every
    other action button in the game -- --violet is already the game's one
    consistent purple accent (Renown uses it too), so this stays legible

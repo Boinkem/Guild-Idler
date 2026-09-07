@@ -982,10 +982,12 @@ export function EquipmentPanel() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/inventory.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Inventory</h2>
-      <p className="subtitle">
-        Everything the guild owns: worn gear, the shared stash, and consumables on hand.
-        Buying and selling both happen in the Shop. This is just what you have.
-      </p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Everything the guild owns: worn gear, the shared stash, and consumables on hand.
+          Buying and selling both happen in the Shop. This is just what you have.
+        </p>
+      </div>
 
       {/* Guild-wide automation preferences -- live in GameState, not
           Settings, since both spend gold/touch gear and therefore follow

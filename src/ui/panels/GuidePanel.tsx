@@ -76,7 +76,11 @@ export function GuidePanel() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/lore-and-guide.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Guide</h2>
-      <p className="subtitle">A running log of what's happened, and a quick reference for how everything works.</p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          A running log of what's happened, and a quick reference for how everything works.
+        </p>
+      </div>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
         <button className={subTab === 'notifications' ? 'btn-primary' : ''} onClick={() => setSubTab('notifications')}>
