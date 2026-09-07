@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
-import { backgroundSrc } from '../game/settings';
+import { backgroundSrc, resolveBackgroundMood } from '../game/settings';
 import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { QuestBoardIntroModal } from './QuestBoardIntroModal';
@@ -471,6 +471,25 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           title={settings.soundEnabled || settings.musicEnabled ? 'Mute all audio' : 'Unmute audio'}
         >
           {settings.soundEnabled || settings.musicEnabled ? '\ud83d\udd0a' : '\ud83d\udd07'}
+        </button>
+        {/* Quick Mood flip -- direct request, same shape as the mute
+            button just above (a fast toggle for something Settings ->
+            Guild's Mood already controls, reachable without leaving
+            whatever tab you're on). Reads the RESOLVED mood (via
+            resolveBackgroundMood, same helper backgroundSrc itself uses)
+            rather than the raw setting, so the icon always matches what's
+            actually on screen right now even while on System. Clicking
+            sets an explicit 'dim'/'bright' value -- the opposite of
+            whatever's currently showing -- which is also the correct,
+            expected way to leave System mode: a manual quick-flip is
+            inherently a manual override, same as picking Moody/Bright by
+            hand in Settings would be. */}
+        <button
+          className="btn-ghost"
+          onClick={() => update('backgroundMood', resolveBackgroundMood(settings.backgroundMood) === 'dim' ? 'bright' : 'dim')}
+          title={resolveBackgroundMood(settings.backgroundMood) === 'dim' ? 'Switch to Bright' : 'Switch to Moody'}
+        >
+          {resolveBackgroundMood(settings.backgroundMood) === 'dim' ? '\ud83d\udd6f\ufe0f' : '\u2600\ufe0f'}
         </button>
         <button
           className="btn-ghost"
