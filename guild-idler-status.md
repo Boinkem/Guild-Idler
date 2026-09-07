@@ -26827,3 +26827,108 @@ diff's only new cross-file dependency is `CHAIN_REPLAY_TIER_BY_ID`, which
 already existed and is exported from `chainReplay.ts` unchanged, so no
 import-shape issue is expected, but a real `npx tsc --noEmit` pass is
 still recommended before merging, per this project's own convention.
+
+### Hero Tier-Up: earn a hero's way to matching the tier above, same class/sprite throughout (patch 0329)
+
+```discord-update
+Dev Update | Hero Tier-Up
+
+- New Training tab section: pay to tier a hero up so their stats match the tier above -- same class, same sprite, same name
+- Every hero can eventually reach a brand-new Tier 5 ceiling, including Tier 4 heroes who'd otherwise have nothing left to earn
+- Gated by quests completed on that specific hero, then paid in gold for tiers 1-4 and Renown for the final step into Tier 5
+- Tiering up gets its own dedicated popup, not just a toast
+```
+
+Direct request: "a way to upgrade the lower tier heroes to 'a tier
+above'... also at the same time have a 5th power tier available, so you
+can upgrade the tier 4's too (everyone has the 5th available)." Designed
+collaboratively over several rounds of questions before any code was
+written -- confirmed identity/sprite stays fixed and only stats move, each
+hero earns their own way up individually, gold funds tiers 1-4 and
+Renown funds the final step into Tier 5 regardless of a hero's native
+tier, and the celebration is a dedicated modal rather than a toast.
+
+**The stat-matching method, worked from real data, not assumed.** Summed
+`baseStats`/`growth` per stat across every real class at each tier in
+`hero-classes.json`: base stats increase ~14.7% tier-to-tier on average,
+growth only ~6.9% -- and one transition (tier 2 -> 3) is a genuine
+anomaly where the two tier-3 casters trade raw stats for wisdom/utility,
+excluded from that average rather than dragging every step down to match
+one outlier. Confirmed directly with the requester that boosting BOTH
+baseStats and growth together (not baseStats alone) is what actually
+answers "a Tier 1 hero at level 20 should read as comparable to a real
+Tier 2 hero at level 20" -- growth is what compounds over a hero's whole
+career, so boosting baseStats alone would be nearly invisible by level
+20. New `src/game/data/heroTierUp.ts` holds the resulting flat, stacking
+per-step multipliers (`hero_tier_up.baseStatsMultiplierPerTier` 1.15,
+`hero_tier_up.growthMultiplierPerTier` 1.07, both Tuning-driven) -- a
+flat multiplier rather than a literal per-tier lookup table is also the
+only principled way to give Tier 5 a real number at all, since it has no
+class data to reference.
+
+**`HeroManager.baselineStats` gains an optional `tierUpLevel` param,
+default 0 (every untouched call site is unaffected).** Applies the
+multiplier to a class's baseStats/growth before the level math runs.
+Threaded through every place a SPECIFIC hero's baseline already mattered
+for something else, so tier-up gains can't silently vanish from other
+systems: `QuestManager.previewSuccess`'s two calls (success-chance
+baseline), `RaidManager.successBaselineLevel`'s contribution calc, and
+`GameEngine.resetHeroStats` (a stat respec now resets a tiered-up hero to
+THEIR tier-adjusted baseline, not their native class's raw one -- without
+this, resetting training would have silently erased a purchase the
+player already paid for).
+
+**`HeroManager.tierUp(state, hero)` -- the actual purchase.** Checks the
+quest-count gate directly off `Hero.questsCompleted` (already-tracked,
+lifetime, no new counter needed -- cumulative thresholds of
+`questsRequiredPerStep * step` work cleanly off a number that only ever
+increases) and the appropriate currency/cost from
+`HeroManager.nextTierUpStep`. The actual stat recompute preserves every
+point the player has spent exactly: computes INVESTED stats as the
+difference between the hero's real current stats and what
+`baselineStats` says the OLD tier level would auto-grant, bumps
+`tierUpLevel`, then re-adds that same invested difference on top of the
+NEW, higher baseline -- so tiering up immediately raises the free portion
+of every stat to match the new tier at the hero's CURRENT level (the
+actual ask -- "their stats go up to match the next tier," not just
+future growth), without double-counting or erasing anything the player
+chose to spend on. `grantXp`'s own per-level growth application was also
+switched to read the tier-adjusted growth rate, so a tiered-up hero keeps
+earning the boosted rate on every future level-up too, not just the
+one-time recompute.
+
+**Save compatibility.** New `Hero.tierUpLevel` field needs a real
+migration (unlike a top-level `GameState` field, `migrate()`'s own
+`{...base, ...save}` fallback doesn't reach inside array elements) --
+`SAVE_VERSION` 60 -> 61, migration 60 backfills `tierUpLevel: 0` onto
+every hero on an existing save, same "no prior data to backfill from, so
+start at the honest baseline" reasoning migration 18's own
+`equippedConsumables` backfill already used for a new per-hero field.
+
+**UI.** New `TierUpSection` inside `TrainingModal` (`TrainingPanel.tsx`)
+-- current effective tier, quest-count progress, cost, and a Tier Up
+button, or a plain "already at the highest tier" line once
+`HeroManager.nextTierUpStep` returns null. New `HeroTierUpModal.tsx` for
+the celebration itself -- a real blocking modal (not a small
+auto-dismissing corner popup like `AchievementPopup`), matching the
+direct request for "Milestone prompt, or like 'Adventurer Tiered Up!
+(up arrow)'." Mounted unconditionally in `App.tsx`, same
+"can only ever be triggered by a click already happening inside a panel,
+so the menu is already open" reasoning `HatchRevealModal`'s own comment
+already established -- no idle-view gating needed.
+
+**Verified:** Diffed every touched file against a fresh pull of `main`
+(through patch 0328) immediately before editing. Confirmed
+`tuning.json` still parses as valid JSON with all six new entries.
+Traced by hand: a fresh recruit (`tierUpLevel: 0`) gets `heroTierUpStat
+Multiplier(0)` = `{base: 1, growth: 1}` at every call site touched, so
+nothing about an untiered hero's stats, success-chance math, or
+respec behavior changes from before. Confirmed every other
+`HeroManager.baselineStats` call site in the files this session has
+access to (`HeroesPanel.tsx`, `engine.ts` elsewhere) was checked and
+none needed the new param. No Node/Vite toolchain in this environment to
+run `tsc`/`vite build` against -- this is the widest-reaching patch of
+the session (9 touched files plus 2 new ones), so a real
+`npx tsc --noEmit` and `vite build` pass before merging matters more
+here than on any earlier patch this session -- strongly recommended, not
+just noted in passing.

@@ -99,7 +99,11 @@ export const RaidManager = {
     const contributions = heroes
       .map((h) => {
         const raw = sumMods(HeroManager.heroMods(state, h, now), ModifierManager.global(state)).success ?? 0;
-        const baselineStats = HeroManager.baselineStats(h.heroClass, reqLevel);
+        // Hero Tier-Up (patch 0329) -- passes h.tierUpLevel so a
+        // tiered-up hero's raid contribution baseline reflects their
+        // bought-up stats, same fix as QuestManager.previewSuccess's own
+        // two call sites.
+        const baselineStats = HeroManager.baselineStats(h.heroClass, reqLevel, h.tierUpLevel);
         const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + reqLevel * 0.4;
         return raw - baselineOffset;
       })

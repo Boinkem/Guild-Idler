@@ -841,8 +841,12 @@ export const QuestManager = {
     // quest's own reqLevel -- just evaluated at the hero's OWN level too)
     // and the invested half (gear + spent stat points on top of that).
     // Only the invested half is curved below.
-    const autoGrowthStats = HeroManager.baselineStats(hero.heroClass, hero.level);
-    const baselineStats = HeroManager.baselineStats(hero.heroClass, successReqLevel);
+    // Hero Tier-Up (patch 0329) -- both pass hero.tierUpLevel so a
+    // tiered-up hero's success preview correctly reflects their bought-up
+    // stats rather than reverting to their native class's raw curve for
+    // this calculation specifically.
+    const autoGrowthStats = HeroManager.baselineStats(hero.heroClass, hero.level, hero.tierUpLevel);
+    const baselineStats = HeroManager.baselineStats(hero.heroClass, successReqLevel, hero.tierUpLevel);
     const autoGrowthSuccess = HeroManager.statMods(autoGrowthStats).success ?? 0;
     const baselineSuccess = HeroManager.statMods(baselineStats).success ?? 0;
     const totalStatSuccess = HeroManager.statMods(HeroManager.totalStats(hero)).success ?? 0;

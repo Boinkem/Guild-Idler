@@ -13,6 +13,7 @@ import { RaidResultModal } from './ui/RaidResultModal';
 import { HatchReadyModal } from './ui/HatchReadyModal';
 import { HatchRevealModal } from './ui/HatchRevealModal';
 import { AchievementPopup } from './ui/AchievementPopup';
+import { HeroTierUpModal } from './ui/HeroTierUpModal';
 import { Toast } from './ui/Toast';
 import { NotificationBanner } from './ui/NotificationBanner';
 
@@ -172,6 +173,12 @@ export function App() {
               (which can happen mid-quest while the companion window is all
               that's showing). */}
           <HatchRevealModal />
+          {/* Not active-gated either, same reasoning as HatchRevealModal
+              just above -- Hero Tier-Up can only ever be triggered by a
+              click already happening inside the Training panel, which
+              means the menu is already open. No idle-view path to guard
+              against. */}
+          <HeroTierUpModal />
         </>
       )}
       <Toast />

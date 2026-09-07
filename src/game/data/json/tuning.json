@@ -4641,6 +4641,66 @@
     "description": "One-time gold cost to unlock Steady Hand (a failed replay stage retries in place instead of resetting the whole attempt to stage 1). Priced above Saga Auto-Pilot itself, since it's a direct follow-on purchase requiring it -- first-pass number, same Balance Sandbox caveat as every other new economy figure."
   },
   {
+    "id": "hero_tier_up.baseStatsMultiplierPerTier",
+    "label": "Hero Tier-Up: baseStats multiplier per step",
+    "category": "hero_tier_up",
+    "value": 1.15,
+    "default": 1.15,
+    "min": 1,
+    "max": 2,
+    "description": "Multiplier applied to a hero's own baseStats per tier-up step, stacking. Calibrated from hero-classes.json's real average tier-to-tier baseStats increase (~14.7%, excluding the tier2->3 outlier) -- see heroTierUp.ts's own comment for the full worked numbers."
+  },
+  {
+    "id": "hero_tier_up.growthMultiplierPerTier",
+    "label": "Hero Tier-Up: growth multiplier per step",
+    "category": "hero_tier_up",
+    "value": 1.07,
+    "default": 1.07,
+    "min": 1,
+    "max": 2,
+    "description": "Multiplier applied to a hero's own per-level stat growth per tier-up step, stacking. Calibrated from hero-classes.json's real average tier-to-tier growth increase (~6.9%, excluding the tier2->3 outlier) -- see heroTierUp.ts's own comment for the full worked numbers."
+  },
+  {
+    "id": "hero_tier_up.questsRequiredPerStep",
+    "label": "Hero Tier-Up: quests required per step",
+    "category": "hero_tier_up",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 1000,
+    "description": "Cumulative lifetime quests (Hero.questsCompleted) required before a hero's Nth tier-up step unlocks -- step N requires N times this value. First-pass number, flagged for Balance Sandbox verification."
+  },
+  {
+    "id": "hero_tier_up.goldBaseCost",
+    "label": "Hero Tier-Up: gold cost at destination tier 1",
+    "category": "hero_tier_up",
+    "value": 2000,
+    "default": 2000,
+    "min": 0,
+    "max": 1000000,
+    "description": "Gold cost for a tier-up step whose destination is Tier 1 -- every higher destination tier (2-4) scales up from this via goldCostGrowth. First-pass number, flagged for Balance Sandbox verification."
+  },
+  {
+    "id": "hero_tier_up.goldCostGrowth",
+    "label": "Hero Tier-Up: gold cost growth per destination tier",
+    "category": "hero_tier_up",
+    "value": 1.8,
+    "default": 1.8,
+    "min": 1,
+    "max": 5,
+    "description": "Per-destination-tier multiplier on Hero Tier-Up's gold cost -- destination tier 4 costs goldBaseCost * this^3. First-pass number, flagged for Balance Sandbox verification."
+  },
+  {
+    "id": "hero_tier_up.renownCost",
+    "label": "Hero Tier-Up: Renown cost for the final step (Tier 5)",
+    "category": "hero_tier_up",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 10000,
+    "description": "Flat Renown cost for the one tier-up step that lands a hero on Tier 5, regardless of which native tier they started at. First-pass number, roughly in line with Extra Banner's own tier2 per-level cost (120 Renown) for a much smaller, repeatable bonus -- set higher since this is a one-time, per-hero, guild-defining purchase. Flagged for Balance Sandbox verification."
+  },
+  {
     "id": "chain_replay_tier.band1.goldCost",
     "label": "Replay tier: The Founding Days (1-7) cost",
     "category": "chain_replay_tiers",

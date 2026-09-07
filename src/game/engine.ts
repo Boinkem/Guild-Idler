@@ -2914,7 +2914,12 @@ export class GameEngine {
     const cost = statResetCost(hero.level);
     if (this.state.gold < cost) return this.say('Not enough gold to reset training.');
     this.state.gold -= cost;
-    hero.stats = HeroManager.baselineStats(hero.heroClass, hero.level);
+    // Hero Tier-Up (patch 0329) -- passes hero.tierUpLevel so a respec
+    // resets a tiered-up hero back to THEIR tier-adjusted baseline, not
+    // their native class's raw one. Without this, resetting training on
+    // a hero who'd bought tier-ups would silently erase the stat gain
+    // that purchase already paid for.
+    hero.stats = HeroManager.baselineStats(hero.heroClass, hero.level, hero.tierUpLevel);
     hero.statPoints = hero.level - 1;
     playSound('allocate');
     this.notify();
@@ -2938,6 +2943,40 @@ export class GameEngine {
     this.say(`${hero.name} trained as ${HeroManager.roleDisplayName(hero)}.`);
     this.notify();
     void this.saveNow();
+  }
+
+  /**
+   * Hero Tier-Up (patch 0329) -- see HeroManager.tierUp for the actual
+   * cost/gate/mutation logic. On success, queues the dedicated popup
+   * (pendingHeroTierUpId) rather than a plain toast -- a hero permanently
+   * matching a higher tier's power is a bigger moment than an ordinary
+   * purchase confirmation, same "gets its own richer popup, separate from
+   * the toast queue" treatment achievementQueue already gives Steam
+   * achievement unlocks. Still archived into the Guide's notification log
+   * via say()'s own banner path... except this deliberately does NOT call
+   * say() at all -- same choice reportGuidance makes for first_chain_seen
+   * (see that branch's own comment): the popup IS the prominent moment,
+   * stacking a toast on top would just be the same "two big moments
+   * competing" issue avoided there.
+   */
+  tierUpHero(heroId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const error = HeroManager.tierUp(this.state, hero);
+    if (error) return this.say(error);
+    playSound('level_up');
+    this.state.pendingHeroTierUpId = hero.id;
+    this.archive(`${hero.name} tiered up to Tier ${HeroManager.effectiveTier(hero)}!`, 'heroes');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Dismisses the Hero Tier-Up popup -- called once the player closes
+   *  HeroTierUpModal, same "read-then-cleared" shape dismissChainCelebration
+   *  already uses for pendingChainDiscovery. */
+  dismissHeroTierUp() {
+    this.state.pendingHeroTierUpId = null;
+    this.notify();
   }
 
   /** Switches which of a hero's already-earned titles displays next to

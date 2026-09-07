@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 60;
+export const SAVE_VERSION = 61;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -625,6 +625,17 @@ export interface Hero {
    * HeroesPanel for the picker UI.
    */
   activeTitle: string | null;
+  /**
+   * Hero Tier-Up (patch 0329) -- how many times this specific hero has
+   * paid to have their stats match one tier above their native class,
+   * same identity/sprite/class throughout. 0 for a hero who's never
+   * tiered up (every hero created before this patch, and every fresh
+   * recruit, starts here). Capped at heroTierUpMaxSteps(def.tier) -- see
+   * heroTierUp.ts -- so a hero's effective tier
+   * (heroEffectiveTier(def.tier, tierUpLevel)) can never exceed the
+   * Tier 5 ceiling every hero can eventually reach.
+   */
+  tierUpLevel: number;
   /**
    * Currently active combat role (Melee/Ranged/Caster) -- only ever read
    * for raid party composition (RaidManager.roleMismatchPenalty), never
@@ -2446,6 +2457,19 @@ export interface GameState {
    * shows even if the app closes before the player notices it.
    */
   pendingChainDiscovery: boolean;
+  /**
+   * Hero Tier-Up (patch 0329) -- id of the hero whose dedicated
+   * HeroTierUpModal popup should show next, same "achievement-style,
+   * separate from the plain toast queue" treatment `achievementQueue`
+   * already gives Steam achievement unlocks (see engine.ts's own comment
+   * on that queue for why a bigger moment gets its own popup rather than
+   * a toast). `null` means no popup pending. Everything the modal needs
+   * to display (hero name/class/new effective tier) is read live off the
+   * hero at render time via this id, not snapshotted here -- same
+   * "read-then-cleared, not a data payload" shape pendingChainDiscovery
+   * just above already uses.
+   */
+  pendingHeroTierUpId: string | null;
 
   /* ------------------------- Harvest/Gathering ------------------------- */
   /** Current stock of each material, capped by warehouseCapacity(). */

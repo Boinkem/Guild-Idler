@@ -197,6 +197,7 @@ export function createInitialState(now = Date.now()): GameState {
     raidUpgrades: {},
     seenOnboarding: false,
     pendingChainDiscovery: false,
+    pendingHeroTierUpId: null,
     materials: emptyMaterials(),
     curios: {},
     harvestNodes: Object.fromEntries(
@@ -1305,6 +1306,27 @@ const MIGRATIONS: Record<number, Migration> = {
     hasObtainedConsumable: (save.hasUsedConsumable as boolean | undefined)
       ?? (save.hasObtainedConsumable as boolean | undefined) ?? true,
   }),
+  // Patch 0329 -- Hero Tier-Up. Every existing hero on a pre-0329 save
+  // gets tierUpLevel: 0 (never tiered up), same "no prior data to
+  // backfill from, so start at the honest baseline" reasoning migration
+  // 18's own equippedConsumables backfill above already used for a new
+  // per-hero field. pendingHeroTierUpId also explicitly set here for
+  // clarity, even though createInitialState's own fallback in migrate()
+  // would already backfill a missing top-level field to null on its
+  // own -- listed plainly so a future reader of this migration doesn't
+  // have to go verify that fallback still covers it.
+  60: (save) => {
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      h.tierUpLevel = (h.tierUpLevel as number | undefined) ?? 0;
+    }
+    return {
+      ...save,
+      version: 61,
+      heroes,
+      pendingHeroTierUpId: (save.pendingHeroTierUpId as string | null | undefined) ?? null,
+    };
+  },
 };
 
 export const SaveManager = {

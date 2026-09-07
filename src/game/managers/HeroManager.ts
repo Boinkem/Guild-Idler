@@ -1,6 +1,10 @@
 import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
+import {
+  heroTierUpMaxSteps, heroTierUpStatMultiplier, heroTierUpQuestsRequired,
+  heroTierUpGoldCost, heroTierUpRenownCost, heroTierUpNextStepIsFinal,
+} from '../data/heroTierUp';
 import { DIFFICULTY_ORDER } from '../data/quests';
 import { Tuning } from '../data/tuning';
 import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
@@ -50,6 +54,7 @@ export const HeroManager = {
       bonusStats: { strength: 0, endurance: 0, luck: 0, wisdom: 0 },
       titles: [],
       activeTitle: null,
+      tierUpLevel: 0,
     };
   },
 
@@ -90,15 +95,26 @@ export const HeroManager = {
    * every level-up in sequence. Used to anchor success chance to a quest's
    * own reqLevel rather than the hero's raw level -- see
    * QuestManager.previewSuccess's comment for why.
+   *
+   * `tierUpLevel` (patch 0329, default 0 -- every pre-existing call site
+   * is unaffected) applies Hero Tier-Up's own baseStats/growth multiplier
+   * on top of the class's native numbers before the level math runs, so
+   * a tiered-up hero's "auto-growth" baseline correctly reflects their
+   * bought-up stats rather than silently reverting to their native
+   * class's raw numbers wherever this function gets called with a bare
+   * heroClass/level pair. Every real caller acting on a SPECIFIC hero
+   * (previewSuccess, tierUp itself, GameEngine.resetHeroStats) passes
+   * hero.tierUpLevel explicitly rather than relying on the default.
    */
-  baselineStats(heroClass: HeroClass, level: number): Stats {
+  baselineStats(heroClass: HeroClass, level: number, tierUpLevel = 0): Stats {
     const def = HERO_CLASSES[heroClass];
     const levels = Math.max(0, level - 1);
+    const mult = heroTierUpStatMultiplier(tierUpLevel);
     return {
-      strength: def.baseStats.strength + def.growth.strength * levels,
-      endurance: def.baseStats.endurance + def.growth.endurance * levels,
-      luck: def.baseStats.luck + def.growth.luck * levels,
-      wisdom: def.baseStats.wisdom + def.growth.wisdom * levels,
+      strength: def.baseStats.strength * mult.base + def.growth.strength * mult.growth * levels,
+      endurance: def.baseStats.endurance * mult.base + def.growth.endurance * mult.growth * levels,
+      luck: def.baseStats.luck * mult.base + def.growth.luck * mult.growth * levels,
+      wisdom: def.baseStats.wisdom * mult.base + def.growth.wisdom * mult.growth * levels,
     };
   },
 
@@ -177,6 +193,102 @@ export const HeroManager = {
     return null;
   },
 
+  /* ------------------------------ Tier-Up ------------------------------ */
+  // Hero Tier-Up (patch 0329) -- see heroTierUp.ts's own header comment
+  // for the full design. Same class/sprite/identity throughout; only the
+  // stat curve moves.
+
+  /** How many tier-up steps this hero has left to buy, 0 once they're
+   *  already at the Tier 5 ceiling. */
+  tierUpStepsRemaining(hero: Hero): number {
+    const def = HERO_CLASSES[hero.heroClass];
+    return Math.max(0, heroTierUpMaxSteps(def.tier) - hero.tierUpLevel);
+  },
+
+  /** This hero's current effective tier, native tier plus however many
+   *  steps they've bought. */
+  effectiveTier(hero: Hero): number {
+    const def = HERO_CLASSES[hero.heroClass];
+    return Math.min(def.tier + hero.tierUpLevel, def.tier + heroTierUpMaxSteps(def.tier));
+  },
+
+  /**
+   * Everything a Training-tab card needs to render the next tier-up
+   * step's cost/gate without duplicating this math in the UI layer --
+   * `null` once the hero's already at the Tier 5 ceiling (nothing left
+   * to buy). `currency` tells the UI which of state.gold/state.renown to
+   * compare `cost` against and which glyph to show.
+   */
+  nextTierUpStep(hero: Hero): {
+    destinationTier: number; questsRequired: number; cost: number; currency: 'gold' | 'renown';
+  } | null {
+    if (HeroManager.tierUpStepsRemaining(hero) <= 0) return null;
+    const def = HERO_CLASSES[hero.heroClass];
+    const nextStep = hero.tierUpLevel + 1;
+    const destinationTier = def.tier + nextStep;
+    const isFinal = heroTierUpNextStepIsFinal(def.tier, hero.tierUpLevel);
+    return {
+      destinationTier,
+      questsRequired: heroTierUpQuestsRequired(nextStep),
+      cost: isFinal ? heroTierUpRenownCost() : heroTierUpGoldCost(destinationTier),
+      currency: isFinal ? 'renown' : 'gold',
+    };
+  },
+
+  /**
+   * Spends the next step's cost and bumps hero.tierUpLevel -- the actual
+   * mutation. Preserves every stat point the player has actually spent
+   * exactly: computes the hero's current INVESTED stats (their real
+   * hero.stats minus what baselineStats says the old tier level would
+   * auto-grant at their current level), bumps tierUpLevel, then re-adds
+   * that same invested difference on top of the NEW, higher baseline --
+   * so a tier-up immediately raises the "free" portion of every stat to
+   * match the new tier at the hero's current level (the actual ask --
+   * "their stats go up to match the next tier," not just future growth),
+   * without silently erasing or double-counting anything the player
+   * chose to spend stat points on. Same difference-based invested/auto
+   * split QuestManager.previewSuccess already computes for an unrelated
+   * reason (curving invested vs. free success) -- reused here rather
+   * than inventing a second way to separate the two.
+   */
+  tierUp(state: GameState, hero: Hero): string | null {
+    const step = HeroManager.nextTierUpStep(hero);
+    if (!step) return `${hero.name} is already at the highest tier.`;
+    if (hero.questsCompleted < step.questsRequired) {
+      return `${hero.name} needs ${step.questsRequired} quests completed first (has ${hero.questsCompleted}).`;
+    }
+    if (step.currency === 'gold') {
+      if (state.gold < step.cost) return 'Not enough gold.';
+    } else if (state.renown < step.cost) {
+      return 'Not enough Renown.';
+    }
+
+    const oldBaseline = HeroManager.baselineStats(hero.heroClass, hero.level, hero.tierUpLevel);
+    const invested: Stats = {
+      strength: hero.stats.strength - oldBaseline.strength,
+      endurance: hero.stats.endurance - oldBaseline.endurance,
+      luck: hero.stats.luck - oldBaseline.luck,
+      wisdom: hero.stats.wisdom - oldBaseline.wisdom,
+    };
+
+    if (step.currency === 'gold') {
+      state.gold -= step.cost;
+      state.stats.goldSpent += step.cost;
+    } else {
+      state.renown -= step.cost;
+    }
+    hero.tierUpLevel += 1;
+
+    const newBaseline = HeroManager.baselineStats(hero.heroClass, hero.level, hero.tierUpLevel);
+    hero.stats = {
+      strength: newBaseline.strength + invested.strength,
+      endurance: newBaseline.endurance + invested.endurance,
+      luck: newBaseline.luck + invested.luck,
+      wisdom: newBaseline.wisdom + invested.wisdom,
+    };
+    return null;
+  },
+
   /**
    * Adds a newly-earned title to a hero's collection and switches the
    * displayed one to it, unless the hero already holds it (re-clearing a
@@ -245,12 +357,20 @@ export const HeroManager = {
       hero.xp -= xpForLevel(hero.level);
       hero.level += 1;
       gained += 1;
-      const growth = HERO_CLASSES[hero.heroClass].growth;
+      // Hero Tier-Up (patch 0329) -- growth.* here already needs to be
+      // the tier-up-adjusted rate, not the class's raw one, so a hero
+      // who's tiered up keeps earning boosted growth on every FUTURE
+      // level-up too, not just the one-time recompute tierUp() itself
+      // does to their current total. heroTierUpStatMultiplier(0) is a
+      // no-op (both multipliers are 1 at tierUpLevel 0), so an
+      // untiered hero's level-up math is exactly unchanged from before.
+      const rawGrowth = HERO_CLASSES[hero.heroClass].growth;
+      const growthMult = heroTierUpStatMultiplier(hero.tierUpLevel).growth;
       hero.stats = {
-        strength: hero.stats.strength + growth.strength,
-        endurance: hero.stats.endurance + growth.endurance,
-        luck: hero.stats.luck + growth.luck,
-        wisdom: hero.stats.wisdom + growth.wisdom,
+        strength: hero.stats.strength + rawGrowth.strength * growthMult,
+        endurance: hero.stats.endurance + rawGrowth.endurance * growthMult,
+        luck: hero.stats.luck + rawGrowth.luck * growthMult,
+        wisdom: hero.stats.wisdom + rawGrowth.wisdom * growthMult,
       };
       hero.statPoints += 1;
     }

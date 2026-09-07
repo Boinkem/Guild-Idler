@@ -7,7 +7,7 @@ import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { HERO_CLASSES, ROLES } from '../../game/data/progression';
 import { Hero, Role } from '../../game/types';
-import { formatGold } from '../../game/util';
+import { formatGold, formatNumber } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { RoleIcon } from '../RoleIcon';
 
@@ -77,6 +77,57 @@ const ROLE_DESCRIPTION: Record<Role, string> = Object.fromEntries(
   ROLES.map((r) => [r.id, r.description ?? '']),
 ) as Record<Role, string>;
 
+/**
+ * Hero Tier-Up (patch 0329) -- own section inside TrainingModal, below the
+ * role cards. Direct request: "possibly in the training tab." Shows the
+ * hero's current effective tier, the next step's quest-count gate and
+ * cost, and a Tier Up button -- or a plain "already at the highest tier"
+ * line once HeroManager.nextTierUpStep returns null (nothing left to
+ * show a cost for).
+ */
+function TierUpSection({ hero }: { hero: Hero }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const step = HeroManager.nextTierUpStep(hero);
+  const effectiveTier = HeroManager.effectiveTier(hero);
+
+  if (!step) {
+    return (
+      <div className="card" style={{ marginTop: 12, textAlign: 'center' }}>
+        <div className="card-title">Tier {effectiveTier}</div>
+        <p className="tiny muted" style={{ margin: '4px 0 0' }}>Already at the highest tier.</p>
+      </div>
+    );
+  }
+
+  const questsMet = hero.questsCompleted >= step.questsRequired;
+  const afforded = step.currency === 'gold' ? state.gold >= step.cost : state.renown >= step.cost;
+  const canBuy = questsMet && afforded;
+  const costLabel = step.currency === 'gold' ? formatGold(step.cost) : `✦ ${formatNumber(step.cost)} Renown`;
+
+  return (
+    <div className="card" style={{ marginTop: 12, textAlign: 'center' }}>
+      <div className="card-title">Tier {effectiveTier} <span aria-hidden="true">→</span> Tier {step.destinationTier}</div>
+      <p className="tiny" style={{ margin: '6px 0 0' }}>
+        Boosts {hero.name}'s stats to match a Tier {step.destinationTier} hero -- same class, same look,
+        permanently stronger.
+      </p>
+      <p className={`tiny ${questsMet ? 'good' : 'muted'}`} style={{ marginTop: 8 }}>
+        Quests completed: {hero.questsCompleted} / {step.questsRequired}
+      </p>
+      <button
+        className="btn-primary"
+        style={{ marginTop: 8, width: '100%' }}
+        disabled={!canBuy}
+        title={!questsMet ? `Needs ${step.questsRequired} quests completed first` : !afforded ? `Not enough ${step.currency === 'gold' ? 'gold' : 'Renown'}` : undefined}
+        onClick={() => engine.tierUpHero(hero.id)}
+      >
+        Tier Up · {costLabel}
+      </button>
+    </div>
+  );
+}
+
 function TrainingModal({ hero, onClose }: { hero: Hero; onClose: () => void }) {
   const classDef = HERO_CLASSES[hero.heroClass];
   const activeRole = HeroManager.activeRole(hero);
@@ -92,6 +143,7 @@ function TrainingModal({ hero, onClose }: { hero: Hero; onClose: () => void }) {
             <RoleCard key={roleDef.id} hero={hero} role={roleDef.id} active={activeRole === roleDef.id} />
           ))}
         </div>
+        <TierUpSection hero={hero} />
         <div className="row end" style={{ marginTop: 14 }}>
           <button className="btn-ghost" onClick={onClose}>Close</button>
         </div>

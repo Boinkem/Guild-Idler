@@ -1,0 +1,826 @@
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 60;
++export const SAVE_VERSION = 61;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -626,6 +626,17 @@
+    */
+   activeTitle: string | null;
+   /**
++   * Hero Tier-Up (patch 0329) -- how many times this specific hero has
++   * paid to have their stats match one tier above their native class,
++   * same identity/sprite/class throughout. 0 for a hero who's never
++   * tiered up (every hero created before this patch, and every fresh
++   * recruit, starts here). Capped at heroTierUpMaxSteps(def.tier) -- see
++   * heroTierUp.ts -- so a hero's effective tier
++   * (heroEffectiveTier(def.tier, tierUpLevel)) can never exceed the
++   * Tier 5 ceiling every hero can eventually reach.
++   */
++  tierUpLevel: number;
++  /**
+    * Currently active combat role (Melee/Ranged/Caster) -- only ever read
+    * for raid party composition (RaidManager.roleMismatchPenalty), never
+    * board/chain quest math. Optional/undefined for any hero who's never
+@@ -2446,6 +2457,19 @@
+    * shows even if the app closes before the player notices it.
+    */
+   pendingChainDiscovery: boolean;
++  /**
++   * Hero Tier-Up (patch 0329) -- id of the hero whose dedicated
++   * HeroTierUpModal popup should show next, same "achievement-style,
++   * separate from the plain toast queue" treatment `achievementQueue`
++   * already gives Steam achievement unlocks (see engine.ts's own comment
++   * on that queue for why a bigger moment gets its own popup rather than
++   * a toast). `null` means no popup pending. Everything the modal needs
++   * to display (hero name/class/new effective tier) is read live off the
++   * hero at render time via this id, not snapshotted here -- same
++   * "read-then-cleared, not a data payload" shape pendingChainDiscovery
++   * just above already uses.
++   */
++  pendingHeroTierUpId: string | null;
+ 
+   /* ------------------------- Harvest/Gathering ------------------------- */
+   /** Current stock of each material, capped by warehouseCapacity(). */
+--- /dev/null
++++ b/src/game/data/heroTierUp.ts
+@@ -0,0 +1,124 @@
++import { Tuning } from './tuning';
++
++/**
++ * Hero Tier-Up (patch 0329) -- lets an individual hero earn their way to
++ * matching a higher tier's power, one step at a time, without changing
++ * class/sprite/identity. Direct request: "a way to upgrade the lower tier
++ * heroes to 'a tier above'... also at the same time have a 5th power tier
++ * available, so you can upgrade the tier 4's too (everyone has the 5th
++ * available)."
++ *
++ * Lives in its own file for the same reason chainReplay.ts/raidUpgrades.ts
++ * do -- a deliberately separable system, not an extension of ordinary hero
++ * progression, with its own cost curve and its own gating.
++ */
++
++/** No real Tier 5 hero classes exist (hero-classes.json tops out at
++ *  tier 4) -- Tier 5 is purely a mechanical ceiling every hero can reach
++ *  via tier-ups, not a class roster. Hardcoded, not tuning-driven: this
++ *  is a structural fact about how many tiers exist, same category as
++ *  MAX_HERO_LEVEL's own "this is the design's real ceiling" reasoning,
++ *  not a balance knob. */
++export const HERO_TIER_UP_MAX_TIER = 5;
++
++/** How many times a hero of a given native tier can tier up before
++ *  hitting the Tier 5 ceiling -- a Tier 4 native needs exactly 1
++ *  (matching "everyone has the 5th available" including Tier 4s who'd
++ *  otherwise have nothing left to earn), a Tier 0 native needs 5. */
++export function heroTierUpMaxSteps(nativeTier: number): number {
++  return Math.max(0, HERO_TIER_UP_MAX_TIER - nativeTier);
++}
++
++/** The hero's current effective tier for power purposes -- native tier
++ *  plus however many steps they've bought, clamped at the ceiling (the
++ *  clamp is defensive; heroTierUpMaxSteps already prevents buying past
++ *  it, this just guarantees the number displayed can never read above 5
++ *  even if something upstream is ever wrong). */
++export function heroEffectiveTier(nativeTier: number, tierUpLevel: number): number {
++  return Math.min(HERO_TIER_UP_MAX_TIER, nativeTier + tierUpLevel);
++}
++
++/**
++ * Stat multiplier per tier-up step, applied to BOTH baseStats and growth
++ * together (not baseStats alone) -- confirmed directly: the ask was for a
++ * Tier 1 hero at level 20 to read as comparable in power to a real Tier 2
++ * hero at level 20, and growth is what actually compounds over a hero's
++ * whole career. Boosting baseStats alone would be nearly invisible by
++ * level 20 (growth's contribution dwarfs it by then); boosting both keeps
++ * the uplift meaningful at every level, not just level 1.
++ *
++ * Calibrated from hero-classes.json's own real per-tier averages, NOT
++ * assumed -- summed across the four stats per class, per tier:
++ *   tier 0 -> 1: base +16.7%, growth +8.1%
++ *   tier 1 -> 2: base +14.3%, growth +10.4%
++ *   tier 2 -> 3: base -4.2%, growth -6.3%  (an outlier: tier 3's two
++ *     casters trade raw stats for wisdom/utility rather than being a
++ *     strict power increase over tier 2 by this measure -- excluded from
++ *     the average below rather than dragging every step's multiplier
++ *     down to match one anomalous transition)
++ *   tier 3 -> 4: base +13.0%, growth +2.1%
++ * Averaging the three well-behaved transitions (0->1, 1->2, 3->4) gives
++ * base ~+14.7%/growth ~+6.9%, rounded to the flat, tunable multipliers
++ * below. A flat per-step multiplier (rather than a literal per-tier
++ * lookup table) is deliberate: it's the only way to give Tier 5 -- which
++ * has no real class data to reference at all -- a principled number
++ * instead of an arbitrarily invented one, and it stays well-behaved
++ * (monotonically increasing) where the raw per-tier data itself isn't.
++ */
++const BASE_STATS_MULTIPLIER_PER_TIER = Tuning.get('hero_tier_up.baseStatsMultiplierPerTier');
++const GROWTH_MULTIPLIER_PER_TIER = Tuning.get('hero_tier_up.growthMultiplierPerTier');
++
++export function heroTierUpStatMultiplier(tierUpLevel: number): { base: number; growth: number } {
++  return {
++    base: BASE_STATS_MULTIPLIER_PER_TIER ** tierUpLevel,
++    growth: GROWTH_MULTIPLIER_PER_TIER ** tierUpLevel,
++  };
++}
++
++/**
++ * Cumulative quest-count gate for a hero's NEXT tier-up step (1-indexed --
++ * `nextStep` is the step being bought, i.e. hero.tierUpLevel + 1). Reads
++ * directly off Hero.questsCompleted (already-tracked, lifetime, covers
++ * quests/chain stages/chain replay stages alike per that field's own
++ * comment) rather than a new counter -- cumulative thresholds work
++ * cleanly off a monotonically-increasing lifetime total with no need to
++ * track "quests since last tier-up" separately.
++ */
++const QUESTS_REQUIRED_PER_STEP = Tuning.get('hero_tier_up.questsRequiredPerStep');
++export function heroTierUpQuestsRequired(nextStep: number): number {
++  return QUESTS_REQUIRED_PER_STEP * nextStep;
++}
++
++/**
++ * Gold cost to reach a given DESTINATION tier (1-4) -- confirmed cost
++ * split: every step that lands on tiers 1 through 4 costs gold; only the
++ * final step into Tier 5 costs Renown (see heroTierUpRenownCost below).
++ * Scales with the destination tier itself, not the step number, so a
++ * Tier 3 hero's single step to Tier 4 costs the same as a Tier 0 hero's
++ * fourth step to Tier 4 -- the destination is what the money is buying,
++ * not how far the hero's own journey there was.
++ */
++const GOLD_BASE_COST = Tuning.get('hero_tier_up.goldBaseCost');
++const GOLD_COST_GROWTH = Tuning.get('hero_tier_up.goldCostGrowth');
++export function heroTierUpGoldCost(destinationTier: number): number {
++  return Math.floor(GOLD_BASE_COST * GOLD_COST_GROWTH ** (destinationTier - 1));
++}
++
++/** Flat Renown cost for the one step that lands a hero on Tier 5 --
++ *  confirmed as Renown regardless of which native tier the hero started
++ *  at (a Tier 4 native's only step already IS this one). First-pass
++ *  number, same Balance Sandbox caveat as every other new economy figure
++ *  in this codebase -- roughly in line with Extra Banner's own tier2
++ *  per-level cost (120 Renown for a much smaller, repeatable bonus), set
++ *  higher here since this is a one-time, guild-defining purchase per
++ *  hero. */
++export function heroTierUpRenownCost(): number {
++  return Tuning.get('hero_tier_up.renownCost');
++}
++
++/** True once the destination tier for a hero's NEXT step is the Tier 5
++ *  ceiling -- the one point where the cost currency switches from gold
++ *  to Renown. */
++export function heroTierUpNextStepIsFinal(nativeTier: number, tierUpLevel: number): boolean {
++  return heroEffectiveTier(nativeTier, tierUpLevel + 1) >= HERO_TIER_UP_MAX_TIER;
++}
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -4641,6 +4641,66 @@
+     "description": "One-time gold cost to unlock Steady Hand (a failed replay stage retries in place instead of resetting the whole attempt to stage 1). Priced above Saga Auto-Pilot itself, since it's a direct follow-on purchase requiring it -- first-pass number, same Balance Sandbox caveat as every other new economy figure."
+   },
+   {
++    "id": "hero_tier_up.baseStatsMultiplierPerTier",
++    "label": "Hero Tier-Up: baseStats multiplier per step",
++    "category": "hero_tier_up",
++    "value": 1.15,
++    "default": 1.15,
++    "min": 1,
++    "max": 2,
++    "description": "Multiplier applied to a hero's own baseStats per tier-up step, stacking. Calibrated from hero-classes.json's real average tier-to-tier baseStats increase (~14.7%, excluding the tier2->3 outlier) -- see heroTierUp.ts's own comment for the full worked numbers."
++  },
++  {
++    "id": "hero_tier_up.growthMultiplierPerTier",
++    "label": "Hero Tier-Up: growth multiplier per step",
++    "category": "hero_tier_up",
++    "value": 1.07,
++    "default": 1.07,
++    "min": 1,
++    "max": 2,
++    "description": "Multiplier applied to a hero's own per-level stat growth per tier-up step, stacking. Calibrated from hero-classes.json's real average tier-to-tier growth increase (~6.9%, excluding the tier2->3 outlier) -- see heroTierUp.ts's own comment for the full worked numbers."
++  },
++  {
++    "id": "hero_tier_up.questsRequiredPerStep",
++    "label": "Hero Tier-Up: quests required per step",
++    "category": "hero_tier_up",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "max": 1000,
++    "description": "Cumulative lifetime quests (Hero.questsCompleted) required before a hero's Nth tier-up step unlocks -- step N requires N times this value. First-pass number, flagged for Balance Sandbox verification."
++  },
++  {
++    "id": "hero_tier_up.goldBaseCost",
++    "label": "Hero Tier-Up: gold cost at destination tier 1",
++    "category": "hero_tier_up",
++    "value": 2000,
++    "default": 2000,
++    "min": 0,
++    "max": 1000000,
++    "description": "Gold cost for a tier-up step whose destination is Tier 1 -- every higher destination tier (2-4) scales up from this via goldCostGrowth. First-pass number, flagged for Balance Sandbox verification."
++  },
++  {
++    "id": "hero_tier_up.goldCostGrowth",
++    "label": "Hero Tier-Up: gold cost growth per destination tier",
++    "category": "hero_tier_up",
++    "value": 1.8,
++    "default": 1.8,
++    "min": 1,
++    "max": 5,
++    "description": "Per-destination-tier multiplier on Hero Tier-Up's gold cost -- destination tier 4 costs goldBaseCost * this^3. First-pass number, flagged for Balance Sandbox verification."
++  },
++  {
++    "id": "hero_tier_up.renownCost",
++    "label": "Hero Tier-Up: Renown cost for the final step (Tier 5)",
++    "category": "hero_tier_up",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "max": 10000,
++    "description": "Flat Renown cost for the one tier-up step that lands a hero on Tier 5, regardless of which native tier they started at. First-pass number, roughly in line with Extra Banner's own tier2 per-level cost (120 Renown) for a much smaller, repeatable bonus -- set higher since this is a one-time, per-hero, guild-defining purchase. Flagged for Balance Sandbox verification."
++  },
++  {
+     "id": "chain_replay_tier.band1.goldCost",
+     "label": "Replay tier: The Founding Days (1-7) cost",
+     "category": "chain_replay_tiers",
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -1,6 +1,10 @@
+ import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
+ import { INJURIES } from '../data/items';
+ import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
++import {
++  heroTierUpMaxSteps, heroTierUpStatMultiplier, heroTierUpQuestsRequired,
++  heroTierUpGoldCost, heroTierUpRenownCost, heroTierUpNextStepIsFinal,
++} from '../data/heroTierUp';
+ import { DIFFICULTY_ORDER } from '../data/quests';
+ import { Tuning } from '../data/tuning';
+ import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
+@@ -50,6 +54,7 @@
+       bonusStats: { strength: 0, endurance: 0, luck: 0, wisdom: 0 },
+       titles: [],
+       activeTitle: null,
++      tierUpLevel: 0,
+     };
+   },
+ 
+@@ -90,15 +95,26 @@
+    * every level-up in sequence. Used to anchor success chance to a quest's
+    * own reqLevel rather than the hero's raw level -- see
+    * QuestManager.previewSuccess's comment for why.
++   *
++   * `tierUpLevel` (patch 0329, default 0 -- every pre-existing call site
++   * is unaffected) applies Hero Tier-Up's own baseStats/growth multiplier
++   * on top of the class's native numbers before the level math runs, so
++   * a tiered-up hero's "auto-growth" baseline correctly reflects their
++   * bought-up stats rather than silently reverting to their native
++   * class's raw numbers wherever this function gets called with a bare
++   * heroClass/level pair. Every real caller acting on a SPECIFIC hero
++   * (previewSuccess, tierUp itself, GameEngine.resetHeroStats) passes
++   * hero.tierUpLevel explicitly rather than relying on the default.
+    */
+-  baselineStats(heroClass: HeroClass, level: number): Stats {
++  baselineStats(heroClass: HeroClass, level: number, tierUpLevel = 0): Stats {
+     const def = HERO_CLASSES[heroClass];
+     const levels = Math.max(0, level - 1);
++    const mult = heroTierUpStatMultiplier(tierUpLevel);
+     return {
+-      strength: def.baseStats.strength + def.growth.strength * levels,
+-      endurance: def.baseStats.endurance + def.growth.endurance * levels,
+-      luck: def.baseStats.luck + def.growth.luck * levels,
+-      wisdom: def.baseStats.wisdom + def.growth.wisdom * levels,
++      strength: def.baseStats.strength * mult.base + def.growth.strength * mult.growth * levels,
++      endurance: def.baseStats.endurance * mult.base + def.growth.endurance * mult.growth * levels,
++      luck: def.baseStats.luck * mult.base + def.growth.luck * mult.growth * levels,
++      wisdom: def.baseStats.wisdom * mult.base + def.growth.wisdom * mult.growth * levels,
+     };
+   },
+ 
+@@ -177,6 +193,102 @@
+     return null;
+   },
+ 
++  /* ------------------------------ Tier-Up ------------------------------ */
++  // Hero Tier-Up (patch 0329) -- see heroTierUp.ts's own header comment
++  // for the full design. Same class/sprite/identity throughout; only the
++  // stat curve moves.
++
++  /** How many tier-up steps this hero has left to buy, 0 once they're
++   *  already at the Tier 5 ceiling. */
++  tierUpStepsRemaining(hero: Hero): number {
++    const def = HERO_CLASSES[hero.heroClass];
++    return Math.max(0, heroTierUpMaxSteps(def.tier) - hero.tierUpLevel);
++  },
++
++  /** This hero's current effective tier, native tier plus however many
++   *  steps they've bought. */
++  effectiveTier(hero: Hero): number {
++    const def = HERO_CLASSES[hero.heroClass];
++    return Math.min(def.tier + hero.tierUpLevel, def.tier + heroTierUpMaxSteps(def.tier));
++  },
++
++  /**
++   * Everything a Training-tab card needs to render the next tier-up
++   * step's cost/gate without duplicating this math in the UI layer --
++   * `null` once the hero's already at the Tier 5 ceiling (nothing left
++   * to buy). `currency` tells the UI which of state.gold/state.renown to
++   * compare `cost` against and which glyph to show.
++   */
++  nextTierUpStep(hero: Hero): {
++    destinationTier: number; questsRequired: number; cost: number; currency: 'gold' | 'renown';
++  } | null {
++    if (HeroManager.tierUpStepsRemaining(hero) <= 0) return null;
++    const def = HERO_CLASSES[hero.heroClass];
++    const nextStep = hero.tierUpLevel + 1;
++    const destinationTier = def.tier + nextStep;
++    const isFinal = heroTierUpNextStepIsFinal(def.tier, hero.tierUpLevel);
++    return {
++      destinationTier,
++      questsRequired: heroTierUpQuestsRequired(nextStep),
++      cost: isFinal ? heroTierUpRenownCost() : heroTierUpGoldCost(destinationTier),
++      currency: isFinal ? 'renown' : 'gold',
++    };
++  },
++
++  /**
++   * Spends the next step's cost and bumps hero.tierUpLevel -- the actual
++   * mutation. Preserves every stat point the player has actually spent
++   * exactly: computes the hero's current INVESTED stats (their real
++   * hero.stats minus what baselineStats says the old tier level would
++   * auto-grant at their current level), bumps tierUpLevel, then re-adds
++   * that same invested difference on top of the NEW, higher baseline --
++   * so a tier-up immediately raises the "free" portion of every stat to
++   * match the new tier at the hero's current level (the actual ask --
++   * "their stats go up to match the next tier," not just future growth),
++   * without silently erasing or double-counting anything the player
++   * chose to spend stat points on. Same difference-based invested/auto
++   * split QuestManager.previewSuccess already computes for an unrelated
++   * reason (curving invested vs. free success) -- reused here rather
++   * than inventing a second way to separate the two.
++   */
++  tierUp(state: GameState, hero: Hero): string | null {
++    const step = HeroManager.nextTierUpStep(hero);
++    if (!step) return `${hero.name} is already at the highest tier.`;
++    if (hero.questsCompleted < step.questsRequired) {
++      return `${hero.name} needs ${step.questsRequired} quests completed first (has ${hero.questsCompleted}).`;
++    }
++    if (step.currency === 'gold') {
++      if (state.gold < step.cost) return 'Not enough gold.';
++    } else if (state.renown < step.cost) {
++      return 'Not enough Renown.';
++    }
++
++    const oldBaseline = HeroManager.baselineStats(hero.heroClass, hero.level, hero.tierUpLevel);
++    const invested: Stats = {
++      strength: hero.stats.strength - oldBaseline.strength,
++      endurance: hero.stats.endurance - oldBaseline.endurance,
++      luck: hero.stats.luck - oldBaseline.luck,
++      wisdom: hero.stats.wisdom - oldBaseline.wisdom,
++    };
++
++    if (step.currency === 'gold') {
++      state.gold -= step.cost;
++      state.stats.goldSpent += step.cost;
++    } else {
++      state.renown -= step.cost;
++    }
++    hero.tierUpLevel += 1;
++
++    const newBaseline = HeroManager.baselineStats(hero.heroClass, hero.level, hero.tierUpLevel);
++    hero.stats = {
++      strength: newBaseline.strength + invested.strength,
++      endurance: newBaseline.endurance + invested.endurance,
++      luck: newBaseline.luck + invested.luck,
++      wisdom: newBaseline.wisdom + invested.wisdom,
++    };
++    return null;
++  },
++
+   /**
+    * Adds a newly-earned title to a hero's collection and switches the
+    * displayed one to it, unless the hero already holds it (re-clearing a
+@@ -245,12 +357,20 @@
+       hero.xp -= xpForLevel(hero.level);
+       hero.level += 1;
+       gained += 1;
+-      const growth = HERO_CLASSES[hero.heroClass].growth;
++      // Hero Tier-Up (patch 0329) -- growth.* here already needs to be
++      // the tier-up-adjusted rate, not the class's raw one, so a hero
++      // who's tiered up keeps earning boosted growth on every FUTURE
++      // level-up too, not just the one-time recompute tierUp() itself
++      // does to their current total. heroTierUpStatMultiplier(0) is a
++      // no-op (both multipliers are 1 at tierUpLevel 0), so an
++      // untiered hero's level-up math is exactly unchanged from before.
++      const rawGrowth = HERO_CLASSES[hero.heroClass].growth;
++      const growthMult = heroTierUpStatMultiplier(hero.tierUpLevel).growth;
+       hero.stats = {
+-        strength: hero.stats.strength + growth.strength,
+-        endurance: hero.stats.endurance + growth.endurance,
+-        luck: hero.stats.luck + growth.luck,
+-        wisdom: hero.stats.wisdom + growth.wisdom,
++        strength: hero.stats.strength + rawGrowth.strength * growthMult,
++        endurance: hero.stats.endurance + rawGrowth.endurance * growthMult,
++        luck: hero.stats.luck + rawGrowth.luck * growthMult,
++        wisdom: hero.stats.wisdom + rawGrowth.wisdom * growthMult,
+       };
+       hero.statPoints += 1;
+     }
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -841,8 +841,12 @@
+     // quest's own reqLevel -- just evaluated at the hero's OWN level too)
+     // and the invested half (gear + spent stat points on top of that).
+     // Only the invested half is curved below.
+-    const autoGrowthStats = HeroManager.baselineStats(hero.heroClass, hero.level);
+-    const baselineStats = HeroManager.baselineStats(hero.heroClass, successReqLevel);
++    // Hero Tier-Up (patch 0329) -- both pass hero.tierUpLevel so a
++    // tiered-up hero's success preview correctly reflects their bought-up
++    // stats rather than reverting to their native class's raw curve for
++    // this calculation specifically.
++    const autoGrowthStats = HeroManager.baselineStats(hero.heroClass, hero.level, hero.tierUpLevel);
++    const baselineStats = HeroManager.baselineStats(hero.heroClass, successReqLevel, hero.tierUpLevel);
+     const autoGrowthSuccess = HeroManager.statMods(autoGrowthStats).success ?? 0;
+     const baselineSuccess = HeroManager.statMods(baselineStats).success ?? 0;
+     const totalStatSuccess = HeroManager.statMods(HeroManager.totalStats(hero)).success ?? 0;
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -99,7 +99,11 @@
+     const contributions = heroes
+       .map((h) => {
+         const raw = sumMods(HeroManager.heroMods(state, h, now), ModifierManager.global(state)).success ?? 0;
+-        const baselineStats = HeroManager.baselineStats(h.heroClass, reqLevel);
++        // Hero Tier-Up (patch 0329) -- passes h.tierUpLevel so a
++        // tiered-up hero's raid contribution baseline reflects their
++        // bought-up stats, same fix as QuestManager.previewSuccess's own
++        // two call sites.
++        const baselineStats = HeroManager.baselineStats(h.heroClass, reqLevel, h.tierUpLevel);
+         const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + reqLevel * 0.4;
+         return raw - baselineOffset;
+       })
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -2914,7 +2914,12 @@
+     const cost = statResetCost(hero.level);
+     if (this.state.gold < cost) return this.say('Not enough gold to reset training.');
+     this.state.gold -= cost;
+-    hero.stats = HeroManager.baselineStats(hero.heroClass, hero.level);
++    // Hero Tier-Up (patch 0329) -- passes hero.tierUpLevel so a respec
++    // resets a tiered-up hero back to THEIR tier-adjusted baseline, not
++    // their native class's raw one. Without this, resetting training on
++    // a hero who'd bought tier-ups would silently erase the stat gain
++    // that purchase already paid for.
++    hero.stats = HeroManager.baselineStats(hero.heroClass, hero.level, hero.tierUpLevel);
+     hero.statPoints = hero.level - 1;
+     playSound('allocate');
+     this.notify();
+@@ -2940,6 +2945,40 @@
+     void this.saveNow();
+   }
+ 
++  /**
++   * Hero Tier-Up (patch 0329) -- see HeroManager.tierUp for the actual
++   * cost/gate/mutation logic. On success, queues the dedicated popup
++   * (pendingHeroTierUpId) rather than a plain toast -- a hero permanently
++   * matching a higher tier's power is a bigger moment than an ordinary
++   * purchase confirmation, same "gets its own richer popup, separate from
++   * the toast queue" treatment achievementQueue already gives Steam
++   * achievement unlocks. Still archived into the Guide's notification log
++   * via say()'s own banner path... except this deliberately does NOT call
++   * say() at all -- same choice reportGuidance makes for first_chain_seen
++   * (see that branch's own comment): the popup IS the prominent moment,
++   * stacking a toast on top would just be the same "two big moments
++   * competing" issue avoided there.
++   */
++  tierUpHero(heroId: string) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const error = HeroManager.tierUp(this.state, hero);
++    if (error) return this.say(error);
++    playSound('level_up');
++    this.state.pendingHeroTierUpId = hero.id;
++    this.archive(`${hero.name} tiered up to Tier ${HeroManager.effectiveTier(hero)}!`, 'heroes');
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Dismisses the Hero Tier-Up popup -- called once the player closes
++   *  HeroTierUpModal, same "read-then-cleared" shape dismissChainCelebration
++   *  already uses for pendingChainDiscovery. */
++  dismissHeroTierUp() {
++    this.state.pendingHeroTierUpId = null;
++    this.notify();
++  }
++
+   /** Switches which of a hero's already-earned titles displays next to
+    *  their name -- purely cosmetic, no gold/gameplay effect, so no error
+    *  path beyond "hero not found" or "doesn't actually hold this title"
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -197,6 +197,7 @@
+     raidUpgrades: {},
+     seenOnboarding: false,
+     pendingChainDiscovery: false,
++    pendingHeroTierUpId: null,
+     materials: emptyMaterials(),
+     curios: {},
+     harvestNodes: Object.fromEntries(
+@@ -1305,6 +1306,27 @@
+     hasObtainedConsumable: (save.hasUsedConsumable as boolean | undefined)
+       ?? (save.hasObtainedConsumable as boolean | undefined) ?? true,
+   }),
++  // Patch 0329 -- Hero Tier-Up. Every existing hero on a pre-0329 save
++  // gets tierUpLevel: 0 (never tiered up), same "no prior data to
++  // backfill from, so start at the honest baseline" reasoning migration
++  // 18's own equippedConsumables backfill above already used for a new
++  // per-hero field. pendingHeroTierUpId also explicitly set here for
++  // clarity, even though createInitialState's own fallback in migrate()
++  // would already backfill a missing top-level field to null on its
++  // own -- listed plainly so a future reader of this migration doesn't
++  // have to go verify that fallback still covers it.
++  60: (save) => {
++    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
++    for (const h of heroes) {
++      h.tierUpLevel = (h.tierUpLevel as number | undefined) ?? 0;
++    }
++    return {
++      ...save,
++      version: 61,
++      heroes,
++      pendingHeroTierUpId: (save.pendingHeroTierUpId as string | null | undefined) ?? null,
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+--- a/src/ui/panels/TrainingPanel.tsx
++++ b/src/ui/panels/TrainingPanel.tsx
+@@ -7,7 +7,7 @@
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { HERO_CLASSES, ROLES } from '../../game/data/progression';
+ import { Hero, Role } from '../../game/types';
+-import { formatGold } from '../../game/util';
++import { formatGold, formatNumber } from '../../game/util';
+ import { HeroSprite } from '../sprites/HeroSprite';
+ import { RoleIcon } from '../RoleIcon';
+ 
+@@ -77,6 +77,57 @@
+   ROLES.map((r) => [r.id, r.description ?? '']),
+ ) as Record<Role, string>;
+ 
++/**
++ * Hero Tier-Up (patch 0329) -- own section inside TrainingModal, below the
++ * role cards. Direct request: "possibly in the training tab." Shows the
++ * hero's current effective tier, the next step's quest-count gate and
++ * cost, and a Tier Up button -- or a plain "already at the highest tier"
++ * line once HeroManager.nextTierUpStep returns null (nothing left to
++ * show a cost for).
++ */
++function TierUpSection({ hero }: { hero: Hero }) {
++  const engine = useEngine();
++  const state = engine.state;
++  const step = HeroManager.nextTierUpStep(hero);
++  const effectiveTier = HeroManager.effectiveTier(hero);
++
++  if (!step) {
++    return (
++      <div className="card" style={{ marginTop: 12, textAlign: 'center' }}>
++        <div className="card-title">Tier {effectiveTier}</div>
++        <p className="tiny muted" style={{ margin: '4px 0 0' }}>Already at the highest tier.</p>
++      </div>
++    );
++  }
++
++  const questsMet = hero.questsCompleted >= step.questsRequired;
++  const afforded = step.currency === 'gold' ? state.gold >= step.cost : state.renown >= step.cost;
++  const canBuy = questsMet && afforded;
++  const costLabel = step.currency === 'gold' ? formatGold(step.cost) : `✦ ${formatNumber(step.cost)} Renown`;
++
++  return (
++    <div className="card" style={{ marginTop: 12, textAlign: 'center' }}>
++      <div className="card-title">Tier {effectiveTier} <span aria-hidden="true">→</span> Tier {step.destinationTier}</div>
++      <p className="tiny" style={{ margin: '6px 0 0' }}>
++        Boosts {hero.name}'s stats to match a Tier {step.destinationTier} hero -- same class, same look,
++        permanently stronger.
++      </p>
++      <p className={`tiny ${questsMet ? 'good' : 'muted'}`} style={{ marginTop: 8 }}>
++        Quests completed: {hero.questsCompleted} / {step.questsRequired}
++      </p>
++      <button
++        className="btn-primary"
++        style={{ marginTop: 8, width: '100%' }}
++        disabled={!canBuy}
++        title={!questsMet ? `Needs ${step.questsRequired} quests completed first` : !afforded ? `Not enough ${step.currency === 'gold' ? 'gold' : 'Renown'}` : undefined}
++        onClick={() => engine.tierUpHero(hero.id)}
++      >
++        Tier Up · {costLabel}
++      </button>
++    </div>
++  );
++}
++
+ function TrainingModal({ hero, onClose }: { hero: Hero; onClose: () => void }) {
+   const classDef = HERO_CLASSES[hero.heroClass];
+   const activeRole = HeroManager.activeRole(hero);
+@@ -92,6 +143,7 @@
+             <RoleCard key={roleDef.id} hero={hero} role={roleDef.id} active={activeRole === roleDef.id} />
+           ))}
+         </div>
++        <TierUpSection hero={hero} />
+         <div className="row end" style={{ marginTop: 14 }}>
+           <button className="btn-ghost" onClick={onClose}>Close</button>
+         </div>
+--- /dev/null
++++ b/src/ui/HeroTierUpModal.tsx
+@@ -0,0 +1,58 @@
++import { useEngine } from './useEngine';
++import { HeroManager } from '../game/managers/HeroManager';
++import { HERO_CLASSES } from '../game/data/progression';
++import { HeroSprite } from './sprites/HeroSprite';
++
++/**
++ * Hero Tier-Up's own dedicated celebration -- direct request: "Milestone
++ * prompt, or like 'Adventurer Tiered Up! (up arrow)'," and a follow-up
++ * choice for a real modal over a small corner popup (unlike
++ * AchievementPopup.tsx, this blocks and requires a click to dismiss --
++ * a hero permanently gaining power is a moment worth pausing on, not a
++ * passive announcement that clears itself).
++ *
++ * Reads everything live off `engine.state.pendingHeroTierUpId` at render
++ * time rather than a snapshotted payload -- same "read-then-cleared, not
++ * a data payload" shape ChainDiscoveryModal's own pendingChainDiscovery
++ * flag already uses. Renders nothing if the hero has since been retired
++ * (id no longer resolves) rather than crashing on a stale reference --
++ * dismisses itself automatically in that edge case via the same onClose
++ * path a normal Close click takes.
++ */
++export function HeroTierUpModal() {
++  const engine = useEngine();
++  const state = engine.state;
++  const heroId = state.pendingHeroTierUpId;
++  const hero = heroId ? state.heroes.find((h) => h.id === heroId) : undefined;
++
++  if (!heroId) return null;
++  if (!hero) {
++    engine.dismissHeroTierUp();
++    return null;
++  }
++
++  const def = HERO_CLASSES[hero.heroClass];
++  const newTier = HeroManager.effectiveTier(hero);
++  const oldTier = newTier - 1;
++
++  return (
++    <div className="overlay" onClick={() => engine.dismissHeroTierUp()}>
++      <div className="modal" style={{ textAlign: 'center', maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
++        <div className="row" style={{ justifyContent: 'center', marginBottom: 4 }}>
++          <HeroSprite heroClass={hero.heroClass} skin={hero.skin} height={72} />
++        </div>
++        <h3 style={{ marginBottom: 2 }}>{def?.name ?? hero.heroClass} Tiered Up!</h3>
++        <p className="small muted" style={{ marginTop: 0 }}>{hero.name}</p>
++        <p className="card-title" style={{ color: 'var(--brass)', fontSize: '1.1rem', margin: '8px 0' }}>
++          Tier {oldTier} <span aria-hidden="true">→</span> Tier {newTier}
++        </p>
++        <p className="small" style={{ marginTop: 4 }}>
++          {hero.name}'s stats now match a Tier {newTier} hero -- same class, same look, permanently stronger.
++        </p>
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button className="btn-primary" onClick={() => engine.dismissHeroTierUp()}>Close</button>
++        </div>
++      </div>
++    </div>
++  );
++}
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -13,6 +13,7 @@
+ import { HatchReadyModal } from './ui/HatchReadyModal';
+ import { HatchRevealModal } from './ui/HatchRevealModal';
+ import { AchievementPopup } from './ui/AchievementPopup';
++import { HeroTierUpModal } from './ui/HeroTierUpModal';
+ import { Toast } from './ui/Toast';
+ import { NotificationBanner } from './ui/NotificationBanner';
+ 
+@@ -172,6 +173,12 @@
+               (which can happen mid-quest while the companion window is all
+               that's showing). */}
+           <HatchRevealModal />
++          {/* Not active-gated either, same reasoning as HatchRevealModal
++              just above -- Hero Tier-Up can only ever be triggered by a
++              click already happening inside the Training panel, which
++              means the menu is already open. No idle-view path to guard
++              against. */}
++          <HeroTierUpModal />
+         </>
+       )}
+       <Toast />
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -26827,3 +26827,108 @@
+ already existed and is exported from `chainReplay.ts` unchanged, so no
+ import-shape issue is expected, but a real `npx tsc --noEmit` pass is
+ still recommended before merging, per this project's own convention.
++
++### Hero Tier-Up: earn a hero's way to matching the tier above, same class/sprite throughout (patch 0329)
++
++```discord-update
++Dev Update | Hero Tier-Up
++
++- New Training tab section: pay to tier a hero up so their stats match the tier above -- same class, same sprite, same name
++- Every hero can eventually reach a brand-new Tier 5 ceiling, including Tier 4 heroes who'd otherwise have nothing left to earn
++- Gated by quests completed on that specific hero, then paid in gold for tiers 1-4 and Renown for the final step into Tier 5
++- Tiering up gets its own dedicated popup, not just a toast
++```
++
++Direct request: "a way to upgrade the lower tier heroes to 'a tier
++above'... also at the same time have a 5th power tier available, so you
++can upgrade the tier 4's too (everyone has the 5th available)." Designed
++collaboratively over several rounds of questions before any code was
++written -- confirmed identity/sprite stays fixed and only stats move, each
++hero earns their own way up individually, gold funds tiers 1-4 and
++Renown funds the final step into Tier 5 regardless of a hero's native
++tier, and the celebration is a dedicated modal rather than a toast.
++
++**The stat-matching method, worked from real data, not assumed.** Summed
++`baseStats`/`growth` per stat across every real class at each tier in
++`hero-classes.json`: base stats increase ~14.7% tier-to-tier on average,
++growth only ~6.9% -- and one transition (tier 2 -> 3) is a genuine
++anomaly where the two tier-3 casters trade raw stats for wisdom/utility,
++excluded from that average rather than dragging every step down to match
++one outlier. Confirmed directly with the requester that boosting BOTH
++baseStats and growth together (not baseStats alone) is what actually
++answers "a Tier 1 hero at level 20 should read as comparable to a real
++Tier 2 hero at level 20" -- growth is what compounds over a hero's whole
++career, so boosting baseStats alone would be nearly invisible by level
++20. New `src/game/data/heroTierUp.ts` holds the resulting flat, stacking
++per-step multipliers (`hero_tier_up.baseStatsMultiplierPerTier` 1.15,
++`hero_tier_up.growthMultiplierPerTier` 1.07, both Tuning-driven) -- a
++flat multiplier rather than a literal per-tier lookup table is also the
++only principled way to give Tier 5 a real number at all, since it has no
++class data to reference.
++
++**`HeroManager.baselineStats` gains an optional `tierUpLevel` param,
++default 0 (every untouched call site is unaffected).** Applies the
++multiplier to a class's baseStats/growth before the level math runs.
++Threaded through every place a SPECIFIC hero's baseline already mattered
++for something else, so tier-up gains can't silently vanish from other
++systems: `QuestManager.previewSuccess`'s two calls (success-chance
++baseline), `RaidManager.successBaselineLevel`'s contribution calc, and
++`GameEngine.resetHeroStats` (a stat respec now resets a tiered-up hero to
++THEIR tier-adjusted baseline, not their native class's raw one -- without
++this, resetting training would have silently erased a purchase the
++player already paid for).
++
++**`HeroManager.tierUp(state, hero)` -- the actual purchase.** Checks the
++quest-count gate directly off `Hero.questsCompleted` (already-tracked,
++lifetime, no new counter needed -- cumulative thresholds of
++`questsRequiredPerStep * step` work cleanly off a number that only ever
++increases) and the appropriate currency/cost from
++`HeroManager.nextTierUpStep`. The actual stat recompute preserves every
++point the player has spent exactly: computes INVESTED stats as the
++difference between the hero's real current stats and what
++`baselineStats` says the OLD tier level would auto-grant, bumps
++`tierUpLevel`, then re-adds that same invested difference on top of the
++NEW, higher baseline -- so tiering up immediately raises the free portion
++of every stat to match the new tier at the hero's CURRENT level (the
++actual ask -- "their stats go up to match the next tier," not just
++future growth), without double-counting or erasing anything the player
++chose to spend on. `grantXp`'s own per-level growth application was also
++switched to read the tier-adjusted growth rate, so a tiered-up hero keeps
++earning the boosted rate on every future level-up too, not just the
++one-time recompute.
++
++**Save compatibility.** New `Hero.tierUpLevel` field needs a real
++migration (unlike a top-level `GameState` field, `migrate()`'s own
++`{...base, ...save}` fallback doesn't reach inside array elements) --
++`SAVE_VERSION` 60 -> 61, migration 60 backfills `tierUpLevel: 0` onto
++every hero on an existing save, same "no prior data to backfill from, so
++start at the honest baseline" reasoning migration 18's own
++`equippedConsumables` backfill already used for a new per-hero field.
++
++**UI.** New `TierUpSection` inside `TrainingModal` (`TrainingPanel.tsx`)
++-- current effective tier, quest-count progress, cost, and a Tier Up
++button, or a plain "already at the highest tier" line once
++`HeroManager.nextTierUpStep` returns null. New `HeroTierUpModal.tsx` for
++the celebration itself -- a real blocking modal (not a small
++auto-dismissing corner popup like `AchievementPopup`), matching the
++direct request for "Milestone prompt, or like 'Adventurer Tiered Up!
++(up arrow)'." Mounted unconditionally in `App.tsx`, same
++"can only ever be triggered by a click already happening inside a panel,
++so the menu is already open" reasoning `HatchRevealModal`'s own comment
++already established -- no idle-view gating needed.
++
++**Verified:** Diffed every touched file against a fresh pull of `main`
++(through patch 0328) immediately before editing. Confirmed
++`tuning.json` still parses as valid JSON with all six new entries.
++Traced by hand: a fresh recruit (`tierUpLevel: 0`) gets `heroTierUpStat
++Multiplier(0)` = `{base: 1, growth: 1}` at every call site touched, so
++nothing about an untiered hero's stats, success-chance math, or
++respec behavior changes from before. Confirmed every other
++`HeroManager.baselineStats` call site in the files this session has
++access to (`HeroesPanel.tsx`, `engine.ts` elsewhere) was checked and
++none needed the new param. No Node/Vite toolchain in this environment to
++run `tsc`/`vite build` against -- this is the widest-reaching patch of
++the session (9 touched files plus 2 new ones), so a real
++`npx tsc --noEmit` and `vite build` pass before merging matters more
++here than on any earlier patch this session -- strongly recommended, not
++just noted in passing.
