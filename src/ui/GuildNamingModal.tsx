@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
-import type { BackgroundMoodId } from '../game/settings';
+import { backgroundSrc, BackgroundMoodId } from '../game/settings';
 
 /**
  * Blocking, non-dismissible prompt asking the player to name their guild.
@@ -14,10 +14,19 @@ import type { BackgroundMoodId } from '../game/settings';
  * QuestResultModal/OfflineReportModal, this isn't optional information, it's
  * a one-time setup step. App.tsx also holds the other modals back while this
  * is showing so nothing stacks behind it.
+ *
+ * Patch 0337, direct redesign request with a reference mockup attached:
+ * full-bleed background art behind the whole card (the Guild Hall tab's own
+ * under-construction scene, public/lore/panels/guildhall.jpg -- already
+ * exists in both Moody and Bright versions, which is what makes the Mood
+ * step's live preview below possible with zero new art), a real gold
+ * frame, and dark semi-opaque text plaques instead of a plain compact
+ * card. Replaces the old placeholder-sprite version entirely, not layered
+ * on top of it.
  */
 export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise<void> | void }) {
   const engine = useEngine();
-  const { update: updateSettings } = useSettings();
+  const { settings, update: updateSettings } = useSettings();
   const [draft, setDraft] = useState('');
   const unnamed = engine.state.guildName === '';
   const inputRef = useRef<HTMLInputElement>(null);
@@ -37,6 +46,16 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
   // since setGuildName is what flips `unnamed` false and closes this
   // modal entirely.
   const [step, setStep] = useState<'name' | 'vibe' | 'guide'>('name');
+  // Patch 0337, direct request: "clicking any of those will swap the
+  // background so you can see an example take place" + "clicking mood
+  // shouldnt auto next page, need to confirm." Seeded from the real
+  // current setting so Name/Guide already show whatever mood the
+  // player's device already prefers, then updated LIVE the instant a
+  // Mood option is clicked on the vibe step -- but only ever written
+  // back to the real setting (updateSettings) when Next is actually
+  // pressed, in confirmVibe below. Backing out via Back after previewing
+  // a mood without confirming leaves the real setting untouched.
+  const [previewMood, setPreviewMood] = useState<BackgroundMoodId>(settings.backgroundMood);
 
   // Forces full menu size before this modal has to render at all -- lives
   // here rather than in App.tsx specifically because this component
@@ -104,8 +123,11 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
     setStep('vibe');
   };
 
-  const confirmVibe = (mood: BackgroundMoodId) => {
-    updateSettings('backgroundMood', mood);
+  // Commits the previewed mood to the real setting, only now -- see
+  // previewMood's own comment above for why this is separate from
+  // picking it.
+  const confirmVibe = () => {
+    updateSettings('backgroundMood', previewMood);
     setStep('guide');
   };
 
@@ -120,142 +142,143 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
     engine.setGuildName(trimmed);
   };
 
+  const bgSrc = backgroundSrc('./lore/panels/guildhall.jpg', previewMood);
+
   return (
     <div className="overlay">
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        {/*
-          Placeholder for the guild's sprite/seal. A scroll-and-note-taker
-          character is planned here -- sized and positioned so dropping the
-          real art in later is a one-line swap, same fallback approach
-          HeroSprite already uses for missing character art. Nothing else
-          in this component needs to change when that lands.
-        */}
-        <div
-          className="guild-naming-sprite-placeholder"
-          style={{
-            width: 96, height: 96, margin: '0 auto 12px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '1px dashed var(--panel-3)', borderRadius: 4, fontSize: 40,
-          }}
-          aria-hidden="true"
-        >
-          📜
+      <div
+        className="guild-naming-card"
+        style={{ backgroundImage: `url(${bgSrc})` }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="guild-naming-content">
+          {step === 'name' ? (
+            <>
+              <div className="guild-naming-textbox guild-naming-textbox-title">
+                <h3 style={{ margin: 0 }}>What is your guild called?</h3>
+              </div>
+              <div className="guild-naming-textbox guild-naming-textbox-sub">
+                <p className="small muted" style={{ margin: 0 }}>You can rename it later from the Dashboard.</p>
+              </div>
+
+              <div className="guild-naming-textbox guild-naming-input-row">
+                <span className="tiny muted">Guild -</span>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={draft}
+                  placeholder="Ironclad"
+                  maxLength={24}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') confirmName(); }}
+                  style={{
+                    flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                    color: 'var(--parchment)', padding: '7px 8px',
+                  }}
+                />
+              </div>
+
+              <div className="row end" style={{ marginTop: 4 }}>
+                <button className="btn-primary" onClick={confirmName} disabled={!trimmed}>
+                  Next
+                </button>
+              </div>
+            </>
+          ) : step === 'vibe' ? (
+            <>
+              <div className="guild-naming-textbox guild-naming-textbox-title">
+                <h3 style={{ margin: 0 }}>What's your guild's vibe?</h3>
+              </div>
+              <div className="guild-naming-textbox guild-naming-textbox-sub">
+                <p className="small muted" style={{ margin: 0 }}>
+                  Sets the look of every hall and tab -- pick one to see it take effect right here.
+                  Changeable anytime later from Settings.
+                </p>
+              </div>
+
+              <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 4 }}>
+                <button
+                  className={`btn-primary guild-naming-mood-btn ${previewMood === 'dim' ? 'selected' : ''}`}
+                  onClick={() => setPreviewMood('dim')}
+                  title="Candlelit halls, torchlit chambers -- the classic look"
+                >
+                  🕯️<br />Moody
+                </button>
+                <button
+                  className={`btn-primary guild-naming-mood-btn ${previewMood === 'bright' ? 'selected' : ''}`}
+                  onClick={() => setPreviewMood('bright')}
+                  title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
+                >
+                  ☀️<br />Bright
+                </button>
+                {/* System (patch 0309) -- added here alongside Moody/Bright
+                 *  rather than left Settings-only, so a new guild can pick
+                 *  the "just do it automatically" option on day one instead
+                 *  of discovering it later. Previewed the same as the other
+                 *  two (resolveBackgroundMood picks Moody or Bright off the
+                 *  player's own clock, same helper backgroundSrc itself
+                 *  uses) rather than a special-cased third preview path. */}
+                <button
+                  className={`btn-primary guild-naming-mood-btn ${previewMood === 'system' ? 'selected' : ''}`}
+                  onClick={() => setPreviewMood('system')}
+                  title="Switches automatically -- bright by day, moody by night, off your own clock"
+                >
+                  🕐<br />System
+                </button>
+              </div>
+
+              <div className="row" style={{ justifyContent: 'space-between', marginTop: 4 }}>
+                <button className="btn-ghost tiny" onClick={() => setStep('name')}>
+                  ← Back
+                </button>
+                <button className="btn-primary" onClick={confirmVibe}>
+                  Next
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Guide-mode step (patch 0330). Deliberately plain yes/no
+               *  rather than a Segmented/THEMES-style picker -- this isn't a
+               *  cosmetic preference, it's "how much hand-holding do you
+               *  want," and framing it as two big buttons (matching
+               *  QuestResultModal's own outcome-choice weight) reads more
+               *  like a real decision than a settings row would. */}
+              <div className="guild-naming-textbox guild-naming-textbox-title">
+                <h3 style={{ margin: 0 }}>Do you need a guide to your guild?</h3>
+              </div>
+              <div className="guild-naming-textbox guild-naming-textbox-sub">
+                <p className="small muted" style={{ margin: 0 }}>
+                  A short walkthrough covers the basics on your first quest. You can turn it
+                  back on or off anytime from Settings.
+                </p>
+              </div>
+
+              <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 4 }}>
+                <button
+                  className="btn-primary guild-naming-mood-btn"
+                  onClick={() => confirmGuide(true)}
+                  title="Show a short walkthrough and helpful nudges as you play"
+                >
+                  🧭<br />Guide me
+                </button>
+                <button
+                  className="btn-primary guild-naming-mood-btn"
+                  onClick={() => confirmGuide(false)}
+                  title="Skip the walkthrough -- jump straight into a normal quest board"
+                >
+                  ⚔️<br />I've got this
+                </button>
+              </div>
+
+              <div className="row" style={{ justifyContent: 'flex-start', marginTop: 4 }}>
+                <button className="btn-ghost tiny" onClick={() => setStep('vibe')}>
+                  ← Back
+                </button>
+              </div>
+            </>
+          )}
         </div>
-
-        {step === 'name' ? (
-          <>
-            <h3 style={{ textAlign: 'center' }}>What is your guild called?</h3>
-            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
-              You can rename it later from the Dashboard.
-            </p>
-
-            <div className="row" style={{ gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
-              <span className="tiny muted">Guild -</span>
-              <input
-                ref={inputRef}
-                type="text"
-                value={draft}
-                placeholder="Ironclad"
-                maxLength={24}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') confirmName(); }}
-                style={{
-                  flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-                  color: 'var(--parchment)', padding: '7px 8px',
-                }}
-              />
-            </div>
-
-            <div className="row end" style={{ marginTop: 16 }}>
-              <button className="btn-primary" onClick={confirmName} disabled={!trimmed}>
-                Next
-              </button>
-            </div>
-          </>
-        ) : step === 'vibe' ? (
-          <>
-            <h3 style={{ textAlign: 'center' }}>What's your guild's vibe?</h3>
-            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
-              Sets the look of every hall and tab -- changeable anytime later from Settings.
-            </p>
-
-            <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
-              <button
-                className="btn-primary"
-                onClick={() => confirmVibe('dim')}
-                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
-                title="Candlelit halls, torchlit chambers -- the classic look"
-              >
-                🕯️<br />Moody
-              </button>
-              <button
-                className="btn-primary"
-                onClick={() => confirmVibe('bright')}
-                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
-                title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
-              >
-                ☀️<br />Bright
-              </button>
-              {/* System (patch 0309) -- added here alongside Moody/Bright
-               *  rather than left Settings-only, so a new guild can pick
-               *  the "just do it automatically" option on day one instead
-               *  of discovering it later. */}
-              <button
-                className="btn-primary"
-                onClick={() => confirmVibe('system')}
-                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
-                title="Switches automatically -- bright by day, moody by night, off your own clock"
-              >
-                🕐<br />System
-              </button>
-            </div>
-
-            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-              <button className="btn-ghost tiny" onClick={() => setStep('name')}>
-                ← Back
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Guide-mode step (patch 0330). Deliberately plain yes/no
-             *  rather than a Segmented/THEMES-style picker -- this isn't a
-             *  cosmetic preference, it's "how much hand-holding do you
-             *  want," and framing it as two big buttons (matching
-             *  QuestResultModal's own outcome-choice weight) reads more
-             *  like a real decision than a settings row would. */}
-            <h3 style={{ textAlign: 'center' }}>Do you need a guide to your guild?</h3>
-            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
-              A short walkthrough covers the basics on your first quest. You can turn it
-              back on or off anytime from Settings.
-            </p>
-
-            <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
-              <button
-                className="btn-primary"
-                onClick={() => confirmGuide(true)}
-                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
-                title="Show a short walkthrough and helpful nudges as you play"
-              >
-                🧭<br />Guide me
-              </button>
-              <button
-                className="btn-primary"
-                onClick={() => confirmGuide(false)}
-                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
-                title="Skip the walkthrough -- jump straight into a normal quest board"
-              >
-                ⚔️<br />I've got this
-              </button>
-            </div>
-
-            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-              <button className="btn-ghost tiny" onClick={() => setStep('vibe')}>
-                ← Back
-              </button>
-            </div>
-          </>
-        )}
       </div>
     </div>
   );

@@ -1,0 +1,932 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 8bab331..9b7e0d3 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -27699,3 +27699,127 @@ the original dark-navy coloring inverted/brightened at 10%, and an 8%
+ brass version applied to both the sidebar AND the titlebar for
+ comparison. Delivered as a file for direct visual review -- no source
+ changes made pending a pick.
++
++### Guild setup redesign, rune texture (for real this time), reduced-motion resolution (patch 0337)
++
++```discord-update
++Dev Update | Guild Setup Redesign
++- Guild setup now uses full guild-hall art behind the whole card, matching a provided design reference
++- Picking Moody/Bright/System now previews the change live on the background before you commit to it
++- All three setup steps (name, vibe, guide) share one fixed-size card now -- nothing jumps around between them anymore
++- Added the subtle rune texture to the nav sidebar and titlebar
++```
++
++**Shimmer bug (patch 0334/0336) -- resolved, was Reduce Motion.** Directly
++confirmed: "shimmer bug was reduced motion, its now working." No code
++change needed -- the diagnosis from last patch was correct.
++
++**Rune texture -- approved from last patch's mockup, "C (dark navy) but
++also on title bar."** New `public/textures/nav-runes.png`, cropped from
++the uploaded sheet, inverted/brightened so the strokes read as faint
++light marks against dark surfaces, with the ~10% opacity baked directly
++into the asset's own alpha channel rather than a CSS `opacity` (needed
++to apply the same image two different ways -- see below -- and wanted
++both to read identically regardless of technique).
++
++**A real bug caught and fixed before this ever shipped, not glossed
++over.** First implementation routed the image path through a CSS custom
++property (`--nav-rune-texture`) assigned inline in MenuWindow.tsx. That
++silently 404'd: a `url()` token stored in a custom property resolves
++relative to the STYLESHEET where `var()` is actually consumed (app.css's
++own built location, e.g. `/assets/app-[hash].css`), not relative to
++wherever the property's value was assigned -- a genuine CSS gotcha, easy
++to miss since DevTools' computed-style panel shows the custom property's
++raw unresolved text and looks completely fine at a glance. Caught by
++actually rendering the app in a headless browser (Playwright) rather
++than trusting the code -- a contrast-boosted screenshot of the sidebar
++showed nothing there at all, network inspection showed the browser
++requesting a path that didn't match the real build output, and computed-
++style inspection confirmed the mismatch precisely. Fixed by setting
++`backgroundImage` directly inline on the real DOM nodes instead (same
++proven path-resolution every other image in this app already relies on
++-- tab-scene backgrounds, hero-status icons), no CSS variable indirection
++at all. Re-verified after the fix with the same screenshot-and-inspect
++method, not just re-reading the code and assuming it was right this
++time -- both the titlebar and sidebar now show the texture correctly.
++
++Applied two different ways for a structural reason, not by choice: the
++titlebar uses a real overlay `<div>` (`.rune-texture-overlay`, absolutely
++positioned, `pointer-events: none`); `.tabs` uses a second background-
++image layer directly on the nav element instead, since `.tabs` scrolls
++(`overflow-y: auto`) and an `inset: 0` overlay there would size itself to
++the scrollable content rather than the visible box. Hit one more real
++bug while wiring the overlay: the existing `.titlebar > *` rule
++(repositions every titlebar child so it paints above the overlay via
++z-index) has equal CSS specificity to a same-named class rule and a
++later source position, which meant it silently won and collapsed the
++overlay's own `position: absolute` back to `relative` -- caught the same
++way, by actually rendering it and finding the overlay didn't show up.
++Fixed with a more specific selector (`.titlebar > .rune-texture-overlay`)
++rather than reordering rules, so it can't regress if something else gets
++added between them later.
++
++**GuildNamingModal, full redesign against a provided reference image.**
++The reference's background art turned out to already exist in the game
++-- Guild Hall's own under-construction scene
++(public/lore/panels/guildhall.jpg + its Bright counterpart) -- so this
++needed zero new art, just reusing what the Guild Hall tab already has.
++Replaced the old compact `.modal` + placeholder-sprite version entirely.
++
++- **"ensure all the cards are the same size across all three sections"**
++  -- new `.guild-naming-card`, a genuinely fixed frame (640px wide,
++  locked 3:2 aspect ratio matching guildhall.jpg's own native
++  1536x1024) rather than a max-width/aspect-ratio-only box that could
++  still grow or shrink with content. Every step (name/vibe/guide)
++  renders inside this exact same frame now -- confirmed via screenshot
++  comparison across all three, identical position and size in each.
++- **"clicking any of those will swap the background... support 2
++  backgrounds"** -- new `previewMood` state, seeded from the real
++  current setting, updated the instant a Moody/Bright/System button is
++  clicked. The card's own `background-image` reads off
++  `backgroundSrc('./lore/panels/guildhall.jpg', previewMood)`, the same
++  helper every tab-scene background already uses, so System correctly
++  resolves to whichever of the two real images matches the clock right
++  now. Confirmed live in a screenshot pair -- clicking Bright instantly
++  swapped the scene from the night version to the day version.
++- **"clicking mood shouldnt auto next page, need to confirm"** -- mood
++  buttons now only call `setPreviewMood(...)`, nothing else. A separate,
++  explicit Next button (matching the Name step's own pattern) calls the
++  new `confirmVibe()`, which is the only place `previewMood` actually
++  gets written back to the real `backgroundMood` setting -- backing out
++  via Back after previewing a mood without pressing Next leaves the real
++  setting untouched. Confirmed via screenshot: picking Bright kept the
++  modal on the vibe step exactly as expected, only advancing after Next
++  was clicked separately.
++- Text now sits in dark semi-opaque plaques (new `.guild-naming-textbox`)
++  over the art, matching the reference's own look, inside a 3px brass
++  frame around the whole card.
++
++**Button contrast, caught and fixed before this ever reached you, not
++left as a known issue.** The first working version's Next/Back buttons
++(plain `.btn-primary`/`.btn-ghost`, no special treatment) had only their
++own default drop shadow for separation from the art behind them --
++fine most of the time, but the guild-hall painting has warm lantern-lit
++patches that can land almost exactly on the brass button's own color and
++luminosity, at which point the button's edge nearly disappeared (caught
++directly in a screenshot, not assumed). Fixed with a solid dark ring
++(`box-shadow: 0 0 0 2px rgba(0,0,0,0.55), 0 4px 14px rgba(0,0,0,0.7)`)
++on every button in this modal, not just Next/Back -- near-black is
++unlikely to closely match either background painting's own palette the
++way brass-on-warm-wood already did, so this holds up regardless of which
++exact spot a button happens to sit over. Re-screenshotted with the
++button in its actual enabled state (the first check accidentally
++compared against a disabled, naturally-faded button) to confirm the fix
++really worked, not just that the code looked plausible.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
++Every visual claim in this entry -- the fixed card size across all three
++steps, the live mood preview actually swapping art, no auto-advance on a
++mood click, the rune texture actually rendering (not just "should
++render" per the CSS), and the button contrast fix -- was confirmed
++against real screenshots from a headless Chromium render of the actual
++built app, not inferred from reading the code. Two real bugs (the CSS
++custom-property url() resolution, and the `.titlebar > *` specificity
++collision) were caught this way that would not have been caught by
++typecheck/build alone -- both compiled and built clean while still being
++functionally broken.
+diff --git a/public/textures/nav-runes.png b/public/textures/nav-runes.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..4f3ee92d84a108e570fef7d1b816926b4cd5c3ea
+GIT binary patch
+literal 12659
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/styles/app.css b/src/styles/app.css
+index b245bfd..39f8db3 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1430,7 +1430,55 @@ button:focus-visible, [tabindex]:focus-visible {
+   padding: 8px 10px;
+   background: linear-gradient(var(--panel-2), var(--panel));
+   border-bottom: 1px solid var(--edge);
++  position: relative;
+ }
++/* Patch 0337, direct request -- a very subtle repeating rune texture
++   behind the titlebar and the nav sidebar (.tabs below), option "C" from
++   a set of mockups: the original dark-navy rune art, inverted/brightened
++   AND baked down to a low alpha directly in the asset itself
++   (public/textures/nav-runes.png) rather than via a CSS opacity -- this
++   same image gets applied two different ways below (a real overlay
++   element here, a plain layered background-image on .tabs, since .tabs
++   scrolls and an inset:0 overlay there would size itself to the
++   scrollable content instead of the visible box), and CSS `opacity`
++   would apply inconsistently between those two techniques. Baking the
++   alpha into the PNG once means both usages read identically regardless
++   of how each is layered.
++   `.rune-texture-overlay` carries no background-image of its own here --
++   MenuWindow.tsx sets that inline (backgroundImage: url(${...})) on the
++   actual DOM element, same proven path-resolution every other image in
++   this app already uses (tab-scene backgrounds, hero-status icons).
++   Confirmed the hard way: an EARLIER version of this rule read the image
++   path from a CSS custom property instead (--nav-rune-texture, assigned
++   inline). That silently 404'd -- a url() token's relative-path base is
++   resolved against the STYLESHEET where var() is actually consumed
++   (app.css's own built location, e.g. /assets/app-[hash].css), not
++   against wherever the custom property's value was assigned, even
++   though DevTools' computed-style panel shows the custom property's raw
++   text unresolved and looks fine at a glance. Direct inline
++   background-image on a real DOM node doesn't have this problem -- that
++   resolves against the document's own URL, exactly like every other
++   image in this app already relies on. pointer-events: none and a lower
++   z-index keep the titlebar's own overlay from ever intercepting
++   drag/clicks or sitting above real content. */
++/* Higher specificity than the generic `.titlebar > *` rule below on
++   purpose -- that rule needs to reposition every OTHER titlebar child to
++   `position: relative` (so it paints above this overlay via z-index),
++   but this overlay itself has to stay `position: absolute` to actually
++   cover the titlebar via `inset: 0`. Equal-specificity + later source
++   order would otherwise let `.titlebar > *` win and collapse this to a
++   relatively-positioned, content-sized, effectively invisible box --
++   caught by actually rendering this and finding the overlay never
++   showed up, not assumed safe. */
++.titlebar > .rune-texture-overlay {
++  position: absolute;
++  inset: 0;
++  background-size: 130px 130px;
++  background-repeat: repeat;
++  pointer-events: none;
++  z-index: 0;
++}
++.titlebar > * { position: relative; z-index: 1; }
+ 
+ .titlebar h1 {
+   font-family: var(--font-display);
+@@ -1553,6 +1601,29 @@ button:focus-visible, [tabindex]:focus-visible {
+   border-right: 1px solid var(--edge);
+   overflow-y: auto;
+ }
++/* Same rune texture as .titlebar above, layered as a second
++   background-image directly on .tabs rather than a ::before pseudo-
++   element -- .tabs scrolls (overflow-y: auto), and a ::before sized to
++   `inset: 0` would size itself to the scrollable content instead of
++   staying put as a backdrop. A background-image layer scrolls naturally
++   WITH the nav buttons instead, which reads as part of the wall rather
++   than fixed wallpaper glimpsed behind them -- the more natural of the
++   two for a short list that rarely actually scrolls anyway. */
++/* Same rune texture as .titlebar above, layered as a second
++   background-image directly on .tabs rather than a separate overlay
++   element -- .tabs scrolls (overflow-y: auto), and an inset:0 overlay
++   sized to it would size itself to the scrollable content instead of
++   staying put as a backdrop. A background-image layer scrolls naturally
++   WITH the nav buttons instead, which reads as part of the wall rather
++   than fixed wallpaper glimpsed behind them -- the more natural of the
++   two for a short list that rarely actually scrolls anyway. Path set
++   inline in MenuWindow.tsx (style.backgroundImage), not here -- see
++   .rune-texture-overlay's own comment for why a CSS custom property
++   holding a url() silently 404'd instead. */
++.tabs.has-rune-texture {
++  background-size: 130px 130px;
++  background-repeat: repeat;
++}
+ 
+ .tabs-group { display: flex; flex-direction: column; gap: 2px; }
+ .tabs-group:not(:first-child) { margin-top: 10px; }
+@@ -2243,6 +2314,94 @@ button:focus-visible, [tabindex]:focus-visible {
+   100% { transform: scale(0.92); opacity: 0; }
+ }
+ 
++/*
++ * Patch 0337, direct redesign request with a reference mockup attached.
++ * Full-bleed background art replaces the old compact .modal + placeholder
++ * sprite entirely -- a fixed size (not aspect-ratio-only, a real width
++ * AND height) is what actually satisfies the direct ask "ensure all the
++ * cards are the same size across all three sections": every step renders
++ * inside this exact same frame regardless of how much content it holds,
++ * so switching steps never resizes or jumps the card. 3:2 matches
++ * guildhall.jpg's own native 1536x1024 ratio exactly, so background-size:
++ * cover never has to crop unexpectedly on a very wide or very tall
++ * window -- it just scales.
++ */
++.guild-naming-card {
++  position: relative;
++  width: 640px;
++  max-width: 92vw;
++  aspect-ratio: 3 / 2;
++  max-height: 92vh;
++  border-radius: 10px;
++  border: 3px solid var(--brass);
++  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7), 0 0 0 4px color-mix(in srgb, var(--brass) 30%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.1);
++  background-size: cover;
++  background-position: center;
++  overflow: hidden;
++  animation: modal-pop-in 240ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
++}
++.guild-naming-content {
++  position: absolute;
++  inset: 0;
++  display: flex;
++  flex-direction: column;
++  justify-content: center;
++  align-items: stretch;
++  gap: 10px;
++  padding: 24px 32px;
++}
++/* The dark plaques behind each line of text/the input -- the reference
++   mockup's own "readable box floating over busy art" treatment, same
++   underlying idea .subtitle's own plaque uses elsewhere, just heavier
++   here since this sits over full painterly art, not a 25% flat tint. */
++.guild-naming-textbox {
++  background: rgba(15, 12, 10, 0.82);
++  border-radius: 8px;
++  padding: 10px 16px;
++  text-align: center;
++}
++.guild-naming-textbox-title h3 { color: var(--brass); text-shadow: none; }
++.guild-naming-input-row {
++  display: flex;
++  gap: 8px;
++  align-items: center;
++  text-align: left;
++}
++/* Direct report: Next/Back (plain .btn-primary/.btn-ghost, no
++   guild-naming-mood-btn class) had only their own default box-shadow for
++   separation from the art behind them -- fine most of the time, but this
++   card's background rotates between two full paintings (Moody/Bright)
++   with warm lantern-lit patches that can land almost exactly on the
++   brass button color/luminosity, at which point the button's own edge
++   nearly disappears. A solid dark ring (not just a soft drop shadow)
++   guarantees real contrast against ANY point in either background,
++   since near-black is unlikely to closely match either painting's own
++   palette the way brass-on-warm-wood already did. Applies to every
++   button in this modal, not just Next/Back -- Moody/Bright/System and
++   Guide me/I've got this sit on the exact same floating-over-art problem,
++   just less often caught by it in testing since they land on less
++   uniformly warm patches of the scene. */
++.guild-naming-content button {
++  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.7), var(--bevel);
++}
++.guild-naming-mood-btn {
++  flex: 1;
++  max-width: 150px;
++  padding: 14px 8px;
++  text-align: center;
++}
++/* Live-preview selection state (patch 0337) -- previewMood already
++   controls which background image is showing; this is just the matching
++   "you picked this one" highlight on the button itself, same brass-glow
++   language .tabs button[aria-current='true'] already uses for an active
++   nav tab. Layered alongside the dark contrast ring above (both are
++   box-shadow -- combined here into one declaration so the selected state
++   doesn't accidentally drop the ring). */
++.guild-naming-mood-btn.selected {
++  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.7), var(--bevel),
++    inset 0 0 0 2px var(--brass), 0 0 12px color-mix(in srgb, var(--brass) 50%, transparent);
++}
++
+ .collect-burst {
+   position: absolute;
+   left: 50%;
+diff --git a/src/ui/GuildNamingModal.tsx b/src/ui/GuildNamingModal.tsx
+index 58a4dd0..0e238b3 100644
+--- a/src/ui/GuildNamingModal.tsx
++++ b/src/ui/GuildNamingModal.tsx
+@@ -1,7 +1,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+-import type { BackgroundMoodId } from '../game/settings';
++import { backgroundSrc, BackgroundMoodId } from '../game/settings';
+ 
+ /**
+  * Blocking, non-dismissible prompt asking the player to name their guild.
+@@ -14,10 +14,19 @@ import type { BackgroundMoodId } from '../game/settings';
+  * QuestResultModal/OfflineReportModal, this isn't optional information, it's
+  * a one-time setup step. App.tsx also holds the other modals back while this
+  * is showing so nothing stacks behind it.
++ *
++ * Patch 0337, direct redesign request with a reference mockup attached:
++ * full-bleed background art behind the whole card (the Guild Hall tab's own
++ * under-construction scene, public/lore/panels/guildhall.jpg -- already
++ * exists in both Moody and Bright versions, which is what makes the Mood
++ * step's live preview below possible with zero new art), a real gold
++ * frame, and dark semi-opaque text plaques instead of a plain compact
++ * card. Replaces the old placeholder-sprite version entirely, not layered
++ * on top of it.
+  */
+ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise<void> | void }) {
+   const engine = useEngine();
+-  const { update: updateSettings } = useSettings();
++  const { settings, update: updateSettings } = useSettings();
+   const [draft, setDraft] = useState('');
+   const unnamed = engine.state.guildName === '';
+   const inputRef = useRef<HTMLInputElement>(null);
+@@ -37,6 +46,16 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+   // since setGuildName is what flips `unnamed` false and closes this
+   // modal entirely.
+   const [step, setStep] = useState<'name' | 'vibe' | 'guide'>('name');
++  // Patch 0337, direct request: "clicking any of those will swap the
++  // background so you can see an example take place" + "clicking mood
++  // shouldnt auto next page, need to confirm." Seeded from the real
++  // current setting so Name/Guide already show whatever mood the
++  // player's device already prefers, then updated LIVE the instant a
++  // Mood option is clicked on the vibe step -- but only ever written
++  // back to the real setting (updateSettings) when Next is actually
++  // pressed, in confirmVibe below. Backing out via Back after previewing
++  // a mood without confirming leaves the real setting untouched.
++  const [previewMood, setPreviewMood] = useState<BackgroundMoodId>(settings.backgroundMood);
+ 
+   // Forces full menu size before this modal has to render at all -- lives
+   // here rather than in App.tsx specifically because this component
+@@ -104,8 +123,11 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+     setStep('vibe');
+   };
+ 
+-  const confirmVibe = (mood: BackgroundMoodId) => {
+-    updateSettings('backgroundMood', mood);
++  // Commits the previewed mood to the real setting, only now -- see
++  // previewMood's own comment above for why this is separate from
++  // picking it.
++  const confirmVibe = () => {
++    updateSettings('backgroundMood', previewMood);
+     setStep('guide');
+   };
+ 
+@@ -120,142 +142,143 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+     engine.setGuildName(trimmed);
+   };
+ 
++  const bgSrc = backgroundSrc('./lore/panels/guildhall.jpg', previewMood);
++
+   return (
+     <div className="overlay">
+-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+-        {/*
+-          Placeholder for the guild's sprite/seal. A scroll-and-note-taker
+-          character is planned here -- sized and positioned so dropping the
+-          real art in later is a one-line swap, same fallback approach
+-          HeroSprite already uses for missing character art. Nothing else
+-          in this component needs to change when that lands.
+-        */}
+-        <div
+-          className="guild-naming-sprite-placeholder"
+-          style={{
+-            width: 96, height: 96, margin: '0 auto 12px',
+-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+-            border: '1px dashed var(--panel-3)', borderRadius: 4, fontSize: 40,
+-          }}
+-          aria-hidden="true"
+-        >
+-          📜
+-        </div>
++      <div
++        className="guild-naming-card"
++        style={{ backgroundImage: `url(${bgSrc})` }}
++        onClick={(e) => e.stopPropagation()}
++      >
++        <div className="guild-naming-content">
++          {step === 'name' ? (
++            <>
++              <div className="guild-naming-textbox guild-naming-textbox-title">
++                <h3 style={{ margin: 0 }}>What is your guild called?</h3>
++              </div>
++              <div className="guild-naming-textbox guild-naming-textbox-sub">
++                <p className="small muted" style={{ margin: 0 }}>You can rename it later from the Dashboard.</p>
++              </div>
+ 
+-        {step === 'name' ? (
+-          <>
+-            <h3 style={{ textAlign: 'center' }}>What is your guild called?</h3>
+-            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
+-              You can rename it later from the Dashboard.
+-            </p>
++              <div className="guild-naming-textbox guild-naming-input-row">
++                <span className="tiny muted">Guild -</span>
++                <input
++                  ref={inputRef}
++                  type="text"
++                  value={draft}
++                  placeholder="Ironclad"
++                  maxLength={24}
++                  onChange={(e) => setDraft(e.target.value)}
++                  onKeyDown={(e) => { if (e.key === 'Enter') confirmName(); }}
++                  style={{
++                    flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
++                    color: 'var(--parchment)', padding: '7px 8px',
++                  }}
++                />
++              </div>
+ 
+-            <div className="row" style={{ gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
+-              <span className="tiny muted">Guild -</span>
+-              <input
+-                ref={inputRef}
+-                type="text"
+-                value={draft}
+-                placeholder="Ironclad"
+-                maxLength={24}
+-                onChange={(e) => setDraft(e.target.value)}
+-                onKeyDown={(e) => { if (e.key === 'Enter') confirmName(); }}
+-                style={{
+-                  flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+-                  color: 'var(--parchment)', padding: '7px 8px',
+-                }}
+-              />
+-            </div>
++              <div className="row end" style={{ marginTop: 4 }}>
++                <button className="btn-primary" onClick={confirmName} disabled={!trimmed}>
++                  Next
++                </button>
++              </div>
++            </>
++          ) : step === 'vibe' ? (
++            <>
++              <div className="guild-naming-textbox guild-naming-textbox-title">
++                <h3 style={{ margin: 0 }}>What's your guild's vibe?</h3>
++              </div>
++              <div className="guild-naming-textbox guild-naming-textbox-sub">
++                <p className="small muted" style={{ margin: 0 }}>
++                  Sets the look of every hall and tab -- pick one to see it take effect right here.
++                  Changeable anytime later from Settings.
++                </p>
++              </div>
+ 
+-            <div className="row end" style={{ marginTop: 16 }}>
+-              <button className="btn-primary" onClick={confirmName} disabled={!trimmed}>
+-                Next
+-              </button>
+-            </div>
+-          </>
+-        ) : step === 'vibe' ? (
+-          <>
+-            <h3 style={{ textAlign: 'center' }}>What's your guild's vibe?</h3>
+-            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
+-              Sets the look of every hall and tab -- changeable anytime later from Settings.
+-            </p>
++              <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 4 }}>
++                <button
++                  className={`btn-primary guild-naming-mood-btn ${previewMood === 'dim' ? 'selected' : ''}`}
++                  onClick={() => setPreviewMood('dim')}
++                  title="Candlelit halls, torchlit chambers -- the classic look"
++                >
++                  🕯️<br />Moody
++                </button>
++                <button
++                  className={`btn-primary guild-naming-mood-btn ${previewMood === 'bright' ? 'selected' : ''}`}
++                  onClick={() => setPreviewMood('bright')}
++                  title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
++                >
++                  ☀️<br />Bright
++                </button>
++                {/* System (patch 0309) -- added here alongside Moody/Bright
++                 *  rather than left Settings-only, so a new guild can pick
++                 *  the "just do it automatically" option on day one instead
++                 *  of discovering it later. Previewed the same as the other
++                 *  two (resolveBackgroundMood picks Moody or Bright off the
++                 *  player's own clock, same helper backgroundSrc itself
++                 *  uses) rather than a special-cased third preview path. */}
++                <button
++                  className={`btn-primary guild-naming-mood-btn ${previewMood === 'system' ? 'selected' : ''}`}
++                  onClick={() => setPreviewMood('system')}
++                  title="Switches automatically -- bright by day, moody by night, off your own clock"
++                >
++                  🕐<br />System
++                </button>
++              </div>
+ 
+-            <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
+-              <button
+-                className="btn-primary"
+-                onClick={() => confirmVibe('dim')}
+-                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
+-                title="Candlelit halls, torchlit chambers -- the classic look"
+-              >
+-                🕯️<br />Moody
+-              </button>
+-              <button
+-                className="btn-primary"
+-                onClick={() => confirmVibe('bright')}
+-                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
+-                title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
+-              >
+-                ☀️<br />Bright
+-              </button>
+-              {/* System (patch 0309) -- added here alongside Moody/Bright
+-               *  rather than left Settings-only, so a new guild can pick
+-               *  the "just do it automatically" option on day one instead
+-               *  of discovering it later. */}
+-              <button
+-                className="btn-primary"
+-                onClick={() => confirmVibe('system')}
+-                style={{ flex: 1, maxWidth: 130, padding: '14px 8px', textAlign: 'center' }}
+-                title="Switches automatically -- bright by day, moody by night, off your own clock"
+-              >
+-                🕐<br />System
+-              </button>
+-            </div>
++              <div className="row" style={{ justifyContent: 'space-between', marginTop: 4 }}>
++                <button className="btn-ghost tiny" onClick={() => setStep('name')}>
++                  ← Back
++                </button>
++                <button className="btn-primary" onClick={confirmVibe}>
++                  Next
++                </button>
++              </div>
++            </>
++          ) : (
++            <>
++              {/* Guide-mode step (patch 0330). Deliberately plain yes/no
++               *  rather than a Segmented/THEMES-style picker -- this isn't a
++               *  cosmetic preference, it's "how much hand-holding do you
++               *  want," and framing it as two big buttons (matching
++               *  QuestResultModal's own outcome-choice weight) reads more
++               *  like a real decision than a settings row would. */}
++              <div className="guild-naming-textbox guild-naming-textbox-title">
++                <h3 style={{ margin: 0 }}>Do you need a guide to your guild?</h3>
++              </div>
++              <div className="guild-naming-textbox guild-naming-textbox-sub">
++                <p className="small muted" style={{ margin: 0 }}>
++                  A short walkthrough covers the basics on your first quest. You can turn it
++                  back on or off anytime from Settings.
++                </p>
++              </div>
+ 
+-            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+-              <button className="btn-ghost tiny" onClick={() => setStep('name')}>
+-                ← Back
+-              </button>
+-            </div>
+-          </>
+-        ) : (
+-          <>
+-            {/* Guide-mode step (patch 0330). Deliberately plain yes/no
+-             *  rather than a Segmented/THEMES-style picker -- this isn't a
+-             *  cosmetic preference, it's "how much hand-holding do you
+-             *  want," and framing it as two big buttons (matching
+-             *  QuestResultModal's own outcome-choice weight) reads more
+-             *  like a real decision than a settings row would. */}
+-            <h3 style={{ textAlign: 'center' }}>Do you need a guide to your guild?</h3>
+-            <p className="small muted" style={{ marginTop: 0, textAlign: 'center' }}>
+-              A short walkthrough covers the basics on your first quest. You can turn it
+-              back on or off anytime from Settings.
+-            </p>
++              <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 4 }}>
++                <button
++                  className="btn-primary guild-naming-mood-btn"
++                  onClick={() => confirmGuide(true)}
++                  title="Show a short walkthrough and helpful nudges as you play"
++                >
++                  🧭<br />Guide me
++                </button>
++                <button
++                  className="btn-primary guild-naming-mood-btn"
++                  onClick={() => confirmGuide(false)}
++                  title="Skip the walkthrough -- jump straight into a normal quest board"
++                >
++                  ⚔️<br />I've got this
++                </button>
++              </div>
+ 
+-            <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
+-              <button
+-                className="btn-primary"
+-                onClick={() => confirmGuide(true)}
+-                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
+-                title="Show a short walkthrough and helpful nudges as you play"
+-              >
+-                🧭<br />Guide me
+-              </button>
+-              <button
+-                className="btn-primary"
+-                onClick={() => confirmGuide(false)}
+-                style={{ flex: 1, maxWidth: 160, padding: '14px 8px', textAlign: 'center' }}
+-                title="Skip the walkthrough -- jump straight into a normal quest board"
+-              >
+-                ⚔️<br />I've got this
+-              </button>
+-            </div>
+-
+-            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+-              <button className="btn-ghost tiny" onClick={() => setStep('vibe')}>
+-                ← Back
+-              </button>
+-            </div>
+-          </>
+-        )}
++              <div className="row" style={{ justifyContent: 'flex-start', marginTop: 4 }}>
++                <button className="btn-ghost tiny" onClick={() => setStep('vibe')}>
++                  ← Back
++                </button>
++              </div>
++            </>
++          )}
++        </div>
+       </div>
+     </div>
+   );
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index e3d6bf7..ffca356 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -437,6 +437,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+         )}
+       </div>
+       <header className="titlebar" style={{ position: 'relative' }}>
++        <div className="rune-texture-overlay" style={{ backgroundImage: 'url(./textures/nav-runes.png)' }} aria-hidden="true" />
+         <h1>{engine.state.guildName || 'Guildbound'}</h1>
+         <div className="resources">
+           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+@@ -554,7 +555,11 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+       </header>
+ 
+       <div className="menu-body" style={{ position: 'relative' }}>
+-        <nav className="tabs" aria-label="Guild sections">
++        <nav
++          className="tabs has-rune-texture"
++          aria-label="Guild sections"
++          style={{ backgroundImage: 'url(./textures/nav-runes.png)' }}
++        >
+           {TAB_GROUPS.map((group, gi) => (
+             <div key={group.label ?? `pinned-${gi}`} className="tabs-group">
+               {group.label && <div className="tabs-group-label">{group.label}</div>}

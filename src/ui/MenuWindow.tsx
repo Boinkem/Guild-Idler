@@ -437,6 +437,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         )}
       </div>
       <header className="titlebar" style={{ position: 'relative' }}>
+        <div className="rune-texture-overlay" style={{ backgroundImage: 'url(./textures/nav-runes.png)' }} aria-hidden="true" />
         <h1>{engine.state.guildName || 'Guildbound'}</h1>
         <div className="resources">
           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
@@ -554,7 +555,11 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
       </header>
 
       <div className="menu-body" style={{ position: 'relative' }}>
-        <nav className="tabs" aria-label="Guild sections">
+        <nav
+          className="tabs has-rune-texture"
+          aria-label="Guild sections"
+          style={{ backgroundImage: 'url(./textures/nav-runes.png)' }}
+        >
           {TAB_GROUPS.map((group, gi) => (
             <div key={group.label ?? `pinned-${gi}`} className="tabs-group">
               {group.label && <div className="tabs-group-label">{group.label}</div>}

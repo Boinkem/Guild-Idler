@@ -27699,3 +27699,127 @@ the original dark-navy coloring inverted/brightened at 10%, and an 8%
 brass version applied to both the sidebar AND the titlebar for
 comparison. Delivered as a file for direct visual review -- no source
 changes made pending a pick.
+
+### Guild setup redesign, rune texture (for real this time), reduced-motion resolution (patch 0337)
+
+```discord-update
+Dev Update | Guild Setup Redesign
+- Guild setup now uses full guild-hall art behind the whole card, matching a provided design reference
+- Picking Moody/Bright/System now previews the change live on the background before you commit to it
+- All three setup steps (name, vibe, guide) share one fixed-size card now -- nothing jumps around between them anymore
+- Added the subtle rune texture to the nav sidebar and titlebar
+```
+
+**Shimmer bug (patch 0334/0336) -- resolved, was Reduce Motion.** Directly
+confirmed: "shimmer bug was reduced motion, its now working." No code
+change needed -- the diagnosis from last patch was correct.
+
+**Rune texture -- approved from last patch's mockup, "C (dark navy) but
+also on title bar."** New `public/textures/nav-runes.png`, cropped from
+the uploaded sheet, inverted/brightened so the strokes read as faint
+light marks against dark surfaces, with the ~10% opacity baked directly
+into the asset's own alpha channel rather than a CSS `opacity` (needed
+to apply the same image two different ways -- see below -- and wanted
+both to read identically regardless of technique).
+
+**A real bug caught and fixed before this ever shipped, not glossed
+over.** First implementation routed the image path through a CSS custom
+property (`--nav-rune-texture`) assigned inline in MenuWindow.tsx. That
+silently 404'd: a `url()` token stored in a custom property resolves
+relative to the STYLESHEET where `var()` is actually consumed (app.css's
+own built location, e.g. `/assets/app-[hash].css`), not relative to
+wherever the property's value was assigned -- a genuine CSS gotcha, easy
+to miss since DevTools' computed-style panel shows the custom property's
+raw unresolved text and looks completely fine at a glance. Caught by
+actually rendering the app in a headless browser (Playwright) rather
+than trusting the code -- a contrast-boosted screenshot of the sidebar
+showed nothing there at all, network inspection showed the browser
+requesting a path that didn't match the real build output, and computed-
+style inspection confirmed the mismatch precisely. Fixed by setting
+`backgroundImage` directly inline on the real DOM nodes instead (same
+proven path-resolution every other image in this app already relies on
+-- tab-scene backgrounds, hero-status icons), no CSS variable indirection
+at all. Re-verified after the fix with the same screenshot-and-inspect
+method, not just re-reading the code and assuming it was right this
+time -- both the titlebar and sidebar now show the texture correctly.
+
+Applied two different ways for a structural reason, not by choice: the
+titlebar uses a real overlay `<div>` (`.rune-texture-overlay`, absolutely
+positioned, `pointer-events: none`); `.tabs` uses a second background-
+image layer directly on the nav element instead, since `.tabs` scrolls
+(`overflow-y: auto`) and an `inset: 0` overlay there would size itself to
+the scrollable content rather than the visible box. Hit one more real
+bug while wiring the overlay: the existing `.titlebar > *` rule
+(repositions every titlebar child so it paints above the overlay via
+z-index) has equal CSS specificity to a same-named class rule and a
+later source position, which meant it silently won and collapsed the
+overlay's own `position: absolute` back to `relative` -- caught the same
+way, by actually rendering it and finding the overlay didn't show up.
+Fixed with a more specific selector (`.titlebar > .rune-texture-overlay`)
+rather than reordering rules, so it can't regress if something else gets
+added between them later.
+
+**GuildNamingModal, full redesign against a provided reference image.**
+The reference's background art turned out to already exist in the game
+-- Guild Hall's own under-construction scene
+(public/lore/panels/guildhall.jpg + its Bright counterpart) -- so this
+needed zero new art, just reusing what the Guild Hall tab already has.
+Replaced the old compact `.modal` + placeholder-sprite version entirely.
+
+- **"ensure all the cards are the same size across all three sections"**
+  -- new `.guild-naming-card`, a genuinely fixed frame (640px wide,
+  locked 3:2 aspect ratio matching guildhall.jpg's own native
+  1536x1024) rather than a max-width/aspect-ratio-only box that could
+  still grow or shrink with content. Every step (name/vibe/guide)
+  renders inside this exact same frame now -- confirmed via screenshot
+  comparison across all three, identical position and size in each.
+- **"clicking any of those will swap the background... support 2
+  backgrounds"** -- new `previewMood` state, seeded from the real
+  current setting, updated the instant a Moody/Bright/System button is
+  clicked. The card's own `background-image` reads off
+  `backgroundSrc('./lore/panels/guildhall.jpg', previewMood)`, the same
+  helper every tab-scene background already uses, so System correctly
+  resolves to whichever of the two real images matches the clock right
+  now. Confirmed live in a screenshot pair -- clicking Bright instantly
+  swapped the scene from the night version to the day version.
+- **"clicking mood shouldnt auto next page, need to confirm"** -- mood
+  buttons now only call `setPreviewMood(...)`, nothing else. A separate,
+  explicit Next button (matching the Name step's own pattern) calls the
+  new `confirmVibe()`, which is the only place `previewMood` actually
+  gets written back to the real `backgroundMood` setting -- backing out
+  via Back after previewing a mood without pressing Next leaves the real
+  setting untouched. Confirmed via screenshot: picking Bright kept the
+  modal on the vibe step exactly as expected, only advancing after Next
+  was clicked separately.
+- Text now sits in dark semi-opaque plaques (new `.guild-naming-textbox`)
+  over the art, matching the reference's own look, inside a 3px brass
+  frame around the whole card.
+
+**Button contrast, caught and fixed before this ever reached you, not
+left as a known issue.** The first working version's Next/Back buttons
+(plain `.btn-primary`/`.btn-ghost`, no special treatment) had only their
+own default drop shadow for separation from the art behind them --
+fine most of the time, but the guild-hall painting has warm lantern-lit
+patches that can land almost exactly on the brass button's own color and
+luminosity, at which point the button's edge nearly disappeared (caught
+directly in a screenshot, not assumed). Fixed with a solid dark ring
+(`box-shadow: 0 0 0 2px rgba(0,0,0,0.55), 0 4px 14px rgba(0,0,0,0.7)`)
+on every button in this modal, not just Next/Back -- near-black is
+unlikely to closely match either background painting's own palette the
+way brass-on-warm-wood already did, so this holds up regardless of which
+exact spot a button happens to sit over. Re-screenshotted with the
+button in its actual enabled state (the first check accidentally
+compared against a disabled, naturally-faded button) to confirm the fix
+really worked, not just that the code looked plausible.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+Every visual claim in this entry -- the fixed card size across all three
+steps, the live mood preview actually swapping art, no auto-advance on a
+mood click, the rune texture actually rendering (not just "should
+render" per the CSS), and the button contrast fix -- was confirmed
+against real screenshots from a headless Chromium render of the actual
+built app, not inferred from reading the code. Two real bugs (the CSS
+custom-property url() resolution, and the `.titlebar > *` specificity
+collision) were caught this way that would not have been caught by
+typecheck/build alone -- both compiled and built clean while still being
+functionally broken.

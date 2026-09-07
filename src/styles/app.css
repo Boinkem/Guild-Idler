@@ -1430,7 +1430,55 @@ button:focus-visible, [tabindex]:focus-visible {
   padding: 8px 10px;
   background: linear-gradient(var(--panel-2), var(--panel));
   border-bottom: 1px solid var(--edge);
+  position: relative;
 }
+/* Patch 0337, direct request -- a very subtle repeating rune texture
+   behind the titlebar and the nav sidebar (.tabs below), option "C" from
+   a set of mockups: the original dark-navy rune art, inverted/brightened
+   AND baked down to a low alpha directly in the asset itself
+   (public/textures/nav-runes.png) rather than via a CSS opacity -- this
+   same image gets applied two different ways below (a real overlay
+   element here, a plain layered background-image on .tabs, since .tabs
+   scrolls and an inset:0 overlay there would size itself to the
+   scrollable content instead of the visible box), and CSS `opacity`
+   would apply inconsistently between those two techniques. Baking the
+   alpha into the PNG once means both usages read identically regardless
+   of how each is layered.
+   `.rune-texture-overlay` carries no background-image of its own here --
+   MenuWindow.tsx sets that inline (backgroundImage: url(${...})) on the
+   actual DOM element, same proven path-resolution every other image in
+   this app already uses (tab-scene backgrounds, hero-status icons).
+   Confirmed the hard way: an EARLIER version of this rule read the image
+   path from a CSS custom property instead (--nav-rune-texture, assigned
+   inline). That silently 404'd -- a url() token's relative-path base is
+   resolved against the STYLESHEET where var() is actually consumed
+   (app.css's own built location, e.g. /assets/app-[hash].css), not
+   against wherever the custom property's value was assigned, even
+   though DevTools' computed-style panel shows the custom property's raw
+   text unresolved and looks fine at a glance. Direct inline
+   background-image on a real DOM node doesn't have this problem -- that
+   resolves against the document's own URL, exactly like every other
+   image in this app already relies on. pointer-events: none and a lower
+   z-index keep the titlebar's own overlay from ever intercepting
+   drag/clicks or sitting above real content. */
+/* Higher specificity than the generic `.titlebar > *` rule below on
+   purpose -- that rule needs to reposition every OTHER titlebar child to
+   `position: relative` (so it paints above this overlay via z-index),
+   but this overlay itself has to stay `position: absolute` to actually
+   cover the titlebar via `inset: 0`. Equal-specificity + later source
+   order would otherwise let `.titlebar > *` win and collapse this to a
+   relatively-positioned, content-sized, effectively invisible box --
+   caught by actually rendering this and finding the overlay never
+   showed up, not assumed safe. */
+.titlebar > .rune-texture-overlay {
+  position: absolute;
+  inset: 0;
+  background-size: 130px 130px;
+  background-repeat: repeat;
+  pointer-events: none;
+  z-index: 0;
+}
+.titlebar > * { position: relative; z-index: 1; }
 
 .titlebar h1 {
   font-family: var(--font-display);
@@ -1552,6 +1600,29 @@ button:focus-visible, [tabindex]:focus-visible {
   background: var(--panel);
   border-right: 1px solid var(--edge);
   overflow-y: auto;
+}
+/* Same rune texture as .titlebar above, layered as a second
+   background-image directly on .tabs rather than a ::before pseudo-
+   element -- .tabs scrolls (overflow-y: auto), and a ::before sized to
+   `inset: 0` would size itself to the scrollable content instead of
+   staying put as a backdrop. A background-image layer scrolls naturally
+   WITH the nav buttons instead, which reads as part of the wall rather
+   than fixed wallpaper glimpsed behind them -- the more natural of the
+   two for a short list that rarely actually scrolls anyway. */
+/* Same rune texture as .titlebar above, layered as a second
+   background-image directly on .tabs rather than a separate overlay
+   element -- .tabs scrolls (overflow-y: auto), and an inset:0 overlay
+   sized to it would size itself to the scrollable content instead of
+   staying put as a backdrop. A background-image layer scrolls naturally
+   WITH the nav buttons instead, which reads as part of the wall rather
+   than fixed wallpaper glimpsed behind them -- the more natural of the
+   two for a short list that rarely actually scrolls anyway. Path set
+   inline in MenuWindow.tsx (style.backgroundImage), not here -- see
+   .rune-texture-overlay's own comment for why a CSS custom property
+   holding a url() silently 404'd instead. */
+.tabs.has-rune-texture {
+  background-size: 130px 130px;
+  background-repeat: repeat;
 }
 
 .tabs-group { display: flex; flex-direction: column; gap: 2px; }
@@ -2241,6 +2312,94 @@ button:focus-visible, [tabindex]:focus-visible {
 @keyframes modal-pop-out {
   0% { transform: scale(1); opacity: 1; }
   100% { transform: scale(0.92); opacity: 0; }
+}
+
+/*
+ * Patch 0337, direct redesign request with a reference mockup attached.
+ * Full-bleed background art replaces the old compact .modal + placeholder
+ * sprite entirely -- a fixed size (not aspect-ratio-only, a real width
+ * AND height) is what actually satisfies the direct ask "ensure all the
+ * cards are the same size across all three sections": every step renders
+ * inside this exact same frame regardless of how much content it holds,
+ * so switching steps never resizes or jumps the card. 3:2 matches
+ * guildhall.jpg's own native 1536x1024 ratio exactly, so background-size:
+ * cover never has to crop unexpectedly on a very wide or very tall
+ * window -- it just scales.
+ */
+.guild-naming-card {
+  position: relative;
+  width: 640px;
+  max-width: 92vw;
+  aspect-ratio: 3 / 2;
+  max-height: 92vh;
+  border-radius: 10px;
+  border: 3px solid var(--brass);
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7), 0 0 0 4px color-mix(in srgb, var(--brass) 30%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  animation: modal-pop-in 240ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.guild-naming-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 10px;
+  padding: 24px 32px;
+}
+/* The dark plaques behind each line of text/the input -- the reference
+   mockup's own "readable box floating over busy art" treatment, same
+   underlying idea .subtitle's own plaque uses elsewhere, just heavier
+   here since this sits over full painterly art, not a 25% flat tint. */
+.guild-naming-textbox {
+  background: rgba(15, 12, 10, 0.82);
+  border-radius: 8px;
+  padding: 10px 16px;
+  text-align: center;
+}
+.guild-naming-textbox-title h3 { color: var(--brass); text-shadow: none; }
+.guild-naming-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+}
+/* Direct report: Next/Back (plain .btn-primary/.btn-ghost, no
+   guild-naming-mood-btn class) had only their own default box-shadow for
+   separation from the art behind them -- fine most of the time, but this
+   card's background rotates between two full paintings (Moody/Bright)
+   with warm lantern-lit patches that can land almost exactly on the
+   brass button color/luminosity, at which point the button's own edge
+   nearly disappears. A solid dark ring (not just a soft drop shadow)
+   guarantees real contrast against ANY point in either background,
+   since near-black is unlikely to closely match either painting's own
+   palette the way brass-on-warm-wood already did. Applies to every
+   button in this modal, not just Next/Back -- Moody/Bright/System and
+   Guide me/I've got this sit on the exact same floating-over-art problem,
+   just less often caught by it in testing since they land on less
+   uniformly warm patches of the scene. */
+.guild-naming-content button {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.7), var(--bevel);
+}
+.guild-naming-mood-btn {
+  flex: 1;
+  max-width: 150px;
+  padding: 14px 8px;
+  text-align: center;
+}
+/* Live-preview selection state (patch 0337) -- previewMood already
+   controls which background image is showing; this is just the matching
+   "you picked this one" highlight on the button itself, same brass-glow
+   language .tabs button[aria-current='true'] already uses for an active
+   nav tab. Layered alongside the dark contrast ring above (both are
+   box-shadow -- combined here into one declaration so the selected state
+   doesn't accidentally drop the ring). */
+.guild-naming-mood-btn.selected {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.7), var(--bevel),
+    inset 0 0 0 2px var(--brass), 0 0 12px color-mix(in srgb, var(--brass) 50%, transparent);
 }
 
 .collect-burst {
