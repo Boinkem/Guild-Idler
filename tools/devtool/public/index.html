@@ -3,14 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <title>Guildbound — Dev Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>Guildbound <span>Dev Tool</span></h1>
+  <!-- Sidebar shell. The three ids app.js talks to (#tabs, #subtabs, #status)
+       are unchanged and in the same document -- only their container moved,
+       so every existing render/wire path still resolves. #subtabs is relocated
+       into #tabs by selectGroup so a group's content types nest under it. -->
+  <aside class="sidebar">
+    <header class="topbar">
+      <h1>Guildbound <span>Dev Tool</span></h1>
+    </header>
     <nav id="tabs"></nav>
     <div class="topbar-status" id="status"></div>
-  </header>
+  </aside>
   <nav id="subtabs"></nav>
   <main id="app"></main>
   <script src="app.js"></script>

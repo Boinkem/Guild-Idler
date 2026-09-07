@@ -65,7 +65,13 @@ function setStatus(text, kind) {
  *  row can wrap to a second line on a narrow window, changing the
  *  topbar's height. */
 function syncSubtabsOffset() {
-  subtabsEl.style.top = document.querySelector('.topbar').offsetHeight + 'px';
+  // Sidebar shell: the sub-tab strip is nested inside #tabs (see selectGroup)
+  // rather than pinned under a floating topbar, so there is no offset to sync.
+  // Kept, not deleted -- still called from init and selectGroup, and still
+  // does the right thing if the strip is ever made sticky again.
+  const topbar = document.querySelector('.topbar');
+  if (!topbar || getComputedStyle(subtabsEl).position !== 'sticky') return;
+  subtabsEl.style.top = topbar.offsetHeight + 'px';
 }
 window.addEventListener('resize', syncSubtabsOffset);
 
@@ -83,20 +89,23 @@ async function init() {
   tabsEl.innerHTML = '';
 
   const patchBtn = document.createElement('button');
-  patchBtn.textContent = 'Patches';
+  patchBtn.innerHTML = '<i class="ph ph-stack"></i><span>Patches</span>';
   patchBtn.dataset.group = '__patches__';
   patchBtn.onclick = () => selectPatchesTab();
   tabsEl.appendChild(patchBtn);
 
   const sandboxBtn = document.createElement('button');
-  sandboxBtn.textContent = 'Sandbox';
+  sandboxBtn.innerHTML = '<i class="ph ph-flask"></i><span>Sandbox</span>';
   sandboxBtn.dataset.group = '__sandbox__';
   sandboxBtn.onclick = () => selectSandboxTab();
   tabsEl.appendChild(sandboxBtn);
 
   groupOrder.forEach((group) => {
     const btn = document.createElement('button');
-    btn.textContent = group;
+    // Caret + label: the caret marks that this group opens a nested strip of
+    // content types (rendered into #subtabs by selectGroup).
+    btn.innerHTML = '<i class="ph ph-caret-right"></i><span>' + escapeHtml(group) + '</span>';
+    btn.classList.add('group-btn');
     btn.dataset.group = group;
     btn.onclick = () => selectGroup(group);
     tabsEl.appendChild(btn);
@@ -132,6 +141,11 @@ function selectGroup(group) {
     btn.onclick = () => selectTab(kind);
     subtabsEl.appendChild(btn);
   });
+  // Move the strip under the active group's own button so the two nav levels
+  // read as one tree instead of two competing rows. #subtabs never changes
+  // identity, so nothing else in this file has to know it moved.
+  const activeBtn = [...tabsEl.children].find((b) => b.dataset && b.dataset.group === group);
+  if (activeBtn) activeBtn.insertAdjacentElement('afterend', subtabsEl);
   syncSubtabsOffset();
 
   const target = state.lastSubTab[group] && kinds.includes(state.lastSubTab[group])
@@ -2372,6 +2386,13 @@ const patchState = {
   files: [], gitStatus: null, selected: null, checked: false, applied: false,
   discordConfigured: false, discordPreview: '', discordDraft: '',
   steam: { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'beta' },
+  // Patches tab now splits into two panes (patch 0331 redesign) -- Patch
+  // flow (steps 1-5) and Build & Ship (steps 6-11), toggled by the two
+  // nav buttons rendered in renderPatches. false = Patch flow shown,
+  // matching a fresh tab-open landing on step 1 first. Declared here
+  // explicitly rather than left implicit-undefined so a future reader
+  // doesn't have to trace renderPatches to find its default.
+  shipView: false,
 };
 
 /* -------------------------------- sandbox --------------------------------- */
@@ -2500,6 +2521,12 @@ function renderPatches() {
            <pre style="margin-top:4px;">${escapeHtml(gs?.statusText || '')}</pre>`}
     </div>
 
+    <div class="patch-nav">
+      <button id="patchFlowNavBtn" class="${patchState.shipView ? '' : 'active'}"><i class="ph ph-git-diff"></i>Patch flow<span class="patch-nav-sub">steps 1-5</span></button>
+      <button id="shipFlowNavBtn" class="${patchState.shipView ? 'active' : ''}"><i class="ph ph-package"></i>Build &amp; Ship<span class="patch-nav-sub">steps 6-11</span></button>
+    </div>
+
+    <div id="patchFlow" ${patchState.shipView ? 'hidden' : ''}>
     <div class="section-heading" style="margin-top:18px;">1. Select a patch</div>
     ${patchState.files.length === 0
       ? '<p class="tiny muted">No .patch files found in the project root or a patches/ folder. Drop one in and hit Refresh.</p>'
@@ -2547,7 +2574,10 @@ function renderPatches() {
     <button id="pushBtn">Push</button>
     <div id="pushResult"></div>
 
-    <div class="section-heading">6. Build</div>
+    </div>
+
+    <div id="shipFlow" ${patchState.shipView ? '' : 'hidden'}>
+    <div class="section-heading" style="margin-top:18px;">6. Build</div>
     <p class="tiny muted">Runs <code>npm run build</code> to confirm nothing is broken. Can take a minute.</p>
     <button id="buildBtn">Run build</button>
     <div id="buildResult"></div>
@@ -2667,7 +2697,20 @@ function renderPatches() {
     </div>
     <p id="discordContinuity" class="tiny muted" style="margin: 4px 0 0;"></p>
     <div id="discordResult"></div>
+    </div>
   `;
+
+  // Both panes stay mounted -- this only flips which is visible, so every
+  // handler wired further down still finds its element either way.
+  const setPatchPane = (ship) => {
+    patchState.shipView = ship;
+    document.getElementById('patchFlow').hidden = ship;
+    document.getElementById('shipFlow').hidden = !ship;
+    document.getElementById('patchFlowNavBtn').classList.toggle('active', !ship);
+    document.getElementById('shipFlowNavBtn').classList.toggle('active', ship);
+  };
+  document.getElementById('patchFlowNavBtn').onclick = () => setPatchPane(false);
+  document.getElementById('shipFlowNavBtn').onclick = () => setPatchPane(true);
 
   document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
 

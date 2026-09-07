@@ -27058,3 +27058,80 @@ generalizing it to arbitrary in-panel/in-modal elements is a real
 follow-up patch of its own, not a small addition on top of this one. The
 inline `.quest-tutorial-callout` above covers the same "explain before
 you click" ask without it for now.
+
+### DevTool frontend redesign: sidebar shell + Patch/Ship split view (patch 0331)
+
+```discord-update
+Dev Update | DevTool
+- Gave the internal DevTool a visual overhaul: sidebar navigation, a cooler "Nocturne" color palette, and Phosphor icons on every tab
+- Split the Patches tab into two panes -- "Patch flow" (steps 1-5) and "Build & Ship" (steps 6-11) -- switchable without losing your place
+- No workflow changes: every existing button, tool, and content-type editor works exactly as before
+```
+
+Design pass delivered as a Claude Design zip (`tools/devtool/public/app.js`,
+`index.html`, `style.css` only -- no server-side files). Direct request:
+"ensure its not lost functions." Verified rather than assumed before
+merging:
+
+- **Every function in `app.js` preserved, none renamed or dropped.**
+  Diffed the full sorted function-name list extracted from both versions
+  (`grep -n "^function \|^async function "`) -- 80 in each, identical
+  set. The real diff between old and new `app.js` is six small, additive
+  hunks in a 3200+ line file: icon markup on the two fixed tabs
+  (Patches/Sandbox) and each content-type group button, nesting the
+  `#subtabs` strip under its active group's own button instead of a
+  separate row, and the new Patch-flow/Build-&-Ship pane split inside
+  `renderPatches` (a `patchState.shipView` boolean toggling `hidden` on
+  two wrapper divs, both panes staying mounted so every handler wired
+  further down still finds its element either way). Every existing
+  handler, `fetch` call, and render function is untouched.
+- **Every CSS selector preserved.** Extracted the full selector list
+  (everything before an opening `{`, comma-split) from both stylesheets
+  and diffed them: 269 in the old file, 283 in the new one, zero
+  selectors present in the old file missing from the new one -- purely
+  additive. Cross-checked separately against every class `app.js`
+  itself references (`classList`/`className` literals) -- all resolve in
+  the new stylesheet except three (`banner-field-size`, `color-field`,
+  `icon-field-size`) that were never styled in the OLD stylesheet either
+  (they ride on `tiny muted`/inherited rules), so not a regression
+  introduced by this pass.
+- **`index.html`'s markup contract is explicitly called out in its own
+  new comment** (added by the design pass itself): the three ids
+  `app.js` drives -- `#tabs`, `#subtabs`, `#status` -- are unchanged and
+  still in the same document, only their container moved into a new
+  `<aside class="sidebar">`. `#app`/`#subtabs` grid-area wiring in the
+  new CSS matches.
+- **`node --check` passes on the new `app.js`** (plain browser JS, not
+  part of the `tsc`/Vite app bundle at all -- the DevTool frontend is
+  served directly by `tools/devtool/server.mjs`, so this was the
+  relevant syntax gate, not `npx tsc --noEmit`). Full `npx tsc --noEmit`
+  + `npx vite build` also re-run for the main app anyway, both clean --
+  confirms this patch didn't accidentally touch anything outside
+  `tools/devtool/public/`.
+
+**Two small deliberate edits on top of the delivered files, not left
+as-is:**
+
+- Dropped a duplicate Google Fonts `@import` at the top of `style.css`
+  -- `index.html`'s own new `<link rel="stylesheet" href="https://fonts.
+  googleapis.com/...">` already loads the identical Inter font file, so
+  the `@import` was pulling the same resource a second way for no
+  benefit.
+- Added `shipView: false` explicitly to the `patchState` object literal
+  in `app.js`. The delivered version reads/writes `patchState.shipView`
+  in `renderPatches` without ever declaring it on the object -- harmless
+  in practice (`undefined` reads falsy, so the Patch-flow pane still
+  shows first by default) but left a future reader to trace
+  `renderPatches` just to find the default. Declared plainly instead,
+  same "listed plainly so nobody has to go verify" convention this
+  file's own migrations already follow elsewhere in the codebase.
+
+**Worth knowing, not a blocker:** the redesign pulls Inter and Phosphor
+Icons from Google Fonts / unpkg CDNs (`index.html`'s two new `<link>`
+tags) rather than bundling either locally. The DevTool is a local-only
+authoring tool, never shipped to players, so this only matters if
+someone runs it fully offline -- in that case the sidebar still renders
+and every button still works, it just falls back to the system
+sans-serif font and loses the tab icons. Self-hosting both is a
+reasonable follow-up if that ever becomes a real problem, not urgent
+enough to hold this patch on.
