@@ -164,6 +164,34 @@ export const QuestManager = {
         difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, legendaryUnlocked, true,
       );
     }
+
+    // Guarantee at least one offer whose reqLevel sits at or under the
+    // hero's own level (patch 0326) -- direct follow-up after confirming
+    // this WASN'T actually guaranteed despite the patch 0214 comment above
+    // claiming the failure mode "can't happen anymore." rollReqLevel's
+    // weighted offset table makes an at-or-under-level roll the
+    // overwhelmingly likely outcome per offer (~61% at the live tuning
+    // values: offsets 0 and below sum to 54 of 88 total weight), but with
+    // BOARD_SIZE independently-rolled offers, ALL SIX landing above
+    // hero.level happens roughly 1 board generation in 300
+    // (0.386^6 ≈ 0.0033, confirmed by direct calculation from the live
+    // offsetWeight* tuning values) -- rare, but real, and neither guarantee
+    // above covers it: the burst guarantee only checks duration/mode, the
+    // standard-length guarantee only checks duration range, and neither
+    // looks at reqLevel at all. A board that rolls this way has nothing a
+    // hero can send on without being under-leveled for it -- reads exactly
+    // as "no level-appropriate quest available," the direct report this
+    // responds to. Targets the third-to-last slot so it can never collide
+    // with either guarantee above (which own the last and second-to-last
+    // slots respectively); falls back to slot 0 if BOARD_SIZE is ever
+    // small enough that a distinct third slot doesn't exist.
+    if (!offers.some((o) => hero.level >= o.reqLevel)) {
+      const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
+      const targetIndex = offers.length > 2 ? offers.length - 3 : 0;
+      offers[targetIndex] = QuestManager.generateOffer(
+        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-onlevel`, hero.level, false, legendaryUnlocked, false, true,
+      );
+    }
     return offers;
   },
 
@@ -332,8 +360,16 @@ export const QuestManager = {
    * full design discussion. Chains are NOT rolled this way -- they keep
    * chain.reqLevel, a fixed authored value, untouched (see chainOffer).
    */
-  rollReqLevel(heroLevel: number, rng: Rng): number {
-    const weights: { item: number; weight: number }[] = [
+  /**
+   * `maxOffset` (patch 0326) lets a caller restrict the roll to offsets at
+   * or under a given ceiling -- currently only used to force an
+   * at-or-under-hero's-own-level roll (maxOffset: 0) for the "always a
+   * level-appropriate quest" board guarantee in generateContractsForHero.
+   * Omitted (the default), this is 100% unchanged from before: the full
+   * 9-point weighted table, same as ever.
+   */
+  rollReqLevel(heroLevel: number, rng: Rng, maxOffset?: number): number {
+    const allWeights: { item: number; weight: number }[] = [
       { item: -4, weight: Tuning.get('quest_reqlevel.offsetWeightM4') },
       { item: -3, weight: Tuning.get('quest_reqlevel.offsetWeightM3') },
       { item: -2, weight: Tuning.get('quest_reqlevel.offsetWeightM2') },
@@ -344,6 +380,7 @@ export const QuestManager = {
       { item: 3, weight: Tuning.get('quest_reqlevel.offsetWeightP3') },
       { item: 4, weight: Tuning.get('quest_reqlevel.offsetWeightP4') },
     ];
+    const weights = maxOffset === undefined ? allWeights : allWeights.filter((w) => w.item <= maxOffset);
     const offset = rng.weighted(weights);
     return Math.max(1, heroLevel + offset);
   },
@@ -351,9 +388,10 @@ export const QuestManager = {
   generateOffer(
     difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
     forceBurst = false, legendaryUnlocked = false, forceStandard = false,
+    forceAtOrUnderLevel = false,
   ): QuestOffer {
     const cfg = DIFFICULTIES[difficulty];
-    const reqLevel = QuestManager.rollReqLevel(topLevel, rng);
+    const reqLevel = QuestManager.rollReqLevel(topLevel, rng, forceAtOrUnderLevel ? 0 : undefined);
     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
     const eligible = QUEST_TEMPLATES.filter((t) => {
       if (!t.minDifficulty) return true;

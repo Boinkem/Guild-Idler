@@ -26590,3 +26590,79 @@ against; the diff itself only touches typed function signatures/
 arithmetic and a pure-JSON data file, so no `.d.ts`/import-shape issue
 is expected, but a real `npx tsc --noEmit` pass before merging is still
 recommended per this project's own verification convention.
+
+### Board guarantee: always at least one level-appropriate quest offer (patch 0326)
+
+```discord-update
+Dev Update | Patch 0326
+
+- Every hero's quest board now always has at least one quest at or under their own level
+- Closes a rare edge case where a whole board could roll nothing but over-leveled offers, which is likely what the Werewolf empty-board report was actually seeing
+```
+
+Direct follow-up to patch 0325's still-open Werewolf investigation, and to a
+direct request to confirm/ensure a level-appropriate quest is always
+available. Re-examined `rollReqLevel`'s own weighted offset table
+(`quest_reqlevel.offsetWeight*` in `tuning.json`) with actual numbers
+this time instead of trusting patch 0214's own comment, which claims the
+old "guaranteed on-level offer" workaround was removed because "every
+offer's reqLevel now rolls near hero.level by construction... so that
+failure mode can't happen anymore." That's true on average, not
+guaranteed: at the live weights (offsets -4..+4 summing to 88, with 54 of
+that at offset 0 or below), any single offer has roughly a 61.4% chance of
+landing at or under the hero's own level -- meaning roughly 38.6% of the
+time it lands above. With `BOARD_SIZE` (6) independently-rolled offers,
+the odds every single one lands above hero.level works out to
+`0.386^6 ≈ 0.33%` -- rare, but a real, reachable board state, and neither
+of the two existing board guarantees (burst-mode, standard-length) checks
+`reqLevel` at all, so neither one catches it. A board that rolls this way
+genuinely has nothing a hero can send on without being under-leveled for
+it -- exactly the shape of the Werewolf report from patch 0325, even
+though no Werewolf- or class-specific mechanism was ever found (and still
+hasn't been -- this fix isn't class-conditional, it's a board-generation
+guarantee that applies to every hero equally).
+
+**`rollReqLevel` gains an optional `maxOffset`, default-omitted and
+100% behavior-preserving for every existing caller.** When passed (only
+ever `0`, for this guarantee), the roll is restricted to the offset table
+filtered down to entries at or below that ceiling before the weighted
+pick -- same weighted-pick mechanism, just off a narrowed pool, so the
+guaranteed offer is still a real, randomly-varied roll (could land
+anywhere from 4 levels under to exactly at the hero's level), not a fixed
+"exactly at-level" value. `generateOffer` gained a matching trailing
+`forceAtOrUnderLevel` param (also default `false`, also fully backward
+compatible with every existing call site) that threads through to this.
+
+**Third board guarantee in `generateContractsForHero`, checked last.**
+After the existing burst-mode and standard-length guarantees both run (so
+it sees the board's real final state, not the pre-guarantee one), checks
+whether any offer has `hero.level >= o.reqLevel`; if not, force-rolls one
+via `generateOffer(..., forceAtOrUnderLevel: true)` into the
+third-to-last slot -- deliberately distinct from the burst guarantee's
+last slot and the standard guarantee's second-to-last slot, so all three
+can never collide or overwrite each other regardless of which combination
+fires in the same board.
+
+**Not a fix for the Werewolf report specifically -- still open.** This
+closes a real, confirmed gap in the board-generation guarantees that
+existed for every hero regardless of class, and directly matches "ensure
+there's always a level-appropriate quest available." Whether it's also
+what the tester actually saw is still unconfirmed; no Werewolf- or
+class-specific code path was found in this patch either, matching patch
+0325's own finding. If the report recurs after this ships, it's very
+likely a different root cause and still needs a repro.
+
+**Verified:** Diffed `QuestManager.ts` against a fresh pull of `main`
+(through patch 0325) immediately before editing. Confirmed by hand that
+every existing `generateOffer`/`rollReqLevel` call site (the two ordinary
+per-slot generations, both prior guarantees, the gathering-bounty
+generator, and the tutorial/burst-spotlight generator in `engine.ts`)
+passes the same arguments as before and gets the exact same behavior with
+the new trailing params both omitted. Probability math (54/88 ≈ 61.4% per
+offer at-or-under, 0.386^6 ≈ 0.33% all-six-over) computed directly from
+the live tuning values, not estimated. No Node/Vite toolchain in this
+environment to run `tsc`/`vite build` against -- the diff is scoped
+entirely to typed function signatures with new optional trailing
+parameters and one new `Array.prototype.some`/`filter` each, so no type
+or import-shape issue is expected, but a real `npx tsc --noEmit` pass is
+still recommended before merging, per this project's own convention.
