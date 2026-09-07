@@ -26438,3 +26438,54 @@ via their real mods/stats (`describeMods`/`describeStats`), unlike
 same real breakdown `SlotCard`'s own modal already computes, and
 re-verified clean before shipping. Full `vite build` (web + both
 Electron entries) passing clean as well.
+
+### Equipped-gear rarity banners no longer crop on wide grid columns (patch 0324)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed equipped-gear cards cropping the rarity banner art on the left/right edges
+- Kept the equipped cards at their current (bigger) size -- the fix is to the artwork's own scaling, not the card size
+```
+
+Direct follow-up report, with a screenshot pinpointing exactly what
+0322/0323 missed: Stash and Consumables cards show their rarity banner
+art cleanly, but the equipped-gear grid crops it slightly at the edges,
+and the report explicitly did NOT want the cards shrunk back down to
+fix it -- "the cards themselves are also bigger (which I think I like
+style-wise) however I need the artwork to be uncropped."
+
+**Root cause.** `.rarity-banner` used `background-size: cover`,
+which scales the art up until it fully fills the box on whichever axis
+needs less scaling, cropping the overflow on the other axis. That's
+fine as long as the card's own box shape stays close to the art's
+native ~4.2:1 ratio -- true for Stash/Consumables, confirmed looking
+right in the report -- but the equipped-gear grid's box shape isn't
+fixed: width comes from the grid (`.gear-card-grid`'s `minmax(265px,
+1fr)`, `auto-fill`), and how many 265px+ columns actually fit side by
+side depends on the window's real width. At a wide enough window, more
+columns fit and each one's aspect ratio drifts away from the art's own
+-- exactly the kind of box-shape mismatch `cover` handles by cropping.
+
+**Fix:** `background-size: contain` instead -- scales the art to fit
+entirely inside the box on both axes, so the whole banner is always
+visible with zero cropping regardless of the box's own aspect, at the
+cost of a little empty space on whichever axis has room to spare. That
+empty space just shows the card's own dark background underneath,
+close enough to the banner art's own dark fill that the seam isn't
+distracting. Deliberately did not cap `.gear-card-grid`'s column width
+back down to force a closer aspect match instead -- the report was
+explicit that the bigger card size is a style improvement worth
+keeping, so the fix belongs on the artwork's own scaling, not the grid.
+One shared rule, so this covers every card using `.rarity-banner`
+uniformly (gear, stash, sell-from-stash, both consumable views) rather
+than a special case for just the equipped grid -- harmless for the
+ones that were already close to a clean fit, since `contain` and
+`cover` render almost identically once the box and art aspects are
+already near a match.
+
+**Verified:** pulled `app.css` fresh from `main` via
+`raw.githubusercontent.com` immediately before editing (patch 0323 was
+already live). CSS-only change -- `npx tsc --noEmit` and a full `vite
+build` (web + both Electron entries) passing clean against a fresh
+clone, confirming nothing else was touched.

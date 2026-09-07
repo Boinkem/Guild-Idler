@@ -5114,7 +5114,27 @@ button.harvest-item:hover {
 .rarity-banner {
   position: absolute;
   inset: 0;
-  background-size: cover;
+  /*
+   * Patch 0324, direct report: was `cover`, which scales the art up
+   * until it fully fills the box on whichever axis needs less scaling,
+   * cropping the other axis's overflow -- fine on cards whose own
+   * aspect happens to land close to the art's native ~4.2:1 (Stash,
+   * Consumables, confirmed looking right), but the equipped-gear grid
+   * can end up with a meaningfully different box shape once enough
+   * columns fit side by side at a wide window width (this class's box
+   * isn't a fixed size -- width comes from the grid, height from
+   * content -- so its aspect isn't guaranteed to match the art's own).
+   * `contain` scales to fit entirely inside the box on both axes
+   * instead, so the full banner is always visible with no cropping
+   * ever, at the cost of a little empty space on whichever axis has
+   * room to spare -- which just shows the card's own dark background
+   * underneath, close enough to the art's own dark fill that the seam
+   * isn't distracting. Deliberately fixed here rather than by capping
+   * the grid's own column width back down -- direct request was to
+   * keep these cards at their current (bigger, preferred) size and fix
+   * the art instead, not shrink the cards back down to fit the art.
+   */
+  background-size: contain;
   background-position: center;
   opacity: 0.42;
   pointer-events: none;
