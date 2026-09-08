@@ -5405,12 +5405,38 @@ button.harvest-item:hover {
   aspect-ratio: 1536 / 1024;
   border: none;
   background-color: transparent;
+  /*
+   * Patch 0340, direct report with screenshots, confirmed live: without
+   * this, the browser smoothly (bilinearly) downscales the frame art
+   * from its native 1536x1024 down to a typical ~300px rendered card
+   * width, which blurs the thin gem/line detail into a soft hazy halo
+   * that visibly extends past the frame's own sharp edges -- exactly the
+   * "shroud... larger than the actual card itself" reported, and worst
+   * specifically on the Silver outline variant below since that art is
+   * ALMOST ENTIRELY thin lines with nothing solid to anchor against (a
+   * painted frame's large flat color fields blur far less noticeably).
+   * The small item icons already used image-rendering: pixelated
+   * (.item-icon img above) for exactly this reason -- this was simply
+   * missing on the much larger frame background itself.
+   */
+  image-rendering: pixelated;
 }
 .rarity-frame-card .item-card-summary,
 .rarity-frame-card .rarity-banner-content {
   padding-left: 34%;
+  padding-top: 12%;
   min-height: 100%;
   box-sizing: border-box;
+  /* Patch 0340, direct report: the name was vertically centered in the
+     card's full height (inherited align-items: center from
+     .item-card-summary's own base rule), landing it right across from
+     the icon and reading as overlapping/cramped rather than clearly
+     separate from it. Anchoring to the top instead puts the name in the
+     frame art's own open upper band -- away from both the icon (which
+     sits centered lower-left in its socket) and the decorative dotted
+     divider line roughly at the card's vertical middle -- so it has a
+     clear, uncontested spot rather than sharing the icon's own row. */
+  align-items: flex-start !important;
 }
 /* Outline-only variant (Silver, empty slots) -- deliberately does NOT
    set background-color: transparent like .rarity-frame-card above. The
@@ -5422,11 +5448,17 @@ button.harvest-item:hover {
   background-size: 100% 100%;
   background-repeat: no-repeat;
   aspect-ratio: 1536 / 1024;
+  /* Same reasoning as .rarity-frame-card above -- see its own comment.
+     This variant is where the blur-halo problem was actually reported
+     and caught, since Silver's art is thin lines almost exclusively. */
+  image-rendering: pixelated;
 }
 .rarity-frame-card-outline .item-card-summary {
   padding-left: 34%;
+  padding-top: 12%;
   min-height: 100%;
   box-sizing: border-box;
+  align-items: flex-start !important;
 }
 /* The icon sits inside the frame's own circular socket -- position and
    size measured directly off the source art / the approved mockup,

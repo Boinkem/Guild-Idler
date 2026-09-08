@@ -27956,3 +27956,48 @@ real look in-game: a stash with a mix of lightly-damaged and fully-broken
 items should show Repair All's count higher than Repair Broken's, and
 clicking Repair Broken should leave the lightly-damaged ones exactly as
 they were.
+
+### Rarity card follow-up: fixed blurred frame art, item name overlapping icon (patch 0340)
+
+```discord-update
+Dev Update | Rarity Cards
+- Fixed a blurry haze around rarity card frames, especially noticeable on empty slots
+- Item names on rarity cards now sit clearly at the top, no longer crowding the icon
+```
+
+Direct report with screenshots, two real issues from patch 0338's card
+redesign, both confirmed live before and after the fix (not just reasoned
+about from the CSS):
+
+**"Shroud... larger than the actual card itself."** The frame art is a
+1536x1024 pixel-art asset, displayed at a typical rendered card width of
+~300px via `background-size: 100% 100%`. Without `image-rendering:
+pixelated` set on it, the browser smoothly (bilinearly) downscales it,
+which blurs the thin gem/line detail into a soft hazy halo that visibly
+extends past the frame's own sharp edges. Worst specifically on the
+Silver outline variant (empty slots), since that art is almost entirely
+thin lines with nothing solid to anchor against -- a painted frame's
+large flat color fields blur far less noticeably, which is why it read
+as most obvious there even though the same fix applies to every rarity.
+The small item icons already used `image-rendering: pixelated` for
+exactly this reason (`.item-icon img`) -- it had simply never been added
+to the much larger frame background introduced in 0338. Added to both
+`.rarity-frame-card` and `.rarity-frame-card-outline`.
+
+**Item name overlapping the icon.** The name/pill/stats block was
+vertically centered across the card's full height (inherited
+`align-items: center` from `.item-card-summary`'s own base rule),
+landing it right across from the icon rather than in its own clear
+space. Re-anchored to the top (`align-items: flex-start` + a little
+top padding) instead -- lands the name in the frame art's own open
+upper band, away from both the icon (centered lower-left in its own
+socket) and the decorative dotted divider roughly at the card's
+vertical middle.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+Re-screenshotted the exact same live Inventory/Vendors views the bug was
+reported against, on a fresh clone confirmed to already include 0338 and
+0339 (Blacksmith's Repair Only Broken button, unrelated) -- both issues
+confirmed fixed, no regressions in the StashCard's busier layout (name,
+rarity pill, and durability bar all still land cleanly) or the Vendor
+shop card's simpler one.
