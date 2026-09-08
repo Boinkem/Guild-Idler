@@ -7,9 +7,7 @@
     "reqLevel": 1,
     "maxDurability": 10,
     "value": 2,
-    "mods": {},
-    "stats": {},
-    "icon": "weapons/Weapon_02.png",
+    "icon": "weapons/Weapon_01.png",
     "raidExclusive": false,
     "craftable": false,
     "chainExclusive": false,
@@ -927,9 +925,11 @@
       "luck": 83
     },
     "setId": "voidforged",
-    "icon": "armor/Armor_76.png",
+    "icon": "armor/Armor_71.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "voidforged_treads",
@@ -944,9 +944,11 @@
       "endurance": 92
     },
     "setId": "voidforged",
-    "icon": "armor/Armor_55.png",
+    "icon": "armor/Armor_50.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "empyrean_grips",
@@ -1807,8 +1809,12 @@
       "strength": 40,
       "endurance": 27
     },
-    "icon": "armor/Armor_16.png",
-    "setId": "grimward"
+    "setId": "grimward",
+    "icon": "armor/Armor_73.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "lichbound_diadem",
@@ -1855,8 +1861,12 @@
       "endurance": 16,
       "wisdom": 37
     },
-    "icon": "armor/Armor_43.png",
-    "setId": "loom"
+    "setId": "loom",
+    "icon": "armor/Armor_111.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "unraveling_cloak",
@@ -1887,8 +1897,12 @@
       "luck": 52,
       "wisdom": 16
     },
-    "icon": "weapons/Weapon_50.png",
-    "setId": "loom"
+    "setId": "loom",
+    "icon": "weapons/Weapon_10.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "tollbreakers_gloves",
@@ -1902,8 +1916,11 @@
       "strength": 1,
       "luck": 1
     },
-    "icon": "armor/Armor_02.png",
-    "chainExclusive": true
+    "icon": "armor/Armor_76.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": true,
+    "gearScoreOverride": 0
   },
   {
     "id": "ridgebreakers_pauldron",
