@@ -341,6 +341,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
     // comment for why this is separate from the plain-read
     // acknowledgeTab call just above.
     if (tab === 'vendors') engine.acknowledgeVendorsTabVisit();
+    // Patch 0343: same shape, one-time "first look at your gear" /
+    // "first look at your heroes" explainers -- see
+    // engine.acknowledgeEquipmentTabVisit/acknowledgeHeroesTabVisit's own
+    // comments.
+    if (tab === 'equipment') engine.acknowledgeEquipmentTabVisit();
+    if (tab === 'heroes') engine.acknowledgeHeroesTabVisit();
   }, [engine, tab]);
   // Nav gold/renown count up to a new value rather than snapping -- the
   // numeric equivalent of the .bar fill transition. No animation on first

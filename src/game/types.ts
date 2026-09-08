@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 63;
+export const SAVE_VERSION = 64;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2707,6 +2707,27 @@ export interface GameState {
    * without also being a "first ever" moment worth re-explaining.
    */
   hasObtainedConsumable: boolean;
+  /**
+   * Patch 0343, direct request. Set the first time the player opens the
+   * Inventory (Equipment) tab at all -- same shape as hasVisitedVendorsTab
+   * just above, via a new engine.acknowledgeEquipmentTabVisit called from
+   * MenuWindow's existing per-tab-switch effect. Drives the one-time
+   * `first_durability_explainer` GuidanceManager topic (only actually
+   * surfaces once this is true AND some hero's gear has taken durability
+   * damage -- see that topic's own CHECKS entry) explaining
+   * repair/durability the first time a guided player looks at their gear
+   * after the tutorial quest's weapon-break.
+   */
+  hasVisitedEquipmentTab: boolean;
+  /**
+   * Patch 0343, direct request. Set the first time the player opens the
+   * Heroes tab at all -- same shape as hasVisitedEquipmentTab just above.
+   * Drives the one-time `first_treat_explainer` GuidanceManager topic
+   * (only surfaces once this is true AND some hero is actually injured)
+   * explaining how to Treat an injury the first time a guided player
+   * looks at their heroes after taking quest damage.
+   */
+  hasVisitedHeroesTab: boolean;
   /**
    * Levels bought in the Overseer upgrade (0-3), Warehouse sub-tab. Each
    * level gives every node a chance to auto-catch a spawn that would

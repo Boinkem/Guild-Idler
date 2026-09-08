@@ -1,0 +1,614 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 2d58071..b073434 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28126,3 +28126,95 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
+ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
++
++### Onboarding polish, Treat visibility, and a handful of direct-report fixes (patch 0343)
++
++```discord-update
++Dev Update | Patch 0343
++- Added a guided tip explaining gear durability the first time a new player checks Inventory after their weapon takes damage
++- Added a guided tip explaining how to Treat an injury the first time a new player checks Heroes after taking a hit
++- Changed a hero's Injuries/Treat panel to always show on their card, instead of hiding behind the "More" button
++- Changed the empty gear slot placeholder icon -- removed, the outline art speaks for itself now
++- Fixed the Tombstone Style button's text washing out against lighter backgrounds
++- Fixed the mouse cursor not showing a click-hand over Vendor stock items
++- Fixed the Enchanter's Crafting button opening the same thing as Weapon Enchanting -- removed the duplicate
++```
++
++Seven direct reports/requests, all small enough to land together.
++
++**Two new guided-onboarding topics, tab-visit gated.** The old
++`first_injury_or_wear` topic fired the instant a hero had an injury or
++worn gear, regardless of what the player was actually looking at, and
++bundled both messages into one Heroes-targeted toast. Split into
++`first_durability_explainer` (Inventory tab) and `first_treat_explainer`
++(Heroes tab), each gated on a new one-time tab-visit flag
++(`hasVisitedEquipmentTab`/`hasVisitedHeroesTab`, SAVE_VERSION 64) set by
++`engine.acknowledgeEquipmentTabVisit`/`acknowledgeHeroesTabVisit` --
++exact same shape `hasVisitedVendorsTab`/`acknowledgeVendorsTabVisit`
++already established, wired from the same MenuWindow per-tab-switch
++effect. Order-independent: `GuidanceManager.checkAll` re-runs after
++every relevant engine action (including the tab-visit acknowledgements
++themselves), so whichever of "opened the tab" or "gear broke/hero got
++hurt" happens second is what actually fires the explainer -- a player
++who pokes at Inventory before their first quest sees nothing yet, then
++gets the durability tip the moment that first quest actually breaks
++something. Both new topics default to already-seen (`true`) on migration
++for any existing save, same "nothing left to retroactively explain on a
++veteran save" reasoning every other `hasVisited*` migration in this file
++already uses.
++
++**Treat, no longer hidden under "More."** Direct report: the
++injuries/Treat panel only ever rendered inside a hero's collapsed
++`isOpen` details section, so a guided player who just took quest damage
++had to find and click "More ▼" before Treat was even visible. Moved out
++to the hero's portrait column instead, always shown, filling the real
++leftover vertical space below the ledger (Gear score/Quests won/Lifetime
++gold/Lifetime xp/Renown perks) -- that column stretches to match the
++body column's own height (`.hero-block-grid`'s `align-items: stretch`),
++so there was empty room sitting there on most heroes already. Compact,
++stacked layout (`hero-block-portrait-injuries`) rather than the old
++side-by-side name/Treat/Bandage row, since the portrait column is only
++~168px wide. The old in-panel copy was removed outright rather than
++duplicated; `hero-block-panels`' 2-column grid dropped to a single
++column now that TOTAL MODIFIERS is the only thing left in it.
++
++**Empty gear slots drop their placeholder icon.** Direct request:
++patch 0342 already stripped the card background/border off an empty
++slot so its own outline art reads as a complete shape on its own, but
++the slot's generic weapon/helmet/etc. emoji glyph (`ItemIcon`'s
++fallback) was still floating in the middle of it, looking like a stray
++placeholder rather than intentional art. New `hideFallback` prop on
++`ItemIcon`/`IconBox` (`icons.tsx`), passed only from `SlotCard`'s empty
++branch (`EquipmentPanel.tsx`) -- every other `ItemIcon`/`ConsumableIcon`/
++etc. caller still wants its fallback glyph, since those represent a real
++owned item that just hasn't gotten dedicated art yet, not an
++intentionally-empty slot.
++
++**Tombstone Style button, dark background.** Direct report: the style
++picker's toggle button sat on plain `.btn-ghost` (`background:
++transparent`), which washes its own text out over lighter background
++art -- same underlying issue patch 0334's `.panel-help-btn` fix already
++solved for the per-tab help button. New `.tombstone-style-toggle` class,
++same non-transparent treatment.
++
++**Vendor stock hover cursor.** Direct report: hovering a Vendor stock
++card kept the plain arrow cursor instead of a click-hand, unlike every
++other clickable card in the game. `.item-card-summary` (SlotCard/
++StashCard) already gets `cursor: pointer` generically, but a Vendor card
++is `.card`-based with `.rarity-banner-content` as its inner wrapper
++instead (same `.card`-vs-`.item-card` split patch 0342's "purple box"
++writeup covers) -- that class never set a cursor of its own. Added
++directly to `.vendor-stock-card` so it's inherited regardless of which
++inner wrapper is in play.
++
++**Enchanter's duplicate Crafting button, removed.** Direct report: the
++generic "Crafting" button every vendor page shows opened
++`VENDOR_CRAFT_CATEGORY['enchanter'] === 'enchant'` for the Enchanter
++specifically, which is the exact same craft-then-apply flow the
++dedicated "Weapon Enchanting" button right next to it already opens --
++two buttons doing the same thing on one page. Blacksmith and Alchemist
++keep their Crafting button unchanged; only the Enchanter drops it, since
++it's the only vendor with a same-category dedicated station duplicating
++it.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+diff --git a/src/game/data/json/guidance-topics.json b/src/game/data/json/guidance-topics.json
+index 924bb19..ee19d25 100644
+--- a/src/game/data/json/guidance-topics.json
++++ b/src/game/data/json/guidance-topics.json
+@@ -99,10 +99,18 @@
+     "targetTab": "settings"
+   },
+   {
+-    "id": "first_injury_or_wear",
++    "id": "first_durability_explainer",
+     "messages": [
+-      "A hurt hero or worn-down gear both drag down the odds on every quest, not just the one that caused it -- don't just wait it out. Treat an injury or Repair a piece of gear right from a hero's card in the Heroes tab (or spend a Field Bandage there instead of gold).",
+-      "Each hero's very first Treat and first Repair are free, on the guild. everything after that costs gold. A Physician's Charity or Smith's Charity guild upgrade can make more of each free every day, for every hero."
++      "That gear took durability damage on the quest -- worn-down equipment drags down the odds on every quest from here on, not just the one that caused it.",
++      "Repair it right here from the Inventory tab. Each hero's very first Repair is free, on the guild -- everything after that costs gold and Scrap (a Smith's Charity guild upgrade can make more free every day)."
++    ],
++    "targetTab": "equipment"
++  },
++  {
++    "id": "first_treat_explainer",
++    "messages": [
++      "That hero came back injured -- an untreated injury drags down the odds on every quest, not just the one that caused it, so don't just wait it out.",
++      "Treat it right from their card here in the Heroes tab (or spend a Field Bandage instead of gold). Each hero's very first Treat is free, on the guild -- everything after that costs gold (a Physician's Charity guild upgrade can make more free every day)."
+     ],
+     "targetTab": "heroes"
+   },
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 096e1b3..ac4aced 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -2389,6 +2389,38 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /**
++   * Patch 0343, direct request. Same shape as acknowledgeVendorsTabVisit
++   * just above -- flips GameState.hasVisitedEquipmentTab the first time
++   * the player opens the Inventory (Equipment) tab at all. Arms the
++   * one-time first_durability_explainer topic, which only actually
++   * surfaces once this is true AND some hero's gear has already taken
++   * durability damage (see that topic's own CHECKS entry) -- so this
++   * fires harmlessly on an early, damage-free first visit and the real
++   * explainer only shows up once there's something to explain. Called
++   * from MenuWindow's existing per-tab-switch effect.
++   */
++  acknowledgeEquipmentTabVisit() {
++    if (this.state.hasVisitedEquipmentTab) return;
++    this.state.hasVisitedEquipmentTab = true;
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    void this.saveNow();
++  }
++
++  /**
++   * Patch 0343, direct request. Same shape as acknowledgeEquipmentTabVisit
++   * just above, for the Heroes tab -- flips GameState.hasVisitedHeroesTab
++   * the first time the player opens it at all, arming the one-time
++   * first_treat_explainer topic (only surfaces once this is true AND some
++   * hero is actually injured).
++   */
++  acknowledgeHeroesTabVisit() {
++    if (this.state.hasVisitedHeroesTab) return;
++    this.state.hasVisitedHeroesTab = true;
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    void this.saveNow();
++  }
++
+   acknowledgeVendorFirstVisit(vendorId: VendorId) {
+     if (vendorId === 'alchemist' && !this.state.hasSeenAlchemist) {
+       this.state.hasSeenAlchemist = true;
+diff --git a/src/game/managers/GuidanceManager.ts b/src/game/managers/GuidanceManager.ts
+index ad5fa35..9d261cf 100644
+--- a/src/game/managers/GuidanceManager.ts
++++ b/src/game/managers/GuidanceManager.ts
+@@ -107,8 +107,23 @@ const CHECKS: Record<string, Check> = {
+   // for one more caller.
+   auto_chain_unlocked: (state) => GuildManager.upgradeLevel(state, 'auto_chain') > 0,
+   first_bard_track_unlocked: (state) => (state.unlockedBardTracks ?? []).length >= 1,
+-  first_injury_or_wear: (state) => state.heroes.some((h) => h.injuries.length > 0
+-    || Object.values(h.equipment).some((item) => item && item.durability < EquipmentManager.maxDurability(item))),
++  // Patch 0343, direct request. Splits the old combined
++  // first_injury_or_wear topic in two, each gated on its own tab's first
++  // visit (hasVisitedEquipmentTab/hasVisitedHeroesTab, set by
++  // engine.acknowledgeEquipmentTabVisit/acknowledgeHeroesTabVisit via
++  // MenuWindow's tab-switch effect) rather than firing the instant the
++  // underlying condition goes true regardless of what the player's
++  // actually looking at. Order-independent by design: checkAll runs
++  // again after every relevant engine action (including the tab-visit
++  // acknowledgements themselves), so whichever of "visited the tab" or
++  // "gear broke / hero got hurt" happens second is still what actually
++  // triggers the explainer -- a player who opens Inventory before ever
++  // taking a quest sees nothing yet, then gets the durability explainer
++  // the moment their first quest actually damages a piece of gear.
++  first_durability_explainer: (state) => state.hasVisitedEquipmentTab
++    && state.heroes.some((h) => Object.values(h.equipment).some((item) => item && item.durability < EquipmentManager.maxDurability(item))),
++  first_treat_explainer: (state) => state.hasVisitedHeroesTab
++    && state.heroes.some((h) => h.injuries.length > 0),
+   // Deliberately checks live state (some hero currently Fallen) rather
+   // than a log/result flag -- this runs immediately after
+   // QuestManager.resolve/RaidManager.resolve in the same tick, before
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 4c18c12..2dfadb3 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -180,6 +180,8 @@ export function createInitialState(now = Date.now()): GameState {
+     hasCompletedFirstQuest: false,
+     hasVisitedVendorsTab: false,
+     hasObtainedConsumable: false,
++    hasVisitedEquipmentTab: false,
++    hasVisitedHeroesTab: false,
+     peddlerTab: null,
+     guildName: '',
+     notifiedSetBonuses: [],
+@@ -1366,6 +1368,20 @@ const MIGRATIONS: Record<number, Migration> = {
+     questFastUpgrades: (save.questFastUpgrades as Record<string, number> | undefined) ?? {},
+     pendingQuestBoardIntro: (save.pendingQuestBoardIntro as boolean | undefined) ?? false,
+   }),
++  // Patch 0343 -- new Inventory/Heroes first-visit flags backing the
++  // first_durability_explainer/first_treat_explainer guidance topics
++  // (see GameState.hasVisitedEquipmentTab/hasVisitedHeroesTab's own
++  // comments). Same "default true for every existing save" reasoning
++  // migration 58's hasVisitedVendorsTab already used -- a save old
++  // enough to need migrating has, by definition, opened both tabs
++  // countless times already, so there's nothing left for either new
++  // topic to retroactively explain.
++  63: (save) => ({
++    ...save,
++    version: 64,
++    hasVisitedEquipmentTab: (save.hasVisitedEquipmentTab as boolean | undefined) ?? true,
++    hasVisitedHeroesTab: (save.hasVisitedHeroesTab as boolean | undefined) ?? true,
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index be5d5fe..321537a 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 63;
++export const SAVE_VERSION = 64;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -2707,6 +2707,27 @@ export interface GameState {
+    * without also being a "first ever" moment worth re-explaining.
+    */
+   hasObtainedConsumable: boolean;
++  /**
++   * Patch 0343, direct request. Set the first time the player opens the
++   * Inventory (Equipment) tab at all -- same shape as hasVisitedVendorsTab
++   * just above, via a new engine.acknowledgeEquipmentTabVisit called from
++   * MenuWindow's existing per-tab-switch effect. Drives the one-time
++   * `first_durability_explainer` GuidanceManager topic (only actually
++   * surfaces once this is true AND some hero's gear has taken durability
++   * damage -- see that topic's own CHECKS entry) explaining
++   * repair/durability the first time a guided player looks at their gear
++   * after the tutorial quest's weapon-break.
++   */
++  hasVisitedEquipmentTab: boolean;
++  /**
++   * Patch 0343, direct request. Set the first time the player opens the
++   * Heroes tab at all -- same shape as hasVisitedEquipmentTab just above.
++   * Drives the one-time `first_treat_explainer` GuidanceManager topic
++   * (only surfaces once this is true AND some hero is actually injured)
++   * explaining how to Treat an injury the first time a guided player
++   * looks at their heroes after taking quest damage.
++   */
++  hasVisitedHeroesTab: boolean;
+   /**
+    * Levels bought in the Overseer upgrade (0-3), Warehouse sub-tab. Each
+    * level gives every node a chance to auto-catch a spawn that would
+diff --git a/src/styles/app.css b/src/styles/app.css
+index fd3cad0..0471f8e 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -983,6 +983,17 @@ button:focus-visible, [tabindex]:focus-visible {
+ }
+ .panel-help-btn:hover { background: var(--panel-2); border-color: var(--blood); }
+ 
++/* Direct report: the Tombstone Style toggle sits on plain .btn-ghost
++   (background: transparent), which reads fine over the app's usual
++   panel backgrounds but washes its own text out wherever this button
++   ends up over lighter background art -- same underlying "transparent
++   ghost button over art" issue .panel-help-btn's own writeup just above
++   already fixed for the per-tab help button. Same fix here: a real,
++   dark, non-transparent background so the label stays legible no matter
++   what's behind it. */
++.tombstone-style-toggle { background: var(--night); }
++.tombstone-style-toggle:hover { background: var(--panel-2); border-color: var(--brass); }
++
+ /* Crafting/Enchanting/Enhance are deliberately styled apart from every
+    other action button in the game -- --violet is already the game's one
+    consistent purple accent (Renown uses it too), so this stays legible
+@@ -5400,7 +5411,16 @@ button.harvest-item:hover {
+    the same ~15% bump), so the extra room the wider column provides
+    actually gets used as breathing room around the icon/text rather than
+    just stretching blank card background. */
+-.vendor-stock-card { padding: 12px 14px; }
++/* Direct report: hovering a vendor stock card kept the default arrow
++   cursor instead of the hand/click cursor every other clickable card
++   already gets. `.item-card-summary` (SlotCard/StashCard) picks up
++   cursor: pointer generically above, but a vendor card is `.card`-based
++   with `.rarity-banner-content` as its inner wrapper instead (see the
++   "purple box" writeup further down for the full .card-vs-.item-card
++   split) -- that class never set a cursor of its own. Set directly on
++   the card root instead so it's inherited by every child regardless of
++   which inner wrapper is in play. */
++.vendor-stock-card { padding: 12px 14px; cursor: pointer; }
+ .item-card-summary { position: relative; z-index: 1; }
+ .item-card .rarity-pill { background: rgba(0, 0, 0, 0.4); }
+ .item-card-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+diff --git a/src/styles/hero-card.css b/src/styles/hero-card.css
+index 6f13328..a0a4e2d 100644
+--- a/src/styles/hero-card.css
++++ b/src/styles/hero-card.css
+@@ -384,8 +384,13 @@
+ }
+ 
+ .hero-block-panels {
++  /* Patch 0343: used to be a 2-column grid holding TOTAL MODIFIERS
++     alongside the injuries/Treat panel -- that second panel moved out
++     to the portrait column (always visible now, not just when isOpen),
++     so this only ever wraps one panel these days. Single column instead
++     of a 2fr grid with a permanently-empty second slot. */
+   display: grid;
+-  grid-template-columns: 1fr 1fr;
++  grid-template-columns: 1fr;
+   gap: 12px;
+ }
+ 
+@@ -431,6 +436,38 @@
+   margin-top: 6px;
+ }
+ 
++/* Patch 0343, direct request: compact/always-visible injuries+Treat
++   panel, living in the portrait column's own leftover space below the
++   ledger (see HeroBlock.tsx) rather than tucked behind "More". The
++   portrait column is only ~168px wide (144px after padding), too narrow
++   for the old side-by-side name/heals-in + Treat/Bandage row layout --
++   everything stacks vertically instead, and the two action buttons sit
++   full-width so they stay tappable at this width. */
++.hero-block-portrait-injuries {
++  width: 100%;
++  margin-top: 2px;
++}
++.hero-block-portrait-injuries .hero-block-panel-label { margin-bottom: 5px; }
++.hero-block-injury-compact {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++  margin-top: 8px;
++}
++.hero-block-injury-compact:first-of-type { margin-top: 0; }
++.hero-block-injury-compact-actions {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++  margin-top: 2px;
++}
++.hero-block-injury-compact-actions button,
++.hero-block-injury-compact > button {
++  width: 100%;
++  font-size: 0.5625rem;
++  padding: 5px 6px;
++}
++
+ .hero-block-title-row { align-items: center; gap: 6px; }
+ .hero-block-livery { align-items: center; margin-top: 2px; }
+ .hero-block-footnote { line-height: 1.6; }
+diff --git a/src/ui/HeroBlock.tsx b/src/ui/HeroBlock.tsx
+index 2f6df7f..4e1f81f 100644
+--- a/src/ui/HeroBlock.tsx
++++ b/src/ui/HeroBlock.tsx
+@@ -217,6 +217,63 @@ export function HeroBlock({
+               </div>
+             )}
+           </div>
++
++          {/* Patch 0343, direct request: this used to only render inside
++              the "More" details panel (isOpen), which meant Treat was
++              effectively hidden behind an extra click at the exact
++              moment a guided player most needs it. Moved out here,
++              always visible, into the portrait column's own leftover
++              space below the ledger (the column stretches to match the
++              body column's height -- see .hero-block-grid's
++              align-items: stretch -- so there's real empty room here on
++              any hero without a full Renown-perks row). Compact/stacked
++              layout (hero-block-portrait-injuries) rather than the wider
++              side-by-side buttons the old in-panel version used, since
++              this column is only ~168px wide. */}
++          {(hero.injuries.length > 0 || fallen) && (
++            <div className="hero-block-panel hero-block-panel-danger hero-block-portrait-injuries">
++              <div className="hero-block-panel-label">{fallen ? 'FALLEN' : 'INJURIES'}</div>
++              {hero.injuries.map((injury) => (
++                <div key={injury.id} className="hero-block-injury-compact">
++                  <div className="small bad">{injury.name}</div>
++                  <div className="tiny muted">heals in {formatDuration(injury.healsAt - now)}</div>
++                  <div className="hero-block-injury-compact-actions">
++                    <button
++                      className="btn-primary"
++                      onClick={() => engine.treatInjury(hero.id, injury.id)}
++                      disabled={!freeTreat && state.gold < injury.treatmentCost}
++                      title={freeTreat ? 'Free -- on the guild' : undefined}
++                    >
++                      {freeTreat ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
++                    </button>
++                    <button
++                      className="btn-primary"
++                      onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
++                      disabled={bandages === 0}
++                    >
++                      Bandage ×{bandages}
++                    </button>
++                  </div>
++                </div>
++              ))}
++              {fallen && (
++                <div className="hero-block-injury-compact">
++                  <div className="tiny muted">
++                    {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
++                      ? `Auto-revive in ${formatDuration(hero.fallenAt + Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR - now)}`
++                      : 'needs reviving before being sent out again'}
++                  </div>
++                  <button
++                    className="btn-primary"
++                    onClick={() => engine.reviveHero(hero.id)}
++                    disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
++                  >
++                    Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
++                  </button>
++                </div>
++              )}
++            </div>
++          )}
+         </div>
+ 
+         <div className="hero-block-body">
+@@ -358,52 +415,10 @@ export function HeroBlock({
+                   )}
+                 </div>
+ 
+-                {(hero.injuries.length > 0 || fallen) && (
+-                  <div className="hero-block-panel hero-block-panel-danger">
+-                    <div className="hero-block-panel-label">{fallen ? 'FALLEN' : 'INJURIES'}</div>
+-                    {hero.injuries.map((injury) => (
+-                      <div key={injury.id} className="hero-block-injury">
+-                        <div>
+-                          <div className="small bad">{injury.name}</div>
+-                          <div className="tiny muted">heals in {formatDuration(injury.healsAt - now)}</div>
+-                        </div>
+-                        <div className="row">
+-                          <button
+-                            className="btn-primary"
+-                            onClick={() => engine.treatInjury(hero.id, injury.id)}
+-                            disabled={!freeTreat && state.gold < injury.treatmentCost}
+-                            title={freeTreat ? 'Free -- on the guild' : undefined}
+-                          >
+-                            {freeTreat ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
+-                          </button>
+-                          <button
+-                            className="btn-primary"
+-                            onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
+-                            disabled={bandages === 0}
+-                          >
+-                            Bandage ×{bandages}
+-                          </button>
+-                        </div>
+-                      </div>
+-                    ))}
+-                    {fallen && (
+-                      <div className="hero-block-injury">
+-                        <div className="tiny muted">
+-                          {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
+-                            ? `Auto-revive in ${formatDuration(hero.fallenAt + Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR - now)}`
+-                            : 'needs reviving before being sent out again'}
+-                        </div>
+-                        <button
+-                          className="btn-primary"
+-                          onClick={() => engine.reviveHero(hero.id)}
+-                          disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
+-                        >
+-                          Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
+-                        </button>
+-                      </div>
+-                    )}
+-                  </div>
+-                )}
++                {/* Patch 0343: the injuries/Treat panel that used to live
++                    here moved out to the portrait column, always visible
++                    -- see the hero-block-portrait-injuries block above.
++                    TOTAL MODIFIERS above is still isOpen-only. */}
+               </div>
+ 
+               <p className="card-flavour">{classDef.blurb}</p>
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index ffca356..61b8d63 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -341,6 +341,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+     // comment for why this is separate from the plain-read
+     // acknowledgeTab call just above.
+     if (tab === 'vendors') engine.acknowledgeVendorsTabVisit();
++    // Patch 0343: same shape, one-time "first look at your gear" /
++    // "first look at your heroes" explainers -- see
++    // engine.acknowledgeEquipmentTabVisit/acknowledgeHeroesTabVisit's own
++    // comments.
++    if (tab === 'equipment') engine.acknowledgeEquipmentTabVisit();
++    if (tab === 'heroes') engine.acknowledgeHeroesTabVisit();
+   }, [engine, tab]);
+   // Nav gold/renown count up to a new value rather than snapping -- the
+   // numeric equivalent of the .bar fill transition. No animation on first
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+index 9fd05b5..921c9d6 100644
+--- a/src/ui/icons.tsx
++++ b/src/ui/icons.tsx
+@@ -17,8 +17,8 @@ const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem' | 'cha
+ };
+ 
+ function IconBox({
+-  icon, size, fallback, broken,
+-}: { icon?: string; size: number; fallback: string; broken?: boolean }) {
++  icon, size, fallback, broken, hideFallback,
++}: { icon?: string; size: number; fallback: string; broken?: boolean; hideFallback?: boolean }) {
+   // Falls back to the glyph on a 404, not just when `icon` is unset --
+   // the common path for a brand-new material assigned an icon path in
+   // DevTool before the actual file has been dropped into item-icons/ yet
+@@ -42,7 +42,16 @@ function IconBox({
+         // but an emoji glyph has no transparency of its own to preserve
+         // and needs SOME backdrop to stay legible against whatever art is
+         // behind it (a bright background, a busy crafting scene, etc.).
+-        : <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>}
++        // `hideFallback` (patch 0343, direct request) skips this entirely
++        // for an EMPTY gear slot specifically -- that slot's own outline
++        // art (EMPTY_SLOT_FRAME, patch 0342) is already a complete,
++        // closed shape on its own, and a generic weapon/helmet/etc. glyph
++        // floating in the middle on top of it read as a stray placeholder
++        // rather than a real icon. Every OTHER IconBox caller (an actual
++        // owned item with no art yet, a consumable, a curio...) still
++        // wants the glyph -- there's a real item there, it just needs
++        // something to stand in for its missing art.
++        : (!hideFallback && <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>)}
+       {/* Broken-gear indicator (patch 0295), direct request: a red ring
+           plus a small "!" badge, same corner-badge shape used elsewhere
+           for at-a-glance state, so a durability-0 item reads as needing
+@@ -54,9 +63,9 @@ function IconBox({
+ }
+ 
+ export function ItemIcon({
+-  slot, icon, size = 40, broken,
+-}: { slot: EquipSlot; icon?: string; size?: number; broken?: boolean }) {
+-  return <IconBox icon={icon} size={size} fallback={SLOT_FALLBACK[slot]} broken={broken} />;
++  slot, icon, size = 40, broken, hideFallback,
++}: { slot: EquipSlot; icon?: string; size?: number; broken?: boolean; hideFallback?: boolean }) {
++  return <IconBox icon={icon} size={size} fallback={SLOT_FALLBACK[slot]} broken={broken} hideFallback={hideFallback} />;
+ }
+ 
+ /** Falls back to the consumable's own glyph (not a generic placeholder) when no icon is assigned. */
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 3beb4f7..57b42fe 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -658,7 +658,12 @@ function SlotCard({
+         style={{ backgroundImage: `url(${EMPTY_SLOT_FRAME})` }}
+       >
+         <div className="item-card-summary">
+-          <ItemIcon slot={slot} />
++          {/* hideFallback (patch 0343, direct request): the old
++              weapon/helmet/etc. emoji placeholder sat awkwardly in the
++              middle of the outline art now that this slot has no card
++              background of its own (patch 0342) -- the frame art alone
++              already reads as "empty," so the glyph was just clutter. */}
++          <ItemIcon slot={slot} hideFallback />
+           <div className="item-card-body">
+             <div className="slot-name">{slot}</div>
+             <div className="tiny muted">Empty</div>
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index a2282a3..d2ddd69 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -123,7 +123,7 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state:
+   return (
+     <div style={{ position: 'relative', marginBottom: 12 }}>
+       <button
+-        className="btn-ghost"
++        className="btn-ghost tombstone-style-toggle"
+         style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+         onClick={() => setOpen((v) => !v)}
+         aria-expanded={open}
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 5258414..9f76a79 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -280,7 +280,17 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+               >
+                 {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`}
+               </button>
+-              <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
++              {/* Patch 0343, direct report: this generic Crafting button
++                  used VENDOR_CRAFT_CATEGORY['enchanter'] === 'enchant',
++                  which opened the exact same craft-then-apply flow as
++                  the dedicated Weapon Enchanting button just below --
++                  two buttons doing the same thing on the Enchanter's own
++                  page. Blacksmith/Alchemist still get this one; only the
++                  Enchanter drops it, since it's the only vendor with a
++                  same-category dedicated station duplicating it. */}
++              {vendorId !== 'enchanter' && (
++                <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
++              )}
+               {/* Durability repair -- moved here from a per-item button
+                   buried in the Inventory tab, gear-specific so it only
+                   makes sense on the Blacksmith's own page. */}

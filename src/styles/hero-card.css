@@ -384,8 +384,13 @@
 }
 
 .hero-block-panels {
+  /* Patch 0343: used to be a 2-column grid holding TOTAL MODIFIERS
+     alongside the injuries/Treat panel -- that second panel moved out
+     to the portrait column (always visible now, not just when isOpen),
+     so this only ever wraps one panel these days. Single column instead
+     of a 2fr grid with a permanently-empty second slot. */
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -429,6 +434,38 @@
   justify-content: space-between;
   gap: 8px;
   margin-top: 6px;
+}
+
+/* Patch 0343, direct request: compact/always-visible injuries+Treat
+   panel, living in the portrait column's own leftover space below the
+   ledger (see HeroBlock.tsx) rather than tucked behind "More". The
+   portrait column is only ~168px wide (144px after padding), too narrow
+   for the old side-by-side name/heals-in + Treat/Bandage row layout --
+   everything stacks vertically instead, and the two action buttons sit
+   full-width so they stay tappable at this width. */
+.hero-block-portrait-injuries {
+  width: 100%;
+  margin-top: 2px;
+}
+.hero-block-portrait-injuries .hero-block-panel-label { margin-bottom: 5px; }
+.hero-block-injury-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.hero-block-injury-compact:first-of-type { margin-top: 0; }
+.hero-block-injury-compact-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+.hero-block-injury-compact-actions button,
+.hero-block-injury-compact > button {
+  width: 100%;
+  font-size: 0.5625rem;
+  padding: 5px 6px;
 }
 
 .hero-block-title-row { align-items: center; gap: 6px; }

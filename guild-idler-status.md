@@ -28126,3 +28126,95 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
 clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
+
+### Onboarding polish, Treat visibility, and a handful of direct-report fixes (patch 0343)
+
+```discord-update
+Dev Update | Patch 0343
+- Added a guided tip explaining gear durability the first time a new player checks Inventory after their weapon takes damage
+- Added a guided tip explaining how to Treat an injury the first time a new player checks Heroes after taking a hit
+- Changed a hero's Injuries/Treat panel to always show on their card, instead of hiding behind the "More" button
+- Changed the empty gear slot placeholder icon -- removed, the outline art speaks for itself now
+- Fixed the Tombstone Style button's text washing out against lighter backgrounds
+- Fixed the mouse cursor not showing a click-hand over Vendor stock items
+- Fixed the Enchanter's Crafting button opening the same thing as Weapon Enchanting -- removed the duplicate
+```
+
+Seven direct reports/requests, all small enough to land together.
+
+**Two new guided-onboarding topics, tab-visit gated.** The old
+`first_injury_or_wear` topic fired the instant a hero had an injury or
+worn gear, regardless of what the player was actually looking at, and
+bundled both messages into one Heroes-targeted toast. Split into
+`first_durability_explainer` (Inventory tab) and `first_treat_explainer`
+(Heroes tab), each gated on a new one-time tab-visit flag
+(`hasVisitedEquipmentTab`/`hasVisitedHeroesTab`, SAVE_VERSION 64) set by
+`engine.acknowledgeEquipmentTabVisit`/`acknowledgeHeroesTabVisit` --
+exact same shape `hasVisitedVendorsTab`/`acknowledgeVendorsTabVisit`
+already established, wired from the same MenuWindow per-tab-switch
+effect. Order-independent: `GuidanceManager.checkAll` re-runs after
+every relevant engine action (including the tab-visit acknowledgements
+themselves), so whichever of "opened the tab" or "gear broke/hero got
+hurt" happens second is what actually fires the explainer -- a player
+who pokes at Inventory before their first quest sees nothing yet, then
+gets the durability tip the moment that first quest actually breaks
+something. Both new topics default to already-seen (`true`) on migration
+for any existing save, same "nothing left to retroactively explain on a
+veteran save" reasoning every other `hasVisited*` migration in this file
+already uses.
+
+**Treat, no longer hidden under "More."** Direct report: the
+injuries/Treat panel only ever rendered inside a hero's collapsed
+`isOpen` details section, so a guided player who just took quest damage
+had to find and click "More ▼" before Treat was even visible. Moved out
+to the hero's portrait column instead, always shown, filling the real
+leftover vertical space below the ledger (Gear score/Quests won/Lifetime
+gold/Lifetime xp/Renown perks) -- that column stretches to match the
+body column's own height (`.hero-block-grid`'s `align-items: stretch`),
+so there was empty room sitting there on most heroes already. Compact,
+stacked layout (`hero-block-portrait-injuries`) rather than the old
+side-by-side name/Treat/Bandage row, since the portrait column is only
+~168px wide. The old in-panel copy was removed outright rather than
+duplicated; `hero-block-panels`' 2-column grid dropped to a single
+column now that TOTAL MODIFIERS is the only thing left in it.
+
+**Empty gear slots drop their placeholder icon.** Direct request:
+patch 0342 already stripped the card background/border off an empty
+slot so its own outline art reads as a complete shape on its own, but
+the slot's generic weapon/helmet/etc. emoji glyph (`ItemIcon`'s
+fallback) was still floating in the middle of it, looking like a stray
+placeholder rather than intentional art. New `hideFallback` prop on
+`ItemIcon`/`IconBox` (`icons.tsx`), passed only from `SlotCard`'s empty
+branch (`EquipmentPanel.tsx`) -- every other `ItemIcon`/`ConsumableIcon`/
+etc. caller still wants its fallback glyph, since those represent a real
+owned item that just hasn't gotten dedicated art yet, not an
+intentionally-empty slot.
+
+**Tombstone Style button, dark background.** Direct report: the style
+picker's toggle button sat on plain `.btn-ghost` (`background:
+transparent`), which washes its own text out over lighter background
+art -- same underlying issue patch 0334's `.panel-help-btn` fix already
+solved for the per-tab help button. New `.tombstone-style-toggle` class,
+same non-transparent treatment.
+
+**Vendor stock hover cursor.** Direct report: hovering a Vendor stock
+card kept the plain arrow cursor instead of a click-hand, unlike every
+other clickable card in the game. `.item-card-summary` (SlotCard/
+StashCard) already gets `cursor: pointer` generically, but a Vendor card
+is `.card`-based with `.rarity-banner-content` as its inner wrapper
+instead (same `.card`-vs-`.item-card` split patch 0342's "purple box"
+writeup covers) -- that class never set a cursor of its own. Added
+directly to `.vendor-stock-card` so it's inherited regardless of which
+inner wrapper is in play.
+
+**Enchanter's duplicate Crafting button, removed.** Direct report: the
+generic "Crafting" button every vendor page shows opened
+`VENDOR_CRAFT_CATEGORY['enchanter'] === 'enchant'` for the Enchanter
+specifically, which is the exact same craft-then-apply flow the
+dedicated "Weapon Enchanting" button right next to it already opens --
+two buttons doing the same thing on one page. Blacksmith and Alchemist
+keep their Crafting button unchanged; only the Enchanter drops it, since
+it's the only vendor with a same-category dedicated station duplicating
+it.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.

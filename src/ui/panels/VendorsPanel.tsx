@@ -280,7 +280,17 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               >
                 {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`}
               </button>
-              <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
+              {/* Patch 0343, direct report: this generic Crafting button
+                  used VENDOR_CRAFT_CATEGORY['enchanter'] === 'enchant',
+                  which opened the exact same craft-then-apply flow as
+                  the dedicated Weapon Enchanting button just below --
+                  two buttons doing the same thing on the Enchanter's own
+                  page. Blacksmith/Alchemist still get this one; only the
+                  Enchanter drops it, since it's the only vendor with a
+                  same-category dedicated station duplicating it. */}
+              {vendorId !== 'enchanter' && (
+                <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
+              )}
               {/* Durability repair -- moved here from a per-item button
                   buried in the Inventory tab, gear-specific so it only
                   makes sense on the Blacksmith's own page. */}

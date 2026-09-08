@@ -17,8 +17,8 @@ const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem' | 'cha
 };
 
 function IconBox({
-  icon, size, fallback, broken,
-}: { icon?: string; size: number; fallback: string; broken?: boolean }) {
+  icon, size, fallback, broken, hideFallback,
+}: { icon?: string; size: number; fallback: string; broken?: boolean; hideFallback?: boolean }) {
   // Falls back to the glyph on a 404, not just when `icon` is unset --
   // the common path for a brand-new material assigned an icon path in
   // DevTool before the actual file has been dropped into item-icons/ yet
@@ -42,7 +42,16 @@ function IconBox({
         // but an emoji glyph has no transparency of its own to preserve
         // and needs SOME backdrop to stay legible against whatever art is
         // behind it (a bright background, a busy crafting scene, etc.).
-        : <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>}
+        // `hideFallback` (patch 0343, direct request) skips this entirely
+        // for an EMPTY gear slot specifically -- that slot's own outline
+        // art (EMPTY_SLOT_FRAME, patch 0342) is already a complete,
+        // closed shape on its own, and a generic weapon/helmet/etc. glyph
+        // floating in the middle on top of it read as a stray placeholder
+        // rather than a real icon. Every OTHER IconBox caller (an actual
+        // owned item with no art yet, a consumable, a curio...) still
+        // wants the glyph -- there's a real item there, it just needs
+        // something to stand in for its missing art.
+        : (!hideFallback && <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>)}
       {/* Broken-gear indicator (patch 0295), direct request: a red ring
           plus a small "!" badge, same corner-badge shape used elsewhere
           for at-a-glance state, so a durability-0 item reads as needing
@@ -54,9 +63,9 @@ function IconBox({
 }
 
 export function ItemIcon({
-  slot, icon, size = 40, broken,
-}: { slot: EquipSlot; icon?: string; size?: number; broken?: boolean }) {
-  return <IconBox icon={icon} size={size} fallback={SLOT_FALLBACK[slot]} broken={broken} />;
+  slot, icon, size = 40, broken, hideFallback,
+}: { slot: EquipSlot; icon?: string; size?: number; broken?: boolean; hideFallback?: boolean }) {
+  return <IconBox icon={icon} size={size} fallback={SLOT_FALLBACK[slot]} broken={broken} hideFallback={hideFallback} />;
 }
 
 /** Falls back to the consumable's own glyph (not a generic placeholder) when no icon is assigned. */

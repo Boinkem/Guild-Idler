@@ -658,7 +658,12 @@ function SlotCard({
         style={{ backgroundImage: `url(${EMPTY_SLOT_FRAME})` }}
       >
         <div className="item-card-summary">
-          <ItemIcon slot={slot} />
+          {/* hideFallback (patch 0343, direct request): the old
+              weapon/helmet/etc. emoji placeholder sat awkwardly in the
+              middle of the outline art now that this slot has no card
+              background of its own (patch 0342) -- the frame art alone
+              already reads as "empty," so the glyph was just clutter. */}
+          <ItemIcon slot={slot} hideFallback />
           <div className="item-card-body">
             <div className="slot-name">{slot}</div>
             <div className="tiny muted">Empty</div>

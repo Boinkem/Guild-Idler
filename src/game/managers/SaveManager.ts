@@ -180,6 +180,8 @@ export function createInitialState(now = Date.now()): GameState {
     hasCompletedFirstQuest: false,
     hasVisitedVendorsTab: false,
     hasObtainedConsumable: false,
+    hasVisitedEquipmentTab: false,
+    hasVisitedHeroesTab: false,
     peddlerTab: null,
     guildName: '',
     notifiedSetBonuses: [],
@@ -1365,6 +1367,20 @@ const MIGRATIONS: Record<number, Migration> = {
     version: 63,
     questFastUpgrades: (save.questFastUpgrades as Record<string, number> | undefined) ?? {},
     pendingQuestBoardIntro: (save.pendingQuestBoardIntro as boolean | undefined) ?? false,
+  }),
+  // Patch 0343 -- new Inventory/Heroes first-visit flags backing the
+  // first_durability_explainer/first_treat_explainer guidance topics
+  // (see GameState.hasVisitedEquipmentTab/hasVisitedHeroesTab's own
+  // comments). Same "default true for every existing save" reasoning
+  // migration 58's hasVisitedVendorsTab already used -- a save old
+  // enough to need migrating has, by definition, opened both tabs
+  // countless times already, so there's nothing left for either new
+  // topic to retroactively explain.
+  63: (save) => ({
+    ...save,
+    version: 64,
+    hasVisitedEquipmentTab: (save.hasVisitedEquipmentTab as boolean | undefined) ?? true,
+    hasVisitedHeroesTab: (save.hasVisitedHeroesTab as boolean | undefined) ?? true,
   }),
 };
 

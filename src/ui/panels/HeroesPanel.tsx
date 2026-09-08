@@ -123,7 +123,7 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
   return (
     <div style={{ position: 'relative', marginBottom: 12 }}>
       <button
-        className="btn-ghost"
+        className="btn-ghost tombstone-style-toggle"
         style={{ display: 'flex', alignItems: 'center', gap: 8 }}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}

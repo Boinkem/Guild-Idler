@@ -2389,6 +2389,38 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /**
+   * Patch 0343, direct request. Same shape as acknowledgeVendorsTabVisit
+   * just above -- flips GameState.hasVisitedEquipmentTab the first time
+   * the player opens the Inventory (Equipment) tab at all. Arms the
+   * one-time first_durability_explainer topic, which only actually
+   * surfaces once this is true AND some hero's gear has already taken
+   * durability damage (see that topic's own CHECKS entry) -- so this
+   * fires harmlessly on an early, damage-free first visit and the real
+   * explainer only shows up once there's something to explain. Called
+   * from MenuWindow's existing per-tab-switch effect.
+   */
+  acknowledgeEquipmentTabVisit() {
+    if (this.state.hasVisitedEquipmentTab) return;
+    this.state.hasVisitedEquipmentTab = true;
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    void this.saveNow();
+  }
+
+  /**
+   * Patch 0343, direct request. Same shape as acknowledgeEquipmentTabVisit
+   * just above, for the Heroes tab -- flips GameState.hasVisitedHeroesTab
+   * the first time the player opens it at all, arming the one-time
+   * first_treat_explainer topic (only surfaces once this is true AND some
+   * hero is actually injured).
+   */
+  acknowledgeHeroesTabVisit() {
+    if (this.state.hasVisitedHeroesTab) return;
+    this.state.hasVisitedHeroesTab = true;
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    void this.saveNow();
+  }
+
   acknowledgeVendorFirstVisit(vendorId: VendorId) {
     if (vendorId === 'alchemist' && !this.state.hasSeenAlchemist) {
       this.state.hasSeenAlchemist = true;

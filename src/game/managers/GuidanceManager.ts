@@ -107,8 +107,23 @@ const CHECKS: Record<string, Check> = {
   // for one more caller.
   auto_chain_unlocked: (state) => GuildManager.upgradeLevel(state, 'auto_chain') > 0,
   first_bard_track_unlocked: (state) => (state.unlockedBardTracks ?? []).length >= 1,
-  first_injury_or_wear: (state) => state.heroes.some((h) => h.injuries.length > 0
-    || Object.values(h.equipment).some((item) => item && item.durability < EquipmentManager.maxDurability(item))),
+  // Patch 0343, direct request. Splits the old combined
+  // first_injury_or_wear topic in two, each gated on its own tab's first
+  // visit (hasVisitedEquipmentTab/hasVisitedHeroesTab, set by
+  // engine.acknowledgeEquipmentTabVisit/acknowledgeHeroesTabVisit via
+  // MenuWindow's tab-switch effect) rather than firing the instant the
+  // underlying condition goes true regardless of what the player's
+  // actually looking at. Order-independent by design: checkAll runs
+  // again after every relevant engine action (including the tab-visit
+  // acknowledgements themselves), so whichever of "visited the tab" or
+  // "gear broke / hero got hurt" happens second is still what actually
+  // triggers the explainer -- a player who opens Inventory before ever
+  // taking a quest sees nothing yet, then gets the durability explainer
+  // the moment their first quest actually damages a piece of gear.
+  first_durability_explainer: (state) => state.hasVisitedEquipmentTab
+    && state.heroes.some((h) => Object.values(h.equipment).some((item) => item && item.durability < EquipmentManager.maxDurability(item))),
+  first_treat_explainer: (state) => state.hasVisitedHeroesTab
+    && state.heroes.some((h) => h.injuries.length > 0),
   // Deliberately checks live state (some hero currently Fallen) rather
   // than a log/result flag -- this runs immediately after
   // QuestManager.resolve/RaidManager.resolve in the same tick, before

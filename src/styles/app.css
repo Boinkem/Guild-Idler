@@ -983,6 +983,17 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .panel-help-btn:hover { background: var(--panel-2); border-color: var(--blood); }
 
+/* Direct report: the Tombstone Style toggle sits on plain .btn-ghost
+   (background: transparent), which reads fine over the app's usual
+   panel backgrounds but washes its own text out wherever this button
+   ends up over lighter background art -- same underlying "transparent
+   ghost button over art" issue .panel-help-btn's own writeup just above
+   already fixed for the per-tab help button. Same fix here: a real,
+   dark, non-transparent background so the label stays legible no matter
+   what's behind it. */
+.tombstone-style-toggle { background: var(--night); }
+.tombstone-style-toggle:hover { background: var(--panel-2); border-color: var(--brass); }
+
 /* Crafting/Enchanting/Enhance are deliberately styled apart from every
    other action button in the game -- --violet is already the game's one
    consistent purple accent (Renown uses it too), so this stays legible
@@ -5400,7 +5411,16 @@ button.harvest-item:hover {
    the same ~15% bump), so the extra room the wider column provides
    actually gets used as breathing room around the icon/text rather than
    just stretching blank card background. */
-.vendor-stock-card { padding: 12px 14px; }
+/* Direct report: hovering a vendor stock card kept the default arrow
+   cursor instead of the hand/click cursor every other clickable card
+   already gets. `.item-card-summary` (SlotCard/StashCard) picks up
+   cursor: pointer generically above, but a vendor card is `.card`-based
+   with `.rarity-banner-content` as its inner wrapper instead (see the
+   "purple box" writeup further down for the full .card-vs-.item-card
+   split) -- that class never set a cursor of its own. Set directly on
+   the card root instead so it's inherited by every child regardless of
+   which inner wrapper is in play. */
+.vendor-stock-card { padding: 12px 14px; cursor: pointer; }
 .item-card-summary { position: relative; z-index: 1; }
 .item-card .rarity-pill { background: rgba(0, 0, 0, 0.4); }
 .item-card-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }

@@ -217,6 +217,63 @@ export function HeroBlock({
               </div>
             )}
           </div>
+
+          {/* Patch 0343, direct request: this used to only render inside
+              the "More" details panel (isOpen), which meant Treat was
+              effectively hidden behind an extra click at the exact
+              moment a guided player most needs it. Moved out here,
+              always visible, into the portrait column's own leftover
+              space below the ledger (the column stretches to match the
+              body column's height -- see .hero-block-grid's
+              align-items: stretch -- so there's real empty room here on
+              any hero without a full Renown-perks row). Compact/stacked
+              layout (hero-block-portrait-injuries) rather than the wider
+              side-by-side buttons the old in-panel version used, since
+              this column is only ~168px wide. */}
+          {(hero.injuries.length > 0 || fallen) && (
+            <div className="hero-block-panel hero-block-panel-danger hero-block-portrait-injuries">
+              <div className="hero-block-panel-label">{fallen ? 'FALLEN' : 'INJURIES'}</div>
+              {hero.injuries.map((injury) => (
+                <div key={injury.id} className="hero-block-injury-compact">
+                  <div className="small bad">{injury.name}</div>
+                  <div className="tiny muted">heals in {formatDuration(injury.healsAt - now)}</div>
+                  <div className="hero-block-injury-compact-actions">
+                    <button
+                      className="btn-primary"
+                      onClick={() => engine.treatInjury(hero.id, injury.id)}
+                      disabled={!freeTreat && state.gold < injury.treatmentCost}
+                      title={freeTreat ? 'Free -- on the guild' : undefined}
+                    >
+                      {freeTreat ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
+                      disabled={bandages === 0}
+                    >
+                      Bandage ×{bandages}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {fallen && (
+                <div className="hero-block-injury-compact">
+                  <div className="tiny muted">
+                    {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
+                      ? `Auto-revive in ${formatDuration(hero.fallenAt + Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR - now)}`
+                      : 'needs reviving before being sent out again'}
+                  </div>
+                  <button
+                    className="btn-primary"
+                    onClick={() => engine.reviveHero(hero.id)}
+                    disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
+                  >
+                    Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="hero-block-body">
@@ -358,52 +415,10 @@ export function HeroBlock({
                   )}
                 </div>
 
-                {(hero.injuries.length > 0 || fallen) && (
-                  <div className="hero-block-panel hero-block-panel-danger">
-                    <div className="hero-block-panel-label">{fallen ? 'FALLEN' : 'INJURIES'}</div>
-                    {hero.injuries.map((injury) => (
-                      <div key={injury.id} className="hero-block-injury">
-                        <div>
-                          <div className="small bad">{injury.name}</div>
-                          <div className="tiny muted">heals in {formatDuration(injury.healsAt - now)}</div>
-                        </div>
-                        <div className="row">
-                          <button
-                            className="btn-primary"
-                            onClick={() => engine.treatInjury(hero.id, injury.id)}
-                            disabled={!freeTreat && state.gold < injury.treatmentCost}
-                            title={freeTreat ? 'Free -- on the guild' : undefined}
-                          >
-                            {freeTreat ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
-                          </button>
-                          <button
-                            className="btn-primary"
-                            onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
-                            disabled={bandages === 0}
-                          >
-                            Bandage ×{bandages}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {fallen && (
-                      <div className="hero-block-injury">
-                        <div className="tiny muted">
-                          {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
-                            ? `Auto-revive in ${formatDuration(hero.fallenAt + Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR - now)}`
-                            : 'needs reviving before being sent out again'}
-                        </div>
-                        <button
-                          className="btn-primary"
-                          onClick={() => engine.reviveHero(hero.id)}
-                          disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
-                        >
-                          Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Patch 0343: the injuries/Treat panel that used to live
+                    here moved out to the portrait column, always visible
+                    -- see the hero-block-portrait-injuries block above.
+                    TOTAL MODIFIERS above is still isOpen-only. */}
               </div>
 
               <p className="card-flavour">{classDef.blurb}</p>

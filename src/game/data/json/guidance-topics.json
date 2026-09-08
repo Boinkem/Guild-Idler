@@ -99,10 +99,18 @@
     "targetTab": "settings"
   },
   {
-    "id": "first_injury_or_wear",
+    "id": "first_durability_explainer",
     "messages": [
-      "A hurt hero or worn-down gear both drag down the odds on every quest, not just the one that caused it -- don't just wait it out. Treat an injury or Repair a piece of gear right from a hero's card in the Heroes tab (or spend a Field Bandage there instead of gold).",
-      "Each hero's very first Treat and first Repair are free, on the guild. everything after that costs gold. A Physician's Charity or Smith's Charity guild upgrade can make more of each free every day, for every hero."
+      "That gear took durability damage on the quest -- worn-down equipment drags down the odds on every quest from here on, not just the one that caused it.",
+      "Repair it right here from the Inventory tab. Each hero's very first Repair is free, on the guild -- everything after that costs gold and Scrap (a Smith's Charity guild upgrade can make more free every day)."
+    ],
+    "targetTab": "equipment"
+  },
+  {
+    "id": "first_treat_explainer",
+    "messages": [
+      "That hero came back injured -- an untreated injury drags down the odds on every quest, not just the one that caused it, so don't just wait it out.",
+      "Treat it right from their card here in the Heroes tab (or spend a Field Bandage instead of gold). Each hero's very first Treat is free, on the guild -- everything after that costs gold (a Physician's Charity guild upgrade can make more free every day)."
     ],
     "targetTab": "heroes"
   },
