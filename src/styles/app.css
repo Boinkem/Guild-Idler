@@ -5424,7 +5424,7 @@ button.harvest-item:hover {
 .rarity-frame-card .item-card-summary,
 .rarity-frame-card .rarity-banner-content {
   padding-left: 34%;
-  padding-top: 12%;
+  padding-top: 21%;
   min-height: 100%;
   box-sizing: border-box;
   /* Patch 0340, direct report: the name was vertically centered in the
@@ -5435,8 +5435,38 @@ button.harvest-item:hover {
      frame art's own open upper band -- away from both the icon (which
      sits centered lower-left in its socket) and the decorative dotted
      divider line roughly at the card's vertical middle -- so it has a
-     clear, uncontested spot rather than sharing the icon's own row. */
+     clear, uncontested spot rather than sharing the icon's own row.
+     Patch 0341, direct follow-up report with a screenshot: 12% wasn't
+     enough -- measured directly off the source art, the frame's own top
+     double-line border runs from ~14% to ~20% down, so a name pinned at
+     12% sat ON TOP of that border instead of below it. 21% clears it
+     with a little room to spare. */
   align-items: flex-start !important;
+}
+/* Patch 0341, direct follow-up report with a before/after mockup: pills
+   and other secondary content (durability bar, count, etc) were still
+   landing immediately under the name, cramped together at the top --
+   the request was to spread them out, landing secondary content down
+   near the icon's own row (the dotted divider line, ~49% down) instead.
+   Absolute positioning here, not a stretch+space-between flex approach
+   (tried first, reverted) -- that approach relies on percentage heights
+   resolving correctly through a chain of nested flex/aspect-ratio
+   containers, which turned out to be unreliable in practice: caught live
+   with a real screenshot showing the durability bar pushed straight out
+   past the bottom of the visible frame entirely, not just misplaced
+   within it. Same proven technique the icon positioning below already
+   uses instead -- percentages measured directly against the card,
+   independent of any ancestor's own height resolution. `top: 42%`
+   deliberately sits a little above the dotted line's own ~49% so a
+   compact one-line row of pills reads as roughly centered ON the line,
+   not starting at it and hanging below. Left/right match the body's own
+   horizontal bounds (34% padding-left, ~6% right margin used elsewhere
+   on this card). */
+.rarity-frame-card .item-card-meta-row {
+  position: absolute;
+  left: 34%;
+  right: 6%;
+  top: 42%;
 }
 /* Outline-only variant (Silver, empty slots) -- deliberately does NOT
    set background-color: transparent like .rarity-frame-card above. The
@@ -5455,7 +5485,7 @@ button.harvest-item:hover {
 }
 .rarity-frame-card-outline .item-card-summary {
   padding-left: 34%;
-  padding-top: 12%;
+  padding-top: 21%;
   min-height: 100%;
   box-sizing: border-box;
   align-items: flex-start !important;

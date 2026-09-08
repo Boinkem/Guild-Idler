@@ -28001,3 +28001,60 @@ reported against, on a fresh clone confirmed to already include 0338 and
 confirmed fixed, no regressions in the StashCard's busier layout (name,
 rarity pill, and durability bar all still land cleanly) or the Vendor
 shop card's simpler one.
+
+### Rarity card follow-up #2: name still crossed the top border, meta text still cramped (patch 0341)
+
+```discord-update
+Dev Update | Rarity Cards
+- Item names on rarity cards no longer cross the frame's own top border line
+- Pills and durability bars now sit lower, aligned with the frame's decorative divider line
+```
+
+Direct follow-up report with a before/after mockup and an annotated
+screenshot, on top of 0340's own fixes for this same card redesign --
+both issues confirmed live before and after, same as every round on this
+feature so far.
+
+**Name still overlapping the frame -- 0340's fix undershot it.**
+Measured the actual source art this time instead of eyeballing it: the
+frame's own top double-line border runs from about 14% to 20% down the
+card, and 0340's `padding-top: 12%` landed the name right on top of that
+border instead of clearing it -- confirmed with a screenshot showing
+"shield" crossing straight through the border line, matching the
+reported screenshot almost exactly. Raised to 21%.
+
+**Pills/durability bar moved down near the icon's own row, not stacked
+under the name.** Direct request with a mockup showing the desired
+target position: roughly aligned with the frame's decorative dotted
+divider line, not immediately under the item name. First attempt used a
+stretch + `justify-content: space-between` flex approach on
+`.item-card-body` -- reverted after catching it live: percentage-height
+resolution through a chain of nested flex/`aspect-ratio` containers
+turned out to be unreliable, and a real screenshot showed the durability
+bar pushed out past the bottom of the visible frame entirely rather than
+just misplaced within it. Replaced with the same absolute-positioning
+technique the icon itself already uses (`top`/`left`/`right` measured
+directly against the card, independent of any ancestor's own height) --
+`.item-card-meta-row` now sits at `top: 42%`, which reads as roughly
+centered on the divider line for the common one-line case. Scoped to
+`.rarity-frame-card` only, not the empty-slot outline variant -- that
+card's body is just a slot name plus a plain "Empty" label, not a
+name-plus-pills pair, and moving "Empty" down on its own wasn't part of
+what was reported.
+
+**Shroud/blur -- re-checked, couldn't reproduce after 0340.** Corner
+gems and thin line art all rendered crisp under close zoom in this
+session's testing, no visible haze. Possible the screenshot showing it
+"still present" was captured against a build from before 0340 actually
+landed, since the two patches were delivered close together -- worth
+confirming on a build that definitely includes 0340 before assuming this
+needs further work.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+Re-screenshotted the same Inventory view from both reports -- the
+"Wooden Practice Sword" stash card now shows its rarity pill and
+durability bar aligned with the divider line almost exactly matching the
+"text here" mockup, and every empty gear slot's name clears the top
+border with room to spare. Vendor shop cards (a structurally different
+card shape that never used `.item-card-meta-row`) re-checked for
+regressions and confirmed unaffected.
