@@ -1088,8 +1088,8 @@ function EquipmentShopCard({
         <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
           <ItemIcon slot={def.slot} icon={def.icon} size={41} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
-            <div className="tiny muted">Lv {displayLevel} · {formatGold(price)}</div>
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
+            <div className="item-card-meta-row tiny muted">Lv {displayLevel} · {formatGold(price)}</div>
           </div>
         </div>
       </div>
@@ -1159,8 +1159,8 @@ function ConsumableShopCard({
         <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
           <ConsumableIcon icon={def.icon} glyph={def.glyph} size={41} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
-            <div className="tiny muted">{formatGold(price)}</div>
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
+            <div className="item-card-meta-row tiny muted">{formatGold(price)}</div>
           </div>
         </div>
       </div>

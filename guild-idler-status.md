@@ -28058,3 +28058,71 @@ durability bar aligned with the divider line almost exactly matching the
 border with room to spare. Vendor shop cards (a structurally different
 card shape that never used `.item-card-meta-row`) re-checked for
 regressions and confirmed unaffected.
+
+### Rarity card follow-up #3: the actual root cause, plus the last visible box (patch 0342)
+
+```discord-update
+Dev Update | Rarity Cards
+- Fixed rarity card text landing in the wrong spot for real (found the actual cause this time)
+- Empty gear slots no longer show any box at all -- just the outline art over the scene
+- Removed a leftover outline still visible around Vendor stock cards
+```
+
+Direct follow-up report with a fresh screenshot, on top of 0340/0341's own
+fixes for this same card redesign. This round found the actual root
+cause behind why positioning kept only half-working across patches,
+rather than nudging numbers again.
+
+**The real bug, finally found.** Every `padding-left`/`padding-top` fix
+in 0340 and 0341 was silently losing to a much older rule from patch
+0322 -- `.item-card.rarity-card .item-card-summary { padding: 12px
+14px; }` -- which has three classes of specificity against this
+feature's two, and was never overridden because only `align-items` had
+been marked `!important`, not the padding properties sitting right next
+to it. This explains everything reported across every round: Vendor
+cards use `.rarity-banner-content`, a class the old rule never targets,
+which is exactly why they were the one card type that already looked
+right -- not because they got special treatment, but because they were
+the only ones NOT fighting this old rule in the first place. Every
+`padding-left`/`padding-top` in this feature's CSS is `!important` now.
+With the name actually landing where the padding says it should,
+rarity/durability (and Vendor's level/price, `.item-card-meta-row`)
+moved from `top: 42%` to `top: 56%` -- clearly below the frame's dotted
+divider line instead of straddling it, per a direct annotated report.
+Empty slots' "Empty" label gets the same treatment now too, for
+consistency between a slot's filled and empty states.
+
+**The "purple box," finally gone for good.** Two separate causes, found
+one at a time as each got fixed and the next became visible underneath:
+1. `.item-card.empty { opacity: 0.6 }` was dimming the WHOLE element,
+   including its own solid background rectangle -- confirmed live by
+   forcing opacity:1 and watching a translucent haze vanish entirely.
+   Fixed last round by restoring full opacity for the Silver-framed
+   empty slots specifically.
+2. Even at full opacity, a real rectangular card (border + solid
+   background) was still visible as a box. Direct follow-up: remove it
+   entirely rather than just fix its opacity -- the Silver outline art
+   is a complete, closed shape on its own (a full ring + frame border),
+   so there's nothing left for a separate card background to add. Empty
+   gear slots now render with no card background or border at all, just
+   the line art directly over the scene.
+
+**The last visible outline, on Vendor cards specifically.** Direct
+follow-up with a zoomed screenshot: even after border: none, Vendor
+cards (EquipmentShopCard/ConsumableShopCard) still showed a thin gold
+outline. Vendor cards are the only `.card`-based usage of this feature
+(everything else is `.item-card`-based) -- traced to `.card`'s own
+`box-shadow: var(--bevel), var(--carved-line)`, and `--carved-line`
+specifically is `0 0 0 1px color-mix(...)`, a solid-color outline drawn
+via box-shadow rather than the `border` property, so `border: none`
+never touched it. `.item-card` never had this problem since its own
+edge is a real `border`, already cleared. `box-shadow: none` added.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+Every fix in this entry was re-screenshotted against the exact live
+views the corresponding report was made against -- StashCard/SlotCard
+name and meta-row position, every empty gear slot showing no box at all
+against the scene art, and a tight zoom on a Vendor stock card showing a
+clean edge with no outline. Also re-checked Inventory after the Vendor-
+specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+didn't regress anything there -- it didn't.
