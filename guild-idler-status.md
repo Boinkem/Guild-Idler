@@ -27823,3 +27823,99 @@ custom-property url() resolution, and the `.titlebar > *` specificity
 collision) were caught this way that would not have been caught by
 typecheck/build alone -- both compiled and built clean while still being
 functionally broken.
+
+### Design A rarity cards shipped for real: gear, potions, Curios, empty slots (patch 0338)
+
+```discord-update
+Dev Update | Rarity Card Redesign
+- Every gear and potion card in Inventory and the Shop now shows its full rarity frame art, not just a thin strip behind it
+- Curios get their own neutral grey frame -- they're not a "weak" rarity, just uncategorized
+- Empty gear slots get a new silver outline frame instead of a plain placeholder
+```
+
+Full implementation of the "Design A" rarity card mockup approved two
+patches ago, including the follow-up icon-size bump, applied everywhere
+the game actually shows a rarity-carrying item card: `SlotCard`/
+`StashCard`/`ArmourStashCard` (gear), `ConsumableInfoCard` and the
+equipped-consumable card (potions -- direct request, "assigning
+consumables the new art too"), and `EquipmentShopCard`/
+`ConsumableShopCard` (Vendor stock) -- 7 real call sites across
+EquipmentPanel.tsx and VendorsPanel.tsx, roughly triple the scope the
+original mockup itself covered. Plus the two new special-purpose frames:
+Grey on `CurioCard` (Curios have no real rarity in the data -- see
+CurioDef's own comment, "no rarity concept to roll against, just a flat
+sell value" -- so Grey reads as "collectible," not "weak"), and Silver as
+an outline overlay on `SlotCard`'s empty-slot branch.
+
+**Deliberate scope boundary: modals untouched.** Every one of those 7
+call sites also has its own detail modal, and every one of those modals
+already had its own `.modal-banner`/`.modal-banner-scrim` treatment
+(RARITY_BANNER, a wide 21:5 strip across the top) -- that system is left
+completely intact. A tall modal is a meaningfully different shape from a
+card, redesigning it was never part of what got mocked up or approved,
+and touching it here would have been scope creep on spec rather than a
+direct request. `RARITY_FRAME` (util.ts) is a deliberately SEPARATE
+mapping from the existing `RARITY_BANNER`, not a replacement for it, so
+the two systems coexist cleanly -- new frame files live in
+public/rarity-frames/, the old banner files in public/rarity-banners/
+untouched.
+
+**Implementation shape.** New shared CSS (`.rarity-frame-card` for the
+five real rarities plus Curios' grey, `.rarity-frame-card-outline` for
+Silver specifically) rather than a new React component -- the 7 call
+sites split across two structurally different card shells
+(`.item-card`/`.item-card-summary` vs `.card.vendor-stock-card`/
+`.rarity-banner-content`), so a shared CSS class that both shells can
+opt into needed less invasive changes at each site than forcing every
+call site through one rigid wrapper component would have. No markup
+restructuring needed beyond adding the class and the frame's own inline
+`backgroundImage` -- the icon-positioning rule targets `.item-icon`
+(IconBox's own root class, icons.tsx) via a descendant selector, so it
+applies wherever in each card's existing JSX the icon happens to render.
+`aspect-ratio: 1536/1024` is a preferred ratio, not a hard clamp -- a
+card whose real content needs more room (StashCard can carry up to five
+pills plus a durability bar) is free to grow taller than the frame art's
+own native ratio, `background-size: 100% 100%` just stretches to match.
+
+**A real bug caught by actually playing it, not just reading the CSS.**
+Screenshotted the built app live (Testing tab's +gold cheat, then real
+purchases and a real empty gear slot) rather than trusting the mockup's
+own hand-picked example data. The Vendor shop cards, purchased stash
+items, and every real-icon case rendered exactly as intended on the
+first try. The empty-slot Silver treatment did not: IconBox's fallback
+glyph (icons.tsx, shown whenever an item has no icon file assigned yet --
+common in any dev/test save) is a `<span>` with its own opaque SQUARE
+backdrop sized at 100% of its container, a different element from the
+`<img>` the icon-sizing rule above was written for -- its square corners
+poked out past the frame's own circular ring. Confirmed via bounding-box
+inspection before touching anything, not assumed from the screenshot
+alone. Fixed by resizing that fallback backdrop to 82% and rounding it
+to a circle (`border-radius: 50%`) so it nests inside the ring instead of
+overflowing it. That fix surfaced a second, narrower issue on top: the
+specific glyph triggering this in testing (the military-helmet emoji
+fallback, U+1FA96) kept rendering oversized even after the resize --
+neither `overflow: hidden` nor a reduced `font-size` visibly contained
+it, confirmed by screenshotting the element in isolation both times.
+Ended on `transform: scale(0.55)` as a third layer, which shrinks
+whatever actually gets painted rather than depending on the text-layout
+pipeline sizing the glyph correctly in the first place -- Chromium's
+Noto Color Emoji (bitmap, not vector) glyphs don't reliably rescale with
+font-size or respect a flex container's own clipping in every rendering
+path, and this environment's headless/software-rendered screenshots gave
+inconsistent visual results across the three attempts even where
+computed styles confirmed each fix had genuinely taken effect. All three
+layers are individually reasonable, defensible fixes for "a glyph
+overflowing its circular socket" and are cheap to keep stacked -- but
+full visual confirmation of the transform fix specifically was
+inconclusive in this sandboxed pipeline. Real icon images (the common
+case once devtool icon assignment catches up) were unaffected throughout
+and re-verified clean after every one of these changes. Worth a live
+spot-check on an actual empty gear slot with no icon assigned once this
+lands somewhere with normal (non-headless) rendering.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+Vendor shop cards (gear and potions both), a real purchased stash item,
+and the general empty-slot layout were all confirmed against actual
+screenshots of the running app, not just the original mockup's own
+hand-picked example data -- see the fallback-glyph caveat above for the
+one sub-case that couldn't be fully nailed down the same way.

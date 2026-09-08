@@ -5371,6 +5371,126 @@ button.harvest-item:hover {
 .item-card-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
 
 /*
+ * Design A rarity card frame (patch 0338, approved mockup) -- the whole
+ * card's background IS the tier's own frame art now (RARITY_FRAME/
+ * CURIO_FRAME/EMPTY_SLOT_FRAME in util.ts), not a thin banner strip
+ * behind a plain card. Applies at every item-card-style rarity display:
+ * SlotCard/StashCard/ArmourStashCard (gear), ConsumableInfoCard and the
+ * equipped-consumable card (potions), EquipmentShopCard/
+ * ConsumableShopCard (Vendor stock), CurioCard (grey), and the empty-slot
+ * branch of SlotCard (silver outline). The old .rarity-banner/.modal-
+ * banner system just above is left fully intact -- it still powers every
+ * item's detail MODAL unchanged, a meaningfully different UI shape (tall
+ * modal, not a card) that was never part of the approved mockup.
+ *
+ * aspect-ratio here is a PREFERRED ratio, not a hard clamp -- a card
+ * whose real content needs more vertical room (StashCard can carry up to
+ * five pills plus a durability bar) is free to grow taller than the
+ * frame art's own native ratio; background-size: 100% 100% just stretches
+ * the art to match whatever height the card actually renders at, rather
+ * than cropping or tiling it. Same aspect-ratio-not-fixed-height approach
+ * the approved mockup itself used.
+ *
+ * No markup changes needed at any of the seven real call sites beyond
+ * adding this class + the frame's own inline background-image -- the
+ * icon positioning rule below targets .item-icon (IconBox's own root
+ * class, icons.tsx) directly via a descendant selector, so it applies
+ * regardless of where in each card's existing JSX the icon happens to
+ * render.
+ */
+.rarity-frame-card {
+  position: relative;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  aspect-ratio: 1536 / 1024;
+  border: none;
+  background-color: transparent;
+}
+.rarity-frame-card .item-card-summary,
+.rarity-frame-card .rarity-banner-content {
+  padding-left: 34%;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+/* Outline-only variant (Silver, empty slots) -- deliberately does NOT
+   set background-color: transparent like .rarity-frame-card above. The
+   silver asset is fully transparent except for its line art, so the
+   slot's own existing dark placeholder background needs to stay visible
+   underneath it, not get replaced by it. */
+.rarity-frame-card-outline {
+  position: relative;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  aspect-ratio: 1536 / 1024;
+}
+.rarity-frame-card-outline .item-card-summary {
+  padding-left: 34%;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+/* The icon sits inside the frame's own circular socket -- position and
+   size measured directly off the source art / the approved mockup,
+   including the later "increase icon size" follow-up (fill bumped from
+   62% to 80% of the socket): center at ~16.6%/48.8% of the card, socket
+   ~19% of the card's width across, icon filling 80% of that socket.
+   !important is what lets this percentage-based sizing win over
+   IconBox's own inline pixel width/height (icons.tsx, driven by its
+   `size` prop) -- IconBox itself is used in a dozen other, non-framed
+   contexts where that fixed-pixel sizing is exactly right, so the
+   override lives here, scoped to just these two card classes, rather
+   than changing IconBox itself. */
+.rarity-frame-card .item-icon,
+.rarity-frame-card-outline .item-icon {
+  position: absolute;
+  left: 16.6%;
+  top: 48.8%;
+  transform: translate(-50%, -50%);
+  width: 19% !important;
+  height: auto !important;
+  aspect-ratio: 1;
+}
+.rarity-frame-card .item-icon img,
+.rarity-frame-card-outline .item-icon img {
+  width: 80%;
+  height: 80%;
+}
+/*
+ * Real caught-live bug, not caught by build/typecheck: a real <img> is a
+ * transparent, item-shaped PNG, so sizing it at 80% of a square container
+ * inside a circular socket looks fine either way. IconBox's own fallback
+ * glyph (icons.tsx, shown whenever an item has no icon file assigned yet
+ * -- very common in a dev/test save like the one this was actually
+ * caught in) is a DIFFERENT element (.item-icon-fallback, a <span>, not
+ * an <img>) with its own opaque square backdrop sized at 100% of the
+ * container -- the rule above doesn't touch it at all, so its square
+ * corners poked out past the frame's own circular ring, confirmed via a
+ * real screenshot of a real empty gear slot, not just reasoned about
+ * from the CSS. Rounding it to a circle at a slightly smaller fill (82%)
+ * nests it cleanly inside the ring instead -- a circle inside a circle
+ * only needs a smaller radius, unlike a square, which needs enough
+ * margin to keep its corners clear.
+ */
+.rarity-frame-card .item-icon-fallback,
+.rarity-frame-card-outline .item-icon-fallback {
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  overflow: hidden;
+  /* Neither overflow: hidden nor a smaller font-size (both tried first,
+     both confirmed ineffective via isolated element screenshots) reliably
+     shrinks this: Noto Color Emoji is a bitmap glyph font, and at least
+     in this headless/software-rendered environment its glyphs don't
+     consistently rescale with font-size or respect a flex container's
+     own overflow clipping the way ordinary vector text does. transform:
+     scale() operates on the fully-rendered visual output instead of
+     relying on the text-layout pipeline to size it correctly in the
+     first place, so it shrinks the glyph regardless of *why* it was
+     rendering oversized. */
+  transform: scale(0.55);
+  font-size: 14px;
+}
+
+/*
  * Was `inset: 0` -- full-bleed over the ENTIRE modal, which is much
  * taller than wide (item detail modals run 300-450px tall on a 460px-
  * wide box) while the actual rarity-banner art is a ~4.2:1 wide strip

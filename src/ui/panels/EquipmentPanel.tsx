@@ -12,7 +12,10 @@ import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, Cons
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
-import { describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_COLOR, MAIN_STAT_TOOLTIP } from '../../game/util';
+import {
+  describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_FRAME, CURIO_FRAME, EMPTY_SLOT_FRAME,
+  RARITY_COLOR, MAIN_STAT_TOOLTIP,
+} from '../../game/util';
 import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
@@ -335,7 +338,8 @@ function CurioCard({ def, count, engine }: { def: CurioDef; count: number; engin
   return (
     <>
       <div
-        className="item-card"
+        className="item-card rarity-frame-card"
+        style={{ backgroundImage: `url(${CURIO_FRAME})` }}
         data-curio-id={def.id}
         onClick={() => setOpen(true)}
         role="button"
@@ -392,13 +396,13 @@ function ConsumableInfoCard({
   return (
     <>
       <div
-        className="item-card rarity-card"
+        className="item-card rarity-card rarity-frame-card"
+        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
-        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ConsumableIcon icon={def.icon} glyph={def.glyph} />
           <div className="item-card-body">
@@ -494,13 +498,13 @@ function ConsumableSlotCard({
     return (
       <>
         <div
-          className="item-card rarity-card"
+          className="item-card rarity-card rarity-frame-card"
+          style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
           onClick={() => setOpen(true)}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
         >
-          <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
           <div className="item-card-summary">
             <ConsumableIcon icon={def.icon} glyph={def.glyph} />
             <div className="item-card-body">
@@ -649,11 +653,16 @@ function SlotCard({
 
   if (!item || !def) {
     return (
-      <div className="item-card empty">
-        <ItemIcon slot={slot} />
-        <div className="item-card-body">
-          <div className="slot-name">{slot}</div>
-          <div className="tiny muted">Empty</div>
+      <div
+        className="item-card empty rarity-frame-card-outline"
+        style={{ backgroundImage: `url(${EMPTY_SLOT_FRAME})` }}
+      >
+        <div className="item-card-summary">
+          <ItemIcon slot={slot} />
+          <div className="item-card-body">
+            <div className="slot-name">{slot}</div>
+            <div className="tiny muted">Empty</div>
+          </div>
         </div>
       </div>
     );
@@ -676,13 +685,13 @@ function SlotCard({
   return (
     <>
       <div
-        className={`item-card rarity-card ${hasActiveSetBonus ? 'set-active' : ''}`}
+        className={`item-card rarity-card rarity-frame-card ${hasActiveSetBonus ? 'set-active' : ''}`}
+        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
-        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
@@ -812,13 +821,13 @@ function StashCard({
   return (
     <>
       <div
-        className="item-card rarity-card"
+        className="item-card rarity-card rarity-frame-card"
+        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
-        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">

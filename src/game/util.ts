@@ -71,6 +71,50 @@ export const RARITY_BANNER: Record<Rarity, string> = {
 };
 
 /**
+ * Patch 0338, direct approval on a mocked-up design ("Design A"): the full
+ * ornate frame art now used AS the whole card background for every
+ * rarity-carrying item card (gear and consumables both -- direct request,
+ * "assigning consumables the new art too"), replacing the old thin
+ * .rarity-banner strip there. Deliberately a SEPARATE mapping from
+ * RARITY_BANNER above rather than replacing it -- RARITY_BANNER still
+ * powers every item's detail MODAL unchanged (.modal-banner/.modal-
+ * banner-scrim), which is a meaningfully different UI shape (a tall
+ * modal, not a card) that was never part of the approved mockup, so it's
+ * deliberately left alone rather than redesigned on spec. See
+ * .rarity-frame-card in app.css for how this actually gets applied.
+ * Files live in public/rarity-frames/ -- ship all five alongside this.
+ */
+export const RARITY_FRAME: Record<Rarity, string> = {
+  common: './rarity-frames/common.png',
+  uncommon: './rarity-frames/uncommon.png',
+  rare: './rarity-frames/rare.png',
+  epic: './rarity-frames/epic.png',
+  legendary: './rarity-frames/legendary.png',
+};
+
+/**
+ * Patch 0338, direct request: a neutral frame for Curios specifically,
+ * since curios have no real rarity to key off of (see CurioDef's own
+ * comment in types.ts -- "no rarity concept to roll against, just a flat
+ * sell value"). Reads as "collectible," not "weak," so it doesn't imply
+ * a tier that doesn't exist. A single constant, not a Record like
+ * RARITY_FRAME, since there's nothing to key it by.
+ */
+export const CURIO_FRAME = './rarity-frames/grey.png';
+
+/**
+ * Patch 0338, direct request: an outline-only frame for an empty/
+ * unequipped gear slot (SlotCard's own empty branch, EquipmentPanel.tsx).
+ * Unlike RARITY_FRAME/CURIO_FRAME above, this asset is fully transparent
+ * except for its line art, so it layers as an overlay on TOP of the
+ * slot's existing dark placeholder background rather than replacing it
+ * the way a fully-painted frame does -- see .rarity-frame-card-outline
+ * in app.css, a deliberately different CSS treatment from
+ * .rarity-frame-card for exactly this reason.
+ */
+export const EMPTY_SLOT_FRAME = './rarity-frames/silver.png';
+
+/**
  * Generic large-number abbreviation -- formatGold's own logic was never
  * actually gold-specific. Extracted so Renown (which can genuinely reach
  * 5-6 digits after many retirements) gets the same treatment instead of

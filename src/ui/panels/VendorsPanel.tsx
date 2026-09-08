@@ -14,7 +14,9 @@ import { scrapIconFor } from '../../game/data/elements';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
 import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity } from '../../game/types';
-import { describeMods, describeStats, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+import {
+  describeMods, describeStats, formatDuration, formatGold, RARITY_BANNER, RARITY_FRAME, RARITY_COLOR, RARITY_ORDER,
+} from '../../game/util';
 import { isTabUnread } from '../../game/attention';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
@@ -844,14 +846,14 @@ function ArmourStashCard({
   return (
     <>
       <div
-        className="item-card rarity-card"
+        className="item-card rarity-card rarity-frame-card"
+        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
         data-stash-uid={item.uid}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
-        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} />
           <div className="item-card-body">
@@ -1056,14 +1058,13 @@ function EquipmentShopCard({
   return (
     <>
       <div
-        className={`card vendor-stock-card ${blackMarket ? 'black-market-item' : ''}`}
-        style={{ marginBottom: 0 }}
+        className={`card vendor-stock-card rarity-frame-card ${blackMarket ? 'black-market-item' : ''}`}
+        style={{ marginBottom: 0, backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
         onClick={() => setShowModal(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
           <ItemIcon slot={def.slot} icon={def.icon} size={41} />
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -1128,14 +1129,13 @@ function ConsumableShopCard({
   return (
     <>
       <div
-        className="card vendor-stock-card"
-        style={{ marginBottom: 0 }}
+        className="card vendor-stock-card rarity-frame-card"
+        style={{ marginBottom: 0, backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
         onClick={() => setShowModal(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
           <ConsumableIcon icon={def.icon} glyph={def.glyph} size={41} />
           <div style={{ minWidth: 0, flex: 1 }}>
