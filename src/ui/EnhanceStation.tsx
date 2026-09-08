@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
 import { EquipmentManager, MAX_PLUS } from '../game/managers/EquipmentManager';
+import { backgroundSrc } from '../game/settings';
 import { formatGold } from '../game/util';
 import { ItemIcon } from './icons';
 import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
@@ -14,6 +16,17 @@ import type { PickerOption, Rect } from './CraftingStation';
  * approach, see .craft-scene in app.css.
  */
 const SLOT_RECT: Rect = { left: 40.9, top: 37.0, width: 18.7, height: 23.1 };
+
+/**
+ * Dim-mode path for this station's own scene, same convention as
+ * CraftingStation's STATION_BG -- pulled out to a named constant here
+ * (patch 0344) so it can be run through backgroundSrc() below instead of
+ * sitting inline as a literal string. A lore/crafting/bright/enhance.jpg
+ * counterpart now ships alongside the Blacksmith's new gear.jpg art, so
+ * Guild's Mood ("bright" setting) resolves here exactly the same way it
+ * already does for the outer vendor-scene wrapper in VendorsPanel.
+ */
+const ENHANCE_BG = './lore/crafting/enhance.jpg';
 
 /**
  * The "Refine" (+N) mechanic, moved here from a per-item button buried in
@@ -35,6 +48,7 @@ const SLOT_RECT: Rect = { left: 40.9, top: 37.0, width: 18.7, height: 23.1 };
  */
 export function EnhanceStation({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
+  const { settings } = useSettings();
   const state = engine.state;
   const workshop = state.guild.workshop ?? 0;
 
@@ -94,7 +108,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
           <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
 
-        <div className="craft-scene" style={{ backgroundImage: 'url(./lore/crafting/enhance.jpg)' }}>
+        <div className="craft-scene" style={{ backgroundImage: `url(${backgroundSrc(ENHANCE_BG, settings.backgroundMood)})` }}>
           <SlotBox
             rect={SLOT_RECT}
             filled={def && item ? <ItemIcon slot={def.slot} icon={def.icon} size={88} /> : null}

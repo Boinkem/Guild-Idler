@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
 import { CraftingManager } from '../game/managers/CraftingManager';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
 import { MATERIAL_BY_ID } from '../game/data/materials';
+import { backgroundSrc } from '../game/settings';
 import {
   CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Rarity, Stats,
 } from '../game/types';
@@ -21,6 +23,16 @@ type Category = CraftingRecipeDef['category'];
  * (Blacksmith/gear, Alchemist/consumable, Enchanter/enchant) -- committed
  * art, not the gitignored-licensed convention public/vendors/ uses, so no
  * "missing file" fallback needed here the way VendorSprite has to have one.
+ *
+ * These are always the dim-mode path; passed through backgroundSrc() below
+ * so Guild's Mood ("bright" setting, patch 0305/0309) can swap in a
+ * lore/crafting/bright/<file> counterpart the same way VendorsPanel's own
+ * vendor-scene wrapper already does (patch 0344, direct report -- this
+ * station-level scene had been left out of that pass entirely). Only
+ * `gear` (the Blacksmith's own forge) has real bright/ art committed so
+ * far; every other category just keeps showing its dim image via the same
+ * "missing file quietly fails to paint" convention backgroundSrc already
+ * relies on elsewhere -- no per-category gating needed here.
  */
 const STATION_BG: Record<Category, string> = {
   gear: './lore/crafting/gear.jpg',
@@ -317,6 +329,7 @@ export function ItemPreviewModal({
 
 export function CraftingStation({ category, onClose }: { category: Category; onClose: () => void }) {
   const engine = useEngine();
+  const { settings } = useSettings();
   const state = engine.state;
   const rects = SLOT_RECTS[category];
 
@@ -564,7 +577,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   );
 
   const scene = (
-    <div className={SCENE_CLASS[category]} style={{ backgroundImage: `url(${STATION_BG[category]})` }}>
+    <div className={SCENE_CLASS[category]} style={{ backgroundImage: `url(${backgroundSrc(STATION_BG[category], settings.backgroundMood)})` }}>
       <SlotBox
         rect={rects.top}
         filled={topFilled}

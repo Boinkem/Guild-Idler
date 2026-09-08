@@ -28127,6 +28127,65 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Blacksmith Crafting & Enhance: new art, Guild's Mood support (patch 0344)
+```discord-update
+Dev Update | Blacksmith Crafting & Enhance Art
+
+- Added new forge artwork to the Blacksmith's Crafting and Enhance screens
+- Changed those screens to swap to a daytime version when Guild's Mood is set to Bright (or on Auto during the day)
+```
+
+Direct delivery: new commissioned art for the Blacksmith's own Crafting
+(`gear` category) and Enhance stations, each shipped as a day/night pair,
+plus the wiring both screens were missing to actually use the day
+version.
+
+**New art (`public/lore/crafting/`).** `enhance.jpg` and `gear.jpg`
+(the Blacksmith's forge, night version) replaced outright -- same
+1402x1122 canvas as the art they replace, so no coordinate changes were
+needed anywhere. New `bright/enhance.jpg` and `bright/gear.jpg` (the
+same room in daylight) added alongside, following the exact folder
+convention `backgroundSrc()` (`settings.ts`) already expects: same
+filename, one level under a sibling `bright/` directory. Hand-measured
+both new images' painted slot frames against the existing `SLOT_RECT`
+(`EnhanceStation.tsx`) and `SLOT_RECTS.gear` (`CraftingStation.tsx`) --
+close enough (within a percentage point or two) that both were left
+untouched.
+
+**The actual gap this closes.** Guild's Mood (`backgroundMood`: dim/
+bright/system, patch 0305/0309) already drives `VendorsPanel.tsx`'s
+outer `vendor-scene` wrapper, but every modal station that opens on top
+of it -- Crafting, Enhance, Weapon Enchanting, Armour Infusion, Scrap --
+had been left reading its own background path as a hardcoded literal,
+predating that system entirely. This patch wires up the two that now
+have real bright art:
+
+- `CraftingStation.tsx`: `STATION_BG[category]` now runs through
+  `backgroundSrc(path, settings.backgroundMood)` (new `useSettings()`
+  call) instead of rendering the dim path directly. Applies to all five
+  categories uniformly -- `gear` is the only one with a `bright/`
+  counterpart committed so far, the rest just keep showing their dim
+  image on Bright until art lands for them too, same "missing file
+  quietly fails to paint" convention this game already leans on
+  elsewhere.
+- `EnhanceStation.tsx`: the inline `'url(./lore/crafting/enhance.jpg)'`
+  literal was pulled out to a named `ENHANCE_BG` constant, then run
+  through the same `backgroundSrc()` call.
+
+**Not done, left open.** `WeaponEnchantStation.tsx`, `ArmourInfusionStation.tsx`,
+and `ScrapStation.tsx` still read their own background paths as hardcoded
+literals -- no bright art exists yet for the Enchanter's or the Scrap
+station's own scenes, so wiring them up now would just be dead code.
+Same fix (`useSettings()` + `backgroundSrc()`) drops in cleanly whenever
+that art shows up.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live in-app playtest in this
+environment (no browser available) -- worth a real-window pass to
+confirm the new art reads well at actual window size and that the Bright
+swap looks right crossing the 6am/6pm boundary under Guild's Mood
+"Auto."
+
 ### Onboarding polish, Treat visibility, and a handful of direct-report fixes (patch 0343)
 
 ```discord-update
