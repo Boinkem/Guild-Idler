@@ -577,9 +577,18 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
     const repairDiscount = ModifierManager.global(state).repairDiscount ?? 0;
     return EquipmentManager.repairCost(item, workshop, repairDiscount) > 0;
   });
-  const runRepairAll = () => {
-    if (repairPreview.length === 0) return;
-    const targets = repairPreview.map((item) => {
+  /**
+   * Repair Only Broken (patch 0339), direct request: a narrower sibling
+   * to Repair All above, scoped to items at 0 durability specifically
+   * (EquipmentManager.isBroken) rather than anything that's merely taken
+   * damage. Filters repairPreview rather than re-scanning state.stash --
+   * a broken item always has a nonzero repair cost, so it's already a
+   * subset of that same list, not a separate criterion to reconcile.
+   */
+  const brokenPreview = repairPreview.filter((item) => EquipmentManager.isBroken(item));
+  const runRepairItems = (items: EquipmentItem[]) => {
+    if (items.length === 0) return;
+    const targets = items.map((item) => {
       const el = document.querySelector(`[data-stash-uid="${item.uid}"]`);
       const rect = el?.getBoundingClientRect();
       return {
@@ -597,6 +606,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
       }, i * STAGGER_MS);
     });
   };
+  const runRepairAll = () => runRepairItems(repairPreview);
+  const runRepairBroken = () => runRepairItems(brokenPreview);
 
   return (
     <>
@@ -670,6 +681,15 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
             title="Repairs every worn item in the stash, Vault-locked or not -- repairing doesn't touch anything's protected status"
           >
             {'\u2692'} Repair All ({repairPreview.length})
+          </button>
+          <button
+            className="btn-teal"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            onClick={runRepairBroken}
+            disabled={brokenPreview.length === 0}
+            title="Repairs only items at 0 durability -- items that have merely taken damage are left as they are"
+          >
+            {'\u2692'} Repair Broken ({brokenPreview.length})
           </button>
         </div>
       )}

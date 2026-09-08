@@ -27919,3 +27919,40 @@ and the general empty-slot layout were all confirmed against actual
 screenshots of the running app, not just the original mockup's own
 hand-picked example data -- see the fallback-glyph caveat above for the
 one sub-case that couldn't be fully nailed down the same way.
+
+
+### Blacksmith: Repair Only Broken button (patch 0339)
+```discord-update
+Dev Update | Blacksmith
+
+- Added: a "Repair Broken" button next to Repair All in the Blacksmith -- fixes only fully broken (0 durability) gear in your stash, leaving lightly damaged items alone
+```
+
+Direct request. `VendorsPanel.tsx`'s Blacksmith page already had a
+"Repair All" button (patch 0300) that repairs anything in the stash with
+a nonzero repair cost -- any damage at all, not just fully broken. New
+`brokenPreview` filters that same list down to `EquipmentManager.
+isBroken(item)` (durability exactly 0) -- a broken item's repair cost is
+always nonzero, so this is a subset of `repairPreview`, not a second
+scan of `state.stash` with its own criteria to keep in sync.
+
+The staggered snapshot-positions-then-animate-each-card logic Repair All
+already used was pulled out into a shared `runRepairItems(items)`, used
+by both buttons now, rather than duplicating the same
+`document.querySelector`/`STAGGER_MS`/free-repair-check block a second
+time for the new button.
+
+New button sits right next to Repair All, same `btn-teal` styling (same
+action family, just a narrower scope) and same wrench icon, labelled
+"Repair Broken (N)" with N counting only broken items, disabled when
+that count is 0. Scoped to this page's stash grid exactly like Repair
+All already is -- doesn't touch equipped gear, same as its sibling.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this
+patch applied. No `SAVE_VERSION` change -- this only reads existing
+`item.durability`/`EquipmentManager.isBroken`, no new state. Worth a
+real look in-game: a stash with a mix of lightly-damaged and fully-broken
+items should show Repair All's count higher than Repair Broken's, and
+clicking Repair Broken should leave the lightly-damaged ones exactly as
+they were.

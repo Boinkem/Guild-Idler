@@ -1,0 +1,96 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index c0f72c3..c92ded1 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -27919,3 +27919,40 @@ and the general empty-slot layout were all confirmed against actual
+ screenshots of the running app, not just the original mockup's own
+ hand-picked example data -- see the fallback-glyph caveat above for the
+ one sub-case that couldn't be fully nailed down the same way.
++
++
++### Blacksmith: Repair Only Broken button (patch 0339)
++```discord-update
++Dev Update | Blacksmith
++
++- Added: a "Repair Broken" button next to Repair All in the Blacksmith -- fixes only fully broken (0 durability) gear in your stash, leaving lightly damaged items alone
++```
++
++Direct request. `VendorsPanel.tsx`'s Blacksmith page already had a
++"Repair All" button (patch 0300) that repairs anything in the stash with
++a nonzero repair cost -- any damage at all, not just fully broken. New
++`brokenPreview` filters that same list down to `EquipmentManager.
++isBroken(item)` (durability exactly 0) -- a broken item's repair cost is
++always nonzero, so this is a subset of `repairPreview`, not a second
++scan of `state.stash` with its own criteria to keep in sync.
++
++The staggered snapshot-positions-then-animate-each-card logic Repair All
++already used was pulled out into a shared `runRepairItems(items)`, used
++by both buttons now, rather than duplicating the same
++`document.querySelector`/`STAGGER_MS`/free-repair-check block a second
++time for the new button.
++
++New button sits right next to Repair All, same `btn-teal` styling (same
++action family, just a narrower scope) and same wrench icon, labelled
++"Repair Broken (N)" with N counting only broken items, disabled when
++that count is 0. Scoped to this page's stash grid exactly like Repair
++All already is -- doesn't touch equipped gear, same as its sibling.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh clone with this
++patch applied. No `SAVE_VERSION` change -- this only reads existing
++`item.durability`/`EquipmentManager.isBroken`, no new state. Worth a
++real look in-game: a stash with a mix of lightly-damaged and fully-broken
++items should show Repair All's count higher than Repair Broken's, and
++clicking Repair Broken should leave the lightly-damaged ones exactly as
++they were.
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 7c3fdb8..5c09d14 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -577,9 +577,18 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+     const repairDiscount = ModifierManager.global(state).repairDiscount ?? 0;
+     return EquipmentManager.repairCost(item, workshop, repairDiscount) > 0;
+   });
+-  const runRepairAll = () => {
+-    if (repairPreview.length === 0) return;
+-    const targets = repairPreview.map((item) => {
++  /**
++   * Repair Only Broken (patch 0339), direct request: a narrower sibling
++   * to Repair All above, scoped to items at 0 durability specifically
++   * (EquipmentManager.isBroken) rather than anything that's merely taken
++   * damage. Filters repairPreview rather than re-scanning state.stash --
++   * a broken item always has a nonzero repair cost, so it's already a
++   * subset of that same list, not a separate criterion to reconcile.
++   */
++  const brokenPreview = repairPreview.filter((item) => EquipmentManager.isBroken(item));
++  const runRepairItems = (items: EquipmentItem[]) => {
++    if (items.length === 0) return;
++    const targets = items.map((item) => {
+       const el = document.querySelector(`[data-stash-uid="${item.uid}"]`);
+       const rect = el?.getBoundingClientRect();
+       return {
+@@ -597,6 +606,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+       }, i * STAGGER_MS);
+     });
+   };
++  const runRepairAll = () => runRepairItems(repairPreview);
++  const runRepairBroken = () => runRepairItems(brokenPreview);
+ 
+   return (
+     <>
+@@ -671,6 +682,15 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+           >
+             {'\u2692'} Repair All ({repairPreview.length})
+           </button>
++          <button
++            className="btn-teal"
++            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++            onClick={runRepairBroken}
++            disabled={brokenPreview.length === 0}
++            title="Repairs only items at 0 durability -- items that have merely taken damage are left as they are"
++          >
++            {'\u2692'} Repair Broken ({brokenPreview.length})
++          </button>
+         </div>
+       )}
+       <div className="item-card-grid gear-card-grid">
