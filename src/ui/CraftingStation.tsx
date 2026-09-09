@@ -92,10 +92,19 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
     bottomLeft: { left: 30.00, top: 46.51, width: 18.01, height: 18.34 },
     bottomRight: { left: 51.92, top: 46.51, width: 18.01, height: 18.34 },
   },
+  // Re-measured against the new commissioned enchant.jpg (patch 0345,
+  // direct report -- the new art's painted frames run noticeably larger
+  // than the old placeholder-era ones, especially the two bottom slots,
+  // so the previous numbers left icons sitting visibly off-centre).
+  // Detected via the same connected-components pass as every other
+  // station's real art (see EnhanceStation/CraftingStation's own
+  // 0344 comments), then inset ~1.5% per edge off the raw frame
+  // bounding box so an icon sits inside the gold border rather than
+  // touching it.
   enchant: {
-    top: { left: 42.3, top: 24.5, width: 16.8, height: 21.8 },
-    bottomLeft: { left: 31.8, top: 52.0, width: 16.4, height: 21.8 },
-    bottomRight: { left: 51.2, top: 52.0, width: 16.8, height: 21.8 },
+    top: { left: 41.3, top: 22.9, width: 17.2, height: 21.7 },
+    bottomLeft: { left: 29.3, top: 50.3, width: 17.4, height: 22.0 },
+    bottomRight: { left: 53.1, top: 50.7, width: 17.5, height: 21.6 },
   },
   // Only the top slot is ever rendered for `gem` (see the scene JSX below
   // -- there's no category==='gem' block adding bottom slots, a recipe is
@@ -115,11 +124,12 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
     bottomRight: { left: 57.1, top: 52.0, width: 16.0, height: 20.3 },
   },
   // Same canvas as `enchant` (enchant.jpg), so the same rects apply --
-  // see STATION_BG's own comment on why `charm` shares that art.
+  // see STATION_BG's own comment on why `charm` shares that art. Kept in
+  // sync with `enchant`'s own re-measurement above (patch 0345).
   charm: {
-    top: { left: 42.3, top: 24.5, width: 16.8, height: 21.8 },
-    bottomLeft: { left: 31.8, top: 52.0, width: 16.4, height: 21.8 },
-    bottomRight: { left: 51.2, top: 52.0, width: 16.8, height: 21.8 },
+    top: { left: 41.3, top: 22.9, width: 17.2, height: 21.7 },
+    bottomLeft: { left: 29.3, top: 50.3, width: 17.4, height: 22.0 },
+    bottomRight: { left: 53.1, top: 50.7, width: 17.5, height: 21.6 },
   },
 };
 

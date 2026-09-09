@@ -1,18 +1,38 @@
 import { useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CraftingManager } from '../game/managers/CraftingManager';
 import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
 import { ElementType, GemTier } from '../game/types';
 import { formatGold, RARITY_COLOR } from '../game/util';
+import { backgroundSrc } from '../game/settings';
 import { ItemIcon } from './icons';
 import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 
-/** Hand-measured against infuse.jpg's own 1402x1122 canvas -- one slot
- *  cutout, same rect Armour Infusion's predecessor (the old dual-purpose
- *  Infuse station) already used. */
-const ITEM_SLOT: Rect = { left: 42.4, top: 38.7, width: 15.1, height: 19.6 };
+/**
+ * Dim-mode path for this station's scene -- named constant (patch 0345,
+ * matching the convention EnhanceStation's own ENHANCE_BG established in
+ * 0344) so it can run through backgroundSrc() below. A
+ * lore/crafting/bright/infuse.jpg counterpart ships alongside this
+ * patch's new night art.
+ */
+const INFUSE_BG = './lore/crafting/infuse.jpg';
+
+/**
+ * Two slots now -- item up top, which enchant (element+tier) below --
+ * matching Armour Infusion's own GEAR_SLOT/GEM_SLOT layout one-for-one
+ * (patch 0345, direct report). Replaces the old single ITEM_SLOT plus a
+ * pair of chip rows underneath the scene for element then tier; that
+ * picker now lives in the bottom slot's own PickerModal table instead,
+ * same "click a slot, get a table" shape every other station already
+ * uses. Hand-measured against the new commissioned infuse.jpg's own
+ * 1402x1122 canvas via the same connected-components pass as every other
+ * station's real art.
+ */
+const ITEM_SLOT: Rect = { left: 41.6, top: 23.3, width: 16.6, height: 21.0 };
+const ENCHANT_SLOT: Rect = { left: 41.6, top: 49.5, width: 16.7, height: 20.9 };
 
 /**
  * Weapon-only now -- moved here from the Blacksmith (was a single
@@ -26,21 +46,18 @@ const ITEM_SLOT: Rect = { left: 42.4, top: 38.7, width: 15.1, height: 19.6 };
  */
 export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
+  const { settings } = useSettings();
   const state = engine.state;
 
   const [targetUid, setTargetUid] = useState('');
   const [element, setElement] = useState<ElementType | null>(null);
-  // Reset alongside element (see setElementAndResetTier below) -- a tier
-  // choice from one element carries no meaning against a different one,
-  // each element/tier combo is priced and stocked independently.
   const [tier, setTier] = useState<GemTier | null>(null);
   const [openItemPicker, setOpenItemPicker] = useState(false);
+  const [openEnchantPicker, setOpenEnchantPicker] = useState(false);
   // Shown once, right after a pick -- same reasoning ItemPreviewModal's
   // own doc comment gives (CraftingStation.tsx): a straight pick-to-live
   // transition made it easy to commit gold against the wrong weapon
-  // without really looking at it first. Was previously the one item
-  // picker on this page skipping the step Crafting/Enhance already use
-  // (patch 0247).
+  // without really looking at it first.
   const [previewUid, setPreviewUid] = useState<string | null>(null);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
@@ -50,11 +67,6 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
   const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
   const previewItem = previewFound?.item;
   const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
-
-  const setElementAndResetTier = (el: ElementType) => {
-    setElement(el);
-    setTier(null);
-  };
 
   const itemOptions: PickerOption[] = EquipmentManager.allItems(state)
     .filter(({ item: i }) => EquipmentManager.def(i)?.slot === 'weapon')
@@ -75,6 +87,27 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
     })
     .filter((o): o is PickerOption => o !== null);
 
+  // One option per element/tier combo, same table Armour Infusion's own
+  // gemOptions already builds (patch 0237's "Tiered Enchanting/Infusion",
+  // reused here as-is on 0345) -- key encodes both (`fire::rare`) since
+  // PickerModal.onPick only carries a single string back. Grouped by
+  // element, then ascending tier within each, so a player scanning for
+  // "the best Fire gem I can afford" reads top-to-bottom within one
+  // block rather than hunting across the whole list. `true` here (vs
+  // Armour Infusion's `false`) is CraftingManager.gemCost's own
+  // isWeapon flag -- same cost table, different gem pool.
+  const enchantOptions: PickerOption[] = ELEMENT_TYPES.flatMap((el) => GEM_TIERS.map((t) => {
+    const tCost = CraftingManager.gemCost(state, true, el, t);
+    const affordable = tCost.ready || (state.gold >= tCost.goldCost && state.scrap >= tCost.scrapCost);
+    return {
+      key: `${el}::${t}`,
+      label: `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[el]} Gem`,
+      sublabel: tCost.ready ? 'Ready' : `${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)}`,
+      icon: <span style={{ fontSize: '1.4rem', color: RARITY_COLOR[t] }}>{ELEMENT_GLYPH[el]}</span>,
+      disabled: !affordable,
+    };
+  }));
+
   function handleInfuse() {
     if (!item || !element || !tier) return;
     engine.infuseItem(item.uid, element, tier);
@@ -94,12 +127,21 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
           <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
 
-        <div className="craft-scene" style={{ backgroundImage: 'url(./lore/crafting/infuse.jpg)' }}>
+        <div className="craft-scene" style={{ backgroundImage: `url(${backgroundSrc(INFUSE_BG, settings.backgroundMood)})` }}>
           <SlotBox
             rect={ITEM_SLOT}
             filled={def && item ? <ItemIcon slot={def.slot} icon={def.icon} size={88} /> : null}
             label="Choose a weapon to enchant"
             onOpen={() => setOpenItemPicker(true)}
+          />
+          <SlotBox
+            rect={ENCHANT_SLOT}
+            filled={element && tier ? (
+              <span className="craft-slot-label" style={{ fontSize: '1.6rem', color: RARITY_COLOR[tier] }}>{ELEMENT_GLYPH[element]}</span>
+            ) : null}
+            disabled={!item}
+            label="Choose an enchant"
+            onOpen={() => setOpenEnchantPicker(true)}
           />
         </div>
 
@@ -107,58 +149,10 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
           <p className="tiny muted" style={{ margin: '8px 0' }}>
             {def.name} -- infusing replaces whatever element (and tier) it currently carries
             {item.elementalDamage ? ` (currently ${GEM_TIER_LABEL[item.elementalDamageTier ?? 'common']} ${ELEMENT_LABEL[item.elementalDamage]})` : ''}.
+            {element && tier && <> Selected: <span style={{ color: RARITY_COLOR[tier] }}>{GEM_TIER_LABEL[tier]}</span> {ELEMENT_LABEL[element]}.</>}
           </p>
         ) : (
-          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose a weapon, then an element and tier, below.</p>
-        )}
-
-        {/* Element row -- picks WHICH element, tier picked separately
-            below once an element is chosen (patch 0237, "Tiered
-            Enchanting/Infusion"). No per-option Ready/cost here anymore --
-            that now depends on tier too, so it moved to the tier row. */}
-        <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
-          {ELEMENT_TYPES.map((el) => {
-            const selected = element === el;
-            return (
-              <button
-                key={el}
-                className={`chip ${selected ? 'on' : ''}`}
-                disabled={!item}
-                onClick={() => setElementAndResetTier(el)}
-                title={ELEMENT_LABEL[el]}
-              >
-                {ELEMENT_GLYPH[el]} {ELEMENT_LABEL[el]}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Tier row -- only once an element is picked. Each option shows
-            "Ready" if a gem of that exact element+tier is already in
-            inventory, otherwise the fresh-craft cost (charged
-            automatically on Infuse, no separate crafting step). Higher
-            tiers cost more but land a bigger match bonus -- see
-            elemental.tierEffectivenessPercent in the tuning registry. */}
-        {element && (
-          <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
-            {GEM_TIERS.map((t) => {
-              const tCost = CraftingManager.gemCost(state, true, element, t);
-              const selected = tier === t;
-              const affordable = tCost.ready || (state.gold >= tCost.goldCost && state.scrap >= tCost.scrapCost);
-              return (
-                <button
-                  key={t}
-                  className={`chip ${selected ? 'on' : ''}`}
-                  disabled={!affordable}
-                  onClick={() => setTier(t)}
-                  style={{ borderColor: RARITY_COLOR[t] }}
-                  title={tCost.ready ? `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[element]} Gem -- ready` : `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[element]} Gem -- ${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)}`}
-                >
-                  <span style={{ color: RARITY_COLOR[t] }}>{GEM_TIER_LABEL[t]}</span> {tCost.ready ? '(Ready)' : `(${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)})`}
-                </button>
-              );
-            })}
-          </div>
+          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose a weapon, then an enchant, above.</p>
         )}
 
         <button className="btn-purple" disabled={!canInfuse} onClick={handleInfuse}>
@@ -188,6 +182,18 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
                 : 'Uninfused -- no elemental damage yet.'}
             </p>
           )}
+        />
+      )}
+      {openEnchantPicker && (
+        <PickerModal
+          title="Choose an enchant"
+          options={enchantOptions}
+          onPick={(key) => {
+            const [el, t] = key.split('::') as [ElementType, GemTier];
+            setElement(el);
+            setTier(t);
+          }}
+          onClose={() => setOpenEnchantPicker(false)}
         />
       )}
     </div>

@@ -28127,6 +28127,81 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Enchanter: new art, Guild's Mood support, Weapon Enchanting rebuilt (patch 0345)
+```discord-update
+Dev Update | Enchanter Art & Weapon Enchanting Rework
+
+- Added new Enchanter artwork to the Enchanting and Weapon Enchanting screens
+- Changed those screens to swap to a daytime version when Guild's Mood is set to Bright (or on Auto during the day)
+- Changed Weapon Enchanting to a two-slot layout -- pick the weapon up top, pick the enchant from a table below, instead of hunting through button rows
+```
+
+Direct follow-up to patch 0344's Blacksmith pass, same treatment for the
+Enchanter: new commissioned art (day/night pairs) for Enchanting's
+three-slot scene and Weapon Enchanting's own scene, both now wired
+through Guild's Mood, plus a rebuild of Weapon Enchanting's picking flow
+that the new art made worth doing at the same time.
+
+**New art (`public/lore/crafting/`).** `enchant.jpg` (Enchanting/Charms,
+three-slot) and `infuse.jpg` (Weapon Enchanting, two-slot) replaced
+outright with their night versions -- same 1402x1122 canvas as the art
+they replace. New `bright/enchant.jpg` and `bright/infuse.jpg` added
+alongside, same folder convention `backgroundSrc()` already expects.
+`enchant.jpg`'s three slots run noticeably larger than the old
+placeholder-era frames it replaces, confirmed by direct report and by
+hand-measuring the new art's own painted frames -- `SLOT_RECTS.enchant`
+in `CraftingStation.tsx` re-measured accordingly (`charm` kept in sync,
+since it shares the same `enchant.jpg` canvas -- see that Record's own
+comment). `gear`/`consumable`/`gem` are untouched, no art changed for
+those. `infuse.jpg`'s frames were hand-measured fresh for the new
+two-slot layout below.
+
+**Enchanting (`enchant`/`charm` categories in `CraftingStation.tsx`)
+needed no code change beyond the art and the re-measured rects.**
+`STATION_BG[category]`
+already runs through `backgroundSrc(path, settings.backgroundMood)` as of
+patch 0344's generic fix -- `enchant`/`charm` picked up Bright support
+automatically the moment `bright/enchant.jpg` existed. Still uses the
+same three-click system it always has (top: recipe or item to enchant;
+bottomLeft/bottomRight: the two chosen bonuses or gem/apply targets,
+depending on category) -- unchanged by this patch, confirmed against the
+Enchanter's own usage before starting.
+
+**Weapon Enchanting (`WeaponEnchantStation.tsx`), rebuilt to match Armour
+Infusion's own shape.** Direct report: this screen still showed a single
+item slot up top, then two rows of chip buttons below the scene (pick an
+element, then pick a tier) -- the one station left over from before
+Armour Infusion's own two-slot/table-picker pattern (`GEAR_SLOT`/
+`GEM_SLOT`, `openGemPicker`) replaced an equivalent chip-row UI back when
+Weapon Enchanting and Armour Infusion first split apart. Now matches it
+exactly:
+- New `ENCHANT_SLOT` rect added alongside the existing `ITEM_SLOT`
+  (both re-measured against the new `infuse.jpg`), rendered as a second
+  `SlotBox` inside the scene -- filled with the chosen element's glyph
+  once picked, disabled until an item is chosen first, same as Armour
+  Infusion's `GEM_SLOT`.
+- New `enchantOptions`, a straight port of Armour Infusion's own
+  `gemOptions` build (element x tier flatMap, Ready/cost sublabel, a
+  disabled row for anything unaffordable) with `CraftingManager.gemCost`'s
+  `isWeapon` flag kept at `true` -- same weapon-side gem pool this
+  screen always drew from, just presented as a picker table
+  (`PickerModal`, already an actual `<table>` as of an earlier pass) now
+  instead of two rows of chip buttons.
+- The old `ELEMENT_TYPES`/`GEM_TIERS` chip-row JSX and
+  `setElementAndResetTier` helper are gone outright, not left dead
+  underneath -- `handleInfuse` and the underlying `engine.infuseItem`
+  call are untouched, only how `element`/`tier` get set changed.
+- Background now runs through `backgroundSrc()` via a new `INFUSE_BG`
+  constant, same pattern `EnhanceStation`'s `ENHANCE_BG` established in
+  patch 0344.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live in-app playtest in this
+environment (no browser available) -- worth a real-window pass on both
+Enchanting's re-measured slots and Weapon Enchanting's new bottom slot to
+confirm nothing sits off-centre, and that the enchant table reads well
+against the new art.
+
 ### Blacksmith Crafting & Enhance: new art, Guild's Mood support (patch 0344)
 ```discord-update
 Dev Update | Blacksmith Crafting & Enhance Art
