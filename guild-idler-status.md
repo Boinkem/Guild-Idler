@@ -28127,7 +28127,68 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### Vendor stock stats now roll at generation, not purchase; raid cards highlighted; renown subtitle readability (patch 0355)
+### Vendor price scaling: high-level stock no longer sells at its own low base price (patch 0356)
+```discord-update
+Dev Update | Patch 0356
+
+- Fixed vendor gear priced way too low for its displayed level -- a "Lv 30" item could cost as little as 23 gold
+- Every vendor stock item's price now scales properly with the level it actually rolled at
+```
+
+Direct follow-up to patch 0355's stat-preview fix: "ensure the price of
+items (from the vendor) increases appropriately to their respective
+rolled level. High level items shouldn't cost low 100's."
+
+**Root cause (`EquipmentManager.ts`).** `shopPrice` only ever scaled
+price off the stock slot's rolled `itemLevel` for a *procedural*
+template pick -- an ordinary hand-authored item (a ready-made Set piece
+like Blackford's `work_gloves`, reqLevel 1, authored value 20 gold; 61
+of these are shop-eligible) fell straight through to a flat
+`Math.ceil(def.value * 1.15)` regardless of what level slot it actually
+landed in. `ShopManager.rollEquipment`'s own eligibility check is
+`def.reqLevel <= itemLevel`, not an equality, so a level-1 item
+regularly gets picked into a level-30+ slot -- shown on the card at that
+slot's real rolled level -- and kept selling at its tiny level-1
+authored price the entire time. That's exactly "Lv 30 for the low 100's
+100's" (in this example, 23 gold): the display level and the price were
+reading off two completely different numbers.
+
+**Fix.** Every `shopPrice` call that provides an `itemLevel` now prices
+off the same level+rarity `scaledValueCurve` a procedural pick already
+used, hand-authored or not -- an ordinary Set piece landing in a
+level-30 slot now costs the same as a procedural item would in that
+same slot (245g for a common at level 30 vs. the old flat 23g,
+scaling up to 13,570g for a max-level Legendary), instead of the two
+silently running two separate economies. `raidExclusive`/
+`chainExclusive` items keep their own existing `reqLevel`-anchored
+curve (their granted power never moves with a roll, so neither should
+their price) -- moot in practice, since both are already filtered out
+of shop/black-market stock entirely, but correct if `shopPrice` is ever
+called elsewhere with one. A call with no `itemLevel` at all (sell/
+repair pricing elsewhere reusing this same function) is completely
+unaffected, same as before.
+
+**Deliberately NOT touched:** resale value. `referenceValue` (sellValue/
+upgradeCost) reads `item.rolledItemLevel ?? def.reqLevel` for a bought
+item's own resale price, and a hand-authored purchase's `rolledItemLevel`
+is deliberately left unset (only a procedural roll's real stat block
+sets it) -- that same field also drives
+`HeroManager.gearRelevance`/enchant leveling ("how powerful is this item
+really"), and a hand-authored item's real granted power never changes
+regardless of which slot it was picked into. Recording the slot's
+higher level there would have made the item read as more relevant to a
+higher-level hero than its actual `def.stats` deliver, which is a
+different and considerably riskier change than the buy-price fix
+actually asked for. Selling such an item back still prices off its flat
+authored `def.value`, same as before this patch -- worth a follow-up
+request if that resale gap turns out to matter in practice.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Hand-checked the new curve at a
+few levels before shipping: common/itemLevel 30 -> 245g (was 23g),
+uncommon/30 -> 538g, rare/30 -> 1,222g, legendary/55 (max) -> 13,570g.
+
+
 ```discord-update
 Dev Update | Patch 0355
 

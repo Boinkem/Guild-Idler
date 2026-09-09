@@ -103,6 +103,18 @@ export const EquipmentManager = {
    * pick (nothing was ever rolled for it) or a stale pre-0355 stock
    * entry (see the same field's own fallback comment) still instantiate
    * cleanly, identically to a plain no-roll `instantiate(defId)` call.
+   *
+   * `rolledItemLevel` deliberately only recorded alongside `rolledStats`,
+   * not for every hand-authored purchase that happened to land in a
+   * higher-level slot -- HeroManager.gearRelevance/enchant leveling both
+   * read `rolledItemLevel ?? def.reqLevel` as "how powerful this item
+   * really is," and a hand-authored item's real power never moves off
+   * its authored `def.stats` regardless of which slot it was picked
+   * into (shopPrice's own patch 0356 fix only changed what it COSTS, not
+   * what it grants) -- recording the slot's higher level here would
+   * misrepresent the item as more relevant to a higher-level hero than
+   * it actually is, well beyond the resale-price nudge that's the only
+   * thing actually being asked for.
    */
   instantiateFromRoll(
     defId: string, rolledStats?: Partial<Stats>, rolledItemLevel?: number, proceduralName?: string,
@@ -337,44 +349,49 @@ export const EquipmentManager = {
   /**
    * `itemLevel`, patch 0241 -- the target power level this Shop/Black
    * Market slot was rolled against (see ShopManager.rollEquipment/
-   * refreshBlackMarket). Only changed anything for a procedural template
-   * (isProceduralTemplate(def)) originally: its own authored `value` is
-   * anchored to its low base reqLevel (a wooden_sword's `value` is 2
-   * gold), so once itemLevel decouples the item's real rolled power from
-   * that base -- the whole point of rolling it fresh rather than selling
-   * the bare template -- pricing off the stale base value would badly
-   * undersell it. Priced instead off scaledValueCurve, ignoring `value`
-   * entirely for this case.
+   * refreshBlackMarket). Originally only changed anything for a
+   * procedural template (isProceduralTemplate(def)): its own authored
+   * `value` is anchored to its low base reqLevel (a wooden_sword's
+   * `value` is 2 gold), so once itemLevel decouples the item's real
+   * rolled power from that base -- the whole point of rolling it fresh
+   * rather than selling the bare template -- pricing off the stale base
+   * value would badly undersell it. Priced instead off scaledValueCurve,
+   * ignoring `value` entirely for that case.
    *
-   * Patch 0283: a second branch now covers `raidExclusive`/
+   * Patch 0283 added a second branch covering `raidExclusive`/
    * `chainExclusive` hand-authored items the same way sellValue's
-   * referenceValue does -- these are excluded from both
-   * ShopManager.rollEquipment's basePool and refreshBlackMarket's
-   * eligible list by design, so in practice this branch should never
-   * actually fire through either real call site. It's here anyway as
-   * the buy-side half of the same fix: a missing exclusivity flag (the
-   * Requiem set, fixed alongside this in equipment.json, had none at
-   * all and could have surfaced for direct purchase) should degrade to
-   * a proportionate price if it ever happens again, not silently sell a
-   * level-55 Legendary at a flat, level-blind number the way this would
-   * have before. Scaled against `def.reqLevel`, same reasoning as
-   * referenceValue's own comment -- keeps buy and sell price moving
-   * together off the same curve, preserving the sell-vs-buy ratio every
-   * other item in the game already has, rather than sellValue's fix
-   * alone quietly shrinking that ratio for exactly this item category.
+   * referenceValue does -- both excluded from ShopManager.rollEquipment's
+   * basePool and refreshBlackMarket's eligible list by design, so in
+   * practice this branch should never actually fire through either real
+   * call site; kept as the correct fallback if shopPrice is ever called
+   * elsewhere with one and an itemLevel.
    *
-   * An ordinary hand-authored fixed-stat item (or any call with no
-   * itemLevel, e.g. sell/repair pricing elsewhere reusing this same
-   * function) is completely unaffected -- its power never moves, so its
-   * existing authored `value` stays the only signal that matters, same
-   * as before this patch.
+   * Patch 0356, direct report: "High level items shouldn't cost low
+   * 100's" -- and they were. Everything ELSE hand-authored (an ordinary
+   * Set piece, 61 of which are shop-eligible, e.g. `work_gloves` at
+   * reqLevel 1/value 20) fell straight through to the flat `def.value`
+   * branch below regardless of the itemLevel its own stock slot had
+   * actually rolled at -- rollEquipment's own eligibility check is
+   * `def.reqLevel <= itemLevel`, not an equality, so a level-1 item
+   * regularly lands in a level-30+ slot (matching that slot's own
+   * rolled itemLevel, shown right on the card) and kept selling at its
+   * tiny level-1 authored price the whole time. Every itemLevel-provided
+   * call now prices off the same scaledValueCurve a procedural pick
+   * already used, hand-authored or not, so an ordinary Set piece scales
+   * exactly like a procedural template landing in the same slot would,
+   * rather than the two silently running two different economies.
+   *
+   * An ordinary hand-authored fixed-stat item with NO itemLevel at all
+   * (sell/repair pricing elsewhere reusing this same function) is still
+   * completely unaffected -- its existing authored `value` stays the
+   * only signal that matters, same as always.
    */
   shopPrice(def: EquipmentDef, itemLevel?: number): number {
-    if (itemLevel !== undefined && isProceduralTemplate(def)) {
+    if (itemLevel !== undefined) {
+      if (def.raidExclusive || def.chainExclusive) {
+        return Math.ceil(scaledValueCurve(def.rarity, def.reqLevel) * 1.15);
+      }
       return Math.ceil(scaledValueCurve(def.rarity, itemLevel) * 1.15);
-    }
-    if (def.raidExclusive || def.chainExclusive) {
-      return Math.ceil(scaledValueCurve(def.rarity, def.reqLevel) * 1.15);
     }
     return Math.ceil(def.value * 1.15);
   },
