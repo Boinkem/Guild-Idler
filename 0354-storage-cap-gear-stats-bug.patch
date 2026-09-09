@@ -1,0 +1,608 @@
+From 20d327b3fe780ca1260c2093cdc1248deb1e7c1f Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Wed, 9 Sep 2026 12:42:43 +0000
+Subject: [PATCH] Patch 0354: uncap stash storage; fix chain rewardItems @5
+ suffix breaking gear stats
+
+---
+ guild-idler-status.md                | 83 +++++++++++++++++++++++++++-
+ src/game/data/json/quest-chains.json | 78 +++++++++++++-------------
+ src/game/data/progression.ts         | 26 ---------
+ src/game/data/quests.ts              | 21 +++++++
+ src/game/managers/ModifierManager.ts | 32 ++++++-----
+ src/game/types.ts                    | 12 ++--
+ src/ui/panels/EquipmentPanel.tsx     |  6 +-
+ tools/devtool/server.mjs             | 21 ++++++-
+ 8 files changed, 191 insertions(+), 88 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 736e537..c09ec70 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,7 +28127,88 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
+-### Heroes tab: always-idle sprites with a red injured border; Quest Board reordered (patch 0353)
++### Stash uncapped; the real "half my gear has no stats" bug found and fixed (patch 0354)
++```discord-update
++Dev Update | Patch 0354
++
++- Removed the stash storage limit entirely -- the Stash Expansion upgrade is retired along with it
++- Found and fixed the actual cause of gear dropping with no stats: story quest chain rewards had a stray data typo silently breaking every single one
++```
++
++Two direct requests from the same Discord thread -- a quick removal, and
++a "go find the actual bug" investigation that turned up something more
++specific (and more severe) than the original report suggested.
++
++**Stash storage limit removed (`ModifierManager.ts`, `progression.ts`,
++`types.ts`, `EquipmentPanel.tsx`).** Direct request: "remove storage
++limit, its not needed really." `ModifierManager.stashCapacity()` now
++always returns `Infinity` -- kept as a function rather than inlined
++away, so the four call sites that used to gate a voluntary stash
++addition on it (`ShopManager.buyEquipment`/`buyBlackMarketEquipment`,
++`CraftingManager.craftGear`) didn't need individual edits: `length >=
++Infinity` can never be true for a finite array, so those checks are
++already fully inert without touching them. The **Stash Expansion**
++upgrade -- whose entire purpose was raising this now-nonexistent cap --
++is removed from `progression.ts` outright, along with the now-dead
++`BASE_STASH_CAPACITY` constant. `EquipmentPanel.tsx`'s "Stash (N/Cap)"
++header updated to just "Stash (N)" rather than printing the literal
++word "Infinity". An existing save with levels already sunk into Stash
++Expansion just has a harmless orphaned `state.upgrades.stash_expansion`
++entry sitting unread -- nothing reads or displays it anymore.
++
++**The real gear-stats bug (`quest-chains.json`, `quests.ts`,
++`tools/devtool/server.mjs`).** Direct request: investigate whether gear
++stat rolling is applying correctly, "i believe this may be a legacy
++bug." Traced every path that can put an item in a player's stash
++(procedural shop/loot rolls, raid drops at every difficulty, Blacksmith
++crafting, Grimsby outcomes) -- all of them correctly attach real stats.
++One path didn't: **`ChainDef.rewardItems`**, the guaranteed item(s) a
++story quest chain grants on its very first clear. Every single entry in
++`quest-chains.json` -- all 39, across every chain in the game -- had an
++identical, meaningless `"@5"` suffix baked onto its defId (e.g.
++`"cellar_dwellers_tooth@5"` instead of `"cellar_dwellers_tooth"`).
++Neither of the two places that read this field
++(`QuestManager`'s first-clear grant, and the chain-replay dedicated-item
++drop that reuses `rewardItems[0]`) parses any suffix -- both just look
++the raw string up directly in `EQUIPMENT_BY_ID`, which silently returns
++`undefined` for a defId that doesn't exist, and both wrap the resulting
++`EquipmentManager.instantiate(...)` call in an `if (item)` guard that
++just as silently drops a `null` on the floor. No error, no console
++warning, nothing -- a guild could complete every story chain in the game
++and never receive a single one of these guaranteed rewards, which is
++close to what "half my gear has no stats other than set bonuses"
++actually was: not gear rolling with missing stats, but the specific
++subset of gear meant to arrive with fixed, guaranteed stats never
++arriving at all. Root cause traced one level further, into the devtool
++itself: `rewardItems`'s schema entry had `picker: 'lootTable'`, the
++exact same widget `loot`/`lootHeroic`/`lootLegendary` (chance-based raid
++encounter loot, correctly weighted) use -- that picker always appends a
++`@chance` value, which is exactly how a field that's supposed to hold
++plain, always-guaranteed defIds ended up with a stray, uniform `@5` on
++every entry. Fixed at both layers: `quest-chains.json`'s 39 entries
++stripped back to plain defIds (verified every one now resolves in
++`EQUIPMENT_BY_ID`), and the devtool schema's `picker: 'lootTable'`
++removed from `rewardItems` so it falls back to the plain string-list
++editor every other un-pickered `string[]` field already uses -- without
++that second fix, the very next devtool edit to any chain's rewardItems
++would have silently reintroduced the exact same bug.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Cross-checked every other loot
++source by script against `equipment.json`'s `stats`/`mods` fields before
++concluding this was the one real gap: raid encounter Normal-difficulty
++loot (44/45 items correctly stat-bearing, the one exception --
++`copper_band` -- has neither `stats` nor `mods` in its def but IS a
++blank procedural template, so it correctly rolls real stats at drop
++time same as any shop item, not actually a bug), all 12 gear crafting
++recipes (`modValue` present and nonzero on every one), and Grimsby's own
++card-game item outcomes (only one distinct itemId in the data, unrelated
++to this). No live in-app playtest in this environment -- worth
++confirming a fresh chain first-clear now actually deposits its reward
++item, and that a Heroic/Mythic/Legendary chain replay can once again
++roll its dedicated-item drop.
++
++
+ ```discord-update
+ Dev Update | Patch 0353
+ 
+diff --git a/src/game/data/json/quest-chains.json b/src/game/data/json/quest-chains.json
+index eebc398..b1edb71 100644
+--- a/src/game/data/json/quest-chains.json
++++ b/src/game/data/json/quest-chains.json
+@@ -6,7 +6,7 @@
+     "reqLevel": 2,
+     "rewardGold": 456,
+     "rewardItems": [
+-      "cellar_dwellers_tooth@5"
++      "cellar_dwellers_tooth"
+     ],
+     "rewardRenown": 1,
+     "title": "First Real Job",
+@@ -57,7 +57,7 @@
+     "reqLevel": 5,
+     "rewardGold": 406,
+     "rewardItems": [
+-      "keepers_last_feather@5"
++      "keepers_last_feather"
+     ],
+     "rewardRenown": 1,
+     "title": "Keeper of the Clutch",
+@@ -104,7 +104,7 @@
+     "reqLevel": 8,
+     "rewardGold": 2733,
+     "rewardItems": [
+-      "crow_feather_charm@5"
++      "crow_feather_charm"
+     ],
+     "rewardRenown": 1,
+     "title": "Crow-Friend",
+@@ -163,7 +163,7 @@
+     "reqLevel": 11,
+     "rewardGold": 1617,
+     "rewardItems": [
+-      "ashwoven_charm@5"
++      "ashwoven_charm"
+     ],
+     "rewardRenown": 1,
+     "title": "Ash-Reader",
+@@ -207,7 +207,7 @@
+     "reqLevel": 15,
+     "rewardGold": 1950,
+     "rewardItems": [
+-      "seized_glaive@5"
++      "seized_glaive"
+     ],
+     "rewardRenown": 2,
+     "title": "Tally-Breaker",
+@@ -251,7 +251,7 @@
+     "reqLevel": 19,
+     "rewardGold": 3675,
+     "rewardItems": [
+-      "gravewatchers_band@5"
++      "gravewatchers_band"
+     ],
+     "rewardRenown": 2,
+     "title": "Grave-Watcher",
+@@ -303,7 +303,7 @@
+     "reqLevel": 16,
+     "rewardGold": 4067,
+     "rewardItems": [
+-      "wardens_signet@5"
++      "wardens_signet"
+     ],
+     "rewardRenown": 3,
+     "title": "Lord of the Keep",
+@@ -363,7 +363,7 @@
+     "reqLevel": 20,
+     "rewardGold": 2700,
+     "rewardItems": [
+-      "bulwark_cuirass@5"
++      "bulwark_cuirass"
+     ],
+     "rewardRenown": 2,
+     "title": "Garrick's End",
+@@ -407,7 +407,7 @@
+     "reqLevel": 24,
+     "rewardGold": 3733,
+     "rewardItems": [
+-      "gravekeepers_gloves@5"
++      "gravekeepers_gloves"
+     ],
+     "rewardRenown": 2,
+     "title": "Farmwarden",
+@@ -451,8 +451,8 @@
+     "reqLevel": 32,
+     "rewardGold": 12873,
+     "rewardItems": [
+-      "sword_of_the_ashen_hand@5",
+-      "bulwark_of_the_war_saint@5"
++      "sword_of_the_ashen_hand",
++      "bulwark_of_the_war_saint"
+     ],
+     "rewardRenown": 5,
+     "title": "Ashen-Sworn",
+@@ -512,8 +512,8 @@
+     "reqLevel": 18,
+     "rewardGold": 4400,
+     "rewardItems": [
+-      "dragon_helm@5",
+-      "dragon_blade@5"
++      "dragon_helm",
++      "dragon_blade"
+     ],
+     "rewardRenown": 2,
+     "title": "Dragonbane",
+@@ -572,7 +572,7 @@
+     "reqLevel": 14,
+     "rewardGold": 2800,
+     "rewardItems": [
+-      "crown_of_the_lost@5"
++      "crown_of_the_lost"
+     ],
+     "rewardRenown": 1,
+     "title": "Kingdom-Finder",
+@@ -623,8 +623,8 @@
+     "reqLevel": 22,
+     "rewardGold": 6400,
+     "rewardItems": [
+-      "dragon_armor@5",
+-      "amulet_of_fortune@5"
++      "dragon_armor",
++      "amulet_of_fortune"
+     ],
+     "rewardRenown": 3,
+     "title": "Hellgate Breaker",
+@@ -681,7 +681,7 @@
+     "reqLevel": 10,
+     "rewardGold": 2300,
+     "rewardItems": [
+-      "lucky_ring@5"
++      "lucky_ring"
+     ],
+     "rewardRenown": 1,
+     "title": "Crownbearer",
+@@ -731,7 +731,7 @@
+     "reqLevel": 6,
+     "rewardGold": 440,
+     "rewardItems": [
+-      "warband_cleaver@5"
++      "warband_cleaver"
+     ],
+     "rewardRenown": 1,
+     "title": "Warband-Breaker",
+@@ -773,7 +773,7 @@
+     "reqLevel": 7,
+     "rewardGold": 711,
+     "rewardItems": [
+-      "chieftains_torc@5"
++      "chieftains_torc"
+     ],
+     "rewardRenown": 1,
+     "title": "Horde-Breaker",
+@@ -825,8 +825,8 @@
+     "reqLevel": 26,
+     "rewardGold": 6400,
+     "rewardItems": [
+-      "choir_mask@5",
+-      "silenced_bell@5"
++      "choir_mask",
++      "silenced_bell"
+     ],
+     "rewardRenown": 2,
+     "title": "Choir-Silencer",
+@@ -876,10 +876,10 @@
+     "reqLevel": 34,
+     "rewardGold": 17848,
+     "rewardItems": [
+-      "voidforged_blade@5",
+-      "voidforged_crown@5",
+-      "voidforged_plate@5",
+-      "voidforged_signet@5"
++      "voidforged_blade",
++      "voidforged_crown",
++      "voidforged_plate",
++      "voidforged_signet"
+     ],
+     "rewardRenown": 6,
+     "title": "World's End",
+@@ -948,7 +948,7 @@
+     "reqLevel": 44,
+     "rewardGold": 23800,
+     "rewardItems": [
+-      "last_pilgrims_waystone@5"
++      "last_pilgrims_waystone"
+     ],
+     "rewardRenown": 8,
+     "title": "Pilgrim's Herald",
+@@ -1007,9 +1007,9 @@
+     "reqLevel": 45,
+     "rewardGold": 25333,
+     "rewardItems": [
+-      "empyrean_blade@5",
+-      "empyrean_halo@5",
+-      "empyrean_aegis@5"
++      "empyrean_blade",
++      "empyrean_halo",
++      "empyrean_aegis"
+     ],
+     "rewardRenown": 10,
+     "title": "Kingslayer Twice Over",
+@@ -1068,7 +1068,7 @@
+     "reqLevel": 5,
+     "rewardGold": 609,
+     "rewardItems": [
+-      "grimsbys_loaded_coin@5"
++      "grimsbys_loaded_coin"
+     ],
+     "rewardRenown": 1,
+     "title": "The One He Doesn't Cheat",
+@@ -1119,7 +1119,7 @@
+     "reqLevel": 4,
+     "rewardGold": 558,
+     "rewardItems": [
+-      "tollbreakers_gloves@5"
++      "tollbreakers_gloves"
+     ],
+     "rewardRenown": 1,
+     "title": "Roadwarden",
+@@ -1170,7 +1170,7 @@
+     "reqLevel": 12,
+     "rewardGold": 2550,
+     "rewardItems": [
+-      "ridgebreakers_pauldron@5"
++      "ridgebreakers_pauldron"
+     ],
+     "rewardRenown": 1,
+     "title": "Ridgebreaker",
+@@ -1221,7 +1221,7 @@
+     "reqLevel": 17,
+     "rewardGold": 3175,
+     "rewardItems": [
+-      "moonsilver_fang@5"
++      "moonsilver_fang"
+     ],
+     "rewardRenown": 2,
+     "title": "Moonhunter",
+@@ -1272,7 +1272,7 @@
+     "reqLevel": 29,
+     "rewardGold": 8050,
+     "rewardItems": [
+-      "unravelers_mark@5"
++      "unravelers_mark"
+     ],
+     "rewardRenown": 3,
+     "title": "Unmasker",
+@@ -1323,7 +1323,7 @@
+     "reqLevel": 37,
+     "rewardGold": 12291,
+     "rewardItems": [
+-      "lichfinders_compass@5"
++      "lichfinders_compass"
+     ],
+     "rewardRenown": 5,
+     "title": "Grave-Marked",
+@@ -1374,7 +1374,7 @@
+     "reqLevel": 35,
+     "rewardGold": 7491,
+     "rewardItems": [
+-      "millbrook_ledger_page@5"
++      "millbrook_ledger_page"
+     ],
+     "rewardRenown": 4,
+     "title": "Watcher of Millbrook",
+@@ -1415,7 +1415,7 @@
+     "reqLevel": 39,
+     "rewardGold": 8897,
+     "rewardItems": [
+-      "loomsplinter_shard@5"
++      "loomsplinter_shard"
+     ],
+     "rewardRenown": 6,
+     "title": "Thread-Walker",
+@@ -1457,7 +1457,7 @@
+     "reqLevel": 1,
+     "rewardGold": 270,
+     "rewardItems": [
+-      "quartermasters_token@5"
++      "quartermasters_token"
+     ],
+     "rewardRenown": 1,
+     "title": "Provisioner",
+@@ -1500,7 +1500,7 @@
+     "reqLevel": 46,
+     "rewardGold": 26867,
+     "rewardItems": [
+-      "kindred_fang@5"
++      "kindred_fang"
+     ],
+     "rewardRenown": 11,
+     "title": "Kindred",
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 2052360..9c1e3c6 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -263,23 +263,6 @@ export const UPGRADES: UpgradeDef[] = [
+     modsPerLevel: {}, freezeChangesPerLevel: Tuning.get('upgrade.board_warden.freezeChangesPerLevel'),
+     category: 'Economy',
+   },
+-  {
+-    id: 'stash_expansion', name: 'Stash Expansion',
+-    description: 'More shelving in the back room -- room to hold onto gear a little longer before the Shop or Vault has to deal with it.',
+-    // Base (20 slots, doubled from 10 in patch 0303) lives in
+-    // ModifierManager.stashCapacity as the
+-    // floor -- see that method's own comment. Only blocks buying/crafting
+-    // NEW equipment once the stash is already full (Shop purchases,
+-    // Black Market purchases, buyback, and gear crafting); quest, raid,
+-    // and Grimsby loot always still comes in uninterrupted, so this can
+-    // never trap or discard an earned reward, only pause a voluntary
+-    // purchase until something's sold.
+-    baseCost: Tuning.get('upgrade.stash_expansion.baseCost'),
+-    costGrowth: Tuning.get('upgrade.stash_expansion.costGrowth'),
+-    maxLevel: Tuning.get('upgrade.stash_expansion.maxLevel'),
+-    modsPerLevel: {}, stashCapacityPerLevel: Tuning.get('upgrade.stash_expansion.stashCapacityPerLevel'),
+-    category: 'Economy',
+-  },
+   {
+     id: 'vitality_training', name: 'Vitality Training',
+     description: 'Conditioning that has nothing to do with winning a fight and everything to do with surviving one.',
+@@ -695,15 +678,6 @@ export function guildCost(def: GuildDef, currentLevel: number): number {
+ 
+ export const BASE_GOLD_STORAGE = 10_000;
+ 
+-/** Stash slot floor before any Stash Expansion levels -- see
+- *  ModifierManager.stashCapacity. Doubled 10 -> 20 in patch 0303
+- *  (direct request: baseline inventory limits felt too tight even before
+- *  Stash Expansion's own per-level bonus is doubled to match, see
+- *  Stash Expansion: extra stash slots granted per level's own tuning
+- *  entry) -- a flat code constant, not tuning-registry-backed, since
+- *  this has always been a hardcoded floor (same as BASE_GOLD_STORAGE
+- *  just above), not something the devtool exposes for live editing. */
+-export const BASE_STASH_CAPACITY = 20;
+ 
+ /* ----------------------------- renown perks ------------------------------ */
+ 
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 969355f..fc09e2c 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -227,6 +227,27 @@ export interface ChainDef {
+   stages: ChainStageDef[];
+   /** Guaranteed reward on completion. */
+   rewardGold: number;
++  /**
++   * Plain equipment defIds, granted in full every time -- NOT the
++   * "defId@chance" weighted-loot-table string format raid/encounter
++   * `loot`/`lootHeroic`/etc. arrays use (see parseLootEntry in raids.ts).
++   * Patch 0354, direct report ("half my gear has no stats other than set
++   * bonuses"): every entry in this file had somehow picked up a stray
++   * "@5" suffix (all 39, all identically "@5" -- a devtool-authoring
++   * artifact, not meaningful per-item data), which silently broke BOTH
++   * consumers of this field: QuestManager's own first-clear grant
++   * (`EquipmentManager.instantiate(defId)` returns null on a defId that
++   * doesn't resolve in EQUIPMENT_BY_ID, and the "if (item) push" guard
++   * right after it just drops a null on the floor rather than erroring)
++   * and the chain-replay dedicated-item drop (`rewardItems[0]`, same
++   * lookup, same silent no-op). Neither ever threw or logged anything,
++   * so a guild could go 900 patches never receiving a single first-clear
++   * chain reward without any error to point at -- stripped back to
++   * plain defIds in quest-chains.json this same patch. If the devtool's
++   * rewardItems editor is ever the same shared widget the loot-table
++   * fields use, that's almost certainly how the "@5" got baked in in the
++   * first place and is worth checking before this can recur.
++   */
+   rewardItems: string[];
+   rewardRenown: number;
+   /**
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 96927ee..5ed4215 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -1,4 +1,4 @@
+-import { GUILD_BY_ID, RENOWN_BY_ID, HERO_RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE, BASE_STASH_CAPACITY } from '../data/progression';
++import { GUILD_BY_ID, RENOWN_BY_ID, HERO_RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE } from '../data/progression';
+ import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
+ import { BASE_INCUBATION_SLOTS } from '../data/pets';
+ import { GameState, Hero, Modifiers, VendorId } from '../types';
+@@ -220,18 +220,24 @@ export const ModifierManager = {
+     return (def?.freeRepairsPerLevel ?? 0) * level;
+   },
+ 
+-  /** 20 base, +10 per Stash Expansion level (max 8 levels -> 100 total).
+-   *  Doubled from 10 base/+5 per level in patch 0303, direct request.
+-   *  Same shape as goldStorage above -- gates voluntary stash additions
+-   *  only (see ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
+-   *  and CraftingManager.craftGear); quest/raid/Grimsby loot always
+-   *  flows in uncapped. */
+-  stashCapacity(state: GameState): number {
+-    const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+-      const def = UPGRADE_BY_ID[id];
+-      return sum + (def?.stashCapacityPerLevel ?? 0) * level;
+-    }, 0);
+-    return BASE_STASH_CAPACITY + bonus;
++  /**
++   * Uncapped (patch 0354, direct request: "remove storage limit, its not
++   * needed really"). Used to be 20 base + up to +80 from the (now retired)
++   * Stash Expansion upgrade -- see that upgrade's own former entry in
++   * progression.ts, removed this same patch, for the history. Every call
++   * site that used to gate a voluntary stash addition on this
++   * (ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack,
++   * CraftingManager.craftGear) still runs its own `state.stash.length >=
++   * stashCapacity(state)` check -- left as-is rather than stripped out of
++   * each of those four call sites individually, since `length >=
++   * Infinity` can never be true for a finite array and the check is
++   * therefore already fully inert. Kept as a function (not inlined away)
++   * so EquipmentPanel's own "Stash (N)" display still has one place to
++   * ask whether a cap currently applies at all (Number.isFinite), in case
++   * a real cap ever comes back.
++   */
++  stashCapacity(_state: GameState): number {
++    return Infinity;
+   },
+ 
+   hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics'): boolean {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index f7de1e8..cd6c6cd 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1748,12 +1748,12 @@ export interface UpgradeDef {
+    *  is always free (see QuestManager.unfreezeOffer). Only Board Warden
+    *  uses this. */
+   freezeChangesPerLevel?: number;
+-  /** Grants this many extra stash slots per level, on top of the 20-slot
+-   *  base floor (doubled from 10 in patch 0303) -- same special-purpose-field shape as the slot-count
+-   *  fields above. See ModifierManager.stashCapacity for the base + this
+-   *  math, and ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
+-   *  and CraftingManager.craftGear for where the resulting cap is
+-   *  actually enforced. Only Stash Expansion uses this. */
++  /** Grants this many extra stash slots per level, on top of the (now-
++   *  removed) base floor -- see ModifierManager.stashCapacity's own
++   *  comment: the stash is uncapped as of patch 0354, direct request,
++   *  and the one upgrade that ever set this field (Stash Expansion) was
++   *  retired the same patch. Left on the type rather than deleted in
++   *  case a real cap ever comes back; no UpgradeDef currently sets it. */
+   stashCapacityPerLevel?: number;
+   /**
+    * Guild Hall Upgrades panel category, for the tab's filter chips and
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 57b42fe..47da825 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -985,7 +985,6 @@ export function EquipmentPanel() {
+   // (Weapon/Helmet/etc.), purely a display filter. 'all' is the default
+   // so nothing changes for anyone who never touches it.
+   const [stashSlotFilter, setStashSlotFilter] = useState<EquipSlot | 'all'>('all');
+-  const stashCapacity = ModifierManager.stashCapacity(state);
+   const filteredStash = state.stash.filter((item) => {
+     if (stashSlotFilter === 'all') return true;
+     const def = EQUIPMENT_BY_ID[item.defId];
+@@ -1162,7 +1161,10 @@ export function EquipmentPanel() {
+ 
+       <div className="spread" style={{ alignItems: 'center' }}>
+         <div className="section-heading" style={{ marginBottom: 0 }}>
+-          Stash ({state.stash.length}/{stashCapacity})
++          {/* Uncapped as of patch 0354 -- ModifierManager.stashCapacity()
++              always returns Infinity now, so this drops the old "/N" cap
++              entirely rather than printing the literal word "Infinity". */}
++          Stash ({state.stash.length})
+         </div>
+         {state.stash.length > 0 && (
+           <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index eec1440..1ac30b0 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -504,7 +504,26 @@ const SCHEMAS = {
+       description: { type: 'string', required: true },
+       reqLevel: { type: 'number', required: true },
+       rewardGold: { type: 'number', required: true },
+-      rewardItems: { type: 'string[]', required: false, picker: 'lootTable' },
++      // Patch 0354, direct report ("half my gear has no stats other than
++      // set bonuses"): this was `picker: 'lootTable'`, the SAME weighted
++      // "defId@chance" picker `loot`/`lootHeroic`/`lootLegendary` (raid-
++      // encounters, just below in this file) correctly use for actual
++      // chance-based loot tables. rewardItems is a guaranteed 100%-of-
++      // the-time reward (see ChainDef.rewardItems's own comment in
++      // quests.ts) -- it was never meant to carry a chance value at all,
++      // but the shared picker always appends one anyway, which is
++      // exactly how every existing entry ended up with an identical,
++      // meaningless "@5" suffix baked into its defId. Both consumers of
++      // this field (QuestManager's first-clear grant and its chain-
++      // replay dedicated-item drop) look the string up directly in
++      // EQUIPMENT_BY_ID with no parsing, so a suffixed id silently never
++      // resolves -- no error, the reward (or the replay drop's own
++      // dedicatedItemDropped flag) just quietly never happens. No
++      // `picker` now, so this falls back to the plain string-list editor
++      // every other unpicker'd `string[]` field already uses (see
++      // `names`/`encounterIds`/etc. nearby) -- exactly what a flat list
++      // of guaranteed defIds needs, nothing more.
++      rewardItems: { type: 'string[]', required: false },
+       rewardRenown: { type: 'number', required: true },
+       title: { type: 'string', required: false },
+       epilogue: { type: 'string', required: false },
+-- 
+2.43.0
+

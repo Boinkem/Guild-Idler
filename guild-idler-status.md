@@ -28127,7 +28127,88 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### Heroes tab: always-idle sprites with a red injured border; Quest Board reordered (patch 0353)
+### Stash uncapped; the real "half my gear has no stats" bug found and fixed (patch 0354)
+```discord-update
+Dev Update | Patch 0354
+
+- Removed the stash storage limit entirely -- the Stash Expansion upgrade is retired along with it
+- Found and fixed the actual cause of gear dropping with no stats: story quest chain rewards had a stray data typo silently breaking every single one
+```
+
+Two direct requests from the same Discord thread -- a quick removal, and
+a "go find the actual bug" investigation that turned up something more
+specific (and more severe) than the original report suggested.
+
+**Stash storage limit removed (`ModifierManager.ts`, `progression.ts`,
+`types.ts`, `EquipmentPanel.tsx`).** Direct request: "remove storage
+limit, its not needed really." `ModifierManager.stashCapacity()` now
+always returns `Infinity` -- kept as a function rather than inlined
+away, so the four call sites that used to gate a voluntary stash
+addition on it (`ShopManager.buyEquipment`/`buyBlackMarketEquipment`,
+`CraftingManager.craftGear`) didn't need individual edits: `length >=
+Infinity` can never be true for a finite array, so those checks are
+already fully inert without touching them. The **Stash Expansion**
+upgrade -- whose entire purpose was raising this now-nonexistent cap --
+is removed from `progression.ts` outright, along with the now-dead
+`BASE_STASH_CAPACITY` constant. `EquipmentPanel.tsx`'s "Stash (N/Cap)"
+header updated to just "Stash (N)" rather than printing the literal
+word "Infinity". An existing save with levels already sunk into Stash
+Expansion just has a harmless orphaned `state.upgrades.stash_expansion`
+entry sitting unread -- nothing reads or displays it anymore.
+
+**The real gear-stats bug (`quest-chains.json`, `quests.ts`,
+`tools/devtool/server.mjs`).** Direct request: investigate whether gear
+stat rolling is applying correctly, "i believe this may be a legacy
+bug." Traced every path that can put an item in a player's stash
+(procedural shop/loot rolls, raid drops at every difficulty, Blacksmith
+crafting, Grimsby outcomes) -- all of them correctly attach real stats.
+One path didn't: **`ChainDef.rewardItems`**, the guaranteed item(s) a
+story quest chain grants on its very first clear. Every single entry in
+`quest-chains.json` -- all 39, across every chain in the game -- had an
+identical, meaningless `"@5"` suffix baked onto its defId (e.g.
+`"cellar_dwellers_tooth@5"` instead of `"cellar_dwellers_tooth"`).
+Neither of the two places that read this field
+(`QuestManager`'s first-clear grant, and the chain-replay dedicated-item
+drop that reuses `rewardItems[0]`) parses any suffix -- both just look
+the raw string up directly in `EQUIPMENT_BY_ID`, which silently returns
+`undefined` for a defId that doesn't exist, and both wrap the resulting
+`EquipmentManager.instantiate(...)` call in an `if (item)` guard that
+just as silently drops a `null` on the floor. No error, no console
+warning, nothing -- a guild could complete every story chain in the game
+and never receive a single one of these guaranteed rewards, which is
+close to what "half my gear has no stats other than set bonuses"
+actually was: not gear rolling with missing stats, but the specific
+subset of gear meant to arrive with fixed, guaranteed stats never
+arriving at all. Root cause traced one level further, into the devtool
+itself: `rewardItems`'s schema entry had `picker: 'lootTable'`, the
+exact same widget `loot`/`lootHeroic`/`lootLegendary` (chance-based raid
+encounter loot, correctly weighted) use -- that picker always appends a
+`@chance` value, which is exactly how a field that's supposed to hold
+plain, always-guaranteed defIds ended up with a stray, uniform `@5` on
+every entry. Fixed at both layers: `quest-chains.json`'s 39 entries
+stripped back to plain defIds (verified every one now resolves in
+`EQUIPMENT_BY_ID`), and the devtool schema's `picker: 'lootTable'`
+removed from `rewardItems` so it falls back to the plain string-list
+editor every other un-pickered `string[]` field already uses -- without
+that second fix, the very next devtool edit to any chain's rewardItems
+would have silently reintroduced the exact same bug.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Cross-checked every other loot
+source by script against `equipment.json`'s `stats`/`mods` fields before
+concluding this was the one real gap: raid encounter Normal-difficulty
+loot (44/45 items correctly stat-bearing, the one exception --
+`copper_band` -- has neither `stats` nor `mods` in its def but IS a
+blank procedural template, so it correctly rolls real stats at drop
+time same as any shop item, not actually a bug), all 12 gear crafting
+recipes (`modValue` present and nonzero on every one), and Grimsby's own
+card-game item outcomes (only one distinct itemId in the data, unrelated
+to this). No live in-app playtest in this environment -- worth
+confirming a fresh chain first-clear now actually deposits its reward
+item, and that a Heroic/Mythic/Legendary chain replay can once again
+roll its dedicated-item drop.
+
+
 ```discord-update
 Dev Update | Patch 0353
 

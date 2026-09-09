@@ -985,7 +985,6 @@ export function EquipmentPanel() {
   // (Weapon/Helmet/etc.), purely a display filter. 'all' is the default
   // so nothing changes for anyone who never touches it.
   const [stashSlotFilter, setStashSlotFilter] = useState<EquipSlot | 'all'>('all');
-  const stashCapacity = ModifierManager.stashCapacity(state);
   const filteredStash = state.stash.filter((item) => {
     if (stashSlotFilter === 'all') return true;
     const def = EQUIPMENT_BY_ID[item.defId];
@@ -1162,7 +1161,10 @@ export function EquipmentPanel() {
 
       <div className="spread" style={{ alignItems: 'center' }}>
         <div className="section-heading" style={{ marginBottom: 0 }}>
-          Stash ({state.stash.length}/{stashCapacity})
+          {/* Uncapped as of patch 0354 -- ModifierManager.stashCapacity()
+              always returns Infinity now, so this drops the old "/N" cap
+              entirely rather than printing the literal word "Infinity". */}
+          Stash ({state.stash.length})
         </div>
         {state.stash.length > 0 && (
           <div className="row" style={{ gap: 6, alignItems: 'center' }}>

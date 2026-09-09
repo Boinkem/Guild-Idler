@@ -1,4 +1,4 @@
-import { GUILD_BY_ID, RENOWN_BY_ID, HERO_RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE, BASE_STASH_CAPACITY } from '../data/progression';
+import { GUILD_BY_ID, RENOWN_BY_ID, HERO_RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE } from '../data/progression';
 import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
 import { BASE_INCUBATION_SLOTS } from '../data/pets';
 import { GameState, Hero, Modifiers, VendorId } from '../types';
@@ -220,18 +220,24 @@ export const ModifierManager = {
     return (def?.freeRepairsPerLevel ?? 0) * level;
   },
 
-  /** 20 base, +10 per Stash Expansion level (max 8 levels -> 100 total).
-   *  Doubled from 10 base/+5 per level in patch 0303, direct request.
-   *  Same shape as goldStorage above -- gates voluntary stash additions
-   *  only (see ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
-   *  and CraftingManager.craftGear); quest/raid/Grimsby loot always
-   *  flows in uncapped. */
-  stashCapacity(state: GameState): number {
-    const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
-      const def = UPGRADE_BY_ID[id];
-      return sum + (def?.stashCapacityPerLevel ?? 0) * level;
-    }, 0);
-    return BASE_STASH_CAPACITY + bonus;
+  /**
+   * Uncapped (patch 0354, direct request: "remove storage limit, its not
+   * needed really"). Used to be 20 base + up to +80 from the (now retired)
+   * Stash Expansion upgrade -- see that upgrade's own former entry in
+   * progression.ts, removed this same patch, for the history. Every call
+   * site that used to gate a voluntary stash addition on this
+   * (ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack,
+   * CraftingManager.craftGear) still runs its own `state.stash.length >=
+   * stashCapacity(state)` check -- left as-is rather than stripped out of
+   * each of those four call sites individually, since `length >=
+   * Infinity` can never be true for a finite array and the check is
+   * therefore already fully inert. Kept as a function (not inlined away)
+   * so EquipmentPanel's own "Stash (N)" display still has one place to
+   * ask whether a cap currently applies at all (Number.isFinite), in case
+   * a real cap ever comes back.
+   */
+  stashCapacity(_state: GameState): number {
+    return Infinity;
   },
 
   hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics'): boolean {

@@ -264,23 +264,6 @@ export const UPGRADES: UpgradeDef[] = [
     category: 'Economy',
   },
   {
-    id: 'stash_expansion', name: 'Stash Expansion',
-    description: 'More shelving in the back room -- room to hold onto gear a little longer before the Shop or Vault has to deal with it.',
-    // Base (20 slots, doubled from 10 in patch 0303) lives in
-    // ModifierManager.stashCapacity as the
-    // floor -- see that method's own comment. Only blocks buying/crafting
-    // NEW equipment once the stash is already full (Shop purchases,
-    // Black Market purchases, buyback, and gear crafting); quest, raid,
-    // and Grimsby loot always still comes in uninterrupted, so this can
-    // never trap or discard an earned reward, only pause a voluntary
-    // purchase until something's sold.
-    baseCost: Tuning.get('upgrade.stash_expansion.baseCost'),
-    costGrowth: Tuning.get('upgrade.stash_expansion.costGrowth'),
-    maxLevel: Tuning.get('upgrade.stash_expansion.maxLevel'),
-    modsPerLevel: {}, stashCapacityPerLevel: Tuning.get('upgrade.stash_expansion.stashCapacityPerLevel'),
-    category: 'Economy',
-  },
-  {
     id: 'vitality_training', name: 'Vitality Training',
     description: 'Conditioning that has nothing to do with winning a fight and everything to do with surviving one.',
     baseCost: Tuning.get('upgrade.vitality_training.baseCost'),
@@ -695,15 +678,6 @@ export function guildCost(def: GuildDef, currentLevel: number): number {
 
 export const BASE_GOLD_STORAGE = 10_000;
 
-/** Stash slot floor before any Stash Expansion levels -- see
- *  ModifierManager.stashCapacity. Doubled 10 -> 20 in patch 0303
- *  (direct request: baseline inventory limits felt too tight even before
- *  Stash Expansion's own per-level bonus is doubled to match, see
- *  Stash Expansion: extra stash slots granted per level's own tuning
- *  entry) -- a flat code constant, not tuning-registry-backed, since
- *  this has always been a hardcoded floor (same as BASE_GOLD_STORAGE
- *  just above), not something the devtool exposes for live editing. */
-export const BASE_STASH_CAPACITY = 20;
 
 /* ----------------------------- renown perks ------------------------------ */
 

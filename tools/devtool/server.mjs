@@ -504,7 +504,26 @@ const SCHEMAS = {
       description: { type: 'string', required: true },
       reqLevel: { type: 'number', required: true },
       rewardGold: { type: 'number', required: true },
-      rewardItems: { type: 'string[]', required: false, picker: 'lootTable' },
+      // Patch 0354, direct report ("half my gear has no stats other than
+      // set bonuses"): this was `picker: 'lootTable'`, the SAME weighted
+      // "defId@chance" picker `loot`/`lootHeroic`/`lootLegendary` (raid-
+      // encounters, just below in this file) correctly use for actual
+      // chance-based loot tables. rewardItems is a guaranteed 100%-of-
+      // the-time reward (see ChainDef.rewardItems's own comment in
+      // quests.ts) -- it was never meant to carry a chance value at all,
+      // but the shared picker always appends one anyway, which is
+      // exactly how every existing entry ended up with an identical,
+      // meaningless "@5" suffix baked into its defId. Both consumers of
+      // this field (QuestManager's first-clear grant and its chain-
+      // replay dedicated-item drop) look the string up directly in
+      // EQUIPMENT_BY_ID with no parsing, so a suffixed id silently never
+      // resolves -- no error, the reward (or the replay drop's own
+      // dedicatedItemDropped flag) just quietly never happens. No
+      // `picker` now, so this falls back to the plain string-list editor
+      // every other unpicker'd `string[]` field already uses (see
+      // `names`/`encounterIds`/etc. nearby) -- exactly what a flat list
+      // of guaranteed defIds needs, nothing more.
+      rewardItems: { type: 'string[]', required: false },
       rewardRenown: { type: 'number', required: true },
       title: { type: 'string', required: false },
       epilogue: { type: 'string', required: false },

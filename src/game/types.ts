@@ -1748,12 +1748,12 @@ export interface UpgradeDef {
    *  is always free (see QuestManager.unfreezeOffer). Only Board Warden
    *  uses this. */
   freezeChangesPerLevel?: number;
-  /** Grants this many extra stash slots per level, on top of the 20-slot
-   *  base floor (doubled from 10 in patch 0303) -- same special-purpose-field shape as the slot-count
-   *  fields above. See ModifierManager.stashCapacity for the base + this
-   *  math, and ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
-   *  and CraftingManager.craftGear for where the resulting cap is
-   *  actually enforced. Only Stash Expansion uses this. */
+  /** Grants this many extra stash slots per level, on top of the (now-
+   *  removed) base floor -- see ModifierManager.stashCapacity's own
+   *  comment: the stash is uncapped as of patch 0354, direct request,
+   *  and the one upgrade that ever set this field (Stash Expansion) was
+   *  retired the same patch. Left on the type rather than deleted in
+   *  case a real cap ever comes back; no UpgradeDef currently sets it. */
   stashCapacityPerLevel?: number;
   /**
    * Guild Hall Upgrades panel category, for the tab's filter chips and

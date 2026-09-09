@@ -227,6 +227,27 @@ export interface ChainDef {
   stages: ChainStageDef[];
   /** Guaranteed reward on completion. */
   rewardGold: number;
+  /**
+   * Plain equipment defIds, granted in full every time -- NOT the
+   * "defId@chance" weighted-loot-table string format raid/encounter
+   * `loot`/`lootHeroic`/etc. arrays use (see parseLootEntry in raids.ts).
+   * Patch 0354, direct report ("half my gear has no stats other than set
+   * bonuses"): every entry in this file had somehow picked up a stray
+   * "@5" suffix (all 39, all identically "@5" -- a devtool-authoring
+   * artifact, not meaningful per-item data), which silently broke BOTH
+   * consumers of this field: QuestManager's own first-clear grant
+   * (`EquipmentManager.instantiate(defId)` returns null on a defId that
+   * doesn't resolve in EQUIPMENT_BY_ID, and the "if (item) push" guard
+   * right after it just drops a null on the floor rather than erroring)
+   * and the chain-replay dedicated-item drop (`rewardItems[0]`, same
+   * lookup, same silent no-op). Neither ever threw or logged anything,
+   * so a guild could go 900 patches never receiving a single first-clear
+   * chain reward without any error to point at -- stripped back to
+   * plain defIds in quest-chains.json this same patch. If the devtool's
+   * rewardItems editor is ever the same shared widget the loot-table
+   * fields use, that's almost certainly how the "@5" got baked in in the
+   * first place and is worth checking before this can recur.
+   */
   rewardItems: string[];
   rewardRenown: number;
   /**

@@ -6,7 +6,7 @@
     "reqLevel": 2,
     "rewardGold": 456,
     "rewardItems": [
-      "cellar_dwellers_tooth@5"
+      "cellar_dwellers_tooth"
     ],
     "rewardRenown": 1,
     "title": "First Real Job",
@@ -57,7 +57,7 @@
     "reqLevel": 5,
     "rewardGold": 406,
     "rewardItems": [
-      "keepers_last_feather@5"
+      "keepers_last_feather"
     ],
     "rewardRenown": 1,
     "title": "Keeper of the Clutch",
@@ -104,7 +104,7 @@
     "reqLevel": 8,
     "rewardGold": 2733,
     "rewardItems": [
-      "crow_feather_charm@5"
+      "crow_feather_charm"
     ],
     "rewardRenown": 1,
     "title": "Crow-Friend",
@@ -163,7 +163,7 @@
     "reqLevel": 11,
     "rewardGold": 1617,
     "rewardItems": [
-      "ashwoven_charm@5"
+      "ashwoven_charm"
     ],
     "rewardRenown": 1,
     "title": "Ash-Reader",
@@ -207,7 +207,7 @@
     "reqLevel": 15,
     "rewardGold": 1950,
     "rewardItems": [
-      "seized_glaive@5"
+      "seized_glaive"
     ],
     "rewardRenown": 2,
     "title": "Tally-Breaker",
@@ -251,7 +251,7 @@
     "reqLevel": 19,
     "rewardGold": 3675,
     "rewardItems": [
-      "gravewatchers_band@5"
+      "gravewatchers_band"
     ],
     "rewardRenown": 2,
     "title": "Grave-Watcher",
@@ -303,7 +303,7 @@
     "reqLevel": 16,
     "rewardGold": 4067,
     "rewardItems": [
-      "wardens_signet@5"
+      "wardens_signet"
     ],
     "rewardRenown": 3,
     "title": "Lord of the Keep",
@@ -363,7 +363,7 @@
     "reqLevel": 20,
     "rewardGold": 2700,
     "rewardItems": [
-      "bulwark_cuirass@5"
+      "bulwark_cuirass"
     ],
     "rewardRenown": 2,
     "title": "Garrick's End",
@@ -407,7 +407,7 @@
     "reqLevel": 24,
     "rewardGold": 3733,
     "rewardItems": [
-      "gravekeepers_gloves@5"
+      "gravekeepers_gloves"
     ],
     "rewardRenown": 2,
     "title": "Farmwarden",
@@ -451,8 +451,8 @@
     "reqLevel": 32,
     "rewardGold": 12873,
     "rewardItems": [
-      "sword_of_the_ashen_hand@5",
-      "bulwark_of_the_war_saint@5"
+      "sword_of_the_ashen_hand",
+      "bulwark_of_the_war_saint"
     ],
     "rewardRenown": 5,
     "title": "Ashen-Sworn",
@@ -512,8 +512,8 @@
     "reqLevel": 18,
     "rewardGold": 4400,
     "rewardItems": [
-      "dragon_helm@5",
-      "dragon_blade@5"
+      "dragon_helm",
+      "dragon_blade"
     ],
     "rewardRenown": 2,
     "title": "Dragonbane",
@@ -572,7 +572,7 @@
     "reqLevel": 14,
     "rewardGold": 2800,
     "rewardItems": [
-      "crown_of_the_lost@5"
+      "crown_of_the_lost"
     ],
     "rewardRenown": 1,
     "title": "Kingdom-Finder",
@@ -623,8 +623,8 @@
     "reqLevel": 22,
     "rewardGold": 6400,
     "rewardItems": [
-      "dragon_armor@5",
-      "amulet_of_fortune@5"
+      "dragon_armor",
+      "amulet_of_fortune"
     ],
     "rewardRenown": 3,
     "title": "Hellgate Breaker",
@@ -681,7 +681,7 @@
     "reqLevel": 10,
     "rewardGold": 2300,
     "rewardItems": [
-      "lucky_ring@5"
+      "lucky_ring"
     ],
     "rewardRenown": 1,
     "title": "Crownbearer",
@@ -731,7 +731,7 @@
     "reqLevel": 6,
     "rewardGold": 440,
     "rewardItems": [
-      "warband_cleaver@5"
+      "warband_cleaver"
     ],
     "rewardRenown": 1,
     "title": "Warband-Breaker",
@@ -773,7 +773,7 @@
     "reqLevel": 7,
     "rewardGold": 711,
     "rewardItems": [
-      "chieftains_torc@5"
+      "chieftains_torc"
     ],
     "rewardRenown": 1,
     "title": "Horde-Breaker",
@@ -825,8 +825,8 @@
     "reqLevel": 26,
     "rewardGold": 6400,
     "rewardItems": [
-      "choir_mask@5",
-      "silenced_bell@5"
+      "choir_mask",
+      "silenced_bell"
     ],
     "rewardRenown": 2,
     "title": "Choir-Silencer",
@@ -876,10 +876,10 @@
     "reqLevel": 34,
     "rewardGold": 17848,
     "rewardItems": [
-      "voidforged_blade@5",
-      "voidforged_crown@5",
-      "voidforged_plate@5",
-      "voidforged_signet@5"
+      "voidforged_blade",
+      "voidforged_crown",
+      "voidforged_plate",
+      "voidforged_signet"
     ],
     "rewardRenown": 6,
     "title": "World's End",
@@ -948,7 +948,7 @@
     "reqLevel": 44,
     "rewardGold": 23800,
     "rewardItems": [
-      "last_pilgrims_waystone@5"
+      "last_pilgrims_waystone"
     ],
     "rewardRenown": 8,
     "title": "Pilgrim's Herald",
@@ -1007,9 +1007,9 @@
     "reqLevel": 45,
     "rewardGold": 25333,
     "rewardItems": [
-      "empyrean_blade@5",
-      "empyrean_halo@5",
-      "empyrean_aegis@5"
+      "empyrean_blade",
+      "empyrean_halo",
+      "empyrean_aegis"
     ],
     "rewardRenown": 10,
     "title": "Kingslayer Twice Over",
@@ -1068,7 +1068,7 @@
     "reqLevel": 5,
     "rewardGold": 609,
     "rewardItems": [
-      "grimsbys_loaded_coin@5"
+      "grimsbys_loaded_coin"
     ],
     "rewardRenown": 1,
     "title": "The One He Doesn't Cheat",
@@ -1119,7 +1119,7 @@
     "reqLevel": 4,
     "rewardGold": 558,
     "rewardItems": [
-      "tollbreakers_gloves@5"
+      "tollbreakers_gloves"
     ],
     "rewardRenown": 1,
     "title": "Roadwarden",
@@ -1170,7 +1170,7 @@
     "reqLevel": 12,
     "rewardGold": 2550,
     "rewardItems": [
-      "ridgebreakers_pauldron@5"
+      "ridgebreakers_pauldron"
     ],
     "rewardRenown": 1,
     "title": "Ridgebreaker",
@@ -1221,7 +1221,7 @@
     "reqLevel": 17,
     "rewardGold": 3175,
     "rewardItems": [
-      "moonsilver_fang@5"
+      "moonsilver_fang"
     ],
     "rewardRenown": 2,
     "title": "Moonhunter",
@@ -1272,7 +1272,7 @@
     "reqLevel": 29,
     "rewardGold": 8050,
     "rewardItems": [
-      "unravelers_mark@5"
+      "unravelers_mark"
     ],
     "rewardRenown": 3,
     "title": "Unmasker",
@@ -1323,7 +1323,7 @@
     "reqLevel": 37,
     "rewardGold": 12291,
     "rewardItems": [
-      "lichfinders_compass@5"
+      "lichfinders_compass"
     ],
     "rewardRenown": 5,
     "title": "Grave-Marked",
@@ -1374,7 +1374,7 @@
     "reqLevel": 35,
     "rewardGold": 7491,
     "rewardItems": [
-      "millbrook_ledger_page@5"
+      "millbrook_ledger_page"
     ],
     "rewardRenown": 4,
     "title": "Watcher of Millbrook",
@@ -1415,7 +1415,7 @@
     "reqLevel": 39,
     "rewardGold": 8897,
     "rewardItems": [
-      "loomsplinter_shard@5"
+      "loomsplinter_shard"
     ],
     "rewardRenown": 6,
     "title": "Thread-Walker",
@@ -1457,7 +1457,7 @@
     "reqLevel": 1,
     "rewardGold": 270,
     "rewardItems": [
-      "quartermasters_token@5"
+      "quartermasters_token"
     ],
     "rewardRenown": 1,
     "title": "Provisioner",
@@ -1500,7 +1500,7 @@
     "reqLevel": 46,
     "rewardGold": 26867,
     "rewardItems": [
-      "kindred_fang@5"
+      "kindred_fang"
     ],
     "rewardRenown": 11,
     "title": "Kindred",
