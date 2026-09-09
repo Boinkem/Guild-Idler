@@ -420,7 +420,14 @@
 .raid-card-meta { display: flex; gap: 10px; align-items: baseline; margin-top: 2px; }
 .raid-card-chevron { flex: none; color: var(--muted); font-size: 0.75rem; }
 .raid-card:hover .raid-card-chevron { color: var(--brass); }
-.raid-card.locked { opacity: 0.55; }
+/* Direct report (patch 0351): "Raids requirements to unlock (when locked)
+ * text is hard to read because of the 'greyed out' of the card." Same
+ * double-dimming bug as .locked-upgrade/.upgrade-row.locked (both fixed
+ * this same patch/patch 0350) -- the lock-reason text is already
+ * .tiny.muted, and this opacity halved .card's own 88%-opaque backing on
+ * top of that. Dashed border added so a locked raid card still reads as
+ * clearly locked without needing to fade the whole card. */
+.raid-card.locked { border-style: dashed; }
 
 /* Found while wiring the zoom control (patch 0164) into RaidBanner: this
  * rule never actually existed, despite .raid-active-banner's own comment
@@ -3609,11 +3616,14 @@ input[type='range'] {
   cursor: pointer;
 }
 /* Vendors' own "not unlocked yet" placeholder row (the old "???"
-   lockedCard) -- dashed, dimmed, no click affordance since there's
-   nothing behind it to open yet. */
+   lockedCard) -- dashed, no extra dimming (patch 0351, direct report:
+   the already-muted name/effect text was ALSO wrapped in opacity: 0.55
+   on the whole row, compounding into text that was hard to read in any
+   theme -- same double-dimming bug patch 0350 already fixed for the
+   Treasury's Gold-for-Renown card. The dashed border alone is still a
+   clear "not unlocked yet" cue). */
 .upgrade-row.locked {
   cursor: default;
-  opacity: 0.55;
   border-style: dashed;
 }
 .upgrade-row.locked:hover { background: color-mix(in srgb, var(--panel) 88%, transparent); }

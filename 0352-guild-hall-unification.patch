@@ -1,0 +1,759 @@
+From 404ef6af8dfa6e88218e301a71b1f6afb7f269b6 Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Wed, 9 Sep 2026 12:13:01 +0000
+Subject: [PATCH 2/2] Patch 0352: Guild Hall unification -- Raid Quartermaster,
+ Quest fast-chance, Replay Memories master unlock
+
+---
+ guild-idler-status.md                   |  96 +++++++++++
+ src/game/attention.ts                   |   2 +-
+ src/game/data/raidUpgrades.ts           |  10 +-
+ src/game/types.ts                       |   2 +-
+ src/ui/MenuWindow.tsx                   |   2 +-
+ src/ui/panels/DiscoveredQuestsPanel.tsx |   8 +-
+ src/ui/panels/GuildPanel.tsx            | 138 ++++++++++++++-
+ src/ui/panels/QuestPanel.tsx            |  64 +------
+ src/ui/panels/RaidsPanel.tsx            | 218 +++---------------------
+ 9 files changed, 264 insertions(+), 276 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 6e7865d..1cc8b98 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28187,6 +28187,102 @@ everywhere else in this and the prior patch.
+ **Verified.** `npx tsc --noEmit` and `npx vite build --config
+ vite.web.config.ts` both pass clean.
+ 
++### Guild Hall unification: Raid Quartermaster and Quest fast-chance upgrades, Replay Memories' master unlock, all folded into one list (patch 0352)
++```discord-update
++Dev Update | Guild Hall Unification
++
++- Moved Raid Quartermaster's 3 upgrades into the Guild Hall, under a new Raids filter
++- Moved Quest Board's 2 fast-chance upgrades into the Guild Hall, under a new Quests filter
++- Moved Replay Memories' "unlock the tab" purchase into the Guild Hall too
++- Removed the Raids tab's Quartermaster sub-tab and its room-sprite visuals now that its upgrades live in the Guild Hall
++```
++
++Direct request: "current thoughts are to unify all upgrade paths to a
++central spot, aside from prestige items," plus "ensure Quests and Raids
++get their own filter tab in the Guild Hall upgrades list." Three
++previously-scattered upgrade trees move into the Guild Hall's own
++unified list; nothing about their underlying cost curves, mods, or save
++data changed -- only which screen sells them.
++
++**What moved.** Raid Quartermaster's 3 upgrades (Raid Speed, Raid Loot,
++Raid Recovery -- previously their own `RaidUpgradeRow` list inside
++Raids' now-retired Quartermaster sub-tab), Quest Board's 2 fast-chance
++upgrades (Lucky Streak, Steady Hands -- previously inline `QuestFastUpgradeRow`s
++at the top of the Quest Board tab), and Replay Memories' own "buy the
++feature" master unlock tier (previously the first card in its saga
++list, alongside the 6 story-content bands).
++
++**What didn't move, on purpose.** The 6 saga bands plus the
++autopilot/autopilot_recover tiers stay exactly where they were, on the
++Replay Memories tab -- their cost and description only make sense next
++to the saga list they unlock, same reasoning vendor-specific upgrades
++(Blacksmith/Alchemist/Enchanter) already stay on each vendor's own page
++instead of the Guild Hall. Prestige/Renown perks are untouched, per the
++request's own "aside from prestige items" carve-out.
++
++**New categories (`types.ts`, `GuildPanel.tsx`).** `GuildHallCategory`
++gains `'Quests'` and `'Raids'`, added to the filter chip bar and the
++category-color table. The 5 original categories already claim every
++distinct theme accent color (Combat/blood, Economy/brass-dim, Roster/sky,
++Care/moss, Unlocks/violet) -- Quests reuses plain `--brass` (visually
++distinct from Economy's `--brass-dim` at a glance) and Raids reuses
++Combat's `--blood` (raids are inherently combat content, so sharing the
++tint reads as related rather than confusing).
++
++**Row builders (`GuildPanel.tsx`).** Three new functions --
++`raidUpgradeRow`, `questFastUpgradeRow`, `replayMasterRow` -- each
++producing the same `RowData` shape `facilityRow`/`upgradeRow` already
++build, so the existing `GuildUpgradeRow` renderer, detail modal, MaxFlash,
++and Built-section logic all work on these new rows completely unchanged.
++The one real wrinkle: raid and quest-fast upgrades price in gold *then*
++Renown past a level threshold, unlike every existing Guild Hall row
++which is gold-only. `RowData.cost` only ever carried the gold figure and
++turned out to be otherwise unread anywhere in this file once `buyLabel`
++exists -- confirmed before relying on it -- so a Renown-priced row
++reports `cost: null` (the same shape a maxed row already used) and bakes
++the real price straight into `buyLabel`/`buyDisabled` instead, mirroring
++exactly what the two retired components (`RaidUpgradeRow`,
++`QuestFastUpgradeRow`) already computed for themselves. `replayMasterRow`
++models the one-time unlock the same way every existing binary unlock in
++`generalUpgrades` already does (`maxLevel: 1`, level 0 or 1) -- nothing
++new needed there.
++
++**Retired: Raids' Quartermaster sub-tab (`RaidsPanel.tsx`).** Its own
++sub-tab switcher, `RaidQuartermasterDen`, `RaidUpgradeRow`, and
++`roomSpriteLevel` all removed -- Raids goes back to a single view, no
++switcher needed for one screen. `RaidRoomSprite` (the weapon-rack/skull/
++shelf room art) is unused after this, not deleted outright -- same
++"stop calling it, leave the file" precedent already used for
++`rerollName`/`rerollHeroName` in patch 0350, in case the visual is
++wanted again later. `TAB_SUBTABS.raids` (`attention.ts`) updated from
++`['raids', 'quartermaster']` to `['raids']` so the nav-shimmer/unread
++system stops expecting a sub-tab that no longer exists; the onboarding
++tour's own Raids tooltip (`MenuWindow.tsx`) updated to stop mentioning
++the Quartermaster's Den by name.
++
++**Retired: Quest Board's inline upgrade rows (`QuestPanel.tsx`).** The
++`QuestFastUpgradeRow` component and both its call sites (Lucky Streak,
++Steady Hands) removed outright -- unlike the raid room sprites, there
++was no standalone visual worth keeping around here, just a row shape the
++Guild Hall's own `GuildUpgradeRow` now covers identically.
++
++**Replay Memories' saga list (`DiscoveredQuestsPanel.tsx`).** The
++`'master'` tier filtered out of `CHAIN_REPLAY_TIERS.map(...)` when
++rendering the saga-card grid -- `TierCard`'s existing `isMaster`/
++`masterOwned` branches are untouched and still correct for the 8
++remaining tiers (they read `GuildManager.hasChainReplayTier(state,
++'master')` from global state, not from a rendered master card), so
++nothing else on that page needed to change.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean, module count dropped by one
++(RaidRoomSprite.tsx no longer pulled into the bundle now that nothing
++imports it). No live in-app playtest in this environment -- worth a real
++pass confirming the Quests/Raids filter chips actually narrow the list
++correctly, the Renown-priced rows show and buy correctly once a raid
++upgrade reaches its Renown tier, and Replay Memories' master unlock
++still gates the 8 remaining saga cards exactly as before.
++
+ ### Subtitle cards on 5 tabs, Quick-assign visibility, Daylight/Parchment scene tint, Treasury readability, Hero Rename (patch 0350)
+ ```discord-update
+ Dev Update | Patch 0350
+diff --git a/src/game/attention.ts b/src/game/attention.ts
+index 31608c9..966cec6 100644
+--- a/src/game/attention.ts
++++ b/src/game/attention.ts
+@@ -59,7 +59,7 @@ export const TAB_SUBTABS: Record<string, string[]> = {
+   vendors: ['blacksmith', 'alchemist', 'enchanter'],
+   harvest: ['warehouse', 'fields'],
+   lore: ['quests', 'raids', 'collection'],
+-  raids: ['raids', 'quartermaster'],
++  raids: ['raids'],
+   stats: ['overview', 'achievements', 'results'],
+   hatchery: ['home', 'pets'],
+   // Board (existing) / Replay Memories (new, patch 0228) -- see
+diff --git a/src/game/data/raidUpgrades.ts b/src/game/data/raidUpgrades.ts
+index e3e919f..a14f538 100644
+--- a/src/game/data/raidUpgrades.ts
++++ b/src/game/data/raidUpgrades.ts
+@@ -37,11 +37,11 @@ export const RAID_UPGRADES: RaidUpgradeDef[] = [
+    * actually having tuning.json in hand; migrating them was exactly the
+    * small, low-risk follow-up it anticipated.
+    *
+-   * Both are built with exactly 3 levels (0-2) on purpose, to match the
+-   * 3-image sprite progression in the Raid Quartermaster's Den 1:1 with no
+-   * banding needed -- unlike raid_speed's existing 10-level curve, which
+-   * predates this visual system and gets banded onto the same 3 states
+-   * instead (see roomSpriteLevel in RaidsPanel.tsx).
++   * Both are built with exactly 3 levels (0-2) on purpose -- originally
++   * to match a 3-image room-sprite progression in the Raid Quartermaster's
++   * Den 1:1 with no banding needed; that visual retired to the Guild Hall's
++   * unified upgrade list in patch 0351 (see this tree's own row builder in
++   * GuildPanel.tsx), but the 3-level cap itself is unchanged.
+    */
+   {
+     id: 'raid_loot',
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 321537a..f7de1e8 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1700,7 +1700,7 @@ export interface RoleDef {
+  * any game-logic code. Presentation-only, same scope as the
+  * `shortEffect` field on UpgradeDef/GuildDef right below.
+  */
+-export type GuildHallCategory = 'Combat' | 'Economy' | 'Roster' | 'Care' | 'Unlocks';
++export type GuildHallCategory = 'Combat' | 'Economy' | 'Roster' | 'Care' | 'Unlocks' | 'Quests' | 'Raids';
+ 
+ export interface UpgradeDef {
+   id: string;
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 61b8d63..26424dc 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -211,7 +211,7 @@ const PANEL_BREAKDOWNS: Partial<Record<TabId, string[]>> = {
+   raids: [
+     'Multi-hero expeditions -- bigger rewards, longer odds, and the whole party is committed until it resolves.',
+     'Pick a difficulty tier and see each encounter’s odds before sending the party in.',
+-    "The Quartermaster's Den holds raid-only upgrades that never affect regular quests.",
++    "Raid-only upgrades that never affect regular quests live in the Guild Hall now, under the Raids filter.",
+   ],
+   lore: [
+     "The story so far -- every quest chain your guild has uncovered, underway or completed.",
+diff --git a/src/ui/panels/DiscoveredQuestsPanel.tsx b/src/ui/panels/DiscoveredQuestsPanel.tsx
+index f7c6fe0..cd3b879 100644
+--- a/src/ui/panels/DiscoveredQuestsPanel.tsx
++++ b/src/ui/panels/DiscoveredQuestsPanel.tsx
+@@ -447,7 +447,13 @@ function ReplayMemoriesView({
+ 
+       <div className="section-heading">Sagas</div>
+       <div className="raid-list">
+-        {CHAIN_REPLAY_TIERS.map((tier) => (
++        {/* 'master' excluded (patch 0351) -- its own "buy the feature"
++         *  unlock moved to the Guild Hall's unified upgrade list, under
++         *  the Quests filter, alongside Quest Board's own fast-chance
++         *  upgrades. The 6 saga bands plus autopilot/autopilot_recover
++         *  stay here -- their cost/description only make sense next to
++         *  the saga list they unlock. */}
++        {CHAIN_REPLAY_TIERS.filter((tier) => tier.id !== 'master').map((tier) => (
+           <TierCard key={tier.id} tier={tier} hero={selectedHero} onOpenChain={onOpenReplayChain} />
+         ))}
+       </div>
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 757d6b3..28dfe71 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -6,7 +6,8 @@ import { backgroundSrc } from '../../game/settings';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
+-import { describeMods, formatGold, pct } from '../../game/util';
++import { CHAIN_REPLAY_TIER_BY_ID } from '../../game/data/chainReplay';
++import { describeMods, formatGold, formatNumber, pct } from '../../game/util';
+ import { GuildHallCategory } from '../../game/types';
+ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+ import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
+@@ -56,16 +57,24 @@ function GuildUpgradeDetailModal({
+ 
+ /** Row's category label colour -- matches Design Handoff's CAT_FG table
+  *  exactly (Combat -> --blood, Economy -> --brass-dim, Roster -> --sky,
+- *  Care -> --moss, Unlocks -> --violet). */
++ *  Care -> --moss, Unlocks -> --violet). Quests/Raids added patch 0351
++ *  when their own upgrade trees moved in from the Quest Board/Raids tabs
++ *  -- every other theme accent is already spoken for by the original
++ *  five, so Quests reuses plain --brass (distinct enough from Economy's
++ *  --brass-dim at a glance) and Raids reuses Combat's --blood (raids are
++ *  inherently combat content, so sharing the tint reads as related
++ *  rather than confusing). */
+ const CATEGORY_FG: Record<GuildHallCategory, string> = {
+   Combat: 'var(--blood)',
+   Economy: 'var(--brass-dim)',
+   Roster: 'var(--sky)',
+   Care: 'var(--moss)',
+   Unlocks: 'var(--violet)',
++  Quests: 'var(--brass)',
++  Raids: 'var(--blood)',
+ };
+ 
+-const FILTERS: ('All' | GuildHallCategory)[] = ['All', 'Combat', 'Economy', 'Roster', 'Care', 'Unlocks'];
++const FILTERS: ('All' | GuildHallCategory)[] = ['All', 'Combat', 'Economy', 'Roster', 'Care', 'Unlocks', 'Quests', 'Raids'];
+ 
+ /** One row's worth of pre-computed data -- built once per render by
+  *  facilityRow/upgradeRow below from a GuildDef or UpgradeDef, so the
+@@ -254,6 +263,21 @@ export function GuildPanel() {
+ 
+   const facilities = GuildManager.facilities();
+   const generalUpgrades = GuildManager.upgrades().filter((u) => !u.vendor);
++  // Raid Quartermaster's 3 upgrades and Quest Board's 2 fast-chance
++  // upgrades, folded into this one unified list (patch 0351, direct
++  // request: "unify all upgrade paths to a central spot, aside from
++  // prestige items"). Both trees already lived entirely in
++  // GuildManager/state (raidUpgrades/questFastUpgrades) -- only the UI
++  // that rendered them is moving, not the underlying data or cost math.
++  // The Replay Memories tab's own 'master' unlock tier (its literal
++  // "buy the feature" upgrade) moves in the same way; the 6 saga bands
++  // and the autopilot/autopilot_recover tiers stay on the Replay
++  // Memories tab itself, same as vendor-specific upgrades staying on
++  // each vendor's own page -- their cost/description only make sense
++  // in the context of the saga list right next to them.
++  const raidUpgradeDefs = GuildManager.raidUpgrades();
++  const questFastUpgradeDefs = GuildManager.questFastUpgrades();
++  const replayMasterTier = CHAIN_REPLAY_TIER_BY_ID['master'];
+   const { flashes, dismiss } = useMaxFlash([
+     ...facilities.map((def) => ({
+       id: def.id, name: def.name,
+@@ -263,10 +287,27 @@ export function GuildPanel() {
+       id: def.id, name: def.name,
+       level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
+     })),
++    ...raidUpgradeDefs.map((def) => ({
++      id: def.id, name: def.name,
++      level: GuildManager.raidUpgradeLevel(state, def.id), maxLevel: def.maxLevel,
++    })),
++    ...questFastUpgradeDefs.map((def) => ({
++      id: def.id, name: def.name,
++      level: GuildManager.questFastUpgradeLevel(state, def.id), maxLevel: def.maxLevel,
++    })),
++    ...(replayMasterTier ? [{
++      id: replayMasterTier.id, name: replayMasterTier.sagaName,
++      level: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0, maxLevel: 1,
++    }] : []),
+   ]);
+   const levelPulses = usePulsesOnChange([
+     ...facilities.map((def) => ({ id: def.id, value: GuildManager.facilityLevel(state, def.id) })),
+     ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
++    ...raidUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.raidUpgradeLevel(state, def.id) })),
++    ...questFastUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.questFastUpgradeLevel(state, def.id) })),
++    ...(replayMasterTier
++      ? [{ id: replayMasterTier.id, value: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0 }]
++      : []),
+   ]);
+ 
+   function facilityRow(def: (typeof facilities)[number]): RowData {
+@@ -303,9 +344,94 @@ export function GuildPanel() {
+     };
+   }
+ 
+-  // Facilities first, then permanent upgrades, source order preserved --
+-  // matches the design handoff's "single list, not two grids" spec.
+-  const rows: RowData[] = [...facilities.map(facilityRow), ...generalUpgrades.map(upgradeRow)];
++  /**
++   * Raid Quartermaster's 3 upgrades (patch 0351 -- previously their own
++   * RaidUpgradeRow component inside RaidsPanel's now-retired Quartermaster
++   * sub-tab). Dual gold-then-Renown pricing (nextRaidUpgradeCost), unlike
++   * every other row above which is gold-only -- RowData.cost only ever
++   * carried the gold figure, so a Renown-priced row reports `cost: null`
++   * (same shape a maxed row already used) and bakes the real Renown price
++   * into buyLabel/buyDisabled directly instead, since nothing else in this
++   * file actually reads row.cost back out once buyLabel exists (confirmed
++   * -- it's otherwise a dead field on RowData already).
++   */
++  function raidUpgradeRow(def: (typeof raidUpgradeDefs)[number]): RowData {
++    const level = GuildManager.raidUpgradeLevel(state, def.id);
++    const next = GuildManager.nextRaidUpgradeCost(state, def.id);
++    const maxed = next === null;
++    const affordable = !maxed && (next!.currency === 'gold' ? state.gold >= next!.cost : state.renown >= next!.cost);
++    const entries = describeMods(def.modsPerLevel).map((line) => ({ text: `${line} per level` }));
++    return {
++      id: def.id, name: def.name, description: def.description,
++      category: 'Raids', level, maxLevel: def.maxLevel, maxed, affordable,
++      cost: next?.currency === 'gold' ? next.cost : null,
++      effectText: entries.map((e) => e.text).join(' · '),
++      statLines: entries.map((e) => <span key={e.text}>{e.text}</span>),
++      buyLabel: maxed
++        ? 'Fully upgraded'
++        : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
++      buyDisabled: maxed || !affordable,
++      onBuy: () => engine.buyRaidUpgrade(def.id),
++    };
++  }
++
++  /** Quest Board's 2 fast-chance upgrades (patch 0351 -- previously their
++   *  own QuestFastUpgradeRow component inline on the Quest Board tab).
++   *  Same dual-currency shape raidUpgradeRow above uses. */
++  function questFastUpgradeRow(def: (typeof questFastUpgradeDefs)[number]): RowData {
++    const level = GuildManager.questFastUpgradeLevel(state, def.id);
++    const next = GuildManager.nextQuestFastUpgradeCost(state, def.id);
++    const maxed = next === null;
++    const affordable = !maxed && (next!.currency === 'gold' ? state.gold >= next!.cost : state.renown >= next!.cost);
++    const effectText = def.fastChancePctPerLevel
++      ? `+${def.fastChancePctPerLevel}% Fast chance per level, every difficulty`
++      : `+${def.successPenaltyRecoveryPerLevel}% success back per level on Fast rolls`;
++    return {
++      id: def.id, name: def.name, description: def.description,
++      category: 'Quests', level, maxLevel: def.maxLevel, maxed, affordable,
++      cost: next?.currency === 'gold' ? next.cost : null,
++      effectText,
++      statLines: [<span key={effectText}>{effectText}</span>],
++      buyLabel: maxed
++        ? 'Fully upgraded'
++        : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
++      buyDisabled: maxed || !affordable,
++      onBuy: () => engine.buyQuestFastUpgrade(def.id),
++    };
++  }
++
++  /** Replay Memories' own "buy the feature" tier (patch 0351 -- the 6 saga
++   *  bands and the autopilot/autopilot_recover tiers stay on the Replay
++   *  Memories tab itself, see this file's own comment above on why).
++   *  One-off gold purchase, modeled the same way every other binary
++   *  unlock in generalUpgrades already is (maxLevel 1, level 0 or 1). */
++  function replayMasterRow(tier: NonNullable<typeof replayMasterTier>): RowData {
++    const owned = GuildManager.hasChainReplayTier(state, tier.id);
++    const affordable = !owned && state.gold >= tier.goldCost;
++    const effectText = 'Unlocks the Replay Memories tab -- revisit completed story chains for a chance at Heroic, Mythic, and Legendary gear.';
++    return {
++      id: tier.id, name: tier.sagaName, description: tier.description,
++      category: 'Quests', level: owned ? 1 : 0, maxLevel: 1, maxed: owned, affordable,
++      cost: tier.goldCost,
++      effectText,
++      statLines: [<span key={effectText} className="gold-text">{effectText}</span>],
++      buyLabel: owned ? 'Unlocked' : `Buy · ${formatGold(tier.goldCost)}`,
++      buyDisabled: owned || !affordable,
++      onBuy: () => engine.buyChainReplayTier(tier.id),
++    };
++  }
++
++  // Facilities first, then permanent upgrades, then the raid/quest/replay
++  // trees folded in from their own former tabs (patch 0351), source order
++  // preserved within each group -- matches the design handoff's "single
++  // list, not two grids" spec, extended rather than restructured.
++  const rows: RowData[] = [
++    ...facilities.map(facilityRow),
++    ...generalUpgrades.map(upgradeRow),
++    ...raidUpgradeDefs.map(raidUpgradeRow),
++    ...questFastUpgradeDefs.map(questFastUpgradeRow),
++    ...(replayMasterTier ? [replayMasterRow(replayMasterTier)] : []),
++  ];
+ 
+   // A row that just hit max stays in the main list for as long as its
+   // MaxFlash is still playing (fires the flash "before it moves", per
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 392528e..29db6fe 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -4,14 +4,13 @@ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { backgroundSrc } from '../../game/settings';
+ import { GuildManager } from '../../game/managers/GuildManager';
+-import { QUEST_FAST_UPGRADE_BY_ID } from '../../game/data/questFastUpgrades';
+ import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+ import {
+   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
+ } from '../../game/data/quests';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { QuestOffer, Hero, AutoChainWeightBy } from '../../game/types';
+-import { formatDuration, formatGold, formatNumber } from '../../game/util';
++import { formatDuration, formatGold } from '../../game/util';
+ import { RarityPill } from '../RarityPill';
+ import { EggIcon } from '../EggIcon';
+ import { ConfirmModal } from '../ConfirmModal';
+@@ -473,56 +472,6 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
+   );
+ }
+ 
+-/**
+- * Patch 0332, direct request: "a new expensive upgrade to increase
+- * chances" for how often a quest offer rolls Fast. Patch 0333 (Steady
+- * Hands) reused this same row rather than copying it -- both entries
+- * are single-effect, single-currency-path upgrades that only differ in
+- * which one number they move and how that number's described, so
+- * `effectText`/`icon` are passed in rather than read off a field this
+- * component would otherwise have to know how to interpret per-id.
+- * Deliberately a compact single row (not the full detail-modal
+- * RaidsPanel's own upgrade-row pattern uses) -- a whole modal-on-click
+- * affordance for a two-entry tree would be more chrome than the feature
+- * currently needs.
+- */
+-function QuestFastUpgradeRow({ id, icon, effectText }: { id: string; icon: string; effectText: string }) {
+-  const engine = useEngine();
+-  const state = engine.state;
+-  const def = QUEST_FAST_UPGRADE_BY_ID[id];
+-  const level = GuildManager.questFastUpgradeLevel(state, def.id);
+-  const next = GuildManager.nextQuestFastUpgradeCost(state, def.id);
+-  const maxed = next === null;
+-  const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
+-  const buyLabel = maxed
+-    ? 'Maxed'
+-    : next!.currency === 'gold'
+-      ? `Buy · ${formatGold(next!.cost)}`
+-      : `Buy · ${formatNumber(next!.cost)} renown`;
+-  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
+-  return (
+-    <div className="upgrade-row">
+-      <span style={{ minWidth: 0 }}>
+-        <span className="upgrade-row-head">
+-          <span className="upgrade-row-name">{icon} {def.name}</span>
+-          <span className="upgrade-row-level">{level}/{def.maxLevel}</span>
+-        </span>
+-        <span className="upgrade-row-effect">{effectText}</span>
+-        <span className="upgrade-row-rule">
+-          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+-        </span>
+-      </span>
+-      <button
+-        className={`upgrade-buy-btn ${!maxed && afford ? 'affordable' : ''}`}
+-        disabled={maxed || !afford}
+-        onClick={() => engine.buyQuestFastUpgrade(def.id)}
+-      >
+-        {buyLabel}
+-      </button>
+-    </div>
+-  );
+-}
+-
+ export function QuestPanel() {
+   const engine = useEngine();
+   const now = useNow();
+@@ -673,17 +622,6 @@ export function QuestPanel() {
+         </p>
+       </div>
+ 
+-      <QuestFastUpgradeRow
+-        id="lucky_streak"
+-        icon="⚡"
+-        effectText={`+${QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel}% Fast chance per level, every difficulty`}
+-      />
+-      <QuestFastUpgradeRow
+-        id="steady_hands"
+-        icon="🛡"
+-        effectText={`+${QUEST_FAST_UPGRADE_BY_ID['steady_hands'].successPenaltyRecoveryPerLevel}% success back per level on Fast rolls`}
+-      />
+-
+       {/* --------------------------- active quests --------------------------- */}
+       {state.activeQuests.length > 0 && (
+         <>
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index a6c1b31..9187934 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -2,25 +2,21 @@ import { useEffect, useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { backgroundSrc } from '../../game/settings';
+-import { isTabUnread } from '../../game/attention';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { RaidManager } from '../../game/managers/RaidManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+-import { GuildManager } from '../../game/managers/GuildManager';
+ import {
+   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON_DEFS, raidDifficultyIconSrc, RAID_DIFFICULTY_LABEL,
+   isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
+ } from '../../game/data/raids';
+ import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
+ import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
+-import { RaidDifficulty, RaidEncounterDef, RaidUpgradeDef, RaidDef, ElementType, Hero, Role } from '../../game/types';
++import { RaidDifficulty, RaidEncounterDef, RaidDef, ElementType, Hero, Role } from '../../game/types';
+ import { ROLE_BY_ID } from '../../game/data/progression';
+ import { RoleIcon } from '../RoleIcon';
+ import { RarityPill } from '../RarityPill';
+-import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+-import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
+ import { RaidPartySprites } from '../sprites/RaidPartySprites';
+-import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
++import { formatDuration, describeMods, RARITY_COLOR } from '../../game/util';
+ 
+ // Single-letter fallback badge (used only if the icon art at
+ // public/raid-icons/<difficulty>.png is missing).
+@@ -225,152 +221,6 @@ function EncounterElementTags({ encounter }: { encounter: RaidEncounterDef }) {
+ 
+ /** Shared across every raid card -- clicking a discovered loot entry opens
+  *  this instead of each card managing its own overlay state. */
+-/**
+- * Patch 0321: converted from a full .card to the shared dense
+- * upgrade row -- see .upgrade-row's own comment in app.css. Only 3 of
+- * these exist (Speed/Loot/Recovery), each still paired with its own
+- * room sprite rendered above it in RaidQuartermasterDen below, which
+- * this doesn't touch at all -- just what used to sit under the sprite.
+- */
+-function RaidUpgradeRow({ def }: { def: RaidUpgradeDef }) {
+-  const engine = useEngine();
+-  const state = engine.state;
+-  const [showDetail, setShowDetail] = useState(false);
+-  const level = GuildManager.raidUpgradeLevel(state, def.id);
+-  const next = GuildManager.nextRaidUpgradeCost(state, def.id);
+-  const maxed = next === null;
+-  const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
+-  const { flashes, dismiss } = useMaxFlash([{ id: def.id, name: def.name, level, maxLevel: def.maxLevel }]);
+-  const flash = flashes[def.id];
+-  const levelPulses = usePulsesOnChange([{ id: def.id, value: level }]);
+-  const entries = describeMods(def.modsPerLevel).map((line) => `${line} per level`);
+-  const effectText = entries.join(' · ');
+-  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
+-  const buyLabel = maxed
+-    ? 'Fully upgraded'
+-    : next!.currency === 'gold'
+-      ? `Buy · ${formatGold(next!.cost)}`
+-      : `Buy · ${formatNumber(next!.cost)} renown`;
+-  return (
+-    <div
+-      className="upgrade-row"
+-      onClick={() => setShowDetail(true)}
+-      role="button"
+-      tabIndex={0}
+-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
+-    >
+-      <span style={{ minWidth: 0 }}>
+-        <span className="upgrade-row-head">
+-          <span className="upgrade-row-name">{def.name}</span>
+-          <span className={`upgrade-row-level ${levelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+-        </span>
+-        <span className="upgrade-row-effect">{effectText}</span>
+-        <span className="upgrade-row-rule">
+-          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+-        </span>
+-      </span>
+-      <button
+-        className={`upgrade-buy-btn ${!maxed && afford ? 'affordable' : ''}`}
+-        disabled={maxed || !afford}
+-        onClick={(e) => { e.stopPropagation(); engine.buyRaidUpgrade(def.id); }}
+-      >
+-        {buyLabel}
+-      </button>
+-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
+-      {showDetail && (
+-        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+-            <div className="spread">
+-              <span className="card-title">{def.name}</span>
+-              <span className="small muted">{level}/{def.maxLevel}</span>
+-            </div>
+-            <p className="card-flavour" style={{ marginTop: 6 }}>{def.description}</p>
+-            {entries.length > 0 && (
+-              <div className="stat-row" style={{ marginBottom: 4 }}>
+-                {entries.map((line) => <span key={line}>{line}</span>)}
+-              </div>
+-            )}
+-            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+-              <button onClick={() => setShowDetail(false)}>Close</button>
+-              <button className="btn-yellow" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>{buyLabel}</button>
+-            </div>
+-          </div>
+-        </div>
+-      )}
+-    </div>
+-  );
+-}
+-
+-const RAID_SPEED_ID = 'raid_speed';
+-const RAID_LOOT_ID = 'raid_loot';
+-const RAID_RECOVERY_ID = 'raid_recovery';
+-
+-function roomSpriteLevel(def: RaidUpgradeDef, level: number): number {
+-  // raid_loot and raid_recovery were built with exactly 3 levels (0-2), so
+-  // they map onto their 3 images directly. raid_speed predates this visual
+-  // system and spans up to 10 levels on an existing, tuned curve that isn't
+-  // worth disturbing just to match 3 images -- it gets banded onto the
+-  // same 3 states instead, at the same milestone its own cost curve
+-  // already uses: still in the gold tier, or into/past the Renown tier.
+-  if (def.id === RAID_SPEED_ID) {
+-    if (level <= 0) return 0;
+-    return level < def.goldTierMaxLevel ? 1 : 2;
+-  }
+-  return Math.max(0, Math.min(2, level));
+-}
+-
+-function RaidQuartermasterDen() {
+-  // Embedded directly in the Raids tab rather than the general Upgrades
+-  // panel -- raids have been treated as their own separable system all
+-  // along (own tab, own background, own resolution engine), and this
+-  // tree only ever affects raids, so it lives where it matters rather
+-  // than getting buried among quest-side upgrades. A weapon rack / skull
+-  // / shelf visibly fill in as their matching upgrade is leveled, rather
+-  // than a plain progress number doing all the work.
+-  const engine = useEngine();
+-  const state = engine.state;
+-  const defs = GuildManager.raidUpgrades();
+-  const speedDef = defs.find((d) => d.id === RAID_SPEED_ID);
+-  const lootDef = defs.find((d) => d.id === RAID_LOOT_ID);
+-  const recoveryDef = defs.find((d) => d.id === RAID_RECOVERY_ID);
+-
+-  return (
+-    <div className="card" style={{ marginBottom: 12 }}>
+-      <div className="card-title" style={{ marginBottom: 8 }}>The Raid Quartermaster's Den</div>
+-      <p className="tiny muted" style={{ marginBottom: 10 }}>
+-        Raid-only bonuses -- these never affect regular quests, and quest upgrades never affect raids either.
+-        Early levels cost gold; deeper levels cost Renown.
+-      </p>
+-      <div className="grid two">
+-        {speedDef && (
+-          <div>
+-            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+-              <RaidRoomSprite kind="rack" level={roomSpriteLevel(speedDef, GuildManager.raidUpgradeLevel(state, speedDef.id))} height={56} title={speedDef.name} />
+-            </div>
+-            <RaidUpgradeRow def={speedDef} />
+-          </div>
+-        )}
+-        {lootDef && (
+-          <div>
+-            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+-              <RaidRoomSprite kind="skull" level={roomSpriteLevel(lootDef, GuildManager.raidUpgradeLevel(state, lootDef.id))} height={56} title={lootDef.name} />
+-            </div>
+-            <RaidUpgradeRow def={lootDef} />
+-          </div>
+-        )}
+-        {recoveryDef && (
+-          <div>
+-            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+-              <RaidRoomSprite kind="shelf" level={roomSpriteLevel(recoveryDef, GuildManager.raidUpgradeLevel(state, recoveryDef.id))} height={56} title={recoveryDef.name} />
+-            </div>
+-            <RaidUpgradeRow def={recoveryDef} />
+-          </div>
+-        )}
+-      </div>
+-    </div>
+-  );
+-}
+-
+ function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => void }) {
+   const def = EQUIPMENT_BY_ID[defId];
+   if (!def) return null;
+@@ -982,25 +832,18 @@ export function RaidsPanel() {
+   const { settings } = useSettings();
+   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
+   const [itemDetail, setItemDetail] = useState<string | null>(null);
+-  const [subTab, setSubTab] = useState<'raids' | 'quartermaster'>('raids');
+   const setTotals = useRaidSetTotals(state);
+ 
+-  // Deep-link support for a notification's "Go to" button targeting a
+-  // specific Raids sub-tab -- same consume-once shape every other
+-  // sub-tabbed panel uses. Placed before the hasRaids early return since
+-  // hooks can't follow a conditional return.
+-  useEffect(() => {
+-    const requested = engine.consumeRequestedSubTab();
+-    if (requested === 'raids' || requested === 'quartermaster') setSubTab(requested);
+-  }, [engine, engine.requestedSubTab]);
+-
+-  // Acknowledges whichever sub-tab is currently open -- on mount (the
+-  // default Raids list) and again on every switch -- clearing the nav
+-  // shimmer for a banner-worthy notification targeting this specific
+-  // sub-tab (patch 0191).
++  // Acknowledges the tab on mount -- clears the nav shimmer for a
++  // banner-worthy notification targeting Raids (patch 0191). Simplified
++  // to a single bare-tab acknowledgement (patch 0351) now that Raids no
++  // longer has its own sub-tab switcher -- the Quartermaster's Den (and
++  // its 'quartermaster' sub-tab id) retired along with it, its 3
++  // upgrades folded into the Guild Hall's own unified list instead. See
++  // TAB_SUBTABS in attention.ts, updated the same patch.
+   useEffect(() => {
+-    engine.acknowledgeTab('raids', subTab);
+-  }, [engine, subTab]);
++    engine.acknowledgeTab('raids');
++  }, [engine]);
+ 
+   if (!hasRaids) {
+     return (
+@@ -1036,38 +879,17 @@ export function RaidsPanel() {
+         </p>
+       </div>
+ 
+-      <div className="row" style={{ gap: 8, marginBottom: 14 }}>
+-        <button
+-          className={`btn-subtab ${subTab === 'raids' ? 'on' : ''} ${isTabUnread(state, 'raids', 'raids') ? 'subtab-unread' : ''}`}
+-          onClick={() => setSubTab('raids')}
+-        >
+-          Raids
+-        </button>
+-        <button
+-          className={`btn-subtab ${subTab === 'quartermaster' ? 'on' : ''} ${isTabUnread(state, 'raids', 'quartermaster') ? 'subtab-unread' : ''}`}
+-          onClick={() => setSubTab('quartermaster')}
+-        >
+-          Quartermaster
+-        </button>
++      <p className="raid-sets-summary">
++        Raid sets discovered: <b>{setTotals.setsComplete}/{setTotals.setsTotal}</b> complete
++        {' · '}<b>{setTotals.piecesFound}/{setTotals.piecesTotal}</b> pieces
++      </p>
++      <div className="raid-list">
++        {state.activeRaid && <ActiveRaidCard />}
++        {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
++          <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
++        ))}
+       </div>
+ 
+-      {subTab === 'raids' ? (
+-        <>
+-          <p className="raid-sets-summary">
+-            Raid sets discovered: <b>{setTotals.setsComplete}/{setTotals.setsTotal}</b> complete
+-            {' · '}<b>{setTotals.piecesFound}/{setTotals.piecesTotal}</b> pieces
+-          </p>
+-          <div className="raid-list">
+-            {state.activeRaid && <ActiveRaidCard />}
+-            {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
+-              <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
+-            ))}
+-          </div>
+-        </>
+-      ) : (
+-        <RaidQuartermasterDen />
+-      )}
+-
+       {itemDetail && <ItemDetailOverlay defId={itemDetail} onClose={() => setItemDetail(null)} />}
+       </div>
+     </div>
+-- 
+2.43.0
+

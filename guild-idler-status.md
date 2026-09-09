@@ -28127,6 +28127,66 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Vendor subtitle cards, Alchemist stock description, locked-card readability across Vendors and Raids (patch 0351)
+```discord-update
+Dev Update | Patch 0351
+
+- Fixed Vendor stock subtitles (Blacksmith, Enchanter) not sitting in a proper readable box
+- Added a missing stock description to the Alchemist
+- Fixed hidden vendor upgrade rows and locked raid cards being much harder to read than intended
+- Fixed the rarity filter dropdowns in "Sell from the stash" lacking a solid background
+```
+
+Four more direct reports, same shape as patch 0350's own bundle -- UI-only,
+no save-shape or balance changes.
+
+**Vendor stock subtitles not in a card (`VendorsPanel.tsx`).** Same root
+cause as patch 0350's "subtitle not in a card" entry, just missed on that
+first pass since it didn't touch Vendors: `ArmourStock` (Blacksmith) and
+`BlackMarketStock` (Enchanter) both had their "Stock rotates in..." line
+on a bare `.subtitle`-classed `<p>`, plus Black Market's own locked-state
+blurb before the Black Market Contact upgrade is bought. All three now
+wrap in a `<div className="card">`, same shape Quest Board/Raids/etc.
+already got last patch. Kept each row's own `.spread` layout (text next
+to the Reroll button) by wrapping the whole spread in the card rather
+than just the paragraph, so the button still sits inline.
+
+**Alchemist missing a stock description (`VendorsPanel.tsx`).** Direct
+report: Blacksmith and Enchanter both open with a "Stock rotates in..."
+line, `SuppliesStock` (Alchemist) had nothing above its Reroll button.
+Added the same line, worded for what's actually true of this vendor --
+unlike the Blacksmith ("buys as well as sells"), nothing in the game
+lets a player sell consumables back to the Alchemist, so this one reads
+"Salves and remedies only -- no buybacks here" instead of copying the
+Blacksmith's wording verbatim.
+
+**Hidden vendor upgrades and locked raid cards hard to read
+(`app.css`).** Two direct reports, one shared root cause: both
+`.upgrade-row.locked` (the "???" placeholder row for a vendor upgrade
+that hasn't unlocked yet) and `.raid-card.locked` (a raid card gated on
+a prior raid/chain) were fading their entire row/card to `opacity: 0.55`
+on top of already-muted `.tiny`/`.small` text -- the exact same
+double-dimming bug patch 0350 fixed for the Treasury's Gold-for-Renown
+card and for `.locked-upgrade` generally, just two more instances of it
+that hadn't been reported yet at the time. Both dropped their opacity;
+`.raid-card.locked` picked up a dashed border (matching every other
+locked-card treatment in the game) so it still reads as clearly locked
+without needing to fade.
+
+**"Common and below" filter dropdowns lacked a background
+(`VendorsPanel.tsx`).** Direct report on the Blacksmith's "Sell from the
+stash" row (Sell Junk / Scrap All, each with its own rarity-threshold
+`<select>`). The global `select` CSS rule already paints a background,
+so this wasn't a missing rule so much as those two selects (and their
+action buttons) sitting directly on the tab's own busy background art
+with nothing backing the row as a whole -- wrapped the entire row (both
+selects, both Sell Junk/Scrap All buttons, both Repair buttons) in a
+`.card`, same "give busy-background chrome a solid backing" fix used
+everywhere else in this and the prior patch.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean.
+
 ### Subtitle cards on 5 tabs, Quick-assign visibility, Daylight/Parchment scene tint, Treasury readability, Hero Rename (patch 0350)
 ```discord-update
 Dev Update | Patch 0350

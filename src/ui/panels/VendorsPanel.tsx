@@ -631,11 +631,13 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
 
   return (
     <>
-      <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
-        <p className="tiny muted subtitle" style={{ margin: 0 }}>
-          Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. The armourer buys as well as sells.
-        </p>
-        <ShopRerollButton vendorId="blacksmith" />
+      <div className="card" style={{ marginBottom: 8 }}>
+        <div className="spread" style={{ alignItems: 'center' }}>
+          <p className="tiny muted" style={{ margin: 0 }}>
+            Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. The armourer buys as well as sells.
+          </p>
+          <ShopRerollButton vendorId="blacksmith" />
+        </div>
       </div>
       {state.shop.equipment.length === 0 && <p className="small muted">Sold out. Come back after the next delivery.</p>}
       <div className="grid vendor-stock-grid">
@@ -654,7 +656,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
       <div className="section-heading" style={{ marginBottom: 0 }}>Sell from the stash</div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare to sell.</p>}
       {state.stash.length > 0 && (
-        <div className="row wrap" style={{ gap: 6, alignItems: 'center', marginBottom: 8 }}>
+        <div className="card" style={{ marginBottom: 8 }}>
+        <div className="row wrap" style={{ gap: 6, alignItems: 'center' }}>
           {/* Patch 0277: Sell Junk, its own rarity threshold separate from
               Scrap All's -- see runSellJunk's own comment above for why
               this stayed a distinct dropdown rather than sharing
@@ -711,6 +714,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           >
             {'\u2692'} Repair Broken ({brokenPreview.length})
           </button>
+        </div>
         </div>
       )}
       <div className="item-card-grid gear-card-grid">
@@ -998,11 +1002,17 @@ function ArmourStashCard({
 function SuppliesStock() {
   const engine = useEngine();
   const state = engine.state;
+  const now = useNow();
 
   return (
     <>
-      <div className="row end" style={{ marginBottom: 8 }}>
-        <ShopRerollButton vendorId="alchemist" />
+      <div className="card" style={{ marginBottom: 8 }}>
+        <div className="spread" style={{ alignItems: 'center' }}>
+          <p className="tiny muted" style={{ margin: 0 }}>
+            Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. Salves and remedies only -- no buybacks here.
+          </p>
+          <ShopRerollButton vendorId="alchemist" />
+        </div>
       </div>
       <div className="grid vendor-stock-grid">
         {state.shop.consumables.map((entry) => {
@@ -1031,10 +1041,12 @@ function BlackMarketStock({ now }: { now: number }) {
   if (!blackMarketUnlocked) {
     return (
       <>
-        <p className="small muted subtitle">
-          Rumour is there's a contact who deals in rarer stock, for a price. Unlock via the Black Market
-          Contact upgrade in Guild Hall.
-        </p>
+        <div className="card">
+          <p className="small muted" style={{ margin: 0 }}>
+            Rumour is there's a contact who deals in rarer stock, for a price. Unlock via the Black Market
+            Contact upgrade in Guild Hall.
+          </p>
+        </div>
         {/* Same "jump to and highlight the requirement" treatment as
          *  RaidsPanel's difficulty circles / whole-tab locked state and
          *  HeroesPanel's locked recruit cards (patch 0179) -- rather than
@@ -1052,12 +1064,14 @@ function BlackMarketStock({ now }: { now: number }) {
 
   return (
     <>
-      <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
-        <p className="tiny muted subtitle" style={{ margin: 0 }}>
-          Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
-          {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
-        </p>
-        <ShopRerollButton vendorId="enchanter" />
+      <div className="card" style={{ marginBottom: 8 }}>
+        <div className="spread" style={{ alignItems: 'center' }}>
+          <p className="tiny muted" style={{ margin: 0 }}>
+            Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
+            {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
+          </p>
+          <ShopRerollButton vendorId="enchanter" />
+        </div>
       </div>
       {state.blackMarket.equipment.length === 0 && (
         <p className="small muted">The contact has nothing worth showing right now.</p>
