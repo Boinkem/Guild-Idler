@@ -28127,6 +28127,82 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Filter tabs on the recipe/enchant pickers (patch 0348)
+```discord-update
+Dev Update | Picker Filter Tabs
+
+- Added filter tabs to the Blacksmith's recipe picker -- filter by equipment slot
+- Added filter tabs to the Weapon Enchanting and Armour Infusion enchant pickers -- filter by element
+- Added filter tabs to the Alchemist and Charms recipe picker -- filter by what the item actually does (success, gold, luck, insight, injury resist, peddler)
+```
+
+Direct follow-up across a design conversation, mocked up first before this
+landed: general-purpose filter tabs for `PickerModal`, wired into every
+picker that has a real category axis worth filtering by. The stat/bonus
+pickers (gear's own bonus slots, the enchant stat slot) stay exactly as
+they were -- flat lists, no tabs, direct call: "probably doesn't need
+tabs."
+
+**`PickerModal` itself (`CraftingStation.tsx`).** New optional `tabs`
+prop (`{id, label}[]`) and new `PickerOption.tags` (`string[]`). When
+`tabs` is passed, an "All" tab is prepended automatically and the option
+list/grid filters to whichever tab is active, by
+`option.tags?.includes(activeTab)` -- an option with no tags at all only
+ever shows under "All" (accurate for Pet Treat, see below, not a bug).
+Every existing picker call is unaffected: omitting `tabs` renders
+exactly as before, `PickerOption.tags` defaults to `undefined` and is
+simply never read.
+
+**Blacksmith gear recipes -- tabs by equipment slot.** New
+`gearSlotTags()`/`gearSlotTabs()` read straight off data already on
+hand: each gear recipe's `resultDefId` resolves to an `EquipmentDef`,
+which already has a `slot`. `gearSlotTabs()` collects the tab set from
+whichever slots the current recipes actually produce (8 of the 9
+`EquipSlot` values today -- no craftable `shield` recipe exists yet)
+rather than a fixed list, so a future gear recipe on a slot with nothing
+craftable today doesn't need this hand-updated.
+
+**Weapon Enchanting and Armour Infusion -- tabs by element.** Both
+`enchantOptions` (Weapon Enchanting) and `gemOptions` (Armour Infusion)
+already loop over `ELEMENT_TYPES`; each option now also carries
+`tags: [el]`, and the tab set (`enchantTabs`/`gemTabs`) is built off that
+same `ELEMENT_TYPES` array rather than a separate hand-written list.
+
+**Alchemist and Charms -- tabs by quest effect, not by flavour.** Direct
+correction mid-conversation: the original ask assumed something like a
+"Healing Potion" category, but none of the 17 craftable consumable/charm
+recipes actually restore health -- confirmed by reading every recipe's
+own `resultConsumableId` through to its real `ConsumableDef.effect`
+before building anything. The six tabs that actually match the data:
+Success (`effect.success`), Gold (`effect.gold`), Luck
+(`effect.lootWeightStat === 'luck'`), Insight (`'wisdom'`), Injury
+resist (Meal On The Go's own player-*picked* `injuryResist` bonus,
+checked separately since it's a `modOptions` choice rather than a baked-
+in `effect`), and Peddler (`effect.peddlerCounterReduction`, Beckoning
+Charm only). New `consumableEffectTags()` returns every tag that
+actually applies -- a recipe with two real effects (Trail Rations:
+`success` + `gold`) carries two tags and shows up under both, direct
+request: "if it boosts a stat and heals, it appears in [both] filter[s]"
+(translated to the real effect set once the health-potion assumption was
+corrected). Pet Treat's `effect` is `{}` (fed to a pet directly, no
+quest effect at all) and gets no tags at all -- it only ever shows under
+"All", which is the accurate answer for an item with nothing to filter
+by, not an oversight.
+
+**New CSS**: `.craft-picker-tabs`/`.craft-picker-tab` in `app.css`, same
+pill-button visual language `.chip` and the vendor tab row already use,
+scoped to this modal specifically so it doesn't collide with either.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Cross-checked the real recipe/
+consumable JSON by hand before writing `consumableEffectTags()` (see the
+Alchemist section above) rather than guessing at categories -- every one
+of the 17 consumable/charm recipes' actual `effect` object was read, not
+inferred from its name or description. No live in-app playtest in this
+environment (no browser available) -- worth a real-window pass on tab
+wrapping with the full 8-slot gear tab row and the 6-tab consumable row
+at actual modal widths.
+
 ### Charms move to the Alchemist, confirm-before-commit previews (patch 0347)
 ```discord-update
 Dev Update | Charms Move to the Alchemist, Confirm-Before-You-Craft

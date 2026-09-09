@@ -99,8 +99,13 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
       // truncate its whole label to almost nothing.
       icon: <span style={{ fontSize: '1.4rem', color: RARITY_COLOR[t] }}>{ELEMENT_GLYPH[el]}</span>,
       disabled: !affordable,
+      tags: [el],
     };
   }));
+
+  // "Deals x type damage is the filter" (patch 0348, direct report) --
+  // one tab per element, same as Weapon Enchanting's own enchantTabs.
+  const gemTabs = ELEMENT_TYPES.map((el) => ({ id: el, label: ELEMENT_LABEL[el] }));
 
   function handleInfuse() {
     if (!item || !element || !tier) return;
@@ -184,6 +189,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose a resistance gem"
           options={gemOptions}
+          tabs={gemTabs}
           onPick={(key) => setPreviewGemKey(key)}
           onClose={() => setOpenGemPicker(false)}
           layout="grid"

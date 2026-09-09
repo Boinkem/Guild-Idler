@@ -120,8 +120,15 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
       sublabel: tCost.ready ? 'Ready' : `${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)}`,
       icon: <span style={{ fontSize: '1.4rem', color: RARITY_COLOR[t] }}>{ELEMENT_GLYPH[el]}</span>,
       disabled: !affordable,
+      tags: [el],
     };
   }));
+
+  // "Deals x type damage is the filter" (patch 0348, direct report) --
+  // one tab per element, built off the same ELEMENT_TYPES the options
+  // above already loop over rather than a separate hand-written list, so
+  // a future element added there shows up here automatically.
+  const enchantTabs = ELEMENT_TYPES.map((el) => ({ id: el, label: ELEMENT_LABEL[el] }));
 
   function handleInfuse() {
     if (!item || !element || !tier) return;
@@ -206,6 +213,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose an enchant"
           options={enchantOptions}
+          tabs={enchantTabs}
           onPick={(key) => setPreviewEnchantKey(key)}
           onClose={() => setOpenEnchantPicker(false)}
           layout="grid"

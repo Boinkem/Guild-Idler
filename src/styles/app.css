@@ -4472,6 +4472,28 @@ button.harvest-item:hover {
    Was a flex column of independent card-rows; rebuilt as an actual table
    (own doc comment on PickerModal explains why) -- `.craft-picker-list` is
    now just the scroll container the `<table>` itself scrolls inside of. */
+/* Filter tabs above a picker's list/grid (patch 0348, direct report) --
+   same pill-button language every other small toggle row in this game
+   already uses (.chip, the vendor tab row), just scoped to this modal so
+   it doesn't collide with either of those existing classes. */
+.craft-picker-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.craft-picker-tab {
+  background: transparent;
+  border: 1px solid var(--panel-3);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  padding: 3px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.craft-picker-tab:hover { border-color: var(--brass-dim); }
+.craft-picker-tab.on { background: var(--panel-3); color: var(--parchment); border-color: var(--brass); }
+
 .craft-picker-list {
   max-height: 320px;
   overflow-y: auto;

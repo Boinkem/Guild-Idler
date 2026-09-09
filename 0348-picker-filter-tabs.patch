@@ -1,0 +1,417 @@
+From 7c4b643138e63d0e1555f107c63e44e87d622f57 Mon Sep 17 00:00:00 2001
+From: Guildbound Dev <dev@guildbound.local>
+Date: Wed, 9 Sep 2026 02:38:23 +0000
+Subject: [PATCH] Patch 0348: Filter tabs on the recipe/enchant pickers
+
+- New PickerModal 'tabs' prop + PickerOption 'tags' -- generic filter-tab support, opt-in per picker
+- Blacksmith gear recipe picker: tabs by equipment slot (gearSlotTags/gearSlotTabs, derived from resultDefId)
+- Weapon Enchanting and Armour Infusion enchant pickers: tabs by element
+- Alchemist/Charms recipe picker: tabs by actual quest effect (success/gold/luck/insight/injury resist/peddler), read from real ConsumableDef.effect data, not guessed from names
+- guild-idler-status.md updated with the patch 0348 entry
+---
+ guild-idler-status.md            |  76 +++++++++++++++++
+ src/styles/app.css               |  22 +++++
+ src/ui/ArmourInfusionStation.tsx |   6 ++
+ src/ui/CraftingStation.tsx       | 142 +++++++++++++++++++++++++++++--
+ src/ui/WeaponEnchantStation.tsx  |   8 ++
+ 5 files changed, 247 insertions(+), 7 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9e6ec65..bbddec6 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,6 +28127,82 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Filter tabs on the recipe/enchant pickers (patch 0348)
++```discord-update
++Dev Update | Picker Filter Tabs
++
++- Added filter tabs to the Blacksmith's recipe picker -- filter by equipment slot
++- Added filter tabs to the Weapon Enchanting and Armour Infusion enchant pickers -- filter by element
++- Added filter tabs to the Alchemist and Charms recipe picker -- filter by what the item actually does (success, gold, luck, insight, injury resist, peddler)
++```
++
++Direct follow-up across a design conversation, mocked up first before this
++landed: general-purpose filter tabs for `PickerModal`, wired into every
++picker that has a real category axis worth filtering by. The stat/bonus
++pickers (gear's own bonus slots, the enchant stat slot) stay exactly as
++they were -- flat lists, no tabs, direct call: "probably doesn't need
++tabs."
++
++**`PickerModal` itself (`CraftingStation.tsx`).** New optional `tabs`
++prop (`{id, label}[]`) and new `PickerOption.tags` (`string[]`). When
++`tabs` is passed, an "All" tab is prepended automatically and the option
++list/grid filters to whichever tab is active, by
++`option.tags?.includes(activeTab)` -- an option with no tags at all only
++ever shows under "All" (accurate for Pet Treat, see below, not a bug).
++Every existing picker call is unaffected: omitting `tabs` renders
++exactly as before, `PickerOption.tags` defaults to `undefined` and is
++simply never read.
++
++**Blacksmith gear recipes -- tabs by equipment slot.** New
++`gearSlotTags()`/`gearSlotTabs()` read straight off data already on
++hand: each gear recipe's `resultDefId` resolves to an `EquipmentDef`,
++which already has a `slot`. `gearSlotTabs()` collects the tab set from
++whichever slots the current recipes actually produce (8 of the 9
++`EquipSlot` values today -- no craftable `shield` recipe exists yet)
++rather than a fixed list, so a future gear recipe on a slot with nothing
++craftable today doesn't need this hand-updated.
++
++**Weapon Enchanting and Armour Infusion -- tabs by element.** Both
++`enchantOptions` (Weapon Enchanting) and `gemOptions` (Armour Infusion)
++already loop over `ELEMENT_TYPES`; each option now also carries
++`tags: [el]`, and the tab set (`enchantTabs`/`gemTabs`) is built off that
++same `ELEMENT_TYPES` array rather than a separate hand-written list.
++
++**Alchemist and Charms -- tabs by quest effect, not by flavour.** Direct
++correction mid-conversation: the original ask assumed something like a
++"Healing Potion" category, but none of the 17 craftable consumable/charm
++recipes actually restore health -- confirmed by reading every recipe's
++own `resultConsumableId` through to its real `ConsumableDef.effect`
++before building anything. The six tabs that actually match the data:
++Success (`effect.success`), Gold (`effect.gold`), Luck
++(`effect.lootWeightStat === 'luck'`), Insight (`'wisdom'`), Injury
++resist (Meal On The Go's own player-*picked* `injuryResist` bonus,
++checked separately since it's a `modOptions` choice rather than a baked-
++in `effect`), and Peddler (`effect.peddlerCounterReduction`, Beckoning
++Charm only). New `consumableEffectTags()` returns every tag that
++actually applies -- a recipe with two real effects (Trail Rations:
++`success` + `gold`) carries two tags and shows up under both, direct
++request: "if it boosts a stat and heals, it appears in [both] filter[s]"
++(translated to the real effect set once the health-potion assumption was
++corrected). Pet Treat's `effect` is `{}` (fed to a pet directly, no
++quest effect at all) and gets no tags at all -- it only ever shows under
++"All", which is the accurate answer for an item with nothing to filter
++by, not an oversight.
++
++**New CSS**: `.craft-picker-tabs`/`.craft-picker-tab` in `app.css`, same
++pill-button visual language `.chip` and the vendor tab row already use,
++scoped to this modal specifically so it doesn't collide with either.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Cross-checked the real recipe/
++consumable JSON by hand before writing `consumableEffectTags()` (see the
++Alchemist section above) rather than guessing at categories -- every one
++of the 17 consumable/charm recipes' actual `effect` object was read, not
++inferred from its name or description. No live in-app playtest in this
++environment (no browser available) -- worth a real-window pass on tab
++wrapping with the full 8-slot gear tab row and the 6-tab consumable row
++at actual modal widths.
++
+ ### Charms move to the Alchemist, confirm-before-commit previews (patch 0347)
+ ```discord-update
+ Dev Update | Charms Move to the Alchemist, Confirm-Before-You-Craft
+diff --git a/src/styles/app.css b/src/styles/app.css
+index bdf91c5..37d42d7 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -4472,6 +4472,28 @@ button.harvest-item:hover {
+    Was a flex column of independent card-rows; rebuilt as an actual table
+    (own doc comment on PickerModal explains why) -- `.craft-picker-list` is
+    now just the scroll container the `<table>` itself scrolls inside of. */
++/* Filter tabs above a picker's list/grid (patch 0348, direct report) --
++   same pill-button language every other small toggle row in this game
++   already uses (.chip, the vendor tab row), just scoped to this modal so
++   it doesn't collide with either of those existing classes. */
++.craft-picker-tabs {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++  margin-bottom: 8px;
++}
++.craft-picker-tab {
++  background: transparent;
++  border: 1px solid var(--panel-3);
++  color: var(--muted);
++  font-size: 0.6875rem;
++  padding: 3px 10px;
++  border-radius: var(--radius);
++  cursor: pointer;
++}
++.craft-picker-tab:hover { border-color: var(--brass-dim); }
++.craft-picker-tab.on { background: var(--panel-3); color: var(--parchment); border-color: var(--brass); }
++
+ .craft-picker-list {
+   max-height: 320px;
+   overflow-y: auto;
+diff --git a/src/ui/ArmourInfusionStation.tsx b/src/ui/ArmourInfusionStation.tsx
+index 5b3efe3..9c7471e 100644
+--- a/src/ui/ArmourInfusionStation.tsx
++++ b/src/ui/ArmourInfusionStation.tsx
+@@ -99,9 +99,14 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+       // truncate its whole label to almost nothing.
+       icon: <span style={{ fontSize: '1.4rem', color: RARITY_COLOR[t] }}>{ELEMENT_GLYPH[el]}</span>,
+       disabled: !affordable,
++      tags: [el],
+     };
+   }));
+ 
++  // "Deals x type damage is the filter" (patch 0348, direct report) --
++  // one tab per element, same as Weapon Enchanting's own enchantTabs.
++  const gemTabs = ELEMENT_TYPES.map((el) => ({ id: el, label: ELEMENT_LABEL[el] }));
++
+   function handleInfuse() {
+     if (!item || !element || !tier) return;
+     engine.infuseItem(item.uid, element, tier);
+@@ -184,6 +189,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose a resistance gem"
+           options={gemOptions}
++          tabs={gemTabs}
+           onPick={(key) => setPreviewGemKey(key)}
+           onClose={() => setOpenGemPicker(false)}
+           layout="grid"
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 256af2c..4ba577c 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -6,6 +6,8 @@ import { CraftingManager } from '../game/managers/CraftingManager';
+ import { EquipmentManager } from '../game/managers/EquipmentManager';
+ import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
+ import { MATERIAL_BY_ID } from '../game/data/materials';
++import { EQUIPMENT_BY_ID } from '../game/data/equipment';
++import { CONSUMABLE_BY_ID } from '../game/data/items';
+ import { backgroundSrc } from '../game/settings';
+ import {
+   CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Rarity, Stats,
+@@ -18,6 +20,75 @@ import { RarityPill } from './RarityPill';
+ 
+ type Category = CraftingRecipeDef['category'];
+ 
++/**
++ * Tag/tab derivation for the two recipe pickers that got filter tabs in
++ * patch 0348 (direct report -- "Armour is easy, they have slots.
++ * consumables to be filtered by what they give"). Both are plain
++ * functions of static recipe/def data, not component state, so they sit
++ * up here next to the other lookup tables rather than inside
++ * CraftingStation itself.
++ */
++
++/** Blacksmith gear recipes, tagged by the equipment slot they produce
++ *  (`resultDefId` -> EquipmentDef.slot). Every gear recipe has exactly
++ *  one slot, so this is always a single-element array. */
++function gearSlotTags(recipe: CraftingRecipeDef): string[] {
++  const def = recipe.resultDefId ? EQUIPMENT_BY_ID[recipe.resultDefId] : undefined;
++  return def ? [def.slot] : [];
++}
++
++/** The tab set for gear's own picker -- collected from whichever slots
++ *  the current category's recipes actually produce, rather than a fixed
++ *  list, so a future gear recipe on a slot with nothing craftable today
++ *  (shield) doesn't need this list hand-updated. Sentence case label
++ *  from the raw EquipSlot string -- no separate label table needed, none
++ *  of the nine slot names need anything fancier than a capitalized
++ *  first letter. */
++function gearSlotTabs(recipes: CraftingRecipeDef[]): { id: string; label: string }[] {
++  const slots = Array.from(new Set(recipes.flatMap(gearSlotTags)));
++  return slots.map((s) => ({ id: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
++}
++
++/**
++ * Consumable/charm recipes, tagged by which of their own quest effects
++ * actually apply (`resultConsumableId` -> ConsumableDef.effect) -- a
++ * recipe with several real effects (success + gold both set, say) gets
++ * several tags and shows up under each one, direct request: "if it
++ * boosts a stat and heals, it appears in [both] filter[s]." `injury` is
++ * a special case: Meal On The Go's own `injuryResist` bonus is a
++ * player-*picked* option (`recipe.modOptions`), not baked into the base
++ * item's `effect` the other five tags read from, so it's checked
++ * separately. Pet Treat's `effect` is `{}` (fed to a pet directly, no
++ * quest effect at all) and gets no tags -- it only ever shows under
++ * "All", which is the accurate answer, not a bug.
++ */
++function consumableEffectTags(recipe: CraftingRecipeDef): string[] {
++  const def = recipe.resultConsumableId ? CONSUMABLE_BY_ID[recipe.resultConsumableId] : undefined;
++  const effect = def?.effect;
++  const tags: string[] = [];
++  if (effect?.success) tags.push('success');
++  if (effect?.gold) tags.push('gold');
++  if (effect?.lootWeightStat === 'luck') tags.push('luck');
++  if (effect?.lootWeightStat === 'wisdom') tags.push('insight');
++  if (effect?.peddlerCounterReduction) tags.push('peddler');
++  if ((recipe.modOptions as string[] | undefined)?.includes('injuryResist')) tags.push('injury');
++  return tags;
++}
++
++/** Fixed tab set (unlike gearSlotTabs' derived one) -- these six cover
++ *  every effect any consumable/charm recipe actually has today, and
++ *  "which effects exist" is a much rarer thing to add to than "which
++ *  slots have a recipe," so a hand-written list reads clearer here than
++ *  deriving one from CONSUMABLE_TABS the way gearSlotTabs does. */
++const CONSUMABLE_EFFECT_TABS = [
++  { id: 'success', label: 'Success' },
++  { id: 'gold', label: 'Gold' },
++  { id: 'luck', label: 'Luck' },
++  { id: 'insight', label: 'Insight' },
++  { id: 'injury', label: 'Injury resist' },
++  { id: 'peddler', label: 'Peddler' },
++];
++
+ /**
+  * One background scene per category, matching the vendor it belongs to
+  * (Blacksmith/gear, Alchemist/consumable, Enchanter/enchant) -- committed
+@@ -175,6 +246,15 @@ export interface PickerOption {
+    *  feedback that the picker table read as flatter than the Inventory
+    *  grid it's showing the exact same items from). */
+   rarity?: Rarity;
++  /**
++   * Which filter tab(s) (PickerModal's own `tabs` prop) this option
++   * belongs to (patch 0348, direct report) -- e.g. an equipment slot, an
++   * element, or one of a consumable's own quest effects. A consumable
++   * with several effects carries several tags and shows up under each
++   * one, same as a filter checkbox would; an option with none only ever
++   * appears under "All". Ignored entirely by a picker with no `tabs`.
++   */
++  tags?: string[];
+ }
+ 
+ /** One clickable frame on the scene -- shows what's picked, or a plain
+@@ -235,12 +315,26 @@ export function SlotBox({
+  * Details column, so `layout` defaults to 'rows' and call sites opt in.
+  */
+ export function PickerModal({
+-  title, options, onPick, onClose, closeOnPick = true, selectedKeys, layout = 'rows', maxWidth,
++  title, options, onPick, onClose, closeOnPick = true, selectedKeys, layout = 'rows', maxWidth, tabs,
+ }: {
+   title: string; options: PickerOption[]; onPick: (key: string) => void; onClose: () => void;
+   closeOnPick?: boolean; selectedKeys?: string[]; layout?: 'rows' | 'grid'; maxWidth?: number;
++  /**
++   * Filter tabs above the list/grid (patch 0348, direct report) -- an
++   * "All" tab is prepended automatically, callers only pass the real
++   * categories. An option belongs to a tab when its own `tags` array
++   * (PickerOption.tags) includes that tab's `id`; an option with no
++   * tags at all (e.g. Pet Treat, which has no quest effect to tag) only
++   * ever shows up under "All", same as it would with no tabs at all.
++   * Omit entirely for a picker with nothing worth filtering by (the
++   * stat/bonus pickers stay flat, direct request -- "probably doesn't
++   * need tabs").
++   */
++  tabs?: { id: string; label: string }[];
+ }) {
+-  const hasSublabels = options.some((o) => o.sublabel);
++  const [activeTab, setActiveTab] = useState('all');
++  const visible = !tabs || activeTab === 'all' ? options : options.filter((o) => o.tags?.includes(activeTab));
++  const hasSublabels = visible.some((o) => o.sublabel);
+   const pick = (opt: PickerOption) => {
+     if (opt.disabled) return;
+     onPick(opt.key);
+@@ -255,10 +349,31 @@ export function PickerModal({
+             {closeOnPick ? 'Close' : 'Done'}
+           </button>
+         </div>
+-        {options.length === 0 && <p className="small muted">Nothing available yet.</p>}
+-        {options.length > 0 && layout === 'grid' && (
++        {tabs && tabs.length > 0 && (
++          <div className="craft-picker-tabs">
++            <button
++              type="button"
++              className={`craft-picker-tab ${activeTab === 'all' ? 'on' : ''}`}
++              onClick={() => setActiveTab('all')}
++            >
++              All
++            </button>
++            {tabs.map((t) => (
++              <button
++                key={t.id}
++                type="button"
++                className={`craft-picker-tab ${activeTab === t.id ? 'on' : ''}`}
++                onClick={() => setActiveTab(t.id)}
++              >
++                {t.label}
++              </button>
++            ))}
++          </div>
++        )}
++        {visible.length === 0 && <p className="small muted">Nothing available yet.</p>}
++        {visible.length > 0 && layout === 'grid' && (
+           <div className="craft-picker-grid">
+-            {options.map((opt) => {
++            {visible.map((opt) => {
+               const selected = selectedKeys?.includes(opt.key) ?? false;
+               return (
+                 <button
+@@ -279,7 +394,7 @@ export function PickerModal({
+             })}
+           </div>
+         )}
+-        {options.length > 0 && layout === 'rows' && (
++        {visible.length > 0 && layout === 'rows' && (
+           <div className="craft-picker-list">
+             <table className="craft-picker-table">
+               <thead>
+@@ -291,7 +406,7 @@ export function PickerModal({
+                 </tr>
+               </thead>
+               <tbody>
+-                {options.map((opt) => {
++                {visible.map((opt) => {
+                   const selected = selectedKeys?.includes(opt.key) ?? false;
+                   return (
+                     <tr
+@@ -612,12 +727,24 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+       ? recipes.map((r) => ({
+         key: r.id, label: r.name, sublabel: materialBadges(r),
+         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
++        tags: consumableEffectTags(r),
+       }))
+       : recipes.map((r) => ({
+         key: r.id, label: r.name, sublabel: r.description,
+         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
++        tags: category === 'gear' ? gearSlotTags(r) : undefined,
+       }));
+ 
++  // Gear's own picker (patch 0348, direct report): "tabs would be the
++  // slots." Only `gear` gets this -- `enchant`'s item picker above and
++  // `gem`'s plain recipe list weren't asked for tabs, and giving them an
++  // empty `tabs={[]}` would render nothing anyway (PickerModal only
++  // shows the tab row when `tabs.length > 0`) but stays explicit here
++  // rather than relying on that fallthrough.
++  const topTabs = category === 'gear' ? gearSlotTabs(recipes)
++    : isConsumableLike ? CONSUMABLE_EFFECT_TABS
++      : undefined;
++
+   // Enchant's top slot picks an existing item (unlike every other
+   // category's top slot, which picks a recipe) -- routed through a preview
+   // step before it actually lands in targetUid, same reasoning as
+@@ -874,6 +1001,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+           title={category === 'enchant' ? 'Choose an item' : 'Choose a recipe'}
+           maxWidth={isConsumableLike ? 560 : undefined}
+           options={topOptions}
++          tabs={topTabs}
+           onPick={handleTopPick}
+           onClose={() => setOpenSlot(null)}
+         />
+diff --git a/src/ui/WeaponEnchantStation.tsx b/src/ui/WeaponEnchantStation.tsx
+index 9fcebce..2b4c14b 100644
+--- a/src/ui/WeaponEnchantStation.tsx
++++ b/src/ui/WeaponEnchantStation.tsx
+@@ -120,9 +120,16 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+       sublabel: tCost.ready ? 'Ready' : `${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)}`,
+       icon: <span style={{ fontSize: '1.4rem', color: RARITY_COLOR[t] }}>{ELEMENT_GLYPH[el]}</span>,
+       disabled: !affordable,
++      tags: [el],
+     };
+   }));
+ 
++  // "Deals x type damage is the filter" (patch 0348, direct report) --
++  // one tab per element, built off the same ELEMENT_TYPES the options
++  // above already loop over rather than a separate hand-written list, so
++  // a future element added there shows up here automatically.
++  const enchantTabs = ELEMENT_TYPES.map((el) => ({ id: el, label: ELEMENT_LABEL[el] }));
++
+   function handleInfuse() {
+     if (!item || !element || !tier) return;
+     engine.infuseItem(item.uid, element, tier);
+@@ -206,6 +213,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose an enchant"
+           options={enchantOptions}
++          tabs={enchantTabs}
+           onPick={(key) => setPreviewEnchantKey(key)}
+           onClose={() => setOpenEnchantPicker(false)}
+           layout="grid"
+-- 
+2.43.0
+

@@ -6,6 +6,8 @@ import { CraftingManager } from '../game/managers/CraftingManager';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
 import { MATERIAL_BY_ID } from '../game/data/materials';
+import { EQUIPMENT_BY_ID } from '../game/data/equipment';
+import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { backgroundSrc } from '../game/settings';
 import {
   CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Rarity, Stats,
@@ -17,6 +19,75 @@ import { RecipeIcon, ItemIcon, MaterialIcon } from './icons';
 import { RarityPill } from './RarityPill';
 
 type Category = CraftingRecipeDef['category'];
+
+/**
+ * Tag/tab derivation for the two recipe pickers that got filter tabs in
+ * patch 0348 (direct report -- "Armour is easy, they have slots.
+ * consumables to be filtered by what they give"). Both are plain
+ * functions of static recipe/def data, not component state, so they sit
+ * up here next to the other lookup tables rather than inside
+ * CraftingStation itself.
+ */
+
+/** Blacksmith gear recipes, tagged by the equipment slot they produce
+ *  (`resultDefId` -> EquipmentDef.slot). Every gear recipe has exactly
+ *  one slot, so this is always a single-element array. */
+function gearSlotTags(recipe: CraftingRecipeDef): string[] {
+  const def = recipe.resultDefId ? EQUIPMENT_BY_ID[recipe.resultDefId] : undefined;
+  return def ? [def.slot] : [];
+}
+
+/** The tab set for gear's own picker -- collected from whichever slots
+ *  the current category's recipes actually produce, rather than a fixed
+ *  list, so a future gear recipe on a slot with nothing craftable today
+ *  (shield) doesn't need this list hand-updated. Sentence case label
+ *  from the raw EquipSlot string -- no separate label table needed, none
+ *  of the nine slot names need anything fancier than a capitalized
+ *  first letter. */
+function gearSlotTabs(recipes: CraftingRecipeDef[]): { id: string; label: string }[] {
+  const slots = Array.from(new Set(recipes.flatMap(gearSlotTags)));
+  return slots.map((s) => ({ id: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
+}
+
+/**
+ * Consumable/charm recipes, tagged by which of their own quest effects
+ * actually apply (`resultConsumableId` -> ConsumableDef.effect) -- a
+ * recipe with several real effects (success + gold both set, say) gets
+ * several tags and shows up under each one, direct request: "if it
+ * boosts a stat and heals, it appears in [both] filter[s]." `injury` is
+ * a special case: Meal On The Go's own `injuryResist` bonus is a
+ * player-*picked* option (`recipe.modOptions`), not baked into the base
+ * item's `effect` the other five tags read from, so it's checked
+ * separately. Pet Treat's `effect` is `{}` (fed to a pet directly, no
+ * quest effect at all) and gets no tags -- it only ever shows under
+ * "All", which is the accurate answer, not a bug.
+ */
+function consumableEffectTags(recipe: CraftingRecipeDef): string[] {
+  const def = recipe.resultConsumableId ? CONSUMABLE_BY_ID[recipe.resultConsumableId] : undefined;
+  const effect = def?.effect;
+  const tags: string[] = [];
+  if (effect?.success) tags.push('success');
+  if (effect?.gold) tags.push('gold');
+  if (effect?.lootWeightStat === 'luck') tags.push('luck');
+  if (effect?.lootWeightStat === 'wisdom') tags.push('insight');
+  if (effect?.peddlerCounterReduction) tags.push('peddler');
+  if ((recipe.modOptions as string[] | undefined)?.includes('injuryResist')) tags.push('injury');
+  return tags;
+}
+
+/** Fixed tab set (unlike gearSlotTabs' derived one) -- these six cover
+ *  every effect any consumable/charm recipe actually has today, and
+ *  "which effects exist" is a much rarer thing to add to than "which
+ *  slots have a recipe," so a hand-written list reads clearer here than
+ *  deriving one from CONSUMABLE_TABS the way gearSlotTabs does. */
+const CONSUMABLE_EFFECT_TABS = [
+  { id: 'success', label: 'Success' },
+  { id: 'gold', label: 'Gold' },
+  { id: 'luck', label: 'Luck' },
+  { id: 'insight', label: 'Insight' },
+  { id: 'injury', label: 'Injury resist' },
+  { id: 'peddler', label: 'Peddler' },
+];
 
 /**
  * One background scene per category, matching the vendor it belongs to
@@ -175,6 +246,15 @@ export interface PickerOption {
    *  feedback that the picker table read as flatter than the Inventory
    *  grid it's showing the exact same items from). */
   rarity?: Rarity;
+  /**
+   * Which filter tab(s) (PickerModal's own `tabs` prop) this option
+   * belongs to (patch 0348, direct report) -- e.g. an equipment slot, an
+   * element, or one of a consumable's own quest effects. A consumable
+   * with several effects carries several tags and shows up under each
+   * one, same as a filter checkbox would; an option with none only ever
+   * appears under "All". Ignored entirely by a picker with no `tabs`.
+   */
+  tags?: string[];
 }
 
 /** One clickable frame on the scene -- shows what's picked, or a plain
@@ -235,12 +315,26 @@ export function SlotBox({
  * Details column, so `layout` defaults to 'rows' and call sites opt in.
  */
 export function PickerModal({
-  title, options, onPick, onClose, closeOnPick = true, selectedKeys, layout = 'rows', maxWidth,
+  title, options, onPick, onClose, closeOnPick = true, selectedKeys, layout = 'rows', maxWidth, tabs,
 }: {
   title: string; options: PickerOption[]; onPick: (key: string) => void; onClose: () => void;
   closeOnPick?: boolean; selectedKeys?: string[]; layout?: 'rows' | 'grid'; maxWidth?: number;
+  /**
+   * Filter tabs above the list/grid (patch 0348, direct report) -- an
+   * "All" tab is prepended automatically, callers only pass the real
+   * categories. An option belongs to a tab when its own `tags` array
+   * (PickerOption.tags) includes that tab's `id`; an option with no
+   * tags at all (e.g. Pet Treat, which has no quest effect to tag) only
+   * ever shows up under "All", same as it would with no tabs at all.
+   * Omit entirely for a picker with nothing worth filtering by (the
+   * stat/bonus pickers stay flat, direct request -- "probably doesn't
+   * need tabs").
+   */
+  tabs?: { id: string; label: string }[];
 }) {
-  const hasSublabels = options.some((o) => o.sublabel);
+  const [activeTab, setActiveTab] = useState('all');
+  const visible = !tabs || activeTab === 'all' ? options : options.filter((o) => o.tags?.includes(activeTab));
+  const hasSublabels = visible.some((o) => o.sublabel);
   const pick = (opt: PickerOption) => {
     if (opt.disabled) return;
     onPick(opt.key);
@@ -255,10 +349,31 @@ export function PickerModal({
             {closeOnPick ? 'Close' : 'Done'}
           </button>
         </div>
-        {options.length === 0 && <p className="small muted">Nothing available yet.</p>}
-        {options.length > 0 && layout === 'grid' && (
+        {tabs && tabs.length > 0 && (
+          <div className="craft-picker-tabs">
+            <button
+              type="button"
+              className={`craft-picker-tab ${activeTab === 'all' ? 'on' : ''}`}
+              onClick={() => setActiveTab('all')}
+            >
+              All
+            </button>
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`craft-picker-tab ${activeTab === t.id ? 'on' : ''}`}
+                onClick={() => setActiveTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {visible.length === 0 && <p className="small muted">Nothing available yet.</p>}
+        {visible.length > 0 && layout === 'grid' && (
           <div className="craft-picker-grid">
-            {options.map((opt) => {
+            {visible.map((opt) => {
               const selected = selectedKeys?.includes(opt.key) ?? false;
               return (
                 <button
@@ -279,7 +394,7 @@ export function PickerModal({
             })}
           </div>
         )}
-        {options.length > 0 && layout === 'rows' && (
+        {visible.length > 0 && layout === 'rows' && (
           <div className="craft-picker-list">
             <table className="craft-picker-table">
               <thead>
@@ -291,7 +406,7 @@ export function PickerModal({
                 </tr>
               </thead>
               <tbody>
-                {options.map((opt) => {
+                {visible.map((opt) => {
                   const selected = selectedKeys?.includes(opt.key) ?? false;
                   return (
                     <tr
@@ -612,11 +727,23 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       ? recipes.map((r) => ({
         key: r.id, label: r.name, sublabel: materialBadges(r),
         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
+        tags: consumableEffectTags(r),
       }))
       : recipes.map((r) => ({
         key: r.id, label: r.name, sublabel: r.description,
         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
+        tags: category === 'gear' ? gearSlotTags(r) : undefined,
       }));
+
+  // Gear's own picker (patch 0348, direct report): "tabs would be the
+  // slots." Only `gear` gets this -- `enchant`'s item picker above and
+  // `gem`'s plain recipe list weren't asked for tabs, and giving them an
+  // empty `tabs={[]}` would render nothing anyway (PickerModal only
+  // shows the tab row when `tabs.length > 0`) but stays explicit here
+  // rather than relying on that fallthrough.
+  const topTabs = category === 'gear' ? gearSlotTabs(recipes)
+    : isConsumableLike ? CONSUMABLE_EFFECT_TABS
+      : undefined;
 
   // Enchant's top slot picks an existing item (unlike every other
   // category's top slot, which picks a recipe) -- routed through a preview
@@ -874,6 +1001,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           title={category === 'enchant' ? 'Choose an item' : 'Choose a recipe'}
           maxWidth={isConsumableLike ? 560 : undefined}
           options={topOptions}
+          tabs={topTabs}
           onPick={handleTopPick}
           onClose={() => setOpenSlot(null)}
         />
