@@ -9,7 +9,7 @@ import { formatGold, RARITY_COLOR } from '../game/util';
 import { backgroundSrc } from '../game/settings';
 import { ItemIcon } from './icons';
 import {
-  ItemPreviewModal, PickerModal, SlotBox,
+  ItemPreviewModal, OptionPreviewModal, PickerModal, SlotBox,
 } from './CraftingStation';
 import type { PickerOption } from './CraftingStation';
 import { INFUSE_BG, ITEM_SLOT, ENCHANT_SLOT } from './WeaponEnchantStation';
@@ -46,6 +46,12 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
   // Same reasoning as WeaponEnchantStation's own previewUid -- see
   // ItemPreviewModal's doc comment (CraftingStation.tsx).
   const [previewUid, setPreviewUid] = useState<string | null>(null);
+  // Same confirm-before-it-commits step WeaponEnchantStation's own
+  // previewEnchantKey adds (patch 0347, direct report) -- holds the
+  // picked option's own key rather than the resolved element/tier so
+  // OptionPreviewModal's onContinue can do the actual setElement/setTier
+  // itself.
+  const [previewGemKey, setPreviewGemKey] = useState<string | null>(null);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
@@ -106,6 +112,8 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
   const cost = element && tier ? CraftingManager.gemCost(state, false, element, tier) : null;
   const canAfford = !cost || cost.ready || (state.gold >= cost.goldCost && state.scrap >= cost.scrapCost);
   const canInfuse = !!item && !!element && !!tier && canAfford;
+
+  const previewGemOption = previewGemKey ? gemOptions.find((o) => o.key === previewGemKey) : undefined;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -176,15 +184,23 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose a resistance gem"
           options={gemOptions}
-          onPick={(key) => {
-            const [el, t] = key.split('::') as [ElementType, GemTier];
-            setElement(el);
-            setTier(t);
-          }}
+          onPick={(key) => setPreviewGemKey(key)}
           onClose={() => setOpenGemPicker(false)}
           layout="grid"
         />
       )}
+      {previewGemOption && (() => {
+        const [el, t] = previewGemKey!.split('::') as [ElementType, GemTier];
+        return (
+          <OptionPreviewModal
+            icon={previewGemOption.icon}
+            title={<span style={{ color: RARITY_COLOR[t] }}>{previewGemOption.label}</span>}
+            detail={previewGemOption.sublabel}
+            onBack={() => { setPreviewGemKey(null); setOpenGemPicker(true); }}
+            onContinue={() => { setElement(el); setTier(t); setPreviewGemKey(null); }}
+          />
+        );
+      })()}
     </div>
   );
 }

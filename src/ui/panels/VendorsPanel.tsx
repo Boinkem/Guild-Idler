@@ -287,9 +287,14 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
                   two buttons doing the same thing on the Enchanter's own
                   page. Blacksmith/Alchemist still get this one; only the
                   Enchanter drops it, since it's the only vendor with a
-                  same-category dedicated station duplicating it. */}
+                  same-category dedicated station duplicating it. Alchemist's
+                  own copy renamed to "Craft Consumable" (patch 0347, direct
+                  report) now that the page has two crafting flows on it --
+                  plain "Crafting" stopped saying which one this button was. */}
               {vendorId !== 'enchanter' && (
-                <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
+                <button className="btn-purple" onClick={() => setShowCrafting(true)}>
+                  {vendorId === 'alchemist' ? 'Craft Consumable' : 'Crafting'}
+                </button>
               )}
               {/* Durability repair -- moved here from a per-item button
                   buried in the Inventory tab, gear-specific so it only
@@ -327,8 +332,13 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
                   structurally incompatible with these being simple
                   recipe crafts (see CraftingRecipeDef.category's own
                   comment on why `charm` exists as a separate value at
-                  all). */}
-              {vendorId === 'enchanter' && (
+                  all). Moved to the Alchemist (patch 0347, direct report:
+                  "Alch now has 2 functions" -- both Charms and Supplies
+                  are the same simple recipe-craft shape, sharing the same
+                  single-slot art now, see CraftingStation.tsx's own
+                  STATION_BG comment). Still `category="charm"`, only
+                  which vendor page the button lives on changed. */}
+              {vendorId === 'alchemist' && (
                 <button className="btn-purple" onClick={() => setShowCharms(true)}>Charms</button>
               )}
             </div>

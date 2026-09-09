@@ -8,7 +8,7 @@ import { ElementType, GemTier } from '../game/types';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { backgroundSrc } from '../game/settings';
 import { ItemIcon } from './icons';
-import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
+import { ItemPreviewModal, OptionPreviewModal, PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 
 /**
@@ -65,6 +65,15 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
   // transition made it easy to commit gold against the wrong weapon
   // without really looking at it first.
   const [previewUid, setPreviewUid] = useState<string | null>(null);
+  // Same confirm-before-it-commits step for an enchant pick (patch 0347,
+  // direct report: "after clicking an enchant/gem -- because they just
+  // show the name/icon and requirements, it should open a new little
+  // card with its description, then click continue from there") --
+  // holds the picked option's own key (`fire::rare`) rather than the
+  // resolved element/tier so OptionPreviewModal's onContinue can do the
+  // actual setElement/setTier itself, same shape previewUid already uses
+  // above for the item pick.
+  const [previewEnchantKey, setPreviewEnchantKey] = useState<string | null>(null);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
@@ -124,6 +133,8 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
   const cost = element && tier ? CraftingManager.gemCost(state, true, element, tier) : null;
   const canAfford = !cost || cost.ready || (state.gold >= cost.goldCost && state.scrap >= cost.scrapCost);
   const canInfuse = !!item && !!element && !!tier && canAfford;
+
+  const previewEnchantOption = previewEnchantKey ? enchantOptions.find((o) => o.key === previewEnchantKey) : undefined;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -195,15 +206,23 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose an enchant"
           options={enchantOptions}
-          onPick={(key) => {
-            const [el, t] = key.split('::') as [ElementType, GemTier];
-            setElement(el);
-            setTier(t);
-          }}
+          onPick={(key) => setPreviewEnchantKey(key)}
           onClose={() => setOpenEnchantPicker(false)}
           layout="grid"
         />
       )}
+      {previewEnchantOption && (() => {
+        const [el, t] = previewEnchantKey!.split('::') as [ElementType, GemTier];
+        return (
+          <OptionPreviewModal
+            icon={previewEnchantOption.icon}
+            title={<span style={{ color: RARITY_COLOR[t] }}>{previewEnchantOption.label}</span>}
+            detail={previewEnchantOption.sublabel}
+            onBack={() => { setPreviewEnchantKey(null); setOpenEnchantPicker(true); }}
+            onContinue={() => { setElement(el); setTier(t); setPreviewEnchantKey(null); }}
+          />
+        );
+      })()}
     </div>
   );
 }

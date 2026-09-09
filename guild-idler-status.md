@@ -28127,6 +28127,81 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Charms move to the Alchemist, confirm-before-commit previews (patch 0347)
+```discord-update
+Dev Update | Charms Move to the Alchemist, Confirm-Before-You-Craft
+
+- Moved Charms from the Enchanter to the Alchemist -- both now share the same single-button crafting flow and art
+- Renamed the Alchemist's Crafting button to "Craft Consumable" now that the page has two crafting flows on it
+- Changed enchant/infusion picks (Weapon Enchanting, Armour Infusion) and recipe picks (Alchemist, Charms) to open a small confirm card first, instead of committing the instant you click
+```
+
+Direct follow-up to patch 0346's Alchemist rework: Charms join that same
+simplified flow, and every picker that used to commit a choice the
+instant it was clicked now shows a small confirm-first card instead.
+
+**Charms moved to the Alchemist (`VendorsPanel.tsx`, `CraftingStation.tsx`).**
+Direct report: "move Charms to Alchemist (alch now has 2 functions)" --
+the "Charms" button (`vendorId === 'enchanter'`) moved to
+`vendorId === 'alchemist'`; still opens `CraftingStation category="charm"`
+unchanged, only which vendor page the button lives on changed. The
+Alchemist's existing generic "Crafting" button is now labelled
+"Craft Consumable" specifically (`vendorId === 'alchemist'` check),
+since a plain "Crafting" stopped saying which of the two flows it opened
+once Charms landed on the same page.
+
+**Charms now share the Alchemist's single-slot art and simplified
+crafting flow.** Direct report: "charms uses the same button art as the
+Crafting Consumables (single button, opens crafting list)." `charm` no
+longer reuses `enchant.jpg`'s three-slot Enchanter-bench layout --
+`STATION_BG.charm`/`SLOT_RECTS.charm` now point at the exact same
+`consumable.jpg` scene and rect `consumable` uses (literal copy, not a
+live reference, same convention `gem`'s own comment explains for why
+this `Record` can't just alias one category to another). The old
+three-slot JSX block (Materials + bonus `SlotBox`es, previously kept for
+`charm` only after patch 0346 dropped it for `consumable`) is gone
+entirely now that both categories are single-slot -- confirmed all 6
+charm recipes have `modsToPick === 0` same as all but one consumable
+recipe, so the rare-bonus text button below the scene (see 0346's own
+writeup) already covers `charm` too via the shared `isConsumableLike`
+flag, unchanged. The now-fully-unreachable "Materials" picker modal
+(materials were never a real choice, just auto-confirmed busywork --
+see `pickRecipe`'s own comment) is removed outright rather than left
+dead, along with the `materialsOptions`/`materialsFilled`/
+`allMaterialsConfirmed`/`consumableModFilled` locals that only existed
+to feed it.
+
+**Confirm-before-commit previews, four pickers (`CraftingStation.tsx`
+new `OptionPreviewModal`, `WeaponEnchantStation.tsx`,
+`ArmourInfusionStation.tsx`).** Direct report: "after clicking an
+enchant/gem -- because they just show the name/icon and requirements, it
+should open a new little card with its description, then click continue
+from there. Consumable crafting should do the same." New
+`OptionPreviewModal`, a generic sibling to the existing
+`ItemPreviewModal` (icon + title + free-form detail + Back/Continue,
+rather than `ItemPreviewModal`'s fixed `EquipmentItem`/`EquipmentDef`
+shape), wired into:
+- **Weapon Enchanting's enchant picker** -- picking a row now sets
+  `previewEnchantKey` instead of `element`/`tier` directly; Continue
+  resolves the key and commits.
+- **Armour Infusion's resistance-gem picker** -- identical shape, new
+  `previewGemKey`.
+- **The Alchemist's and Charms' own recipe table** (`isConsumableLike`
+  in `CraftingStation.tsx`) -- picking a row now sets `previewRecipeId`
+  instead of calling `pickRecipe` directly; the preview card shows the
+  recipe's description plus the same `materialBadges()` readout the
+  table row itself uses. `gear`/`enchant`/`gem` recipe picks are
+  untouched -- their table row still shows the plain description
+  sublabel, no preview step was asked for there, and `handleTopPick`
+  only routes through the new `previewRecipeId` state for
+  `isConsumableLike`.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live in-app playtest in this
+environment (no browser available) -- worth a real-window pass on the
+Alchemist page now that it carries two buttons plus the confirm-card
+flow, and on the new preview cards for both enchant/gem pickers.
+
 ### Armour Infusion shares Weapon Enchanting's art, picker grids, Alchemist rework (patch 0346)
 ```discord-update
 Dev Update | Armour Infusion, Picker Tables, Alchemist Rework

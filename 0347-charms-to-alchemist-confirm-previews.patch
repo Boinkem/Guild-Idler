@@ -1,0 +1,589 @@
+From db1147218b4126cf229c8879e07649a5e14eea71 Mon Sep 17 00:00:00 2001
+From: Guildbound Dev <dev@guildbound.local>
+Date: Wed, 9 Sep 2026 01:08:28 +0000
+Subject: [PATCH] Patch 0347: Charms move to the Alchemist,
+ confirm-before-commit previews
+
+- Charms button moved from Enchanter to Alchemist page; Alchemist's Crafting button renamed to 'Craft Consumable'
+- charm category now shares consumable's single-slot art/rects/simplified flow (old 3-slot enchant.jpg layout dropped)
+- New OptionPreviewModal: confirm card shown after picking an enchant (Weapon Enchanting), infusion (Armour Infusion), or recipe (Alchemist/Charms) before it commits
+- Dead 'Materials' picker modal and related unused locals removed
+- guild-idler-status.md updated with the patch 0347 entry
+---
+ guild-idler-status.md            |  75 +++++++++++
+ src/ui/ArmourInfusionStation.tsx |  28 +++-
+ src/ui/CraftingStation.tsx       | 216 +++++++++++++++++--------------
+ src/ui/WeaponEnchantStation.tsx  |  31 ++++-
+ src/ui/panels/VendorsPanel.tsx   |  18 ++-
+ 5 files changed, 253 insertions(+), 115 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index fba09b1..9e6ec65 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,6 +28127,81 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Charms move to the Alchemist, confirm-before-commit previews (patch 0347)
++```discord-update
++Dev Update | Charms Move to the Alchemist, Confirm-Before-You-Craft
++
++- Moved Charms from the Enchanter to the Alchemist -- both now share the same single-button crafting flow and art
++- Renamed the Alchemist's Crafting button to "Craft Consumable" now that the page has two crafting flows on it
++- Changed enchant/infusion picks (Weapon Enchanting, Armour Infusion) and recipe picks (Alchemist, Charms) to open a small confirm card first, instead of committing the instant you click
++```
++
++Direct follow-up to patch 0346's Alchemist rework: Charms join that same
++simplified flow, and every picker that used to commit a choice the
++instant it was clicked now shows a small confirm-first card instead.
++
++**Charms moved to the Alchemist (`VendorsPanel.tsx`, `CraftingStation.tsx`).**
++Direct report: "move Charms to Alchemist (alch now has 2 functions)" --
++the "Charms" button (`vendorId === 'enchanter'`) moved to
++`vendorId === 'alchemist'`; still opens `CraftingStation category="charm"`
++unchanged, only which vendor page the button lives on changed. The
++Alchemist's existing generic "Crafting" button is now labelled
++"Craft Consumable" specifically (`vendorId === 'alchemist'` check),
++since a plain "Crafting" stopped saying which of the two flows it opened
++once Charms landed on the same page.
++
++**Charms now share the Alchemist's single-slot art and simplified
++crafting flow.** Direct report: "charms uses the same button art as the
++Crafting Consumables (single button, opens crafting list)." `charm` no
++longer reuses `enchant.jpg`'s three-slot Enchanter-bench layout --
++`STATION_BG.charm`/`SLOT_RECTS.charm` now point at the exact same
++`consumable.jpg` scene and rect `consumable` uses (literal copy, not a
++live reference, same convention `gem`'s own comment explains for why
++this `Record` can't just alias one category to another). The old
++three-slot JSX block (Materials + bonus `SlotBox`es, previously kept for
++`charm` only after patch 0346 dropped it for `consumable`) is gone
++entirely now that both categories are single-slot -- confirmed all 6
++charm recipes have `modsToPick === 0` same as all but one consumable
++recipe, so the rare-bonus text button below the scene (see 0346's own
++writeup) already covers `charm` too via the shared `isConsumableLike`
++flag, unchanged. The now-fully-unreachable "Materials" picker modal
++(materials were never a real choice, just auto-confirmed busywork --
++see `pickRecipe`'s own comment) is removed outright rather than left
++dead, along with the `materialsOptions`/`materialsFilled`/
++`allMaterialsConfirmed`/`consumableModFilled` locals that only existed
++to feed it.
++
++**Confirm-before-commit previews, four pickers (`CraftingStation.tsx`
++new `OptionPreviewModal`, `WeaponEnchantStation.tsx`,
++`ArmourInfusionStation.tsx`).** Direct report: "after clicking an
++enchant/gem -- because they just show the name/icon and requirements, it
++should open a new little card with its description, then click continue
++from there. Consumable crafting should do the same." New
++`OptionPreviewModal`, a generic sibling to the existing
++`ItemPreviewModal` (icon + title + free-form detail + Back/Continue,
++rather than `ItemPreviewModal`'s fixed `EquipmentItem`/`EquipmentDef`
++shape), wired into:
++- **Weapon Enchanting's enchant picker** -- picking a row now sets
++  `previewEnchantKey` instead of `element`/`tier` directly; Continue
++  resolves the key and commits.
++- **Armour Infusion's resistance-gem picker** -- identical shape, new
++  `previewGemKey`.
++- **The Alchemist's and Charms' own recipe table** (`isConsumableLike`
++  in `CraftingStation.tsx`) -- picking a row now sets `previewRecipeId`
++  instead of calling `pickRecipe` directly; the preview card shows the
++  recipe's description plus the same `materialBadges()` readout the
++  table row itself uses. `gear`/`enchant`/`gem` recipe picks are
++  untouched -- their table row still shows the plain description
++  sublabel, no preview step was asked for there, and `handleTopPick`
++  only routes through the new `previewRecipeId` state for
++  `isConsumableLike`.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. No live in-app playtest in this
++environment (no browser available) -- worth a real-window pass on the
++Alchemist page now that it carries two buttons plus the confirm-card
++flow, and on the new preview cards for both enchant/gem pickers.
++
+ ### Armour Infusion shares Weapon Enchanting's art, picker grids, Alchemist rework (patch 0346)
+ ```discord-update
+ Dev Update | Armour Infusion, Picker Tables, Alchemist Rework
+diff --git a/src/ui/ArmourInfusionStation.tsx b/src/ui/ArmourInfusionStation.tsx
+index 637b329..5b3efe3 100644
+--- a/src/ui/ArmourInfusionStation.tsx
++++ b/src/ui/ArmourInfusionStation.tsx
+@@ -9,7 +9,7 @@ import { formatGold, RARITY_COLOR } from '../game/util';
+ import { backgroundSrc } from '../game/settings';
+ import { ItemIcon } from './icons';
+ import {
+-  ItemPreviewModal, PickerModal, SlotBox,
++  ItemPreviewModal, OptionPreviewModal, PickerModal, SlotBox,
+ } from './CraftingStation';
+ import type { PickerOption } from './CraftingStation';
+ import { INFUSE_BG, ITEM_SLOT, ENCHANT_SLOT } from './WeaponEnchantStation';
+@@ -46,6 +46,12 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+   // Same reasoning as WeaponEnchantStation's own previewUid -- see
+   // ItemPreviewModal's doc comment (CraftingStation.tsx).
+   const [previewUid, setPreviewUid] = useState<string | null>(null);
++  // Same confirm-before-it-commits step WeaponEnchantStation's own
++  // previewEnchantKey adds (patch 0347, direct report) -- holds the
++  // picked option's own key rather than the resolved element/tier so
++  // OptionPreviewModal's onContinue can do the actual setElement/setTier
++  // itself.
++  const [previewGemKey, setPreviewGemKey] = useState<string | null>(null);
+ 
+   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
+   const item = found?.item;
+@@ -107,6 +113,8 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+   const canAfford = !cost || cost.ready || (state.gold >= cost.goldCost && state.scrap >= cost.scrapCost);
+   const canInfuse = !!item && !!element && !!tier && canAfford;
+ 
++  const previewGemOption = previewGemKey ? gemOptions.find((o) => o.key === previewGemKey) : undefined;
++
+   return (
+     <div className="overlay" onClick={onClose}>
+       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
+@@ -176,15 +184,23 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose a resistance gem"
+           options={gemOptions}
+-          onPick={(key) => {
+-            const [el, t] = key.split('::') as [ElementType, GemTier];
+-            setElement(el);
+-            setTier(t);
+-          }}
++          onPick={(key) => setPreviewGemKey(key)}
+           onClose={() => setOpenGemPicker(false)}
+           layout="grid"
+         />
+       )}
++      {previewGemOption && (() => {
++        const [el, t] = previewGemKey!.split('::') as [ElementType, GemTier];
++        return (
++          <OptionPreviewModal
++            icon={previewGemOption.icon}
++            title={<span style={{ color: RARITY_COLOR[t] }}>{previewGemOption.label}</span>}
++            detail={previewGemOption.sublabel}
++            onBack={() => { setPreviewGemKey(null); setOpenGemPicker(true); }}
++            onContinue={() => { setElement(el); setTier(t); setPreviewGemKey(null); }}
++          />
++        );
++      })()}
+     </div>
+   );
+ }
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index fd9c2a2..256af2c 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -41,10 +41,16 @@ const STATION_BG: Record<Category, string> = {
+   // No commissioned art yet -- same "missing file just fails to paint"
+   // convention every other banner/background in this game already uses.
+   gem: './lore/crafting/gem.jpg',
+-  // Same room/canvas as `enchant` -- these are the Enchanter's own bench-
+-  // made charms (patch 0247), not a separate physical space, so they
+-  // reuse enchant.jpg rather than getting dedicated art of their own.
+-  charm: './lore/crafting/enchant.jpg',
++  // Charms moved to the Alchemist (patch 0347, direct report -- "Alch
++  // now has 2 functions") and now shares the Alchemist's own single-slot
++  // consumable.jpg scene outright, same reasoning ArmourInfusionStation
++  // sharing Weapon Enchanting's infuse.jpg already established in patch
++  // 0346: both categories crafted the exact same way (one recipe, no
++  // manual materials/bonus slots), so a second dedicated image would
++  // just be a second thing to keep in sync. No longer reuses enchant.jpg
++  // -- charm recipes were never really at the Enchanter's own bench
++  // physically, that was just where the button used to live.
++  charm: './lore/crafting/consumable.jpg',
+ };
+ 
+ const STATION_TITLE: Record<Category, string> = {
+@@ -128,13 +134,18 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
+     bottomLeft: { left: 26.5, top: 52.0, width: 16.0, height: 20.3 },
+     bottomRight: { left: 57.1, top: 52.0, width: 16.0, height: 20.3 },
+   },
+-  // Same canvas as `enchant` (enchant.jpg), so the same rects apply --
+-  // see STATION_BG's own comment on why `charm` shares that art. Kept in
+-  // sync with `enchant`'s own re-measurement above (patch 0345).
++  // Charms (patch 0347) now share the Alchemist's own single-slot
++  // consumable.jpg scene and rects outright -- identical values to
++  // `consumable` above, not a live reference to it, same "literal copy"
++  // convention `gem`'s own comment explains for why this Record can't
++  // just alias one category to another. Only `top` is ever rendered
++  // (see the scene JSX below -- no bottomLeft/bottomRight block for
++  // `charm` anymore either, both consumable-like categories are single-
++  // slot now).
+   charm: {
+-    top: { left: 41.3, top: 22.9, width: 17.2, height: 21.7 },
+-    bottomLeft: { left: 29.3, top: 50.3, width: 17.4, height: 22.0 },
+-    bottomRight: { left: 53.1, top: 50.7, width: 17.5, height: 21.6 },
++    top: { left: 41.1, top: 36.7, width: 17.7, height: 22.1 },
++    bottomLeft: { left: 41.1, top: 36.7, width: 17.7, height: 22.1 },
++    bottomRight: { left: 41.1, top: 36.7, width: 17.7, height: 22.1 },
+   },
+ };
+ 
+@@ -386,6 +397,42 @@ export function ItemPreviewModal({
+   );
+ }
+ 
++/**
++ * Generic sibling to ItemPreviewModal above, for a picked *option* rather
++ * than an owned item -- a recipe, an enchant, an infusion (patch 0347,
++ * direct report: "after clicking an enchant/gem -- because they just
++ * show the name/icon and requirements, it should open a new little card
++ * with its description, then click continue from there"). Same "confirm
++ * before it commits" shape, just generic enough for any picker's
++ * icon+title+detail rather than specifically an EquipmentItem/
++ * EquipmentDef pair -- `detail` is whatever that station wants to show
++ * (a recipe's description + materialBadges() readout, an enchant's
++ * Ready/cost sublabel, etc.), not a fixed shape. Used by CraftingStation
++ * itself for consumable/charm recipes, and by WeaponEnchantStation/
++ * ArmourInfusionStation for their own enchant/resistance-gem picks.
++ */
++export function OptionPreviewModal({
++  icon, title, detail, onBack, onContinue,
++}: {
++  icon: ReactNode; title: ReactNode; detail?: ReactNode; onBack: () => void; onContinue: () => void;
++}) {
++  return (
++    <div className="overlay" style={{ zIndex: 60 }} onClick={onBack}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
++        <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
++          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
++          <span className="card-title">{title}</span>
++        </div>
++        {detail && <div className="tiny muted" style={{ marginBottom: 4 }}>{detail}</div>}
++        <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
++          <button className="btn-ghost" onClick={onBack}>Choose a different option</button>
++          <button className="btn-primary" onClick={onContinue}>Continue</button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
+ export function CraftingStation({ category, onClose }: { category: Category; onClose: () => void }) {
+   const engine = useEngine();
+   const { settings } = useSettings();
+@@ -445,6 +492,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     setConfirmedMaterials(new Set());
+     setChosenConsumableMods([]);
+     setPreviewUid(null);
++    setPreviewRecipeId(null);
+   }
+ 
+   const afford = recipe ? CraftingManager.affordability(state, recipe) : null;
+@@ -550,16 +598,17 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+         icon: <ItemIcon slot={def.slot} icon={def.icon} size={40} />,
+       };
+     }).filter((o): o is PickerOption => o !== null)
+-    // Alchemist's own recipe table (patch 0346, direct report): "no need
+-    // to select the resources manually, the recipe should just show what
+-    // you can and can't craft" -- swaps the flat description sublabel
+-    // every other category's recipe picker shows for the live
+-    // materialBadges() readout instead, so affordability is visible for
+-    // every recipe at a glance rather than needing to pick one first.
+-    // Not gated on affordability (`disabled` stays unset) -- an
+-    // out-of-reach recipe is still worth picking to see its full
++    // Alchemist's own recipe table (patch 0346, extended to Charms in
++    // 0347 -- both are `isConsumableLike` now, see that flag's own
++    // comment): "no need to select the resources manually, the recipe
++    // should just show what you can and can't craft" -- swaps the flat
++    // description sublabel every other category's recipe picker shows
++    // for the live materialBadges() readout instead, so affordability is
++    // visible for every recipe at a glance rather than needing to pick
++    // one first. Not gated on affordability (`disabled` stays unset) --
++    // an out-of-reach recipe is still worth picking to see its full
+     // breakdown and start gathering toward it, same as it always was.
+-    : category === 'consumable'
++    : isConsumableLike
+       ? recipes.map((r) => ({
+         key: r.id, label: r.name, sublabel: materialBadges(r),
+         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
+@@ -572,16 +621,26 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+   // Enchant's top slot picks an existing item (unlike every other
+   // category's top slot, which picks a recipe) -- routed through a preview
+   // step before it actually lands in targetUid, same reasoning as
+-  // EnhanceStation's own previewUid. A recipe pick has no such step: its
+-  // own label/sublabel in the picker row already is the description, there
+-  // isn't a separate "item" to look over first.
++  // EnhanceStation's own previewUid.
+   const [previewUid, setPreviewUid] = useState<string | null>(null);
+   const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
+   const previewItem = previewFound?.item;
+   const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
+ 
++  // Consumable/charm recipe pick, same "confirm before it commits" shape
++  // as the item preview above (patch 0347, direct report: "consumable
++  // crafting should do the same" as the new enchant/gem preview card) --
++  // the table row's own sublabel is now materialBadges(), not the recipe's
++  // description, so there's nowhere left on the table itself to actually
++  // read what the thing does before committing to it. gear/gem/enchant
++  // recipe picks are untouched -- their table row still shows the plain
++  // description sublabel, no separate preview step was asked for there.
++  const [previewRecipeId, setPreviewRecipeId] = useState<string | null>(null);
++  const previewRecipe = previewRecipeId ? CRAFTING_RECIPES.find((r) => r.id === previewRecipeId) ?? null : null;
++
+   function handleTopPick(key: string) {
+     if (category === 'enchant') setPreviewUid(key);
++    else if (isConsumableLike) setPreviewRecipeId(key);
+     else pickRecipe(key);
+   }
+ 
+@@ -638,30 +697,6 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     </span>
+   );
+ 
+-  /* ------------------------- consumable: materials slot (combined) -------- */
+-  const materialsOptions: PickerOption[] = materialIds.map((id) => {
+-    const material = MATERIAL_BY_ID[id];
+-    const need = recipe?.materialCost[id] ?? 0;
+-    const have = state.materials[id] ?? 0;
+-    return {
+-      key: id,
+-      label: `${material.name} x${need}`,
+-      sublabel: have >= need ? `Have ${have}` : `Need ${need}, have ${have}`,
+-      disabled: have < need,
+-    };
+-  });
+-  const allMaterialsConfirmed = materialIds.length > 0 && materialIds.every((id) => confirmedMaterials.has(id));
+-  // Used to show each material's own glyph here (ore/herbs/fish etc.) --
+-  // pulled per direct request (patch 0247): these two bottom boxes are a
+-  // planned removal from this screen entirely, so showing resource icons
+-  // in a slot that's going away wasn't worth keeping around in the
+-  // meantime. A plain checkmark instead -- still confirms materials are
+-  // set without naming which ones, the have/need row above the Craft
+-  // button already answers that in full anyway.
+-  const materialsFilled = allMaterialsConfirmed
+-    ? <span className="craft-slot-label" aria-hidden="true">✓</span>
+-    : null;
+-
+   /* ------------------------- consumable: bonus slot ------------------------ */
+   // Consumable recipes are untouched by patch 0255's all-stats rework (a
+   // temporary buff isn't gear) and still pick Modifiers keys -- cast is
+@@ -682,12 +717,6 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     });
+   }
+ 
+-  const consumableModFilled = chosenConsumableMods.length === 0 ? null : (
+-    <span className="craft-slot-label">
+-      {chosenConsumableMods.map((m) => `+${recipe?.modValue}% ${MOD_LABEL[m]}`).join(', ')}
+-    </span>
+-  );
+-
+   const scene = (
+     <div className={SCENE_CLASS[category]} style={{ backgroundImage: `url(${backgroundSrc(STATION_BG[category], settings.backgroundMood)})` }}>
+       <SlotBox
+@@ -734,42 +763,13 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+         </>
+       )}
+ 
+-      {/* charm keeps the old three-slot layout (still on enchant.jpg's
+-          shared canvas) -- consumable dropped these two boxes entirely
+-          in patch 0346's single-slot Alchemist rework (see SLOT_RECTS.
+-          consumable's own comment): materials are still auto-confirmed
+-          the instant a recipe is picked (pickRecipe, unchanged), there's
+-          just no separate box left to open/close for it, and the one
+-          consumable recipe with a bonus to pick (modsToPick > 0) gets a
+-          plain text button below the scene instead -- see that button
+-          just after this scene block. */}
+-      {category === 'charm' && (
+-        <>
+-          {/* Auto-confirmed the instant a recipe is picked (see pickRecipe's
+-              own comment) -- no longer a required click. Still openable to
+-              confirm materials are met, though the slot itself no longer
+-              shows what they are -- see materialsFilled's own comment on
+-              why the resource glyphs were pulled (patch 0247), same
+-              reasoning gearModSlot's own filled preview stays clickable
+-              after it's set. */}
+-          <SlotBox
+-            rect={rects.bottomLeft}
+-            filled={materialsFilled}
+-            disabled={!recipe}
+-            label="Materials"
+-            onOpen={() => setOpenSlot('bottomLeft')}
+-          />
+-          {modsToPick > 0 && (
+-            <SlotBox
+-              rect={rects.bottomRight}
+-              filled={consumableModFilled}
+-              disabled={!recipe}
+-              label="Choose a bonus"
+-              onOpen={() => setOpenSlot('bottomRight')}
+-            />
+-          )}
+-        </>
+-      )}
++      {/* consumable/charm (patch 0347: charm joined consumable's
++          single-slot rework) have no bottom boxes at all anymore --
++          materials are auto-confirmed the instant a recipe is picked
++          (pickRecipe, unchanged), and the rare bonus pick
++          (modsToPick > 0, currently only craft_trail_meal) gets a plain
++          text button below the scene instead -- see that button just
++          after this scene block. */}
+     </div>
+   );
+ 
+@@ -872,7 +872,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+       {openSlot === 'top' && (
+         <PickerModal
+           title={category === 'enchant' ? 'Choose an item' : 'Choose a recipe'}
+-          maxWidth={category === 'consumable' ? 560 : undefined}
++          maxWidth={isConsumableLike ? 560 : undefined}
+           options={topOptions}
+           onPick={handleTopPick}
+           onClose={() => setOpenSlot(null)}
+@@ -888,6 +888,27 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+         />
+       )}
+ 
++      {/* Confirm step for a consumable/charm recipe pick (patch 0347,
++          direct report) -- the table row's own sublabel is
++          materialBadges() now, not a description, so this is the only
++          place left to actually read what the recipe does before
++          committing to it. onContinue is what used to fire straight from
++          the table row's onPick: pickRecipe(id), unchanged. */}
++      {isConsumableLike && previewRecipe && (
++        <OptionPreviewModal
++          icon={<RecipeIcon icon={previewRecipe.icon} category={category} size={48} />}
++          title={previewRecipe.name}
++          detail={(
++            <>
++              <div style={{ marginBottom: 6 }}>{previewRecipe.description}</div>
++              {materialBadges(previewRecipe)}
++            </>
++          )}
++          onBack={() => { setPreviewRecipeId(null); setOpenSlot('top'); }}
++          onContinue={() => { pickRecipe(previewRecipe.id); setPreviewRecipeId(null); setOpenSlot(null); }}
++        />
++      )}
++
+       {openSlot === 'bottomLeft' && category === 'gear' && (
+         <PickerModal title="Choose a bonus" options={mod0.options} onPick={mod0.onPick} onClose={() => setOpenSlot(null)} />
+       )}
+@@ -914,16 +935,13 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+         />
+       )}
+ 
+-      {openSlot === 'bottomLeft' && isConsumableLike && (
+-        <PickerModal
+-          title="Materials"
+-          options={materialsOptions}
+-          onPick={(key) => setConfirmedMaterials((prev) => new Set(prev).add(key as MaterialId))}
+-          onClose={() => setOpenSlot(null)}
+-          closeOnPick={materialIds.length <= 1}
+-          selectedKeys={[...confirmedMaterials]}
+-        />
+-      )}
++      {/* consumable/charm's only remaining picker modal -- the rare bonus
++          pick (modsToPick > 0), triggered by the plain text button above
++          rather than an on-canvas slot (see that button's own comment).
++          The old "Materials" picker modal is gone entirely (patch 0347)
++          -- materials were never a real choice (see pickRecipe's own
++          comment) and had no on-canvas trigger left to open it once both
++          consumable-like categories dropped their bottom boxes. */}
+       {openSlot === 'bottomRight' && isConsumableLike && (
+         <PickerModal
+           title={`Choose a bonus (${chosenConsumableMods.length}/${modsToPick})`}
+diff --git a/src/ui/WeaponEnchantStation.tsx b/src/ui/WeaponEnchantStation.tsx
+index df0956c..9fcebce 100644
+--- a/src/ui/WeaponEnchantStation.tsx
++++ b/src/ui/WeaponEnchantStation.tsx
+@@ -8,7 +8,7 @@ import { ElementType, GemTier } from '../game/types';
+ import { formatGold, RARITY_COLOR } from '../game/util';
+ import { backgroundSrc } from '../game/settings';
+ import { ItemIcon } from './icons';
+-import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
++import { ItemPreviewModal, OptionPreviewModal, PickerModal, SlotBox } from './CraftingStation';
+ import type { PickerOption, Rect } from './CraftingStation';
+ 
+ /**
+@@ -65,6 +65,15 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+   // transition made it easy to commit gold against the wrong weapon
+   // without really looking at it first.
+   const [previewUid, setPreviewUid] = useState<string | null>(null);
++  // Same confirm-before-it-commits step for an enchant pick (patch 0347,
++  // direct report: "after clicking an enchant/gem -- because they just
++  // show the name/icon and requirements, it should open a new little
++  // card with its description, then click continue from there") --
++  // holds the picked option's own key (`fire::rare`) rather than the
++  // resolved element/tier so OptionPreviewModal's onContinue can do the
++  // actual setElement/setTier itself, same shape previewUid already uses
++  // above for the item pick.
++  const [previewEnchantKey, setPreviewEnchantKey] = useState<string | null>(null);
+ 
+   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
+   const item = found?.item;
+@@ -125,6 +134,8 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+   const canAfford = !cost || cost.ready || (state.gold >= cost.goldCost && state.scrap >= cost.scrapCost);
+   const canInfuse = !!item && !!element && !!tier && canAfford;
+ 
++  const previewEnchantOption = previewEnchantKey ? enchantOptions.find((o) => o.key === previewEnchantKey) : undefined;
++
+   return (
+     <div className="overlay" onClick={onClose}>
+       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
+@@ -195,15 +206,23 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose an enchant"
+           options={enchantOptions}
+-          onPick={(key) => {
+-            const [el, t] = key.split('::') as [ElementType, GemTier];
+-            setElement(el);
+-            setTier(t);
+-          }}
++          onPick={(key) => setPreviewEnchantKey(key)}
+           onClose={() => setOpenEnchantPicker(false)}
+           layout="grid"
+         />
+       )}
++      {previewEnchantOption && (() => {
++        const [el, t] = previewEnchantKey!.split('::') as [ElementType, GemTier];
++        return (
++          <OptionPreviewModal
++            icon={previewEnchantOption.icon}
++            title={<span style={{ color: RARITY_COLOR[t] }}>{previewEnchantOption.label}</span>}
++            detail={previewEnchantOption.sublabel}
++            onBack={() => { setPreviewEnchantKey(null); setOpenEnchantPicker(true); }}
++            onContinue={() => { setElement(el); setTier(t); setPreviewEnchantKey(null); }}
++          />
++        );
++      })()}
+     </div>
+   );
+ }
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 9f76a79..0306e3a 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -287,9 +287,14 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+                   two buttons doing the same thing on the Enchanter's own
+                   page. Blacksmith/Alchemist still get this one; only the
+                   Enchanter drops it, since it's the only vendor with a
+-                  same-category dedicated station duplicating it. */}
++                  same-category dedicated station duplicating it. Alchemist's
++                  own copy renamed to "Craft Consumable" (patch 0347, direct
++                  report) now that the page has two crafting flows on it --
++                  plain "Crafting" stopped saying which one this button was. */}
+               {vendorId !== 'enchanter' && (
+-                <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
++                <button className="btn-purple" onClick={() => setShowCrafting(true)}>
++                  {vendorId === 'alchemist' ? 'Craft Consumable' : 'Crafting'}
++                </button>
+               )}
+               {/* Durability repair -- moved here from a per-item button
+                   buried in the Inventory tab, gear-specific so it only
+@@ -327,8 +332,13 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+                   structurally incompatible with these being simple
+                   recipe crafts (see CraftingRecipeDef.category's own
+                   comment on why `charm` exists as a separate value at
+-                  all). */}
+-              {vendorId === 'enchanter' && (
++                  all). Moved to the Alchemist (patch 0347, direct report:
++                  "Alch now has 2 functions" -- both Charms and Supplies
++                  are the same simple recipe-craft shape, sharing the same
++                  single-slot art now, see CraftingStation.tsx's own
++                  STATION_BG comment). Still `category="charm"`, only
++                  which vendor page the button lives on changed. */}
++              {vendorId === 'alchemist' && (
+                 <button className="btn-purple" onClick={() => setShowCharms(true)}>Charms</button>
+               )}
+             </div>
+-- 
+2.43.0
+
