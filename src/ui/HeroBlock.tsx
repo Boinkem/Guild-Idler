@@ -110,6 +110,15 @@ export function HeroBlock({
   // level-up/revive flash timing depends on it).
   const [collapsed, setCollapsed] = useState(true);
 
+  // Inline rename control (patch 0350) -- same shape DashboardPanel's own
+  // guild-rename already uses (editing flag + a local draft, seeded from
+  // the live name whenever editing starts so a stale draft from a
+  // previous open never lingers). Declared up here alongside `collapsed`
+  // rather than down by the chip row itself since hooks can't sit after
+  // the early `if (collapsed) return (...)` below.
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(hero.name);
+
   if (collapsed) {
     return (
       <div className={`card hero-block hero-block-summary ${fallen ? 'fallen' : ''}`}>
@@ -457,9 +466,47 @@ export function HeroBlock({
                     </button>
                   );
                 })}
-                <button className="chip" onClick={() => engine.rerollHeroName(hero.id)} title="Rerolls this hero's name from their class's name pool">
-                  ⟲ Reroll Name
-                </button>
+                {editingName ? (
+                  <span className="row" style={{ gap: 4, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      value={nameDraft}
+                      maxLength={24}
+                      autoFocus
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { engine.renameHero(hero.id, nameDraft); setEditingName(false); }
+                        if (e.key === 'Escape') { setNameDraft(hero.name); setEditingName(false); }
+                      }}
+                      style={{
+                        width: 120, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                        color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.6875rem',
+                      }}
+                    />
+                    <button
+                      className="chip"
+                      onClick={() => { engine.renameHero(hero.id, nameDraft); setEditingName(false); }}
+                      title="Save name"
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="chip"
+                      onClick={() => { setNameDraft(hero.name); setEditingName(false); }}
+                      title="Cancel"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    className="chip"
+                    onClick={() => { setNameDraft(hero.name); setEditingName(true); }}
+                    title="Give this hero a name of your choosing"
+                  >
+                    ✎ Rename
+                  </button>
+                )}
               </div>
 
               <p className="tiny muted hero-block-footnote">

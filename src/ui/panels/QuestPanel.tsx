@@ -856,7 +856,10 @@ export function QuestPanel() {
               {autoChainOwned && contractOffers.length > 0 && (
                 <button
                   className="btn-ghost"
-                  style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+                  style={{
+                    minHeight: 22, padding: '2px 10px', fontSize: '0.625rem',
+                    background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                  }}
                   onClick={quickAssign}
                   title="Send this hero on the best contract from their own board"
                 >

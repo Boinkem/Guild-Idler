@@ -1007,9 +1007,11 @@ export function RaidsPanel() {
       <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/raids-bg.jpg', settings.backgroundMood)})` }}>
         <div className="tab-scene-content">
         <h2>Raids</h2>
-        <p className="subtitle">Send the whole guild, not just one hero.</p>
         <div className="card">
           <p className="small muted" style={{ margin: 0 }}>
+            Send the whole guild, not just one hero.
+          </p>
+          <p className="small muted" style={{ margin: '6px 0 0' }}>
             Requires the Raid Charter upgrade -- check the Guild Hall tab once the guild can field a real force.
           </p>
         </div>
@@ -1028,9 +1030,11 @@ export function RaidsPanel() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/raids-bg.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Raids</h2>
-      <p className="subtitle">
-        Multi-hero expeditions. Big rewards, long odds, and everyone comes home a little worse for wear -- win or lose.
-      </p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Multi-hero expeditions. Big rewards, long odds, and everyone comes home a little worse for wear -- win or lose.
+        </p>
+      </div>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
         <button

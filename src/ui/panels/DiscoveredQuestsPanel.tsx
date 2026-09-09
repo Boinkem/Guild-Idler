@@ -119,7 +119,11 @@ export function DiscoveredQuestsPanel() {
       <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
         <div className="tab-scene-content">
         <h2>Story Quests</h2>
-        <p className="subtitle">Recruit a hero first -- quest chains open up once you have someone to send.</p>
+        <div className="card">
+          <p className="small muted" style={{ margin: 0 }}>
+            Recruit a hero first -- quest chains open up once you have someone to send.
+          </p>
+        </div>
         </div>
       </div>
     );
@@ -171,10 +175,12 @@ export function DiscoveredQuestsPanel() {
 
       {subTab === 'board' ? (
         <>
-          <p className="subtitle">
-            Story quest chains your heroes have uncovered on the board. Pick a hero below to see which
-            chains are open to them right now.
-          </p>
+          <div className="card">
+            <p className="small muted" style={{ margin: 0 }}>
+              Story quest chains your heroes have uncovered on the board. Pick a hero below to see which
+              chains are open to them right now.
+            </p>
+          </div>
 
           <div className="section-heading">Heroes</div>
           <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
@@ -424,11 +430,13 @@ function ReplayMemoriesView({
 
   return (
     <>
-      <p className="subtitle">
-        Revisit a story you&rsquo;ve already finished. Unlock a saga below, then replay any of its
-        completed chains at Heroic or Legendary for a chance at their own tougher gear -- the story
-        plays out again in full, so a failed step sends the whole attempt back to the beginning.
-      </p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Revisit a story you&rsquo;ve already finished. Unlock a saga below, then replay any of its
+          completed chains at Heroic or Legendary for a chance at their own tougher gear -- the story
+          plays out again in full, so a failed step sends the whole attempt back to the beginning.
+        </p>
+      </div>
 
       <div className="section-heading">Heroes</div>
       <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>

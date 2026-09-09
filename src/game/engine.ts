@@ -3115,6 +3115,20 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /**
+   * Sets a hero's name to player-chosen text -- see HeroManager.renameHero's
+   * own doc comment. Free, no confirmation needed (same as rerollHeroName
+   * above -- a hero's name has always been pure flavor text, nothing is
+   * lost by changing it).
+   */
+  renameHero(heroId: string, name: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    HeroManager.renameHero(hero, name);
+    this.notify();
+    void this.saveNow();
+  }
+
   /** Applies an owned skin to one hero. Free once unlocked. */
   setHeroSkin(heroId: string, skinId: string) {
     const hero = this.hero(heroId);

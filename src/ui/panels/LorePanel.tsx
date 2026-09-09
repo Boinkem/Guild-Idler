@@ -271,7 +271,11 @@ function StoryQuestsTab() {
       {groups.length === 0 && (
         <>
           <div className="section-heading">Completed</div>
-          <p className="small muted subtitle">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger. Keep an eye out.</p>
+          <div className="card">
+            <p className="small muted" style={{ margin: 0 }}>
+              No chapters finished yet. Contracts on the board sometimes lead somewhere bigger. Keep an eye out.
+            </p>
+          </div>
         </>
       )}
 
@@ -507,7 +511,11 @@ export function LorePanel() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/lore-and-guide.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Lore</h2>
-      <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Every contract tells a small story. This is the guild's record of the ones worth remembering.
+        </p>
+      </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="spread">

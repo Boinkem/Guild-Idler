@@ -28127,6 +28127,121 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Subtitle cards on 5 tabs, Quick-assign visibility, Daylight/Parchment scene tint, Treasury readability, Hero Rename (patch 0350)
+```discord-update
+Dev Update | Patch 0350
+
+- Fixed the subtitle text under Raids, Story Quests, Lore, Settings, and Statistics not sitting in a proper readable box like Quest Board's does
+- Fixed the Quick-assign button being invisible against the background
+- Fixed Daylight and Parchment washing the tab art out with a white haze instead of the moody darkening every other theme gets
+- Fixed the Treasury's Gold-for-Renown Exchange card being hard to read before it's unlocked
+- Replaced Reroll Name with a real Rename -- type in whatever name you want for a hero
+```
+
+Five direct reports bundled into one patch, all UI-only, no save-shape or
+balance changes.
+
+**Subtitle "not in a card" -- Raids, Story Quests, Lore, Settings,
+Statistics (`RaidsPanel.tsx`, `DiscoveredQuestsPanel.tsx`,
+`LorePanel.tsx`, `SettingsPanel.tsx`, `StatsPanel.tsx`).** Patch 0334's
+own "subtitle cards" pass (see that entry above) gave `.panel .subtitle`
+a real backing plaque, but it's an `inline-block` plaque sized to hug
+its own text -- fine for a short line, but visibly different from
+Quest Board's subtitle, which has always been hand-wrapped in
+`<div className="card"><p className="small muted">` instead of using
+the shared `.subtitle` class at all, giving it a full-width bar. Direct
+report, screenshots across five tabs (six spots -- Raids has one for
+both its locked and unlocked states; Story Quests has one for its
+no-hero state, its Board sub-tab, and its Replay Memories sub-tab; Lore
+has one for its own header and a second one for the Completed section's
+"no chapters finished yet" empty state, which was combining `.subtitle`
+with `.small.muted` on the same `<p>`). Every one of these now uses the
+same `<div className="card"><p className="small muted">` shape Quest
+Board already established, instead of `.subtitle`. Raids' locked state
+specifically had two separate elements (a bare `.subtitle` line plus an
+already-carded paragraph right below it) -- merged into one card, two
+short paragraphs, rather than a card sitting directly under a
+differently-styled line. `.panel .subtitle` itself is untouched; nothing
+else in the game still reaches for it after this patch, but removing
+the class was out of scope here.
+
+**Quick-assign button had no background (`QuestPanel.tsx`).** Direct
+report. The button uses `.btn-ghost` (`background: transparent` by
+design), sitting directly on the tab's own background art rather than
+on a card -- its neighbours in the same toolbar row (the sort `<select>`,
+the freeze-count badge) both already carry an explicit
+`background: var(--panel-2)` / `border: 1px solid var(--panel-3)` in
+their own inline styles, which is exactly what Quick-assign was missing.
+Added the same two properties to its existing inline `style` object;
+`className="btn-ghost"` is unchanged, so its hover/disabled behaviour is
+identical, it just no longer disappears against busy background art.
+
+**Daylight/Parchment "filter" over the background art
+(`settings.ts`, `app.css`).** Direct report: "Daylight theme applies a
+filter over the background, looks like Parchment does the same thing."
+Root cause: `.tab-scene-content`/`.vendor-scene-content` tint their
+full-bleed background art with `color-mix(in srgb, var(--night) 25%,
+transparent)` -- a flat darkening scrim, explicitly documented (patch
+0308's own comment) as existing purely "for text legibility over busy
+artwork, nothing more." That assumption held for the four original
+themes, where `--night` is always a near-black shadow color. Daylight
+and Parchment (added later) redefine `--night` as their own near-white/
+tan *panel* background -- correct for their own purpose, but this one
+rule never anticipated `--night` going light, so the "darkening" scrim
+inverted into a washed-out white haze over the art in exactly those two
+themes. New `--scene-scrim` CSS variable added to every theme's `vars`
+in `settings.ts`: identical to that theme's own `--night` for the four
+dark-flavored themes (candlelit, midnight, forest, high_contrast -- zero
+visual change there), but a dedicated dark value for Daylight (`#1c1e24`)
+and Old Parchment (`#2b2115`) instead of reusing their light `--night`.
+`.tab-scene`, `.tab-scene-content`, `.vendor-scene`, and
+`.vendor-scene-content` in `app.css` all switched from `var(--night)` to
+`var(--scene-scrim)`. The many *other* `var(--night)` usages elsewhere in
+`app.css` (badges, toggles, the `.subtitle` plaque, etc.) are untouched --
+out of scope for this report, which was specifically about the full-bleed
+tab background art.
+
+**Treasury's Gold-for-Renown Exchange, locked state unreadable
+(`app.css`).** Direct report: "very hard to read in any theme, it needs
+to match the other upgrade cards." `.locked-upgrade` (used only by this
+card and Grimsby's "A Permanent Spot" upsell) was fading its entire
+`.card` -- flavour text included -- to `opacity: 0.5`, which roughly
+halves the effective coverage of `.card`'s own 88%-opaque panel backing
+(see `.card`'s own comment on that `color-mix`), letting the busy
+background art bleed straight back through on top of dimming the text
+itself. Every other locked/unaffordable state in the game
+(`.guild-upgrade-row`, `.grimsby-game-card.locked`) stays at full
+opacity and signals "locked" some other way (a disabled Buy button, a
+state pill) rather than fading -- this was the one outlier. Dropped
+`opacity: 0.5` from `.locked-upgrade`; the dashed border alone is still
+a clear "not unlocked yet" cue, and the card now reads exactly like
+every other upgrade card until it's bought.
+
+**Hero Rename, replacing Reroll Name (`HeroManager.ts`, `engine.ts`,
+`HeroBlock.tsx`).** Direct request: a real Rename rather than
+`rerollName`'s random draw from the hero's own class name pool. New
+`HeroManager.renameHero(hero, name)`, same trim + 24-char cap +
+empty-input-is-a-no-op shape `GameEngine.setGuildName` already uses (a
+hero's name shows in the same places -- quest log, chain text,
+tombstones -- a whitespace-only or absurdly long value would look just
+as broken in). New `GameEngine.renameHero(heroId, name)` wraps it the
+same free/no-confirmation way `rerollHeroName` already does. In
+`HeroBlock.tsx`, the old "⟲ Reroll Name" chip is replaced with an
+inline edit control -- same shape as `DashboardPanel`'s own guild-rename
+UI: a "Rename" chip toggles a text input (24-char max, autofocused) plus
+Save/Cancel chips, with Enter committing and Escape reverting the draft
+without saving. `rerollName`/`rerollHeroName` themselves are left in
+place, unused -- no call site references them anymore after this patch,
+but removing them outright was out of scope for what was asked.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against the live repo with every fix
+above applied. No live in-app playtest in this environment (no browser
+available) -- worth a real-window pass across all six themes to confirm
+`--scene-scrim` reads well against every background image, and to
+confirm the new inline Rename input doesn't clip against the Skins row
+it now sits at the end of on a narrow window.
+
 ### Picker sizing fix, Enhance's item picker gets its own tabs (patch 0349)
 ```discord-update
 Dev Update | Bigger Picker Windows, Enhance Filters

@@ -3441,7 +3441,11 @@ input[type='range'] {
      the visible symptom there is simply "acts like the old per-page
      zoom on that one platform," not any actual breakage. */
   background-attachment: fixed;
-  background-color: var(--night);
+  /* --scene-scrim rather than --night (patch 0350) -- see --scene-scrim's
+     own comment in settings.ts for why: --night goes light in Daylight/
+     Old Parchment for panel-chrome purposes, which isn't what this backdrop
+     color wants. */
+  background-color: var(--scene-scrim);
 }
 .vendor-scene-content {
   position: relative;
@@ -3459,8 +3463,11 @@ input[type='range'] {
    * resolution (patch 0308), which would have meant this CSS attribute
    * needing its own live update on the same 6am/6pm boundary
    * backgroundSrc() already tracks -- a flat, mood-independent value
-   * has nothing to keep in sync at all. */
-  background: color-mix(in srgb, var(--night) 25%, transparent);
+   * has nothing to keep in sync at all. --scene-scrim rather than --night
+   * (patch 0350) -- see --scene-scrim's own comment in settings.ts;
+   * direct report that Daylight/Old Parchment washed this tint out white
+   * instead of darkening the art underneath. */
+  background: color-mix(in srgb, var(--scene-scrim) 25%, transparent);
 }
 
 /*
@@ -3501,19 +3508,33 @@ input[type='range'] {
      report this line fixes), generalized the same way the rest of this
      class already was. */
   background-attachment: fixed;
-  background-color: var(--night);
+  /* --scene-scrim rather than --night -- see .vendor-scene's own comment
+     above (patch 0350). */
+  background-color: var(--scene-scrim);
 }
 .tab-scene-content {
   position: relative;
   padding: 14px 16px 24px;
   /* Flat value, same reasoning as .vendor-scene-content's own comment
    * above -- Guild's Mood is carried entirely by which art is showing
-   * now (patch 0308), not by this tint also changing per mood. */
-  background: color-mix(in srgb, var(--night) 25%, transparent);
+   * now (patch 0308), not by this tint also changing per mood.
+   * --scene-scrim rather than --night (patch 0350) -- see
+   * .vendor-scene-content's own comment above. */
+  background: color-mix(in srgb, var(--scene-scrim) 25%, transparent);
 }
 
+/* Direct report (patch 0350): the Treasury's Gold-for-Renown Exchange card
+ * ("very hard to read in any theme, it needs to match the other upgrade
+ * cards") was fading its ENTIRE .card -- including .card's own 88%-opaque
+ * panel backing (see .card's own comment) -- down to 50% opacity, roughly
+ * halving that backing's effective coverage and letting the busy
+ * background art bleed straight back through, on top of also dimming the
+ * flavour text itself. Every other locked/unaffordable state in this game
+ * (.guild-upgrade-row, .grimsby-game-card.locked) stays at full opacity and
+ * signals "locked" some other way (a disabled Buy button, a state pill) --
+ * this now matches that instead of being the one outlier that fades. The
+ * dashed border alone is still a clear enough "not unlocked yet" cue. */
 .locked-upgrade {
-  opacity: 0.5;
   border-style: dashed;
 }
 

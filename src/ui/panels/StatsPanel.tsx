@@ -298,7 +298,11 @@ export function StatsPanel() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/settings.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Statistics</h2>
-      <p className="subtitle">Everything the guild scribe has bothered to write down.</p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Everything the guild scribe has bothered to write down.
+        </p>
+      </div>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
         <button

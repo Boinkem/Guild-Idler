@@ -292,7 +292,7 @@ export const THEMES: Theme[] = [
     name: 'Candlelit Hall',
     description: 'The default. Deep plum shadow, oiled parchment, brass.',
     vars: {
-      '--night': '#171320', '--panel': '#221c2e', '--panel-2': '#2b2338',
+      '--night': '#171320', '--scene-scrim': '#171320', '--panel': '#221c2e', '--panel-2': '#2b2338',
       '--panel-3': '#362c46', '--edge': '#0e0b14', '--parchment': '#f3e6c8',
       '--muted': '#a294b5', '--brass': '#d9a441', '--brass-dim': '#8c6a2a',
       '--moss': '#79a86b', '--blood': '#a33a3a', '--sky': '#5b8fd6', '--violet': '#a874d6',
@@ -303,7 +303,7 @@ export const THEMES: Theme[] = [
     name: 'Midnight Watch',
     description: 'Cooler and darker. Easy on the eyes at 2am.',
     vars: {
-      '--night': '#0d1017', '--panel': '#151a24', '--panel-2': '#1c2330',
+      '--night': '#0d1017', '--scene-scrim': '#0d1017', '--panel': '#151a24', '--panel-2': '#1c2330',
       '--panel-3': '#27303f', '--edge': '#070a0f', '--parchment': '#dbe4f0',
       '--muted': '#7e8aa0', '--brass': '#6ea8d8', '--brass-dim': '#3a6a92',
       '--moss': '#5fa88f', '--blood': '#c85c6a', '--sky': '#6ea8d8', '--violet': '#9a8fd6',
@@ -314,7 +314,16 @@ export const THEMES: Theme[] = [
     name: 'Old Parchment',
     description: 'A light theme. Ink on aged paper.',
     vars: {
-      '--night': '#e8dcc0', '--panel': '#f1e7cf', '--panel-2': '#e6d9ba',
+      /* --scene-scrim stays a dark sepia here rather than reusing this
+       * theme's own light --night (#e8dcc0) -- see .tab-scene-content's
+       * comment for why: that 25% tint exists purely to darken busy
+       * background ART for legibility, a job that inverts into a washed-
+       * out haze the moment --night itself goes light, which is exactly
+       * what Old Parchment and Daylight below do for their own (correct)
+       * purpose of lightening panels/chrome. Direct report: "Daylight
+       * theme applies a filter over the background, looks like Parchment
+       * does the same thing." */
+      '--night': '#e8dcc0', '--scene-scrim': '#2b2115', '--panel': '#f1e7cf', '--panel-2': '#e6d9ba',
       '--panel-3': '#d8c8a2', '--edge': '#b7a172', '--parchment': '#3a2f22',
       '--muted': '#7a6a4e', '--brass': '#9a6b1e', '--brass-dim': '#c9a350',
       '--moss': '#5a7d3e', '--blood': '#9a3226', '--sky': '#3f6ea8', '--violet': '#7a4fa0',
@@ -325,7 +334,7 @@ export const THEMES: Theme[] = [
     name: 'Deep Forest',
     description: 'Mossy greens and warm lantern light.',
     vars: {
-      '--night': '#12180f', '--panel': '#1b2416', '--panel-2': '#232f1c',
+      '--night': '#12180f', '--scene-scrim': '#12180f', '--panel': '#1b2416', '--panel-2': '#232f1c',
       '--panel-3': '#2f3d26', '--edge': '#0a0e08', '--parchment': '#ece6cf',
       '--muted': '#9aa585', '--brass': '#d9a441', '--brass-dim': '#8c6a2a',
       '--moss': '#8fbf6f', '--blood': '#c0603a', '--sky': '#6fa8b0', '--violet': '#b088c0',
@@ -336,7 +345,7 @@ export const THEMES: Theme[] = [
     name: 'High Contrast',
     description: 'Maximum legibility, near-black. Doubles as a clean dark mode.',
     vars: {
-      '--night': '#000000', '--panel': '#101014', '--panel-2': '#18181f',
+      '--night': '#000000', '--scene-scrim': '#000000', '--panel': '#101014', '--panel-2': '#18181f',
       '--panel-3': '#26262f', '--edge': '#000000', '--parchment': '#ffffff',
       '--muted': '#c0c0cc', '--brass': '#ffcc44', '--brass-dim': '#c99a1e',
       '--moss': '#66d466', '--blood': '#ff6b6b', '--sky': '#66b8ff', '--violet': '#c88fff',
@@ -347,7 +356,11 @@ export const THEMES: Theme[] = [
     name: 'Daylight',
     description: 'Near-white and neutral, closer to a stock desktop app than a tavern.',
     vars: {
-      '--night': '#f4f5f7', '--panel': '#ffffff', '--panel-2': '#f0f1f4',
+      /* --scene-scrim: same reasoning as Old Parchment's own comment
+       * above -- kept a dark neutral slate rather than this theme's own
+       * near-white --night, so background art still gets a real
+       * darkening tint instead of a washed-out white haze. */
+      '--night': '#f4f5f7', '--scene-scrim': '#1c1e24', '--panel': '#ffffff', '--panel-2': '#f0f1f4',
       '--panel-3': '#e2e4e9', '--edge': '#c7cad1', '--parchment': '#20232a',
       '--muted': '#5b616e', '--brass': '#a5670f', '--brass-dim': '#8a5510',
       '--moss': '#2f7d4f', '--blood': '#c22f3d', '--sky': '#1f6fc9', '--violet': '#7346c7',

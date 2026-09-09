@@ -71,7 +71,11 @@ export function SettingsPanel() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/settings.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Settings</h2>
-      <p className="subtitle">Everything here is per-device and saved instantly. It never touches your guild's progress.</p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Everything here is per-device and saved instantly. It never touches your guild's progress.
+        </p>
+      </div>
 
       <div className="section-heading">Appearance</div>
 

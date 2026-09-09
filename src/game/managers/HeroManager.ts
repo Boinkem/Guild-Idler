@@ -88,6 +88,24 @@ export const HeroManager = {
   },
 
   /**
+   * Sets a hero's name to player-chosen text (patch 0350, direct request:
+   * a real Rename rather than rerollName's random draw from the class's
+   * own name pool above -- that one stays for anyone who still wants a
+   * quick "give me a different flavour name" option, this is the "no, I
+   * want THIS specific name" one). Same trim + length-cap + empty-input-
+   * is-a-no-op shape as GameEngine.setGuildName, since a hero's name shows
+   * in the exact same places (quest log, chain text, tombstones) a
+   * whitespace-only or absurdly long value would look just as broken in.
+   * Mutates hero.name directly and returns it, same "mutate + return what
+   * changed" shape rerollName above uses.
+   */
+  renameHero(hero: Hero, name: string): string {
+    const trimmed = name.trim().slice(0, 24);
+    if (trimmed) hero.name = trimmed;
+    return hero.name;
+  },
+
+  /**
    * The stats a hero of this class would have at a given level with zero
    * investment -- no equipment, no bonusStats, no spent stat points. Same
    * automatic per-level growth math create()/grantXp already apply, just
