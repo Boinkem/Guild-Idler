@@ -28127,6 +28127,65 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Picker sizing fix, Enhance's item picker gets its own tabs (patch 0349)
+```discord-update
+Dev Update | Bigger Picker Windows, Enhance Filters
+
+- Fixed picker windows cutting off item names and details -- they're wider now, with room reserved so names don't get squeezed out
+- Added filter tabs to the Enhance picker -- Equipped, Unequipped, and one tab per hero
+```
+
+Direct follow-up to patch 0348's filter tabs, from a real in-app
+screenshot: names were still truncating ("Lucky C...") even with the
+picker table's own Details column right there.
+
+**The actual bug, not just "make it wider."** `.craft-picker-td-name`
+had a `max-width: 0` rule -- an old trick that only worked under the
+table's previous auto-layout, where it forced the ellipsis to respect
+whatever width the browser's own layout algorithm settled on. That
+algorithm gave a long Details column (several material badges, or the
+Alchemist's own multi-material row) most of the space and squeezed Name
+down to almost nothing first, so the truncation showed up regardless of
+how wide the modal itself was -- confirmed from the screenshot's own
+"Lucky C..." in a modal that already had real width to spare. Simply
+bumping `maxWidth` on its own wouldn't have fixed this; the column
+itself needed a real floor.
+
+**`craft-picker-table` (`app.css`)**: switched to `table-layout: fixed`,
+with `.craft-picker-th-name`/`.craft-picker-td-name` (new header class
+added alongside the existing body one) given a real `38%` width. Details
+keeps no declared width, so it still takes whatever's left, same
+behaviour as before -- it just no longer gets to take it *from* Name
+first. Both `.craft-picker-td-name` and `.craft-picker-td-detail`'s own
+`max-width: 0` rules are gone -- they'd have zeroed their columns right
+back out under the new fixed layout, since neither column has an
+explicit `width` for a `max-width: 0` to safely cap.
+
+**Sizing (`CraftingStation.tsx`)**: `PickerModal`'s default `maxWidth`
+raised from 420/520px (rows/grid) to 680/620px; `.craft-picker-list`'s
+own scroll cap raised from 320px to 420px tall so more rows are visible
+before scrolling. The Alchemist's own `maxWidth={560}` override is gone
+outright -- the new 680px default already covers it, one fewer special
+case to keep in sync.
+
+**Enhance's own item picker (`EnhanceStation.tsx`) -- new filter tabs.**
+Direct request: "Equipped Gear / Unequipped / (individual heroes (being
+their equipped))." Each item option now carries `tags: ['equipped', heroId]`
+or `tags: ['unequipped']` (stash items only ever get the one tag); the
+tab row is Equipped, Unequipped, then one tab per hero in
+`state.heroes`, by name. A hero with nothing equipped still gets a tab
+rather than being left out -- an empty list under that hero's own name
+is itself the answer ("this hero has no gear"), not a state worth
+hiding. Every other item picker in the game (Weapon Enchanting, Armour
+Infusion, the Enchanter's own item slot) is untouched -- this round was
+scoped to Enhance specifically, direct request.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live in-app playtest in this
+environment (no browser available) -- worth a real-window pass to
+confirm names read in full now at the new column width, and that the
+per-hero tab row doesn't wrap awkwardly on a guild with a large roster.
+
 ### Filter tabs on the recipe/enchant pickers (patch 0348)
 ```discord-update
 Dev Update | Picker Filter Tabs

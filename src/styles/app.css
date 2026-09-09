@@ -4495,13 +4495,25 @@ button.harvest-item:hover {
 .craft-picker-tab.on { background: var(--panel-3); color: var(--parchment); border-color: var(--brass); }
 
 .craft-picker-list {
-  max-height: 320px;
+  max-height: 420px;
   overflow-y: auto;
   border: 1px solid var(--panel-3);
   border-radius: var(--radius);
 }
+/**
+ * `table-layout: fixed` (patch 0349, direct report) -- the previous
+ * auto-layout table let a long Details column (several material badges,
+ * or the Alchemist's own multi-material row) squeeze Name down to
+ * almost nothing before its own `max-width: 0` ellipsis trick ever got
+ * a say, truncating names like "Lucky Charm" to "Lucky C..." even in a
+ * fairly wide modal. Fixed layout hands Name a guaranteed floor
+ * (.craft-picker-th-name/.craft-picker-td-name below) up front instead
+ * of leaving it to fight Details for whatever's left; Details (no width
+ * declared) still takes all the remaining space, same as before.
+ */
 .craft-picker-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.6875rem;
   color: var(--parchment);
@@ -4521,6 +4533,7 @@ button.harvest-item:hover {
   z-index: 1;
 }
 .craft-picker-th-icon, .craft-picker-td-icon { width: 48px; }
+.craft-picker-th-name, .craft-picker-td-name { width: 38%; }
 /* Rarity stripe (patch 0247) -- transparent by default (recipe pickers,
    which have no rarity), coloured via inline style on real item rows
    only. Declared on the <td> specifically, not .craft-picker-row -- see
@@ -4573,13 +4586,25 @@ button.harvest-item:hover {
 .hero-compare-table tbody tr:hover { background: var(--panel-2); }
 .craft-picker-row td { padding: 6px 8px; vertical-align: middle; }
 .craft-picker-td-name {
-  max-width: 0; /* forces the ellipsis below to respect the table's own column width instead of growing it */
+  /* max-width intentionally NOT 0 here (patch 0349) -- that was the old
+     auto-layout trick to make the ellipsis below respect a computed
+     column width; table-layout: fixed above now gives this column a
+     real declared width (.craft-picker-th-name/-td-name, 38%) instead,
+     so a max-width cap here would just override that and squeeze the
+     column straight back down to nothing. overflow/ellipsis still
+     apply -- a name longer than the real 38% column still truncates,
+     it just has a genuine floor to truncate from now. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .craft-picker-td-detail {
-  max-width: 0;
+  /* No declared width, same as before -- takes whatever's left after
+     icon/name/check under the new table-layout: fixed (patch 0349).
+     max-width intentionally NOT 0 here for the same reason as
+     .craft-picker-td-name above -- fixed layout already gives this
+     column a real width via "no width declared = gets the remainder,"
+     a max-width cap would just zero it back out. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

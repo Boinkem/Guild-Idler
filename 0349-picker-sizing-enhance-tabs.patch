@@ -1,0 +1,227 @@
+From f90123b56088e553eb91a99bf9397646da7cc7bc Mon Sep 17 00:00:00 2001
+From: Guildbound Dev <dev@guildbound.local>
+Date: Wed, 9 Sep 2026 02:52:25 +0000
+Subject: [PATCH] Patch 0349: Picker sizing fix, Enhance's item picker gets its
+ own tabs
+
+- Fixed the real bug behind truncated names: .craft-picker-td-name's old max-width:0 trick was fighting the Details column for space under auto table layout. Switched to table-layout: fixed with a real 38% floor for Name.
+- Raised PickerModal default maxWidth (420/520 -> 680/620) and craft-picker-list's scroll cap (320px -> 420px); removed the now-redundant Alchemist-specific maxWidth override
+- EnhanceStation's item picker: new tabs (Equipped, Unequipped, one per hero), tags derived from heroId
+- guild-idler-status.md updated with the patch 0349 entry
+---
+ guild-idler-status.md      | 59 ++++++++++++++++++++++++++++++++++++++
+ src/styles/app.css         | 31 ++++++++++++++++++--
+ src/ui/CraftingStation.tsx |  7 ++---
+ src/ui/EnhanceStation.tsx  | 16 +++++++++++
+ 4 files changed, 106 insertions(+), 7 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index bbddec6..97b50bd 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,6 +28127,65 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Picker sizing fix, Enhance's item picker gets its own tabs (patch 0349)
++```discord-update
++Dev Update | Bigger Picker Windows, Enhance Filters
++
++- Fixed picker windows cutting off item names and details -- they're wider now, with room reserved so names don't get squeezed out
++- Added filter tabs to the Enhance picker -- Equipped, Unequipped, and one tab per hero
++```
++
++Direct follow-up to patch 0348's filter tabs, from a real in-app
++screenshot: names were still truncating ("Lucky C...") even with the
++picker table's own Details column right there.
++
++**The actual bug, not just "make it wider."** `.craft-picker-td-name`
++had a `max-width: 0` rule -- an old trick that only worked under the
++table's previous auto-layout, where it forced the ellipsis to respect
++whatever width the browser's own layout algorithm settled on. That
++algorithm gave a long Details column (several material badges, or the
++Alchemist's own multi-material row) most of the space and squeezed Name
++down to almost nothing first, so the truncation showed up regardless of
++how wide the modal itself was -- confirmed from the screenshot's own
++"Lucky C..." in a modal that already had real width to spare. Simply
++bumping `maxWidth` on its own wouldn't have fixed this; the column
++itself needed a real floor.
++
++**`craft-picker-table` (`app.css`)**: switched to `table-layout: fixed`,
++with `.craft-picker-th-name`/`.craft-picker-td-name` (new header class
++added alongside the existing body one) given a real `38%` width. Details
++keeps no declared width, so it still takes whatever's left, same
++behaviour as before -- it just no longer gets to take it *from* Name
++first. Both `.craft-picker-td-name` and `.craft-picker-td-detail`'s own
++`max-width: 0` rules are gone -- they'd have zeroed their columns right
++back out under the new fixed layout, since neither column has an
++explicit `width` for a `max-width: 0` to safely cap.
++
++**Sizing (`CraftingStation.tsx`)**: `PickerModal`'s default `maxWidth`
++raised from 420/520px (rows/grid) to 680/620px; `.craft-picker-list`'s
++own scroll cap raised from 320px to 420px tall so more rows are visible
++before scrolling. The Alchemist's own `maxWidth={560}` override is gone
++outright -- the new 680px default already covers it, one fewer special
++case to keep in sync.
++
++**Enhance's own item picker (`EnhanceStation.tsx`) -- new filter tabs.**
++Direct request: "Equipped Gear / Unequipped / (individual heroes (being
++their equipped))." Each item option now carries `tags: ['equipped', heroId]`
++or `tags: ['unequipped']` (stash items only ever get the one tag); the
++tab row is Equipped, Unequipped, then one tab per hero in
++`state.heroes`, by name. A hero with nothing equipped still gets a tab
++rather than being left out -- an empty list under that hero's own name
++is itself the answer ("this hero has no gear"), not a state worth
++hiding. Every other item picker in the game (Weapon Enchanting, Armour
++Infusion, the Enchanter's own item slot) is untouched -- this round was
++scoped to Enhance specifically, direct request.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. No live in-app playtest in this
++environment (no browser available) -- worth a real-window pass to
++confirm names read in full now at the new column width, and that the
++per-hero tab row doesn't wrap awkwardly on a guild with a large roster.
++
+ ### Filter tabs on the recipe/enchant pickers (patch 0348)
+ ```discord-update
+ Dev Update | Picker Filter Tabs
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 37d42d7..fe730a9 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -4495,13 +4495,25 @@ button.harvest-item:hover {
+ .craft-picker-tab.on { background: var(--panel-3); color: var(--parchment); border-color: var(--brass); }
+ 
+ .craft-picker-list {
+-  max-height: 320px;
++  max-height: 420px;
+   overflow-y: auto;
+   border: 1px solid var(--panel-3);
+   border-radius: var(--radius);
+ }
++/**
++ * `table-layout: fixed` (patch 0349, direct report) -- the previous
++ * auto-layout table let a long Details column (several material badges,
++ * or the Alchemist's own multi-material row) squeeze Name down to
++ * almost nothing before its own `max-width: 0` ellipsis trick ever got
++ * a say, truncating names like "Lucky Charm" to "Lucky C..." even in a
++ * fairly wide modal. Fixed layout hands Name a guaranteed floor
++ * (.craft-picker-th-name/.craft-picker-td-name below) up front instead
++ * of leaving it to fight Details for whatever's left; Details (no width
++ * declared) still takes all the remaining space, same as before.
++ */
+ .craft-picker-table {
+   width: 100%;
++  table-layout: fixed;
+   border-collapse: collapse;
+   font-size: 0.6875rem;
+   color: var(--parchment);
+@@ -4521,6 +4533,7 @@ button.harvest-item:hover {
+   z-index: 1;
+ }
+ .craft-picker-th-icon, .craft-picker-td-icon { width: 48px; }
++.craft-picker-th-name, .craft-picker-td-name { width: 38%; }
+ /* Rarity stripe (patch 0247) -- transparent by default (recipe pickers,
+    which have no rarity), coloured via inline style on real item rows
+    only. Declared on the <td> specifically, not .craft-picker-row -- see
+@@ -4573,13 +4586,25 @@ button.harvest-item:hover {
+ .hero-compare-table tbody tr:hover { background: var(--panel-2); }
+ .craft-picker-row td { padding: 6px 8px; vertical-align: middle; }
+ .craft-picker-td-name {
+-  max-width: 0; /* forces the ellipsis below to respect the table's own column width instead of growing it */
++  /* max-width intentionally NOT 0 here (patch 0349) -- that was the old
++     auto-layout trick to make the ellipsis below respect a computed
++     column width; table-layout: fixed above now gives this column a
++     real declared width (.craft-picker-th-name/-td-name, 38%) instead,
++     so a max-width cap here would just override that and squeeze the
++     column straight back down to nothing. overflow/ellipsis still
++     apply -- a name longer than the real 38% column still truncates,
++     it just has a genuine floor to truncate from now. */
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+ }
+ .craft-picker-td-detail {
+-  max-width: 0;
++  /* No declared width, same as before -- takes whatever's left after
++     icon/name/check under the new table-layout: fixed (patch 0349).
++     max-width intentionally NOT 0 here for the same reason as
++     .craft-picker-td-name above -- fixed layout already gives this
++     column a real width via "no width declared = gets the remainder,"
++     a max-width cap would just zero it back out. */
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 4ba577c..3481242 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -342,7 +342,7 @@ export function PickerModal({
+   };
+   return (
+     <div className="overlay" style={{ zIndex: 60 }} onClick={onClose}>
+-      <div className="modal" style={{ maxWidth: maxWidth ?? (layout === 'grid' ? 520 : 420) }} onClick={(e) => e.stopPropagation()}>
++      <div className="modal" style={{ maxWidth: maxWidth ?? (layout === 'grid' ? 620 : 680) }} onClick={(e) => e.stopPropagation()}>
+         <div className="spread" style={{ marginBottom: 8 }}>
+           <span className="card-title">{title}</span>
+           <button className={closeOnPick ? '' : 'btn-primary'} onClick={onClose}>
+@@ -400,8 +400,8 @@ export function PickerModal({
+               <thead>
+                 <tr>
+                   <th aria-hidden="true" className="craft-picker-th-icon" />
+-                  <th>Name</th>
+-                  {hasSublabels && <th>Details</th>}
++                  <th className="craft-picker-th-name">Name</th>
++                  {hasSublabels && <th className="craft-picker-th-detail">Details</th>}
+                   <th aria-hidden="true" className="craft-picker-th-check" />
+                 </tr>
+               </thead>
+@@ -999,7 +999,6 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+       {openSlot === 'top' && (
+         <PickerModal
+           title={category === 'enchant' ? 'Choose an item' : 'Choose a recipe'}
+-          maxWidth={isConsumableLike ? 560 : undefined}
+           options={topOptions}
+           tabs={topTabs}
+           onPick={handleTopPick}
+diff --git a/src/ui/EnhanceStation.tsx b/src/ui/EnhanceStation.tsx
+index c3f6da5..749259a 100644
+--- a/src/ui/EnhanceStation.tsx
++++ b/src/ui/EnhanceStation.tsx
+@@ -91,10 +91,25 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
+         sublabel: `${owner} -- ${atMax ? 'max refinement' : `+${i.plus}/${MAX_PLUS}`}`,
+         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
+         rarity: d.rarity,
++        // 'equipped'/'unequipped' plus the owning hero's own id (patch
++        // 0349, direct report) -- an unequipped (stash) item only ever
++        // gets the one tag, an equipped item gets both so it shows up
++        // under "Equipped" and under that specific hero's own tab.
++        tags: heroId ? ['equipped', heroId] : ['unequipped'],
+       };
+     })
+     .filter((o): o is PickerOption => o !== null);
+ 
++  // Equipped/Unequipped first, then one tab per hero -- a hero with
++  // nothing equipped still gets a tab (an empty "nothing here yet" tab
++  // reads as "this hero has no gear," which is real information, not
++  // just an empty state to hide).
++  const itemTabs = [
++    { id: 'equipped', label: 'Equipped' },
++    { id: 'unequipped', label: 'Unequipped' },
++    ...state.heroes.map((h) => ({ id: h.id, label: h.name })),
++  ];
++
+   function handleEnhance() {
+     if (!item) return;
+     engine.upgradeItem(item.uid);
+@@ -148,6 +163,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose an item"
+           options={options}
++          tabs={itemTabs}
+           onPick={(key) => setPreviewUid(key)}
+           onClose={() => setOpenPicker(false)}
+         />
+-- 
+2.43.0
+

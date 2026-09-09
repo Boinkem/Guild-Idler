@@ -342,7 +342,7 @@ export function PickerModal({
   };
   return (
     <div className="overlay" style={{ zIndex: 60 }} onClick={onClose}>
-      <div className="modal" style={{ maxWidth: maxWidth ?? (layout === 'grid' ? 520 : 420) }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: maxWidth ?? (layout === 'grid' ? 620 : 680) }} onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">{title}</span>
           <button className={closeOnPick ? '' : 'btn-primary'} onClick={onClose}>
@@ -400,8 +400,8 @@ export function PickerModal({
               <thead>
                 <tr>
                   <th aria-hidden="true" className="craft-picker-th-icon" />
-                  <th>Name</th>
-                  {hasSublabels && <th>Details</th>}
+                  <th className="craft-picker-th-name">Name</th>
+                  {hasSublabels && <th className="craft-picker-th-detail">Details</th>}
                   <th aria-hidden="true" className="craft-picker-th-check" />
                 </tr>
               </thead>
@@ -999,7 +999,6 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       {openSlot === 'top' && (
         <PickerModal
           title={category === 'enchant' ? 'Choose an item' : 'Choose a recipe'}
-          maxWidth={isConsumableLike ? 560 : undefined}
           options={topOptions}
           tabs={topTabs}
           onPick={handleTopPick}

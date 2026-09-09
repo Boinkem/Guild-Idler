@@ -91,9 +91,24 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
         sublabel: `${owner} -- ${atMax ? 'max refinement' : `+${i.plus}/${MAX_PLUS}`}`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
         rarity: d.rarity,
+        // 'equipped'/'unequipped' plus the owning hero's own id (patch
+        // 0349, direct report) -- an unequipped (stash) item only ever
+        // gets the one tag, an equipped item gets both so it shows up
+        // under "Equipped" and under that specific hero's own tab.
+        tags: heroId ? ['equipped', heroId] : ['unequipped'],
       };
     })
     .filter((o): o is PickerOption => o !== null);
+
+  // Equipped/Unequipped first, then one tab per hero -- a hero with
+  // nothing equipped still gets a tab (an empty "nothing here yet" tab
+  // reads as "this hero has no gear," which is real information, not
+  // just an empty state to hide).
+  const itemTabs = [
+    { id: 'equipped', label: 'Equipped' },
+    { id: 'unequipped', label: 'Unequipped' },
+    ...state.heroes.map((h) => ({ id: h.id, label: h.name })),
+  ];
 
   function handleEnhance() {
     if (!item) return;
@@ -148,6 +163,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose an item"
           options={options}
+          tabs={itemTabs}
           onPick={(key) => setPreviewUid(key)}
           onClose={() => setOpenPicker(false)}
         />
