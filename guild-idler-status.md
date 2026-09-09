@@ -28127,6 +28127,114 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Armour Infusion shares Weapon Enchanting's art, picker grids, Alchemist rework (patch 0346)
+```discord-update
+Dev Update | Armour Infusion, Picker Tables, Alchemist Rework
+
+- Changed Armour Infusion to the same two-slot scene as Weapon Enchanting -- pick armor, then pick an infusion from a table
+- Changed the weapon/infusion pickers on both screens to a proper grid of icons and names instead of a scrolling list
+- Added new Alchemist artwork with a single click-to-craft slot
+- Changed Alchemist crafting to one step -- pick a recipe from a table that shows exactly what you can and can't afford, in red or green, no manual material selection
+```
+
+Three direct reports bundled into one patch: Armour Infusion adopting
+Weapon Enchanting's new two-slot art outright, a genuine grid layout for
+every item/enchant/infusion picker that asked for one, and a full rework
+of how the Alchemist crafts consumables.
+
+**Armour Infusion now shares Weapon Enchanting's own scene
+(`ArmourInfusionStation.tsx`).** Direct report: "Armour infusion will use
+the same 2 button art as the new Weapon Enchant art." `INFUSE_BG`/
+`ITEM_SLOT`/`ENCHANT_SLOT` (patch 0345's `WeaponEnchantStation.tsx`) are
+now exported and imported here directly rather than duplicated --
+both stations paint onto the identical `infuse.jpg`/`bright/infuse.jpg`
+canvas, so a second hand-measured copy of the same rects would just be a
+second place to drift out of sync with the art. Scene class switched
+from its own `.armor-infusion-scene` (a dedicated 1448x1086 aspect-ratio
+lock for the old dedicated `armor-infusion.jpg`) to the shared
+`.craft-scene` class every 1402x1122-canvas station already uses. The
+old `armor-infusion.jpg` and its now-unreferenced `.armor-infusion-scene`
+CSS are left in place, not deleted -- same "orphaned rather than pruned"
+treatment `gearenhance.jpg` already gets, in case dedicated Armour
+Infusion art comes back later. Functionally unchanged otherwise: still
+armor-only, still the same `gemOptions`/`craftAndInfuse` flow.
+
+**Picker tables are now an actual grid where it was asked for
+(`CraftingStation.tsx`'s `PickerModal`).** Direct report: even though
+`PickerModal` was already rebuilt into a real `<table>` (an earlier
+pass), a single option per full-width row still reads as "a scrolling
+1-by-1 list" once every row is a whole item card. New `layout='grid'`
+prop (default stays `'rows'`, every existing picker -- recipes, gear/
+enchant bonus picks, the Alchemist's own recipe table -- is unchanged)
+renders a CSS grid of square icon+name cards instead (new
+`.craft-picker-grid`/`.craft-picker-grid-card` classes in `app.css`),
+several per row, matching the "a little square and name for each one
+available" ask directly. Applied to all four pickers this was asked for:
+Weapon Enchanting's weapon and enchant pickers, Armour Infusion's armor
+and resistance-gem pickers. `PickerOption.sublabel` widened from `string`
+to `ReactNode` alongside this so a grid card (or a table row) can carry
+richer content than plain text -- every existing plain-string sublabel
+still works unchanged.
+
+**Alchemist crafting collapsed to one step
+(`CraftingStation.tsx`, category `'consumable'` only -- `'charm'` is
+untouched, see below).** Direct report: "click middle button, presents a
+full table of available craftables. No need to select the resources
+manually... missing materials should show a red number, and if you have
+the required materials, should show green."
+- New commissioned `consumable.jpg`/`bright/consumable.jpg` art, single
+  centred slot, same 1402x1122 canvas the other categories already
+  share -- `SCENE_CLASS.consumable` now points at `.craft-scene` instead
+  of its own `.consumable-scene` (built for the old
+  `Alchemist_Crafting_Box.png` this replaces, 1277x1232 -- left
+  unreferenced in `app.css` rather than deleted, same treatment
+  `.armor-infusion-scene` gets above). `SLOT_RECTS.consumable` re-measured
+  to one `top` rect; `bottomLeft`/`bottomRight` kept as unused
+  placeholders (the `Record` type requires all three), same convention
+  `gem`'s own comment already explains.
+- New `materialBadges()` helper builds the live have/need readout --
+  red below what's needed, green once met, same colour convention (and
+  reusing the exact same numbers) the existing below-scene summary row
+  already computed. `topOptions` for `'consumable'` now uses this as
+  each recipe's `sublabel` instead of the flat description text every
+  other category's recipe picker still shows, so every recipe's
+  affordability is visible in the table at a glance rather than needing
+  to pick one first. New `.craft-picker-td-detail.rich` CSS resets the
+  row layout's default single-line ellipsis truncation for this
+  multi-badge content specifically -- every other picker's plain-string
+  sublabel is untouched. The recipe table opens at 560px instead of the
+  row layout's default 420px to give the badge row room.
+- The old three-slot layout's two extra boxes (Materials, Choose a
+  bonus) are gone for `consumable` -- confirmed against
+  `crafting-recipes.json` that materials were never a real choice
+  (`recipe.materialCost` is a fixed dict, no alternate-material path
+  exists) and were already auto-confirmed the instant a recipe was
+  picked before this patch (patch 0247), so that box was pure
+  ceremony. The one actual choice, a bonus stat
+  (`recipe.modsToPick > 0`), applies to exactly 1 of the 17 consumable/
+  charm recipes today (`craft_trail_meal`) -- confirmed by enumerating
+  `crafting-recipes.json` before deciding how to handle it. Rather than
+  design a whole extra slot into the new single-slot art for one recipe,
+  it's a plain text button below the scene now (`Choose a bonus (0/1)`,
+  same wording pattern the old slot's label used), shown only when the
+  selected recipe actually has one -- opens the exact same bonus picker
+  (`openSlot === 'bottomRight'`) the JSX already wires up, unchanged.
+- **`charm` is deliberately untouched.** It still shares `enchant.jpg`'s
+  three-slot layout and its own Materials/bonus boxes exactly as before
+  -- the JSX gate that used to be `isConsumableLike` (`consumable` OR
+  `charm`) for those two boxes is now `category === 'charm'` only. The
+  `isConsumableLike` flag itself stays, still driving `canCraft`'s
+  shared affordability check for both categories -- only which category
+  gets the two boxes on-canvas changed.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live in-app playtest in this
+environment (no browser available) -- worth a real-window pass across
+all three changes: the grid pickers at actual card sizes, the
+Alchemist's recipe table with several materials at once (does the badge
+row wrap sensibly at 560px), and Armour Infusion's slots against the
+shared art now that it's a different canvas shape than before.
+
 ### Enchanter: new art, Guild's Mood support, Weapon Enchanting rebuilt (patch 0345)
 ```discord-update
 Dev Update | Enchanter Art & Weapon Enchanting Rework

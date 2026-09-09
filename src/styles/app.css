@@ -4238,13 +4238,15 @@ button.harvest-item:hover {
   overflow: hidden;
 }
 
-/* Alchemist's own crafting scene (patch 0242) -- Alchemist_Crafting_Box.png's
-   canvas (1277x1232) isn't the shared 1402:1122 ratio the other three
-   categories' art uses, so it needs its own aspect-ratio lock rather than
-   reusing .craft-scene directly, same shape as .armor-infusion-scene /
-   .hatchery-select-scene below already use when their own art's ratio
-   didn't match either. Slot rects (SLOT_RECTS.consumable in
-   CraftingStation.tsx) are hand-measured against this exact canvas. */
+/* Alchemist's own crafting scene -- was Alchemist_Crafting_Box.png's own
+   1277x1232 canvas (patch 0242), needing its own aspect-ratio lock since
+   that didn't match the shared 1402:1122 ratio the other categories'
+   art uses. Unreferenced as of patch 0346: the Alchemist's new
+   commissioned consumable.jpg landed on that same shared 1402:1122
+   canvas, so CraftingStation.tsx's SCENE_CLASS now points `consumable`
+   at .craft-scene like everything else. Left in place rather than
+   deleted, same "orphaned rather than pruned" treatment gearenhance.jpg
+   already gets. */
 .consumable-scene {
   position: relative;
   width: 100%;
@@ -4338,8 +4340,13 @@ button.harvest-item:hover {
 
 /* Same shape again -- armorinfusion.jpg's own canvas is also 1448x1086,
    not the 1402x1122 the original three crafting scenes (gear/consumable/
-   enchant) use. Two real slot cutouts this time (gear top, gem bottom),
-   unlike Weapon Enchanting's single-slot infuse.jpg. */
+   enchant) use. Unreferenced as of patch 0346: ArmourInfusionStation.tsx
+   now shares Weapon Enchanting's own infuse.jpg scene (.craft-scene)
+   outright rather than painting its own dedicated art -- see that
+   component's own doc comment. Left in place rather than deleted, same
+   "orphaned rather than pruned" treatment .consumable-scene above and
+   gearenhance.jpg already get, in case dedicated Armour Infusion art
+   replaces this shared arrangement again later. */
 .armor-infusion-scene {
   position: relative;
   width: 100%;
@@ -4556,6 +4563,77 @@ button.harvest-item:hover {
   white-space: nowrap;
 }
 .craft-picker-check { color: var(--brass); font-weight: 700; }
+
+/* Rich (non-string) Details content -- the Alchemist's own recipe table
+   (patch 0346) puts a wrapping row of colour-coded material/gold badges
+   here (materialBadges() in CraftingStation.tsx) instead of a plain
+   description sentence. .craft-picker-td-detail's own ellipsis-on-one-
+   line treatment above is right for a short flavour string but would
+   clip a multi-badge row -- this modifier (applied only when the
+   sublabel isn't a plain string, see the JSX's own ternary) resets that
+   back to normal wrapping instead. */
+.craft-picker-td-detail.rich {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+}
+
+/* Grid variant of the same picker popup (patch 0346, direct report) --
+   PickerModal's `layout='grid'` prop. A single-column `<table>` still
+   reads as a scrolling list once every row is a whole item card; this
+   lays several square icon+name cards per row instead, for the item
+   pickers (Weapon Enchanting, Armour Infusion) and their own enchant/
+   infusion pickers. Same overlay/modal shell and `.craft-picker-*`
+   colour language as the row layout, just a CSS grid of cards instead of
+   a table body. */
+.craft-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.craft-picker-grid-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+  color: var(--parchment);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.craft-picker-grid-card:hover:not(:disabled) { border-color: var(--brass); background: var(--panel-3); }
+.craft-picker-grid-card:focus-visible { outline: 2px solid var(--brass-dim); outline-offset: -2px; }
+.craft-picker-grid-card:disabled, .craft-picker-grid-card.disabled { opacity: 0.4; cursor: default; }
+.craft-picker-grid-card.selected { border-color: var(--brass); background: var(--panel-3); }
+.craft-picker-grid-icon { display: flex; align-items: center; justify-content: center; height: 40px; }
+.craft-picker-grid-name {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.craft-picker-grid-sub { line-height: 1.2; }
+.craft-picker-grid-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--brass);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
 
 /* ------------------------------ gear score badge ---------------------------- */
 /* Colour-banded like RarityPill (see gearScoreTier in data/equipment.ts),

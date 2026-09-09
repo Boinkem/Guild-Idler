@@ -28,11 +28,11 @@ type Category = CraftingRecipeDef['category'];
  * so Guild's Mood ("bright" setting, patch 0305/0309) can swap in a
  * lore/crafting/bright/<file> counterpart the same way VendorsPanel's own
  * vendor-scene wrapper already does (patch 0344, direct report -- this
- * station-level scene had been left out of that pass entirely). Only
- * `gear` (the Blacksmith's own forge) has real bright/ art committed so
- * far; every other category just keeps showing its dim image via the same
- * "missing file quietly fails to paint" convention backgroundSrc already
- * relies on elsewhere -- no per-category gating needed here.
+ * station-level scene had been left out of that pass entirely). `gear`
+ * (0344), `enchant`/`charm` (0345), and now `consumable` (0346) all have
+ * real bright/ art committed; `gem` still just keeps showing its dim image
+ * via the same "missing file quietly fails to paint" convention this game
+ * already relies on elsewhere until it gets commissioned art of its own.
  */
 const STATION_BG: Record<Category, string> = {
   gear: './lore/crafting/gear.jpg',
@@ -53,15 +53,16 @@ const STATION_TITLE: Record<Category, string> = {
 
 /**
  * Which locked-aspect-ratio CSS class each category's scene uses (patch
- * 0242) -- gear/enchant/gem/charm still share .craft-scene's 1402:1122
- * canvas, but consumable moved to its own differently-shaped art
- * (Alchemist_Crafting_Box.png, 1277x1232) and needs its own class
- * (.consumable-scene, app.css) with a matching aspect-ratio, same
- * pattern .armor-infusion-scene/.hatchery-select-scene already use for
- * their own off-ratio art.
+ * 0242) -- gear/enchant/gem/charm/consumable all share .craft-scene's
+ * 1402:1122 canvas as of patch 0346 (the Alchemist's new commissioned
+ * art landed on that same shared canvas, so `.consumable-scene`'s own
+ * 1277:1232 lock -- built for the old Alchemist_Crafting_Box.png this
+ * replaces -- is no longer needed here; left in app.css unused rather
+ * than deleted, same "orphaned rather than pruned" treatment
+ * gearenhance.jpg already gets).
  */
 const SCENE_CLASS: Record<Category, string> = {
-  gear: 'craft-scene', consumable: 'consumable-scene', enchant: 'craft-scene', gem: 'craft-scene', charm: 'craft-scene',
+  gear: 'craft-scene', consumable: 'craft-scene', enchant: 'craft-scene', gem: 'craft-scene', charm: 'craft-scene',
 };
 
 export interface Rect { left: number; top: number; width: number; height: number; }
@@ -81,16 +82,20 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
     bottomLeft: { left: 30.0, top: 53.1, width: 15.4, height: 19.3 },
     bottomRight: { left: 53.9, top: 53.1, width: 15.4, height: 19.3 },
   },
+  // Re-measured against the Alchemist's new commissioned consumable.jpg
+  // (patch 0346, direct report) -- one single centred slot now, same
+  // "recipe picker only" shape EnhanceStation's own SLOT_RECT uses,
+  // replacing the old three-slot Alchemist_Crafting_Box.png layout. Only
+  // `top` is ever rendered for this category now (see the scene JSX
+  // below -- no bottomLeft/bottomRight block for `consumable` anymore,
+  // `charm` keeps its own three-slot block since it still shares
+  // enchant.jpg's layout, not this). bottomLeft/bottomRight kept as a
+  // harmless centered placeholder, same convention `gem`'s own comment
+  // explains, since the Record type requires all three either way.
   consumable: {
-    // Hand-measured against Alchemist_Crafting_Box.png's own 1277x1232
-    // canvas (patch 0242) -- replaced the old transparent-square art, so
-    // these four numbers per slot moved too, same as any other art swap
-    // here would require. See .consumable-scene in app.css for why this
-    // category gets its own aspect-ratio lock instead of reusing
-    // .craft-scene's shared 1402:1122 one.
-    top: { left: 40.80, top: 24.68, width: 15.51, height: 19.00 },
-    bottomLeft: { left: 30.00, top: 46.51, width: 18.01, height: 18.34 },
-    bottomRight: { left: 51.92, top: 46.51, width: 18.01, height: 18.34 },
+    top: { left: 41.1, top: 36.7, width: 17.7, height: 22.1 },
+    bottomLeft: { left: 41.1, top: 36.7, width: 17.7, height: 22.1 },
+    bottomRight: { left: 41.1, top: 36.7, width: 17.7, height: 22.1 },
   },
   // Re-measured against the new commissioned enchant.jpg (patch 0345,
   // direct report -- the new art's painted frames run noticeably larger
@@ -137,7 +142,16 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
 export interface PickerOption {
   key: string;
   label: string;
-  sublabel?: string;
+  /**
+   * Plain text in almost every picker (a recipe's flavour text, an
+   * item's owner). Widened to ReactNode (patch 0346) so the Alchemist's
+   * recipe table can show live colour-coded have/need material badges
+   * here instead of a flat description string -- see materialBadges()
+   * below. `hasSublabels`'s truthy check and the `<td>`/grid-card render
+   * both already just drop whatever's passed straight into JSX, so a
+   * plain string still works unchanged everywhere else.
+   */
+  sublabel?: ReactNode;
   icon?: ReactNode;
   disabled?: boolean;
   /** Actual equipment only -- a recipe (crafting/enchant/gem/charm) has
@@ -198,12 +212,22 @@ export function SlotBox({
  * click-to-pick behaviour the old `<button>` row had, plus explicit
  * `role="button"`/`tabIndex`/`onKeyDown` so keyboard activation (Enter or
  * Space) still works the way a native button's did for free.
+ *
+ * `layout='grid'` (patch 0346, direct report) is a second rendering mode
+ * for the same options/onPick/selectedKeys contract -- a single-column
+ * `<tr>` still reads as "a scrolling 1-by-1 list" even wrapped in a
+ * `<table>`, which is what prompted this: item pickers (Weapon Enchanting,
+ * Armour Infusion) and their enchant/infusion pickers now want several
+ * square icon+name cards per row instead. Deliberately not a blanket
+ * default -- every other picker (recipes, gear/enchant bonus picks, the
+ * Alchemist's own recipe table) still wants the row shape's room for a
+ * Details column, so `layout` defaults to 'rows' and call sites opt in.
  */
 export function PickerModal({
-  title, options, onPick, onClose, closeOnPick = true, selectedKeys,
+  title, options, onPick, onClose, closeOnPick = true, selectedKeys, layout = 'rows', maxWidth,
 }: {
   title: string; options: PickerOption[]; onPick: (key: string) => void; onClose: () => void;
-  closeOnPick?: boolean; selectedKeys?: string[];
+  closeOnPick?: boolean; selectedKeys?: string[]; layout?: 'rows' | 'grid'; maxWidth?: number;
 }) {
   const hasSublabels = options.some((o) => o.sublabel);
   const pick = (opt: PickerOption) => {
@@ -213,7 +237,7 @@ export function PickerModal({
   };
   return (
     <div className="overlay" style={{ zIndex: 60 }} onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: maxWidth ?? (layout === 'grid' ? 520 : 420) }} onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">{title}</span>
           <button className={closeOnPick ? '' : 'btn-primary'} onClick={onClose}>
@@ -221,7 +245,30 @@ export function PickerModal({
           </button>
         </div>
         {options.length === 0 && <p className="small muted">Nothing available yet.</p>}
-        {options.length > 0 && (
+        {options.length > 0 && layout === 'grid' && (
+          <div className="craft-picker-grid">
+            {options.map((opt) => {
+              const selected = selectedKeys?.includes(opt.key) ?? false;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  className={`craft-picker-grid-card ${selected ? 'selected' : ''} ${opt.disabled ? 'disabled' : ''}`}
+                  disabled={opt.disabled}
+                  onClick={() => pick(opt)}
+                  style={opt.rarity ? { borderColor: RARITY_COLOR[opt.rarity] } : undefined}
+                  title={opt.label}
+                >
+                  <span className="craft-picker-grid-icon">{opt.icon ?? null}</span>
+                  <span className="craft-picker-grid-name" style={opt.rarity ? { color: RARITY_COLOR[opt.rarity] } : undefined}>{opt.label}</span>
+                  {opt.sublabel != null && <span className="craft-picker-grid-sub tiny muted">{opt.sublabel}</span>}
+                  {selected && <span aria-hidden="true" className="craft-picker-grid-check">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {options.length > 0 && layout === 'rows' && (
           <div className="craft-picker-list">
             <table className="craft-picker-table">
               <thead>
@@ -252,7 +299,9 @@ export function PickerModal({
                           every browser once collapse is in effect. */}
                       <td className="craft-picker-td-icon" style={opt.rarity ? { borderLeftColor: RARITY_COLOR[opt.rarity] } : undefined}>{opt.icon ?? null}</td>
                       <td className="craft-picker-td-name" style={opt.rarity ? { color: RARITY_COLOR[opt.rarity] } : undefined}>{opt.label}</td>
-                      {hasSublabels && <td className="tiny muted craft-picker-td-detail">{opt.sublabel}</td>}
+                      {hasSublabels && (
+                        <td className={`tiny muted craft-picker-td-detail ${typeof opt.sublabel !== 'string' ? 'rich' : ''}`}>{opt.sublabel}</td>
+                      )}
                       <td className="craft-picker-td-check">{selected && <span aria-hidden="true" className="craft-picker-check">✓</span>}</td>
                     </tr>
                   );
@@ -452,6 +501,45 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     })()
     : (recipe ? <RecipeIcon icon={recipe.icon} category={category} size={88} /> : null);
 
+  /**
+   * Live colour-coded have/need readout for one recipe -- red number
+   * below what's needed, green once met, same colour convention the
+   * existing per-recipe summary row below the scene already uses
+   * (`.tiny.bad`/`.tiny.good`). Pulled into its own helper (patch 0346,
+   * direct report) so the Alchemist's recipe table can show this same
+   * breakdown inline per row instead of the flat description string
+   * every other category's recipe picker uses -- see topOptions' own
+   * `consumable` branch below. Deliberately not reused inside the
+   * existing below-scene summary block (materialIds.map(...) further
+   * down): that block is already correct and untouched by this patch,
+   * this is purely an additional presentation of the same numbers.
+   */
+  function materialBadges(r: CraftingRecipeDef): ReactNode {
+    const ids = Object.keys(r.materialCost) as MaterialId[];
+    return (
+      <span className="row wrap" style={{ gap: 6, alignItems: 'center' }}>
+        {ids.map((id) => {
+          const material = MATERIAL_BY_ID[id];
+          const need = r.materialCost[id] ?? 0;
+          const have = state.materials[id] ?? 0;
+          const short = have < need;
+          return (
+            <span key={id} className="row" style={{ gap: 3, alignItems: 'center' }} title={`${material.name}: have ${have}, need ${need}`}>
+              <MaterialIcon icon={material.icon} glyph={material.glyph} size={16} />
+              <span className={`tiny ${short ? 'bad' : 'good'}`}>{have}/{need}</span>
+            </span>
+          );
+        })}
+        {!!r.scrapCost && (
+          <span className={`tiny ${state.scrap < r.scrapCost ? 'bad' : 'good'}`}>⚙ {state.scrap}/{r.scrapCost}</span>
+        )}
+        <span className={`tiny ${state.gold < CraftingManager.goldCost(state, r) ? 'bad' : 'good'}`}>
+          {'\u25c6'} {formatGold(state.gold)}/{formatGold(CraftingManager.goldCost(state, r))}
+        </span>
+      </span>
+    );
+  }
+
   const topOptions: PickerOption[] = category === 'enchant'
     ? EquipmentManager.allItems(state).map(({ item, heroId }): PickerOption | null => {
       const def = EquipmentManager.def(item);
@@ -462,10 +550,24 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         icon: <ItemIcon slot={def.slot} icon={def.icon} size={40} />,
       };
     }).filter((o): o is PickerOption => o !== null)
-    : recipes.map((r) => ({
-      key: r.id, label: r.name, sublabel: r.description,
-      icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
-    }));
+    // Alchemist's own recipe table (patch 0346, direct report): "no need
+    // to select the resources manually, the recipe should just show what
+    // you can and can't craft" -- swaps the flat description sublabel
+    // every other category's recipe picker shows for the live
+    // materialBadges() readout instead, so affordability is visible for
+    // every recipe at a glance rather than needing to pick one first.
+    // Not gated on affordability (`disabled` stays unset) -- an
+    // out-of-reach recipe is still worth picking to see its full
+    // breakdown and start gathering toward it, same as it always was.
+    : category === 'consumable'
+      ? recipes.map((r) => ({
+        key: r.id, label: r.name, sublabel: materialBadges(r),
+        icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
+      }))
+      : recipes.map((r) => ({
+        key: r.id, label: r.name, sublabel: r.description,
+        icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
+      }));
 
   // Enchant's top slot picks an existing item (unlike every other
   // category's top slot, which picks a recipe) -- routed through a preview
@@ -632,7 +734,16 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         </>
       )}
 
-      {isConsumableLike && (
+      {/* charm keeps the old three-slot layout (still on enchant.jpg's
+          shared canvas) -- consumable dropped these two boxes entirely
+          in patch 0346's single-slot Alchemist rework (see SLOT_RECTS.
+          consumable's own comment): materials are still auto-confirmed
+          the instant a recipe is picked (pickRecipe, unchanged), there's
+          just no separate box left to open/close for it, and the one
+          consumable recipe with a bonus to pick (modsToPick > 0) gets a
+          plain text button below the scene instead -- see that button
+          just after this scene block. */}
+      {category === 'charm' && (
         <>
           {/* Auto-confirmed the instant a recipe is picked (see pickRecipe's
               own comment) -- no longer a required click. Still openable to
@@ -717,6 +828,28 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           </p>
         )}
 
+        {/* Consumable's one remaining choice beyond the recipe itself
+            (patch 0346) -- almost every consumable/charm recipe has
+            modsToPick === 0 (confirmed against crafting-recipes.json:
+            16 of 17 do), so this only ever actually shows up for
+            craft_trail_meal today. A plain text button rather than a
+            SlotBox since the new single-slot Alchemist art has nowhere
+            left to paint a second frame -- opens the exact same bonus
+            picker (openSlot 'bottomRight') charm's own SlotBox already
+            triggers below, just from off-canvas instead of on it. */}
+        {category === 'consumable' && recipe && modsToPick > 0 && (
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ margin: '0 0 8px', width: '100%' }}
+            onClick={() => setOpenSlot('bottomRight')}
+          >
+            {chosenConsumableMods.length > 0
+              ? `Bonus: ${chosenConsumableMods.map((m) => `+${recipe.modValue}% ${MOD_LABEL[m]}`).join(', ')}`
+              : `Choose a bonus (${chosenConsumableMods.length}/${modsToPick})`}
+          </button>
+        )}
+
         {/* Cost on the button label mirrors VendorsPanel's "Buy · <cost>" /
             "Level up · <cost>" convention -- every other paid action in the
             game already shows its price right on the button, this was the
@@ -739,6 +872,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       {openSlot === 'top' && (
         <PickerModal
           title={category === 'enchant' ? 'Choose an item' : 'Choose a recipe'}
+          maxWidth={category === 'consumable' ? 560 : undefined}
           options={topOptions}
           onPick={handleTopPick}
           onClose={() => setOpenSlot(null)}

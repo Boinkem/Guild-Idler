@@ -16,23 +16,29 @@ import type { PickerOption, Rect } from './CraftingStation';
  * matching the convention EnhanceStation's own ENHANCE_BG established in
  * 0344) so it can run through backgroundSrc() below. A
  * lore/crafting/bright/infuse.jpg counterpart ships alongside this
- * patch's new night art.
+ * patch's new night art. Exported (patch 0346) so ArmourInfusionStation
+ * can reuse the exact same art -- direct report: Armour Infusion now
+ * shares this station's own two-slot scene rather than getting its own
+ * dedicated background.
  */
-const INFUSE_BG = './lore/crafting/infuse.jpg';
+export const INFUSE_BG = './lore/crafting/infuse.jpg';
 
 /**
  * Two slots now -- item up top, which enchant (element+tier) below --
- * matching Armour Infusion's own GEAR_SLOT/GEM_SLOT layout one-for-one
- * (patch 0345, direct report). Replaces the old single ITEM_SLOT plus a
- * pair of chip rows underneath the scene for element then tier; that
- * picker now lives in the bottom slot's own PickerModal table instead,
- * same "click a slot, get a table" shape every other station already
- * uses. Hand-measured against the new commissioned infuse.jpg's own
- * 1402x1122 canvas via the same connected-components pass as every other
- * station's real art.
+ * originally matched Armour Infusion's own GEAR_SLOT/GEM_SLOT layout
+ * (patch 0345, direct report); as of patch 0346 Armour Infusion imports
+ * these exact same rects instead of keeping its own copy, since both
+ * stations now share this identical infuse.jpg scene outright -- see
+ * ArmourInfusionStation.tsx's own doc comment. Replaces the old single
+ * ITEM_SLOT plus a pair of chip rows underneath the scene for element
+ * then tier; that picker now lives in the bottom slot's own PickerModal
+ * table instead, same "click a slot, get a table" shape every other
+ * station already uses. Hand-measured against the new commissioned
+ * infuse.jpg's own 1402x1122 canvas via the same connected-components
+ * pass as every other station's real art.
  */
-const ITEM_SLOT: Rect = { left: 41.6, top: 23.3, width: 16.6, height: 21.0 };
-const ENCHANT_SLOT: Rect = { left: 41.6, top: 49.5, width: 16.7, height: 20.9 };
+export const ITEM_SLOT: Rect = { left: 41.6, top: 23.3, width: 16.6, height: 21.0 };
+export const ENCHANT_SLOT: Rect = { left: 41.6, top: 49.5, width: 16.7, height: 20.9 };
 
 /**
  * Weapon-only now -- moved here from the Blacksmith (was a single
@@ -166,6 +172,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
           options={itemOptions}
           onPick={(key) => setPreviewUid(key)}
           onClose={() => setOpenItemPicker(false)}
+          layout="grid"
         />
       )}
 
@@ -194,6 +201,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
             setTier(t);
           }}
           onClose={() => setOpenEnchantPicker(false)}
+          layout="grid"
         />
       )}
     </div>

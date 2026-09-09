@@ -1,31 +1,41 @@
 import { useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CraftingManager } from '../game/managers/CraftingManager';
 import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
 import { ElementType, GemTier } from '../game/types';
 import { formatGold, RARITY_COLOR } from '../game/util';
+import { backgroundSrc } from '../game/settings';
 import { ItemIcon } from './icons';
-import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
-import type { PickerOption, Rect } from './CraftingStation';
-
-/** Hand-measured against armor-infusion.jpg's own 1448x1086 canvas via a
- *  connected-components pass (largest dark region near each cutout),
- *  same method used for every other station's real art. */
-const GEAR_SLOT: Rect = { left: 43.3, top: 27.3, width: 12.5, height: 17.2 };
-const GEM_SLOT: Rect = { left: 44.4, top: 50.1, width: 12.1, height: 17.2 };
+import {
+  ItemPreviewModal, PickerModal, SlotBox,
+} from './CraftingStation';
+import type { PickerOption } from './CraftingStation';
+import { INFUSE_BG, ITEM_SLOT, ENCHANT_SLOT } from './WeaponEnchantStation';
 
 /**
  * Armor-only -- renamed and rebuilt from what used to be "Gems" (a plain
- * recipe-crafting screen with no item selection at all). Now works like
- * Crafting: gear up top, gem at the bottom, Infuse. Same collapsed
+ * recipe-crafting screen with no item selection at all). Works like
+ * Weapon Enchanting: gear up top, infusion below, Infuse. Same collapsed
  * craft-then-apply flow Weapon Enchanting uses (see
  * CraftingManager.craftAndInfuse) -- picking an element that isn't
  * already in inventory crafts a fresh Resistance Gem on the spot as part
  * of the same Infuse click.
+ *
+ * Patch 0346, direct report: this station now shares Weapon Enchanting's
+ * own two-slot scene outright (INFUSE_BG/ITEM_SLOT/ENCHANT_SLOT,
+ * imported rather than duplicated) instead of its own dedicated
+ * armor-infusion.jpg -- both stations paint onto the exact same
+ * commissioned art now. The old armor-infusion.jpg (and its own
+ * .armor-infusion-scene aspect-ratio class in app.css) are left in place
+ * but unreferenced, same "orphaned rather than pruned" treatment
+ * gearenhance.jpg already gets, in case dedicated Armour Infusion art
+ * ever replaces this shared-scene arrangement again.
  */
 export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
+  const { settings } = useSettings();
   const state = engine.state;
 
   const [targetUid, setTargetUid] = useState('');
@@ -105,15 +115,15 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
           <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
 
-        <div className="armor-infusion-scene" style={{ backgroundImage: 'url(./lore/crafting/armor-infusion.jpg)' }}>
+        <div className="craft-scene" style={{ backgroundImage: `url(${backgroundSrc(INFUSE_BG, settings.backgroundMood)})` }}>
           <SlotBox
-            rect={GEAR_SLOT}
-            filled={def && item ? <ItemIcon slot={def.slot} icon={def.icon} size={72} /> : null}
+            rect={ITEM_SLOT}
+            filled={def && item ? <ItemIcon slot={def.slot} icon={def.icon} size={88} /> : null}
             label="Choose armor to infuse"
             onOpen={() => setOpenItemPicker(true)}
           />
           <SlotBox
-            rect={GEM_SLOT}
+            rect={ENCHANT_SLOT}
             filled={element && tier ? (
               <span className="craft-slot-label" style={{ fontSize: '1.6rem', color: RARITY_COLOR[tier] }}>{ELEMENT_GLYPH[element]}</span>
             ) : null}
@@ -143,6 +153,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
           options={itemOptions}
           onPick={(key) => setPreviewUid(key)}
           onClose={() => setOpenItemPicker(false)}
+          layout="grid"
         />
       )}
 
@@ -171,6 +182,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
             setTier(t);
           }}
           onClose={() => setOpenGemPicker(false)}
+          layout="grid"
         />
       )}
     </div>
