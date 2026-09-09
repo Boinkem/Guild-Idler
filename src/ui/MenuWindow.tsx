@@ -211,7 +211,7 @@ const PANEL_BREAKDOWNS: Partial<Record<TabId, string[]>> = {
   raids: [
     'Multi-hero expeditions -- bigger rewards, longer odds, and the whole party is committed until it resolves.',
     'Pick a difficulty tier and see each encounter’s odds before sending the party in.',
-    "The Quartermaster's Den holds raid-only upgrades that never affect regular quests.",
+    "Raid-only upgrades that never affect regular quests live in the Guild Hall now, under the Raids filter.",
   ],
   lore: [
     "The story so far -- every quest chain your guild has uncovered, underway or completed.",

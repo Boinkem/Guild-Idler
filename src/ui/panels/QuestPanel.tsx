@@ -4,14 +4,13 @@ import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
-import { QUEST_FAST_UPGRADE_BY_ID } from '../../game/data/questFastUpgrades';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import {
   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
 } from '../../game/data/quests';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { QuestOffer, Hero, AutoChainWeightBy } from '../../game/types';
-import { formatDuration, formatGold, formatNumber } from '../../game/util';
+import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
 import { ConfirmModal } from '../ConfirmModal';
@@ -473,56 +472,6 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
   );
 }
 
-/**
- * Patch 0332, direct request: "a new expensive upgrade to increase
- * chances" for how often a quest offer rolls Fast. Patch 0333 (Steady
- * Hands) reused this same row rather than copying it -- both entries
- * are single-effect, single-currency-path upgrades that only differ in
- * which one number they move and how that number's described, so
- * `effectText`/`icon` are passed in rather than read off a field this
- * component would otherwise have to know how to interpret per-id.
- * Deliberately a compact single row (not the full detail-modal
- * RaidsPanel's own upgrade-row pattern uses) -- a whole modal-on-click
- * affordance for a two-entry tree would be more chrome than the feature
- * currently needs.
- */
-function QuestFastUpgradeRow({ id, icon, effectText }: { id: string; icon: string; effectText: string }) {
-  const engine = useEngine();
-  const state = engine.state;
-  const def = QUEST_FAST_UPGRADE_BY_ID[id];
-  const level = GuildManager.questFastUpgradeLevel(state, def.id);
-  const next = GuildManager.nextQuestFastUpgradeCost(state, def.id);
-  const maxed = next === null;
-  const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
-  const buyLabel = maxed
-    ? 'Maxed'
-    : next!.currency === 'gold'
-      ? `Buy · ${formatGold(next!.cost)}`
-      : `Buy · ${formatNumber(next!.cost)} renown`;
-  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
-  return (
-    <div className="upgrade-row">
-      <span style={{ minWidth: 0 }}>
-        <span className="upgrade-row-head">
-          <span className="upgrade-row-name">{icon} {def.name}</span>
-          <span className="upgrade-row-level">{level}/{def.maxLevel}</span>
-        </span>
-        <span className="upgrade-row-effect">{effectText}</span>
-        <span className="upgrade-row-rule">
-          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
-        </span>
-      </span>
-      <button
-        className={`upgrade-buy-btn ${!maxed && afford ? 'affordable' : ''}`}
-        disabled={maxed || !afford}
-        onClick={() => engine.buyQuestFastUpgrade(def.id)}
-      >
-        {buyLabel}
-      </button>
-    </div>
-  );
-}
-
 export function QuestPanel() {
   const engine = useEngine();
   const now = useNow();
@@ -672,17 +621,6 @@ export function QuestPanel() {
           what's open to them.
         </p>
       </div>
-
-      <QuestFastUpgradeRow
-        id="lucky_streak"
-        icon="⚡"
-        effectText={`+${QUEST_FAST_UPGRADE_BY_ID['lucky_streak'].fastChancePctPerLevel}% Fast chance per level, every difficulty`}
-      />
-      <QuestFastUpgradeRow
-        id="steady_hands"
-        icon="🛡"
-        effectText={`+${QUEST_FAST_UPGRADE_BY_ID['steady_hands'].successPenaltyRecoveryPerLevel}% success back per level on Fast rolls`}
-      />
 
       {/* --------------------------- active quests --------------------------- */}
       {state.activeQuests.length > 0 && (

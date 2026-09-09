@@ -59,7 +59,7 @@ export const TAB_SUBTABS: Record<string, string[]> = {
   vendors: ['blacksmith', 'alchemist', 'enchanter'],
   harvest: ['warehouse', 'fields'],
   lore: ['quests', 'raids', 'collection'],
-  raids: ['raids', 'quartermaster'],
+  raids: ['raids'],
   stats: ['overview', 'achievements', 'results'],
   hatchery: ['home', 'pets'],
   // Board (existing) / Replay Memories (new, patch 0228) -- see

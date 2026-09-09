@@ -1700,7 +1700,7 @@ export interface RoleDef {
  * any game-logic code. Presentation-only, same scope as the
  * `shortEffect` field on UpgradeDef/GuildDef right below.
  */
-export type GuildHallCategory = 'Combat' | 'Economy' | 'Roster' | 'Care' | 'Unlocks';
+export type GuildHallCategory = 'Combat' | 'Economy' | 'Roster' | 'Care' | 'Unlocks' | 'Quests' | 'Raids';
 
 export interface UpgradeDef {
   id: string;

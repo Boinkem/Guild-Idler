@@ -2,25 +2,21 @@ import { useEffect, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
-import { isTabUnread } from '../../game/attention';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { RaidManager } from '../../game/managers/RaidManager';
 import { HeroManager } from '../../game/managers/HeroManager';
-import { GuildManager } from '../../game/managers/GuildManager';
 import {
   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON_DEFS, raidDifficultyIconSrc, RAID_DIFFICULTY_LABEL,
   isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
-import { RaidDifficulty, RaidEncounterDef, RaidUpgradeDef, RaidDef, ElementType, Hero, Role } from '../../game/types';
+import { RaidDifficulty, RaidEncounterDef, RaidDef, ElementType, Hero, Role } from '../../game/types';
 import { ROLE_BY_ID } from '../../game/data/progression';
 import { RoleIcon } from '../RoleIcon';
 import { RarityPill } from '../RarityPill';
-import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
-import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
 import { RaidPartySprites } from '../sprites/RaidPartySprites';
-import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
+import { formatDuration, describeMods, RARITY_COLOR } from '../../game/util';
 
 // Single-letter fallback badge (used only if the icon art at
 // public/raid-icons/<difficulty>.png is missing).
@@ -225,152 +221,6 @@ function EncounterElementTags({ encounter }: { encounter: RaidEncounterDef }) {
 
 /** Shared across every raid card -- clicking a discovered loot entry opens
  *  this instead of each card managing its own overlay state. */
-/**
- * Patch 0321: converted from a full .card to the shared dense
- * upgrade row -- see .upgrade-row's own comment in app.css. Only 3 of
- * these exist (Speed/Loot/Recovery), each still paired with its own
- * room sprite rendered above it in RaidQuartermasterDen below, which
- * this doesn't touch at all -- just what used to sit under the sprite.
- */
-function RaidUpgradeRow({ def }: { def: RaidUpgradeDef }) {
-  const engine = useEngine();
-  const state = engine.state;
-  const [showDetail, setShowDetail] = useState(false);
-  const level = GuildManager.raidUpgradeLevel(state, def.id);
-  const next = GuildManager.nextRaidUpgradeCost(state, def.id);
-  const maxed = next === null;
-  const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
-  const { flashes, dismiss } = useMaxFlash([{ id: def.id, name: def.name, level, maxLevel: def.maxLevel }]);
-  const flash = flashes[def.id];
-  const levelPulses = usePulsesOnChange([{ id: def.id, value: level }]);
-  const entries = describeMods(def.modsPerLevel).map((line) => `${line} per level`);
-  const effectText = entries.join(' · ');
-  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
-  const buyLabel = maxed
-    ? 'Fully upgraded'
-    : next!.currency === 'gold'
-      ? `Buy · ${formatGold(next!.cost)}`
-      : `Buy · ${formatNumber(next!.cost)} renown`;
-  return (
-    <div
-      className="upgrade-row"
-      onClick={() => setShowDetail(true)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
-    >
-      <span style={{ minWidth: 0 }}>
-        <span className="upgrade-row-head">
-          <span className="upgrade-row-name">{def.name}</span>
-          <span className={`upgrade-row-level ${levelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
-        </span>
-        <span className="upgrade-row-effect">{effectText}</span>
-        <span className="upgrade-row-rule">
-          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
-        </span>
-      </span>
-      <button
-        className={`upgrade-buy-btn ${!maxed && afford ? 'affordable' : ''}`}
-        disabled={maxed || !afford}
-        onClick={(e) => { e.stopPropagation(); engine.buyRaidUpgrade(def.id); }}
-      >
-        {buyLabel}
-      </button>
-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
-      {showDetail && (
-        <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="spread">
-              <span className="card-title">{def.name}</span>
-              <span className="small muted">{level}/{def.maxLevel}</span>
-            </div>
-            <p className="card-flavour" style={{ marginTop: 6 }}>{def.description}</p>
-            {entries.length > 0 && (
-              <div className="stat-row" style={{ marginBottom: 4 }}>
-                {entries.map((line) => <span key={line}>{line}</span>)}
-              </div>
-            )}
-            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
-              <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>{buyLabel}</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const RAID_SPEED_ID = 'raid_speed';
-const RAID_LOOT_ID = 'raid_loot';
-const RAID_RECOVERY_ID = 'raid_recovery';
-
-function roomSpriteLevel(def: RaidUpgradeDef, level: number): number {
-  // raid_loot and raid_recovery were built with exactly 3 levels (0-2), so
-  // they map onto their 3 images directly. raid_speed predates this visual
-  // system and spans up to 10 levels on an existing, tuned curve that isn't
-  // worth disturbing just to match 3 images -- it gets banded onto the
-  // same 3 states instead, at the same milestone its own cost curve
-  // already uses: still in the gold tier, or into/past the Renown tier.
-  if (def.id === RAID_SPEED_ID) {
-    if (level <= 0) return 0;
-    return level < def.goldTierMaxLevel ? 1 : 2;
-  }
-  return Math.max(0, Math.min(2, level));
-}
-
-function RaidQuartermasterDen() {
-  // Embedded directly in the Raids tab rather than the general Upgrades
-  // panel -- raids have been treated as their own separable system all
-  // along (own tab, own background, own resolution engine), and this
-  // tree only ever affects raids, so it lives where it matters rather
-  // than getting buried among quest-side upgrades. A weapon rack / skull
-  // / shelf visibly fill in as their matching upgrade is leveled, rather
-  // than a plain progress number doing all the work.
-  const engine = useEngine();
-  const state = engine.state;
-  const defs = GuildManager.raidUpgrades();
-  const speedDef = defs.find((d) => d.id === RAID_SPEED_ID);
-  const lootDef = defs.find((d) => d.id === RAID_LOOT_ID);
-  const recoveryDef = defs.find((d) => d.id === RAID_RECOVERY_ID);
-
-  return (
-    <div className="card" style={{ marginBottom: 12 }}>
-      <div className="card-title" style={{ marginBottom: 8 }}>The Raid Quartermaster's Den</div>
-      <p className="tiny muted" style={{ marginBottom: 10 }}>
-        Raid-only bonuses -- these never affect regular quests, and quest upgrades never affect raids either.
-        Early levels cost gold; deeper levels cost Renown.
-      </p>
-      <div className="grid two">
-        {speedDef && (
-          <div>
-            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
-              <RaidRoomSprite kind="rack" level={roomSpriteLevel(speedDef, GuildManager.raidUpgradeLevel(state, speedDef.id))} height={56} title={speedDef.name} />
-            </div>
-            <RaidUpgradeRow def={speedDef} />
-          </div>
-        )}
-        {lootDef && (
-          <div>
-            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
-              <RaidRoomSprite kind="skull" level={roomSpriteLevel(lootDef, GuildManager.raidUpgradeLevel(state, lootDef.id))} height={56} title={lootDef.name} />
-            </div>
-            <RaidUpgradeRow def={lootDef} />
-          </div>
-        )}
-        {recoveryDef && (
-          <div>
-            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
-              <RaidRoomSprite kind="shelf" level={roomSpriteLevel(recoveryDef, GuildManager.raidUpgradeLevel(state, recoveryDef.id))} height={56} title={recoveryDef.name} />
-            </div>
-            <RaidUpgradeRow def={recoveryDef} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => void }) {
   const def = EQUIPMENT_BY_ID[defId];
   if (!def) return null;
@@ -982,25 +832,18 @@ export function RaidsPanel() {
   const { settings } = useSettings();
   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
   const [itemDetail, setItemDetail] = useState<string | null>(null);
-  const [subTab, setSubTab] = useState<'raids' | 'quartermaster'>('raids');
   const setTotals = useRaidSetTotals(state);
 
-  // Deep-link support for a notification's "Go to" button targeting a
-  // specific Raids sub-tab -- same consume-once shape every other
-  // sub-tabbed panel uses. Placed before the hasRaids early return since
-  // hooks can't follow a conditional return.
+  // Acknowledges the tab on mount -- clears the nav shimmer for a
+  // banner-worthy notification targeting Raids (patch 0191). Simplified
+  // to a single bare-tab acknowledgement (patch 0351) now that Raids no
+  // longer has its own sub-tab switcher -- the Quartermaster's Den (and
+  // its 'quartermaster' sub-tab id) retired along with it, its 3
+  // upgrades folded into the Guild Hall's own unified list instead. See
+  // TAB_SUBTABS in attention.ts, updated the same patch.
   useEffect(() => {
-    const requested = engine.consumeRequestedSubTab();
-    if (requested === 'raids' || requested === 'quartermaster') setSubTab(requested);
-  }, [engine, engine.requestedSubTab]);
-
-  // Acknowledges whichever sub-tab is currently open -- on mount (the
-  // default Raids list) and again on every switch -- clearing the nav
-  // shimmer for a banner-worthy notification targeting this specific
-  // sub-tab (patch 0191).
-  useEffect(() => {
-    engine.acknowledgeTab('raids', subTab);
-  }, [engine, subTab]);
+    engine.acknowledgeTab('raids');
+  }, [engine]);
 
   if (!hasRaids) {
     return (
@@ -1036,37 +879,16 @@ export function RaidsPanel() {
         </p>
       </div>
 
-      <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-        <button
-          className={`btn-subtab ${subTab === 'raids' ? 'on' : ''} ${isTabUnread(state, 'raids', 'raids') ? 'subtab-unread' : ''}`}
-          onClick={() => setSubTab('raids')}
-        >
-          Raids
-        </button>
-        <button
-          className={`btn-subtab ${subTab === 'quartermaster' ? 'on' : ''} ${isTabUnread(state, 'raids', 'quartermaster') ? 'subtab-unread' : ''}`}
-          onClick={() => setSubTab('quartermaster')}
-        >
-          Quartermaster
-        </button>
+      <p className="raid-sets-summary">
+        Raid sets discovered: <b>{setTotals.setsComplete}/{setTotals.setsTotal}</b> complete
+        {' · '}<b>{setTotals.piecesFound}/{setTotals.piecesTotal}</b> pieces
+      </p>
+      <div className="raid-list">
+        {state.activeRaid && <ActiveRaidCard />}
+        {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
+          <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
+        ))}
       </div>
-
-      {subTab === 'raids' ? (
-        <>
-          <p className="raid-sets-summary">
-            Raid sets discovered: <b>{setTotals.setsComplete}/{setTotals.setsTotal}</b> complete
-            {' · '}<b>{setTotals.piecesFound}/{setTotals.piecesTotal}</b> pieces
-          </p>
-          <div className="raid-list">
-            {state.activeRaid && <ActiveRaidCard />}
-            {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
-              <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
-            ))}
-          </div>
-        </>
-      ) : (
-        <RaidQuartermasterDen />
-      )}
 
       {itemDetail && <ItemDetailOverlay defId={itemDetail} onClose={() => setItemDetail(null)} />}
       </div>

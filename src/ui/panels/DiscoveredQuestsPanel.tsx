@@ -447,7 +447,13 @@ function ReplayMemoriesView({
 
       <div className="section-heading">Sagas</div>
       <div className="raid-list">
-        {CHAIN_REPLAY_TIERS.map((tier) => (
+        {/* 'master' excluded (patch 0351) -- its own "buy the feature"
+         *  unlock moved to the Guild Hall's unified upgrade list, under
+         *  the Quests filter, alongside Quest Board's own fast-chance
+         *  upgrades. The 6 saga bands plus autopilot/autopilot_recover
+         *  stay here -- their cost/description only make sense next to
+         *  the saga list they unlock. */}
+        {CHAIN_REPLAY_TIERS.filter((tier) => tier.id !== 'master').map((tier) => (
           <TierCard key={tier.id} tier={tier} hero={selectedHero} onOpenChain={onOpenReplayChain} />
         ))}
       </div>

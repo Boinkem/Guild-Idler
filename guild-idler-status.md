@@ -28187,6 +28187,102 @@ everywhere else in this and the prior patch.
 **Verified.** `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean.
 
+### Guild Hall unification: Raid Quartermaster and Quest fast-chance upgrades, Replay Memories' master unlock, all folded into one list (patch 0352)
+```discord-update
+Dev Update | Guild Hall Unification
+
+- Moved Raid Quartermaster's 3 upgrades into the Guild Hall, under a new Raids filter
+- Moved Quest Board's 2 fast-chance upgrades into the Guild Hall, under a new Quests filter
+- Moved Replay Memories' "unlock the tab" purchase into the Guild Hall too
+- Removed the Raids tab's Quartermaster sub-tab and its room-sprite visuals now that its upgrades live in the Guild Hall
+```
+
+Direct request: "current thoughts are to unify all upgrade paths to a
+central spot, aside from prestige items," plus "ensure Quests and Raids
+get their own filter tab in the Guild Hall upgrades list." Three
+previously-scattered upgrade trees move into the Guild Hall's own
+unified list; nothing about their underlying cost curves, mods, or save
+data changed -- only which screen sells them.
+
+**What moved.** Raid Quartermaster's 3 upgrades (Raid Speed, Raid Loot,
+Raid Recovery -- previously their own `RaidUpgradeRow` list inside
+Raids' now-retired Quartermaster sub-tab), Quest Board's 2 fast-chance
+upgrades (Lucky Streak, Steady Hands -- previously inline `QuestFastUpgradeRow`s
+at the top of the Quest Board tab), and Replay Memories' own "buy the
+feature" master unlock tier (previously the first card in its saga
+list, alongside the 6 story-content bands).
+
+**What didn't move, on purpose.** The 6 saga bands plus the
+autopilot/autopilot_recover tiers stay exactly where they were, on the
+Replay Memories tab -- their cost and description only make sense next
+to the saga list they unlock, same reasoning vendor-specific upgrades
+(Blacksmith/Alchemist/Enchanter) already stay on each vendor's own page
+instead of the Guild Hall. Prestige/Renown perks are untouched, per the
+request's own "aside from prestige items" carve-out.
+
+**New categories (`types.ts`, `GuildPanel.tsx`).** `GuildHallCategory`
+gains `'Quests'` and `'Raids'`, added to the filter chip bar and the
+category-color table. The 5 original categories already claim every
+distinct theme accent color (Combat/blood, Economy/brass-dim, Roster/sky,
+Care/moss, Unlocks/violet) -- Quests reuses plain `--brass` (visually
+distinct from Economy's `--brass-dim` at a glance) and Raids reuses
+Combat's `--blood` (raids are inherently combat content, so sharing the
+tint reads as related rather than confusing).
+
+**Row builders (`GuildPanel.tsx`).** Three new functions --
+`raidUpgradeRow`, `questFastUpgradeRow`, `replayMasterRow` -- each
+producing the same `RowData` shape `facilityRow`/`upgradeRow` already
+build, so the existing `GuildUpgradeRow` renderer, detail modal, MaxFlash,
+and Built-section logic all work on these new rows completely unchanged.
+The one real wrinkle: raid and quest-fast upgrades price in gold *then*
+Renown past a level threshold, unlike every existing Guild Hall row
+which is gold-only. `RowData.cost` only ever carried the gold figure and
+turned out to be otherwise unread anywhere in this file once `buyLabel`
+exists -- confirmed before relying on it -- so a Renown-priced row
+reports `cost: null` (the same shape a maxed row already used) and bakes
+the real price straight into `buyLabel`/`buyDisabled` instead, mirroring
+exactly what the two retired components (`RaidUpgradeRow`,
+`QuestFastUpgradeRow`) already computed for themselves. `replayMasterRow`
+models the one-time unlock the same way every existing binary unlock in
+`generalUpgrades` already does (`maxLevel: 1`, level 0 or 1) -- nothing
+new needed there.
+
+**Retired: Raids' Quartermaster sub-tab (`RaidsPanel.tsx`).** Its own
+sub-tab switcher, `RaidQuartermasterDen`, `RaidUpgradeRow`, and
+`roomSpriteLevel` all removed -- Raids goes back to a single view, no
+switcher needed for one screen. `RaidRoomSprite` (the weapon-rack/skull/
+shelf room art) is unused after this, not deleted outright -- same
+"stop calling it, leave the file" precedent already used for
+`rerollName`/`rerollHeroName` in patch 0350, in case the visual is
+wanted again later. `TAB_SUBTABS.raids` (`attention.ts`) updated from
+`['raids', 'quartermaster']` to `['raids']` so the nav-shimmer/unread
+system stops expecting a sub-tab that no longer exists; the onboarding
+tour's own Raids tooltip (`MenuWindow.tsx`) updated to stop mentioning
+the Quartermaster's Den by name.
+
+**Retired: Quest Board's inline upgrade rows (`QuestPanel.tsx`).** The
+`QuestFastUpgradeRow` component and both its call sites (Lucky Streak,
+Steady Hands) removed outright -- unlike the raid room sprites, there
+was no standalone visual worth keeping around here, just a row shape the
+Guild Hall's own `GuildUpgradeRow` now covers identically.
+
+**Replay Memories' saga list (`DiscoveredQuestsPanel.tsx`).** The
+`'master'` tier filtered out of `CHAIN_REPLAY_TIERS.map(...)` when
+rendering the saga-card grid -- `TierCard`'s existing `isMaster`/
+`masterOwned` branches are untouched and still correct for the 8
+remaining tiers (they read `GuildManager.hasChainReplayTier(state,
+'master')` from global state, not from a rendered master card), so
+nothing else on that page needed to change.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean, module count dropped by one
+(RaidRoomSprite.tsx no longer pulled into the bundle now that nothing
+imports it). No live in-app playtest in this environment -- worth a real
+pass confirming the Quests/Raids filter chips actually narrow the list
+correctly, the Renown-priced rows show and buy correctly once a raid
+upgrade reaches its Renown tier, and Replay Memories' master unlock
+still gates the 8 remaining saga cards exactly as before.
+
 ### Subtitle cards on 5 tabs, Quick-assign visibility, Daylight/Parchment scene tint, Treasury readability, Hero Rename (patch 0350)
 ```discord-update
 Dev Update | Patch 0350

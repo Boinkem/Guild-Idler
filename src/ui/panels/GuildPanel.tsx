@@ -6,7 +6,8 @@ import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
-import { describeMods, formatGold, pct } from '../../game/util';
+import { CHAIN_REPLAY_TIER_BY_ID } from '../../game/data/chainReplay';
+import { describeMods, formatGold, formatNumber, pct } from '../../game/util';
 import { GuildHallCategory } from '../../game/types';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
@@ -56,16 +57,24 @@ function GuildUpgradeDetailModal({
 
 /** Row's category label colour -- matches Design Handoff's CAT_FG table
  *  exactly (Combat -> --blood, Economy -> --brass-dim, Roster -> --sky,
- *  Care -> --moss, Unlocks -> --violet). */
+ *  Care -> --moss, Unlocks -> --violet). Quests/Raids added patch 0351
+ *  when their own upgrade trees moved in from the Quest Board/Raids tabs
+ *  -- every other theme accent is already spoken for by the original
+ *  five, so Quests reuses plain --brass (distinct enough from Economy's
+ *  --brass-dim at a glance) and Raids reuses Combat's --blood (raids are
+ *  inherently combat content, so sharing the tint reads as related
+ *  rather than confusing). */
 const CATEGORY_FG: Record<GuildHallCategory, string> = {
   Combat: 'var(--blood)',
   Economy: 'var(--brass-dim)',
   Roster: 'var(--sky)',
   Care: 'var(--moss)',
   Unlocks: 'var(--violet)',
+  Quests: 'var(--brass)',
+  Raids: 'var(--blood)',
 };
 
-const FILTERS: ('All' | GuildHallCategory)[] = ['All', 'Combat', 'Economy', 'Roster', 'Care', 'Unlocks'];
+const FILTERS: ('All' | GuildHallCategory)[] = ['All', 'Combat', 'Economy', 'Roster', 'Care', 'Unlocks', 'Quests', 'Raids'];
 
 /** One row's worth of pre-computed data -- built once per render by
  *  facilityRow/upgradeRow below from a GuildDef or UpgradeDef, so the
@@ -254,6 +263,21 @@ export function GuildPanel() {
 
   const facilities = GuildManager.facilities();
   const generalUpgrades = GuildManager.upgrades().filter((u) => !u.vendor);
+  // Raid Quartermaster's 3 upgrades and Quest Board's 2 fast-chance
+  // upgrades, folded into this one unified list (patch 0351, direct
+  // request: "unify all upgrade paths to a central spot, aside from
+  // prestige items"). Both trees already lived entirely in
+  // GuildManager/state (raidUpgrades/questFastUpgrades) -- only the UI
+  // that rendered them is moving, not the underlying data or cost math.
+  // The Replay Memories tab's own 'master' unlock tier (its literal
+  // "buy the feature" upgrade) moves in the same way; the 6 saga bands
+  // and the autopilot/autopilot_recover tiers stay on the Replay
+  // Memories tab itself, same as vendor-specific upgrades staying on
+  // each vendor's own page -- their cost/description only make sense
+  // in the context of the saga list right next to them.
+  const raidUpgradeDefs = GuildManager.raidUpgrades();
+  const questFastUpgradeDefs = GuildManager.questFastUpgrades();
+  const replayMasterTier = CHAIN_REPLAY_TIER_BY_ID['master'];
   const { flashes, dismiss } = useMaxFlash([
     ...facilities.map((def) => ({
       id: def.id, name: def.name,
@@ -263,10 +287,27 @@ export function GuildPanel() {
       id: def.id, name: def.name,
       level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
     })),
+    ...raidUpgradeDefs.map((def) => ({
+      id: def.id, name: def.name,
+      level: GuildManager.raidUpgradeLevel(state, def.id), maxLevel: def.maxLevel,
+    })),
+    ...questFastUpgradeDefs.map((def) => ({
+      id: def.id, name: def.name,
+      level: GuildManager.questFastUpgradeLevel(state, def.id), maxLevel: def.maxLevel,
+    })),
+    ...(replayMasterTier ? [{
+      id: replayMasterTier.id, name: replayMasterTier.sagaName,
+      level: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0, maxLevel: 1,
+    }] : []),
   ]);
   const levelPulses = usePulsesOnChange([
     ...facilities.map((def) => ({ id: def.id, value: GuildManager.facilityLevel(state, def.id) })),
     ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
+    ...raidUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.raidUpgradeLevel(state, def.id) })),
+    ...questFastUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.questFastUpgradeLevel(state, def.id) })),
+    ...(replayMasterTier
+      ? [{ id: replayMasterTier.id, value: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0 }]
+      : []),
   ]);
 
   function facilityRow(def: (typeof facilities)[number]): RowData {
@@ -303,9 +344,94 @@ export function GuildPanel() {
     };
   }
 
-  // Facilities first, then permanent upgrades, source order preserved --
-  // matches the design handoff's "single list, not two grids" spec.
-  const rows: RowData[] = [...facilities.map(facilityRow), ...generalUpgrades.map(upgradeRow)];
+  /**
+   * Raid Quartermaster's 3 upgrades (patch 0351 -- previously their own
+   * RaidUpgradeRow component inside RaidsPanel's now-retired Quartermaster
+   * sub-tab). Dual gold-then-Renown pricing (nextRaidUpgradeCost), unlike
+   * every other row above which is gold-only -- RowData.cost only ever
+   * carried the gold figure, so a Renown-priced row reports `cost: null`
+   * (same shape a maxed row already used) and bakes the real Renown price
+   * into buyLabel/buyDisabled directly instead, since nothing else in this
+   * file actually reads row.cost back out once buyLabel exists (confirmed
+   * -- it's otherwise a dead field on RowData already).
+   */
+  function raidUpgradeRow(def: (typeof raidUpgradeDefs)[number]): RowData {
+    const level = GuildManager.raidUpgradeLevel(state, def.id);
+    const next = GuildManager.nextRaidUpgradeCost(state, def.id);
+    const maxed = next === null;
+    const affordable = !maxed && (next!.currency === 'gold' ? state.gold >= next!.cost : state.renown >= next!.cost);
+    const entries = describeMods(def.modsPerLevel).map((line) => ({ text: `${line} per level` }));
+    return {
+      id: def.id, name: def.name, description: def.description,
+      category: 'Raids', level, maxLevel: def.maxLevel, maxed, affordable,
+      cost: next?.currency === 'gold' ? next.cost : null,
+      effectText: entries.map((e) => e.text).join(' · '),
+      statLines: entries.map((e) => <span key={e.text}>{e.text}</span>),
+      buyLabel: maxed
+        ? 'Fully upgraded'
+        : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
+      buyDisabled: maxed || !affordable,
+      onBuy: () => engine.buyRaidUpgrade(def.id),
+    };
+  }
+
+  /** Quest Board's 2 fast-chance upgrades (patch 0351 -- previously their
+   *  own QuestFastUpgradeRow component inline on the Quest Board tab).
+   *  Same dual-currency shape raidUpgradeRow above uses. */
+  function questFastUpgradeRow(def: (typeof questFastUpgradeDefs)[number]): RowData {
+    const level = GuildManager.questFastUpgradeLevel(state, def.id);
+    const next = GuildManager.nextQuestFastUpgradeCost(state, def.id);
+    const maxed = next === null;
+    const affordable = !maxed && (next!.currency === 'gold' ? state.gold >= next!.cost : state.renown >= next!.cost);
+    const effectText = def.fastChancePctPerLevel
+      ? `+${def.fastChancePctPerLevel}% Fast chance per level, every difficulty`
+      : `+${def.successPenaltyRecoveryPerLevel}% success back per level on Fast rolls`;
+    return {
+      id: def.id, name: def.name, description: def.description,
+      category: 'Quests', level, maxLevel: def.maxLevel, maxed, affordable,
+      cost: next?.currency === 'gold' ? next.cost : null,
+      effectText,
+      statLines: [<span key={effectText}>{effectText}</span>],
+      buyLabel: maxed
+        ? 'Fully upgraded'
+        : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
+      buyDisabled: maxed || !affordable,
+      onBuy: () => engine.buyQuestFastUpgrade(def.id),
+    };
+  }
+
+  /** Replay Memories' own "buy the feature" tier (patch 0351 -- the 6 saga
+   *  bands and the autopilot/autopilot_recover tiers stay on the Replay
+   *  Memories tab itself, see this file's own comment above on why).
+   *  One-off gold purchase, modeled the same way every other binary
+   *  unlock in generalUpgrades already is (maxLevel 1, level 0 or 1). */
+  function replayMasterRow(tier: NonNullable<typeof replayMasterTier>): RowData {
+    const owned = GuildManager.hasChainReplayTier(state, tier.id);
+    const affordable = !owned && state.gold >= tier.goldCost;
+    const effectText = 'Unlocks the Replay Memories tab -- revisit completed story chains for a chance at Heroic, Mythic, and Legendary gear.';
+    return {
+      id: tier.id, name: tier.sagaName, description: tier.description,
+      category: 'Quests', level: owned ? 1 : 0, maxLevel: 1, maxed: owned, affordable,
+      cost: tier.goldCost,
+      effectText,
+      statLines: [<span key={effectText} className="gold-text">{effectText}</span>],
+      buyLabel: owned ? 'Unlocked' : `Buy · ${formatGold(tier.goldCost)}`,
+      buyDisabled: owned || !affordable,
+      onBuy: () => engine.buyChainReplayTier(tier.id),
+    };
+  }
+
+  // Facilities first, then permanent upgrades, then the raid/quest/replay
+  // trees folded in from their own former tabs (patch 0351), source order
+  // preserved within each group -- matches the design handoff's "single
+  // list, not two grids" spec, extended rather than restructured.
+  const rows: RowData[] = [
+    ...facilities.map(facilityRow),
+    ...generalUpgrades.map(upgradeRow),
+    ...raidUpgradeDefs.map(raidUpgradeRow),
+    ...questFastUpgradeDefs.map(questFastUpgradeRow),
+    ...(replayMasterTier ? [replayMasterRow(replayMasterTier)] : []),
+  ];
 
   // A row that just hit max stays in the main list for as long as its
   // MaxFlash is still playing (fires the flash "before it moves", per

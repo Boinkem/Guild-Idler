@@ -37,11 +37,11 @@ export const RAID_UPGRADES: RaidUpgradeDef[] = [
    * actually having tuning.json in hand; migrating them was exactly the
    * small, low-risk follow-up it anticipated.
    *
-   * Both are built with exactly 3 levels (0-2) on purpose, to match the
-   * 3-image sprite progression in the Raid Quartermaster's Den 1:1 with no
-   * banding needed -- unlike raid_speed's existing 10-level curve, which
-   * predates this visual system and gets banded onto the same 3 states
-   * instead (see roomSpriteLevel in RaidsPanel.tsx).
+   * Both are built with exactly 3 levels (0-2) on purpose -- originally
+   * to match a 3-image room-sprite progression in the Raid Quartermaster's
+   * Den 1:1 with no banding needed; that visual retired to the Guild Hall's
+   * unified upgrade list in patch 0351 (see this tree's own row builder in
+   * GuildPanel.tsx), but the 3-level cap itself is unchanged.
    */
   {
     id: 'raid_loot',
