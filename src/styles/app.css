@@ -420,6 +420,25 @@
 .raid-card-meta { display: flex; gap: 10px; align-items: baseline; margin-top: 2px; }
 .raid-card-chevron { flex: none; color: var(--muted); font-size: 0.75rem; }
 .raid-card:hover .raid-card-chevron { color: var(--brass); }
+/* Direct request (patch 0355): "highlight the raids that players can
+ * click on, making them visually pop out over the locked ones." Locked
+ * cards already read as muted/inactive (dashed border, own comment
+ * below); this is the other half -- an UNLOCKED, clickable raid card now
+ * gets a brighter brass border, a matching left accent (overriding
+ * .card's own neutral --panel-3 one), and a soft brass glow, all a
+ * little stronger on hover. Static, not the pulsing/rotating
+ * .requirement-highlight ring elsewhere in this file -- that ring means
+ * "the answer to a specific jump-to-me link," temporary and animated;
+ * this means "you can click this one," permanent and calm, since every
+ * unlocked raid card would be wearing it at once. */
+.raid-card:not(.locked) {
+  border-color: var(--brass);
+  border-left-color: var(--brass);
+  box-shadow: var(--bevel), var(--carved-line), 0 0 8px color-mix(in srgb, var(--brass) 30%, transparent);
+}
+.raid-card:not(.locked):hover {
+  box-shadow: var(--bevel), var(--carved-line), 0 0 14px color-mix(in srgb, var(--brass) 50%, transparent);
+}
 /* Direct report (patch 0351): "Raids requirements to unlock (when locked)
  * text is hard to read because of the 'greyed out' of the card." Same
  * double-dimming bug as .locked-upgrade/.upgrade-row.locked (both fixed

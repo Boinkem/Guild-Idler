@@ -1,6 +1,6 @@
 import { EQUIPMENT, EQUIPMENT_BY_ID, RARITY_WEIGHT } from '../data/equipment';
 import { CONSUMABLES } from '../data/items';
-import { EquipmentItem, GameState, Rarity, ShopStock } from '../types';
+import { EquipmentItem, GameState, Rarity, ShopStock, Stats } from '../types';
 import { createRng, uid } from '../rng';
 import { HOUR, RARITY_ORDER } from '../util';
 import { EquipmentManager } from './EquipmentManager';
@@ -8,6 +8,7 @@ import { ModifierManager } from './ModifierManager';
 import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
 import { Tuning } from '../data/tuning';
 import { applyVendorRepDiscount } from '../data/vendorRep';
+import { isProceduralTemplate, rollProceduralItem } from '../data/proceduralLoot';
 
 export const SHOP_REFRESH_MS = 4 * HOUR;
 const SHOP_EQUIPMENT_SLOTS = 5;
@@ -79,7 +80,7 @@ export const ShopManager = {
     // uses below -- accepts some staleness between a restock and a
     // level-up mid-window, same tradeoff that precedent already made.
     const repSpent = state.vendorGoldSpent?.blacksmith ?? 0;
-    const picks: { defId: string; itemLevel: number }[] = [];
+    const picks: { defId: string; itemLevel: number; rolledStats?: Partial<Stats>; proceduralName?: string }[] = [];
     const usedIds = new Set<string>();
     let guard = 0;
     while (picks.length < SHOP_EQUIPMENT_SLOTS && guard++ < 200) {
@@ -88,12 +89,24 @@ export const ShopManager = {
       if (eligible.length === 0) continue;
       const def = rng.weighted(eligible.map((e) => ({ item: e, weight: RARITY_WEIGHT[e.rarity] })));
       usedIds.add(def.id);
-      picks.push({ defId: def.id, itemLevel });
+      // Patch 0355, direct report: a procedural-template pick's real
+      // stats now roll right here, off this same seeded rng, rather than
+      // at purchase time off a fresh Date.now()-seeded one -- so the
+      // stock card shown (and its detail modal) can display the exact
+      // stats a purchase will actually hand over, instead of a level
+      // number that quietly reverted and stats that only appeared after
+      // the fact. See ShopStock.equipment's own comment in types.ts.
+      const rolled = isProceduralTemplate(def)
+        ? rollProceduralItem(def.rarity, itemLevel, 'normal', def.name, rng)
+        : undefined;
+      picks.push({ defId: def.id, itemLevel, rolledStats: rolled?.stats, proceduralName: rolled?.displayName });
     }
-    return picks.map(({ defId, itemLevel }) => ({
+    return picks.map(({ defId, itemLevel, rolledStats, proceduralName }) => ({
       uid: uid('shopitem'),
       defId,
       itemLevel,
+      rolledStats,
+      proceduralName,
       price: applyVendorRepDiscount(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId], itemLevel), repSpent),
     }));
   },
@@ -312,10 +325,20 @@ export const ShopManager = {
       equipment: [...picks].map((defId) => {
         const def = EQUIPMENT_BY_ID[defId];
         const itemLevel = def.reqLevel;
+        // Same pre-roll-at-stock-time fix rollEquipment above just got
+        // (patch 0355, direct report) -- a procedural-template pick's
+        // real stats roll right here, off this same seeded rng, instead
+        // of at purchase time. See ShopStock.equipment's own comment in
+        // types.ts.
+        const rolled = isProceduralTemplate(def)
+          ? rollProceduralItem(def.rarity, itemLevel, 'normal', def.name, rng)
+          : undefined;
         return {
           uid: uid('blackmarket'),
           defId,
           itemLevel,
+          rolledStats: rolled?.stats,
+          proceduralName: rolled?.displayName,
           price: applyVendorRepDiscount(
             Math.ceil(EquipmentManager.shopPrice(def, itemLevel) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
             repSpent,
@@ -330,43 +353,14 @@ export const ShopManager = {
     return Math.max(0, (state.blackMarket?.refreshedAt ?? 0) + BLACK_MARKET_REFRESH_MS - now);
   },
 
-  /**
-   * Builds the roll EquipmentManager.instantiate needs to actually give a
-   * procedural-template purchase real stats -- patch 0241 fix for a real
-   * bug: neither buy path below ever passed a `roll` before this, so any
-   * procedural template that made it into Shop/Black Market stock
-   * (22 of ~90 eligible defs) sold as a completely blank, statless item,
-   * silently. `entry.itemLevel` falls back to the def's own reqLevel for
-   * a stock entry generated before this patch (ShopStock.equipment's
-   * `itemLevel` is optional for exactly this reason -- see that field's
-   * own comment) -- stock fully regenerates every refresh window
-   * regardless, so this fallback only ever matters for the remainder of
-   * an in-flight window right after upgrading. Fresh per-purchase RNG
-   * (not the deterministic per-window stock RNG) so buying a slot
-   * actually rolls new random mods each time, matching the "randomised
-   * rolls" quest loot already has -- there's nothing to keep
-   * deterministic here since a bought slot is immediately removed from
-   * stock and can't be "re-previewed" against its own roll anyway.
-   * `'normal'` sourceTag applies no budget multiplier and no bracketed
-   * source tag (see LootSourceTag's own comment) -- a shop purchase
-   * shouldn't visually read as tagged loot the way a Hard-quest or raid
-   * drop does.
-   */
-  purchaseRoll(entry: { defId: string; itemLevel?: number }, uidForSeed: string) {
-    const def = EQUIPMENT_BY_ID[entry.defId];
-    return {
-      itemLevel: entry.itemLevel ?? def?.reqLevel ?? 1,
-      sourceTag: 'normal' as const,
-      rng: createRng(`shop-buy:${uidForSeed}:${Date.now()}`),
-    };
-  },
-
   buyBlackMarketEquipment(state: GameState, shopUid: string): string | null {
     const entry = state.blackMarket.equipment.find((e) => e.uid === shopUid);
     if (!entry) return 'That item has already been sold.';
     if (state.gold < entry.price) return 'Not enough gold.';
     if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
-    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId, ShopManager.purchaseRoll(entry, entry.uid));
+    const item: EquipmentItem | null = EquipmentManager.instantiateFromRoll(
+      entry.defId, entry.rolledStats, entry.itemLevel, entry.proceduralName,
+    );
     if (!item) return 'Unknown item.';
     state.gold -= entry.price;
     state.stats.goldSpent += entry.price;
@@ -383,7 +377,9 @@ export const ShopManager = {
     if (!entry) return 'That item has already been sold.';
     if (state.gold < entry.price) return 'Not enough gold.';
     if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
-    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId, ShopManager.purchaseRoll(entry, entry.uid));
+    const item: EquipmentItem | null = EquipmentManager.instantiateFromRoll(
+      entry.defId, entry.rolledStats, entry.itemLevel, entry.proceduralName,
+    );
     if (!item) return 'Unknown item.';
     state.gold -= entry.price;
     state.stats.goldSpent += entry.price;

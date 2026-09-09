@@ -284,11 +284,13 @@ export function PrestigePanel() {
         from playing capped heroes through Mythic/Legendary raids and
         Replay Memories instead -- see the Raids and Replay Memories tabs.
       */}
-      <p className="subtitle">
-        Early Retirement frees a hero's slot immediately, at any level -- no renown, no bonus attached.
-        Heroic Renown itself comes from clearing raids and Replay Memories at Mythic or Legendary difficulty
-        with your capped ({PRESTIGE_MIN_LEVEL}+) heroes.
-      </p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Early Retirement frees a hero's slot immediately, at any level -- no renown, no bonus attached.
+          Heroic Renown itself comes from clearing raids and Replay Memories at Mythic or Legendary difficulty
+          with your capped ({PRESTIGE_MIN_LEVEL}+) heroes.
+        </p>
+      </div>
 
       <div className="card">
         <div className="spread">
@@ -350,9 +352,11 @@ export function PrestigePanel() {
       {state.heroes.length > 0 && (
         <>
           <div className="section-heading">Spend renown -- per hero</div>
-          <p className="small muted subtitle" style={{ marginTop: -4 }}>
-            Extra power for a specific hero who&apos;s done leveling.
-          </p>
+          <div className="card" style={{ marginTop: -4 }}>
+            <p className="small muted" style={{ margin: 0 }}>
+              Extra power for a specific hero who&apos;s done leveling.
+            </p>
+          </div>
           {state.heroes.map((hero) => (
             <HeroPerkRow key={hero.id} hero={hero} onBuy={(heroId, perkId) => engine.buyHeroPerk(heroId, perkId)} />
           ))}

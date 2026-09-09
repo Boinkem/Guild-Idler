@@ -28127,7 +28127,84 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### Stash uncapped; the real "half my gear has no stats" bug found and fixed (patch 0354)
+### Vendor stock stats now roll at generation, not purchase; raid cards highlighted; renown subtitle readability (patch 0355)
+```discord-update
+Dev Update | Patch 0355
+
+- Fixed vendor items showing the wrong required level after clicking, and no stat preview at all
+- Vendor stock now rolls its real stats the moment it's stocked, not at the moment of purchase -- what you see is what you get
+- Clickable raids now visually pop out from the locked ones
+- Fixed the per-hero Renown subtitle being hard to read
+```
+
+Two direct reports and two quick follow-ups from the same conversation.
+
+**Vendor item stats never shown, and reverting to "level 1" on click
+(`ShopManager.ts`, `EquipmentManager.ts`, `types.ts`,
+`VendorsPanel.tsx`).** Direct report, and correctly guessed as a side
+effect of the procedural-loot rework. Root cause: a vendor stock slot's
+`itemLevel` has rolled at stock-*generation* time since patch 0241, but
+its actual *stats* never did -- `ShopManager.buyEquipment`/
+`buyBlackMarketEquipment` only rolled real stats at the moment of
+*purchase*, off a fresh `Date.now()`-seeded rng
+(`ShopManager.purchaseRoll`, now removed). Two visible symptoms from one
+cause: the stock card correctly showed the rolled level ("Lv 22"), but
+its own detail modal read `def.reqLevel` (the base template's equip
+floor, almost always 1) instead of that same rolled level -- clicking a
+"Lv 22" card visibly "reverted" to "requires level 1" purely because two
+different numbers were being shown for the same slot. And since no
+stats existed until purchase, there was nothing to preview beforehand
+either -- the modal could only ever say "Stats roll when purchased."
+
+Fixed by moving the roll itself, not just the display: `rollEquipment`
+(Blacksmith) and `refreshBlackMarket` (Black Market) now roll a
+procedural pick's real stats right there, off the same seeded rng the
+rest of that slot's own roll already uses, and store the result
+(`rolledStats`, plus `proceduralName` for a "Charmed"/"Fortunate" roll's
+own display name) directly on the stock entry (`ShopStock.equipment`,
+two new optional fields). New `EquipmentManager.instantiateFromRoll`
+replaces the old purchase-time `instantiate(defId, purchaseRoll(...))`
+call in both buy functions -- it just replays the stock entry's
+already-rolled data onto a fresh item instance rather than rolling
+anything new, so a purchase can no longer hand over anything other than
+exactly what the card showed. `EquipmentShopCard`'s modal updated to
+match: the level line now reads the same `displayLevel` the card itself
+already showed (no more reverting to `def.reqLevel`), and a procedural
+item's real stats render via the existing `describeStats` helper
+instead of the old "stats roll when purchased" placeholder. A
+non-procedural (hand-authored) pick is unaffected either way -- its
+fixed `def.mods` were always shown correctly and were never the bug.
+
+**Raids: clickable cards now visually pop out (`app.css`).** Direct
+request. Locked raid cards already read as muted (dashed border, patch
+0351). Unlocked ones had no distinct treatment at all -- same plain
+`.card` look as everything else. New `.raid-card:not(.locked)` rule adds
+a brighter brass border, a matching left accent (overriding `.card`'s
+own neutral grey one), and a soft brass glow, a little stronger on
+hover. Deliberately static, not the pulsing/rotating
+`.requirement-highlight` ring used elsewhere for "jump here" links --
+that one means "the specific answer to a link," temporary; this means
+"you can click this," permanent, and every unlocked raid card would be
+wearing the animated version at once if reused here.
+
+**Per-hero Renown subtitle hard to read (`PrestigePanel.tsx`).** Direct
+report. Same `.subtitle`-class narrow-plaque bug the last several
+patches have been sweeping panel by panel -- Prestige's own "Spend
+renown -- per hero" line had been missed. Wrapped in a `.card`, same
+shape every other fixed subtitle now uses. Prestige's main page
+subtitle (right under the `<h2>`, immediately above this one) had the
+identical bug and hadn't been reported yet either -- fixed in the same
+pass rather than leaving the page half-consistent.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live in-app playtest in this
+environment -- worth confirming a vendor purchase now genuinely matches
+its own preview (same name, same stats, same level) across a few rolls
+of each rarity, and that the new raid-card glow reads clearly against
+all six themes without overpowering the rarity-tinted banner art behind
+it.
+
+
 ```discord-update
 Dev Update | Patch 0354
 

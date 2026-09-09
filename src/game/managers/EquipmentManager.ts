@@ -89,6 +89,35 @@ export const EquipmentManager = {
     return item;
   },
 
+  /**
+   * Builds an item straight from an ALREADY-rolled stat block -- the
+   * purchase-time counterpart to a vendor stock entry's own `rolledStats`/
+   * `proceduralName` (see ShopStock.equipment's own comment in types.ts
+   * for the full "why" -- patch 0355, direct report). Deliberately not a
+   * third branch inside `instantiate` above: that function's whole shape
+   * is "roll happens here, right now, off this rng", which is exactly
+   * the behavior a vendor purchase needs to STOP doing -- the roll
+   * already happened, once, at stock-generation time, and this just
+   * replays it verbatim onto a fresh item instance. `rolledStats`/
+   * `proceduralName` both optional so a non-procedural, hand-authored
+   * pick (nothing was ever rolled for it) or a stale pre-0355 stock
+   * entry (see the same field's own fallback comment) still instantiate
+   * cleanly, identically to a plain no-roll `instantiate(defId)` call.
+   */
+  instantiateFromRoll(
+    defId: string, rolledStats?: Partial<Stats>, rolledItemLevel?: number, proceduralName?: string,
+  ): EquipmentItem | null {
+    const def = EQUIPMENT_BY_ID[defId];
+    if (!def) return null;
+    const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
+    if (rolledStats) {
+      item.rolledStats = rolledStats;
+      item.rolledItemLevel = rolledItemLevel;
+      if (proceduralName) item.proceduralName = proceduralName;
+    }
+    return item;
+  },
+
   def(item: EquipmentItem): EquipmentDef | undefined {
     return EQUIPMENT_BY_ID[item.defId];
   },
@@ -238,9 +267,9 @@ export const EquipmentManager = {
    * roll's 4,130g -- a 3.4x gap for equal power, worse at lower
    * comparison levels). Scaled against `def.reqLevel` rather than any
    * live roll, since these items' actual granted power never varies by
-   * level in the first place (ShopManager.purchaseRoll's sourceTag is
-   * always 'normal', never one of scaleDedicatedItem's four dedicated
-   * tags, so a shop-bought dedicated item's stats are always its fixed
+   * level in the first place (a shop stock slot's sourceTag is always
+   * 'normal', never one of scaleDedicatedItem's four dedicated tags, so
+   * a shop-bought dedicated item's stats are always its fixed
    * `def.stats` regardless of any itemLevel a stock slot happened to
    * roll) -- reqLevel is the one number that actually describes how
    * powerful the design intends this specific item to be.

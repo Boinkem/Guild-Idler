@@ -1944,8 +1944,22 @@ export interface ShopStock {
    * 16h black market), so a stale pre-patch entry just falls back to the
    * def's own reqLevel (ShopManager.buyEquipment/buyBlackMarketEquipment)
    * until the next natural restock replaces it with a real rolled value.
+   *
+   * `rolledStats`/`proceduralName` (patch 0355, direct report): a
+   * procedural-template pick's real stats now roll ONCE, right here at
+   * stock-generation time, off the same seeded RNG the rest of this
+   * slot's own roll already uses -- not at purchase time off a fresh
+   * `Date.now()`-seeded one, which is what let the exact same stock
+   * card show one thing, then hand over a DIFFERENT (and un-previewable)
+   * roll on click/purchase. Both fields undefined for a non-procedural,
+   * hand-authored pick (its fixed `def.mods` are already fully visible
+   * with nothing to roll) and for any pre-0355 in-flight stock, same
+   * "stale entry, falls back gracefully" shape `itemLevel` above
+   * established -- naturally replaced by the next restock either way.
+   * See EquipmentManager.instantiateFromRoll, the purchase-time consumer
+   * of both.
    */
-  equipment: { uid: string; defId: string; price: number; itemLevel?: number }[];
+  equipment: { uid: string; defId: string; price: number; itemLevel?: number; rolledStats?: Partial<Stats>; proceduralName?: string }[];
 }
 
 export interface Statistics {

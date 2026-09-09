@@ -13,7 +13,7 @@ import { isProceduralTemplate } from '../../game/data/proceduralLoot';
 import { scrapIconFor } from '../../game/data/elements';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
-import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity } from '../../game/types';
+import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity, Stats } from '../../game/types';
 import {
   describeMods, describeStats, formatDuration, formatGold, RARITY_BANNER, RARITY_FRAME, RARITY_COLOR, RARITY_ORDER,
 } from '../../game/util';
@@ -646,6 +646,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
             key={entry.uid}
             def={EQUIPMENT_BY_ID[entry.defId]}
             itemLevel={entry.itemLevel}
+            rolledStats={entry.rolledStats}
+            proceduralName={entry.proceduralName}
             price={entry.price}
             canAfford={state.gold >= entry.price}
             onBuy={() => engine.buyShopEquipment(entry.uid)}
@@ -1082,6 +1084,8 @@ function BlackMarketStock({ now }: { now: number }) {
             key={entry.uid}
             def={EQUIPMENT_BY_ID[entry.defId]}
             itemLevel={entry.itemLevel}
+            rolledStats={entry.rolledStats}
+            proceduralName={entry.proceduralName}
             price={entry.price}
             canAfford={state.gold >= entry.price}
             onBuy={() => engine.buyBlackMarketEquipment(entry.uid)}
@@ -1095,9 +1099,10 @@ function BlackMarketStock({ now }: { now: number }) {
 
 /** Collapsed summary (icon, name, price) only -- clicking opens a detail modal. */
 function EquipmentShopCard({
-  def, itemLevel, price, canAfford, onBuy, blackMarket,
+  def, itemLevel, rolledStats, proceduralName, price, canAfford, onBuy, blackMarket,
 }: {
-  def: EquipmentDef | undefined; itemLevel?: number; price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
+  def: EquipmentDef | undefined; itemLevel?: number; rolledStats?: Partial<Stats>; proceduralName?: string;
+  price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
 }) {
   const [showModal, setShowModal] = useState(false);
   if (!def) return null;
@@ -1108,6 +1113,12 @@ function EquipmentShopCard({
   // (ShopStock.equipment's itemLevel is optional for exactly that reason).
   const displayLevel = itemLevel ?? def.reqLevel;
   const procedural = isProceduralTemplate(def);
+  // Patch 0355, direct report: a procedural pick's real name (e.g.
+  // "Charmed Iron Sword") now comes from the SAME roll the stats below
+  // do, done once at stock-generation time -- rather than def.name here
+  // and a possibly-different rolled display name only appearing after
+  // purchase.
+  const displayName = proceduralName ?? def.name;
 
   return (
     <>
@@ -1122,7 +1133,7 @@ function EquipmentShopCard({
         <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
           <ItemIcon slot={def.slot} icon={def.icon} size={41} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{displayName}</div>
             <div className="item-card-meta-row tiny muted">Lv {displayLevel} · {formatGold(price)}</div>
           </div>
         </div>
@@ -1136,23 +1147,31 @@ function EquipmentShopCard({
               <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
                 <ItemIcon slot={def.slot} icon={def.icon} size={55} />
                 <div>
-                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
-                  <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
+                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{displayName}</span>
+                  {/* Direct report: this used to read def.reqLevel (the
+                      base template's own equip floor, near-always 1) --
+                      the card right above already correctly showed
+                      displayLevel (the level THIS stock slot actually
+                      rolled at), so clicking a "Lv 22" card opened a
+                      modal that visibly "reverted" to "requires level
+                      1". Both now agree. */}
+                  <div className="tiny muted">{def.slot} · {def.rarity} · requires level {displayLevel}</div>
                 </div>
               </div>
               {procedural ? (
-                // Procedural templates (patch 0214) carry no fixed mods of
-                // their own -- def.mods is deliberately empty, real stats
-                // roll fresh at purchase time (EquipmentManager.instantiate,
-                // via ShopManager.purchaseRoll) budgeted off displayLevel
-                // above, same "randomised rolls" quest/raid loot already
-                // has. Showing "No bonuses" here (describeMods({}) would)
-                // read as a broken/statless item rather than what's
-                // actually true, so this reads as intentional mystery
-                // instead.
-                <p className="tiny muted" style={{ margin: '6px 0 12px' }}>
-                  Stats roll when purchased, scaled to level {displayLevel}.
-                </p>
+                // Patch 0355, direct report: this used to read "Stats
+                // roll when purchased, scaled to level N" -- true at the
+                // time (EquipmentManager.instantiate rolled fresh stats
+                // off a Date.now()-seeded rng at purchase, so there was
+                // genuinely nothing to show yet), but the roll now
+                // happens once, at stock-generation time (see
+                // ShopManager.rollEquipment/refreshBlackMarket), so the
+                // real stats this exact purchase will hand over are
+                // already known and shown here directly, same as any
+                // hand-authored item's fixed def.mods below.
+                <div className="stat-row" style={{ margin: '6px 0 12px' }}>
+                  {describeStats(rolledStats, true).map((line) => <span key={line}>{line}</span>)}
+                </div>
               ) : (
                 <div className="stat-row" style={{ margin: '6px 0 12px' }}>
                   {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}

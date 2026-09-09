@@ -1,0 +1,506 @@
+From 32a333a2049a140cb41a5916d2038bfe0b8c06fe Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Wed, 9 Sep 2026 12:54:00 +0000
+Subject: [PATCH] Patch 0355: vendor stock stats roll at generation, raid card
+ highlight, renown subtitle readability
+
+---
+ guild-idler-status.md                 | 79 ++++++++++++++++++++++++++-
+ src/game/managers/EquipmentManager.ts | 35 +++++++++++-
+ src/game/managers/ShopManager.ts      | 70 +++++++++++-------------
+ src/game/types.ts                     | 18 +++++-
+ src/styles/app.css                    | 19 +++++++
+ src/ui/panels/PrestigePanel.tsx       | 20 ++++---
+ src/ui/panels/VendorsPanel.tsx        | 55 +++++++++++++------
+ 7 files changed, 227 insertions(+), 69 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index c09ec70..16780d0 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,7 +28127,84 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
+-### Stash uncapped; the real "half my gear has no stats" bug found and fixed (patch 0354)
++### Vendor stock stats now roll at generation, not purchase; raid cards highlighted; renown subtitle readability (patch 0355)
++```discord-update
++Dev Update | Patch 0355
++
++- Fixed vendor items showing the wrong required level after clicking, and no stat preview at all
++- Vendor stock now rolls its real stats the moment it's stocked, not at the moment of purchase -- what you see is what you get
++- Clickable raids now visually pop out from the locked ones
++- Fixed the per-hero Renown subtitle being hard to read
++```
++
++Two direct reports and two quick follow-ups from the same conversation.
++
++**Vendor item stats never shown, and reverting to "level 1" on click
++(`ShopManager.ts`, `EquipmentManager.ts`, `types.ts`,
++`VendorsPanel.tsx`).** Direct report, and correctly guessed as a side
++effect of the procedural-loot rework. Root cause: a vendor stock slot's
++`itemLevel` has rolled at stock-*generation* time since patch 0241, but
++its actual *stats* never did -- `ShopManager.buyEquipment`/
++`buyBlackMarketEquipment` only rolled real stats at the moment of
++*purchase*, off a fresh `Date.now()`-seeded rng
++(`ShopManager.purchaseRoll`, now removed). Two visible symptoms from one
++cause: the stock card correctly showed the rolled level ("Lv 22"), but
++its own detail modal read `def.reqLevel` (the base template's equip
++floor, almost always 1) instead of that same rolled level -- clicking a
++"Lv 22" card visibly "reverted" to "requires level 1" purely because two
++different numbers were being shown for the same slot. And since no
++stats existed until purchase, there was nothing to preview beforehand
++either -- the modal could only ever say "Stats roll when purchased."
++
++Fixed by moving the roll itself, not just the display: `rollEquipment`
++(Blacksmith) and `refreshBlackMarket` (Black Market) now roll a
++procedural pick's real stats right there, off the same seeded rng the
++rest of that slot's own roll already uses, and store the result
++(`rolledStats`, plus `proceduralName` for a "Charmed"/"Fortunate" roll's
++own display name) directly on the stock entry (`ShopStock.equipment`,
++two new optional fields). New `EquipmentManager.instantiateFromRoll`
++replaces the old purchase-time `instantiate(defId, purchaseRoll(...))`
++call in both buy functions -- it just replays the stock entry's
++already-rolled data onto a fresh item instance rather than rolling
++anything new, so a purchase can no longer hand over anything other than
++exactly what the card showed. `EquipmentShopCard`'s modal updated to
++match: the level line now reads the same `displayLevel` the card itself
++already showed (no more reverting to `def.reqLevel`), and a procedural
++item's real stats render via the existing `describeStats` helper
++instead of the old "stats roll when purchased" placeholder. A
++non-procedural (hand-authored) pick is unaffected either way -- its
++fixed `def.mods` were always shown correctly and were never the bug.
++
++**Raids: clickable cards now visually pop out (`app.css`).** Direct
++request. Locked raid cards already read as muted (dashed border, patch
++0351). Unlocked ones had no distinct treatment at all -- same plain
++`.card` look as everything else. New `.raid-card:not(.locked)` rule adds
++a brighter brass border, a matching left accent (overriding `.card`'s
++own neutral grey one), and a soft brass glow, a little stronger on
++hover. Deliberately static, not the pulsing/rotating
++`.requirement-highlight` ring used elsewhere for "jump here" links --
++that one means "the specific answer to a link," temporary; this means
++"you can click this," permanent, and every unlocked raid card would be
++wearing the animated version at once if reused here.
++
++**Per-hero Renown subtitle hard to read (`PrestigePanel.tsx`).** Direct
++report. Same `.subtitle`-class narrow-plaque bug the last several
++patches have been sweeping panel by panel -- Prestige's own "Spend
++renown -- per hero" line had been missed. Wrapped in a `.card`, same
++shape every other fixed subtitle now uses. Prestige's main page
++subtitle (right under the `<h2>`, immediately above this one) had the
++identical bug and hadn't been reported yet either -- fixed in the same
++pass rather than leaving the page half-consistent.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. No live in-app playtest in this
++environment -- worth confirming a vendor purchase now genuinely matches
++its own preview (same name, same stats, same level) across a few rolls
++of each rarity, and that the new raid-card glow reads clearly against
++all six themes without overpowering the rarity-tinted banner art behind
++it.
++
++
+ ```discord-update
+ Dev Update | Patch 0354
+ 
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index 7a60922..73db0cc 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -89,6 +89,35 @@ export const EquipmentManager = {
+     return item;
+   },
+ 
++  /**
++   * Builds an item straight from an ALREADY-rolled stat block -- the
++   * purchase-time counterpart to a vendor stock entry's own `rolledStats`/
++   * `proceduralName` (see ShopStock.equipment's own comment in types.ts
++   * for the full "why" -- patch 0355, direct report). Deliberately not a
++   * third branch inside `instantiate` above: that function's whole shape
++   * is "roll happens here, right now, off this rng", which is exactly
++   * the behavior a vendor purchase needs to STOP doing -- the roll
++   * already happened, once, at stock-generation time, and this just
++   * replays it verbatim onto a fresh item instance. `rolledStats`/
++   * `proceduralName` both optional so a non-procedural, hand-authored
++   * pick (nothing was ever rolled for it) or a stale pre-0355 stock
++   * entry (see the same field's own fallback comment) still instantiate
++   * cleanly, identically to a plain no-roll `instantiate(defId)` call.
++   */
++  instantiateFromRoll(
++    defId: string, rolledStats?: Partial<Stats>, rolledItemLevel?: number, proceduralName?: string,
++  ): EquipmentItem | null {
++    const def = EQUIPMENT_BY_ID[defId];
++    if (!def) return null;
++    const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
++    if (rolledStats) {
++      item.rolledStats = rolledStats;
++      item.rolledItemLevel = rolledItemLevel;
++      if (proceduralName) item.proceduralName = proceduralName;
++    }
++    return item;
++  },
++
+   def(item: EquipmentItem): EquipmentDef | undefined {
+     return EQUIPMENT_BY_ID[item.defId];
+   },
+@@ -238,9 +267,9 @@ export const EquipmentManager = {
+    * roll's 4,130g -- a 3.4x gap for equal power, worse at lower
+    * comparison levels). Scaled against `def.reqLevel` rather than any
+    * live roll, since these items' actual granted power never varies by
+-   * level in the first place (ShopManager.purchaseRoll's sourceTag is
+-   * always 'normal', never one of scaleDedicatedItem's four dedicated
+-   * tags, so a shop-bought dedicated item's stats are always its fixed
++   * level in the first place (a shop stock slot's sourceTag is always
++   * 'normal', never one of scaleDedicatedItem's four dedicated tags, so
++   * a shop-bought dedicated item's stats are always its fixed
+    * `def.stats` regardless of any itemLevel a stock slot happened to
+    * roll) -- reqLevel is the one number that actually describes how
+    * powerful the design intends this specific item to be.
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index e9a1bb2..8ca4cde 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -1,6 +1,6 @@
+ import { EQUIPMENT, EQUIPMENT_BY_ID, RARITY_WEIGHT } from '../data/equipment';
+ import { CONSUMABLES } from '../data/items';
+-import { EquipmentItem, GameState, Rarity, ShopStock } from '../types';
++import { EquipmentItem, GameState, Rarity, ShopStock, Stats } from '../types';
+ import { createRng, uid } from '../rng';
+ import { HOUR, RARITY_ORDER } from '../util';
+ import { EquipmentManager } from './EquipmentManager';
+@@ -8,6 +8,7 @@ import { ModifierManager } from './ModifierManager';
+ import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
+ import { Tuning } from '../data/tuning';
+ import { applyVendorRepDiscount } from '../data/vendorRep';
++import { isProceduralTemplate, rollProceduralItem } from '../data/proceduralLoot';
+ 
+ export const SHOP_REFRESH_MS = 4 * HOUR;
+ const SHOP_EQUIPMENT_SLOTS = 5;
+@@ -79,7 +80,7 @@ export const ShopManager = {
+     // uses below -- accepts some staleness between a restock and a
+     // level-up mid-window, same tradeoff that precedent already made.
+     const repSpent = state.vendorGoldSpent?.blacksmith ?? 0;
+-    const picks: { defId: string; itemLevel: number }[] = [];
++    const picks: { defId: string; itemLevel: number; rolledStats?: Partial<Stats>; proceduralName?: string }[] = [];
+     const usedIds = new Set<string>();
+     let guard = 0;
+     while (picks.length < SHOP_EQUIPMENT_SLOTS && guard++ < 200) {
+@@ -88,12 +89,24 @@ export const ShopManager = {
+       if (eligible.length === 0) continue;
+       const def = rng.weighted(eligible.map((e) => ({ item: e, weight: RARITY_WEIGHT[e.rarity] })));
+       usedIds.add(def.id);
+-      picks.push({ defId: def.id, itemLevel });
++      // Patch 0355, direct report: a procedural-template pick's real
++      // stats now roll right here, off this same seeded rng, rather than
++      // at purchase time off a fresh Date.now()-seeded one -- so the
++      // stock card shown (and its detail modal) can display the exact
++      // stats a purchase will actually hand over, instead of a level
++      // number that quietly reverted and stats that only appeared after
++      // the fact. See ShopStock.equipment's own comment in types.ts.
++      const rolled = isProceduralTemplate(def)
++        ? rollProceduralItem(def.rarity, itemLevel, 'normal', def.name, rng)
++        : undefined;
++      picks.push({ defId: def.id, itemLevel, rolledStats: rolled?.stats, proceduralName: rolled?.displayName });
+     }
+-    return picks.map(({ defId, itemLevel }) => ({
++    return picks.map(({ defId, itemLevel, rolledStats, proceduralName }) => ({
+       uid: uid('shopitem'),
+       defId,
+       itemLevel,
++      rolledStats,
++      proceduralName,
+       price: applyVendorRepDiscount(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId], itemLevel), repSpent),
+     }));
+   },
+@@ -312,10 +325,20 @@ export const ShopManager = {
+       equipment: [...picks].map((defId) => {
+         const def = EQUIPMENT_BY_ID[defId];
+         const itemLevel = def.reqLevel;
++        // Same pre-roll-at-stock-time fix rollEquipment above just got
++        // (patch 0355, direct report) -- a procedural-template pick's
++        // real stats roll right here, off this same seeded rng, instead
++        // of at purchase time. See ShopStock.equipment's own comment in
++        // types.ts.
++        const rolled = isProceduralTemplate(def)
++          ? rollProceduralItem(def.rarity, itemLevel, 'normal', def.name, rng)
++          : undefined;
+         return {
+           uid: uid('blackmarket'),
+           defId,
+           itemLevel,
++          rolledStats: rolled?.stats,
++          proceduralName: rolled?.displayName,
+           price: applyVendorRepDiscount(
+             Math.ceil(EquipmentManager.shopPrice(def, itemLevel) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
+             repSpent,
+@@ -330,43 +353,14 @@ export const ShopManager = {
+     return Math.max(0, (state.blackMarket?.refreshedAt ?? 0) + BLACK_MARKET_REFRESH_MS - now);
+   },
+ 
+-  /**
+-   * Builds the roll EquipmentManager.instantiate needs to actually give a
+-   * procedural-template purchase real stats -- patch 0241 fix for a real
+-   * bug: neither buy path below ever passed a `roll` before this, so any
+-   * procedural template that made it into Shop/Black Market stock
+-   * (22 of ~90 eligible defs) sold as a completely blank, statless item,
+-   * silently. `entry.itemLevel` falls back to the def's own reqLevel for
+-   * a stock entry generated before this patch (ShopStock.equipment's
+-   * `itemLevel` is optional for exactly this reason -- see that field's
+-   * own comment) -- stock fully regenerates every refresh window
+-   * regardless, so this fallback only ever matters for the remainder of
+-   * an in-flight window right after upgrading. Fresh per-purchase RNG
+-   * (not the deterministic per-window stock RNG) so buying a slot
+-   * actually rolls new random mods each time, matching the "randomised
+-   * rolls" quest loot already has -- there's nothing to keep
+-   * deterministic here since a bought slot is immediately removed from
+-   * stock and can't be "re-previewed" against its own roll anyway.
+-   * `'normal'` sourceTag applies no budget multiplier and no bracketed
+-   * source tag (see LootSourceTag's own comment) -- a shop purchase
+-   * shouldn't visually read as tagged loot the way a Hard-quest or raid
+-   * drop does.
+-   */
+-  purchaseRoll(entry: { defId: string; itemLevel?: number }, uidForSeed: string) {
+-    const def = EQUIPMENT_BY_ID[entry.defId];
+-    return {
+-      itemLevel: entry.itemLevel ?? def?.reqLevel ?? 1,
+-      sourceTag: 'normal' as const,
+-      rng: createRng(`shop-buy:${uidForSeed}:${Date.now()}`),
+-    };
+-  },
+-
+   buyBlackMarketEquipment(state: GameState, shopUid: string): string | null {
+     const entry = state.blackMarket.equipment.find((e) => e.uid === shopUid);
+     if (!entry) return 'That item has already been sold.';
+     if (state.gold < entry.price) return 'Not enough gold.';
+     if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
+-    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId, ShopManager.purchaseRoll(entry, entry.uid));
++    const item: EquipmentItem | null = EquipmentManager.instantiateFromRoll(
++      entry.defId, entry.rolledStats, entry.itemLevel, entry.proceduralName,
++    );
+     if (!item) return 'Unknown item.';
+     state.gold -= entry.price;
+     state.stats.goldSpent += entry.price;
+@@ -383,7 +377,9 @@ export const ShopManager = {
+     if (!entry) return 'That item has already been sold.';
+     if (state.gold < entry.price) return 'Not enough gold.';
+     if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
+-    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId, ShopManager.purchaseRoll(entry, entry.uid));
++    const item: EquipmentItem | null = EquipmentManager.instantiateFromRoll(
++      entry.defId, entry.rolledStats, entry.itemLevel, entry.proceduralName,
++    );
+     if (!item) return 'Unknown item.';
+     state.gold -= entry.price;
+     state.stats.goldSpent += entry.price;
+diff --git a/src/game/types.ts b/src/game/types.ts
+index cd6c6cd..d14e111 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1944,8 +1944,22 @@ export interface ShopStock {
+    * 16h black market), so a stale pre-patch entry just falls back to the
+    * def's own reqLevel (ShopManager.buyEquipment/buyBlackMarketEquipment)
+    * until the next natural restock replaces it with a real rolled value.
+-   */
+-  equipment: { uid: string; defId: string; price: number; itemLevel?: number }[];
++   *
++   * `rolledStats`/`proceduralName` (patch 0355, direct report): a
++   * procedural-template pick's real stats now roll ONCE, right here at
++   * stock-generation time, off the same seeded RNG the rest of this
++   * slot's own roll already uses -- not at purchase time off a fresh
++   * `Date.now()`-seeded one, which is what let the exact same stock
++   * card show one thing, then hand over a DIFFERENT (and un-previewable)
++   * roll on click/purchase. Both fields undefined for a non-procedural,
++   * hand-authored pick (its fixed `def.mods` are already fully visible
++   * with nothing to roll) and for any pre-0355 in-flight stock, same
++   * "stale entry, falls back gracefully" shape `itemLevel` above
++   * established -- naturally replaced by the next restock either way.
++   * See EquipmentManager.instantiateFromRoll, the purchase-time consumer
++   * of both.
++   */
++  equipment: { uid: string; defId: string; price: number; itemLevel?: number; rolledStats?: Partial<Stats>; proceduralName?: string }[];
+ }
+ 
+ export interface Statistics {
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 743cf79..ea161ad 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -420,6 +420,25 @@
+ .raid-card-meta { display: flex; gap: 10px; align-items: baseline; margin-top: 2px; }
+ .raid-card-chevron { flex: none; color: var(--muted); font-size: 0.75rem; }
+ .raid-card:hover .raid-card-chevron { color: var(--brass); }
++/* Direct request (patch 0355): "highlight the raids that players can
++ * click on, making them visually pop out over the locked ones." Locked
++ * cards already read as muted/inactive (dashed border, own comment
++ * below); this is the other half -- an UNLOCKED, clickable raid card now
++ * gets a brighter brass border, a matching left accent (overriding
++ * .card's own neutral --panel-3 one), and a soft brass glow, all a
++ * little stronger on hover. Static, not the pulsing/rotating
++ * .requirement-highlight ring elsewhere in this file -- that ring means
++ * "the answer to a specific jump-to-me link," temporary and animated;
++ * this means "you can click this one," permanent and calm, since every
++ * unlocked raid card would be wearing it at once. */
++.raid-card:not(.locked) {
++  border-color: var(--brass);
++  border-left-color: var(--brass);
++  box-shadow: var(--bevel), var(--carved-line), 0 0 8px color-mix(in srgb, var(--brass) 30%, transparent);
++}
++.raid-card:not(.locked):hover {
++  box-shadow: var(--bevel), var(--carved-line), 0 0 14px color-mix(in srgb, var(--brass) 50%, transparent);
++}
+ /* Direct report (patch 0351): "Raids requirements to unlock (when locked)
+  * text is hard to read because of the 'greyed out' of the card." Same
+  * double-dimming bug as .locked-upgrade/.upgrade-row.locked (both fixed
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index f020593..e48d2c1 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -284,11 +284,13 @@ export function PrestigePanel() {
+         from playing capped heroes through Mythic/Legendary raids and
+         Replay Memories instead -- see the Raids and Replay Memories tabs.
+       */}
+-      <p className="subtitle">
+-        Early Retirement frees a hero's slot immediately, at any level -- no renown, no bonus attached.
+-        Heroic Renown itself comes from clearing raids and Replay Memories at Mythic or Legendary difficulty
+-        with your capped ({PRESTIGE_MIN_LEVEL}+) heroes.
+-      </p>
++      <div className="card">
++        <p className="small muted" style={{ margin: 0 }}>
++          Early Retirement frees a hero's slot immediately, at any level -- no renown, no bonus attached.
++          Heroic Renown itself comes from clearing raids and Replay Memories at Mythic or Legendary difficulty
++          with your capped ({PRESTIGE_MIN_LEVEL}+) heroes.
++        </p>
++      </div>
+ 
+       <div className="card">
+         <div className="spread">
+@@ -350,9 +352,11 @@ export function PrestigePanel() {
+       {state.heroes.length > 0 && (
+         <>
+           <div className="section-heading">Spend renown -- per hero</div>
+-          <p className="small muted subtitle" style={{ marginTop: -4 }}>
+-            Extra power for a specific hero who&apos;s done leveling.
+-          </p>
++          <div className="card" style={{ marginTop: -4 }}>
++            <p className="small muted" style={{ margin: 0 }}>
++              Extra power for a specific hero who&apos;s done leveling.
++            </p>
++          </div>
+           {state.heroes.map((hero) => (
+             <HeroPerkRow key={hero.id} hero={hero} onBuy={(heroId, perkId) => engine.buyHeroPerk(heroId, perkId)} />
+           ))}
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 82347d9..5e3bfb9 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -13,7 +13,7 @@ import { isProceduralTemplate } from '../../game/data/proceduralLoot';
+ import { scrapIconFor } from '../../game/data/elements';
+ import { CONSUMABLE_BY_ID } from '../../game/data/items';
+ import { VENDORS, vendorUpgrades } from '../../game/data/progression';
+-import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity } from '../../game/types';
++import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity, Stats } from '../../game/types';
+ import {
+   describeMods, describeStats, formatDuration, formatGold, RARITY_BANNER, RARITY_FRAME, RARITY_COLOR, RARITY_ORDER,
+ } from '../../game/util';
+@@ -646,6 +646,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+             key={entry.uid}
+             def={EQUIPMENT_BY_ID[entry.defId]}
+             itemLevel={entry.itemLevel}
++            rolledStats={entry.rolledStats}
++            proceduralName={entry.proceduralName}
+             price={entry.price}
+             canAfford={state.gold >= entry.price}
+             onBuy={() => engine.buyShopEquipment(entry.uid)}
+@@ -1082,6 +1084,8 @@ function BlackMarketStock({ now }: { now: number }) {
+             key={entry.uid}
+             def={EQUIPMENT_BY_ID[entry.defId]}
+             itemLevel={entry.itemLevel}
++            rolledStats={entry.rolledStats}
++            proceduralName={entry.proceduralName}
+             price={entry.price}
+             canAfford={state.gold >= entry.price}
+             onBuy={() => engine.buyBlackMarketEquipment(entry.uid)}
+@@ -1095,9 +1099,10 @@ function BlackMarketStock({ now }: { now: number }) {
+ 
+ /** Collapsed summary (icon, name, price) only -- clicking opens a detail modal. */
+ function EquipmentShopCard({
+-  def, itemLevel, price, canAfford, onBuy, blackMarket,
++  def, itemLevel, rolledStats, proceduralName, price, canAfford, onBuy, blackMarket,
+ }: {
+-  def: EquipmentDef | undefined; itemLevel?: number; price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
++  def: EquipmentDef | undefined; itemLevel?: number; rolledStats?: Partial<Stats>; proceduralName?: string;
++  price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
+ }) {
+   const [showModal, setShowModal] = useState(false);
+   if (!def) return null;
+@@ -1108,6 +1113,12 @@ function EquipmentShopCard({
+   // (ShopStock.equipment's itemLevel is optional for exactly that reason).
+   const displayLevel = itemLevel ?? def.reqLevel;
+   const procedural = isProceduralTemplate(def);
++  // Patch 0355, direct report: a procedural pick's real name (e.g.
++  // "Charmed Iron Sword") now comes from the SAME roll the stats below
++  // do, done once at stock-generation time -- rather than def.name here
++  // and a possibly-different rolled display name only appearing after
++  // purchase.
++  const displayName = proceduralName ?? def.name;
+ 
+   return (
+     <>
+@@ -1122,7 +1133,7 @@ function EquipmentShopCard({
+         <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
+           <ItemIcon slot={def.slot} icon={def.icon} size={41} />
+           <div style={{ minWidth: 0, flex: 1 }}>
+-            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
++            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{displayName}</div>
+             <div className="item-card-meta-row tiny muted">Lv {displayLevel} · {formatGold(price)}</div>
+           </div>
+         </div>
+@@ -1136,23 +1147,31 @@ function EquipmentShopCard({
+               <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                 <ItemIcon slot={def.slot} icon={def.icon} size={55} />
+                 <div>
+-                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
+-                  <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
++                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{displayName}</span>
++                  {/* Direct report: this used to read def.reqLevel (the
++                      base template's own equip floor, near-always 1) --
++                      the card right above already correctly showed
++                      displayLevel (the level THIS stock slot actually
++                      rolled at), so clicking a "Lv 22" card opened a
++                      modal that visibly "reverted" to "requires level
++                      1". Both now agree. */}
++                  <div className="tiny muted">{def.slot} · {def.rarity} · requires level {displayLevel}</div>
+                 </div>
+               </div>
+               {procedural ? (
+-                // Procedural templates (patch 0214) carry no fixed mods of
+-                // their own -- def.mods is deliberately empty, real stats
+-                // roll fresh at purchase time (EquipmentManager.instantiate,
+-                // via ShopManager.purchaseRoll) budgeted off displayLevel
+-                // above, same "randomised rolls" quest/raid loot already
+-                // has. Showing "No bonuses" here (describeMods({}) would)
+-                // read as a broken/statless item rather than what's
+-                // actually true, so this reads as intentional mystery
+-                // instead.
+-                <p className="tiny muted" style={{ margin: '6px 0 12px' }}>
+-                  Stats roll when purchased, scaled to level {displayLevel}.
+-                </p>
++                // Patch 0355, direct report: this used to read "Stats
++                // roll when purchased, scaled to level N" -- true at the
++                // time (EquipmentManager.instantiate rolled fresh stats
++                // off a Date.now()-seeded rng at purchase, so there was
++                // genuinely nothing to show yet), but the roll now
++                // happens once, at stock-generation time (see
++                // ShopManager.rollEquipment/refreshBlackMarket), so the
++                // real stats this exact purchase will hand over are
++                // already known and shown here directly, same as any
++                // hand-authored item's fixed def.mods below.
++                <div className="stat-row" style={{ margin: '6px 0 12px' }}>
++                  {describeStats(rolledStats, true).map((line) => <span key={line}>{line}</span>)}
++                </div>
+               ) : (
+                 <div className="stat-row" style={{ margin: '6px 0 12px' }}>
+                   {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
+-- 
+2.43.0
+
