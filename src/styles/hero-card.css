@@ -9,6 +9,19 @@
 
 .hero-block-summary { padding: 0; overflow: hidden; }
 
+/* Injured state (patch 0353, direct request): replaces the old "hurt"
+ * sprite animation as the at-a-glance injury signal -- every hero sprite
+ * now always plays its idle animation regardless of injury status, and
+ * a red card border carries that signal instead. `.card`'s own base
+ * border is a plain 1px line plus a 3px left accent (var(--panel-3));
+ * both switch to var(--blood) here so the whole card reads as "hurt"
+ * from any angle, not just the left edge. Shared by both the collapsed
+ * summary and the expanded card (same `.hero-block` class either way). */
+.hero-block.injured {
+  border-color: color-mix(in srgb, var(--blood) 55%, var(--edge));
+  border-left-color: var(--blood);
+}
+
 .hero-block-summary-row {
   display: flex;
   align-items: center;

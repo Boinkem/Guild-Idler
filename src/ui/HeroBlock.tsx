@@ -95,6 +95,14 @@ export function HeroBlock({
   const freeTreat = healsUsedToday < ModifierManager.freeHealsPerDay(state) || !hero.usedFreeTreat;
   const showingOnDesktop = engine.displayedHero.id === hero.id;
   const fallen = hero.status === 'fallen';
+  // Red card border while injured (patch 0353, direct request) --
+  // replaces the old "hurt" sprite animation as the injury signal.
+  // Excludes fallen: that already gets its own distinct tombstone/
+  // opacity treatment above, and a fallen hero's `injuries` array isn't
+  // necessarily empty (nothing clears it on death), so this would
+  // otherwise double up two different "something's wrong" borders on
+  // the same card.
+  const injured = !fallen && hero.injuries.length > 0;
   const activeChain = state.activeQuests.find((q: any) => q.heroId === hero.id)?.offer.chain;
   const spriteHeight = Math.round(96 * settings.spriteScale);
 
@@ -121,7 +129,7 @@ export function HeroBlock({
 
   if (collapsed) {
     return (
-      <div className={`card hero-block hero-block-summary ${fallen ? 'fallen' : ''}`}>
+      <div className={`card hero-block hero-block-summary ${fallen ? 'fallen' : ''} ${injured ? 'injured' : ''}`}>
         {children}
         <div
           className="hero-block-summary-row"
@@ -138,7 +146,7 @@ export function HeroBlock({
                 <HeroSprite
                   heroClass={hero.heroClass}
                   skin={hero.skin}
-                  animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}
+                  animation="idle"
                   height={Math.round(44 * settings.spriteScale)}
                 />
               )}
@@ -173,7 +181,7 @@ export function HeroBlock({
   }
 
   return (
-    <div className={`card hero-block ${fallen ? 'fallen' : ''}`}>
+    <div className={`card hero-block ${fallen ? 'fallen' : ''} ${injured ? 'injured' : ''}`}>
       {children}
       <div className="hero-block-grid">
 
@@ -185,7 +193,7 @@ export function HeroBlock({
                 <HeroSprite
                   heroClass={hero.heroClass}
                   skin={hero.skin}
-                  animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}
+                  animation="idle"
                   height={spriteHeight}
                 />
               )}

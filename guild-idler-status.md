@@ -28127,7 +28127,70 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### Vendor subtitle cards, Alchemist stock description, locked-card readability across Vendors and Raids (patch 0351)
+### Heroes tab: always-idle sprites with a red injured border; Quest Board reordered (patch 0353)
+```discord-update
+Dev Update | Patch 0353
+
+- Hero cards now always show their idle animation -- an injured hero gets a red card border instead of a hurt animation
+- Reordered the Quest Board: Heroes and Chain Tactics now sit above the contract list, "On the road" moved to the bottom
+- Your selected hero's own active quest now shows right where their contracts would be, instead of a plain "already out" message
+```
+
+Two direct requests, one from the Heroes tab, one a follow-up to patch
+0352's Guild Hall unification now that the upgrade rows are out of the
+way.
+
+**Heroes tab: idle-only sprites, red border on injury
+(`HeroBlock.tsx`, `hero-card.css`).** Direct request: "remove any
+animation that isn't idle... default always Idle, but when a hero is
+injured have their card have a red border." Both `HeroSprite` call sites
+in `HeroBlock.tsx` (the collapsed summary row and the expanded card)
+switched from `animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}`
+to a bare `animation="idle"`. New `injured` flag (`!fallen &&
+hero.injuries.length > 0` -- excludes fallen specifically, since nothing
+clears a fallen hero's `injuries` array and Fallen already gets its own
+distinct tombstone/opacity treatment, so this avoids stacking two
+different "something's wrong" signals on the same card) adds an
+`injured` class to both card wrappers. New `.hero-block.injured` rule in
+`hero-card.css` swaps the card's border and left-accent color to
+`var(--blood)`, same red used everywhere else in the game for danger/
+injury state. Scoped to the Heroes tab specifically, per the request's
+own section header -- the desktop companion overlay (`IdleView.tsx`)
+still plays a hurt pose for an injured hero standing idle at the guild,
+untouched by this patch; that's a different, walk/run/departure-animated
+view the report wasn't about.
+
+**Quest Board reordered (`QuestPanel.tsx`).** Direct follow-up to patch
+0352: with Quest Board's own upgrade rows moved out to the Guild Hall,
+the page's remaining order got a pass. New order top to bottom: Heroes
+(hero tabs + Send All Idle) → Chain Tactics → the selected hero's own
+Contracts → "On the road" (every active quest, every hero) at the very
+bottom, where it previously opened the page. The one added behavior
+beyond a straight reorder: previously, selecting a hero who was already
+out on a quest just showed a plain "already out -- see 'On the road'
+above" line in the Contracts slot, pointing the player back up the page
+to find their own quest in a shared list. Now that list sits at the
+bottom instead, so that pointer would have read backwards -- instead,
+the selected hero's own active-quest card renders directly in the
+Contracts slot, "filling the space" per the request. New
+`ActiveQuestCard` component (pulled out of the old inline `.map` in the
+On the road section) makes this possible without duplicating the card's
+own markup: the exact same component renders once here (for whichever
+hero's tab is open, if they're out) and again for every entry in the
+full On the road list at the bottom -- that bottom list is intentionally
+NOT filtered to exclude the selected hero's own quest, so it stays the
+one complete "everyone currently out" overview no matter which tab is
+open.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live in-app playtest in this
+environment -- worth a real pass confirming the red injured border
+reads clearly against all six themes, and that switching between an
+idle hero's tab and a questing hero's tab correctly swaps the Contracts
+slot between the normal contract list and the single active-quest card
+with no layout jump.
+
+
 ```discord-update
 Dev Update | Patch 0351
 

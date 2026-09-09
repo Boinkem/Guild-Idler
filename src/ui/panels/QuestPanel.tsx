@@ -9,7 +9,7 @@ import {
   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
 } from '../../game/data/quests';
 import { InventoryManager } from '../../game/managers/InventoryManager';
-import { QuestOffer, Hero, AutoChainWeightBy } from '../../game/types';
+import { QuestOffer, Hero, AutoChainWeightBy, ActiveQuest } from '../../game/types';
 import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
@@ -472,6 +472,64 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
   );
 }
 
+/**
+ * One "on the road" card -- pulled out of QuestPanel's own render (patch
+ * 0353, page reorder) so the same card can be used two places: the full
+ * "On the road" list at the bottom of the page (every active quest,
+ * every hero), and a single-card preview filling the Contracts slot when
+ * the currently-selected hero happens to be the one out questing, rather
+ * than the plain "already out" text that used to sit there. Direct
+ * report: this card showed no art at all, even though the exact same
+ * offer already has a banner the instant you click into it before
+ * sending (QuestDetailModal, above in this file) -- same source, same
+ * chain-vs-plain-tag branch that modal already uses, just the shorter
+ * .raid-active-banner strip (48px) RaidsPanel's own in-progress card
+ * uses, not the full 90px detail-view banner, since this card already
+ * carries a title/stats/progress bar of its own and the banner is a
+ * mood strip here, not the primary identifier. Slightly dimmed per
+ * direct request ("maybe a smidge dimmer") so it doesn't compete with
+ * the card's own text sitting right below it.
+ */
+function ActiveQuestCard({
+  quest, questHero, now, onRecall,
+}: { quest: ActiveQuest; questHero: Hero | undefined; now: number; onRecall: () => void }) {
+  const state = useEngine().state;
+  const total = quest.endsAt - quest.startedAt;
+  const progress = Math.min(100, ((now - quest.startedAt) / total) * 100);
+  const onTheRoadTagSrc = !quest.offer.chain ? questTagBannerSrc(quest.offer.tag) : undefined;
+  return (
+    <div className={`card ${quest.offer.difficulty}`}>
+      {quest.offer.chain ? (
+        <ChainQuestBanner chainId={quest.offer.chain.chainId} height={48} style={{ opacity: 0.85 }} />
+      ) : onTheRoadTagSrc ? (
+        <div className="raid-active-banner" style={{ backgroundImage: `url(${onTheRoadTagSrc})`, opacity: 0.85 }} />
+      ) : null}
+      <div className="spread">
+        <span className="card-title quest-title">{quest.offer.name}</span>
+        <span className="small gold-text">{formatDuration(quest.endsAt - now)}</span>
+      </div>
+      <div className="stat-row" style={{ margin: '4px 0 6px' }}>
+        <span>{questHero?.name ?? 'A hero'}</span>
+        <span>Success <b>{Math.round(quest.finalSuccess)}%</b></span>
+        <span>Reward <b className="gold-text">{formatGold(quest.offer.rewardGold * quest.goldMultiplier)}</b></span>
+        {quest.consumables.length > 0 && (
+          <span>Used {quest.consumables.map((c) => InventoryManager.resolveDef(state, c)?.name).join(', ')}</span>
+        )}
+      </div>
+      <div className="bar"><span style={{ width: `${progress}%` }} /></div>
+      <div className="row end" style={{ marginTop: 6 }}>
+        <button
+          className="btn-ghost"
+          style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+          onClick={onRecall}
+        >
+          Recall
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function QuestPanel() {
   const engine = useEngine();
   const now = useNow();
@@ -622,63 +680,14 @@ export function QuestPanel() {
         </p>
       </div>
 
-      {/* --------------------------- active quests --------------------------- */}
-      {state.activeQuests.length > 0 && (
-        <>
-          <div className="section-heading">On the road</div>
-          {state.activeQuests.map((quest) => {
-            const questHero = state.heroes.find((h) => h.id === quest.heroId);
-            const total = quest.endsAt - quest.startedAt;
-            const progress = Math.min(100, ((now - quest.startedAt) / total) * 100);
-            // Direct report: this card showed no art at all, even though
-            // the exact same offer already has a banner the instant you
-            // click into it before sending (QuestDetailModal, just
-            // above in this file). Same source, same chain-vs-plain-tag
-            // branch that modal already uses -- just the shorter
-            // .raid-active-banner strip (48px) RaidsPanel's own
-            // in-progress card uses, not the full 90px detail-view
-            // banner, since this card already carries a title/stats/
-            // progress bar of its own and the banner is a mood strip
-            // here, not the primary identifier. Slightly dimmed per
-            // direct request ("maybe a smidge dimmer") so it doesn't
-            // compete with the card's own text sitting right below it.
-            const onTheRoadTagSrc = !quest.offer.chain ? questTagBannerSrc(quest.offer.tag) : undefined;
-            return (
-              <div key={quest.id} className={`card ${quest.offer.difficulty}`}>
-                {quest.offer.chain ? (
-                  <ChainQuestBanner chainId={quest.offer.chain.chainId} height={48} style={{ opacity: 0.85 }} />
-                ) : onTheRoadTagSrc ? (
-                  <div className="raid-active-banner" style={{ backgroundImage: `url(${onTheRoadTagSrc})`, opacity: 0.85 }} />
-                ) : null}
-                <div className="spread">
-                  <span className="card-title quest-title">{quest.offer.name}</span>
-                  <span className="small gold-text">{formatDuration(quest.endsAt - now)}</span>
-                </div>
-                <div className="stat-row" style={{ margin: '4px 0 6px' }}>
-                  <span>{questHero?.name ?? 'A hero'}</span>
-                  <span>Success <b>{Math.round(quest.finalSuccess)}%</b></span>
-                  <span>Reward <b className="gold-text">{formatGold(quest.offer.rewardGold * quest.goldMultiplier)}</b></span>
-                  {quest.consumables.length > 0 && (
-                    <span>Used {quest.consumables.map((c) => InventoryManager.resolveDef(state, c)?.name).join(', ')}</span>
-                  )}
-                </div>
-                <div className="bar"><span style={{ width: `${progress}%` }} /></div>
-                <div className="row end" style={{ marginTop: 6 }}>
-                  <button
-                    className="btn-ghost"
-                    style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
-                    onClick={() => recall(quest.heroId)}
-                  >
-                    Recall
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </>
-      )}
-
       {/* ------------------------------- hero tabs ------------------------------- */}
+      {/* Page reorder (patch 0353, direct request): Heroes moved to the top of
+          the page, Chain Tactics under that, then the contract cards --
+          "On the road" (every active quest, every hero) moved to the very
+          bottom instead of sitting up here first. The selected hero's OWN
+          active quest, if they have one, still shows immediately below --
+          see the Contracts section further down -- so a player doesn't have
+          to scroll past their own pick to find it. */}
       <div className="spread" style={{ alignItems: 'center' }}>
         <div className="section-heading" style={{ marginBottom: 0 }}>Heroes</div>
         {idleCount > 0 && (
@@ -691,6 +700,11 @@ export function QuestPanel() {
             Send All Idle ({idleCount})
           </button>
         )}
+      </div>
+      <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+        {state.heroes.map((h) => (
+          <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />
+        ))}
       </div>
 
       {/* Chain Tactics -- guild-wide overrides for what the Auto-Chain
@@ -741,17 +755,31 @@ export function QuestPanel() {
         </div>
       )}
 
-      <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
-        {state.heroes.map((h) => (
-          <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />
-        ))}
-      </div>
-
+      {/* ------------------------------- contracts ------------------------------- */}
       {selectedHero.status === 'questing' ? (
-        <p className="small muted">{selectedHero.name} is already out -- see "On the road" above.</p>
+        // Direct request: rather than a plain "already out" line pointing
+        // down to the (now bottom-of-page) On the road list, the selected
+        // hero's own active quest fills this same slot -- same card the
+        // full On the road list uses further down, just the one that
+        // belongs to whoever's tab is actually open right now.
+        (() => {
+          const ownActiveQuest = state.activeQuests.find((q) => q.heroId === selectedHero.id);
+          return ownActiveQuest
+            ? (
+              <>
+                <div className="section-heading" style={{ marginBottom: 0 }}>{selectedHero.name} is on the road</div>
+                <ActiveQuestCard
+                  quest={ownActiveQuest}
+                  questHero={selectedHero}
+                  now={now}
+                  onRecall={() => recall(selectedHero.id)}
+                />
+              </>
+            )
+            : <p className="small muted">{selectedHero.name} is already out.</p>;
+        })()
       ) : (
         <>
-          {/* ------------------------------- contracts ------------------------------- */}
           <div className="spread" style={{ alignItems: 'center' }}>
             <div className="section-heading" style={{ marginBottom: 0 }}>{selectedHero.name}'s Contracts</div>
             <div className="row" style={{ gap: 6 }}>
@@ -835,6 +863,28 @@ export function QuestPanel() {
               autoChainOwned={autoChainOwned}
             />
           )}
+        </>
+      )}
+
+      {/* --------------------------- active quests --------------------------- */}
+      {/* Every active quest, every hero -- moved to the bottom of the page
+          (patch 0353, direct request). The selected hero's own quest (if
+          any) already shows above in the Contracts slot; it's not excluded
+          from this list too, so this stays the one complete "everyone
+          currently out" overview regardless of which tab happens to be
+          open. */}
+      {state.activeQuests.length > 0 && (
+        <>
+          <div className="section-heading">On the road</div>
+          {state.activeQuests.map((quest) => (
+            <ActiveQuestCard
+              key={quest.id}
+              quest={quest}
+              questHero={state.heroes.find((h) => h.id === quest.heroId)}
+              now={now}
+              onRecall={() => recall(quest.heroId)}
+            />
+          ))}
         </>
       )}
 
