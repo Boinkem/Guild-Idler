@@ -1509,37 +1509,37 @@
     "name": "Heirloom Sigil of Vitality I",
     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_33_hue1.png",
     "materialCost": {
       "ore": 10,
       "timber": 5
     },
     "goldCost": 150,
+    "scrapCost": 17,
     "resultDefId": "heirloom_vitality_1",
-    "modOptions": [],
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 17
+    "statValue": 0
   },
   {
     "id": "craft_heirloom_vitality_2",
     "name": "Heirloom Sigil of Vitality II",
     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_26_hue4.png",
     "materialCost": {
       "ore": 25,
       "timber": 12,
       "herbs": 5
     },
     "goldCost": 600,
+    "scrapCost": 67,
     "resultDefId": "heirloom_vitality_2",
-    "modOptions": [],
     "modsToPick": 0,
     "modValue": 0,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 67
+    "statValue": 0
   },
   {
     "id": "craft_heirloom_vitality_3",
@@ -2089,11 +2089,13 @@
     "name": "Guildmade Gauntlets",
     "description": "Fitted knuckle to knuckle at the guild's own forge -- no rack of spares to pick through.",
     "category": "gear",
+    "icon": "armor/Armor_74.png",
     "materialCost": {
       "ore": 18,
       "timber": 8
     },
     "goldCost": 400,
+    "scrapCost": 44,
     "resultDefId": "guildmade_gauntlets",
     "modOptions": [
       "strength",
@@ -2103,19 +2105,20 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 44
+    "statValue": 0
   },
   {
     "id": "craft_guildmade_buckler",
     "name": "Guildmade Buckler",
     "description": "Guild-crested and sized to one arm. Never sold, never looted -- only ever made to order.",
     "category": "gear",
+    "icon": "shields/Shield_18.png",
     "materialCost": {
       "ore": 18,
       "timber": 8
     },
     "goldCost": 400,
+    "scrapCost": 44,
     "resultDefId": "guildmade_buckler",
     "modOptions": [
       "strength",
@@ -2125,19 +2128,20 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 44
+    "statValue": 0
   },
   {
     "id": "craft_guildmade_talisman",
     "name": "Guildmade Talisman",
     "description": "Strung and weighted by hand, to whoever's neck it's meant for.",
     "category": "gear",
+    "icon": "accessories/Accessory_25_hue2.png",
     "materialCost": {
       "ore": 18,
       "timber": 8
     },
     "goldCost": 400,
+    "scrapCost": 44,
     "resultDefId": "guildmade_talisman",
     "modOptions": [
       "strength",
@@ -2147,14 +2151,14 @@
     "modsToPick": 2,
     "modValue": 14,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 44
+    "statValue": 0
   },
   {
     "id": "craft_masterwork_band",
     "name": "Masterwork Band",
     "description": "The Masterwork line's own answer to a Guildmade Band -- same idea, a season further along.",
     "category": "gear",
+    "icon": "accessories/Accessory_04_hue2.png",
     "materialCost": {
       "ore": 75,
       "timber": 25,
@@ -2162,6 +2166,7 @@
       "fish": 12
     },
     "goldCost": 13000,
+    "scrapCost": 1444,
     "resultDefId": "masterwork_band",
     "modOptions": [
       "strength",
@@ -2172,14 +2177,14 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 1444
+    "statValue": 0
   },
   {
     "id": "craft_masterwork_bulwark",
     "name": "Masterwork Bulwark",
     "description": "Layered and tested against the guild's own training dummies before it's ever handed over.",
     "category": "gear",
+    "icon": "shields/Shield_24_hue5.png",
     "materialCost": {
       "ore": 75,
       "timber": 25,
@@ -2187,6 +2192,7 @@
       "fish": 12
     },
     "goldCost": 13000,
+    "scrapCost": 1444,
     "resultDefId": "masterwork_bulwark",
     "modOptions": [
       "strength",
@@ -2197,14 +2203,14 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 1444
+    "statValue": 0
   },
   {
     "id": "craft_masterwork_mantle",
     "name": "Masterwork Mantle",
     "description": "Cut and weighted for one set of shoulders, not adjusted to fit a dozen.",
     "category": "gear",
+    "icon": "armor/Armor_09_hue5.png",
     "materialCost": {
       "ore": 75,
       "timber": 25,
@@ -2212,6 +2218,7 @@
       "fish": 12
     },
     "goldCost": 13000,
+    "scrapCost": 1444,
     "resultDefId": "masterwork_mantle",
     "modOptions": [
       "strength",
@@ -2222,7 +2229,6 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 1444
+    "statValue": 0
   }
 ]

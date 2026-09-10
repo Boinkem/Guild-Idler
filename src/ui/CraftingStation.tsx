@@ -14,9 +14,9 @@ import {
   CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Rarity, Stats,
 } from '../game/types';
 import {
-  describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP,
+  describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP, STAT_EFFECT_TOOLTIP,
 } from '../game/util';
-import { RecipeIcon, ItemIcon, MaterialIcon } from './icons';
+import { RecipeIcon, ItemIcon, MaterialIcon, StatIcon } from './icons';
 import { RarityPill } from './RarityPill';
 
 type Category = CraftingRecipeDef['category'];
@@ -780,8 +780,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
 
   function handleTopPick(key: string) {
     if (category === 'enchant') setPreviewUid(key);
-    else if (isConsumableLike) setPreviewRecipeId(key);
-    else pickRecipe(key);
+    else setPreviewRecipeId(key);
   }
 
   /* ---------------------------- gear mod slots ---------------------------- */
@@ -795,7 +794,11 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     // than the old `+N% Label` mod-flavored text.
     const options: PickerOption[] = ((recipe?.modOptions ?? []) as (keyof Stats)[])
       .filter((m) => m !== otherPicked)
-      .map((m) => ({ key: m, label: `+${recipe?.modValue ?? 0} ${craftingStatLabel(m)}` }));
+      .map((m) => ({
+        key: m, label: `+${recipe?.modValue ?? 0} ${craftingStatLabel(m)}`,
+        icon: <StatIcon stat={m} size={40} />,
+        sublabel: m === 'strength' ? MAIN_STAT_TOOLTIP : STAT_EFFECT_TOOLTIP[m],
+      }));
     return {
       filled: picked ? <span className="craft-slot-label">+{recipe?.modValue} {craftingStatLabel(picked)}</span> : null,
       options,
@@ -810,12 +813,13 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   const statOptions: PickerOption[] = (recipe?.statOptions ?? []).map((s) => ({
     key: s,
     label: `+${recipe?.statValue ?? 0} ${craftingStatLabel(s)}`,
+    icon: <StatIcon stat={s} size={40} />,
     // Only the Main Stat option gets a sublabel -- the others (Endurance/
     // Luck/Wisdom) don't need explaining, and an empty "Details" cell next
     // to them reads fine once at least one row in the table has real
     // content there (hasSublabels only needs one true to show the column
     // at all).
-    sublabel: s === 'strength' ? MAIN_STAT_TOOLTIP : undefined,
+    sublabel: s === 'strength' ? MAIN_STAT_TOOLTIP : STAT_EFFECT_TOOLTIP[s],
     disabled: !chosenStats.includes(s) && chosenStats.length >= statsToPick,
   }));
 
@@ -1028,19 +1032,34 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         />
       )}
 
-      {/* Confirm step for a consumable/charm recipe pick (patch 0347,
-          direct report) -- the table row's own sublabel is
-          materialBadges() now, not a description, so this is the only
-          place left to actually read what the recipe does before
-          committing to it. onContinue is what used to fire straight from
-          the table row's onPick: pickRecipe(id), unchanged. */}
-      {isConsumableLike && previewRecipe && (
+      {/* Confirm step before a recipe pick actually commits (patch 0347 for
+          consumable/charm; widened patch 0361 to gear/gem too, direct
+          report: "when selecting an item from the list, it goes straight
+          to the UI... it should maybe give you a card... then confirming
+          from there"). The table row's own sublabel is materialBadges()
+          for consumable/charm and gear/gem alike now, not a description,
+          so this is the only place left to actually read what the recipe
+          does before committing to it. For a fixed-mod gear recipe
+          (modsToPick === 0 -- every Heirloom, nothing to pick afterward)
+          the detail also shows the exact bonus the crafted item will
+          carry, via the same describeMods the Enhance/Inventory cards
+          already use -- for an ordinary Guildmade/Masterwork pick
+          (modsToPick > 0) there's nothing fixed to show yet, that choice
+          still happens in the next step same as before. onContinue is
+          what used to fire straight from the table row's onPick:
+          pickRecipe(id), unchanged. */}
+      {previewRecipe && (
         <OptionPreviewModal
           icon={<RecipeIcon icon={previewRecipe.icon} category={category} size={48} />}
           title={previewRecipe.name}
           detail={(
             <>
               <div style={{ marginBottom: 6 }}>{previewRecipe.description}</div>
+              {previewRecipe.category === 'gear' && (previewRecipe.modsToPick ?? 0) === 0 && previewRecipe.resultDefId && (
+                <div className="stat-row" style={{ margin: '0 0 6px' }}>
+                  {describeMods(EQUIPMENT_BY_ID[previewRecipe.resultDefId]?.mods).map((line) => <span key={line}>{line}</span>)}
+                </div>
+              )}
               {materialBadges(previewRecipe)}
             </>
           )}

@@ -395,23 +395,33 @@ export function SettingsPanel() {
       </div>
       <button className="btn-ghost" onClick={reset}>Reset settings to defaults</button>
 
-      {/* Deliberately no label, no section-heading, no hint text -- a
-          screenshot of this page shouldn't read as "here's a secret
-          button," it should just look like an odd little punctuation
-          mark at the bottom of the page and nothing more. Fully gone
-          (not just invisible) once TESTING_TOOLS_ENABLED flips to false
-          before a real release, same as the tab itself used to be. */}
+      {/* Direct follow-up: the first version of this (a single, near-
+          black, 0.5-opacity "." on var(--edge)) turned out to be
+          genuinely invisible, not just subtle -- --edge is a near-black
+          #0e0b14-#000000 across every dark theme, so a 50%-opacity dot in
+          that color against a dark panel background was below the noise
+          floor, not "hard to notice." Bumped to var(--muted) (still a
+          deliberately quiet, unlabeled color, just one actually meant to
+          read as text rather than disappear) at higher opacity, and "···"
+          instead of a single "." reads more like a real (if unlabeled)
+          control at a glance. Still no label, no section-heading, no hint
+          text -- a screenshot of this page shouldn't announce "here's a
+          secret button" -- just no longer literally unfindable. Fully
+          gone (not just invisible) once TESTING_TOOLS_ENABLED flips to
+          false before a real release, same as the tab itself used to
+          be. */}
       {TESTING_TOOLS_ENABLED && (
         <div style={{ textAlign: 'center', marginTop: 24 }}>
           <button
             onClick={() => setShowTesting(true)}
             aria-label="Testing tools"
+            title="Testing tools"
             style={{
-              background: 'none', border: 'none', color: 'var(--edge)',
-              fontSize: '0.625rem', padding: 4, cursor: 'pointer', opacity: 0.5,
+              background: 'none', border: 'none', color: 'var(--muted)',
+              fontSize: '1rem', padding: 4, cursor: 'pointer', opacity: 0.7,
             }}
           >
-            {'\u00b7'}
+            {'\u00b7\u00b7\u00b7'}
           </button>
         </div>
       )}

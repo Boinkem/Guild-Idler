@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { EquipSlot } from '../game/types';
+import { EquipSlot, Stats } from '../game/types';
+import { STAT_GLYPH } from '../game/util';
 
 /**
  * Emoji placeholder per slot, shown whenever an item has no icon assigned
@@ -76,6 +77,16 @@ export function ConsumableIcon({ icon, glyph, size = 40 }: { icon?: string; glyp
 /** Falls back to a per-category glyph (gear/consumable/enchant/gem/charm) when a recipe has no icon assigned. */
 export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant' | 'gem' | 'charm'; size?: number }) {
   return <IconBox icon={icon} size={size} fallback={CATEGORY_FALLBACK[category]} />;
+}
+
+/** Glyph-only, no image-path variant -- a Stat isn't a physical item, so
+ *  there's nothing for it to fall back FROM the way every other IconBox
+ *  user has an optional `icon` path. See STAT_GLYPH's own comment
+ *  (util.ts) for why. Patch 0361, direct request: gear/enchant's own
+ *  stat-choice pickers previously showed plain text rows with no icon
+ *  column at all. */
+export function StatIcon({ stat, size = 40 }: { stat: keyof Stats; size?: number }) {
+  return <IconBox size={size} fallback={STAT_GLYPH[stat]} />;
 }
 
 /** Falls back to the material's own glyph when no icon is assigned yet --

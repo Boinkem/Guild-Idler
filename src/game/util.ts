@@ -218,6 +218,34 @@ export const STAT_LABEL: Record<keyof Stats, string> = {
   wisdom: 'Wisdom',
 };
 
+/** Single-glyph fallback per stat, same role as MaterialDef.glyph/
+ *  ConsumableDef.glyph -- used wherever a stat-choice picker (gear's own
+ *  bonus slots, Weapon Enchanting's stat pick) shows an icon column
+ *  (patch 0361, direct request: "give these text-based items an Icon").
+ *  No image-file variant exists for these the way equipment/consumables
+ *  have -- a stat isn't a physical item, so the glyph IS the icon, not a
+ *  fallback for a missing one. */
+export const STAT_GLYPH: Record<keyof Stats, string> = {
+  strength: '\u{1F4AA}', endurance: '\u{1F6E1}\uFE0F', luck: '\u{1F340}', wisdom: '\u{1F4D6}',
+};
+
+/** One-line "what this stat actually does" -- derived straight from
+ *  HeroManager.statMods' own real formula (strength -> success, luck ->
+ *  gold + loot, wisdom -> xp, endurance -> injuryResist + speed), not
+ *  separately hand-written flavor text that could drift out of sync
+ *  with what the stat actually grants. Shown as a picker sublabel
+ *  wherever a stat choice needs explaining (patch 0361, direct request:
+ *  "they still get to see what it does") -- strength keeps its own
+ *  MAIN_STAT_TOOLTIP instead (the role-substitution note matters more
+ *  there than restating "boosts success chance," which the label`+N
+ *  Main Stat` already implies). */
+export const STAT_EFFECT_TOOLTIP: Record<keyof Stats, string> = {
+  strength: 'Boosts quest success chance.',
+  endurance: 'Reduces injury risk and quest duration.',
+  luck: 'Boosts gold earned and rare loot chance.',
+  wisdom: 'Boosts experience earned.',
+};
+
 /**
  * Strength's display name per combat role -- what the stat actually does
  * never changes (still `strength` under the hood, same growth curve, same

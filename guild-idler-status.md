@@ -28127,7 +28127,92 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### Enhance redesign: two-slot before/after preview with new art; Testing Tools moved off the main tab bar; two new test buttons (patch 0360)
+### Crafting recipe pickers now confirm before committing (gear/gem, matching consumable/charm); stat-bonus pickers get icons and descriptions; hidden Settings button was genuinely invisible (patch 0361)
+```discord-update
+Dev Update | Patch 0361
+
+- Picking a Gear or Gem recipe now shows a confirm card first, same as Consumable/Charm already did -- name, description, materials, and (for fixed-bonus recipes like Heirlooms) the exact stats it'll carry
+- The "choose a bonus" stat picker now shows an icon and a one-line description for each option instead of plain text
+- Fixed the hidden Testing Tools button in Settings actually being invisible, not just subtle
+```
+
+Direct follow-up to patch 0360's Testing Tools relocation and Enhance
+redesign, plus a UI consistency pass across every crafting/enchant
+picker.
+
+**Hidden Settings button was actually invisible (`SettingsPanel.tsx`).**
+Direct report, with a screenshot showing no button at all where one was
+supposed to be. Root cause: `var(--edge)` is a near-black color in every
+dark theme (`#0e0b14` to literal `#000000` in High Contrast), so a
+single "." at 50% opacity in that color against a dark panel background
+wasn't subtle, it was below the noise floor -- genuinely unfindable, not
+just easy to miss. Switched to `var(--muted)` (a color meant to read as
+quiet text, not disappear) at higher opacity, and "···" instead of a
+single "." so it reads as an actual control at a glance. Still no
+label, no heading, no hint text -- a casual screenshot shouldn't
+announce "here's a secret button" -- just no longer literally
+impossible to find when you know to look for it.
+
+**Crafting/Gem recipe picks now confirm before committing
+(`CraftingStation.tsx`).** Direct report: "when selecting an item from
+the list, it goes straight to the UI to start doing whatever... it
+should maybe give you a card... then confirming from there." Turned out
+the game already had exactly this pattern -- `OptionPreviewModal`, built
+in patch 0347 for Consumable/Charm recipes and already used by Weapon
+Enchanting/Armour Infusion's own picks -- it just wasn't applied to Gear
+or Gem recipes yet (`handleTopPick` routed straight to `pickRecipe`
+for those two, skipping the preview step entirely). Widened it to cover
+every recipe category: picking any Gear or Gem recipe now opens the
+same confirm card first (icon, name, description, live material/gold/
+scrap affordability) before landing in the actual crafting UI. One
+addition beyond what Consumable/Charm's own card shows: a fixed-bonus
+Gear recipe (`modsToPick === 0` -- every Heirloom, nothing left to pick
+afterward) now also shows the exact stats the crafted item will carry,
+via the same `describeMods` the Enhance/Inventory cards already use --
+an ordinary Guildmade/Masterwork pick (`modsToPick > 0`) has nothing
+fixed to show yet, that choice still happens in the next step exactly
+as before.
+
+**Stat-bonus pickers get icons and descriptions
+(`util.ts`, `icons.tsx`, `CraftingStation.tsx`).** Direct request, with
+a screenshot of the plain-text "Choose a bonus" list ("+14 Main Stat,"
+"+14 Luck," "+14 Wisdom," no icon, no explanation). New `STAT_GLYPH`
+(a single emoji per stat, same role `MaterialDef.glyph`/
+`ConsumableDef.glyph` already play for their own icon fallbacks -- a
+stat isn't a physical item, so the glyph IS the icon here, not a
+fallback for a missing image) and new `StatIcon` component render it.
+New `STAT_EFFECT_TOOLTIP` gives each non-Strength option (Endurance/
+Luck/Wisdom) a one-line "what this actually does" sublabel, derived
+directly from `HeroManager.statMods`' own real formula (Strength ->
+success, Luck -> gold + loot, Wisdom -> xp, Endurance -> injuryResist +
+speed) rather than separately hand-written flavor text that could drift
+out of sync with what the stat actually grants. Strength keeps its
+existing `MAIN_STAT_TOOLTIP` (the role-substitution note matters more
+there than restating "boosts success chance," which the "+N Main Stat"
+label already implies). Applied to both of Gear's own bonus slots and
+Weapon Enchanting's stat picker -- the two places this list shape
+exists.
+
+**Discussed, not yet built: tiered crafting bonuses.** Direct point
+raised in the same message, correctly: a recipe's `modValue` is a flat
+number on the recipe itself, not scaled by the level you craft at --
+"what you would craft can go to a level 1, or a level 20, but they only
+get the same stats on the gear." Flagged for a fuller design discussion
+before any code, per the request's own framing ("we're probably going
+to need to discuss this change in full") -- crafting's role relative to
+raid/quest drops (an alternative path, not a competing one, unless
+Masterworked) needs deciding before picking between the two directions
+raised (tiering bonuses behind more recipes vs. a level-picker on the
+confirm card that scales `modValue` live).
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live in-app playtest in this
+environment -- worth confirming the widened confirm-card doesn't feel
+like an extra click too many for a quick Gem craft (the category with
+the most repetitive, low-stakes picks -- 40 recipes, same 2-3 gold cost
+tier), and that the new stat icons render sensibly across every theme.
+
+
 ```discord-update
 Dev Update | Patch 0360
 

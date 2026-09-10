@@ -1,0 +1,326 @@
+From 4b870181199bc374444e2529a431039d43a41bf3 Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Thu, 10 Sep 2026 03:22:45 +0000
+Subject: [PATCH] Patch 0361: recipe-pick confirm cards for gear/gem,
+ stat-picker icons+descriptions, fix invisible testing button
+
+---
+ guild-idler-status.md           | 87 ++++++++++++++++++++++++++++++++-
+ src/game/util.ts                | 28 +++++++++++
+ src/ui/CraftingStation.tsx      | 45 ++++++++++++-----
+ src/ui/icons.tsx                | 13 ++++-
+ src/ui/panels/SettingsPanel.tsx | 28 +++++++----
+ 5 files changed, 177 insertions(+), 24 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f9b7f35..0d29e3b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,7 +28127,92 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
+-### Enhance redesign: two-slot before/after preview with new art; Testing Tools moved off the main tab bar; two new test buttons (patch 0360)
++### Crafting recipe pickers now confirm before committing (gear/gem, matching consumable/charm); stat-bonus pickers get icons and descriptions; hidden Settings button was genuinely invisible (patch 0361)
++```discord-update
++Dev Update | Patch 0361
++
++- Picking a Gear or Gem recipe now shows a confirm card first, same as Consumable/Charm already did -- name, description, materials, and (for fixed-bonus recipes like Heirlooms) the exact stats it'll carry
++- The "choose a bonus" stat picker now shows an icon and a one-line description for each option instead of plain text
++- Fixed the hidden Testing Tools button in Settings actually being invisible, not just subtle
++```
++
++Direct follow-up to patch 0360's Testing Tools relocation and Enhance
++redesign, plus a UI consistency pass across every crafting/enchant
++picker.
++
++**Hidden Settings button was actually invisible (`SettingsPanel.tsx`).**
++Direct report, with a screenshot showing no button at all where one was
++supposed to be. Root cause: `var(--edge)` is a near-black color in every
++dark theme (`#0e0b14` to literal `#000000` in High Contrast), so a
++single "." at 50% opacity in that color against a dark panel background
++wasn't subtle, it was below the noise floor -- genuinely unfindable, not
++just easy to miss. Switched to `var(--muted)` (a color meant to read as
++quiet text, not disappear) at higher opacity, and "···" instead of a
++single "." so it reads as an actual control at a glance. Still no
++label, no heading, no hint text -- a casual screenshot shouldn't
++announce "here's a secret button" -- just no longer literally
++impossible to find when you know to look for it.
++
++**Crafting/Gem recipe picks now confirm before committing
++(`CraftingStation.tsx`).** Direct report: "when selecting an item from
++the list, it goes straight to the UI to start doing whatever... it
++should maybe give you a card... then confirming from there." Turned out
++the game already had exactly this pattern -- `OptionPreviewModal`, built
++in patch 0347 for Consumable/Charm recipes and already used by Weapon
++Enchanting/Armour Infusion's own picks -- it just wasn't applied to Gear
++or Gem recipes yet (`handleTopPick` routed straight to `pickRecipe`
++for those two, skipping the preview step entirely). Widened it to cover
++every recipe category: picking any Gear or Gem recipe now opens the
++same confirm card first (icon, name, description, live material/gold/
++scrap affordability) before landing in the actual crafting UI. One
++addition beyond what Consumable/Charm's own card shows: a fixed-bonus
++Gear recipe (`modsToPick === 0` -- every Heirloom, nothing left to pick
++afterward) now also shows the exact stats the crafted item will carry,
++via the same `describeMods` the Enhance/Inventory cards already use --
++an ordinary Guildmade/Masterwork pick (`modsToPick > 0`) has nothing
++fixed to show yet, that choice still happens in the next step exactly
++as before.
++
++**Stat-bonus pickers get icons and descriptions
++(`util.ts`, `icons.tsx`, `CraftingStation.tsx`).** Direct request, with
++a screenshot of the plain-text "Choose a bonus" list ("+14 Main Stat,"
++"+14 Luck," "+14 Wisdom," no icon, no explanation). New `STAT_GLYPH`
++(a single emoji per stat, same role `MaterialDef.glyph`/
++`ConsumableDef.glyph` already play for their own icon fallbacks -- a
++stat isn't a physical item, so the glyph IS the icon here, not a
++fallback for a missing image) and new `StatIcon` component render it.
++New `STAT_EFFECT_TOOLTIP` gives each non-Strength option (Endurance/
++Luck/Wisdom) a one-line "what this actually does" sublabel, derived
++directly from `HeroManager.statMods`' own real formula (Strength ->
++success, Luck -> gold + loot, Wisdom -> xp, Endurance -> injuryResist +
++speed) rather than separately hand-written flavor text that could drift
++out of sync with what the stat actually grants. Strength keeps its
++existing `MAIN_STAT_TOOLTIP` (the role-substitution note matters more
++there than restating "boosts success chance," which the "+N Main Stat"
++label already implies). Applied to both of Gear's own bonus slots and
++Weapon Enchanting's stat picker -- the two places this list shape
++exists.
++
++**Discussed, not yet built: tiered crafting bonuses.** Direct point
++raised in the same message, correctly: a recipe's `modValue` is a flat
++number on the recipe itself, not scaled by the level you craft at --
++"what you would craft can go to a level 1, or a level 20, but they only
++get the same stats on the gear." Flagged for a fuller design discussion
++before any code, per the request's own framing ("we're probably going
++to need to discuss this change in full") -- crafting's role relative to
++raid/quest drops (an alternative path, not a competing one, unless
++Masterworked) needs deciding before picking between the two directions
++raised (tiering bonuses behind more recipes vs. a level-picker on the
++confirm card that scales `modValue` live).
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. No live in-app playtest in this
++environment -- worth confirming the widened confirm-card doesn't feel
++like an extra click too many for a quick Gem craft (the category with
++the most repetitive, low-stakes picks -- 40 recipes, same 2-3 gold cost
++tier), and that the new stat icons render sensibly across every theme.
++
++
+ ```discord-update
+ Dev Update | Patch 0360
+ 
+diff --git a/src/game/util.ts b/src/game/util.ts
+index b6f810d..a0cd5d2 100644
+--- a/src/game/util.ts
++++ b/src/game/util.ts
+@@ -218,6 +218,34 @@ export const STAT_LABEL: Record<keyof Stats, string> = {
+   wisdom: 'Wisdom',
+ };
+ 
++/** Single-glyph fallback per stat, same role as MaterialDef.glyph/
++ *  ConsumableDef.glyph -- used wherever a stat-choice picker (gear's own
++ *  bonus slots, Weapon Enchanting's stat pick) shows an icon column
++ *  (patch 0361, direct request: "give these text-based items an Icon").
++ *  No image-file variant exists for these the way equipment/consumables
++ *  have -- a stat isn't a physical item, so the glyph IS the icon, not a
++ *  fallback for a missing one. */
++export const STAT_GLYPH: Record<keyof Stats, string> = {
++  strength: '\u{1F4AA}', endurance: '\u{1F6E1}\uFE0F', luck: '\u{1F340}', wisdom: '\u{1F4D6}',
++};
++
++/** One-line "what this stat actually does" -- derived straight from
++ *  HeroManager.statMods' own real formula (strength -> success, luck ->
++ *  gold + loot, wisdom -> xp, endurance -> injuryResist + speed), not
++ *  separately hand-written flavor text that could drift out of sync
++ *  with what the stat actually grants. Shown as a picker sublabel
++ *  wherever a stat choice needs explaining (patch 0361, direct request:
++ *  "they still get to see what it does") -- strength keeps its own
++ *  MAIN_STAT_TOOLTIP instead (the role-substitution note matters more
++ *  there than restating "boosts success chance," which the label`+N
++ *  Main Stat` already implies). */
++export const STAT_EFFECT_TOOLTIP: Record<keyof Stats, string> = {
++  strength: 'Boosts quest success chance.',
++  endurance: 'Reduces injury risk and quest duration.',
++  luck: 'Boosts gold earned and rare loot chance.',
++  wisdom: 'Boosts experience earned.',
++};
++
+ /**
+  * Strength's display name per combat role -- what the stat actually does
+  * never changes (still `strength` under the hood, same growth curve, same
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 5ad7178..8cb319f 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -14,9 +14,9 @@ import {
+   CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Rarity, Stats,
+ } from '../game/types';
+ import {
+-  describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP,
++  describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP, STAT_EFFECT_TOOLTIP,
+ } from '../game/util';
+-import { RecipeIcon, ItemIcon, MaterialIcon } from './icons';
++import { RecipeIcon, ItemIcon, MaterialIcon, StatIcon } from './icons';
+ import { RarityPill } from './RarityPill';
+ 
+ type Category = CraftingRecipeDef['category'];
+@@ -780,8 +780,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+ 
+   function handleTopPick(key: string) {
+     if (category === 'enchant') setPreviewUid(key);
+-    else if (isConsumableLike) setPreviewRecipeId(key);
+-    else pickRecipe(key);
++    else setPreviewRecipeId(key);
+   }
+ 
+   /* ---------------------------- gear mod slots ---------------------------- */
+@@ -795,7 +794,11 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     // than the old `+N% Label` mod-flavored text.
+     const options: PickerOption[] = ((recipe?.modOptions ?? []) as (keyof Stats)[])
+       .filter((m) => m !== otherPicked)
+-      .map((m) => ({ key: m, label: `+${recipe?.modValue ?? 0} ${craftingStatLabel(m)}` }));
++      .map((m) => ({
++        key: m, label: `+${recipe?.modValue ?? 0} ${craftingStatLabel(m)}`,
++        icon: <StatIcon stat={m} size={40} />,
++        sublabel: m === 'strength' ? MAIN_STAT_TOOLTIP : STAT_EFFECT_TOOLTIP[m],
++      }));
+     return {
+       filled: picked ? <span className="craft-slot-label">+{recipe?.modValue} {craftingStatLabel(picked)}</span> : null,
+       options,
+@@ -810,12 +813,13 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+   const statOptions: PickerOption[] = (recipe?.statOptions ?? []).map((s) => ({
+     key: s,
+     label: `+${recipe?.statValue ?? 0} ${craftingStatLabel(s)}`,
++    icon: <StatIcon stat={s} size={40} />,
+     // Only the Main Stat option gets a sublabel -- the others (Endurance/
+     // Luck/Wisdom) don't need explaining, and an empty "Details" cell next
+     // to them reads fine once at least one row in the table has real
+     // content there (hasSublabels only needs one true to show the column
+     // at all).
+-    sublabel: s === 'strength' ? MAIN_STAT_TOOLTIP : undefined,
++    sublabel: s === 'strength' ? MAIN_STAT_TOOLTIP : STAT_EFFECT_TOOLTIP[s],
+     disabled: !chosenStats.includes(s) && chosenStats.length >= statsToPick,
+   }));
+ 
+@@ -1028,19 +1032,34 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+         />
+       )}
+ 
+-      {/* Confirm step for a consumable/charm recipe pick (patch 0347,
+-          direct report) -- the table row's own sublabel is
+-          materialBadges() now, not a description, so this is the only
+-          place left to actually read what the recipe does before
+-          committing to it. onContinue is what used to fire straight from
+-          the table row's onPick: pickRecipe(id), unchanged. */}
+-      {isConsumableLike && previewRecipe && (
++      {/* Confirm step before a recipe pick actually commits (patch 0347 for
++          consumable/charm; widened patch 0361 to gear/gem too, direct
++          report: "when selecting an item from the list, it goes straight
++          to the UI... it should maybe give you a card... then confirming
++          from there"). The table row's own sublabel is materialBadges()
++          for consumable/charm and gear/gem alike now, not a description,
++          so this is the only place left to actually read what the recipe
++          does before committing to it. For a fixed-mod gear recipe
++          (modsToPick === 0 -- every Heirloom, nothing to pick afterward)
++          the detail also shows the exact bonus the crafted item will
++          carry, via the same describeMods the Enhance/Inventory cards
++          already use -- for an ordinary Guildmade/Masterwork pick
++          (modsToPick > 0) there's nothing fixed to show yet, that choice
++          still happens in the next step same as before. onContinue is
++          what used to fire straight from the table row's onPick:
++          pickRecipe(id), unchanged. */}
++      {previewRecipe && (
+         <OptionPreviewModal
+           icon={<RecipeIcon icon={previewRecipe.icon} category={category} size={48} />}
+           title={previewRecipe.name}
+           detail={(
+             <>
+               <div style={{ marginBottom: 6 }}>{previewRecipe.description}</div>
++              {previewRecipe.category === 'gear' && (previewRecipe.modsToPick ?? 0) === 0 && previewRecipe.resultDefId && (
++                <div className="stat-row" style={{ margin: '0 0 6px' }}>
++                  {describeMods(EQUIPMENT_BY_ID[previewRecipe.resultDefId]?.mods).map((line) => <span key={line}>{line}</span>)}
++                </div>
++              )}
+               {materialBadges(previewRecipe)}
+             </>
+           )}
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+index 39488be..c165951 100644
+--- a/src/ui/icons.tsx
++++ b/src/ui/icons.tsx
+@@ -1,5 +1,6 @@
+ import { useState } from 'react';
+-import { EquipSlot } from '../game/types';
++import { EquipSlot, Stats } from '../game/types';
++import { STAT_GLYPH } from '../game/util';
+ 
+ /**
+  * Emoji placeholder per slot, shown whenever an item has no icon assigned
+@@ -78,6 +79,16 @@ export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; categ
+   return <IconBox icon={icon} size={size} fallback={CATEGORY_FALLBACK[category]} />;
+ }
+ 
++/** Glyph-only, no image-path variant -- a Stat isn't a physical item, so
++ *  there's nothing for it to fall back FROM the way every other IconBox
++ *  user has an optional `icon` path. See STAT_GLYPH's own comment
++ *  (util.ts) for why. Patch 0361, direct request: gear/enchant's own
++ *  stat-choice pickers previously showed plain text rows with no icon
++ *  column at all. */
++export function StatIcon({ stat, size = 40 }: { stat: keyof Stats; size?: number }) {
++  return <IconBox size={size} fallback={STAT_GLYPH[stat]} />;
++}
++
+ /** Falls back to the material's own glyph when no icon is assigned yet --
+  *  same shape as ConsumableIcon. Used for static/stable material displays
+  *  (Crafting's materials-needed list, Warehouse stock, scrap fly-up
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index 00d25a0..1897703 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -395,23 +395,33 @@ export function SettingsPanel() {
+       </div>
+       <button className="btn-ghost" onClick={reset}>Reset settings to defaults</button>
+ 
+-      {/* Deliberately no label, no section-heading, no hint text -- a
+-          screenshot of this page shouldn't read as "here's a secret
+-          button," it should just look like an odd little punctuation
+-          mark at the bottom of the page and nothing more. Fully gone
+-          (not just invisible) once TESTING_TOOLS_ENABLED flips to false
+-          before a real release, same as the tab itself used to be. */}
++      {/* Direct follow-up: the first version of this (a single, near-
++          black, 0.5-opacity "." on var(--edge)) turned out to be
++          genuinely invisible, not just subtle -- --edge is a near-black
++          #0e0b14-#000000 across every dark theme, so a 50%-opacity dot in
++          that color against a dark panel background was below the noise
++          floor, not "hard to notice." Bumped to var(--muted) (still a
++          deliberately quiet, unlabeled color, just one actually meant to
++          read as text rather than disappear) at higher opacity, and "···"
++          instead of a single "." reads more like a real (if unlabeled)
++          control at a glance. Still no label, no section-heading, no hint
++          text -- a screenshot of this page shouldn't announce "here's a
++          secret button" -- just no longer literally unfindable. Fully
++          gone (not just invisible) once TESTING_TOOLS_ENABLED flips to
++          false before a real release, same as the tab itself used to
++          be. */}
+       {TESTING_TOOLS_ENABLED && (
+         <div style={{ textAlign: 'center', marginTop: 24 }}>
+           <button
+             onClick={() => setShowTesting(true)}
+             aria-label="Testing tools"
++            title="Testing tools"
+             style={{
+-              background: 'none', border: 'none', color: 'var(--edge)',
+-              fontSize: '0.625rem', padding: 4, cursor: 'pointer', opacity: 0.5,
++              background: 'none', border: 'none', color: 'var(--muted)',
++              fontSize: '1rem', padding: 4, cursor: 'pointer', opacity: 0.7,
+             }}
+           >
+-            {'\u00b7'}
++            {'\u00b7\u00b7\u00b7'}
+           </button>
+         </div>
+       )}
+-- 
+2.43.0
+
