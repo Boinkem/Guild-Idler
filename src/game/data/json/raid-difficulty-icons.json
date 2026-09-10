@@ -14,10 +14,13 @@
   {
     "id": "mythic",
     "icon": {
-      "path": "raid-difficulty-icons/legendary.png"
+      "path": "raid-difficulty-icons/mythic.png"
     }
   },
   {
-    "id": "legendary"
+    "id": "legendary",
+    "icon": {
+      "path": "raid-difficulty-icons/legendary.png"
+    }
   }
 ]

@@ -502,11 +502,9 @@
     "cost": 40,
     "rarity": "common",
     "glyph": "✦",
+    "icon": "food/Food_12_hue2.png",
     "craftable": true,
-    "effect": {
-      "lootWeightStat": "wisdom",
-      "lootWeightMultiplier": 1.15
-    }
+    "effect": {}
   },
   {
     "id": "fortune_weave_gold",
@@ -515,11 +513,9 @@
     "cost": 150,
     "rarity": "rare",
     "glyph": "♦",
+    "icon": "misc/Misc_24.png",
     "craftable": true,
-    "effect": {
-      "lootWeightStat": "luck",
-      "lootWeightMultiplier": 2.5
-    }
+    "effect": {}
   },
   {
     "id": "fortune_weave_xp",
@@ -528,11 +524,9 @@
     "cost": 150,
     "rarity": "rare",
     "glyph": "✦",
+    "icon": "misc/Misc_24_hue2.png",
     "craftable": true,
-    "effect": {
-      "lootWeightStat": "wisdom",
-      "lootWeightMultiplier": 2.5
-    }
+    "effect": {}
   },
   {
     "id": "windfall_sigil_gold",
@@ -541,11 +535,9 @@
     "cost": 220,
     "rarity": "epic",
     "glyph": "♦",
+    "icon": "misc/Misc_25.png",
     "craftable": true,
-    "effect": {
-      "lootWeightStat": "luck",
-      "lootWeightMultiplier": 4.2
-    }
+    "effect": {}
   },
   {
     "id": "windfall_sigil_xp",
@@ -554,10 +546,8 @@
     "cost": 220,
     "rarity": "epic",
     "glyph": "✦",
+    "icon": "misc/Misc_25_hue1.png",
     "craftable": true,
-    "effect": {
-      "lootWeightStat": "wisdom",
-      "lootWeightMultiplier": 4.2
-    }
+    "effect": {}
   }
 ]

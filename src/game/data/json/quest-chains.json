@@ -783,13 +783,13 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/the_gathering_horde.png",
-      "focusX": 79.6,
-      "focusY": 35,
-      "scale": 119
+      "path": "chains/goblin_warband.png",
+      "focusX": 26.3,
+      "focusY": 41.4,
+      "scale": 102
     },
     "icon": {
-      "path": "chains-icons/the_gathering_horde.png"
+      "path": "chains-icons/goblin_warband.png"
     },
     "stages": [
       {
