@@ -9,6 +9,7 @@ import { MOD_LABEL } from '../util';
 import { EQUIPMENT_BY_ID } from '../data/equipment';
 import { isProceduralTemplate, rollProceduralItem } from '../data/proceduralLoot';
 import { createRng } from '../rng';
+import { RecipeManager } from './RecipeManager';
 
 export const CraftingManager = {
   /**
@@ -27,6 +28,14 @@ export const CraftingManager = {
 
   /** What's still missing to afford a recipe, if anything -- used to grey out the Craft button. */
   affordability(state: GameState, recipe: CraftingRecipeDef): { ok: boolean; reason?: string } {
+    // Patch 0357, WoW-style recipe drop/learn system, direct request --
+    // checked first, ahead of gold/scrap/materials: an unlearned recipe
+    // is unavailable full stop, not just "too expensive right now," and
+    // this is the one chokepoint all 4 craft-execution functions below
+    // already call before spending anything, so gating here protects
+    // every one of them plus the UI's own Craft-button greying in a
+    // single change. See RecipeManager.isKnown.
+    if (!RecipeManager.isKnown(state, recipe.id)) return { ok: false, reason: "You haven't learned this recipe yet." };
     if (state.gold < CraftingManager.goldCost(state, recipe)) return { ok: false, reason: 'Not enough gold.' };
     if ((recipe.scrapCost ?? 0) > state.scrap) return { ok: false, reason: 'Not enough scrap.' };
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {

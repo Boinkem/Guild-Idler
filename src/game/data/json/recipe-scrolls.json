@@ -1,0 +1,338 @@
+[
+  {
+    "id": "scroll_craft_elemental_gem_fire_uncommon",
+    "recipeId": "craft_elemental_gem_fire_uncommon",
+    "reqLevel": 12,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_frost_uncommon",
+    "recipeId": "craft_elemental_gem_frost_uncommon",
+    "reqLevel": 12,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_lightning_uncommon",
+    "recipeId": "craft_elemental_gem_lightning_uncommon",
+    "reqLevel": 12,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_poison_uncommon",
+    "recipeId": "craft_elemental_gem_poison_uncommon",
+    "reqLevel": 12,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_guildmade_band",
+    "recipeId": "craft_guildmade_band",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_blade",
+    "recipeId": "craft_guildmade_blade",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_boots",
+    "recipeId": "craft_guildmade_boots",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_cloak",
+    "recipeId": "craft_guildmade_cloak",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_helm",
+    "recipeId": "craft_guildmade_helm",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_plate",
+    "recipeId": "craft_guildmade_plate",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_fire_uncommon",
+    "recipeId": "craft_resistance_gem_fire_uncommon",
+    "reqLevel": 12,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_frost_uncommon",
+    "recipeId": "craft_resistance_gem_frost_uncommon",
+    "reqLevel": 12,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_lightning_uncommon",
+    "recipeId": "craft_resistance_gem_lightning_uncommon",
+    "reqLevel": 12,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_poison_uncommon",
+    "recipeId": "craft_resistance_gem_poison_uncommon",
+    "reqLevel": 12,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_alchemists_reserve",
+    "recipeId": "craft_alchemists_reserve",
+    "reqLevel": 15,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_trail_meal",
+    "recipeId": "craft_trail_meal",
+    "reqLevel": 15,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_fortune_weave_gold",
+    "recipeId": "craft_fortune_weave_gold",
+    "reqLevel": 18,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_fortune_weave_xp",
+    "recipeId": "craft_fortune_weave_xp",
+    "reqLevel": 18,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_enchant_standard_sigil",
+    "recipeId": "enchant_standard_sigil",
+    "reqLevel": 20,
+    "rarity": "uncommon"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_fire_rare",
+    "recipeId": "craft_elemental_gem_fire_rare",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_frost_rare",
+    "recipeId": "craft_elemental_gem_frost_rare",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_lightning_rare",
+    "recipeId": "craft_elemental_gem_lightning_rare",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_poison_rare",
+    "recipeId": "craft_elemental_gem_poison_rare",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_fire_rare",
+    "recipeId": "craft_resistance_gem_fire_rare",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_frost_rare",
+    "recipeId": "craft_resistance_gem_frost_rare",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_lightning_rare",
+    "recipeId": "craft_resistance_gem_lightning_rare",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_poison_rare",
+    "recipeId": "craft_resistance_gem_poison_rare",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_phoenix_ember",
+    "recipeId": "craft_phoenix_ember",
+    "reqLevel": 30,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_prospectors_cache",
+    "recipeId": "craft_prospectors_cache",
+    "reqLevel": 30,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_warband_feast",
+    "recipeId": "craft_warband_feast",
+    "reqLevel": 30,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_fire_epic",
+    "recipeId": "craft_elemental_gem_fire_epic",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_frost_epic",
+    "recipeId": "craft_elemental_gem_frost_epic",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_lightning_epic",
+    "recipeId": "craft_elemental_gem_lightning_epic",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_poison_epic",
+    "recipeId": "craft_elemental_gem_poison_epic",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_fire_epic",
+    "recipeId": "craft_resistance_gem_fire_epic",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_frost_epic",
+    "recipeId": "craft_resistance_gem_frost_epic",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_lightning_epic",
+    "recipeId": "craft_resistance_gem_lightning_epic",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_poison_epic",
+    "recipeId": "craft_resistance_gem_poison_epic",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_windfall_sigil_gold",
+    "recipeId": "craft_windfall_sigil_gold",
+    "reqLevel": 36,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_windfall_sigil_xp",
+    "recipeId": "craft_windfall_sigil_xp",
+    "reqLevel": 36,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_dragons_hoard_charm",
+    "recipeId": "craft_dragons_hoard_charm",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_enchant_greater_sigil",
+    "recipeId": "enchant_greater_sigil",
+    "reqLevel": 40,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_fire_legendary",
+    "recipeId": "craft_elemental_gem_fire_legendary",
+    "reqLevel": 48,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_frost_legendary",
+    "recipeId": "craft_elemental_gem_frost_legendary",
+    "reqLevel": 48,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_lightning_legendary",
+    "recipeId": "craft_elemental_gem_lightning_legendary",
+    "reqLevel": 48,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_elemental_gem_poison_legendary",
+    "recipeId": "craft_elemental_gem_poison_legendary",
+    "reqLevel": 48,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_fire_legendary",
+    "recipeId": "craft_resistance_gem_fire_legendary",
+    "reqLevel": 48,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_frost_legendary",
+    "recipeId": "craft_resistance_gem_frost_legendary",
+    "reqLevel": 48,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_lightning_legendary",
+    "recipeId": "craft_resistance_gem_lightning_legendary",
+    "reqLevel": 48,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_resistance_gem_poison_legendary",
+    "recipeId": "craft_resistance_gem_poison_legendary",
+    "reqLevel": 48,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_masterwork_gauntlets",
+    "recipeId": "craft_masterwork_gauntlets",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_masterwork_greathelm",
+    "recipeId": "craft_masterwork_greathelm",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_masterwork_plate",
+    "recipeId": "craft_masterwork_plate",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_masterwork_sabatons",
+    "recipeId": "craft_masterwork_sabatons",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_masterwork_sigil",
+    "recipeId": "craft_masterwork_sigil",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_masterwork_warblade",
+    "recipeId": "craft_masterwork_warblade",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  }
+]

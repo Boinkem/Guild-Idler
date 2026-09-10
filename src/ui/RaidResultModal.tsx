@@ -9,6 +9,8 @@ import { RarityPill } from './RarityPill';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { useCountUp } from './useCountUp';
 import { measureFlyOffset } from './flyTarget';
+import { RECIPE_SCROLL_BY_ID } from '../game/data/recipeScrolls';
+import { CRAFTING_RECIPE_BY_ID } from '../game/data/craftingRecipes';
 
 const DISMISS_DELAY_MS = 640;
 /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
@@ -139,6 +141,39 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
                 </span>
               ))}
             </div>
+          </>
+        )}
+
+        {/* Also-found extras -- same shape QuestResultModal's own
+            "Also found" section already uses. eggsFound (existed before
+            this patch) had never actually been wired into this modal
+            either, same "purely informational, silently unread" gap
+            QuestResultModal's own comment already found and fixed on
+            the quest side -- fixed here alongside recipeScrollGained
+            (patch 0357, WoW-style recipe drop/learn system) rather than
+            leaving eggsFound the one field in this raid result still
+            silently broken right next to the one that's now wired up. */}
+        {(result.eggsFound?.length || result.recipeScrollGained) && (
+          <>
+            <div className="section-heading">Also found</div>
+            {result.eggsFound?.map((egg, i) => (
+              <div key={i} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                <span className="small" style={{ color: RARITY_COLOR[egg.rarity] }}>A {egg.rarity} egg</span>
+                <RarityPill rarity={egg.rarity} />
+              </div>
+            ))}
+            {result.recipeScrollGained && (() => {
+              const scroll = RECIPE_SCROLL_BY_ID[result.recipeScrollGained.scrollId];
+              const recipe = scroll ? CRAFTING_RECIPE_BY_ID[scroll.recipeId] : undefined;
+              return (
+                <div className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                  <span className="small" style={{ color: scroll ? RARITY_COLOR[scroll.rarity] : undefined }}>
+                    Recipe: {recipe?.name ?? 'a new recipe'}
+                  </span>
+                  {scroll && <RarityPill rarity={scroll.rarity} />}
+                </div>
+              );
+            })()}
           </>
         )}
 

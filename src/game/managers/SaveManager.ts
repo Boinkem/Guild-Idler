@@ -11,6 +11,7 @@ import { PeddlerManager } from './PeddlerManager';
 import { HarvestManager } from './HarvestManager';
 import { EquipmentManager } from './EquipmentManager';
 import { tutorialQuestOffer } from '../data/quests';
+import { ALWAYS_KNOWN_RECIPE_IDS, RECIPE_SCROLLS } from '../data/recipeScrolls';
 
 /** Storage abstraction so the game also runs in a plain browser tab for testing. */
 export interface SaveAdapter {
@@ -210,6 +211,17 @@ export function createInitialState(now = Date.now()): GameState {
     pendingHeroTierUpId: null,
     materials: emptyMaterials(),
     curios: {},
+    // Patch 0357, WoW-style recipe drop/learn system -- a brand-new
+    // guild starts with nothing but the lowest tier of every gated
+    // family already known (see ALWAYS_KNOWN_RECIPE_IDS's own comment
+    // in recipeScrolls.ts for the full list and reasoning), same as
+    // this same function equips the starter hero with only a Wooden
+    // Practice Sword rather than the whole Blacksmith's shelf. An
+    // in-flight pre-0357 save's migration grants every recipe instead
+    // (SaveManager's own migration, not this fresh-start path) so
+    // nobody who already had full crafting access loses any of it.
+    recipeScrolls: {},
+    unlockedRecipes: [...ALWAYS_KNOWN_RECIPE_IDS],
     harvestNodes: Object.fromEntries(
       NODE_ORDER.map((id) => [id, { nextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'), pending: null }]),
     ) as GameState['harvestNodes'],
@@ -1381,6 +1393,24 @@ const MIGRATIONS: Record<number, Migration> = {
     version: 64,
     hasVisitedEquipmentTab: (save.hasVisitedEquipmentTab as boolean | undefined) ?? true,
     hasVisitedHeroesTab: (save.hasVisitedHeroesTab as boolean | undefined) ?? true,
+  }),
+  // Patch 0357 -- WoW-style recipe drop/learn system, direct request.
+  // Every recipe was unconditionally craftable before this patch; a
+  // save old enough to need migrating has, by definition, already had
+  // full access to all 72 -- so unlike createInitialState's own fresh-
+  // start seed (ALWAYS_KNOWN_RECIPE_IDS alone, 16 of the 72), THIS path
+  // grants literally every recipe id that exists (ALWAYS_KNOWN_RECIPE_IDS
+  // plus every RECIPE_SCROLLS entry's own recipeId), so nobody who
+  // already had it loses anything retroactively. Newly-introduced
+  // scrolls found from here on simply have nothing left to grant for an
+  // already-migrated save -- RecipeManager.learn's own "already known"
+  // guard makes that a harmless no-op if one somehow still drops.
+  64: (save) => ({
+    ...save,
+    version: 65,
+    recipeScrolls: (save.recipeScrolls as Record<string, number> | undefined) ?? {},
+    unlockedRecipes: (save.unlockedRecipes as string[] | undefined)
+      ?? [...ALWAYS_KNOWN_RECIPE_IDS, ...RECIPE_SCROLLS.map((s) => s.recipeId)],
   }),
 };
 

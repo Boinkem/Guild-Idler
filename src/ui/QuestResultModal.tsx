@@ -11,6 +11,8 @@ import { useCountUp } from './useCountUp';
 import { measureFlyOffset } from './flyTarget';
 import { MATERIAL_BY_ID } from '../game/data/materials';
 import { CURIO_BY_ID } from '../game/data/curios';
+import { RECIPE_SCROLL_BY_ID } from '../game/data/recipeScrolls';
+import { CRAFTING_RECIPE_BY_ID } from '../game/data/craftingRecipes';
 
 /** How long the pop-out + coin/XP burst plays before the modal actually
  * unmounts. Matches the CSS: modal-pop-out is 320ms, collect-fly is 750ms
@@ -204,7 +206,7 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
             alongside curioGained rather than leaving two of three
             "purely informational for the result modal" fields silently
             broken right next to the one that's now wired up correctly. */}
-        {(result.materialGained || result.eggDropped || result.curioGained) && (
+        {(result.materialGained || result.eggDropped || result.curioGained || result.recipeScrollGained) && (
           <>
             <div className="section-heading">Also found</div>
             {result.materialGained && result.materialGained.amount > 0 && (
@@ -226,6 +228,18 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
                 {result.curioGained.amount > 1 ? ` ×${result.curioGained.amount}` : ''}
               </div>
             )}
+            {result.recipeScrollGained && (() => {
+              const scroll = RECIPE_SCROLL_BY_ID[result.recipeScrollGained.scrollId];
+              const recipe = scroll ? CRAFTING_RECIPE_BY_ID[scroll.recipeId] : undefined;
+              return (
+                <div className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                  <span className="small" style={{ color: scroll ? RARITY_COLOR[scroll.rarity] : undefined }}>
+                    Recipe: {recipe?.name ?? 'a new recipe'}
+                  </span>
+                  {scroll && <RarityPill rarity={scroll.rarity} />}
+                </div>
+              );
+            })()}
           </>
         )}
 

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { CraftingManager } from '../game/managers/CraftingManager';
+import { RecipeManager } from '../game/managers/RecipeManager';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
 import { MATERIAL_BY_ID } from '../game/data/materials';
@@ -723,14 +724,26 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     // one first. Not gated on affordability (`disabled` stays unset) --
     // an out-of-reach recipe is still worth picking to see its full
     // breakdown and start gathering toward it, same as it always was.
+    // An UNLEARNED recipe is a different kind of unavailable, though
+    // (patch 0357, WoW-style recipe drop/learn system, direct answer:
+    // "visible but locked -- shows what's out there to chase") -- no
+    // amount of gold/materials fixes that, so this DOES set `disabled`
+    // (PickerModal already blocks selecting a disabled option outright,
+    // see its own onClick guard) and swaps the sublabel to say so
+    // instead of showing live material badges/flavour text for a recipe
+    // that can't be picked at all yet.
     : isConsumableLike
       ? recipes.map((r) => ({
-        key: r.id, label: r.name, sublabel: materialBadges(r),
+        key: r.id, label: r.name,
+        sublabel: RecipeManager.isKnown(state, r.id) ? materialBadges(r) : '🔒 Recipe not yet learned',
         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
         tags: consumableEffectTags(r),
+        disabled: !RecipeManager.isKnown(state, r.id),
       }))
       : recipes.map((r) => ({
-        key: r.id, label: r.name, sublabel: r.description,
+        key: r.id, label: r.name,
+        sublabel: RecipeManager.isKnown(state, r.id) ? r.description : '🔒 Recipe not yet learned',
+        disabled: !RecipeManager.isKnown(state, r.id),
         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
         tags: category === 'gear' ? gearSlotTags(r) : undefined,
       }));
@@ -1046,7 +1059,12 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       {openSlot === 'bottomLeft' && category === 'enchant' && (
         <PickerModal
           title="Choose what to apply"
-          options={recipes.map((r) => ({ key: r.id, label: r.name, sublabel: r.description, icon: <RecipeIcon icon={r.icon} category={category} size={40} /> }))}
+          options={recipes.map((r) => ({
+            key: r.id, label: r.name,
+            sublabel: RecipeManager.isKnown(state, r.id) ? r.description : '🔒 Recipe not yet learned',
+            disabled: !RecipeManager.isKnown(state, r.id),
+            icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
+          }))}
           onPick={pickRecipe}
           onClose={() => setOpenSlot(null)}
         />

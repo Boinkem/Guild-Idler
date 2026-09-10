@@ -10,6 +10,9 @@ import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './
 import { EquipmentManager } from './managers/EquipmentManager';
 import { InventoryManager } from './managers/InventoryManager';
 import { CurioManager } from './managers/CurioManager';
+import { RecipeManager } from './managers/RecipeManager';
+import { RECIPE_SCROLL_BY_ID } from './data/recipeScrolls';
+import { CRAFTING_RECIPE_BY_ID } from './data/craftingRecipes';
 import { GuildHallDecorManager } from './managers/GuildHallDecorManager';
 import { GUILD_HALL_DECORATIONS } from './data/guildHallDecor';
 import { DlcManager } from './managers/DlcManager';
@@ -2263,6 +2266,47 @@ export class GameEngine {
     if (count === 0) return this.say('No curios to sell.');
     playSound('sell');
     this.say(`Sold ${count} curio${count === 1 ? '' : 's'} for ${gold} gold.`);
+    void this.saveNow();
+  }
+
+  /**
+   * Consumes one recipe scroll and permanently unlocks its recipe --
+   * patch 0357's WoW-style recipe drop/learn system, direct request.
+   * See RecipeManager.learn's own comment for the two ways this can
+   * fail (no unused copy, or the recipe's already known some other
+   * way); both report back to the player rather than silently no-op-ing
+   * the way a background system failure might.
+   */
+  learnRecipe(scrollId: string) {
+    const error = RecipeManager.learn(this.state, scrollId);
+    if (error) return this.say(error);
+    const def = RECIPE_SCROLL_BY_ID[scrollId];
+    const recipe = def ? CRAFTING_RECIPE_BY_ID[def.recipeId] : undefined;
+    playSound('achievement');
+    this.say(recipe ? `Learned: ${recipe.name}.` : 'Recipe learned.');
+    void this.saveNow();
+  }
+
+  /** Sells the full stack of one recipe scroll -- same "whole stack"
+   *  shape sellCurio above uses. Selling doesn't touch whether the
+   *  recipe's known; it only ever removes UNUSED copies (see
+   *  RecipeManager.sellAll, which reads straight off state.recipeScrolls,
+   *  never state.unlockedRecipes). */
+  sellRecipe(scrollId: string) {
+    const gold = RecipeManager.sellAll(this.state, scrollId);
+    if (gold === 0) return this.say("You don't have any of those.");
+    playSound('sell');
+    this.say(`Sold for ${gold} gold.`);
+    void this.saveNow();
+  }
+
+  /** Bulk-sells every owned recipe scroll in one action -- the Recipes-
+   *  section counterpart to sellAllCurios above. */
+  sellAllRecipes() {
+    const { count, gold } = RecipeManager.sellEverything(this.state);
+    if (count === 0) return this.say('No recipe scrolls to sell.');
+    playSound('sell');
+    this.say(`Sold ${count} recipe scroll${count === 1 ? '' : 's'} for ${gold} gold.`);
     void this.saveNow();
   }
 

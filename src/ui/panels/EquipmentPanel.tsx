@@ -8,15 +8,18 @@ import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance, itemDisplayName } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
-import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
+import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef, RecipeScrollDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
+import { RecipeManager } from '../../game/managers/RecipeManager';
+import { CRAFTING_RECIPE_BY_ID } from '../../game/data/craftingRecipes';
+import { scrollSellValue } from '../../game/data/recipeScrolls';
 import { rerollsUsedToday } from '../../game/data/reroll';
 import {
   describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_FRAME, CURIO_FRAME, EMPTY_SLOT_FRAME,
   RARITY_COLOR, MAIN_STAT_TOOLTIP,
 } from '../../game/util';
-import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
+import { ItemIcon, ConsumableIcon, CurioIcon, RecipeIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
 import { RewardGlowParticle } from '../RewardGlowParticle';
@@ -326,6 +329,74 @@ function isInstantUseOnHero(def: ConsumableDef): boolean {
  * Beckoning Charm. An item with no actionable effect at all (Pet Treat --
  * fed from the Hatchery instead) shows no button, just the description.
  */
+/**
+ * One owned-but-not-yet-learned recipe scroll -- same "click to expand
+ * into a modal" shape CurioCard just below uses, but with two actions
+ * instead of one (Learn, then Sell for anyone who'd rather cash in a
+ * duplicate/unwanted find -- patch 0357, WoW-style recipe drop/learn
+ * system, direct answer: duplicates are sellable, not auto-consumed or
+ * blocked). A scroll has no def of its own worth displaying -- name,
+ * description, and icon are all derived from the CraftingRecipeDef it
+ * unlocks (RecipeScrollDef's own comment in types.ts explains why), so
+ * this reads `CRAFTING_RECIPE_BY_ID[def.recipeId]` once and falls back
+ * to the bare id if content ever drifts out from under an old save.
+ */
+function RecipeScrollCard({ def, count, engine }: { def: RecipeScrollDef; count: number; engine: GameEngine }) {
+  const [open, setOpen] = useState(false);
+  const recipe = CRAFTING_RECIPE_BY_ID[def.recipeId];
+  const name = recipe ? `Recipe: ${recipe.name}` : def.recipeId;
+  return (
+    <>
+      <div
+        className="item-card rarity-frame-card"
+        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
+        data-recipe-id={def.id}
+        onClick={() => setOpen(true)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+      >
+        <div className="item-card-summary">
+          <RecipeIcon icon={recipe?.icon} category={recipe?.category ?? 'gear'} />
+          <div className="item-card-body">
+            <div className="item-card-name">{name} ×{count}</div>
+          </div>
+        </div>
+      </div>
+
+      {open && (
+        <div className="overlay" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+              <RecipeIcon icon={recipe?.icon} category={recipe?.category ?? 'gear'} size={48} />
+              <div>
+                <span className="card-title">{name}</span>
+                <div className="tiny muted">Owned ×{count} · {formatGold(scrollSellValue(def.rarity))} each</div>
+              </div>
+            </div>
+            {recipe && <div className="tiny muted">{recipe.description}</div>}
+            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+              <button onClick={() => setOpen(false)}>Close</button>
+              <button
+                className="btn-ghost"
+                onClick={() => { engine.sellRecipe(def.id); setOpen(false); }}
+              >
+                Sell ×{count} · {formatGold(scrollSellValue(def.rarity) * count)}
+              </button>
+              <button
+                className="btn-green"
+                onClick={() => { engine.learnRecipe(def.id); setOpen(false); }}
+              >
+                Learn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 /**
  * A single owned curio -- click opens a small modal with its description
  * and a Sell action, same "click to expand into a modal" shape
@@ -941,6 +1012,42 @@ export function EquipmentPanel() {
     .reduce((sum, e) => sum + EquipmentManager.repairScrapCost(e.item, workshop, repairDiscountForBill), 0);
 
   const curiosOwned = CurioManager.owned(state);
+  const recipesOwned = RecipeManager.owned(state);
+
+  /** Same staggered "snapshot positions, animate each card individually"
+   *  shape runSellAllCurios right below already uses, for the Recipes
+   *  section's own Sell All (patch 0357 follow-up, filling in the
+   *  animation that patch's own writeup flagged as deliberately skipped
+   *  for the first pass). `engine.sellRecipe` (not `sellAllRecipes`) is
+   *  called once per scroll type so each card gets its own gold-fly
+   *  particle and visibly leaves the grid one at a time, same reasoning
+   *  patch 0302's own Curios fix already established. */
+  const [recipeFlights, setRecipeFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
+  const RECIPE_SELL_STAGGER_MS = 140;
+  const runSellAllRecipes = () => {
+    if (recipesOwned.length === 0) return;
+    const targets = recipesOwned.map(({ def }) => {
+      const el = document.querySelector(`[data-recipe-id="${def.id}"]`);
+      const rect = el?.getBoundingClientRect();
+      return {
+        id: def.id,
+        x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+        y: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
+      };
+    });
+    targets.forEach((t, i) => {
+      window.setTimeout(() => {
+        engine.sellRecipe(t.id);
+        const target = getFlyTargetCenter('gold');
+        if (target) {
+          const key = Date.now() + Math.random();
+          setRecipeFlights((prev) => [...prev, { key, x: t.x, y: t.y, dx: target.x - t.x, dy: target.y - t.y }]);
+          window.setTimeout(() => setRecipeFlights((prev) => prev.filter((f) => f.key !== key)), 750);
+        }
+      }, i * RECIPE_SELL_STAGGER_MS);
+    });
+  };
+
 
   /**
    * Patch 0302, direct request. Sell All (Curios) previously called
@@ -1193,6 +1300,40 @@ export function EquipmentPanel() {
           <StashCard key={item.uid} item={item} hero={hero} engine={engine} />
         ))}
       </div>
+
+      {/* Owned-but-not-yet-learned recipe scrolls (patch 0357, WoW-style
+          recipe drop/learn system, direct request: "above Curios") --
+          same no-confirm-gate reasoning Curios' own comment right below
+          gives (a scroll has no equip/durability stakes either, just a
+          one-way Learn or a Sell), plus the same "sell everything in one
+          action" bulk button. */}
+      {recipesOwned.length > 0 && (
+        <>
+          <div className="spread" style={{ alignItems: 'center' }}>
+            <div className="section-heading" style={{ marginBottom: 0 }}>Recipes ({recipesOwned.length})</div>
+            <button
+              className="btn-green"
+              style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+              onClick={runSellAllRecipes}
+              title="Sells every unlearned recipe scroll currently in the stash"
+            >
+              Sell All · {formatGold(recipesOwned.reduce((sum, { def, count }) => sum + scrollSellValue(def.rarity) * count, 0))}
+            </button>
+          </div>
+          <div className="item-card-grid">
+            {recipesOwned.map(({ def, count }) => (
+              <RecipeScrollCard key={def.id} def={def} count={count} engine={engine} />
+            ))}
+          </div>
+          {recipeFlights.map((f) => (
+            <RewardGlowParticle
+              key={f.key}
+              x={f.x} y={f.y} dx={f.dx} dy={f.dy}
+              color="var(--brass)" delay={0} durationMs={750}
+            />
+          ))}
+        </>
+      )}
 
       {/* Sellable odds-and-ends -- see CurioDef's own doc comment in
           types.ts. No confirm-sell gate on this bulk action -- a curio

@@ -15,6 +15,8 @@ import { PetManager } from './PetManager';
 import { elementalBonusForHero } from '../data/elements';
 import { createRng } from '../rng';
 import { clamp, sumMods, MINUTE, softCap } from '../util';
+import { RecipeManager } from './RecipeManager';
+import { raidRecipeDropChance } from '../data/recipeScrolls';
 
 export const RaidManager = {
   /**
@@ -532,6 +534,26 @@ export const RaidManager = {
       if (renownGained > 0) state.renown += renownGained;
     }
 
+    // Recipe scroll drop (patch 0357, WoW-style recipe drop/learn
+    // system, direct request) -- one flat, independent roll per raid
+    // CLEAR (not per encounter, unlike the eggLoot table above), same
+    // reasoning QuestManager.resolve's own quest-side roll comment
+    // gives: no need to hand-author a recipeLoot table into every
+    // encounter in the game when reqLevel-gated eligibility already
+    // does the "harder content reaches higher tiers" work on its own.
+    // Gated on fullClear, same as every other real raid reward here --
+    // a partial clear earns nothing. `raid?.reqLevel` (not `active.
+    // difficulty`) is the eligibility ceiling, same "recipes spread by
+    // level range" request the quest side keys off `quest.offer.reqLevel`.
+    let recipeScrollGained: RaidResult['recipeScrollGained'];
+    if (fullClear && raid && rng.chance(raidRecipeDropChance(active.difficulty))) {
+      const scroll = RecipeManager.rollDrop(state, raid.reqLevel, rng);
+      if (scroll) {
+        RecipeManager.add(state, scroll.id, 1);
+        recipeScrollGained = { scrollId: scroll.id };
+      }
+    }
+
     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
       state.completedRaids.push(raid.id);
     }
@@ -656,6 +678,7 @@ export const RaidManager = {
       encountersCleared,
       totalEncounters: encounterIds.length,
       fullClear,
+      recipeScrollGained,
       gold,
       xp,
       loot,

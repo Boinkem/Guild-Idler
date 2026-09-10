@@ -5315,5 +5315,95 @@
     "default": 5,
     "min": 1,
     "description": "Absolute level cap -- also doubles as goldTierMaxLevel since this is a gold-only upgrade (see questFastUpgrades.ts). 5 levels x 1%/level recovery = 5 points clawed back off a 7-point quest.fastSuccessPenalty, leaving a permanent 2-point residual by design."
+  },
+  {
+    "id": "quest.recipeDropChance.easy",
+    "label": "Quest: recipe scroll drop chance, Easy quests (%)",
+    "category": "quest",
+    "value": 1.5,
+    "default": 1.5,
+    "min": 0,
+    "max": 100,
+    "description": "Flat % chance a successful Easy-tier quest drops a random not-yet-known, level-eligible recipe scroll (patch 0357). Deliberately rarer than an egg or curio drop -- a permanent recipe unlock is a bigger find than either."
+  },
+  {
+    "id": "quest.recipeDropChance.normal",
+    "label": "Quest: recipe scroll drop chance, Normal quests (%)",
+    "category": "quest",
+    "value": 2.5,
+    "default": 2.5,
+    "min": 0,
+    "max": 100,
+    "description": "See quest.recipeDropChance.easy's own description -- same mechanic, Normal-tier rate."
+  },
+  {
+    "id": "quest.recipeDropChance.hard",
+    "label": "Quest: recipe scroll drop chance, Hard quests (%)",
+    "category": "quest",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "max": 100,
+    "description": "See quest.recipeDropChance.easy's own description -- same mechanic, Hard-tier rate."
+  },
+  {
+    "id": "quest.recipeDropChance.epic",
+    "label": "Quest: recipe scroll drop chance, Epic quests (%)",
+    "category": "quest",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "max": 100,
+    "description": "See quest.recipeDropChance.easy's own description -- same mechanic, Epic-tier rate."
+  },
+  {
+    "id": "quest.recipeDropChance.legendary",
+    "label": "Quest: recipe scroll drop chance, Legendary quests (%)",
+    "category": "quest",
+    "value": 9,
+    "default": 9,
+    "min": 0,
+    "max": 100,
+    "description": "See quest.recipeDropChance.easy's own description -- same mechanic, Legendary-tier rate."
+  },
+  {
+    "id": "raid.recipeDropChance.normal",
+    "label": "Raid: recipe scroll drop chance, Normal difficulty (%)",
+    "category": "raid",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "max": 100,
+    "description": "Flat % chance a cleared raid drops a random not-yet-known, level-eligible recipe scroll (patch 0357), rolled once per raid clear rather than per encounter. Higher baseline than the quest-side equivalent -- a raid clear is already a rarer, higher-effort event than an ordinary quest."
+  },
+  {
+    "id": "raid.recipeDropChance.heroic",
+    "label": "Raid: recipe scroll drop chance, Heroic difficulty (%)",
+    "category": "raid",
+    "value": 9,
+    "default": 9,
+    "min": 0,
+    "max": 100,
+    "description": "See raid.recipeDropChance.normal's own description -- same mechanic, Heroic-tier rate."
+  },
+  {
+    "id": "raid.recipeDropChance.mythic",
+    "label": "Raid: recipe scroll drop chance, Mythic difficulty (%)",
+    "category": "raid",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "See raid.recipeDropChance.normal's own description -- same mechanic, Mythic-tier rate."
+  },
+  {
+    "id": "raid.recipeDropChance.legendary",
+    "label": "Raid: recipe scroll drop chance, Legendary difficulty (%)",
+    "category": "raid",
+    "value": 22,
+    "default": 22,
+    "min": 0,
+    "max": 100,
+    "description": "See raid.recipeDropChance.normal's own description -- same mechanic, Legendary-tier rate."
   }
 ]

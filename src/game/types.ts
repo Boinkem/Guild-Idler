@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 64;
+export const SAVE_VERSION = 65;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1060,6 +1060,17 @@ export interface QuestResult {
    *  result modal; the actual `state.curios` mutation already happened
    *  in QuestManager.resolve by the time this is read. */
   curioGained?: { curioId: string; amount: number };
+  /** A recipe scroll drop rolled this quest, if any -- same shape and
+   *  same "flat % chance on success, scaled by difficulty" pattern as
+   *  curioGained just above, just for QuestManager's own recipe-drop
+   *  roll (patch 0357, WoW-style recipe drop/learn system). Purely
+   *  informational for the result modal; the actual `state.recipeScrolls`
+   *  mutation already happened in QuestManager.resolve by the time this
+   *  is read. `scrollId` rather than `recipeId` since that's the actual
+   *  key the drop landed under (state.recipeScrolls, RECIPE_SCROLL_BY_ID)
+   *  -- the result modal derives the recipe's own display name from it
+   *  the same way the Inventory Recipes section does. */
+  recipeScrollGained?: { scrollId: string };
   /** True when this hero's daily first-burst bonus applied to gold/xp
    *  above (already folded into the numbers, not a separate reward) --
    *  see Hero.lastBurstBonusDay. Purely informational, for the result
@@ -1620,6 +1631,14 @@ export interface RaidResult {
    *  entries predate this field, and every read already treats a missing
    *  value as "nothing found." */
   eggsFound?: { rarity: Rarity; encounterId: string }[];
+  /** A recipe scroll drop rolled on this raid's clear, if any -- same
+   *  "flat % chance, scaled by difficulty, rolled once (here per raid
+   *  clear rather than per encounter)" shape QuestResult.recipeScrollGained
+   *  uses on the quest side (patch 0357, WoW-style recipe drop/learn
+   *  system). Purely informational for the result modal; the actual
+   *  `state.recipeScrolls` mutation already happened in
+   *  RaidManager.resolve by the time this is read. */
+  recipeScrollGained?: { scrollId: string };
   injuries: { heroId: string; heroName: string; injury: Injury }[];
   resolvedAt: number;
   /** Set if this was a full clear and the raid carries a title that at
@@ -2608,6 +2627,28 @@ export interface GameState {
    *  flavor/sell-fodder, not a resource anything is built from, so
    *  there's no economy reason to bottleneck how many can pile up. */
   curios: Record<string, number>;
+  /**
+   * Patch 0357, WoW-style recipe drop/learn system -- see
+   * RecipeScrollDef's own comment in this file. `recipeScrolls` is an
+   * owned-but-not-yet-learned scroll's stock count, same open-ended
+   * "keyed by def id, no cap" shape `curios` right above already uses
+   * (a scroll is pure inventory until used, same as a curio is pure
+   * inventory until sold -- owning five of the same one is fine, they
+   * just sit there until spent or sold). `unlockedRecipes` is the
+   * actual permanent unlock list -- a CraftingRecipeDef id lands here
+   * once, the moment its scroll is used, and never leaves. Two separate
+   * fields rather than one, since "how many unused scrolls of X are
+   * sitting in the stash" and "is X actually craftable yet" are
+   * genuinely different questions (owning a scroll you haven't used
+   * yet doesn't unlock anything -- see RecipeManager.learn). New games
+   * seed `unlockedRecipes` from ALWAYS_KNOWN_RECIPE_IDS
+   * (recipeScrolls.ts); an in-flight pre-0357 save's migration instead
+   * grants every recipe that existed before this patch, so nobody who
+   * already had full access loses any of it retroactively -- see
+   * SaveManager's own migration for the full reasoning.
+   */
+  recipeScrolls: Record<string, number>;
+  unlockedRecipes: string[];
   /** Per-node spawn/pending-item state, including each node's own
    *  independent `nextSpawnAt` -- see HarvestManager. Was briefly one
    *  shared GameState-level timestamp for all 4 nodes ("harvest o'clock"),
@@ -3312,6 +3353,27 @@ export interface CurioDef {
    *  chain (falls back to `glyph`, which falls back to a generic '?')
    *  every other def's own `icon` field already follows. */
   icon?: string;
+}
+
+/**
+ * Patch 0357 -- WoW-style recipe drop/learn system, direct request. A
+ * gated recipe (the higher tiers of Gems, Enchant Sigils, Charms, all of
+ * Gear, and 6 of the tiered Consumable lines -- see
+ * ALWAYS_KNOWN_RECIPE_IDS's own comment in recipeScrolls.ts for the full
+ * split) can't be crafted at all until its matching scroll is found and
+ * used. `recipeId` points at the CraftingRecipeDef this unlocks -- a
+ * deliberately thin def (no name/description/icon of its own) since a
+ * scroll's display is always derived from the recipe it unlocks
+ * ("Recipe: {recipe.name}", `recipe.icon`) rather than duplicating that
+ * data a second time. `reqLevel` is drop-eligibility only (see
+ * RecipeManager.eligibleDrops) -- it does NOT gate crafting once learned,
+ * `state.unlockedRecipes` alone does that.
+ */
+export interface RecipeScrollDef {
+  id: string;
+  recipeId: string;
+  reqLevel: number;
+  rarity: Rarity;
 }
 
 /**

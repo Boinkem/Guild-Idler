@@ -7,6 +7,8 @@ import { HERO_CLASSES, questGoldBaseline, questXpBaseline, renownForChainReplayC
 import { rewardPayoutFloor } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
 import { CURIOS, questCurioDropChance } from '../data/curios';
+import { RecipeManager } from './RecipeManager';
+import { questRecipeDropChance } from '../data/recipeScrolls';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
 import { warehouseCapacity } from '../data/harvestUpgrades';
@@ -1052,6 +1054,7 @@ export const QuestManager = {
     const lootItems: EquipmentItem[] = [];
     let eggDropped: QuestResult['eggDropped'];
     let curioGained: QuestResult['curioGained'];
+    let recipeScrollGained: QuestResult['recipeScrollGained'];
 
     if (success) {
       gold = Math.floor(quest.offer.rewardGold * quest.goldMultiplier * (1 + events.goldPct)) + events.flatGold;
@@ -1134,6 +1137,21 @@ export const QuestManager = {
         const picked = CURIOS[rng.int(0, CURIOS.length - 1)];
         CurioManager.add(state, picked.id, 1);
         curioGained = { curioId: picked.id, amount: 1 };
+      }
+      // Recipe scroll drop (patch 0357, WoW-style recipe drop/learn
+      // system, direct request) -- same independent, flat-per-difficulty
+      // roll shape as the curio/egg drops just above, not folded into
+      // quest.offer.loot's own weighted equipment table. Eligibility
+      // (RecipeManager.eligibleDrops) is quest.offer.reqLevel-gated and
+      // already excludes anything already known -- "spread through
+      // level ranges... can't drop again if learnt," both handled there
+      // rather than re-implemented here.
+      if (rng.chance(questRecipeDropChance(quest.offer.difficulty))) {
+        const scroll = RecipeManager.rollDrop(state, quest.offer.reqLevel, rng);
+        if (scroll) {
+          RecipeManager.add(state, scroll.id, 1);
+          recipeScrollGained = { scrollId: scroll.id };
+        }
       }
     } else {
       // Failure still pays a small consolation and a little experience.
@@ -1638,6 +1656,7 @@ export const QuestManager = {
       eggDropped,
       materialGained,
       curioGained,
+      recipeScrollGained,
       dailyBurstBonus: dailyBurstBonus || undefined,
       critBonus: critBonus || undefined,
       grimsbyArrived: grimsbyArrived || undefined,
