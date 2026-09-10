@@ -9,7 +9,7 @@ import { EquipSlot } from '../game/types';
  */
 const SLOT_FALLBACK: Record<EquipSlot, string> = {
   weapon: '⚔️', helmet: '🪖', chest: '🎽', shield: '🛡️',
-  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣',
+  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣', heirloom: '🏺',
 };
 
 const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem' | 'charm', string> = {

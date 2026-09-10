@@ -13,7 +13,7 @@
     "description": "A stranger's face, cracked with age. Nobody in the guild recognizes them.",
     "sellValue": 14,
     "glyph": "🖼️",
-    "icon": "armor/Armor_preview.png"
+    "icon": "misc/Misc_61.png"
   },
   {
     "id": "tarnished_ring",
@@ -62,5 +62,21 @@
     "sellValue": 6,
     "glyph": "✨",
     "icon": "crafting/Crafting_46.png"
+  },
+  {
+    "id": "ornate_rusty_sword",
+    "name": "Ornate Rusty Sword",
+    "description": "Once a beautiful blade, now dulled by rust and time... it may still fetch a nice price",
+    "sellValue": 150,
+    "glyph": "💍",
+    "icon": "weapons/Weapon_01.png"
+  },
+  {
+    "id": "ornate_spoon",
+    "name": "Ornate Spoon",
+    "description": "Wow.. Nice spoon",
+    "sellValue": 50,
+    "glyph": "🥄",
+    "icon": "misc/Misc_73.png"
   }
 ]

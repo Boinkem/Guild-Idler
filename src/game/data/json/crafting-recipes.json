@@ -2,7 +2,7 @@
   {
     "id": "craft_guildmade_blade",
     "name": "Guildmade Blade",
-    "description": "A weapon built to the wielder\u2019s own spec, not whatever the smith happened to have on the rack.",
+    "description": "A weapon built to the wielder’s own spec, not whatever the smith happened to have on the rack.",
     "category": "gear",
     "icon": "weapons/Weapon_06.png",
     "materialCost": {
@@ -25,7 +25,7 @@
   {
     "id": "craft_guildmade_band",
     "name": "Guildmade Band",
-    "description": "A ring cast and set by the guild\u2019s own hand -- exactly the bonuses asked for, nothing left to chance.",
+    "description": "A ring cast and set by the guild’s own hand -- exactly the bonuses asked for, nothing left to chance.",
     "category": "gear",
     "icon": "accessories/Accessory_07.png",
     "materialCost": {
@@ -48,7 +48,7 @@
   {
     "id": "craft_trail_rations",
     "name": "Trail Rations",
-    "description": "Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner.",
+    "description": "Smoked fish and dried herbs, packed for a hero who won’t be home for dinner.",
     "category": "consumable",
     "icon": "food/Food_36.png",
     "materialCost": {
@@ -87,7 +87,7 @@
   {
     "id": "craft_herbal_tonic",
     "name": "Herbal Tonic",
-    "description": "The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor\u2019s shelf.",
+    "description": "The Herb Garden’s own cure-all, brewed in-house rather than bought off a vendor’s shelf.",
     "category": "consumable",
     "icon": "potions/Potion_10.png",
     "materialCost": {
@@ -1178,7 +1178,7 @@
     "name": "Masterwork Greathelm",
     "description": "No two are ever quite the same -- this one was never meant to be worn by anybody else.",
     "category": "gear",
-    "icon": "armor/Armor_44.png",
+    "icon": "armor/Armor_40_hue4.png",
     "materialCost": {
       "ore": 85,
       "timber": 25,
@@ -1186,6 +1186,7 @@
       "fish": 15
     },
     "goldCost": 13500,
+    "scrapCost": 1500,
     "resultDefId": "masterwork_greathelm",
     "modOptions": [
       "strength",
@@ -1196,15 +1197,14 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 1500
+    "statValue": 0
   },
   {
     "id": "craft_masterwork_plate",
     "name": "Masterwork Plate",
     "description": "The guild's smiths call this one finished when they run out of ways to improve it.",
     "category": "gear",
-    "icon": "armor/Armor_20.png",
+    "icon": "armor/Armor_11_hue2.png",
     "materialCost": {
       "ore": 100,
       "timber": 30,
@@ -1212,6 +1212,7 @@
       "fish": 10
     },
     "goldCost": 14500,
+    "scrapCost": 1611,
     "resultDefId": "masterwork_plate",
     "modOptions": [
       "strength",
@@ -1222,15 +1223,14 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 1611
+    "statValue": 0
   },
   {
     "id": "craft_masterwork_gauntlets",
     "name": "Masterwork Gauntlets",
     "description": "Articulated at every knuckle -- a season's worth of fitting, for a single pair of hands.",
     "category": "gear",
-    "icon": "armor/Armor_17.png",
+    "icon": "armor/Armor_76_hue2.png",
     "materialCost": {
       "ore": 70,
       "timber": 20,
@@ -1238,6 +1238,7 @@
       "fish": 10
     },
     "goldCost": 12000,
+    "scrapCost": 1333,
     "resultDefId": "masterwork_gauntlets",
     "modOptions": [
       "strength",
@@ -1248,15 +1249,14 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 1333
+    "statValue": 0
   },
   {
     "id": "craft_masterwork_sabatons",
     "name": "Masterwork Sabatons",
     "description": "Weighted, balanced, and re-balanced again until the wearer stops noticing they're wearing them at all.",
     "category": "gear",
-    "icon": "armor/Armor_76.png",
+    "icon": "armor/Armor_44_hue4.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -1264,6 +1264,7 @@
       "fish": 10
     },
     "goldCost": 12000,
+    "scrapCost": 1333,
     "resultDefId": "masterwork_sabatons",
     "modOptions": [
       "strength",
@@ -1274,15 +1275,14 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 1333
+    "statValue": 0
   },
   {
     "id": "craft_masterwork_sigil",
     "name": "Masterwork Sigil",
     "description": "The guild's own mark, cast in gold and never sold -- every one of these was made to order.",
     "category": "gear",
-    "icon": "accessories/Accessory_23.png",
+    "icon": "crafting/Crafting_64_hue2.png",
     "materialCost": {
       "ore": 40,
       "timber": 15,
@@ -1290,6 +1290,7 @@
       "fish": 25
     },
     "goldCost": 13000,
+    "scrapCost": 1444,
     "resultDefId": "masterwork_sigil",
     "modOptions": [
       "strength",
@@ -1300,26 +1301,25 @@
     "modsToPick": 3,
     "modValue": 32,
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 1444
+    "statValue": 0
   },
   {
     "id": "craft_alchemists_reserve",
     "name": "Alchemist's Reserve",
     "description": "A stronger cure-all than the Herb Garden's basic tonic, brewed with a heavier hand.",
     "category": "consumable",
-    "icon": "potions/Potion_10.png",
+    "icon": "potions/Potion_32_hue4.png",
     "materialCost": {
       "herbs": 20,
       "fish": 5
     },
     "goldCost": 65,
-    "resultConsumableId": "alchemists_reserve",
+    "scrapCost": 7,
     "modsToPick": 0,
     "modValue": 0,
+    "resultConsumableId": "alchemists_reserve",
     "statsToPick": 0,
-    "statValue": 0,
-    "scrapCost": 7
+    "statValue": 0
   },
   {
     "id": "craft_phoenix_ember",
@@ -1503,5 +1503,726 @@
     "statsToPick": 0,
     "statValue": 0,
     "scrapCost": 16
+  },
+  {
+    "id": "craft_heirloom_vitality_1",
+    "name": "Heirloom Sigil of Vitality I",
+    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 10,
+      "timber": 5
+    },
+    "goldCost": 150,
+    "resultDefId": "heirloom_vitality_1",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 17
+  },
+  {
+    "id": "craft_heirloom_vitality_2",
+    "name": "Heirloom Sigil of Vitality II",
+    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 25,
+      "timber": 12,
+      "herbs": 5
+    },
+    "goldCost": 600,
+    "resultDefId": "heirloom_vitality_2",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 67
+  },
+  {
+    "id": "craft_heirloom_vitality_3",
+    "name": "Heirloom Sigil of Vitality III",
+    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 45,
+      "timber": 20,
+      "herbs": 10
+    },
+    "goldCost": 2200,
+    "resultDefId": "heirloom_vitality_3",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 244
+  },
+  {
+    "id": "craft_heirloom_vitality_4",
+    "name": "Heirloom Sigil of Vitality IV",
+    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 65,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 5500,
+    "resultDefId": "heirloom_vitality_4",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 610
+  },
+  {
+    "id": "craft_heirloom_vitality_5",
+    "name": "Heirloom Sigil of Vitality V",
+    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 80,
+      "timber": 30,
+      "herbs": 20,
+      "fish": 15
+    },
+    "goldCost": 9500,
+    "resultDefId": "heirloom_vitality_5",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1054
+  },
+  {
+    "id": "craft_heirloom_vitality_6",
+    "name": "Heirloom Sigil of Vitality VI",
+    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 100,
+      "timber": 35,
+      "herbs": 25,
+      "fish": 20
+    },
+    "goldCost": 15000,
+    "resultDefId": "heirloom_vitality_6",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1665
+  },
+  {
+    "id": "craft_heirloom_fortune_1",
+    "name": "Heirloom Sigil of Fortune I",
+    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 10,
+      "timber": 5
+    },
+    "goldCost": 150,
+    "resultDefId": "heirloom_fortune_1",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 17
+  },
+  {
+    "id": "craft_heirloom_fortune_2",
+    "name": "Heirloom Sigil of Fortune II",
+    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 25,
+      "timber": 12,
+      "herbs": 5
+    },
+    "goldCost": 600,
+    "resultDefId": "heirloom_fortune_2",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 67
+  },
+  {
+    "id": "craft_heirloom_fortune_3",
+    "name": "Heirloom Sigil of Fortune III",
+    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 45,
+      "timber": 20,
+      "herbs": 10
+    },
+    "goldCost": 2200,
+    "resultDefId": "heirloom_fortune_3",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 244
+  },
+  {
+    "id": "craft_heirloom_fortune_4",
+    "name": "Heirloom Sigil of Fortune IV",
+    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 65,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 5500,
+    "resultDefId": "heirloom_fortune_4",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 610
+  },
+  {
+    "id": "craft_heirloom_fortune_5",
+    "name": "Heirloom Sigil of Fortune V",
+    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 80,
+      "timber": 30,
+      "herbs": 20,
+      "fish": 15
+    },
+    "goldCost": 9500,
+    "resultDefId": "heirloom_fortune_5",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1054
+  },
+  {
+    "id": "craft_heirloom_fortune_6",
+    "name": "Heirloom Sigil of Fortune VI",
+    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 100,
+      "timber": 35,
+      "herbs": 25,
+      "fish": 20
+    },
+    "goldCost": 15000,
+    "resultDefId": "heirloom_fortune_6",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1665
+  },
+  {
+    "id": "craft_heirloom_wisdom_1",
+    "name": "Heirloom Sigil of Wisdom I",
+    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 10,
+      "timber": 5
+    },
+    "goldCost": 150,
+    "resultDefId": "heirloom_wisdom_1",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 17
+  },
+  {
+    "id": "craft_heirloom_wisdom_2",
+    "name": "Heirloom Sigil of Wisdom II",
+    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 25,
+      "timber": 12,
+      "herbs": 5
+    },
+    "goldCost": 600,
+    "resultDefId": "heirloom_wisdom_2",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 67
+  },
+  {
+    "id": "craft_heirloom_wisdom_3",
+    "name": "Heirloom Sigil of Wisdom III",
+    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 45,
+      "timber": 20,
+      "herbs": 10
+    },
+    "goldCost": 2200,
+    "resultDefId": "heirloom_wisdom_3",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 244
+  },
+  {
+    "id": "craft_heirloom_wisdom_4",
+    "name": "Heirloom Sigil of Wisdom IV",
+    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 65,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 5500,
+    "resultDefId": "heirloom_wisdom_4",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 610
+  },
+  {
+    "id": "craft_heirloom_wisdom_5",
+    "name": "Heirloom Sigil of Wisdom V",
+    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 80,
+      "timber": 30,
+      "herbs": 20,
+      "fish": 15
+    },
+    "goldCost": 9500,
+    "resultDefId": "heirloom_wisdom_5",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1054
+  },
+  {
+    "id": "craft_heirloom_wisdom_6",
+    "name": "Heirloom Sigil of Wisdom VI",
+    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 100,
+      "timber": 35,
+      "herbs": 25,
+      "fish": 20
+    },
+    "goldCost": 15000,
+    "resultDefId": "heirloom_wisdom_6",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1665
+  },
+  {
+    "id": "craft_heirloom_haste_1",
+    "name": "Heirloom Sigil of Haste I",
+    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 10,
+      "timber": 5
+    },
+    "goldCost": 150,
+    "resultDefId": "heirloom_haste_1",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 17
+  },
+  {
+    "id": "craft_heirloom_haste_2",
+    "name": "Heirloom Sigil of Haste II",
+    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 25,
+      "timber": 12,
+      "herbs": 5
+    },
+    "goldCost": 600,
+    "resultDefId": "heirloom_haste_2",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 67
+  },
+  {
+    "id": "craft_heirloom_haste_3",
+    "name": "Heirloom Sigil of Haste III",
+    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 45,
+      "timber": 20,
+      "herbs": 10
+    },
+    "goldCost": 2200,
+    "resultDefId": "heirloom_haste_3",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 244
+  },
+  {
+    "id": "craft_heirloom_haste_4",
+    "name": "Heirloom Sigil of Haste IV",
+    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 65,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 5500,
+    "resultDefId": "heirloom_haste_4",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 610
+  },
+  {
+    "id": "craft_heirloom_haste_5",
+    "name": "Heirloom Sigil of Haste V",
+    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 80,
+      "timber": 30,
+      "herbs": 20,
+      "fish": 15
+    },
+    "goldCost": 9500,
+    "resultDefId": "heirloom_haste_5",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1054
+  },
+  {
+    "id": "craft_heirloom_haste_6",
+    "name": "Heirloom Sigil of Haste VI",
+    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 100,
+      "timber": 35,
+      "herbs": 25,
+      "fish": 20
+    },
+    "goldCost": 15000,
+    "resultDefId": "heirloom_haste_6",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1665
+  },
+  {
+    "id": "craft_heirloom_unbreakable_1",
+    "name": "Heirloom Sigil of the Unbreakable I",
+    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 10,
+      "timber": 5
+    },
+    "goldCost": 150,
+    "resultDefId": "heirloom_unbreakable_1",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 17
+  },
+  {
+    "id": "craft_heirloom_unbreakable_2",
+    "name": "Heirloom Sigil of the Unbreakable II",
+    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 25,
+      "timber": 12,
+      "herbs": 5
+    },
+    "goldCost": 600,
+    "resultDefId": "heirloom_unbreakable_2",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 67
+  },
+  {
+    "id": "craft_heirloom_unbreakable_3",
+    "name": "Heirloom Sigil of the Unbreakable III",
+    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 45,
+      "timber": 20,
+      "herbs": 10
+    },
+    "goldCost": 2200,
+    "resultDefId": "heirloom_unbreakable_3",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 244
+  },
+  {
+    "id": "craft_heirloom_unbreakable_4",
+    "name": "Heirloom Sigil of the Unbreakable IV",
+    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 65,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 5500,
+    "resultDefId": "heirloom_unbreakable_4",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 610
+  },
+  {
+    "id": "craft_heirloom_unbreakable_5",
+    "name": "Heirloom Sigil of the Unbreakable V",
+    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 80,
+      "timber": 30,
+      "herbs": 20,
+      "fish": 15
+    },
+    "goldCost": 9500,
+    "resultDefId": "heirloom_unbreakable_5",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1054
+  },
+  {
+    "id": "craft_heirloom_unbreakable_6",
+    "name": "Heirloom Sigil of the Unbreakable VI",
+    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 100,
+      "timber": 35,
+      "herbs": 25,
+      "fish": 20
+    },
+    "goldCost": 15000,
+    "resultDefId": "heirloom_unbreakable_6",
+    "modOptions": [],
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1665
+  },
+  {
+    "id": "craft_guildmade_gauntlets",
+    "name": "Guildmade Gauntlets",
+    "description": "Fitted knuckle to knuckle at the guild's own forge -- no rack of spares to pick through.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 18,
+      "timber": 8
+    },
+    "goldCost": 400,
+    "resultDefId": "guildmade_gauntlets",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 44
+  },
+  {
+    "id": "craft_guildmade_buckler",
+    "name": "Guildmade Buckler",
+    "description": "Guild-crested and sized to one arm. Never sold, never looted -- only ever made to order.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 18,
+      "timber": 8
+    },
+    "goldCost": 400,
+    "resultDefId": "guildmade_buckler",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 44
+  },
+  {
+    "id": "craft_guildmade_talisman",
+    "name": "Guildmade Talisman",
+    "description": "Strung and weighted by hand, to whoever's neck it's meant for.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 18,
+      "timber": 8
+    },
+    "goldCost": 400,
+    "resultDefId": "guildmade_talisman",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 44
+  },
+  {
+    "id": "craft_masterwork_band",
+    "name": "Masterwork Band",
+    "description": "The Masterwork line's own answer to a Guildmade Band -- same idea, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 75,
+      "timber": 25,
+      "herbs": 12,
+      "fish": 12
+    },
+    "goldCost": 13000,
+    "resultDefId": "masterwork_band",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 32,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1444
+  },
+  {
+    "id": "craft_masterwork_bulwark",
+    "name": "Masterwork Bulwark",
+    "description": "Layered and tested against the guild's own training dummies before it's ever handed over.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 75,
+      "timber": 25,
+      "herbs": 12,
+      "fish": 12
+    },
+    "goldCost": 13000,
+    "resultDefId": "masterwork_bulwark",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 32,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1444
+  },
+  {
+    "id": "craft_masterwork_mantle",
+    "name": "Masterwork Mantle",
+    "description": "Cut and weighted for one set of shoulders, not adjusted to fit a dozen.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 75,
+      "timber": 25,
+      "herbs": 12,
+      "fish": 12
+    },
+    "goldCost": 13000,
+    "resultDefId": "masterwork_mantle",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 32,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 1444
   }
 ]

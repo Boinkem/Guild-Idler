@@ -334,5 +334,221 @@
     "recipeId": "craft_masterwork_warblade",
     "reqLevel": 50,
     "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_vitality_1",
+    "recipeId": "craft_heirloom_vitality_1",
+    "reqLevel": 1,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_vitality_2",
+    "recipeId": "craft_heirloom_vitality_2",
+    "reqLevel": 10,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_vitality_3",
+    "recipeId": "craft_heirloom_vitality_3",
+    "reqLevel": 20,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_vitality_4",
+    "recipeId": "craft_heirloom_vitality_4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_vitality_5",
+    "recipeId": "craft_heirloom_vitality_5",
+    "reqLevel": 40,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_vitality_6",
+    "recipeId": "craft_heirloom_vitality_6",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_fortune_1",
+    "recipeId": "craft_heirloom_fortune_1",
+    "reqLevel": 1,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_fortune_2",
+    "recipeId": "craft_heirloom_fortune_2",
+    "reqLevel": 10,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_fortune_3",
+    "recipeId": "craft_heirloom_fortune_3",
+    "reqLevel": 20,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_fortune_4",
+    "recipeId": "craft_heirloom_fortune_4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_fortune_5",
+    "recipeId": "craft_heirloom_fortune_5",
+    "reqLevel": 40,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_fortune_6",
+    "recipeId": "craft_heirloom_fortune_6",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_wisdom_1",
+    "recipeId": "craft_heirloom_wisdom_1",
+    "reqLevel": 1,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_wisdom_2",
+    "recipeId": "craft_heirloom_wisdom_2",
+    "reqLevel": 10,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_wisdom_3",
+    "recipeId": "craft_heirloom_wisdom_3",
+    "reqLevel": 20,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_wisdom_4",
+    "recipeId": "craft_heirloom_wisdom_4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_wisdom_5",
+    "recipeId": "craft_heirloom_wisdom_5",
+    "reqLevel": 40,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_wisdom_6",
+    "recipeId": "craft_heirloom_wisdom_6",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_haste_1",
+    "recipeId": "craft_heirloom_haste_1",
+    "reqLevel": 1,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_haste_2",
+    "recipeId": "craft_heirloom_haste_2",
+    "reqLevel": 10,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_haste_3",
+    "recipeId": "craft_heirloom_haste_3",
+    "reqLevel": 20,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_haste_4",
+    "recipeId": "craft_heirloom_haste_4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_haste_5",
+    "recipeId": "craft_heirloom_haste_5",
+    "reqLevel": 40,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_haste_6",
+    "recipeId": "craft_heirloom_haste_6",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_unbreakable_1",
+    "recipeId": "craft_heirloom_unbreakable_1",
+    "reqLevel": 1,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_unbreakable_2",
+    "recipeId": "craft_heirloom_unbreakable_2",
+    "reqLevel": 10,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_heirloom_unbreakable_3",
+    "recipeId": "craft_heirloom_unbreakable_3",
+    "reqLevel": 20,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_unbreakable_4",
+    "recipeId": "craft_heirloom_unbreakable_4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_heirloom_unbreakable_5",
+    "recipeId": "craft_heirloom_unbreakable_5",
+    "reqLevel": 40,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_heirloom_unbreakable_6",
+    "recipeId": "craft_heirloom_unbreakable_6",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_guildmade_gauntlets",
+    "recipeId": "craft_guildmade_gauntlets",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_buckler",
+    "recipeId": "craft_guildmade_buckler",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_talisman",
+    "recipeId": "craft_guildmade_talisman",
+    "reqLevel": 12,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_masterwork_band",
+    "recipeId": "craft_masterwork_band",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_masterwork_bulwark",
+    "recipeId": "craft_masterwork_bulwark",
+    "reqLevel": 50,
+    "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_masterwork_mantle",
+    "recipeId": "craft_masterwork_mantle",
+    "reqLevel": 50,
+    "rarity": "legendary"
   }
 ]

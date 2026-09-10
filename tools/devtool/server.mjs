@@ -699,7 +699,7 @@ const SCHEMAS = {
     fields: {
       id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
-      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'] },
+      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak', 'heirloom'] },
       rarity: { type: 'enum', required: true, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
       reqLevel: { type: 'number', required: true },
       maxDurability: { type: 'number', required: true },
@@ -736,6 +736,15 @@ const SCHEMAS = {
       // "legendary" armour that should read as a bigger jump than an
       // ordinary legendary. Leave unset for the normal flat-rarity score.
       gearScoreOverride: { type: 'number', required: false },
+      // Multiplies EquipmentManager.upgradeCost for this specific item --
+      // see EquipmentDef.enhanceCostMultiplier's own comment in types.ts.
+      // Added alongside the 30 Heirloom items (patch 0359), which are the
+      // only entries that currently set it -- same "add it here the
+      // moment the field exists on disk" lesson raidExclusive/craftable's
+      // own comment above already learned the hard way, rather than
+      // waiting for a report that editing a Heirloom's icon silently
+      // reset its enhance cost back to normal.
+      enhanceCostMultiplier: { type: 'number', required: false },
     },
   },
   'consumables': {

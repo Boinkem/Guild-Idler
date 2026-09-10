@@ -29,7 +29,19 @@ export type ElementType = 'fire' | 'frost' | 'lightning' | 'poison';
  */
 export type GemTier = Rarity;
 
-export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak';
+/**
+ * `heirloom` (patch 0359, direct design request -- "a slot... only
+ * filled through crafting") is the one slot in this list with no other
+ * source at all: every Heirloom EquipmentDef is `craftable: true`
+ * (excludes it from Shop/Black Market roll pools the same way
+ * Guildmade/Masterwork already are) and deliberately never listed in
+ * any raid/quest loot table -- there was no new exclusion mechanism to
+ * build, just never adding one to a loot array. See
+ * data/json/equipment.json's own `heirloom_*` entries and
+ * RecipeScrollDef's comment in this file for the 30 recipes/scrolls
+ * (5 themes x 6 level brackets) that produce them.
+ */
+export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak' | 'heirloom';
 
 /**
  * One material per Harvest/Gathering node. Deliberately 1:1 with the node
@@ -380,6 +392,20 @@ export interface EquipmentDef {
    * normal flat rarity table exactly as before.
    */
   gearScoreOverride?: number;
+  /**
+   * Multiplies EquipmentManager.upgradeCost's own result for this
+   * specific item -- patch 0359, direct request: "leave the enhance cap
+   * where it is, maybe just dramatically increase its cost curve"
+   * (Heirloom, specifically -- MAX_PLUS/the 0-10 range is unchanged for
+   * every item including this one, only the gold/scrap price of each
+   * +1 changes). Optional and unset for all 142 pre-0359 items, which
+   * keep the exact cost curve they've always had -- this is additive on
+   * top of upgradeCost's existing `1.65^plus` exponential, not a
+   * replacement for it, so a high multiplier still starts cheap at +1
+   * and compounds the same shape, just from a steeper base. Every
+   * `heirloom_*` def sets this; nothing else does yet.
+   */
+  enhanceCostMultiplier?: number;
 }
 
 /** A concrete item the player owns. */

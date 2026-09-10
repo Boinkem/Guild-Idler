@@ -28127,7 +28127,114 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### DevTool: crafting-recipes.json save blocked entirely by a missing 'charm' category option (patch 0358)
+### New system: Heirloom equip slot, craft-only, 5 themes x 6 level brackets; existing gear crafting's slot gaps (Shield etc.) filled in (patch 0359)
+```discord-update
+Dev Update | Heirloom Slot
+
+- New equipment slot: Heirloom -- craft-only, never found any other way, one per hero
+- 5 Heirloom lines to find and craft: Vitality, Fortune, Wisdom, Haste, and the Unbreakable, each with 6 level brackets from 1 to 50
+- Recraft at a higher bracket as your hero levels up rather than infinitely enhancing one copy forever
+- Enhance is still capped at +10 like everything else, but costs a lot more to fully max on a Heirloom
+- Filled in the gaps in existing gear crafting too -- Shield (and a few other slots) had zero craftable options before this, now every slot has one
+```
+
+Direct design request, worked through over several rounds of discussion
+before any code: "a slot in Inventory/Equipable that is only filled
+through crafting." Net new equip slot plus 36 new craftable items --
+the biggest single content addition to crafting since it existed.
+
+**The new slot (`types.ts`, `data/equipment.ts`, `ui/icons.tsx`,
+`tools/devtool/server.mjs`).** `EquipSlot` gains a 10th value,
+`'heirloom'`. Turned out to need far less code than the discussion
+worried it might: `EQUIP_SLOTS` is the one source of truth almost
+everything else in the game already iterates generically
+(`HeroManager`'s stat/mod sums, the Inventory slot grid, gear score --
+all `Object.values(hero.equipment)`/`SLOTS.map(...)`, nothing hand-listing
+all 9 slot names), so adding the 10th value there and to `SLOT_FALLBACK`'s
+glyph map (🏺) was enough to make it show up correctly everywhere. Also
+updated the DevTool's own `slot` enum (same class of bug patch 0358 just
+fixed for `category` -- caught this one before it could bite the same
+way) and added `enhanceCostMultiplier` to the DevTool's equipment schema
+before it existed anywhere else, having learned from `raidExclusive`/
+`craftable`'s own comment in that file: the editor rebuilds every saved
+entry from exactly the fields it knows about, so a field missing from
+the schema gets silently deleted the next time anyone edits that item
+for any reason.
+
+**Craft-only sourcing, for free.** `EquipmentDef.craftable: true` already
+excludes an item from Shop/Black Market stock generation (how Guildmade/
+Masterwork already work) and raid/quest loot only ever drops what's
+hand-listed in that encounter's own table -- so as long as no Heirloom
+item is ever added to a loot array, "the only way to get one is to craft
+it" was true by construction, no new exclusion logic needed.
+
+**5 themes x 6 brackets = 30 recipes/scrolls (`data/json/equipment.json`,
+`crafting-recipes.json`, `recipe-scrolls.json`).** Sigil of Vitality
+(flat Health), Fortune (Gold %), Wisdom (XP %), Haste (Speed %), and the
+Unbreakable (Durability %) -- all 5 map onto `Modifiers` fields the game
+already sums through everywhere else, so no new stat plumbing was
+needed, just a new source feeding the existing machinery. Brackets craft
+at level 1/10/20/30/40/50 (rarity climbing rare -> rare -> epic -> epic
+-> legendary -> legendary), magnitude 3% -> 20% for the four %-based
+themes (Health: 15 -> 200 flat), gold cost 150 -> 15,000 scaled against
+the existing Guildmade/Masterwork cost curve. Each recipe is
+`modsToPick: 0` with its bracket's fixed bonus sitting directly on the
+item's own `def.mods` -- deliberately NOT the `customMods`-via-picked-
+stats path every other `craftable` gear item uses (gear crafting has
+been Stats-only, not Modifiers-only, since patch 0255's all-stats
+rework), since a Heirloom has nothing for the player to pick: the whole
+point is that its power is fixed by which bracket you crafted. This
+needed zero changes to `CraftingManager.craftGear` or the crafting UI's
+picking flow -- a `modsToPick: 0` recipe already skips straight to
+"ready to craft," confirmed against the existing readiness check before
+writing a single new recipe.
+
+**Recrafting is the intended progression loop, not enhancing forever.**
+Direct design decision: Enhance's existing cap (`MAX_PLUS = 10`) is
+unchanged for every item including Heirlooms, but its cost curve is now
+`x4` steeper for them specifically (new `EquipmentDef.
+enhanceCostMultiplier`, read by `EquipmentManager.upgradeCost` --
+additive on top of the existing `1.65^plus` exponential, not a
+replacement for it). The existing gear-relevance falloff
+(`HeroManager.gearRelevance`, unrelated to this patch) does the rest for
+free: a low-bracket Heirloom naturally loses effectiveness as its
+wearer outlevels it, since Heirlooms never get a `rolledItemLevel`
+the way procedural loot does -- their fixed `def.reqLevel` is what
+relevance falls off against. That's exactly the pressure a "recraft at
+a higher bracket" loop needs, and it came from a mechanic already in the
+game rather than anything new built for this.
+
+**Filled the existing gear-crafting gaps too, same patch.** Direct
+follow-up request. Before this, Guildmade covered 6 of 9 slots (missing
+Gloves/Shield/Amulet) and Masterwork covered a different 6 (missing
+Ring/Shield/Cloak) -- Shield specifically had ZERO craftable recipes at
+either tier. 6 new standalone items (Guildmade Gauntlets/Buckler/
+Talisman, Masterwork Band/Bulwark/Mantle) fill every remaining gap,
+each individually gated with its own scroll like every other gear
+recipe. Deliberately NOT added to the existing Guildmade/Masterwork
+SET's own `pieces` array -- both are real set-bonus items with tiered
+bonuses at 2/4/6 pieces, and "Commissioned Complete" at 6/6 explicitly
+means the set as designed is already whole; extending it to 9 pieces
+would mean redesigning tested set-bonus tiers nobody asked to touch.
+These are standalone tier-matched pieces instead, same shape Guildmade
+Blade/Band themselves had before the set existed (per that set's own
+comment in `equipment.ts`). Every slot now has exactly 2 craftable
+options, confirmed by script before writing this up.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean (206 modules, unchanged -- pure data
+plus a handful of small code edits, no new files). Full cross-reference
+integrity check by script: all 178 equipment ids and 108 recipe ids and
+92 scroll ids are unique, every recipe's `resultDefId` resolves to a
+real equipment entry, every scroll's `recipeId` resolves to a real
+recipe, and all 10 equip slots (including the new one) have at least
+one craftable option. No live in-app playtest in this environment --
+worth a real pass confirming a crafted Heirloom actually shows up in the
+new slot correctly, that its % bonus applies to the wearer only (not
+guild-wide), and that the enhance-cost multiplier reads as "expensive
+but not absurd" in practice rather than just on paper.
+
+
 ```discord-update
 Dev Update | Bug Fix
 

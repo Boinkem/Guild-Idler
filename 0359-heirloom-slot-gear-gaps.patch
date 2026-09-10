@@ -1,0 +1,1708 @@
+From 8b352542c94076dba64d09073d9601999a66170c Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Thu, 10 Sep 2026 02:33:02 +0000
+Subject: [PATCH] Patch 0359: Heirloom equip slot (craft-only), 30 new recipes,
+ existing gear slot gaps filled
+
+---
+ guild-idler-status.md                    | 109 +++-
+ src/game/data/equipment.ts               |   2 +-
+ src/game/data/json/crafting-recipes.json | 721 +++++++++++++++++++++++
+ src/game/data/json/equipment.json        | 486 +++++++++++++++
+ src/game/data/json/recipe-scrolls.json   | 216 +++++++
+ src/game/managers/EquipmentManager.ts    |   2 +-
+ src/game/types.ts                        |  28 +-
+ src/ui/icons.tsx                         |   2 +-
+ tools/devtool/server.mjs                 |  11 +-
+ 9 files changed, 1571 insertions(+), 6 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 141521f..5a0f140 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,7 +28127,114 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
+-### DevTool: crafting-recipes.json save blocked entirely by a missing 'charm' category option (patch 0358)
++### New system: Heirloom equip slot, craft-only, 5 themes x 6 level brackets; existing gear crafting's slot gaps (Shield etc.) filled in (patch 0359)
++```discord-update
++Dev Update | Heirloom Slot
++
++- New equipment slot: Heirloom -- craft-only, never found any other way, one per hero
++- 5 Heirloom lines to find and craft: Vitality, Fortune, Wisdom, Haste, and the Unbreakable, each with 6 level brackets from 1 to 50
++- Recraft at a higher bracket as your hero levels up rather than infinitely enhancing one copy forever
++- Enhance is still capped at +10 like everything else, but costs a lot more to fully max on a Heirloom
++- Filled in the gaps in existing gear crafting too -- Shield (and a few other slots) had zero craftable options before this, now every slot has one
++```
++
++Direct design request, worked through over several rounds of discussion
++before any code: "a slot in Inventory/Equipable that is only filled
++through crafting." Net new equip slot plus 36 new craftable items --
++the biggest single content addition to crafting since it existed.
++
++**The new slot (`types.ts`, `data/equipment.ts`, `ui/icons.tsx`,
++`tools/devtool/server.mjs`).** `EquipSlot` gains a 10th value,
++`'heirloom'`. Turned out to need far less code than the discussion
++worried it might: `EQUIP_SLOTS` is the one source of truth almost
++everything else in the game already iterates generically
++(`HeroManager`'s stat/mod sums, the Inventory slot grid, gear score --
++all `Object.values(hero.equipment)`/`SLOTS.map(...)`, nothing hand-listing
++all 9 slot names), so adding the 10th value there and to `SLOT_FALLBACK`'s
++glyph map (🏺) was enough to make it show up correctly everywhere. Also
++updated the DevTool's own `slot` enum (same class of bug patch 0358 just
++fixed for `category` -- caught this one before it could bite the same
++way) and added `enhanceCostMultiplier` to the DevTool's equipment schema
++before it existed anywhere else, having learned from `raidExclusive`/
++`craftable`'s own comment in that file: the editor rebuilds every saved
++entry from exactly the fields it knows about, so a field missing from
++the schema gets silently deleted the next time anyone edits that item
++for any reason.
++
++**Craft-only sourcing, for free.** `EquipmentDef.craftable: true` already
++excludes an item from Shop/Black Market stock generation (how Guildmade/
++Masterwork already work) and raid/quest loot only ever drops what's
++hand-listed in that encounter's own table -- so as long as no Heirloom
++item is ever added to a loot array, "the only way to get one is to craft
++it" was true by construction, no new exclusion logic needed.
++
++**5 themes x 6 brackets = 30 recipes/scrolls (`data/json/equipment.json`,
++`crafting-recipes.json`, `recipe-scrolls.json`).** Sigil of Vitality
++(flat Health), Fortune (Gold %), Wisdom (XP %), Haste (Speed %), and the
++Unbreakable (Durability %) -- all 5 map onto `Modifiers` fields the game
++already sums through everywhere else, so no new stat plumbing was
++needed, just a new source feeding the existing machinery. Brackets craft
++at level 1/10/20/30/40/50 (rarity climbing rare -> rare -> epic -> epic
++-> legendary -> legendary), magnitude 3% -> 20% for the four %-based
++themes (Health: 15 -> 200 flat), gold cost 150 -> 15,000 scaled against
++the existing Guildmade/Masterwork cost curve. Each recipe is
++`modsToPick: 0` with its bracket's fixed bonus sitting directly on the
++item's own `def.mods` -- deliberately NOT the `customMods`-via-picked-
++stats path every other `craftable` gear item uses (gear crafting has
++been Stats-only, not Modifiers-only, since patch 0255's all-stats
++rework), since a Heirloom has nothing for the player to pick: the whole
++point is that its power is fixed by which bracket you crafted. This
++needed zero changes to `CraftingManager.craftGear` or the crafting UI's
++picking flow -- a `modsToPick: 0` recipe already skips straight to
++"ready to craft," confirmed against the existing readiness check before
++writing a single new recipe.
++
++**Recrafting is the intended progression loop, not enhancing forever.**
++Direct design decision: Enhance's existing cap (`MAX_PLUS = 10`) is
++unchanged for every item including Heirlooms, but its cost curve is now
++`x4` steeper for them specifically (new `EquipmentDef.
++enhanceCostMultiplier`, read by `EquipmentManager.upgradeCost` --
++additive on top of the existing `1.65^plus` exponential, not a
++replacement for it). The existing gear-relevance falloff
++(`HeroManager.gearRelevance`, unrelated to this patch) does the rest for
++free: a low-bracket Heirloom naturally loses effectiveness as its
++wearer outlevels it, since Heirlooms never get a `rolledItemLevel`
++the way procedural loot does -- their fixed `def.reqLevel` is what
++relevance falls off against. That's exactly the pressure a "recraft at
++a higher bracket" loop needs, and it came from a mechanic already in the
++game rather than anything new built for this.
++
++**Filled the existing gear-crafting gaps too, same patch.** Direct
++follow-up request. Before this, Guildmade covered 6 of 9 slots (missing
++Gloves/Shield/Amulet) and Masterwork covered a different 6 (missing
++Ring/Shield/Cloak) -- Shield specifically had ZERO craftable recipes at
++either tier. 6 new standalone items (Guildmade Gauntlets/Buckler/
++Talisman, Masterwork Band/Bulwark/Mantle) fill every remaining gap,
++each individually gated with its own scroll like every other gear
++recipe. Deliberately NOT added to the existing Guildmade/Masterwork
++SET's own `pieces` array -- both are real set-bonus items with tiered
++bonuses at 2/4/6 pieces, and "Commissioned Complete" at 6/6 explicitly
++means the set as designed is already whole; extending it to 9 pieces
++would mean redesigning tested set-bonus tiers nobody asked to touch.
++These are standalone tier-matched pieces instead, same shape Guildmade
++Blade/Band themselves had before the set existed (per that set's own
++comment in `equipment.ts`). Every slot now has exactly 2 craftable
++options, confirmed by script before writing this up.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean (206 modules, unchanged -- pure data
++plus a handful of small code edits, no new files). Full cross-reference
++integrity check by script: all 178 equipment ids and 108 recipe ids and
++92 scroll ids are unique, every recipe's `resultDefId` resolves to a
++real equipment entry, every scroll's `recipeId` resolves to a real
++recipe, and all 10 equip slots (including the new one) have at least
++one craftable option. No live in-app playtest in this environment --
++worth a real pass confirming a crafted Heirloom actually shows up in the
++new slot correctly, that its % bonus applies to the wearer only (not
++guild-wide), and that the enhance-cost multiplier reads as "expensive
++but not absurd" in practice rather than just on paper.
++
++
+ ```discord-update
+ Dev Update | Bug Fix
+ 
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index 0669921..ce1041e 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -142,7 +142,7 @@ export const GEAR_SCORE_MAX = 9 * (GEAR_SCORE_BY_RARITY.legendary + GEAR_SCORE_L
+  * engine.equipBestGear can iterate the same set without either duplicating
+  * the list or importing a UI file into game logic.
+  */
+-export const EQUIP_SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
++export const EQUIP_SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak', 'heirloom'];
+ 
+ /**
+  * Gear Score tiers, evenly spaced across GEAR_SCORE_MAX and reusing the
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+index aae7fc3..cca1abd 100644
+--- a/src/game/data/json/crafting-recipes.json
++++ b/src/game/data/json/crafting-recipes.json
+@@ -1503,5 +1503,726 @@
+     "statsToPick": 0,
+     "statValue": 0,
+     "scrapCost": 16
++  },
++  {
++    "id": "craft_heirloom_vitality_1",
++    "name": "Heirloom Sigil of Vitality I",
++    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 10,
++      "timber": 5
++    },
++    "goldCost": 150,
++    "resultDefId": "heirloom_vitality_1",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 17
++  },
++  {
++    "id": "craft_heirloom_vitality_2",
++    "name": "Heirloom Sigil of Vitality II",
++    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 25,
++      "timber": 12,
++      "herbs": 5
++    },
++    "goldCost": 600,
++    "resultDefId": "heirloom_vitality_2",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 67
++  },
++  {
++    "id": "craft_heirloom_vitality_3",
++    "name": "Heirloom Sigil of Vitality III",
++    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 45,
++      "timber": 20,
++      "herbs": 10
++    },
++    "goldCost": 2200,
++    "resultDefId": "heirloom_vitality_3",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 244
++  },
++  {
++    "id": "craft_heirloom_vitality_4",
++    "name": "Heirloom Sigil of Vitality IV",
++    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 65,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 5500,
++    "resultDefId": "heirloom_vitality_4",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 610
++  },
++  {
++    "id": "craft_heirloom_vitality_5",
++    "name": "Heirloom Sigil of Vitality V",
++    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 80,
++      "timber": 30,
++      "herbs": 20,
++      "fish": 15
++    },
++    "goldCost": 9500,
++    "resultDefId": "heirloom_vitality_5",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1054
++  },
++  {
++    "id": "craft_heirloom_vitality_6",
++    "name": "Heirloom Sigil of Vitality VI",
++    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 100,
++      "timber": 35,
++      "herbs": 25,
++      "fish": 20
++    },
++    "goldCost": 15000,
++    "resultDefId": "heirloom_vitality_6",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1665
++  },
++  {
++    "id": "craft_heirloom_fortune_1",
++    "name": "Heirloom Sigil of Fortune I",
++    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 10,
++      "timber": 5
++    },
++    "goldCost": 150,
++    "resultDefId": "heirloom_fortune_1",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 17
++  },
++  {
++    "id": "craft_heirloom_fortune_2",
++    "name": "Heirloom Sigil of Fortune II",
++    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 25,
++      "timber": 12,
++      "herbs": 5
++    },
++    "goldCost": 600,
++    "resultDefId": "heirloom_fortune_2",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 67
++  },
++  {
++    "id": "craft_heirloom_fortune_3",
++    "name": "Heirloom Sigil of Fortune III",
++    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 45,
++      "timber": 20,
++      "herbs": 10
++    },
++    "goldCost": 2200,
++    "resultDefId": "heirloom_fortune_3",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 244
++  },
++  {
++    "id": "craft_heirloom_fortune_4",
++    "name": "Heirloom Sigil of Fortune IV",
++    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 65,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 5500,
++    "resultDefId": "heirloom_fortune_4",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 610
++  },
++  {
++    "id": "craft_heirloom_fortune_5",
++    "name": "Heirloom Sigil of Fortune V",
++    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 80,
++      "timber": 30,
++      "herbs": 20,
++      "fish": 15
++    },
++    "goldCost": 9500,
++    "resultDefId": "heirloom_fortune_5",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1054
++  },
++  {
++    "id": "craft_heirloom_fortune_6",
++    "name": "Heirloom Sigil of Fortune VI",
++    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 100,
++      "timber": 35,
++      "herbs": 25,
++      "fish": 20
++    },
++    "goldCost": 15000,
++    "resultDefId": "heirloom_fortune_6",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1665
++  },
++  {
++    "id": "craft_heirloom_wisdom_1",
++    "name": "Heirloom Sigil of Wisdom I",
++    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 10,
++      "timber": 5
++    },
++    "goldCost": 150,
++    "resultDefId": "heirloom_wisdom_1",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 17
++  },
++  {
++    "id": "craft_heirloom_wisdom_2",
++    "name": "Heirloom Sigil of Wisdom II",
++    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 25,
++      "timber": 12,
++      "herbs": 5
++    },
++    "goldCost": 600,
++    "resultDefId": "heirloom_wisdom_2",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 67
++  },
++  {
++    "id": "craft_heirloom_wisdom_3",
++    "name": "Heirloom Sigil of Wisdom III",
++    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 45,
++      "timber": 20,
++      "herbs": 10
++    },
++    "goldCost": 2200,
++    "resultDefId": "heirloom_wisdom_3",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 244
++  },
++  {
++    "id": "craft_heirloom_wisdom_4",
++    "name": "Heirloom Sigil of Wisdom IV",
++    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 65,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 5500,
++    "resultDefId": "heirloom_wisdom_4",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 610
++  },
++  {
++    "id": "craft_heirloom_wisdom_5",
++    "name": "Heirloom Sigil of Wisdom V",
++    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 80,
++      "timber": 30,
++      "herbs": 20,
++      "fish": 15
++    },
++    "goldCost": 9500,
++    "resultDefId": "heirloom_wisdom_5",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1054
++  },
++  {
++    "id": "craft_heirloom_wisdom_6",
++    "name": "Heirloom Sigil of Wisdom VI",
++    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 100,
++      "timber": 35,
++      "herbs": 25,
++      "fish": 20
++    },
++    "goldCost": 15000,
++    "resultDefId": "heirloom_wisdom_6",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1665
++  },
++  {
++    "id": "craft_heirloom_haste_1",
++    "name": "Heirloom Sigil of Haste I",
++    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 10,
++      "timber": 5
++    },
++    "goldCost": 150,
++    "resultDefId": "heirloom_haste_1",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 17
++  },
++  {
++    "id": "craft_heirloom_haste_2",
++    "name": "Heirloom Sigil of Haste II",
++    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 25,
++      "timber": 12,
++      "herbs": 5
++    },
++    "goldCost": 600,
++    "resultDefId": "heirloom_haste_2",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 67
++  },
++  {
++    "id": "craft_heirloom_haste_3",
++    "name": "Heirloom Sigil of Haste III",
++    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 45,
++      "timber": 20,
++      "herbs": 10
++    },
++    "goldCost": 2200,
++    "resultDefId": "heirloom_haste_3",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 244
++  },
++  {
++    "id": "craft_heirloom_haste_4",
++    "name": "Heirloom Sigil of Haste IV",
++    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 65,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 5500,
++    "resultDefId": "heirloom_haste_4",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 610
++  },
++  {
++    "id": "craft_heirloom_haste_5",
++    "name": "Heirloom Sigil of Haste V",
++    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 80,
++      "timber": 30,
++      "herbs": 20,
++      "fish": 15
++    },
++    "goldCost": 9500,
++    "resultDefId": "heirloom_haste_5",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1054
++  },
++  {
++    "id": "craft_heirloom_haste_6",
++    "name": "Heirloom Sigil of Haste VI",
++    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 100,
++      "timber": 35,
++      "herbs": 25,
++      "fish": 20
++    },
++    "goldCost": 15000,
++    "resultDefId": "heirloom_haste_6",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1665
++  },
++  {
++    "id": "craft_heirloom_unbreakable_1",
++    "name": "Heirloom Sigil of the Unbreakable I",
++    "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 10,
++      "timber": 5
++    },
++    "goldCost": 150,
++    "resultDefId": "heirloom_unbreakable_1",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 17
++  },
++  {
++    "id": "craft_heirloom_unbreakable_2",
++    "name": "Heirloom Sigil of the Unbreakable II",
++    "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 25,
++      "timber": 12,
++      "herbs": 5
++    },
++    "goldCost": 600,
++    "resultDefId": "heirloom_unbreakable_2",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 67
++  },
++  {
++    "id": "craft_heirloom_unbreakable_3",
++    "name": "Heirloom Sigil of the Unbreakable III",
++    "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 45,
++      "timber": 20,
++      "herbs": 10
++    },
++    "goldCost": 2200,
++    "resultDefId": "heirloom_unbreakable_3",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 244
++  },
++  {
++    "id": "craft_heirloom_unbreakable_4",
++    "name": "Heirloom Sigil of the Unbreakable IV",
++    "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 65,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 5500,
++    "resultDefId": "heirloom_unbreakable_4",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 610
++  },
++  {
++    "id": "craft_heirloom_unbreakable_5",
++    "name": "Heirloom Sigil of the Unbreakable V",
++    "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 80,
++      "timber": 30,
++      "herbs": 20,
++      "fish": 15
++    },
++    "goldCost": 9500,
++    "resultDefId": "heirloom_unbreakable_5",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1054
++  },
++  {
++    "id": "craft_heirloom_unbreakable_6",
++    "name": "Heirloom Sigil of the Unbreakable VI",
++    "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 100,
++      "timber": 35,
++      "herbs": 25,
++      "fish": 20
++    },
++    "goldCost": 15000,
++    "resultDefId": "heirloom_unbreakable_6",
++    "modOptions": [],
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1665
++  },
++  {
++    "id": "craft_guildmade_gauntlets",
++    "name": "Guildmade Gauntlets",
++    "description": "Fitted knuckle to knuckle at the guild's own forge -- no rack of spares to pick through.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 18,
++      "timber": 8
++    },
++    "goldCost": 400,
++    "resultDefId": "guildmade_gauntlets",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 14,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 44
++  },
++  {
++    "id": "craft_guildmade_buckler",
++    "name": "Guildmade Buckler",
++    "description": "Guild-crested and sized to one arm. Never sold, never looted -- only ever made to order.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 18,
++      "timber": 8
++    },
++    "goldCost": 400,
++    "resultDefId": "guildmade_buckler",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 14,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 44
++  },
++  {
++    "id": "craft_guildmade_talisman",
++    "name": "Guildmade Talisman",
++    "description": "Strung and weighted by hand, to whoever's neck it's meant for.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 18,
++      "timber": 8
++    },
++    "goldCost": 400,
++    "resultDefId": "guildmade_talisman",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 14,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 44
++  },
++  {
++    "id": "craft_masterwork_band",
++    "name": "Masterwork Band",
++    "description": "The Masterwork line's own answer to a Guildmade Band -- same idea, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 75,
++      "timber": 25,
++      "herbs": 12,
++      "fish": 12
++    },
++    "goldCost": 13000,
++    "resultDefId": "masterwork_band",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 32,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1444
++  },
++  {
++    "id": "craft_masterwork_bulwark",
++    "name": "Masterwork Bulwark",
++    "description": "Layered and tested against the guild's own training dummies before it's ever handed over.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 75,
++      "timber": 25,
++      "herbs": 12,
++      "fish": 12
++    },
++    "goldCost": 13000,
++    "resultDefId": "masterwork_bulwark",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 32,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1444
++  },
++  {
++    "id": "craft_masterwork_mantle",
++    "name": "Masterwork Mantle",
++    "description": "Cut and weighted for one set of shoulders, not adjusted to fit a dozen.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 75,
++      "timber": 25,
++      "herbs": 12,
++      "fish": 12
++    },
++    "goldCost": 13000,
++    "resultDefId": "masterwork_mantle",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 32,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 1444
+   }
+ ]
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index 9d5b9c2..05f659d 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -2241,5 +2241,491 @@
+     "raidExclusive": false,
+     "craftable": false,
+     "chainExclusive": true
++  },
++  {
++    "id": "heirloom_vitality_1",
++    "name": "Heirloom Sigil of Vitality I",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 1,
++    "maxDurability": 75,
++    "mods": {
++      "health": 15
++    },
++    "value": 90,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_vitality_2",
++    "name": "Heirloom Sigil of Vitality II",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 90,
++    "mods": {
++      "health": 30
++    },
++    "value": 360,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_vitality_3",
++    "name": "Heirloom Sigil of Vitality III",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 20,
++    "maxDurability": 105,
++    "mods": {
++      "health": 55
++    },
++    "value": 1320,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_vitality_4",
++    "name": "Heirloom Sigil of Vitality IV",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 120,
++    "mods": {
++      "health": 90
++    },
++    "value": 3300,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_vitality_5",
++    "name": "Heirloom Sigil of Vitality V",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 40,
++    "maxDurability": 135,
++    "mods": {
++      "health": 140
++    },
++    "value": 5700,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_vitality_6",
++    "name": "Heirloom Sigil of Vitality VI",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 50,
++    "maxDurability": 150,
++    "mods": {
++      "health": 200
++    },
++    "value": 9000,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_fortune_1",
++    "name": "Heirloom Sigil of Fortune I",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 1,
++    "maxDurability": 75,
++    "mods": {
++      "gold": 3
++    },
++    "value": 90,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_fortune_2",
++    "name": "Heirloom Sigil of Fortune II",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 90,
++    "mods": {
++      "gold": 5
++    },
++    "value": 360,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_fortune_3",
++    "name": "Heirloom Sigil of Fortune III",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 20,
++    "maxDurability": 105,
++    "mods": {
++      "gold": 8
++    },
++    "value": 1320,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_fortune_4",
++    "name": "Heirloom Sigil of Fortune IV",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 120,
++    "mods": {
++      "gold": 12
++    },
++    "value": 3300,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_fortune_5",
++    "name": "Heirloom Sigil of Fortune V",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 40,
++    "maxDurability": 135,
++    "mods": {
++      "gold": 16
++    },
++    "value": 5700,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_fortune_6",
++    "name": "Heirloom Sigil of Fortune VI",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 50,
++    "maxDurability": 150,
++    "mods": {
++      "gold": 20
++    },
++    "value": 9000,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_wisdom_1",
++    "name": "Heirloom Sigil of Wisdom I",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 1,
++    "maxDurability": 75,
++    "mods": {
++      "xp": 3
++    },
++    "value": 90,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_wisdom_2",
++    "name": "Heirloom Sigil of Wisdom II",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 90,
++    "mods": {
++      "xp": 5
++    },
++    "value": 360,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_wisdom_3",
++    "name": "Heirloom Sigil of Wisdom III",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 20,
++    "maxDurability": 105,
++    "mods": {
++      "xp": 8
++    },
++    "value": 1320,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_wisdom_4",
++    "name": "Heirloom Sigil of Wisdom IV",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 120,
++    "mods": {
++      "xp": 12
++    },
++    "value": 3300,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_wisdom_5",
++    "name": "Heirloom Sigil of Wisdom V",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 40,
++    "maxDurability": 135,
++    "mods": {
++      "xp": 16
++    },
++    "value": 5700,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_wisdom_6",
++    "name": "Heirloom Sigil of Wisdom VI",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 50,
++    "maxDurability": 150,
++    "mods": {
++      "xp": 20
++    },
++    "value": 9000,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_haste_1",
++    "name": "Heirloom Sigil of Haste I",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 1,
++    "maxDurability": 75,
++    "mods": {
++      "speed": 3
++    },
++    "value": 90,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_haste_2",
++    "name": "Heirloom Sigil of Haste II",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 90,
++    "mods": {
++      "speed": 5
++    },
++    "value": 360,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_haste_3",
++    "name": "Heirloom Sigil of Haste III",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 20,
++    "maxDurability": 105,
++    "mods": {
++      "speed": 8
++    },
++    "value": 1320,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_haste_4",
++    "name": "Heirloom Sigil of Haste IV",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 120,
++    "mods": {
++      "speed": 12
++    },
++    "value": 3300,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_haste_5",
++    "name": "Heirloom Sigil of Haste V",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 40,
++    "maxDurability": 135,
++    "mods": {
++      "speed": 16
++    },
++    "value": 5700,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_haste_6",
++    "name": "Heirloom Sigil of Haste VI",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 50,
++    "maxDurability": 150,
++    "mods": {
++      "speed": 20
++    },
++    "value": 9000,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_unbreakable_1",
++    "name": "Heirloom Sigil of the Unbreakable I",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 1,
++    "maxDurability": 75,
++    "mods": {
++      "durability": 3
++    },
++    "value": 90,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_unbreakable_2",
++    "name": "Heirloom Sigil of the Unbreakable II",
++    "slot": "heirloom",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 90,
++    "mods": {
++      "durability": 5
++    },
++    "value": 360,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_unbreakable_3",
++    "name": "Heirloom Sigil of the Unbreakable III",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 20,
++    "maxDurability": 105,
++    "mods": {
++      "durability": 8
++    },
++    "value": 1320,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_unbreakable_4",
++    "name": "Heirloom Sigil of the Unbreakable IV",
++    "slot": "heirloom",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 120,
++    "mods": {
++      "durability": 12
++    },
++    "value": 3300,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_unbreakable_5",
++    "name": "Heirloom Sigil of the Unbreakable V",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 40,
++    "maxDurability": 135,
++    "mods": {
++      "durability": 16
++    },
++    "value": 5700,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "heirloom_unbreakable_6",
++    "name": "Heirloom Sigil of the Unbreakable VI",
++    "slot": "heirloom",
++    "rarity": "legendary",
++    "reqLevel": 50,
++    "maxDurability": 150,
++    "mods": {
++      "durability": 20
++    },
++    "value": 9000,
++    "craftable": true,
++    "enhanceCostMultiplier": 4
++  },
++  {
++    "id": "guildmade_gauntlets",
++    "name": "Guildmade Gauntlets",
++    "slot": "gloves",
++    "rarity": "rare",
++    "reqLevel": 12,
++    "maxDurability": 100,
++    "value": 550,
++    "mods": {},
++    "craftable": true
++  },
++  {
++    "id": "guildmade_buckler",
++    "name": "Guildmade Buckler",
++    "slot": "shield",
++    "rarity": "rare",
++    "reqLevel": 12,
++    "maxDurability": 100,
++    "value": 550,
++    "mods": {},
++    "craftable": true
++  },
++  {
++    "id": "guildmade_talisman",
++    "name": "Guildmade Talisman",
++    "slot": "amulet",
++    "rarity": "rare",
++    "reqLevel": 12,
++    "maxDurability": 100,
++    "value": 550,
++    "mods": {},
++    "craftable": true
++  },
++  {
++    "id": "masterwork_band",
++    "name": "Masterwork Band",
++    "slot": "ring",
++    "rarity": "legendary",
++    "reqLevel": 50,
++    "maxDurability": 320,
++    "value": 13000,
++    "mods": {},
++    "craftable": true
++  },
++  {
++    "id": "masterwork_bulwark",
++    "name": "Masterwork Bulwark",
++    "slot": "shield",
++    "rarity": "legendary",
++    "reqLevel": 50,
++    "maxDurability": 320,
++    "value": 13000,
++    "mods": {},
++    "craftable": true
++  },
++  {
++    "id": "masterwork_mantle",
++    "name": "Masterwork Mantle",
++    "slot": "cloak",
++    "rarity": "legendary",
++    "reqLevel": 50,
++    "maxDurability": 320,
++    "value": 13000,
++    "mods": {},
++    "craftable": true
+   }
+ ]
+diff --git a/src/game/data/json/recipe-scrolls.json b/src/game/data/json/recipe-scrolls.json
+index 6158a6c..35b89d2 100644
+--- a/src/game/data/json/recipe-scrolls.json
++++ b/src/game/data/json/recipe-scrolls.json
+@@ -334,5 +334,221 @@
+     "recipeId": "craft_masterwork_warblade",
+     "reqLevel": 50,
+     "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_vitality_1",
++    "recipeId": "craft_heirloom_vitality_1",
++    "reqLevel": 1,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_vitality_2",
++    "recipeId": "craft_heirloom_vitality_2",
++    "reqLevel": 10,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_vitality_3",
++    "recipeId": "craft_heirloom_vitality_3",
++    "reqLevel": 20,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_vitality_4",
++    "recipeId": "craft_heirloom_vitality_4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_vitality_5",
++    "recipeId": "craft_heirloom_vitality_5",
++    "reqLevel": 40,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_vitality_6",
++    "recipeId": "craft_heirloom_vitality_6",
++    "reqLevel": 50,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_fortune_1",
++    "recipeId": "craft_heirloom_fortune_1",
++    "reqLevel": 1,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_fortune_2",
++    "recipeId": "craft_heirloom_fortune_2",
++    "reqLevel": 10,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_fortune_3",
++    "recipeId": "craft_heirloom_fortune_3",
++    "reqLevel": 20,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_fortune_4",
++    "recipeId": "craft_heirloom_fortune_4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_fortune_5",
++    "recipeId": "craft_heirloom_fortune_5",
++    "reqLevel": 40,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_fortune_6",
++    "recipeId": "craft_heirloom_fortune_6",
++    "reqLevel": 50,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_wisdom_1",
++    "recipeId": "craft_heirloom_wisdom_1",
++    "reqLevel": 1,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_wisdom_2",
++    "recipeId": "craft_heirloom_wisdom_2",
++    "reqLevel": 10,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_wisdom_3",
++    "recipeId": "craft_heirloom_wisdom_3",
++    "reqLevel": 20,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_wisdom_4",
++    "recipeId": "craft_heirloom_wisdom_4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_wisdom_5",
++    "recipeId": "craft_heirloom_wisdom_5",
++    "reqLevel": 40,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_wisdom_6",
++    "recipeId": "craft_heirloom_wisdom_6",
++    "reqLevel": 50,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_haste_1",
++    "recipeId": "craft_heirloom_haste_1",
++    "reqLevel": 1,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_haste_2",
++    "recipeId": "craft_heirloom_haste_2",
++    "reqLevel": 10,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_haste_3",
++    "recipeId": "craft_heirloom_haste_3",
++    "reqLevel": 20,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_haste_4",
++    "recipeId": "craft_heirloom_haste_4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_haste_5",
++    "recipeId": "craft_heirloom_haste_5",
++    "reqLevel": 40,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_haste_6",
++    "recipeId": "craft_heirloom_haste_6",
++    "reqLevel": 50,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_unbreakable_1",
++    "recipeId": "craft_heirloom_unbreakable_1",
++    "reqLevel": 1,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_unbreakable_2",
++    "recipeId": "craft_heirloom_unbreakable_2",
++    "reqLevel": 10,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_heirloom_unbreakable_3",
++    "recipeId": "craft_heirloom_unbreakable_3",
++    "reqLevel": 20,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_unbreakable_4",
++    "recipeId": "craft_heirloom_unbreakable_4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_heirloom_unbreakable_5",
++    "recipeId": "craft_heirloom_unbreakable_5",
++    "reqLevel": 40,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_heirloom_unbreakable_6",
++    "recipeId": "craft_heirloom_unbreakable_6",
++    "reqLevel": 50,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_guildmade_gauntlets",
++    "recipeId": "craft_guildmade_gauntlets",
++    "reqLevel": 12,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_buckler",
++    "recipeId": "craft_guildmade_buckler",
++    "reqLevel": 12,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_talisman",
++    "recipeId": "craft_guildmade_talisman",
++    "reqLevel": 12,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_masterwork_band",
++    "recipeId": "craft_masterwork_band",
++    "reqLevel": 50,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_masterwork_bulwark",
++    "recipeId": "craft_masterwork_bulwark",
++    "reqLevel": 50,
++    "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_masterwork_mantle",
++    "recipeId": "craft_masterwork_mantle",
++    "reqLevel": 50,
++    "rarity": "legendary"
+   }
+ ]
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index a57636c..c62dda3 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -246,7 +246,7 @@ export const EquipmentManager = {
+     const def = EQUIPMENT_BY_ID[item.defId];
+     if (!def) return 0;
+     const reference = EquipmentManager.referenceValue(item, def);
+-    const base = reference * 0.6 * Math.pow(1.65, item.plus);
++    const base = reference * 0.6 * Math.pow(1.65, item.plus) * (def.enhanceCostMultiplier ?? 1);
+     const discount = 1 - Math.min(0.4, workshopLevel * 0.04);
+     return Math.ceil(base * discount);
+   },
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 9753644..684df78 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -29,7 +29,19 @@ export type ElementType = 'fire' | 'frost' | 'lightning' | 'poison';
+  */
+ export type GemTier = Rarity;
+ 
+-export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak';
++/**
++ * `heirloom` (patch 0359, direct design request -- "a slot... only
++ * filled through crafting") is the one slot in this list with no other
++ * source at all: every Heirloom EquipmentDef is `craftable: true`
++ * (excludes it from Shop/Black Market roll pools the same way
++ * Guildmade/Masterwork already are) and deliberately never listed in
++ * any raid/quest loot table -- there was no new exclusion mechanism to
++ * build, just never adding one to a loot array. See
++ * data/json/equipment.json's own `heirloom_*` entries and
++ * RecipeScrollDef's comment in this file for the 30 recipes/scrolls
++ * (5 themes x 6 level brackets) that produce them.
++ */
++export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak' | 'heirloom';
+ 
+ /**
+  * One material per Harvest/Gathering node. Deliberately 1:1 with the node
+@@ -380,6 +392,20 @@ export interface EquipmentDef {
+    * normal flat rarity table exactly as before.
+    */
+   gearScoreOverride?: number;
++  /**
++   * Multiplies EquipmentManager.upgradeCost's own result for this
++   * specific item -- patch 0359, direct request: "leave the enhance cap
++   * where it is, maybe just dramatically increase its cost curve"
++   * (Heirloom, specifically -- MAX_PLUS/the 0-10 range is unchanged for
++   * every item including this one, only the gold/scrap price of each
++   * +1 changes). Optional and unset for all 142 pre-0359 items, which
++   * keep the exact cost curve they've always had -- this is additive on
++   * top of upgradeCost's existing `1.65^plus` exponential, not a
++   * replacement for it, so a high multiplier still starts cheap at +1
++   * and compounds the same shape, just from a steeper base. Every
++   * `heirloom_*` def sets this; nothing else does yet.
++   */
++  enhanceCostMultiplier?: number;
+ }
+ 
+ /** A concrete item the player owns. */
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+index 921c9d6..39488be 100644
+--- a/src/ui/icons.tsx
++++ b/src/ui/icons.tsx
+@@ -9,7 +9,7 @@ import { EquipSlot } from '../game/types';
+  */
+ const SLOT_FALLBACK: Record<EquipSlot, string> = {
+   weapon: '⚔️', helmet: '🪖', chest: '🎽', shield: '🛡️',
+-  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣',
++  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣', heirloom: '🏺',
+ };
+ 
+ const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem' | 'charm', string> = {
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 422ac6b..941fce4 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -699,7 +699,7 @@ const SCHEMAS = {
+     fields: {
+       id: { type: 'string', required: true, slug: true },
+       name: { type: 'string', required: true },
+-      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'] },
++      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak', 'heirloom'] },
+       rarity: { type: 'enum', required: true, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
+       reqLevel: { type: 'number', required: true },
+       maxDurability: { type: 'number', required: true },
+@@ -736,6 +736,15 @@ const SCHEMAS = {
+       // "legendary" armour that should read as a bigger jump than an
+       // ordinary legendary. Leave unset for the normal flat-rarity score.
+       gearScoreOverride: { type: 'number', required: false },
++      // Multiplies EquipmentManager.upgradeCost for this specific item --
++      // see EquipmentDef.enhanceCostMultiplier's own comment in types.ts.
++      // Added alongside the 30 Heirloom items (patch 0359), which are the
++      // only entries that currently set it -- same "add it here the
++      // moment the field exists on disk" lesson raidExclusive/craftable's
++      // own comment above already learned the hard way, rather than
++      // waiting for a report that editing a Heirloom's icon silently
++      // reset its enhance cost back to normal.
++      enhanceCostMultiplier: { type: 'number', required: false },
+     },
+   },
+   'consumables': {
+-- 
+2.43.0
+

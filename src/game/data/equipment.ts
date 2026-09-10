@@ -142,7 +142,7 @@ export const GEAR_SCORE_MAX = 9 * (GEAR_SCORE_BY_RARITY.legendary + GEAR_SCORE_L
  * engine.equipBestGear can iterate the same set without either duplicating
  * the list or importing a UI file into game logic.
  */
-export const EQUIP_SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
+export const EQUIP_SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak', 'heirloom'];
 
 /**
  * Gear Score tiers, evenly spaced across GEAR_SCORE_MAX and reusing the

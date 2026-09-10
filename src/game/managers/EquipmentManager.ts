@@ -246,7 +246,7 @@ export const EquipmentManager = {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return 0;
     const reference = EquipmentManager.referenceValue(item, def);
-    const base = reference * 0.6 * Math.pow(1.65, item.plus);
+    const base = reference * 0.6 * Math.pow(1.65, item.plus) * (def.enhanceCostMultiplier ?? 1);
     const discount = 1 - Math.min(0.4, workshopLevel * 0.04);
     return Math.ceil(base * discount);
   },

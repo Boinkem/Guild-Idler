@@ -2287,5 +2287,491 @@
     "raidExclusive": false,
     "craftable": false,
     "chainExclusive": true
+  },
+  {
+    "id": "heirloom_vitality_1",
+    "name": "Heirloom Sigil of Vitality I",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 1,
+    "maxDurability": 75,
+    "mods": {
+      "health": 15
+    },
+    "value": 90,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_vitality_2",
+    "name": "Heirloom Sigil of Vitality II",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 90,
+    "mods": {
+      "health": 30
+    },
+    "value": 360,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_vitality_3",
+    "name": "Heirloom Sigil of Vitality III",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 20,
+    "maxDurability": 105,
+    "mods": {
+      "health": 55
+    },
+    "value": 1320,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_vitality_4",
+    "name": "Heirloom Sigil of Vitality IV",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 30,
+    "maxDurability": 120,
+    "mods": {
+      "health": 90
+    },
+    "value": 3300,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_vitality_5",
+    "name": "Heirloom Sigil of Vitality V",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 40,
+    "maxDurability": 135,
+    "mods": {
+      "health": 140
+    },
+    "value": 5700,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_vitality_6",
+    "name": "Heirloom Sigil of Vitality VI",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 150,
+    "mods": {
+      "health": 200
+    },
+    "value": 9000,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_fortune_1",
+    "name": "Heirloom Sigil of Fortune I",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 1,
+    "maxDurability": 75,
+    "mods": {
+      "gold": 3
+    },
+    "value": 90,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_fortune_2",
+    "name": "Heirloom Sigil of Fortune II",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 90,
+    "mods": {
+      "gold": 5
+    },
+    "value": 360,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_fortune_3",
+    "name": "Heirloom Sigil of Fortune III",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 20,
+    "maxDurability": 105,
+    "mods": {
+      "gold": 8
+    },
+    "value": 1320,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_fortune_4",
+    "name": "Heirloom Sigil of Fortune IV",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 30,
+    "maxDurability": 120,
+    "mods": {
+      "gold": 12
+    },
+    "value": 3300,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_fortune_5",
+    "name": "Heirloom Sigil of Fortune V",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 40,
+    "maxDurability": 135,
+    "mods": {
+      "gold": 16
+    },
+    "value": 5700,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_fortune_6",
+    "name": "Heirloom Sigil of Fortune VI",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 150,
+    "mods": {
+      "gold": 20
+    },
+    "value": 9000,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_wisdom_1",
+    "name": "Heirloom Sigil of Wisdom I",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 1,
+    "maxDurability": 75,
+    "mods": {
+      "xp": 3
+    },
+    "value": 90,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_wisdom_2",
+    "name": "Heirloom Sigil of Wisdom II",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 90,
+    "mods": {
+      "xp": 5
+    },
+    "value": 360,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_wisdom_3",
+    "name": "Heirloom Sigil of Wisdom III",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 20,
+    "maxDurability": 105,
+    "mods": {
+      "xp": 8
+    },
+    "value": 1320,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_wisdom_4",
+    "name": "Heirloom Sigil of Wisdom IV",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 30,
+    "maxDurability": 120,
+    "mods": {
+      "xp": 12
+    },
+    "value": 3300,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_wisdom_5",
+    "name": "Heirloom Sigil of Wisdom V",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 40,
+    "maxDurability": 135,
+    "mods": {
+      "xp": 16
+    },
+    "value": 5700,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_wisdom_6",
+    "name": "Heirloom Sigil of Wisdom VI",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 150,
+    "mods": {
+      "xp": 20
+    },
+    "value": 9000,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_haste_1",
+    "name": "Heirloom Sigil of Haste I",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 1,
+    "maxDurability": 75,
+    "mods": {
+      "speed": 3
+    },
+    "value": 90,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_haste_2",
+    "name": "Heirloom Sigil of Haste II",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 90,
+    "mods": {
+      "speed": 5
+    },
+    "value": 360,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_haste_3",
+    "name": "Heirloom Sigil of Haste III",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 20,
+    "maxDurability": 105,
+    "mods": {
+      "speed": 8
+    },
+    "value": 1320,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_haste_4",
+    "name": "Heirloom Sigil of Haste IV",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 30,
+    "maxDurability": 120,
+    "mods": {
+      "speed": 12
+    },
+    "value": 3300,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_haste_5",
+    "name": "Heirloom Sigil of Haste V",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 40,
+    "maxDurability": 135,
+    "mods": {
+      "speed": 16
+    },
+    "value": 5700,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_haste_6",
+    "name": "Heirloom Sigil of Haste VI",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 150,
+    "mods": {
+      "speed": 20
+    },
+    "value": 9000,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_unbreakable_1",
+    "name": "Heirloom Sigil of the Unbreakable I",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 1,
+    "maxDurability": 75,
+    "mods": {
+      "durability": 3
+    },
+    "value": 90,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_unbreakable_2",
+    "name": "Heirloom Sigil of the Unbreakable II",
+    "slot": "heirloom",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 90,
+    "mods": {
+      "durability": 5
+    },
+    "value": 360,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_unbreakable_3",
+    "name": "Heirloom Sigil of the Unbreakable III",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 20,
+    "maxDurability": 105,
+    "mods": {
+      "durability": 8
+    },
+    "value": 1320,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_unbreakable_4",
+    "name": "Heirloom Sigil of the Unbreakable IV",
+    "slot": "heirloom",
+    "rarity": "epic",
+    "reqLevel": 30,
+    "maxDurability": 120,
+    "mods": {
+      "durability": 12
+    },
+    "value": 3300,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_unbreakable_5",
+    "name": "Heirloom Sigil of the Unbreakable V",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 40,
+    "maxDurability": 135,
+    "mods": {
+      "durability": 16
+    },
+    "value": 5700,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "heirloom_unbreakable_6",
+    "name": "Heirloom Sigil of the Unbreakable VI",
+    "slot": "heirloom",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 150,
+    "mods": {
+      "durability": 20
+    },
+    "value": 9000,
+    "craftable": true,
+    "enhanceCostMultiplier": 4
+  },
+  {
+    "id": "guildmade_gauntlets",
+    "name": "Guildmade Gauntlets",
+    "slot": "gloves",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "craftable": true
+  },
+  {
+    "id": "guildmade_buckler",
+    "name": "Guildmade Buckler",
+    "slot": "shield",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "craftable": true
+  },
+  {
+    "id": "guildmade_talisman",
+    "name": "Guildmade Talisman",
+    "slot": "amulet",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "craftable": true
+  },
+  {
+    "id": "masterwork_band",
+    "name": "Masterwork Band",
+    "slot": "ring",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 320,
+    "value": 13000,
+    "mods": {},
+    "craftable": true
+  },
+  {
+    "id": "masterwork_bulwark",
+    "name": "Masterwork Bulwark",
+    "slot": "shield",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 320,
+    "value": 13000,
+    "mods": {},
+    "craftable": true
+  },
+  {
+    "id": "masterwork_mantle",
+    "name": "Masterwork Mantle",
+    "slot": "cloak",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 320,
+    "value": 13000,
+    "mods": {},
+    "craftable": true
   }
 ]
