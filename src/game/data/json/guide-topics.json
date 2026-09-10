@@ -2,7 +2,7 @@
   {
     "id": "stats",
     "title": "Stat Points",
-    "body": "Every level grants a stat point. Spend it in the Heroes tab -- Strength and Endurance push success chance, Luck pushes gold and loot, Wisdom pushes XP."
+    "body": "Every level grants a stat point. Spend it in the Heroes tab - Strength and Endurance push success chance, Luck pushes gold and loot, Wisdom pushes XP."
   },
   {
     "id": "recruiting",
@@ -12,27 +12,27 @@
   {
     "id": "equipment",
     "title": "Equipment",
-    "body": "Gear drops from quests and sits in the stash until equipped. Durability wears down with use -- repair it from the Inventory tab before it breaks."
+    "body": "Gear drops from quests and sits in the stash until equipped. Durability wears down with use -repair it from the Inventory tab before it breaks."
   },
   {
     "id": "chains",
     "title": "Quest Chains",
-    "body": "Some contracts are the first stage of a longer story. They show up on the board like any other quest -- finishing one reveals the next stage next time it appears."
+    "body": "Some contracts are the first stage of a longer story. They show up on the board like any other quest -finishing one reveals the next stage next time it appears."
   },
   {
     "id": "raids",
     "title": "Raids",
-    "body": "Raids need a full, exact-size party -- Normal needs 3 heroes, Heroic 6, Legendary 9. They pay out per encounter cleared, so a partial run still earns something."
+    "body": "Raids need a full, exact-size party - Normal needs 3 heroes, Heroic 6, Legendary 9. They pay out per encounter cleared, so a partial run still earns something."
   },
   {
     "id": "prestige",
     "title": "Prestige",
-    "body": "Retiring a high-level hero grants Renown -- permanent, account-wide bonuses that carry across every future hero. It's the long-term progression path once levelling alone starts to slow."
+    "body": "Retiring a high-level hero grants Renown - permanent, account-wide bonuses that carry across every future hero. It's the long-term progression path once levelling alone starts to slow."
   },
   {
     "id": "harvest",
     "title": "Harvest & Gathering",
-    "body": "Unlocked by a quest chain. Four nodes spawn materials over time -- catch them from the Harvest tab, then spend them at Vendors’ Crafting stations to make your own gear and consumables."
+    "body": "Unlocked by a quest chain. Four nodes spawn materials over time - catch them from the Harvest tab, then spend them at Vendors’ Crafting stations to make your own gear and consumables."
   },
   {
     "id": "crafting",
@@ -42,22 +42,22 @@
   {
     "id": "pets",
     "title": "Pets & Hatchery",
-    "body": "Unlocked by a quest chain. Eggs found on quests incubate in a Nest and hatch into a companion with its own rolled bonus. Only an equipped pet earns XP -- keep one slotted to actually grow its bonus over time."
+    "body": "Unlocked by a quest chain. Eggs found on quests incubate in a Nest and hatch into a companion with its own rolled bonus. Only an equipped pet earns XP - keep one slotted to actually grow its bonus over time."
   },
   {
     "id": "peddler",
     "title": "Grimsby",
-    "body": "A travelling peddler who visits on his own unpredictable schedule (unlocked by a quest chain). His Pick Your Card flips cost gold for a chance at gear, materials, or a jackpot -- pure gamble, no guaranteed value."
+    "body": "A travelling peddler who visits on his own unpredictable schedule (unlocked by a quest chain). His Pick Your Card flips cost gold for a chance at gear, materials, or a jackpot - pure gamble, no guaranteed value."
   },
   {
     "id": "black_market",
     "title": "Black Market",
-    "body": "A permanent Guild Hall upgrade unlocks a second, rarer stock rotation in Vendors -- separate refresh timer from the regular shop, better odds at higher rarities."
+    "body": "A permanent Guild Hall upgrade unlocks a second, rarer stock rotation in Vendors - separate refresh timer from the regular shop, better odds at higher rarities."
   },
   {
     "id": "item_sets",
     "title": "Item Sets",
-    "body": "Some gear belongs to a set -- equip enough pieces on one hero and a bonus kicks in automatically. Check an equipped item's tooltip to see the set's progress and which bonus is currently active."
+    "body": "Some gear belongs to a set - equip enough pieces on one hero and a bonus kicks in automatically. Check an equipped item's tooltip to see the set's progress and which bonus is currently active."
   },
   {
     "id": "elemental",
@@ -67,6 +67,6 @@
   {
     "id": "bard_tracks",
     "title": "The Guild Bard",
-    "body": "Background tracks aren't bought -- the guild bard learns a new one every so often as a reward for something you did: finishing a quest chain, clearing a raid, unlocking an achievement, winning big at Grimsby's table. Once you've earned at least one, pick a specific track or shuffle daily through everything you've earned from the Track option in Settings."
+    "body": "Background tracks aren't bought - the guild bard learns a new one every so often as a reward for something you did: finishing a quest chain, clearing a raid, unlocking an achievement, winning big at Grimsby's table. Once you've earned at least one, pick a specific track or shuffle daily through everything you've earned from the Track option in Settings."
   }
 ]
