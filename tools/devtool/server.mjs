@@ -1273,7 +1273,7 @@ const SCHEMAS = {
       id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
-      category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant', 'gem'] },
+      category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant', 'gem', 'charm'] },
       icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
       materialCost: { type: 'materials', required: true },
       goldCost: { type: 'number', required: true },

@@ -28127,7 +28127,35 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### New system: recipe drop/learn (WoW-style), Gems/Sigils/Charms/Gear/tiered Consumables now gated behind found scrolls (patch 0357)
+### DevTool: crafting-recipes.json save blocked entirely by a missing 'charm' category option (patch 0358)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the DevTool refusing to save ANY change to crafting-recipes.json, even something as small as swapping an icon
+```
+
+Direct report, with a screenshot: editing Masterwork Blade's icon and saving
+threw "Validation failed... entry 66-71: 'category' must be one of gear,
+consumable, enchant, gem" and refused to save at all.
+
+**Root cause (`tools/devtool/server.mjs`).** The DevTool's own schema for
+`crafting-recipes.json`'s `category` field was still `['gear',
+'consumable', 'enchant', 'gem']` -- missing `'charm'`, added to the real
+game back in patch 0347 (`types.ts`'s own `CraftingRecipeDef.category`
+union already correctly includes it; this was a DevTool-only oversight,
+never a game bug). The DevTool validates the WHOLE file on any save, not
+just the entry being edited -- so the 6 charm recipes (entries 66-71:
+Lucky Charm x2, Fortune Weave x2, Windfall Sigil x2) failed validation
+and blocked saving literally anything else in the file, including a
+completely unrelated icon swap on Masterwork Blade.
+
+**Fix.** Added `'charm'` to the enum. One line.
+
+**Verified.** `node -c tools/devtool/server.mjs` (syntax), plus `npx tsc
+--noEmit` on the main game to confirm this genuinely touched nothing
+outside the DevTool.
+
+
 ```discord-update
 Dev Update | Recipe Drop System
 

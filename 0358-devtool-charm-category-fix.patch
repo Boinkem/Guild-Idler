@@ -1,0 +1,68 @@
+From e9f64961208cc2530aec66db9bae592000537a88 Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Thu, 10 Sep 2026 01:39:20 +0000
+Subject: [PATCH] Patch 0358: DevTool fix -- crafting-recipes.json missing
+ 'charm' category
+
+---
+ guild-idler-status.md    | 30 +++++++++++++++++++++++++++++-
+ tools/devtool/server.mjs |  2 +-
+ 2 files changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 83ddd38..141521f 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,7 +28127,35 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
+-### New system: recipe drop/learn (WoW-style), Gems/Sigils/Charms/Gear/tiered Consumables now gated behind found scrolls (patch 0357)
++### DevTool: crafting-recipes.json save blocked entirely by a missing 'charm' category option (patch 0358)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed the DevTool refusing to save ANY change to crafting-recipes.json, even something as small as swapping an icon
++```
++
++Direct report, with a screenshot: editing Masterwork Blade's icon and saving
++threw "Validation failed... entry 66-71: 'category' must be one of gear,
++consumable, enchant, gem" and refused to save at all.
++
++**Root cause (`tools/devtool/server.mjs`).** The DevTool's own schema for
++`crafting-recipes.json`'s `category` field was still `['gear',
++'consumable', 'enchant', 'gem']` -- missing `'charm'`, added to the real
++game back in patch 0347 (`types.ts`'s own `CraftingRecipeDef.category`
++union already correctly includes it; this was a DevTool-only oversight,
++never a game bug). The DevTool validates the WHOLE file on any save, not
++just the entry being edited -- so the 6 charm recipes (entries 66-71:
++Lucky Charm x2, Fortune Weave x2, Windfall Sigil x2) failed validation
++and blocked saving literally anything else in the file, including a
++completely unrelated icon swap on Masterwork Blade.
++
++**Fix.** Added `'charm'` to the enum. One line.
++
++**Verified.** `node -c tools/devtool/server.mjs` (syntax), plus `npx tsc
++--noEmit` on the main game to confirm this genuinely touched nothing
++outside the DevTool.
++
++
+ ```discord-update
+ Dev Update | Recipe Drop System
+ 
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 1ac30b0..422ac6b 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -1273,7 +1273,7 @@ const SCHEMAS = {
+       id: { type: 'string', required: true, slug: true },
+       name: { type: 'string', required: true },
+       description: { type: 'string', required: true },
+-      category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant', 'gem'] },
++      category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant', 'gem', 'charm'] },
+       icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+       materialCost: { type: 'materials', required: true },
+       goldCost: { type: 'number', required: true },
+-- 
+2.43.0
+
