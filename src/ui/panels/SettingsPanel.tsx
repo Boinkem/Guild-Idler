@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
@@ -7,6 +8,8 @@ import { Settings, THEMES, backgroundSrc } from '../../game/settings';
 import { previewSound } from '../../game/sound';
 import { BARD_TRACKS } from '../../game/data/bard';
 import { CREDITS } from '../../game/data/credits';
+import { TestingPanel } from './TestingPanel';
+import { TESTING_TOOLS_ENABLED } from '../../game/testingTools';
 
 /* ------------------------------ small controls ---------------------------- */
 
@@ -66,8 +69,17 @@ export function SettingsPanel() {
   const set = <K extends keyof Settings>(key: K) => (value: Settings[K]) => update(key, value);
   const unlockedTrackIds = engine.state.unlockedBardTracks;
   const unlockedTracks = BARD_TRACKS.filter((t) => unlockedTrackIds.includes(t.id));
+  // Patch 0360, direct request: the Testing tab is gone from the main nav
+  // (screenshots of the real UI shouldn't show a "Testing" tab sitting
+  // next to Statistics), but the tools themselves are still fully wired
+  // up -- TESTING_TOOLS_ENABLED (testingTools.ts) still gates ALL of it,
+  // same as before. This local bit of state is the new, deliberately
+  // unlabeled way in -- see the tiny dot at the very bottom of this
+  // panel's own render, below.
+  const [showTesting, setShowTesting] = useState(false);
 
   return (
+    <>
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/settings.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Settings</h2>
@@ -357,10 +369,12 @@ export function SettingsPanel() {
       </Row>
 
       <div className="section-heading">Credits</div>
-      <p className="small muted subtitle">
-        Guildbound uses licensed art from a few outside creators. None of the terms below require
-        credit, but it's given anyway.
-      </p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>
+          Guildbound uses licensed art from a few outside creators. None of the terms below require
+          credit, but it's given anyway.
+        </p>
+      </div>
       <div className="credits-list">
         {CREDITS.map((c) => (
           <div key={c.id} className="card credits-entry">
@@ -376,9 +390,44 @@ export function SettingsPanel() {
       </div>
 
       <div className="section-heading">Reset</div>
-      <p className="small muted subtitle">Restores every setting above to its default. Your guild is untouched.</p>
+      <div className="card">
+        <p className="small muted" style={{ margin: 0 }}>Restores every setting above to its default. Your guild is untouched.</p>
+      </div>
       <button className="btn-ghost" onClick={reset}>Reset settings to defaults</button>
+
+      {/* Deliberately no label, no section-heading, no hint text -- a
+          screenshot of this page shouldn't read as "here's a secret
+          button," it should just look like an odd little punctuation
+          mark at the bottom of the page and nothing more. Fully gone
+          (not just invisible) once TESTING_TOOLS_ENABLED flips to false
+          before a real release, same as the tab itself used to be. */}
+      {TESTING_TOOLS_ENABLED && (
+        <div style={{ textAlign: 'center', marginTop: 24 }}>
+          <button
+            onClick={() => setShowTesting(true)}
+            aria-label="Testing tools"
+            style={{
+              background: 'none', border: 'none', color: 'var(--edge)',
+              fontSize: '0.625rem', padding: 4, cursor: 'pointer', opacity: 0.5,
+            }}
+          >
+            {'\u00b7'}
+          </button>
+        </div>
+      )}
       </div>
     </div>
+
+    {TESTING_TOOLS_ENABLED && showTesting && (
+      <div className="overlay" onClick={() => setShowTesting(false)}>
+        <div className="modal" style={{ maxWidth: 900, maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+          <div className="row end" style={{ marginBottom: 8 }}>
+            <button className="btn-primary" onClick={() => setShowTesting(false)}>Close</button>
+          </div>
+          <TestingPanel />
+        </div>
+      </div>
+    )}
+    </>
   );
 }

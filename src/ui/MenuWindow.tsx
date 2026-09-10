@@ -30,8 +30,6 @@ import { DashboardPanel } from './panels/DashboardPanel';
 import { StatsPanel } from './panels/StatsPanel';
 import { PrestigePanel } from './panels/PrestigePanel';
 import { SettingsPanel } from './panels/SettingsPanel';
-import { TestingPanel } from './panels/TestingPanel';
-import { TESTING_TOOLS_ENABLED } from '../game/testingTools';
 
 /**
  * Grouped rather than one flat 13-entry list -- the nav had grown past the
@@ -91,7 +89,6 @@ const META_GROUP = {
   tabs: [
     { id: 'stats', label: 'Statistics', Panel: StatsPanel, tooltip: 'Lifetime stats and achievements for this guild.' },
     { id: 'settings', label: 'Settings', Panel: SettingsPanel, tooltip: 'Display, sound, and gameplay preferences.' },
-    ...(TESTING_TOOLS_ENABLED ? [{ id: 'testing', label: 'Testing', Panel: TestingPanel, tooltip: 'Developer-only tools for skipping ahead and spawning test content.' }] as const : []),
   ],
 } as const;
 
@@ -155,9 +152,7 @@ const FIRST_RUN_TOUR_DESCRIPTIONS: Record<string, string> = {
  * STEP_DESCRIPTIONS lives in OnboardingTour.tsx rather than in TAB_GROUPS
  * -- this is content for one specific piece of UI, not nav config.
  * `Partial` + a missing-entry fallback (see the render site) means a
- * future new tab never breaks this by needing an entry here first;
- * 'testing' has none on purpose, same as it's excluded from the main
- * tour's own steps.
+ * future new tab never breaks this by needing an entry here first.
  */
 const PANEL_BREAKDOWNS: Partial<Record<TabId, string[]>> = {
   dashboard: [
@@ -709,7 +704,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
       {engine.state.guildName !== '' && (!engine.state.seenOnboarding || manualTourOpen) && (
         <OnboardingTour
           steps={(manualTourOpen ? ALL_TABS : ALL_TABS.filter((t) => FIRST_RUN_TOUR_TAB_IDS.includes(t.id)))
-            .filter((t) => t.id !== 'testing' && isTabVisible(t.id))
+            .filter((t) => isTabVisible(t.id))
             .map((t) => ({
               id: t.id,
               label: t.label,

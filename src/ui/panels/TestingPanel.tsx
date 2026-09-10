@@ -53,6 +53,18 @@ export function TestingPanel() {
         <button onClick={() => engine.testAddRenown(50)}>+50 renown</button>
         <button onClick={() => engine.testAddRenown(500)}>+500 renown</button>
       </div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+        <button onClick={() => engine.testAddScrap(100)}>+100 scrap</button>
+        <button onClick={() => engine.testAddScrap(1000)}>+1,000 scrap</button>
+        <button onClick={() => engine.testAddScrap(10000)}>+10,000 scrap</button>
+      </div>
+
+      <div className="section-heading">Recipes</div>
+      <p className="small muted" style={{ marginBottom: 8 }}>
+        Adds one random not-yet-learned recipe scroll to the stash -- ignores the real drop
+        system's level gating, for testing the Inventory Recipes section's own Learn/Sell flow.
+      </p>
+      <button onClick={() => engine.testAddRandomRecipe()}>Add unknown recipe scroll</button>
 
       <div className="section-heading">Heroes</div>
       {injured.length > 0 && (

@@ -4365,6 +4365,24 @@ button.harvest-item:hover {
   color: color-mix(in srgb, var(--parchment) 55%, transparent);
 }
 .craft-slot.filled .craft-slot-plus { display: none; }
+/* Enhance's own right-hand preview slot (patch 0360) -- same positioned
+   box .craft-slot already is, but a plain non-interactive <div>, not a
+   <button>: there's nothing to click here, just something to look at.
+   Overrides the pointer cursor/hover tint .craft-slot's base rule
+   otherwise gives every slot, clickable or not. */
+.enhance-preview-slot { cursor: default; }
+.enhance-preview-slot:hover { background: transparent; }
+/* Icon flash on Enhance (patch 0360, direct request: "the icons flash").
+   Applied to both slots' icon wrapper for the animation's own duration,
+   then removed -- a quick bright pulse reading as "something just
+   changed here," not a state that lingers. */
+.enhance-slot-icon { display: inline-flex; }
+.enhance-slot-icon.enhance-flash { animation: enhance-icon-flash 650ms ease-out; }
+@keyframes enhance-icon-flash {
+  0% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
+  30% { filter: brightness(2.2) drop-shadow(0 0 16px var(--brass)); }
+  100% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
+}
 .craft-slot-label {
   font-size: 0.5625rem;
   line-height: 1.3;

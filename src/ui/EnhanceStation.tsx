@@ -3,30 +3,67 @@ import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { EquipmentManager, MAX_PLUS } from '../game/managers/EquipmentManager';
 import { backgroundSrc } from '../game/settings';
-import { formatGold } from '../game/util';
+import { formatGold, formatModValue, scaleMods, MOD_LABEL, STAT_LABEL } from '../game/util';
+import { Modifiers, Stats } from '../game/types';
 import { ItemIcon } from './icons';
 import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 
 /**
- * Percent-based slot rect, hand-measured against enhance.jpg's own
- * 1402x1122 canvas -- one single, larger centered slot rather than the
- * three CraftingStation uses, matching that image's own painted frame.
- * Same "scene container locked to the image's own aspect ratio via CSS"
- * approach, see .craft-scene in app.css.
+ * Two slots now (patch 0360, direct design request, with commissioned
+ * art to match) -- left is "what you have," right is "what one more
+ * Enhance gets you," hand-measured against the new enhance.jpg/
+ * bright/enhance.jpg's own 1402x1122 canvas the same way the old single
+ * SLOT_RECT was. Both slots sit at the same vertical band the art's own
+ * painted chevron (>>>) points between.
  */
-const SLOT_RECT: Rect = { left: 40.9, top: 37.0, width: 18.7, height: 23.1 };
+const LEFT_SLOT_RECT: Rect = { left: 29.7, top: 39.3, width: 14.3, height: 17.5 };
+const RIGHT_SLOT_RECT: Rect = { left: 56.3, top: 39.3, width: 14.3, height: 17.5 };
+
+const ENHANCE_BG = './lore/crafting/enhance.jpg';
+
+/** Same flat-multiplier-only scaling `scaleMods` (util.ts) already does
+ *  for Modifiers, mirrored for Stats -- both are plain `Record<string,
+ *  number>` shapes under the hood, but kept as two small functions
+ *  rather than one generic to match scaleMods' own existing signature
+ *  instead of touching it. Preview-only: this is deliberately NOT the
+ *  real `(1 + plus*0.15) * gearRelevance(...)` formula HeroManager uses
+ *  for actual combat power (see HeroManager.equipmentStats/equipmentMods)
+ *  -- gearRelevance needs a specific wearer's level, which an unequipped
+ *  stash item (or one being previewed before a hero's chosen at all)
+ *  doesn't have. This shows the item's own contribution at a given plus
+ *  level in isolation, same "the item's own numbers, not a specific
+ *  hero's final total" scope every other item-preview modal in the game
+ *  (ItemPreviewModal, shop cards) already sticks to.
+ */
+function scaleStats(stats: Partial<Stats> | undefined, factor: number): Partial<Stats> {
+  const out: Partial<Stats> = {};
+  if (!stats) return out;
+  for (const key of Object.keys(stats) as (keyof Stats)[]) {
+    out[key] = (stats[key] ?? 0) * factor;
+  }
+  return out;
+}
 
 /**
- * Dim-mode path for this station's own scene, same convention as
- * CraftingStation's STATION_BG -- pulled out to a named constant here
- * (patch 0344) so it can be run through backgroundSrc() below instead of
- * sitting inline as a literal string. A lore/crafting/bright/enhance.jpg
- * counterpart now ships alongside the Blacksmith's new gear.jpg art, so
- * Guild's Mood ("bright" setting) resolves here exactly the same way it
- * already does for the outer vendor-scene wrapper in VendorsPanel.
+ * One "Label current -> next" line, next value in `.good` (green) --
+ * direct request: "green text showing the new increased stats." Shared
+ * between the Modifiers and Stats halves of the preview below; `format`
+ * is the one thing that differs between them (formatModValue knows which
+ * Modifiers keys are %, which are flat; a Stat is always just a flat
+ * rounded number).
  */
-const ENHANCE_BG = './lore/crafting/enhance.jpg';
+function DeltaLine({ label, current, next, format }: { label: string; current: number; next: number; format: (n: number) => string }) {
+  if (current === 0 && next === 0) return null;
+  return (
+    <div className="stat-row" style={{ justifyContent: 'flex-start', gap: 6 }}>
+      <span className="tiny muted">{label}</span>
+      <span className="tiny">{format(current)}</span>
+      <span className="tiny muted">{'\u2192'}</span>
+      <span className="tiny good">{format(next)}</span>
+    </div>
+  );
+}
 
 /**
  * The "Refine" (+N) mechanic, moved here from a per-item button buried in
@@ -45,6 +82,14 @@ const ENHANCE_BG = './lore/crafting/enhance.jpg';
  * the same action. Plain repair (restore to whatever the cap already is,
  * no cap increase) stays as a quick action back on the Inventory tab
  * instead -- it was never the button being asked to move.
+ *
+ * Patch 0360, direct design request, with new two-slot art to match:
+ * left slot shows the item as it is now, right slot previews what one
+ * more Enhance gets you (icon plus a green stat-delta readout), and the
+ * Enhance button flashes both icons before settling into the new
+ * "current / next" pair -- no need to reselect the item to keep going,
+ * the left slot's own item.plus already ticks up live off the same
+ * engine state this component already reads every render.
  */
 export function EnhanceStation({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
@@ -59,6 +104,9 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   // to commit gold against the wrong piece of gear without really looking
   // at it. See ItemPreviewModal's own doc comment (CraftingStation.tsx).
   const [previewUid, setPreviewUid] = useState<string | null>(null);
+  // Briefly true right after clicking Enhance -- drives the flash overlay
+  // on both slots, cleared on its own after the animation's own duration.
+  const [flashing, setFlashing] = useState(false);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
@@ -70,6 +118,18 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   // Same formula EquipmentManager.maxDurability itself uses, evaluated one
   // plus level ahead -- just for the "here's what you'd get" preview line.
   const nextMaxDurability = def ? Math.floor(def.maxDurability * (1 + ((item?.plus ?? 0) + 1) * 0.1)) : 0;
+
+  // The item's own base mods/stats, unscaled -- see scaleStats' own
+  // comment above for why this preview intentionally stops at the
+  // plus-multiplier and doesn't attempt gearRelevance.
+  const baseMods: Partial<Modifiers> = item?.customMods ?? def?.mods ?? {};
+  const baseStats: Partial<Stats> = item?.rolledStats ?? def?.stats ?? {};
+  const currentScale = 1 + (item?.plus ?? 0) * 0.15;
+  const nextScale = 1 + ((item?.plus ?? 0) + 1) * 0.15;
+  const currentMods = scaleMods(baseMods, currentScale);
+  const nextMods = scaleMods(baseMods, nextScale);
+  const currentStats = scaleStats(baseStats, currentScale);
+  const nextStats = scaleStats(baseStats, nextScale);
 
   const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
   const previewItem = previewFound?.item;
@@ -91,19 +151,11 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
         sublabel: `${owner} -- ${atMax ? 'max refinement' : `+${i.plus}/${MAX_PLUS}`}`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
         rarity: d.rarity,
-        // 'equipped'/'unequipped' plus the owning hero's own id (patch
-        // 0349, direct report) -- an unequipped (stash) item only ever
-        // gets the one tag, an equipped item gets both so it shows up
-        // under "Equipped" and under that specific hero's own tab.
         tags: heroId ? ['equipped', heroId] : ['unequipped'],
       };
     })
     .filter((o): o is PickerOption => o !== null);
 
-  // Equipped/Unequipped first, then one tab per hero -- a hero with
-  // nothing equipped still gets a tab (an empty "nothing here yet" tab
-  // reads as "this hero has no gear," which is real information, not
-  // just an empty state to hide).
   const itemTabs = [
     { id: 'equipped', label: 'Equipped' },
     { id: 'unequipped', label: 'Unequipped' },
@@ -113,6 +165,8 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   function handleEnhance() {
     if (!item) return;
     engine.upgradeItem(item.uid);
+    setFlashing(true);
+    window.setTimeout(() => setFlashing(false), 650);
   }
 
   return (
@@ -125,20 +179,61 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
 
         <div className="craft-scene" style={{ backgroundImage: `url(${backgroundSrc(ENHANCE_BG, settings.backgroundMood)})` }}>
           <SlotBox
-            rect={SLOT_RECT}
-            filled={def && item ? <ItemIcon slot={def.slot} icon={def.icon} size={88} /> : null}
+            rect={LEFT_SLOT_RECT}
+            filled={def && item ? (
+              <span className={`enhance-slot-icon ${flashing ? 'enhance-flash' : ''}`}>
+                <ItemIcon slot={def.slot} icon={def.icon} size={72} />
+              </span>
+            ) : null}
             label="Choose an item to enhance"
             onOpen={() => setOpenPicker(true)}
           />
+          {/* Right slot is a preview only, not a picker of its own -- same
+              rect shape as SlotBox but with no click handler, since
+              there's nothing to choose here, just something to look at. */}
+          <div
+            className={`craft-slot enhance-preview-slot ${def && item && !maxed ? 'filled' : ''}`}
+            style={{
+              left: `${RIGHT_SLOT_RECT.left}%`, top: `${RIGHT_SLOT_RECT.top}%`,
+              width: `${RIGHT_SLOT_RECT.width}%`, height: `${RIGHT_SLOT_RECT.height}%`,
+            }}
+          >
+            {def && item && !maxed ? (
+              <span className={`enhance-slot-icon ${flashing ? 'enhance-flash' : ''}`}>
+                <ItemIcon slot={def.slot} icon={def.icon} size={72} />
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {item && def ? (
-          <p className="tiny muted" style={{ margin: '8px 0' }}>
-            {def.name}{item.plus > 0 ? ` +${item.plus}` : ''} &mdash;{' '}
-            {maxed
-              ? 'already at maximum refinement'
-              : `+${item.plus} \u2192 +${item.plus + 1} (durability cap ${maxDurability} \u2192 ${nextMaxDurability})`}
-          </p>
+          <>
+            <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
+              {def.name}{item.plus > 0 ? ` +${item.plus}` : ''} &mdash;{' '}
+              {maxed
+                ? 'already at maximum refinement'
+                : `+${item.plus} \u2192 +${item.plus + 1}`}
+            </p>
+            {!maxed && (
+              <div style={{ margin: '4px 0 8px' }}>
+                <DeltaLine label="Durability cap" current={maxDurability} next={nextMaxDurability} format={(n) => `${Math.round(n)}`} />
+                {(Object.keys(MOD_LABEL) as (keyof Modifiers)[]).map((key) => (
+                  <DeltaLine
+                    key={key} label={MOD_LABEL[key]}
+                    current={currentMods[key] ?? 0} next={nextMods[key] ?? 0}
+                    format={(n) => formatModValue(key, Math.round(n * 10) / 10)}
+                  />
+                ))}
+                {(Object.keys(STAT_LABEL) as (keyof Stats)[]).map((key) => (
+                  <DeltaLine
+                    key={key} label={STAT_LABEL[key]}
+                    current={currentStats[key] ?? 0} next={nextStats[key] ?? 0}
+                    format={(n) => `+${Math.round(n)}`}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see its refinement level.</p>
         )}

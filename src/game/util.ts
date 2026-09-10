@@ -199,7 +199,7 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
  * case, since every other current and future caller of pct() genuinely
  * is a percentage.
  */
-function formatModValue(key: keyof Modifiers, value: number): string {
+export function formatModValue(key: keyof Modifiers, value: number): string {
   if (key === 'health' || key === 'petHealth') return `${value > 0 ? '+' : ''}${value}`;
   return pct(value);
 }

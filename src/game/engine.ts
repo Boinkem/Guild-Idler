@@ -11,7 +11,7 @@ import { EquipmentManager } from './managers/EquipmentManager';
 import { InventoryManager } from './managers/InventoryManager';
 import { CurioManager } from './managers/CurioManager';
 import { RecipeManager } from './managers/RecipeManager';
-import { RECIPE_SCROLL_BY_ID } from './data/recipeScrolls';
+import { RECIPE_SCROLL_BY_ID, RECIPE_SCROLLS } from './data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from './data/craftingRecipes';
 import { GuildHallDecorManager } from './managers/GuildHallDecorManager';
 import { GUILD_HALL_DECORATIONS } from './data/guildHallDecor';
@@ -1239,6 +1239,38 @@ export class GameEngine {
   testAddRenown(amount: number) {
     if (!TESTING_TOOLS_ENABLED) return;
     this.state.renown = Math.max(0, this.state.renown + amount);
+    this.notify();
+    void this.saveNow();
+  }
+
+  testAddScrap(amount: number) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.scrap = Math.max(0, this.state.scrap + amount);
+    this.notify();
+    void this.saveNow();
+  }
+
+  /**
+   * Drops one random NOT-YET-LEARNED recipe scroll straight into the
+   * stash -- direct request, "so I can test that process" (learning a
+   * scroll from the Inventory tab's own Recipes section). Deliberately
+   * ignores RecipeManager.eligibleDrops' own reqLevel gate real raid/
+   * quest drops respect (see RecipeManager.rollDrop) -- a tester wants
+   * to reach ANY scroll on demand, not simulate what a specific level
+   * of content could actually roll. Picks uniformly across every
+   * currently-unlearned scroll in RECIPE_SCROLLS, same "no rarity
+   * weighting, reqLevel alone does the gating" reasoning
+   * RecipeManager.rollDrop's own comment already gives for the real
+   * drop roll -- just without the reqLevel half of it here.
+   */
+  testAddRandomRecipe() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    const unlearned = RECIPE_SCROLLS.filter((s) => !RecipeManager.isKnown(this.state, s.recipeId));
+    if (unlearned.length === 0) { this.say('Every recipe is already learned.'); return; }
+    const pick = unlearned[Math.floor(Math.random() * unlearned.length)];
+    RecipeManager.add(this.state, pick.id, 1);
+    const recipe = CRAFTING_RECIPE_BY_ID[pick.recipeId];
+    this.say(`Added scroll: ${recipe?.name ?? pick.recipeId}.`);
     this.notify();
     void this.saveNow();
   }

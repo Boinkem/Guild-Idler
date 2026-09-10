@@ -28127,7 +28127,89 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### New system: Heirloom equip slot, craft-only, 5 themes x 6 level brackets; existing gear crafting's slot gaps (Shield etc.) filled in (patch 0359)
+### Enhance redesign: two-slot before/after preview with new art; Testing Tools moved off the main tab bar; two new test buttons (patch 0360)
+```discord-update
+Dev Update | Patch 0360
+
+- Enhance has a new look: pick your item, see exactly what the next level gets you before you commit, in green
+- The icons flash when you Enhance, then settle into the new "current / next" pair -- keep clicking to keep leveling, no need to reselect
+- Testing Tools no longer sits in the main tab bar -- it's still fully there, just tucked behind a small button at the very bottom of Settings
+- Testing Tools: new buttons for +Scrap and for dropping a random unlearned recipe scroll straight into the stash
+```
+
+Two direct requests bundled together -- a UI redesign with commissioned
+art to match, and some workflow cleanup for screenshot-taking.
+
+**Enhance: two-slot before/after preview (`EnhanceStation.tsx`,
+`app.css`, `public/lore/crafting/enhance.jpg` +
+`bright/enhance.jpg`).** Direct request, with new art already made to
+match: left slot is the item as it is now, right slot previews what one
+more Enhance gets you. New background art (both mood variants) measured
+pixel-by-pixel against the same 1402x1122 canvas the old single-slot
+art used, confirmed stable across three separate scan rows before
+committing to the rects. Below the two slots, every non-zero stat/
+modifier the item actually has gets its own "current -> next" line, next
+value in `.good` (green) -- durability cap plus whichever of Modifiers/
+Stats the item rolls. Deliberately NOT the real `(1 + plus*0.15) *
+gearRelevance(...)` formula HeroManager uses for actual combat power
+(new local `scaleStats`, mirroring util.ts's own `scaleMods`) --
+gearRelevance needs a specific wearer's level, which an unequipped stash
+item doesn't have; this shows the item's own contribution in isolation,
+same scope every other item-preview modal in the game already sticks
+to. `formatModValue` (util.ts) exported so this file could reuse the
+same %-vs-flat formatting `describeMods` already has, rather than
+re-deriving it. Clicking Enhance triggers a brief brass glow-flash on
+both icons (new `.enhance-flash` keyframe) and calls the same
+`engine.upgradeItem` as before -- both slots read the live item off
+engine state every render, so the flash is purely cosmetic timing, not
+something gating when the numbers actually update; "current" and
+"next" both shift on their own the instant the upgrade lands, no need
+to reselect the item to keep chaining Enhances.
+
+**Testing Tools off the main tab bar (`MenuWindow.tsx`,
+`SettingsPanel.tsx`).** Direct request: "I dont want Testing Tools
+removed, but the tab should be removed... a hidden button at the bottom
+of SETTINGS that wont be shown in a screenshot." `TESTING_TOOLS_ENABLED`
+(testingTools.ts) still gates all of it end to end, same pre-release
+kill switch as before -- only where it's *reached from* changed. The
+Testing tab entry is gone from `MenuWindow.tsx`'s tab registration
+entirely (a couple of now-dead references to `'testing'` as a tab id
+cleaned up alongside it, one of which TypeScript itself caught as an
+impossible comparison once the id could no longer exist). New entry
+point: an unlabeled, low-opacity `\u00b7` at the very bottom of Settings,
+past Reset -- deliberately no heading, no hint text, nothing that reads
+as "click here" in a casual screenshot, opening `TestingPanel` in a
+plain modal overlay on click. Both the dot and the overlay it opens are
+wrapped in the same `TESTING_TOOLS_ENABLED` check, so flipping that flag
+to false before a real build removes this exactly as completely as
+deleting the tab used to.
+
+**Two new Testing Tools buttons (`engine.ts`, `TestingPanel.tsx`).**
+Direct request. `testAddScrap` mirrors `testAddGold`/`testAddRenown`
+exactly (+100/+1,000/+10,000 buttons). `testAddRandomRecipe` picks
+uniformly across every currently-unlearned scroll in `RECIPE_SCROLLS`
+and adds one to the stash -- deliberately ignoring the real drop
+system's `reqLevel` eligibility gate (`RecipeManager.eligibleDrops`
+respects it, this doesn't), since the point is reaching any scroll on
+demand to test the Inventory Recipes section's Learn/Sell flow, not
+simulating what a specific difficulty could actually roll.
+
+**Also fixed while in `SettingsPanel.tsx`:** the Credits and Reset
+section subtitles were still on the bare `.subtitle` class the last
+several patches have been sweeping panel by panel -- wrapped in `.card`
+like everywhere else now, never reported separately, just caught in
+passing.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean (206 modules, unchanged). No live
+in-app playtest in this environment -- worth confirming the new Enhance
+slot rects line up cleanly against the art in a real browser (measured
+programmatically, not eyeballed in a live window), that the flash
+timing feels right rather than too fast/slow, and that the Settings
+page's new bottom dot is genuinely easy to miss in a casual screenshot
+while still being clickable when you know it's there.
+
+
 ```discord-update
 Dev Update | Heirloom Slot
 
