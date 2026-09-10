@@ -12,6 +12,7 @@ import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/p
 import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
 import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { formatGold, formatNumber } from '../../game/util';
+import { LeaderboardModal } from '../LeaderboardModal';
 
 // Same shape as GuidePanel's own timeAgo -- kept local rather than shared,
 // matching how small formatting helpers already get duplicated per-file
@@ -215,6 +216,7 @@ export function DashboardPanel() {
   const next = nextGuildRank(state);
   const powerNeeded = powerToNextRank(state);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const achProgress = AchievementManager.progress(state);
   const guildAgeDays = Math.max(0, Math.floor((Date.now() - state.createdAt) / (24 * 3600000)));
 
@@ -308,7 +310,18 @@ export function DashboardPanel() {
         onClick={() => setShowBreakdown((v) => !v)}
         title="Tap to see what makes up this number. Combines hero stats, gear score, ascension, guild upgrades, renown perks, raid upgrades, and completed story chains."
       >
-        <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>
+        <div className="spread" style={{ alignItems: 'flex-start' }}>
+          <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            onClick={(e) => { e.stopPropagation(); setLeaderboardOpen(true); }}
+            title="See how this guild's Power stacks up (Steam leaderboards -- coming soon)"
+          >
+            🏆 Leaderboard
+          </button>
+        </div>
         <div className="power-number">{power.toLocaleString()}</div>
         <div className="stat-row" style={{ marginTop: 6 }}>
           <span className="gold-text">◆ {formatGold(state.gold)}</span>
@@ -390,6 +403,7 @@ export function DashboardPanel() {
         </div>
       </div>
       </div>
+      {leaderboardOpen && <LeaderboardModal onClose={() => setLeaderboardOpen(false)} />}
     </div>
   );
 }

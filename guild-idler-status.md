@@ -7382,12 +7382,13 @@ pass (same caveat as the two entries above).
   bar the first batch set.
 
 ### Platform / distribution
-- **To do: create the actual Steamworks partner account and register an
-  App ID.** This is the one action item on this whole list that isn't
-  code or waiting on anyone else -- everything below is either already
-  built and just waiting on that App ID to exist, or is partner-backend
-  configuration that literally can't be started before it does. Doing
-  this unblocks the "Consolidated" list below all at once.
+- **Done (patch 0363): the App ID exists -- GuildBound (5143490).** The
+  one action item on this list that wasn't code or waiting on anyone
+  else is now cleared, unblocking the "Consolidated" list below all at
+  once. Doesn't mean any of those items are actually done yet -- Cloud
+  saves setup, DLC pack registration, achievement id mapping, and
+  leaderboard SDK integration are all still real work, just no longer
+  blocked on something outside this project's control.
 - **App/taskbar icon -- Windows/Linux done, macOS still pending.**
   Wiring landed patch 0120 (see that entry for the full writeup:
   `loadAppIcon()` in `electron/main.ts`, the three `build.<platform>.icon`
@@ -7451,15 +7452,18 @@ pass (same caveat as the two entries above).
   - Both a Global and a Friends-scoped leaderboard entry via Steamworks'
     own leaderboard types -- decided, not deferred
   - Upload cadence (every save? a periodic tick?) still an open call
-  - **Sanity-clamp the uploaded value.** The save file is
-    client-authoritative; an uploaded score needs a plausibility check
-    (e.g. against the theoretical max attainable at whatever caps/levels
-    the client's build actually supports) before it's trusted, not
-    posted raw off local state
-  - **No in-game leaderboard UI exists anywhere today.** This is new UI
-    work, not just an API call -- a place in the menu to actually view
-    Global/Friends standings needs designing, same as any other new
-    panel would
+  - ~~Sanity-clamp the uploaded value~~ -- done (patch 0363).
+    `leaderboard.ts`'s `clampForUpload` (10x `GUILD_POWER_CEILING`, loose
+    on purpose since ascension is legitimately uncapped) is wired into
+    the one place a real upload will eventually go through, so this is
+    no longer a gap to remember later.
+  - ~~No in-game leaderboard UI exists anywhere today~~ -- a UI shell
+    landed (patch 0363): a "🏆 Leaderboard" button next to Guild Power
+    on the Dashboard opens `LeaderboardModal.tsx` (Global/Friends tabs,
+    player's own row shown as a preview). Still needs the real
+    `DownloadLeaderboardEntries` call swapped into
+    `leaderboard.ts`'s `fetchLeaderboard()` once the SDK lands --
+    `LEADERBOARD_READY` is the flag that flips when it does.
 - **DLC: a dev-support/founder pack (always purchasable, not a
   launch-window exclusive) alongside future sprite reskins.** Decided:
   the founder pack is a permanent SKU, not a time-limited one -- it
@@ -28126,6 +28130,118 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
 clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
+
+### Save integrity signing, and a Steam Leaderboard UI shell next to Guild Power (patch 0363)
+```discord-update
+Dev Update | Patch 0363
+
+- Local saves are now signed -- editing your save file outside the game no longer sticks, it just quietly reverts to your last real save
+- Added a Leaderboard button next to Guild Power on the Dashboard -- Global and Friends tabs are there now, showing your own guild as a preview ahead of Steam going live
+- Registered the real Steam App ID: GuildBound (5143490)
+```
+
+Two direct requests bundled together, both on the Steam Admin side of the
+conversation: "ensure the local save cannot be modified (without great
+effort, at least) to change game gold/xp/any numbers", and a UI shell for
+the leaderboard design already locked further up this doc (Global +
+Friends, tracking Guild Power) -- "probably need a new button next to
+Guild Power for 'Leaderboard'". A real Steam App ID also now exists:
+**GuildBound (5143490)** -- doesn't unblock the SDK integration itself
+(still needs the actual `steamworks.js` binding wired in), but is the
+one thing every "Consolidated: everything blocked on a real Steam App ID
+existing" item further up this doc was waiting on to even start.
+
+**Save integrity signing (`electron/main.ts`).** Not real DRM -- this is
+a compiled Electron app, so a determined player can still pull the
+signing secret out of `dist-electron/main.js` and forge a valid
+signature by hand. The bar being raised is specifically "open the save
+in a text editor and change a number," which this fully closes: any edit
+made outside the game changes the payload's hash, the signature no
+longer matches on the next launch, and the edit is silently discarded in
+favour of the last known-good file -- the exact same fallback path a
+corrupted/unreadable save already took before this patch (main save ->
+backup -> fresh start), just with one more way to land in it.
+
+On-disk shape changed from a bare `GameState` JSON object to a small
+envelope, `{ v: 1, sig, data }`, where `data` is the base64 of that same
+JSON and `sig` is an HMAC-SHA256 of `data` keyed by a constant baked into
+the compiled app. `save:write`'s existing temp-file-then-rename-into-
+place sequence is unchanged; it now wraps the payload in this envelope
+before the write instead of writing raw JSON. `save:read` decodes and
+verifies the same way on the way back in, and **the existing backup
+fallback (`savePath()` fails/is tampered -> try `backupPath()` -> `null`)
+now covers a tampered file the exact same way it already covered a
+corrupt or missing one** -- `verifyAndDecodeSaveEnvelope` throwing on a
+bad signature falls into the same catch block that a `JSON.parse` throw
+already used, no new branch needed. The promoted backup file is itself
+already a validly-signed envelope from whenever it was the current save,
+so it verifies the same way on the way back in.
+
+**Backward compatible, no save-version bump.** A save written before
+this patch is bare JSON with no `{ v: 1, ... }` shape --
+`verifyAndDecodeSaveEnvelope` recognises that and returns it unchanged
+(treated as legacy, not rejected), so nobody's existing save is at risk
+the first time this patch runs. The very next autosave re-writes it in
+the new signed envelope format, so this branch only ever matters once
+per install. This is a save-*file-format* change, not a `GameState`
+schema change -- `SaveManager.ts`'s own `SAVE_VERSION`/`MIGRATIONS`
+machinery is untouched, since nothing about the shape of the data itself
+changed, only how it's wrapped on disk.
+
+**Deliberately scoped to the Electron file path only.** The browser/
+dev-mode `localStorageAdapter` fallback in `SaveManager.ts` is untouched
+-- it exists for local testing, not as a real player-facing path (Steam
+ships the packaged Electron build), and any signing scheme implemented
+in the same renderer JS that reads it would be trivially bypassable from
+the browser's own devtools console anyway. The meaningful protection is
+specifically the compiled main-process code a save-file edit has to get
+past, which is what this patch targets.
+
+**Leaderboard UI shell.** New `src/game/leaderboard.ts` -- same "stub
+now, real call later" shape `DlcManager.owns()` already uses for DLC
+ownership checks. `LEADERBOARD_READY` (currently `false`) is the single
+flag `LeaderboardModal` reads for its "not live yet" notice; flips once
+`FindOrCreateLeaderBoard`/`UploadLeaderboardScore`/
+`DownloadLeaderboardEntries` actually get called from here.
+`fetchLeaderboard(state, scope)` returns just the player's own row today
+(already run through `clampForUpload`, so the sanity-clamp scope item
+noted further up this doc is no longer purely theoretical -- the
+function exists and is wired into the one place that will eventually
+upload through it), already in the exact `LeaderboardEntry` shape a real
+`DownloadLeaderboardEntries` response gets mapped into. Swapping in the
+real SDK call later only touches this file's function body -- the modal
+doesn't change.
+
+`clampForUpload` is deliberately looser than `GUILD_POWER_CEILING`
+itself (10x it) -- ascension is uncapped by design (see `power.ts`'s own
+comment on why it's excluded from that ceiling), so a genuinely
+multi-retirement guild can legitimately sail past the "one full clear"
+ceiling through entirely normal play. 10x is a soft "not achievable no
+matter how many times you've retired" backstop, not a tight bound;
+revisit once real upload data exists and genuine high-end saves are
+actually observable.
+
+New `src/ui/LeaderboardModal.tsx` -- same overlay/modal shape
+`FundGuildModal` already uses. Global/Friends tab toggle (both wired to
+the same stub data today, since there's no real distinction to draw yet
+without a live connection), the player's own row highlighted, and a
+plain "Steam leaderboards aren't live yet" notice rather than faking
+real rankings. `DashboardPanel.tsx`'s Guild Power card gets a small
+"🏆 Leaderboard" ghost button next to its "Guild Power" label
+(`e.stopPropagation()` on click so it doesn't also toggle the card's own
+breakdown expand/collapse), opening the modal via the same local
+`useState` pattern `GuildPanel.tsx` already uses for `FundGuildModal`.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Sign/verify round-trip checked
+standalone against the same HMAC-SHA256 logic (round-trips correctly,
+correctly throws on a hand-edited payload with a stale signature, passes
+a legacy unsigned save through unchanged, and correctly throws on a
+genuinely corrupt/non-JSON file so the existing backup fallback still
+engages) -- no live Electron session available in this environment to
+click through the Dashboard's new button directly, worth a real-window
+pass to confirm the modal opens cleanly and the ghost button doesn't
+also toggle the Guild Power breakdown underneath it.
 
 ### Tiered crafting redesign: Guildmade merges Masterwork into one continuous 6-tier line (level 1-50), 36 new items, Enhance fills the gaps between tiers (patch 0362)
 ```discord-update

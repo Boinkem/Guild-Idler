@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } from 'el
 import type { Display } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -223,6 +224,64 @@ const userDataDir = () => app.getPath('userData');
 const savePath = () => path.join(userDataDir(), 'guildbound-save.json');
 const backupPath = () => path.join(userDataDir(), 'guildbound-save.backup.json');
 const settingsPath = () => path.join(userDataDir(), 'guildbound-settings.json');
+
+/**
+ * Save integrity signing -- patch 0363, direct request ("ensure the local
+ * save cannot be modified, at least without great effort, to change gold/
+ * xp/any numbers"). Not real DRM -- this is a compiled Electron app, so a
+ * sufficiently determined player can still pull this string out of
+ * dist-electron/main.js and recompute a valid signature by hand. The goal
+ * is raising the bar past "open the save in Notepad and change a number",
+ * which this fully closes: any edit made outside the game changes the
+ * payload's hash, the signature no longer matches on the next launch, and
+ * the edit is silently discarded in favour of the last known-good file --
+ * exactly the same fallback path a corrupted/unreadable save already took
+ * before this patch, just with one more way to land in it.
+ *
+ * On-disk shape changed from a bare GameState JSON object to a small
+ * envelope: { v: 1, sig, data } where `data` is the base64 of that same
+ * JSON. The base64 step isn't a security measure on its own (trivially
+ * reversible) -- it's there so a save opened in a plain text editor reads
+ * as gibberish rather than inviting an edit that's just going to get
+ * silently reverted next launch, which is a much cleaner experience than
+ * "I changed my gold and it didn't work" with no explanation anywhere.
+ */
+const SAVE_SIGNING_SECRET = 'guildbound-save-integrity-v1-9f3a1c7e';
+
+function encodeSaveEnvelope(json: string): string {
+  const data = Buffer.from(json, 'utf8').toString('base64');
+  const sig = crypto.createHmac('sha256', SAVE_SIGNING_SECRET).update(data).digest('hex');
+  return JSON.stringify({ v: 1, sig, data });
+}
+
+/**
+ * Throws on anything that isn't a validly-signed envelope for OUR secret,
+ * which both save:read call sites below already treat as "unreadable" and
+ * fall back accordingly (main save -> backup -> null, same shape the old
+ * JSON.parse-can-throw path already had).
+ *
+ * One deliberate exception: a file that parses as JSON but does NOT have
+ * the { v: 1, sig, data } shape is treated as a pre-0363 legacy save
+ * (bare GameState JSON, unsigned) and returned as-is rather than rejected
+ * -- so nobody's existing save gets nuked the first time this patch runs.
+ * The very next autosave rewrites it in the new signed format, so this
+ * branch only ever matters once per install.
+ */
+function verifyAndDecodeSaveEnvelope(raw: string): string {
+  const envelope = JSON.parse(raw) as Record<string, unknown>;
+  if (!envelope || typeof envelope !== 'object' || envelope.v !== 1) {
+    return raw; // legacy pre-0363 save -- accept once, re-signed on next write
+  }
+  const { sig, data } = envelope;
+  if (typeof sig !== 'string' || typeof data !== 'string') {
+    return raw; // shape doesn't match ours either -- treat as legacy, same as above
+  }
+  const expected = crypto.createHmac('sha256', SAVE_SIGNING_SECRET).update(data).digest('hex');
+  if (sig !== expected) {
+    throw new Error('save signature mismatch -- edited outside the game');
+  }
+  return Buffer.from(data, 'base64').toString('utf8');
+}
 
 /**
  * One-time migration for the app.setName('little-knight') -> 'guildbound'
@@ -641,10 +700,14 @@ function createTray() {
 
 ipcMain.handle('save:read', async () => {
   try {
-    return await fs.readFile(savePath(), 'utf8');
+    return verifyAndDecodeSaveEnvelope(await fs.readFile(savePath(), 'utf8'));
   } catch {
+    // Covers both "file missing/unreadable" (the original try/catch's
+    // job) and "file present but tampered/corrupt" (verifyAndDecode
+    // throwing) -- either way, the backup is the next thing to trust,
+    // exactly like before this patch.
     try {
-      return await fs.readFile(backupPath(), 'utf8');
+      return verifyAndDecodeSaveEnvelope(await fs.readFile(backupPath(), 'utf8'));
     } catch {
       return null;
     }
@@ -653,8 +716,11 @@ ipcMain.handle('save:read', async () => {
 
 ipcMain.handle('save:write', async (_e, json: string) => {
   // Write to a temp file, promote the old save to backup, then swap in.
+  // The backup being promoted here is itself already a validly-signed
+  // envelope from whenever IT was written as the current save, so the
+  // fallback read above verifies it the same way as the main file.
   const tmp = savePath() + '.tmp';
-  await fs.writeFile(tmp, json, 'utf8');
+  await fs.writeFile(tmp, encodeSaveEnvelope(json), 'utf8');
   try {
     await fs.copyFile(savePath(), backupPath());
   } catch {

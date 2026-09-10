@@ -1,0 +1,511 @@
+From e3401f072718560ef4494146e50b7744f58a0bbe Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Thu, 10 Sep 2026 04:06:16 +0000
+Subject: [PATCH] Patch 0363: save integrity signing + Steam Leaderboard UI
+ shell
+
+- HMAC-signed save envelope (electron/main.ts) so an edited save file
+  no longer sticks -- silently falls back to the last known-good file,
+  same as an already-corrupt save does today.
+- New src/game/leaderboard.ts stub (Global/Friends, Guild Power,
+  clampForUpload sanity check) and src/ui/LeaderboardModal.tsx, wired
+  to a new Leaderboard button on the Dashboard's Guild Power card.
+- Registered Steam App ID: GuildBound (5143490).
+---
+ electron/main.ts                 |  72 ++++++++++++++-
+ guild-idler-status.md            | 146 +++++++++++++++++++++++++++----
+ src/game/leaderboard.ts          |  67 ++++++++++++++
+ src/ui/LeaderboardModal.tsx      |  80 +++++++++++++++++
+ src/ui/panels/DashboardPanel.tsx |  16 +++-
+ 5 files changed, 362 insertions(+), 19 deletions(-)
+ create mode 100644 src/game/leaderboard.ts
+ create mode 100644 src/ui/LeaderboardModal.tsx
+
+diff --git a/electron/main.ts b/electron/main.ts
+index 0e70e33..9cc9ee9 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } from 'el
+ import type { Display } from 'electron';
+ import path from 'node:path';
+ import fs from 'node:fs/promises';
++import crypto from 'node:crypto';
+ import { fileURLToPath } from 'node:url';
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+@@ -224,6 +225,64 @@ const savePath = () => path.join(userDataDir(), 'guildbound-save.json');
+ const backupPath = () => path.join(userDataDir(), 'guildbound-save.backup.json');
+ const settingsPath = () => path.join(userDataDir(), 'guildbound-settings.json');
+ 
++/**
++ * Save integrity signing -- patch 0363, direct request ("ensure the local
++ * save cannot be modified, at least without great effort, to change gold/
++ * xp/any numbers"). Not real DRM -- this is a compiled Electron app, so a
++ * sufficiently determined player can still pull this string out of
++ * dist-electron/main.js and recompute a valid signature by hand. The goal
++ * is raising the bar past "open the save in Notepad and change a number",
++ * which this fully closes: any edit made outside the game changes the
++ * payload's hash, the signature no longer matches on the next launch, and
++ * the edit is silently discarded in favour of the last known-good file --
++ * exactly the same fallback path a corrupted/unreadable save already took
++ * before this patch, just with one more way to land in it.
++ *
++ * On-disk shape changed from a bare GameState JSON object to a small
++ * envelope: { v: 1, sig, data } where `data` is the base64 of that same
++ * JSON. The base64 step isn't a security measure on its own (trivially
++ * reversible) -- it's there so a save opened in a plain text editor reads
++ * as gibberish rather than inviting an edit that's just going to get
++ * silently reverted next launch, which is a much cleaner experience than
++ * "I changed my gold and it didn't work" with no explanation anywhere.
++ */
++const SAVE_SIGNING_SECRET = 'guildbound-save-integrity-v1-9f3a1c7e';
++
++function encodeSaveEnvelope(json: string): string {
++  const data = Buffer.from(json, 'utf8').toString('base64');
++  const sig = crypto.createHmac('sha256', SAVE_SIGNING_SECRET).update(data).digest('hex');
++  return JSON.stringify({ v: 1, sig, data });
++}
++
++/**
++ * Throws on anything that isn't a validly-signed envelope for OUR secret,
++ * which both save:read call sites below already treat as "unreadable" and
++ * fall back accordingly (main save -> backup -> null, same shape the old
++ * JSON.parse-can-throw path already had).
++ *
++ * One deliberate exception: a file that parses as JSON but does NOT have
++ * the { v: 1, sig, data } shape is treated as a pre-0363 legacy save
++ * (bare GameState JSON, unsigned) and returned as-is rather than rejected
++ * -- so nobody's existing save gets nuked the first time this patch runs.
++ * The very next autosave rewrites it in the new signed format, so this
++ * branch only ever matters once per install.
++ */
++function verifyAndDecodeSaveEnvelope(raw: string): string {
++  const envelope = JSON.parse(raw) as Record<string, unknown>;
++  if (!envelope || typeof envelope !== 'object' || envelope.v !== 1) {
++    return raw; // legacy pre-0363 save -- accept once, re-signed on next write
++  }
++  const { sig, data } = envelope;
++  if (typeof sig !== 'string' || typeof data !== 'string') {
++    return raw; // shape doesn't match ours either -- treat as legacy, same as above
++  }
++  const expected = crypto.createHmac('sha256', SAVE_SIGNING_SECRET).update(data).digest('hex');
++  if (sig !== expected) {
++    throw new Error('save signature mismatch -- edited outside the game');
++  }
++  return Buffer.from(data, 'base64').toString('utf8');
++}
++
+ /**
+  * One-time migration for the app.setName('little-knight') -> 'guildbound'
+  * change above. Electron resolves userData as
+@@ -641,10 +700,14 @@ function createTray() {
+ 
+ ipcMain.handle('save:read', async () => {
+   try {
+-    return await fs.readFile(savePath(), 'utf8');
++    return verifyAndDecodeSaveEnvelope(await fs.readFile(savePath(), 'utf8'));
+   } catch {
++    // Covers both "file missing/unreadable" (the original try/catch's
++    // job) and "file present but tampered/corrupt" (verifyAndDecode
++    // throwing) -- either way, the backup is the next thing to trust,
++    // exactly like before this patch.
+     try {
+-      return await fs.readFile(backupPath(), 'utf8');
++      return verifyAndDecodeSaveEnvelope(await fs.readFile(backupPath(), 'utf8'));
+     } catch {
+       return null;
+     }
+@@ -653,8 +716,11 @@ ipcMain.handle('save:read', async () => {
+ 
+ ipcMain.handle('save:write', async (_e, json: string) => {
+   // Write to a temp file, promote the old save to backup, then swap in.
++  // The backup being promoted here is itself already a validly-signed
++  // envelope from whenever IT was written as the current save, so the
++  // fallback read above verifies it the same way as the main file.
+   const tmp = savePath() + '.tmp';
+-  await fs.writeFile(tmp, json, 'utf8');
++  await fs.writeFile(tmp, encodeSaveEnvelope(json), 'utf8');
+   try {
+     await fs.copyFile(savePath(), backupPath());
+   } catch {
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f9f29c7..94ee38f 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7382,12 +7382,13 @@ pass (same caveat as the two entries above).
+   bar the first batch set.
+ 
+ ### Platform / distribution
+-- **To do: create the actual Steamworks partner account and register an
+-  App ID.** This is the one action item on this whole list that isn't
+-  code or waiting on anyone else -- everything below is either already
+-  built and just waiting on that App ID to exist, or is partner-backend
+-  configuration that literally can't be started before it does. Doing
+-  this unblocks the "Consolidated" list below all at once.
++- **Done (patch 0363): the App ID exists -- GuildBound (5143490).** The
++  one action item on this list that wasn't code or waiting on anyone
++  else is now cleared, unblocking the "Consolidated" list below all at
++  once. Doesn't mean any of those items are actually done yet -- Cloud
++  saves setup, DLC pack registration, achievement id mapping, and
++  leaderboard SDK integration are all still real work, just no longer
++  blocked on something outside this project's control.
+ - **App/taskbar icon -- Windows/Linux done, macOS still pending.**
+   Wiring landed patch 0120 (see that entry for the full writeup:
+   `loadAppIcon()` in `electron/main.ts`, the three `build.<platform>.icon`
+@@ -7451,15 +7452,18 @@ pass (same caveat as the two entries above).
+   - Both a Global and a Friends-scoped leaderboard entry via Steamworks'
+     own leaderboard types -- decided, not deferred
+   - Upload cadence (every save? a periodic tick?) still an open call
+-  - **Sanity-clamp the uploaded value.** The save file is
+-    client-authoritative; an uploaded score needs a plausibility check
+-    (e.g. against the theoretical max attainable at whatever caps/levels
+-    the client's build actually supports) before it's trusted, not
+-    posted raw off local state
+-  - **No in-game leaderboard UI exists anywhere today.** This is new UI
+-    work, not just an API call -- a place in the menu to actually view
+-    Global/Friends standings needs designing, same as any other new
+-    panel would
++  - ~~Sanity-clamp the uploaded value~~ -- done (patch 0363).
++    `leaderboard.ts`'s `clampForUpload` (10x `GUILD_POWER_CEILING`, loose
++    on purpose since ascension is legitimately uncapped) is wired into
++    the one place a real upload will eventually go through, so this is
++    no longer a gap to remember later.
++  - ~~No in-game leaderboard UI exists anywhere today~~ -- a UI shell
++    landed (patch 0363): a "🏆 Leaderboard" button next to Guild Power
++    on the Dashboard opens `LeaderboardModal.tsx` (Global/Friends tabs,
++    player's own row shown as a preview). Still needs the real
++    `DownloadLeaderboardEntries` call swapped into
++    `leaderboard.ts`'s `fetchLeaderboard()` once the SDK lands --
++    `LEADERBOARD_READY` is the flag that flips when it does.
+ - **DLC: a dev-support/founder pack (always purchasable, not a
+   launch-window exclusive) alongside future sprite reskins.** Decided:
+   the founder pack is a permanent SKU, not a time-limited one -- it
+@@ -28127,6 +28131,118 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Save integrity signing, and a Steam Leaderboard UI shell next to Guild Power (patch 0363)
++```discord-update
++Dev Update | Patch 0363
++
++- Local saves are now signed -- editing your save file outside the game no longer sticks, it just quietly reverts to your last real save
++- Added a Leaderboard button next to Guild Power on the Dashboard -- Global and Friends tabs are there now, showing your own guild as a preview ahead of Steam going live
++- Registered the real Steam App ID: GuildBound (5143490)
++```
++
++Two direct requests bundled together, both on the Steam Admin side of the
++conversation: "ensure the local save cannot be modified (without great
++effort, at least) to change game gold/xp/any numbers", and a UI shell for
++the leaderboard design already locked further up this doc (Global +
++Friends, tracking Guild Power) -- "probably need a new button next to
++Guild Power for 'Leaderboard'". A real Steam App ID also now exists:
++**GuildBound (5143490)** -- doesn't unblock the SDK integration itself
++(still needs the actual `steamworks.js` binding wired in), but is the
++one thing every "Consolidated: everything blocked on a real Steam App ID
++existing" item further up this doc was waiting on to even start.
++
++**Save integrity signing (`electron/main.ts`).** Not real DRM -- this is
++a compiled Electron app, so a determined player can still pull the
++signing secret out of `dist-electron/main.js` and forge a valid
++signature by hand. The bar being raised is specifically "open the save
++in a text editor and change a number," which this fully closes: any edit
++made outside the game changes the payload's hash, the signature no
++longer matches on the next launch, and the edit is silently discarded in
++favour of the last known-good file -- the exact same fallback path a
++corrupted/unreadable save already took before this patch (main save ->
++backup -> fresh start), just with one more way to land in it.
++
++On-disk shape changed from a bare `GameState` JSON object to a small
++envelope, `{ v: 1, sig, data }`, where `data` is the base64 of that same
++JSON and `sig` is an HMAC-SHA256 of `data` keyed by a constant baked into
++the compiled app. `save:write`'s existing temp-file-then-rename-into-
++place sequence is unchanged; it now wraps the payload in this envelope
++before the write instead of writing raw JSON. `save:read` decodes and
++verifies the same way on the way back in, and **the existing backup
++fallback (`savePath()` fails/is tampered -> try `backupPath()` -> `null`)
++now covers a tampered file the exact same way it already covered a
++corrupt or missing one** -- `verifyAndDecodeSaveEnvelope` throwing on a
++bad signature falls into the same catch block that a `JSON.parse` throw
++already used, no new branch needed. The promoted backup file is itself
++already a validly-signed envelope from whenever it was the current save,
++so it verifies the same way on the way back in.
++
++**Backward compatible, no save-version bump.** A save written before
++this patch is bare JSON with no `{ v: 1, ... }` shape --
++`verifyAndDecodeSaveEnvelope` recognises that and returns it unchanged
++(treated as legacy, not rejected), so nobody's existing save is at risk
++the first time this patch runs. The very next autosave re-writes it in
++the new signed envelope format, so this branch only ever matters once
++per install. This is a save-*file-format* change, not a `GameState`
++schema change -- `SaveManager.ts`'s own `SAVE_VERSION`/`MIGRATIONS`
++machinery is untouched, since nothing about the shape of the data itself
++changed, only how it's wrapped on disk.
++
++**Deliberately scoped to the Electron file path only.** The browser/
++dev-mode `localStorageAdapter` fallback in `SaveManager.ts` is untouched
++-- it exists for local testing, not as a real player-facing path (Steam
++ships the packaged Electron build), and any signing scheme implemented
++in the same renderer JS that reads it would be trivially bypassable from
++the browser's own devtools console anyway. The meaningful protection is
++specifically the compiled main-process code a save-file edit has to get
++past, which is what this patch targets.
++
++**Leaderboard UI shell.** New `src/game/leaderboard.ts` -- same "stub
++now, real call later" shape `DlcManager.owns()` already uses for DLC
++ownership checks. `LEADERBOARD_READY` (currently `false`) is the single
++flag `LeaderboardModal` reads for its "not live yet" notice; flips once
++`FindOrCreateLeaderBoard`/`UploadLeaderboardScore`/
++`DownloadLeaderboardEntries` actually get called from here.
++`fetchLeaderboard(state, scope)` returns just the player's own row today
++(already run through `clampForUpload`, so the sanity-clamp scope item
++noted further up this doc is no longer purely theoretical -- the
++function exists and is wired into the one place that will eventually
++upload through it), already in the exact `LeaderboardEntry` shape a real
++`DownloadLeaderboardEntries` response gets mapped into. Swapping in the
++real SDK call later only touches this file's function body -- the modal
++doesn't change.
++
++`clampForUpload` is deliberately looser than `GUILD_POWER_CEILING`
++itself (10x it) -- ascension is uncapped by design (see `power.ts`'s own
++comment on why it's excluded from that ceiling), so a genuinely
++multi-retirement guild can legitimately sail past the "one full clear"
++ceiling through entirely normal play. 10x is a soft "not achievable no
++matter how many times you've retired" backstop, not a tight bound;
++revisit once real upload data exists and genuine high-end saves are
++actually observable.
++
++New `src/ui/LeaderboardModal.tsx` -- same overlay/modal shape
++`FundGuildModal` already uses. Global/Friends tab toggle (both wired to
++the same stub data today, since there's no real distinction to draw yet
++without a live connection), the player's own row highlighted, and a
++plain "Steam leaderboards aren't live yet" notice rather than faking
++real rankings. `DashboardPanel.tsx`'s Guild Power card gets a small
++"🏆 Leaderboard" ghost button next to its "Guild Power" label
++(`e.stopPropagation()` on click so it doesn't also toggle the card's own
++breakdown expand/collapse), opening the modal via the same local
++`useState` pattern `GuildPanel.tsx` already uses for `FundGuildModal`.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Sign/verify round-trip checked
++standalone against the same HMAC-SHA256 logic (round-trips correctly,
++correctly throws on a hand-edited payload with a stale signature, passes
++a legacy unsigned save through unchanged, and correctly throws on a
++genuinely corrupt/non-JSON file so the existing backup fallback still
++engages) -- no live Electron session available in this environment to
++click through the Dashboard's new button directly, worth a real-window
++pass to confirm the modal opens cleanly and the ghost button doesn't
++also toggle the Guild Power breakdown underneath it.
++
+ ### Tiered crafting redesign: Guildmade merges Masterwork into one continuous 6-tier line (level 1-50), 36 new items, Enhance fills the gaps between tiers (patch 0362)
+ ```discord-update
+ Dev Update | Tiered Crafting
+diff --git a/src/game/leaderboard.ts b/src/game/leaderboard.ts
+new file mode 100644
+index 0000000..264827b
+--- /dev/null
++++ b/src/game/leaderboard.ts
+@@ -0,0 +1,67 @@
++import { GameState } from './types';
++import { guildPowerLevel, GUILD_POWER_CEILING } from './power';
++
++export type LeaderboardScope = 'global' | 'friends';
++
++export interface LeaderboardEntry {
++  rank: number;
++  name: string;
++  power: number;
++  isYou?: boolean;
++}
++
++/**
++ * Steam leaderboards -- patch 0363, UI shell for a design already locked
++ * in guild-idler-status.md: Global + Friends, tracking Guild Power
++ * (power.ts's guildPowerLevel, already the number driving in-game Guild
++ * Rank -- no new metric to invent). Real upload/download depends on the
++ * Steamworks SDK integration (steamworks.js) landing first against the
++ * now-registered App ID (GuildBound, 5143490) -- this module is the seam
++ * that swap-in replaces once it does, the same "stub now, real call
++ * later" shape DlcManager.owns() already uses for DLC ownership checks.
++ *
++ * LEADERBOARD_READY flips true the same day FindOrCreateLeaderBoard /
++ * UploadLeaderboardScore / DownloadLeaderboardEntries actually get called
++ * from here -- LeaderboardModal reads this flag directly rather than
++ * duplicating its own "not live yet" check.
++ */
++export const LEADERBOARD_READY = false;
++
++/**
++ * Sanity clamp for a value before it's ever trusted as an upload -- the
++ * save is client-authoritative, so this needs to exist before the first
++ * real UploadLeaderboardScore call, not bolted on after the fact.
++ *
++ * Deliberately looser than GUILD_POWER_CEILING itself: ascension is
++ * uncapped by design (see power.ts's own comment on why it's excluded
++ * from that ceiling), so a genuinely multi-retirement guild can sail well
++ * past the "one full clear" ceiling through entirely legitimate play. 10x
++ * is a soft backstop -- "not achievable through normal play no matter how
++ * many times you've retired" -- not a tight bound. Revisit once real
++ * upload data exists and genuine high-end saves are actually observable.
++ */
++const MAX_PLAUSIBLE_POWER = GUILD_POWER_CEILING * 10;
++
++export function clampForUpload(power: number): number {
++  return Math.max(0, Math.min(Math.floor(power), MAX_PLAUSIBLE_POWER));
++}
++
++/**
++ * Placeholder leaderboard read. No live Steam connection exists yet, so
++ * this returns just the player's own (clamped) row -- already the exact
++ * shape a real DownloadLeaderboardEntries response gets mapped into, so
++ * LeaderboardModal doesn't need to change when the real call lands, only
++ * this function's body does. `scope` is accepted now (unused) so the
++ * eventual Global-vs-Friends branch is a one-line change here, not a
++ * signature change at every call site.
++ */
++export function fetchLeaderboard(state: GameState, _scope: LeaderboardScope): LeaderboardEntry[] {
++  return [
++    {
++      rank: 1,
++      name: state.guildName || 'Your Guild',
++      power: clampForUpload(guildPowerLevel(state)),
++      isYou: true,
++    },
++  ];
++}
+diff --git a/src/ui/LeaderboardModal.tsx b/src/ui/LeaderboardModal.tsx
+new file mode 100644
+index 0000000..d970cb8
+--- /dev/null
++++ b/src/ui/LeaderboardModal.tsx
+@@ -0,0 +1,80 @@
++import { useState } from 'react';
++import { useEngine } from './useEngine';
++import { formatNumber } from '../game/util';
++import { fetchLeaderboard, LEADERBOARD_READY, LeaderboardScope } from '../game/leaderboard';
++
++/**
++ * Steam leaderboards UI shell -- patch 0363, direct request (a button
++ * next to Guild Power on the Dashboard). Design locked in
++ * guild-idler-status.md: Global + Friends, tracking Guild Power. No live
++ * Steam connection exists yet (Steamworks SDK integration is still the
++ * prerequisite -- see leaderboard.ts's own doc comment), so this renders
++ * the real tab structure and the player's own row today, with a plain
++ * "not live yet" notice rather than faking real rankings. Swapping in
++ * DownloadLeaderboardEntries later only touches leaderboard.ts's
++ * fetchLeaderboard() -- this component doesn't change.
++ *
++ * Same overlay/modal shape FundGuildModal already uses.
++ */
++export function LeaderboardModal({ onClose }: { onClose: () => void }) {
++  const engine = useEngine();
++  const state = engine.state;
++  const [scope, setScope] = useState<LeaderboardScope>('global');
++
++  const entries = fetchLeaderboard(state, scope);
++
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
++        <div className="card-title">🏆 Leaderboard</div>
++        <p className="tiny muted" style={{ marginBottom: 10 }}>
++          Ranked by Guild Power -- the same number shown on the Dashboard.
++        </p>
++
++        <div className="row" style={{ gap: 6, marginBottom: 10 }}>
++          <button
++            type="button"
++            className={scope === 'global' ? 'btn-primary' : 'btn-ghost'}
++            onClick={() => setScope('global')}
++          >
++            Global
++          </button>
++          <button
++            type="button"
++            className={scope === 'friends' ? 'btn-primary' : 'btn-ghost'}
++            onClick={() => setScope('friends')}
++          >
++            Friends
++          </button>
++        </div>
++
++        {!LEADERBOARD_READY && (
++          <p className="tiny muted" style={{ marginBottom: 10 }}>
++            Steam leaderboards aren't live yet -- this is a preview of how standings will look. Only your own guild shows for now.
++          </p>
++        )}
++
++        <div className="card" style={{ marginBottom: 0 }}>
++          {entries.length === 0 ? (
++            <p className="tiny muted" style={{ margin: 0 }}>No entries yet.</p>
++          ) : (
++            entries.map((entry) => (
++              <div
++                key={entry.rank}
++                className="spread"
++                style={{ padding: '4px 0', color: entry.isYou ? 'var(--brass)' : undefined }}
++              >
++                <span>#{entry.rank} {entry.name}{entry.isYou ? ' (you)' : ''}</span>
++                <span>{formatNumber(entry.power)}</span>
++              </div>
++            ))
++          )}
++        </div>
++
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button onClick={onClose}>Close</button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index 5300ffc..4dc2041 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -12,6 +12,7 @@ import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/p
+ import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+ import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
+ import { formatGold, formatNumber } from '../../game/util';
++import { LeaderboardModal } from '../LeaderboardModal';
+ 
+ // Same shape as GuidePanel's own timeAgo -- kept local rather than shared,
+ // matching how small formatting helpers already get duplicated per-file
+@@ -215,6 +216,7 @@ export function DashboardPanel() {
+   const next = nextGuildRank(state);
+   const powerNeeded = powerToNextRank(state);
+   const [showBreakdown, setShowBreakdown] = useState(false);
++  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+   const achProgress = AchievementManager.progress(state);
+   const guildAgeDays = Math.max(0, Math.floor((Date.now() - state.createdAt) / (24 * 3600000)));
+ 
+@@ -308,7 +310,18 @@ export function DashboardPanel() {
+         onClick={() => setShowBreakdown((v) => !v)}
+         title="Tap to see what makes up this number. Combines hero stats, gear score, ascension, guild upgrades, renown perks, raid upgrades, and completed story chains."
+       >
+-        <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>
++        <div className="spread" style={{ alignItems: 'flex-start' }}>
++          <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>
++          <button
++            type="button"
++            className="btn-ghost"
++            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++            onClick={(e) => { e.stopPropagation(); setLeaderboardOpen(true); }}
++            title="See how this guild's Power stacks up (Steam leaderboards -- coming soon)"
++          >
++            🏆 Leaderboard
++          </button>
++        </div>
+         <div className="power-number">{power.toLocaleString()}</div>
+         <div className="stat-row" style={{ marginTop: 6 }}>
+           <span className="gold-text">◆ {formatGold(state.gold)}</span>
+@@ -390,6 +403,7 @@ export function DashboardPanel() {
+         </div>
+       </div>
+       </div>
++      {leaderboardOpen && <LeaderboardModal onClose={() => setLeaderboardOpen(false)} />}
+     </div>
+   );
+ }
+-- 
+2.43.0
+
