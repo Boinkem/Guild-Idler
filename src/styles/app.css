@@ -5620,16 +5620,20 @@ button.harvest-item:hover {
 
 /*
  * Design A rarity card frame (patch 0338, approved mockup) -- the whole
- * card's background IS the tier's own frame art now (RARITY_FRAME/
- * CURIO_FRAME/EMPTY_SLOT_FRAME in util.ts), not a thin banner strip
- * behind a plain card. Applies at every item-card-style rarity display:
- * SlotCard/StashCard/ArmourStashCard (gear), ConsumableInfoCard and the
- * equipped-consumable card (potions), EquipmentShopCard/
- * ConsumableShopCard (Vendor stock), CurioCard (grey), and the empty-slot
- * branch of SlotCard (silver outline). The old .rarity-banner/.modal-
- * banner system just above is left fully intact -- it still powers every
- * item's detail MODAL unchanged, a meaningfully different UI shape (tall
- * modal, not a card) that was never part of the approved mockup.
+ * card's background IS the tier's own frame art (CURIO_FRAME/
+ * EMPTY_SLOT_FRAME in util.ts), not a thin banner strip behind a plain
+ * card. Patch 0364, direct revert: every REAL-rarity call site
+ * (SlotCard/StashCard/ArmourStashCard, ConsumableInfoCard/equipped-
+ * consumable, EquipmentShopCard/ConsumableShopCard, RecipeScrollCard)
+ * moved back to the old .rarity-banner treatment just above -- direct
+ * feedback that the old style "looked nicer," with its one real problem
+ * (mismatched banner art sizes) fixed at the source with a freshly
+ * re-supplied, evenly-sized (1008x226) set. This class now only applies
+ * to the two non-rarity special cases that were never part of that
+ * revert: CurioCard (grey -- Curios have no real rarity to bank a
+ * .rarity-banner lookup on) and the empty-slot branch of SlotCard
+ * (silver outline). RARITY_FRAME itself (the per-rarity map) has no
+ * remaining callers as of this patch -- see its own comment in util.ts.
  *
  * aspect-ratio here is a PREFERRED ratio, not a hard clamp -- a card
  * whose real content needs more vertical room (StashCard can carry up to

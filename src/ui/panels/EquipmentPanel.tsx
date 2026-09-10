@@ -16,7 +16,7 @@ import { CRAFTING_RECIPE_BY_ID } from '../../game/data/craftingRecipes';
 import { scrollSellValue } from '../../game/data/recipeScrolls';
 import { rerollsUsedToday } from '../../game/data/reroll';
 import {
-  describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_FRAME, CURIO_FRAME, EMPTY_SLOT_FRAME,
+  describeMods, describeStats, formatGold, RARITY_BANNER, CURIO_FRAME, EMPTY_SLOT_FRAME,
   RARITY_COLOR, MAIN_STAT_TOOLTIP,
 } from '../../game/util';
 import { ItemIcon, ConsumableIcon, CurioIcon, RecipeIcon } from '../icons';
@@ -348,16 +348,16 @@ function RecipeScrollCard({ def, count, engine }: { def: RecipeScrollDef; count:
   return (
     <>
       <div
-        className="item-card rarity-frame-card"
-        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
+        className="item-card"
         data-recipe-id={def.id}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
-          <RecipeIcon icon={recipe?.icon} category={recipe?.category ?? 'gear'} />
+          <RecipeIcon icon={recipe?.icon} category={recipe?.category ?? 'gear'} size={48} />
           <div className="item-card-body">
             <div className="item-card-name">{name} ×{count}</div>
           </div>
@@ -467,15 +467,15 @@ function ConsumableInfoCard({
   return (
     <>
       <div
-        className="item-card rarity-card rarity-frame-card"
-        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
+        className="item-card rarity-card"
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
-          <ConsumableIcon icon={def.icon} glyph={def.glyph} />
+          <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
             <div className="item-card-meta-row">
@@ -569,15 +569,15 @@ function ConsumableSlotCard({
     return (
       <>
         <div
-          className="item-card rarity-card rarity-frame-card"
-          style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
+          className="item-card rarity-card"
           onClick={() => setOpen(true)}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
         >
+          <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
           <div className="item-card-summary">
-            <ConsumableIcon icon={def.icon} glyph={def.glyph} />
+            <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
             <div className="item-card-body">
               <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
               <div className="item-card-meta-row">
@@ -761,15 +761,15 @@ function SlotCard({
   return (
     <>
       <div
-        className={`item-card rarity-card rarity-frame-card ${hasActiveSetBonus ? 'set-active' : ''}`}
-        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
+        className={`item-card rarity-card ${hasActiveSetBonus ? 'set-active' : ''}`}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
-          <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
+          <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <div className="item-card-meta-row">
@@ -897,15 +897,15 @@ function StashCard({
   return (
     <>
       <div
-        className="item-card rarity-card rarity-frame-card"
-        style={{ backgroundImage: `url(${RARITY_FRAME[def.rarity]})` }}
+        className="item-card rarity-card"
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
-          <ItemIcon slot={def.slot} icon={def.icon} broken={EquipmentManager.isBroken(item)} />
+          <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <div className="item-card-meta-row">

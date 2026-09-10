@@ -61,7 +61,12 @@ export const RARITY_COLOR: Record<Rarity, string> = {
 
 /** Full-bleed banner art for each rarity tier, shown behind item cards and
  *  their detail modals (see .rarity-banner / .modal-banner in app.css).
- *  Files live in public/rarity-banners/ -- ship all five alongside this. */
+ *  Files live in public/rarity-banners/ -- ship all five alongside this.
+ *  Patch 0364: re-exported to item cards again (reverting patch 0338's
+ *  Design A rarity-frame-card, see RARITY_FRAME's own comment below) --
+ *  this art was re-supplied at a consistent 1008x226 across all five
+ *  rarities, replacing the old mismatched-size set that originally
+ *  motivated moving to RARITY_FRAME in the first place. */
 export const RARITY_BANNER: Record<Rarity, string> = {
   common: './rarity-banners/common.png',
   uncommon: './rarity-banners/uncommon.png',
@@ -72,17 +77,18 @@ export const RARITY_BANNER: Record<Rarity, string> = {
 
 /**
  * Patch 0338, direct approval on a mocked-up design ("Design A"): the full
- * ornate frame art now used AS the whole card background for every
- * rarity-carrying item card (gear and consumables both -- direct request,
- * "assigning consumables the new art too"), replacing the old thin
- * .rarity-banner strip there. Deliberately a SEPARATE mapping from
- * RARITY_BANNER above rather than replacing it -- RARITY_BANNER still
- * powers every item's detail MODAL unchanged (.modal-banner/.modal-
- * banner-scrim), which is a meaningfully different UI shape (a tall
- * modal, not a card) that was never part of the approved mockup, so it's
- * deliberately left alone rather than redesigned on spec. See
- * .rarity-frame-card in app.css for how this actually gets applied.
- * Files live in public/rarity-frames/ -- ship all five alongside this.
+ * ornate frame art used AS the whole card background for every
+ * rarity-carrying item card. Patch 0364, direct revert: the real-rarity
+ * cards (gear, potions, Vendor stock, recipe scrolls) moved back to
+ * RARITY_BANNER above -- the old style "looked nicer" per direct
+ * feedback, its one real problem (mismatched banner art sizes) is now
+ * fixed at the source instead. No remaining callers key off this map
+ * directly as of patch 0364 (CURIO_FRAME/EMPTY_SLOT_FRAME below are their
+ * own single-file constants, untouched by this revert and still live),
+ * so this Record is currently dead code -- left in place rather than
+ * deleted in case a rarity-keyed frame is wanted again later; flag for
+ * the CSS/dead-code cleanup pass in the backlog if it's still unused
+ * next time that runs. Files live in public/rarity-frames/.
  */
 export const RARITY_FRAME: Record<Rarity, string> = {
   common: './rarity-frames/common.png',
