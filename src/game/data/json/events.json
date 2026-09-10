@@ -224,9 +224,9 @@
   {
     "id": "it_noticed_you",
     "name": "It Noticed You",
+    "description": "You were careful. It did not matter. ",
     "kind": "negative",
     "weight": 8,
-    "description": "You were careful. It did not matter. Something this size does not need to be quiet.",
     "effects": {
       "success": -22,
       "goldPct": -0.2,
