@@ -28131,6 +28131,19 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Curios join the rarity-banner revert -- the last piece of Design A is gone (patch 0366)
+
+```discord-update
+Dev Update | Curios
+- Curio cards now use the same old-style banner treatment as every other item card, on new dedicated art
+```
+
+Direct follow-up: the art missing from patch 0364/0365's rounds (`Curios.png`, a black/grey banner matching the same 1008x226 shape and rune-motif style as the five real rarities and the empty-slot banner) was supplied, so `CurioCard` moves off `CURIO_FRAME`'s Design A grey frame onto a new `CURIO_BANNER` constant (`util.ts`, `public/rarity-banners/curio.png`) the same way every other card in this series already moved -- same `.rarity-banner`/`.item-card`/`.item-card-summary` shape, `size={48}` icon to match, no bespoke treatment. Curios still have no real rarity to key a `RARITY_BANNER`-style Record off of (`CurioDef`'s own comment in types.ts), so `CURIO_BANNER` stays a single constant, same shape `CURIO_FRAME` already was.
+
+**The Design A system is now fully dead code.** This was the last remaining caller of `.rarity-frame-card`/`.rarity-frame-card-outline` (app.css) and `RARITY_FRAME`/`CURIO_FRAME`/`EMPTY_SLOT_FRAME` (util.ts) -- nothing in the app renders any of them anymore as of this patch. All left in place rather than deleted, same reasoning given at each of their own comments across this three-patch series: in case this exact look is wanted again later. Worth a proper pass whenever the backlog's CSS/dead-code cleanup item next comes up, now that there's a genuinely large, confirmed-dead block to remove in one go instead of piecemeal.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean. Same caveat as the previous two patches in this series -- no headless browser available in this sandbox, so not confirmed against a live screenshot.
+
 ### Rarity banner follow-up: fixed the background-repeat tiling bug, empty gear slots reverted too (patch 0365)
 
 ```discord-update

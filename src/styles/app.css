@@ -5656,12 +5656,14 @@ button.harvest-item:hover {
  * feedback, same treatment: the empty-slot branch of SlotCard (silver
  * outline, the `.rarity-frame-card-outline` variant below) moved to
  * .rarity-banner too, on its own freshly-supplied art (EMPTY_SLOT_BANNER
- * in util.ts) -- so `.rarity-frame-card-outline` now has NO remaining
- * callers at all, and `.rarity-frame-card` itself has exactly one:
- * CurioCard's grey frame (Curios have no real rarity to bank a
- * .rarity-banner lookup on, and no replacement art has been supplied for
- * them yet). RARITY_FRAME and EMPTY_SLOT_FRAME (util.ts) are both dead
- * code as of patch 0365 for the same reason -- see their own comments.
+ * in util.ts). Patch 0366, same again: CurioCard's grey frame moved to
+ * .rarity-banner on its own freshly-supplied art (CURIO_BANNER) -- the
+ * last remaining caller of this whole class family. As of patch 0366,
+ * `.rarity-frame-card` and `.rarity-frame-card-outline` (and
+ * RARITY_FRAME/CURIO_FRAME/EMPTY_SLOT_FRAME in util.ts) have NO
+ * remaining callers anywhere in the app -- fully dead code, left in
+ * place rather than deleted in case this look is wanted again later;
+ * flag for the CSS/dead-code cleanup pass in the backlog.
  *
  * aspect-ratio here is a PREFERRED ratio, not a hard clamp -- a card
  * whose real content needs more vertical room (StashCard can carry up to

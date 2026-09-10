@@ -91,6 +91,17 @@ export const RARITY_BANNER: Record<Rarity, string> = {
 export const EMPTY_SLOT_BANNER = './rarity-banners/empty.png';
 
 /**
+ * Patch 0366, direct follow-up to patch 0364/0365's rarity-banner
+ * revert: CurioCard moves off CURIO_FRAME's Design A grey frame onto
+ * this instead, same reasoning and same freshly-supplied 1008x226 shape
+ * as RARITY_BANNER/EMPTY_SLOT_BANNER above. Curios still have no real
+ * rarity to key a Record off of (CurioDef's own comment in types.ts --
+ * "no rarity concept to roll against, just a flat sell value"), so this
+ * stays a single constant, not a Record, same as CURIO_FRAME was.
+ */
+export const CURIO_BANNER = './rarity-banners/curio.png';
+
+/**
  * Patch 0338, direct approval on a mocked-up design ("Design A"): the full
  * ornate frame art used AS the whole card background for every
  * rarity-carrying item card. Patch 0364, direct revert: the real-rarity
@@ -98,14 +109,16 @@ export const EMPTY_SLOT_BANNER = './rarity-banners/empty.png';
  * RARITY_BANNER above -- the old style "looked nicer" per direct
  * feedback, its one real problem (mismatched banner art sizes) is now
  * fixed at the source instead. No remaining callers key off this map
- * directly as of patch 0364 (CURIO_FRAME below is its own single-file
- * constant, still live via CurioCard -- EMPTY_SLOT_FRAME just below it
- * was ALSO still live as of patch 0364, but patch 0365 moved the
- * empty-slot card onto EMPTY_SLOT_BANNER the same way, so it's dead too
- * now), so this Record is currently dead code -- left in place rather
- * than deleted in case a rarity-keyed frame is wanted again later; flag
- * for the CSS/dead-code cleanup pass in the backlog if it's still
- * unused next time that runs. Files live in public/rarity-frames/.
+ * directly as of patch 0364. CURIO_FRAME and EMPTY_SLOT_FRAME below were
+ * still live at that point (CurioCard and the empty-slot card,
+ * respectively), but patch 0365 moved the empty-slot card and patch
+ * 0366 moved CurioCard, both onto their own freshly-supplied banner the
+ * same way -- so as of patch 0366, EVERY Design A caller is gone and the
+ * entire RARITY_FRAME/CURIO_FRAME/EMPTY_SLOT_FRAME trio (plus
+ * .rarity-frame-card/.rarity-frame-card-outline in app.css) is dead
+ * code, left in place rather than deleted in case this look is wanted
+ * again later; flag for the CSS/dead-code cleanup pass in the backlog if
+ * still unused next time that runs. Files live in public/rarity-frames/.
  */
 export const RARITY_FRAME: Record<Rarity, string> = {
   common: './rarity-frames/common.png',
@@ -122,6 +135,9 @@ export const RARITY_FRAME: Record<Rarity, string> = {
  * sell value"). Reads as "collectible," not "weak," so it doesn't imply
  * a tier that doesn't exist. A single constant, not a Record like
  * RARITY_FRAME, since there's nothing to key it by.
+ * Patch 0366: no remaining callers -- CurioCard moved to CURIO_BANNER
+ * above, same reasoning as RARITY_FRAME's own comment. Dead code, left
+ * in place for the same reasons given there.
  */
 export const CURIO_FRAME = './rarity-frames/grey.png';
 

@@ -52,6 +52,13 @@ function IconBox({
         // owned item with no art yet, a consumable, a curio...) still
         // wants the glyph -- there's a real item there, it just needs
         // something to stand in for its missing art.
+        // Patch 0365: no remaining callers pass hideFallback -- the empty
+        // gear slot moved to EMPTY_SLOT_BANNER's fully-painted card
+        // background (same .rarity-banner treatment every other reverted
+        // card uses), where the fallback glyph reads as intentional again
+        // rather than a stray placeholder. Prop left in place (harmless,
+        // optional, defaults off) rather than removed, in case an
+        // outline-style empty state is wanted again later.
         : (!hideFallback && <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>)}
       {/* Broken-gear indicator (patch 0295), direct request: a red ring
           plus a small "!" badge, same corner-badge shape used elsewhere

@@ -16,7 +16,7 @@ import { CRAFTING_RECIPE_BY_ID } from '../../game/data/craftingRecipes';
 import { scrollSellValue } from '../../game/data/recipeScrolls';
 import { rerollsUsedToday } from '../../game/data/reroll';
 import {
-  describeMods, describeStats, formatGold, RARITY_BANNER, CURIO_FRAME, EMPTY_SLOT_BANNER,
+  describeMods, describeStats, formatGold, RARITY_BANNER, CURIO_BANNER, EMPTY_SLOT_BANNER,
   RARITY_COLOR, MAIN_STAT_TOOLTIP,
 } from '../../game/util';
 import { ItemIcon, ConsumableIcon, CurioIcon, RecipeIcon } from '../icons';
@@ -409,16 +409,16 @@ function CurioCard({ def, count, engine }: { def: CurioDef; count: number; engin
   return (
     <>
       <div
-        className="item-card rarity-frame-card"
-        style={{ backgroundImage: `url(${CURIO_FRAME})` }}
+        className="item-card"
         data-curio-id={def.id}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
+        <div className="rarity-banner" style={{ backgroundImage: `url(${CURIO_BANNER})` }} />
         <div className="item-card-summary">
-          <CurioIcon icon={def.icon} glyph={def.glyph} />
+          <CurioIcon icon={def.icon} glyph={def.glyph} size={48} />
           <div className="item-card-body">
             <div className="item-card-name">{def.name} ×{count}</div>
           </div>
