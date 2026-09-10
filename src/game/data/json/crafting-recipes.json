@@ -1,8 +1,8 @@
 [
   {
     "id": "craft_guildmade_blade",
-    "name": "Guildmade Blade",
-    "description": "A weapon built to the wielder’s own spec, not whatever the smith happened to have on the rack.",
+    "name": "Guildmade Blade II",
+    "description": "A weapon built to the wielder\u2019s own spec, not whatever the smith happened to have on the rack.",
     "category": "gear",
     "icon": "weapons/Weapon_06.png",
     "materialCost": {
@@ -24,8 +24,8 @@
   },
   {
     "id": "craft_guildmade_band",
-    "name": "Guildmade Band",
-    "description": "A ring cast and set by the guild’s own hand -- exactly the bonuses asked for, nothing left to chance.",
+    "name": "Guildmade Band II",
+    "description": "A ring cast and set by the guild\u2019s own hand -- exactly the bonuses asked for, nothing left to chance.",
     "category": "gear",
     "icon": "accessories/Accessory_07.png",
     "materialCost": {
@@ -48,7 +48,7 @@
   {
     "id": "craft_trail_rations",
     "name": "Trail Rations",
-    "description": "Smoked fish and dried herbs, packed for a hero who won’t be home for dinner.",
+    "description": "Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner.",
     "category": "consumable",
     "icon": "food/Food_36.png",
     "materialCost": {
@@ -87,7 +87,7 @@
   {
     "id": "craft_herbal_tonic",
     "name": "Herbal Tonic",
-    "description": "The Herb Garden’s own cure-all, brewed in-house rather than bought off a vendor’s shelf.",
+    "description": "The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor\u2019s shelf.",
     "category": "consumable",
     "icon": "potions/Potion_10.png",
     "materialCost": {
@@ -1057,7 +1057,7 @@
   },
   {
     "id": "craft_guildmade_helm",
-    "name": "Guildmade Helm",
+    "name": "Guildmade Helm II",
     "description": "A helm shaped to one head, not sized to fit a rack of them.",
     "category": "gear",
     "icon": "armor/Armor_11.png",
@@ -1080,7 +1080,7 @@
   },
   {
     "id": "craft_guildmade_plate",
-    "name": "Guildmade Plate",
+    "name": "Guildmade Plate II",
     "description": "Fitted plate, commissioned rather than pulled off a shop rack.",
     "category": "gear",
     "icon": "armor/Armor_08.png",
@@ -1103,7 +1103,7 @@
   },
   {
     "id": "craft_guildmade_boots",
-    "name": "Guildmade Boots",
+    "name": "Guildmade Boots II",
     "description": "Broken in on the workshop floor before they ever see real ground.",
     "category": "gear",
     "icon": "armor/Armor_75.png",
@@ -1126,7 +1126,7 @@
   },
   {
     "id": "craft_guildmade_cloak",
-    "name": "Guildmade Cloak",
+    "name": "Guildmade Cloak II",
     "description": "Cut and hemmed to the wearer's own height -- no guessing at the length.",
     "category": "gear",
     "icon": "armor/Armor_63.png",
@@ -2086,7 +2086,7 @@
   },
   {
     "id": "craft_guildmade_gauntlets",
-    "name": "Guildmade Gauntlets",
+    "name": "Guildmade Gauntlets II",
     "description": "Fitted knuckle to knuckle at the guild's own forge -- no rack of spares to pick through.",
     "category": "gear",
     "icon": "armor/Armor_74.png",
@@ -2109,7 +2109,7 @@
   },
   {
     "id": "craft_guildmade_buckler",
-    "name": "Guildmade Buckler",
+    "name": "Guildmade Buckler II",
     "description": "Guild-crested and sized to one arm. Never sold, never looted -- only ever made to order.",
     "category": "gear",
     "icon": "shields/Shield_18.png",
@@ -2132,7 +2132,7 @@
   },
   {
     "id": "craft_guildmade_talisman",
-    "name": "Guildmade Talisman",
+    "name": "Guildmade Talisman II",
     "description": "Strung and weighted by hand, to whoever's neck it's meant for.",
     "category": "gear",
     "icon": "accessories/Accessory_25_hue2.png",
@@ -2230,5 +2230,860 @@
     "modValue": 32,
     "statsToPick": 0,
     "statValue": 0
+  },
+  {
+    "id": "craft_guildmade_blade_t1",
+    "name": "Guildmade Blade I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_blade_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_blade_t3",
+    "name": "Guildmade Blade III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_blade_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_blade_t4",
+    "name": "Guildmade Blade IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_blade_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_blade_t5",
+    "name": "Guildmade Blade V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_blade_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
+  },
+  {
+    "id": "craft_guildmade_band_t1",
+    "name": "Guildmade Band I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_band_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_band_t3",
+    "name": "Guildmade Band III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_band_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_band_t4",
+    "name": "Guildmade Band IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_band_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_band_t5",
+    "name": "Guildmade Band V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_band_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
+  },
+  {
+    "id": "craft_guildmade_helm_t1",
+    "name": "Guildmade Helm I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_helm_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_helm_t3",
+    "name": "Guildmade Helm III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_helm_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_helm_t4",
+    "name": "Guildmade Helm IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_helm_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_helm_t5",
+    "name": "Guildmade Helm V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_helm_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
+  },
+  {
+    "id": "craft_guildmade_plate_t1",
+    "name": "Guildmade Plate I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_plate_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_plate_t3",
+    "name": "Guildmade Plate III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_plate_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_plate_t4",
+    "name": "Guildmade Plate IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_plate_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_plate_t5",
+    "name": "Guildmade Plate V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_plate_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
+  },
+  {
+    "id": "craft_guildmade_boots_t1",
+    "name": "Guildmade Boots I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_boots_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_boots_t3",
+    "name": "Guildmade Boots III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_boots_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_boots_t4",
+    "name": "Guildmade Boots IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_boots_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_boots_t5",
+    "name": "Guildmade Boots V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_boots_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
+  },
+  {
+    "id": "craft_guildmade_cloak_t1",
+    "name": "Guildmade Cloak I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_cloak_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_cloak_t3",
+    "name": "Guildmade Cloak III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_cloak_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_cloak_t4",
+    "name": "Guildmade Cloak IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_cloak_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_cloak_t5",
+    "name": "Guildmade Cloak V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_cloak_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
+  },
+  {
+    "id": "craft_guildmade_gauntlets_t1",
+    "name": "Guildmade Gauntlets I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_gauntlets_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_gauntlets_t3",
+    "name": "Guildmade Gauntlets III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_gauntlets_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_gauntlets_t4",
+    "name": "Guildmade Gauntlets IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_gauntlets_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_gauntlets_t5",
+    "name": "Guildmade Gauntlets V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_gauntlets_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
+  },
+  {
+    "id": "craft_guildmade_buckler_t1",
+    "name": "Guildmade Buckler I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_buckler_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_buckler_t3",
+    "name": "Guildmade Buckler III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_buckler_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_buckler_t4",
+    "name": "Guildmade Buckler IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_buckler_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_buckler_t5",
+    "name": "Guildmade Buckler V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_buckler_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
+  },
+  {
+    "id": "craft_guildmade_talisman_t1",
+    "name": "Guildmade Talisman I",
+    "description": "Guild-forged, fresh off the guild's own bench.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 8,
+      "timber": 4
+    },
+    "goldCost": 120,
+    "resultDefId": "guildmade_talisman_t1",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 13
+  },
+  {
+    "id": "craft_guildmade_talisman_t3",
+    "name": "Guildmade Talisman III",
+    "description": "Guild-forged, proven, a season further along.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 35,
+      "timber": 15,
+      "herbs": 5
+    },
+    "goldCost": 1400,
+    "resultDefId": "guildmade_talisman_t3",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom"
+    ],
+    "modsToPick": 2,
+    "modValue": 20,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 155
+  },
+  {
+    "id": "craft_guildmade_talisman_t4",
+    "name": "Guildmade Talisman IV",
+    "description": "Guild-forged, trusted, further along still.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 55,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 5
+    },
+    "goldCost": 3800,
+    "resultDefId": "guildmade_talisman_t4",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 24,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 422
+  },
+  {
+    "id": "craft_guildmade_talisman_t5",
+    "name": "Guildmade Talisman V",
+    "description": "Guild-forged, veteran-grade, nearly the finished article.",
+    "category": "gear",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 10
+    },
+    "goldCost": 7500,
+    "resultDefId": "guildmade_talisman_t5",
+    "modOptions": [
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
+    ],
+    "modsToPick": 3,
+    "modValue": 28,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 832
   }
 ]

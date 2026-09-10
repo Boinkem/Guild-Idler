@@ -28127,7 +28127,106 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
-### Crafting recipe pickers now confirm before committing (gear/gem, matching consumable/charm); stat-bonus pickers get icons and descriptions; hidden Settings button was genuinely invisible (patch 0361)
+### Tiered crafting redesign: Guildmade merges Masterwork into one continuous 6-tier line (level 1-50), 36 new items, Enhance fills the gaps between tiers (patch 0362)
+```discord-update
+Dev Update | Tiered Crafting
+
+- Guildmade gear is now a 6-tier ladder from level 1 to 50, not two separate tiers with a huge gap between them
+- Masterwork is folded into the same line as its top tier -- same name on those items, same guild identity the whole way through
+- Tier I is free for every slot; Tiers II-VI are found the same way every other gated recipe is
+- The Guildmade set bonus now counts any tier you're wearing toward the same bonus, plus a new 9-piece tier on top of the existing 2/4/6
+- Enhance is the intended way to grow within a tier -- recrafting at the next tier is how you jump to a new level bracket
+```
+
+Direct design discussion, worked through over several rounds before any
+code -- "I'm currently leaning towards crafting in tiers, and the gaps
+are supported by the Enhancement Mechanic." Net result: Guildmade and
+Masterwork, previously two disconnected tiers (level 12 and level 50,
+a 38-level dead zone crafting had nothing to offer in), become one
+continuous 6-tier line, using the exact bracket spacing (1/10/20/30/40/
+50) Heirloom already established in patch 0359.
+
+**The numbers.** 54 items total (9 slots x 6 tiers) -- only 36 are
+actually new. Tier II (level 10, was 12) and Tier VI (level 50) already
+existed as the original 12 Guildmade/Masterwork pieces plus patch
+0359's 3 gap-fillers each; those got a `reqLevel` nudge (12 -> 10 for
+the 9 that needed it -- safe, no save migration required, items
+reference `EQUIPMENT_BY_ID` live rather than storing a copy) and, for
+Tier II specifically, a name bump to "Guildmade {Piece} II" so the
+numbering reads correctly against its neighbors. Tiers I, III, IV, and
+V (levels 1/20/30/40) are the 36 genuinely new items -- rarity ramping
+uncommon -> rare -> rare -> epic -> epic -> legendary, `modValue`
+climbing 6 -> 14 -> 20 -> 24 -> 28 -> 32 (Tier II/VI's existing 14 and
+32 were the fixed endpoints this curve had to hit), gold cost 120 ->
+13,000. Every number here is a first-pass balance figure, same as
+Heirloom's own -- worth tuning via DevTool after real play, not
+precision-calibrated against actual raid loot tables.
+
+**Masterwork survives as flavor, not mechanics (`equipment.ts`).**
+Direct decision: "merge into one set -- Guildmade becomes the umbrella
+name for all 6 tiers, Masterwork survives only as top-tier flavor
+text." The former standalone `masterwork` ItemSet is gone; its 6 pieces
+folded into `guildmade`'s own `pieces` array (now 54 entries, 9 slots x
+6 tiers) with their existing `name` fields ("Masterwork Warblade" etc.)
+completely untouched -- only `setId` changed. Flavor naming and
+mechanical set membership are independent on purpose, so nothing about
+how these items look or read in the Inventory changed at all.
+
+**Set-bonus counting needed zero code changes.** Checked before
+promising anything: `pieces.filter(p => equipped/discovered.includes
+(p))` (`EquipmentPanel.tsx`/`LorePanel.tsx`/`RaidsPanel.tsx`) is a flat
+membership check, and a hero can only ever wear ONE item per physical
+slot regardless of how many tier options exist for it -- so widening
+`pieces` from 6 to 54 doesn't risk double-counting; whichever tier of
+Blade someone has equipped still only ever counts as "1 of 9." Direct
+decision confirmed exactly this: "you get the bonus regardless of if
+you're wearing a level 1 item, mixed in with level 20s" -- true by
+construction, not a new rule that needed enforcing. New 9-piece bonus
+tier added on top of the existing 2/4/6 (direct decision: "add just one
+more tier at 9... skip 7/8") -- "The Guild's Own," since a hero now has
+9 possible slots to fill from this one line instead of 6.
+
+**Recipe gating: Tier I joins the free tiers (`recipeScrolls.ts`,
+`data/json/*`).** Direct default, flagged rather than assumed: every
+*other* tiered family (Gems, Sigils, Charms, Consumables) already gives
+its lowest tier for free -- Gear was the one exception in patch 0357,
+specifically because it had no tier ladder to anchor a "lowest tier" on
+at the time. Now that it does, Tier I of all 9 slots (9 recipes) joins
+`ALWAYS_KNOWN_RECIPE_IDS`. Tiers II-VI (45 recipes across the 9 slots,
+27 of them newly gated this patch) all still need their own scroll,
+same as before. `ALWAYS_KNOWN_RECIPE_IDS`'s own comment updated with
+the real count: 25 always-known + 119 gated = all 144 recipes,
+cross-checked by script.
+
+**Enhance's role, unchanged mechanically, now load-bearing by design.**
+No code changed here -- Enhance already scales an item's durability and
+real stats/mods by `(1 + plus*0.15)` per level, capped at +10. What
+changed is intent: growing within a tier via Enhance, then recrafting
+at the next tier once you outgrow it, is now the actual intended
+progression loop for crafted gear generally, not just Heirloom's own
+corner case.
+
+**Verified.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean (206 modules, unchanged -- pure
+data plus one `equipment.ts` edit, no new files). Full cross-reference
+integrity check by script: all 214 equipment ids, 144 recipe ids, and
+119 scroll ids unique; every recipe's `resultDefId` and every scroll's
+`recipeId` resolves; every one of the 9 original gear slots confirmed
+to have the exact 1/10/20/30/40/50 level ladder with no gaps or
+duplicates; all 54 of the merged set's own `pieces` entries confirmed
+to resolve against real equipment ids. One side effect worth flagging,
+not hidden: the "Sets completed" stat (`StatsPanel.tsx`, already
+generic against `ITEM_SETS.length`/`pieces.length`, no code change
+needed) now requires discovering all 54 Guildmade-line pieces for 100%
+completion on that one set, not the previous 6+6 across two sets -- a
+real consequence of the merge, not a bug, but worth knowing going in.
+No live in-app playtest in this environment -- worth a real pass
+confirming the new tiers feel appropriately weaker than same-level raid
+gear (the "safety net, not the best option" positioning) and that
+Enhance's existing cost curve makes sense as the in-between-tiers grind
+without needing Heirloom's own steeper multiplier applied here too.
+
+
 ```discord-update
 Dev Update | Patch 0361
 

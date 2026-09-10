@@ -1,0 +1,2062 @@
+From cdba39eb4abe2edc064ea71ec4ce4cf002a2700a Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Thu, 10 Sep 2026 03:46:38 +0000
+Subject: [PATCH] Patch 0362: tiered crafting redesign -- Guildmade/Masterwork
+ merge into one 6-tier line
+
+---
+ guild-idler-status.md                    | 101 ++-
+ src/game/data/equipment.ts               |  63 +-
+ src/game/data/json/crafting-recipes.json | 881 ++++++++++++++++++++++-
+ src/game/data/json/equipment.json        | 498 ++++++++++++-
+ src/game/data/json/recipe-scrolls.json   | 162 +++++
+ src/game/data/recipeScrolls.ts           |  41 +-
+ 6 files changed, 1673 insertions(+), 73 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0d29e3b..f9f29c7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28127,7 +28127,106 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
+-### Crafting recipe pickers now confirm before committing (gear/gem, matching consumable/charm); stat-bonus pickers get icons and descriptions; hidden Settings button was genuinely invisible (patch 0361)
++### Tiered crafting redesign: Guildmade merges Masterwork into one continuous 6-tier line (level 1-50), 36 new items, Enhance fills the gaps between tiers (patch 0362)
++```discord-update
++Dev Update | Tiered Crafting
++
++- Guildmade gear is now a 6-tier ladder from level 1 to 50, not two separate tiers with a huge gap between them
++- Masterwork is folded into the same line as its top tier -- same name on those items, same guild identity the whole way through
++- Tier I is free for every slot; Tiers II-VI are found the same way every other gated recipe is
++- The Guildmade set bonus now counts any tier you're wearing toward the same bonus, plus a new 9-piece tier on top of the existing 2/4/6
++- Enhance is the intended way to grow within a tier -- recrafting at the next tier is how you jump to a new level bracket
++```
++
++Direct design discussion, worked through over several rounds before any
++code -- "I'm currently leaning towards crafting in tiers, and the gaps
++are supported by the Enhancement Mechanic." Net result: Guildmade and
++Masterwork, previously two disconnected tiers (level 12 and level 50,
++a 38-level dead zone crafting had nothing to offer in), become one
++continuous 6-tier line, using the exact bracket spacing (1/10/20/30/40/
++50) Heirloom already established in patch 0359.
++
++**The numbers.** 54 items total (9 slots x 6 tiers) -- only 36 are
++actually new. Tier II (level 10, was 12) and Tier VI (level 50) already
++existed as the original 12 Guildmade/Masterwork pieces plus patch
++0359's 3 gap-fillers each; those got a `reqLevel` nudge (12 -> 10 for
++the 9 that needed it -- safe, no save migration required, items
++reference `EQUIPMENT_BY_ID` live rather than storing a copy) and, for
++Tier II specifically, a name bump to "Guildmade {Piece} II" so the
++numbering reads correctly against its neighbors. Tiers I, III, IV, and
++V (levels 1/20/30/40) are the 36 genuinely new items -- rarity ramping
++uncommon -> rare -> rare -> epic -> epic -> legendary, `modValue`
++climbing 6 -> 14 -> 20 -> 24 -> 28 -> 32 (Tier II/VI's existing 14 and
++32 were the fixed endpoints this curve had to hit), gold cost 120 ->
++13,000. Every number here is a first-pass balance figure, same as
++Heirloom's own -- worth tuning via DevTool after real play, not
++precision-calibrated against actual raid loot tables.
++
++**Masterwork survives as flavor, not mechanics (`equipment.ts`).**
++Direct decision: "merge into one set -- Guildmade becomes the umbrella
++name for all 6 tiers, Masterwork survives only as top-tier flavor
++text." The former standalone `masterwork` ItemSet is gone; its 6 pieces
++folded into `guildmade`'s own `pieces` array (now 54 entries, 9 slots x
++6 tiers) with their existing `name` fields ("Masterwork Warblade" etc.)
++completely untouched -- only `setId` changed. Flavor naming and
++mechanical set membership are independent on purpose, so nothing about
++how these items look or read in the Inventory changed at all.
++
++**Set-bonus counting needed zero code changes.** Checked before
++promising anything: `pieces.filter(p => equipped/discovered.includes
++(p))` (`EquipmentPanel.tsx`/`LorePanel.tsx`/`RaidsPanel.tsx`) is a flat
++membership check, and a hero can only ever wear ONE item per physical
++slot regardless of how many tier options exist for it -- so widening
++`pieces` from 6 to 54 doesn't risk double-counting; whichever tier of
++Blade someone has equipped still only ever counts as "1 of 9." Direct
++decision confirmed exactly this: "you get the bonus regardless of if
++you're wearing a level 1 item, mixed in with level 20s" -- true by
++construction, not a new rule that needed enforcing. New 9-piece bonus
++tier added on top of the existing 2/4/6 (direct decision: "add just one
++more tier at 9... skip 7/8") -- "The Guild's Own," since a hero now has
++9 possible slots to fill from this one line instead of 6.
++
++**Recipe gating: Tier I joins the free tiers (`recipeScrolls.ts`,
++`data/json/*`).** Direct default, flagged rather than assumed: every
++*other* tiered family (Gems, Sigils, Charms, Consumables) already gives
++its lowest tier for free -- Gear was the one exception in patch 0357,
++specifically because it had no tier ladder to anchor a "lowest tier" on
++at the time. Now that it does, Tier I of all 9 slots (9 recipes) joins
++`ALWAYS_KNOWN_RECIPE_IDS`. Tiers II-VI (45 recipes across the 9 slots,
++27 of them newly gated this patch) all still need their own scroll,
++same as before. `ALWAYS_KNOWN_RECIPE_IDS`'s own comment updated with
++the real count: 25 always-known + 119 gated = all 144 recipes,
++cross-checked by script.
++
++**Enhance's role, unchanged mechanically, now load-bearing by design.**
++No code changed here -- Enhance already scales an item's durability and
++real stats/mods by `(1 + plus*0.15)` per level, capped at +10. What
++changed is intent: growing within a tier via Enhance, then recrafting
++at the next tier once you outgrow it, is now the actual intended
++progression loop for crafted gear generally, not just Heirloom's own
++corner case.
++
++**Verified.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean (206 modules, unchanged -- pure
++data plus one `equipment.ts` edit, no new files). Full cross-reference
++integrity check by script: all 214 equipment ids, 144 recipe ids, and
++119 scroll ids unique; every recipe's `resultDefId` and every scroll's
++`recipeId` resolves; every one of the 9 original gear slots confirmed
++to have the exact 1/10/20/30/40/50 level ladder with no gaps or
++duplicates; all 54 of the merged set's own `pieces` entries confirmed
++to resolve against real equipment ids. One side effect worth flagging,
++not hidden: the "Sets completed" stat (`StatsPanel.tsx`, already
++generic against `ITEM_SETS.length`/`pieces.length`, no code change
++needed) now requires discovering all 54 Guildmade-line pieces for 100%
++completion on that one set, not the previous 6+6 across two sets -- a
++real consequence of the merge, not a bug, but worth knowing going in.
++No live in-app playtest in this environment -- worth a real pass
++confirming the new tiers feel appropriately weaker than same-level raid
++gear (the "safety net, not the best option" positioning) and that
++Enhance's existing cost curve makes sense as the in-between-tiers grind
++without needing Heirloom's own steeper multiplier applied here too.
++
++
+ ```discord-update
+ Dev Update | Patch 0361
+ 
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index ce1041e..37cd2e8 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -404,31 +404,52 @@ export const ITEM_SETS: ItemSet[] = [
+     // set bonus below is a supplement on top of that choice, not the
+     // main draw, same balance philosophy the material-tier sets
+     // (Leather/Steel/Cutpurse's) already use at nearby levels.
+-    pieces: ['guildmade_blade', 'guildmade_band', 'guildmade_helm', 'guildmade_plate', 'guildmade_boots', 'guildmade_cloak'],
++    //
++    // Patch 0362 -- tiered crafting redesign, direct design discussion.
++    // Merged with the former standalone `masterwork` set (below this
++    // comment used to sit its own separate ItemSet entry; deleted, its
++    // 6 pieces folded in here instead) into one continuous 6-tier line
++    // spanning level 1 to 50, direct decision: "merge into one set --
++    // Guildmade becomes the umbrella name for all 6 tiers, Masterwork
++    // survives only as top-tier flavor text." The former Masterwork
++    // items keep their own `name` untouched (still "Masterwork
++    // Warblade" etc, not renamed to "Guildmade Blade VI") -- only
++    // `setId` changed, so flavor naming and mechanical set membership
++    // are independent here on purpose. `pieces` grew from 6 to 54 (9
++    // slots x 6 tiers, patch 0359's 3 gap-filler slots -- Shield/
++    // Gloves/Amulet -- included per direct decision) -- counting still
++    // works unmodified (EquipmentPanel.tsx/LorePanel.tsx/RaidsPanel.tsx
++    // all just do `pieces.filter(p => equipped/discovered.includes(p))`)
++    // since a hero can only ever wear ONE item per physical slot
++    // regardless of how many tier options exist for it -- whichever
++    // tier of Blade someone has equipped still only ever counts as "1
++    // of 9," so widening the pool of valid ids per slot doesn't risk
++    // double-counting. Direct decision: "you get the bonus regardless
++    // of if you're wearing a level 1 item, mixed in with level 20s" --
++    // the bonus thresholds below are tier-blind by construction, same
++    // as the counting always was.
++    pieces: [
++      'guildmade_blade', 'guildmade_blade_t1', 'guildmade_blade_t3', 'guildmade_blade_t4', 'guildmade_blade_t5', 'masterwork_warblade',
++      'guildmade_band', 'guildmade_band_t1', 'guildmade_band_t3', 'guildmade_band_t4', 'guildmade_band_t5', 'masterwork_band',
++      'guildmade_helm', 'guildmade_helm_t1', 'guildmade_helm_t3', 'guildmade_helm_t4', 'guildmade_helm_t5', 'masterwork_greathelm',
++      'guildmade_plate', 'guildmade_plate_t1', 'guildmade_plate_t3', 'guildmade_plate_t4', 'guildmade_plate_t5', 'masterwork_plate',
++      'guildmade_boots', 'guildmade_boots_t1', 'guildmade_boots_t3', 'guildmade_boots_t4', 'guildmade_boots_t5', 'masterwork_sabatons',
++      'guildmade_cloak', 'guildmade_cloak_t1', 'guildmade_cloak_t3', 'guildmade_cloak_t4', 'guildmade_cloak_t5', 'masterwork_mantle',
++      'guildmade_gauntlets', 'guildmade_gauntlets_t1', 'guildmade_gauntlets_t3', 'guildmade_gauntlets_t4', 'guildmade_gauntlets_t5', 'masterwork_gauntlets',
++      'guildmade_buckler', 'guildmade_buckler_t1', 'guildmade_buckler_t3', 'guildmade_buckler_t4', 'guildmade_buckler_t5', 'masterwork_bulwark',
++      'guildmade_talisman', 'guildmade_talisman_t1', 'guildmade_talisman_t3', 'guildmade_talisman_t4', 'guildmade_talisman_t5', 'masterwork_sigil',
++    ],
+     bonuses: [
+       { count: 2, mods: { success: 6, injuryResist: 6 }, label: 'Guild Standard' },
+       { count: 4, mods: { success: 12, injuryResist: 12, gold: 8 }, label: 'Built to Spec' },
+       { count: 6, mods: { success: 18, injuryResist: 18, gold: 14, speed: 10 }, label: 'Commissioned Complete' },
+-    ],
+-  },
+-  {
+-    id: 'masterwork',
+-    name: 'Masterwork Set',
+-    // The endgame counterpart to Guildmade above -- reqLevel 50,
+-    // deliberately sitting between Empyrean (45, a chain-reward
+-    // capstone) and Requiem (55, the final raid) as a genuine crafting-
+-    // only chase rather than a byproduct of finishing a specific chain
+-    // or raid. Fully new items, no existing base to build on. Durability/
+-    // value calibrated against empyrean_*/requiem_* items at the same
+-    // slots; modsToPick=3 at modValue=14 (vs. Guildmade's 2 picks at
+-    // value 6) is what actually distinguishes an endgame craft from an
+-    // early one -- more player-chosen precision, not just bigger flat
+-    // numbers.
+-    pieces: ['masterwork_warblade', 'masterwork_greathelm', 'masterwork_plate', 'masterwork_gauntlets', 'masterwork_sabatons', 'masterwork_sigil'],
+-    bonuses: [
+-      { count: 2, mods: { success: 16, injuryResist: 18 }, label: 'Guild-Forged' },
+-      { count: 4, mods: { success: 32, gold: 52, loot: 30, injuryResist: 28 }, label: 'Nothing Left to Improve' },
+-      { count: 6, mods: { success: 44, gold: 65, loot: 38, injuryResist: 36, xp: 50, speed: 20 }, label: "The Guild's Own Masterwork" },
++      // New patch 0362 -- direct decision: "add just one more tier at 9
++      // on top of the existing 2/4/6, skip 7/8." A hero now has 9
++      // possible slots to fill from this one line (up from 6 before the
++      // merge), so 9/9 is the new genuine "every slot, this line, full
++      // commitment" ceiling -- 6 stays exactly as it was rather than
++      // being redefined, this is purely an additional rung above it.
++      { count: 9, mods: { success: 26, injuryResist: 26, gold: 20, speed: 16, xp: 14 }, label: "The Guild's Own" },
+     ],
+   },
+ ];
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+index 0b3b7cb..a7f89c9 100644
+--- a/src/game/data/json/crafting-recipes.json
++++ b/src/game/data/json/crafting-recipes.json
+@@ -1,8 +1,8 @@
+ [
+   {
+     "id": "craft_guildmade_blade",
+-    "name": "Guildmade Blade",
+-    "description": "A weapon built to the wielder’s own spec, not whatever the smith happened to have on the rack.",
++    "name": "Guildmade Blade II",
++    "description": "A weapon built to the wielder\u2019s own spec, not whatever the smith happened to have on the rack.",
+     "category": "gear",
+     "icon": "weapons/Weapon_06.png",
+     "materialCost": {
+@@ -24,8 +24,8 @@
+   },
+   {
+     "id": "craft_guildmade_band",
+-    "name": "Guildmade Band",
+-    "description": "A ring cast and set by the guild’s own hand -- exactly the bonuses asked for, nothing left to chance.",
++    "name": "Guildmade Band II",
++    "description": "A ring cast and set by the guild\u2019s own hand -- exactly the bonuses asked for, nothing left to chance.",
+     "category": "gear",
+     "icon": "accessories/Accessory_07.png",
+     "materialCost": {
+@@ -48,7 +48,7 @@
+   {
+     "id": "craft_trail_rations",
+     "name": "Trail Rations",
+-    "description": "Smoked fish and dried herbs, packed for a hero who won’t be home for dinner.",
++    "description": "Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner.",
+     "category": "consumable",
+     "icon": "food/Food_36.png",
+     "materialCost": {
+@@ -87,7 +87,7 @@
+   {
+     "id": "craft_herbal_tonic",
+     "name": "Herbal Tonic",
+-    "description": "The Herb Garden’s own cure-all, brewed in-house rather than bought off a vendor’s shelf.",
++    "description": "The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor\u2019s shelf.",
+     "category": "consumable",
+     "icon": "potions/Potion_10.png",
+     "materialCost": {
+@@ -1057,7 +1057,7 @@
+   },
+   {
+     "id": "craft_guildmade_helm",
+-    "name": "Guildmade Helm",
++    "name": "Guildmade Helm II",
+     "description": "A helm shaped to one head, not sized to fit a rack of them.",
+     "category": "gear",
+     "icon": "armor/Armor_11.png",
+@@ -1080,7 +1080,7 @@
+   },
+   {
+     "id": "craft_guildmade_plate",
+-    "name": "Guildmade Plate",
++    "name": "Guildmade Plate II",
+     "description": "Fitted plate, commissioned rather than pulled off a shop rack.",
+     "category": "gear",
+     "icon": "armor/Armor_08.png",
+@@ -1103,7 +1103,7 @@
+   },
+   {
+     "id": "craft_guildmade_boots",
+-    "name": "Guildmade Boots",
++    "name": "Guildmade Boots II",
+     "description": "Broken in on the workshop floor before they ever see real ground.",
+     "category": "gear",
+     "icon": "armor/Armor_75.png",
+@@ -1126,7 +1126,7 @@
+   },
+   {
+     "id": "craft_guildmade_cloak",
+-    "name": "Guildmade Cloak",
++    "name": "Guildmade Cloak II",
+     "description": "Cut and hemmed to the wearer's own height -- no guessing at the length.",
+     "category": "gear",
+     "icon": "armor/Armor_63.png",
+@@ -2086,7 +2086,7 @@
+   },
+   {
+     "id": "craft_guildmade_gauntlets",
+-    "name": "Guildmade Gauntlets",
++    "name": "Guildmade Gauntlets II",
+     "description": "Fitted knuckle to knuckle at the guild's own forge -- no rack of spares to pick through.",
+     "category": "gear",
+     "icon": "armor/Armor_74.png",
+@@ -2109,7 +2109,7 @@
+   },
+   {
+     "id": "craft_guildmade_buckler",
+-    "name": "Guildmade Buckler",
++    "name": "Guildmade Buckler II",
+     "description": "Guild-crested and sized to one arm. Never sold, never looted -- only ever made to order.",
+     "category": "gear",
+     "icon": "shields/Shield_18.png",
+@@ -2132,7 +2132,7 @@
+   },
+   {
+     "id": "craft_guildmade_talisman",
+-    "name": "Guildmade Talisman",
++    "name": "Guildmade Talisman II",
+     "description": "Strung and weighted by hand, to whoever's neck it's meant for.",
+     "category": "gear",
+     "icon": "accessories/Accessory_25_hue2.png",
+@@ -2230,5 +2230,860 @@
+     "modValue": 32,
+     "statsToPick": 0,
+     "statValue": 0
++  },
++  {
++    "id": "craft_guildmade_blade_t1",
++    "name": "Guildmade Blade I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_blade_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_blade_t3",
++    "name": "Guildmade Blade III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_blade_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_blade_t4",
++    "name": "Guildmade Blade IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_blade_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_blade_t5",
++    "name": "Guildmade Blade V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_blade_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
++  },
++  {
++    "id": "craft_guildmade_band_t1",
++    "name": "Guildmade Band I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_band_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_band_t3",
++    "name": "Guildmade Band III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_band_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_band_t4",
++    "name": "Guildmade Band IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_band_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_band_t5",
++    "name": "Guildmade Band V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_band_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
++  },
++  {
++    "id": "craft_guildmade_helm_t1",
++    "name": "Guildmade Helm I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_helm_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_helm_t3",
++    "name": "Guildmade Helm III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_helm_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_helm_t4",
++    "name": "Guildmade Helm IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_helm_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_helm_t5",
++    "name": "Guildmade Helm V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_helm_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
++  },
++  {
++    "id": "craft_guildmade_plate_t1",
++    "name": "Guildmade Plate I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_plate_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_plate_t3",
++    "name": "Guildmade Plate III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_plate_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_plate_t4",
++    "name": "Guildmade Plate IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_plate_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_plate_t5",
++    "name": "Guildmade Plate V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_plate_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
++  },
++  {
++    "id": "craft_guildmade_boots_t1",
++    "name": "Guildmade Boots I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_boots_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_boots_t3",
++    "name": "Guildmade Boots III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_boots_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_boots_t4",
++    "name": "Guildmade Boots IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_boots_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_boots_t5",
++    "name": "Guildmade Boots V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_boots_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
++  },
++  {
++    "id": "craft_guildmade_cloak_t1",
++    "name": "Guildmade Cloak I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_cloak_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_cloak_t3",
++    "name": "Guildmade Cloak III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_cloak_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_cloak_t4",
++    "name": "Guildmade Cloak IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_cloak_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_cloak_t5",
++    "name": "Guildmade Cloak V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_cloak_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
++  },
++  {
++    "id": "craft_guildmade_gauntlets_t1",
++    "name": "Guildmade Gauntlets I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_gauntlets_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_gauntlets_t3",
++    "name": "Guildmade Gauntlets III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_gauntlets_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_gauntlets_t4",
++    "name": "Guildmade Gauntlets IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_gauntlets_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_gauntlets_t5",
++    "name": "Guildmade Gauntlets V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_gauntlets_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
++  },
++  {
++    "id": "craft_guildmade_buckler_t1",
++    "name": "Guildmade Buckler I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_buckler_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_buckler_t3",
++    "name": "Guildmade Buckler III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_buckler_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_buckler_t4",
++    "name": "Guildmade Buckler IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_buckler_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_buckler_t5",
++    "name": "Guildmade Buckler V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_buckler_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
++  },
++  {
++    "id": "craft_guildmade_talisman_t1",
++    "name": "Guildmade Talisman I",
++    "description": "Guild-forged, fresh off the guild's own bench.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 8,
++      "timber": 4
++    },
++    "goldCost": 120,
++    "resultDefId": "guildmade_talisman_t1",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 6,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 13
++  },
++  {
++    "id": "craft_guildmade_talisman_t3",
++    "name": "Guildmade Talisman III",
++    "description": "Guild-forged, proven, a season further along.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 35,
++      "timber": 15,
++      "herbs": 5
++    },
++    "goldCost": 1400,
++    "resultDefId": "guildmade_talisman_t3",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom"
++    ],
++    "modsToPick": 2,
++    "modValue": 20,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 155
++  },
++  {
++    "id": "craft_guildmade_talisman_t4",
++    "name": "Guildmade Talisman IV",
++    "description": "Guild-forged, trusted, further along still.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 55,
++      "timber": 20,
++      "herbs": 10,
++      "fish": 5
++    },
++    "goldCost": 3800,
++    "resultDefId": "guildmade_talisman_t4",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 24,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 422
++  },
++  {
++    "id": "craft_guildmade_talisman_t5",
++    "name": "Guildmade Talisman V",
++    "description": "Guild-forged, veteran-grade, nearly the finished article.",
++    "category": "gear",
++    "materialCost": {
++      "ore": 70,
++      "timber": 25,
++      "herbs": 15,
++      "fish": 10
++    },
++    "goldCost": 7500,
++    "resultDefId": "guildmade_talisman_t5",
++    "modOptions": [
++      "strength",
++      "luck",
++      "wisdom",
++      "endurance"
++    ],
++    "modsToPick": 3,
++    "modValue": 28,
++    "statsToPick": 0,
++    "statValue": 0,
++    "scrapCost": 832
+   }
+ ]
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index b764505..9c5da8e 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -1271,10 +1271,10 @@
+   },
+   {
+     "id": "guildmade_blade",
+-    "name": "Guildmade Blade",
++    "name": "Guildmade Blade II",
+     "slot": "weapon",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "icon": "weapons/Weapon_03.png",
+@@ -1284,10 +1284,10 @@
+   },
+   {
+     "id": "guildmade_band",
+-    "name": "Guildmade Band",
++    "name": "Guildmade Band II",
+     "slot": "ring",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "icon": "accessories/Accessory_07.png",
+@@ -2076,10 +2076,10 @@
+   },
+   {
+     "id": "guildmade_helm",
+-    "name": "Guildmade Helm",
++    "name": "Guildmade Helm II",
+     "slot": "helmet",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "setId": "guildmade",
+@@ -2091,10 +2091,10 @@
+   },
+   {
+     "id": "guildmade_plate",
+-    "name": "Guildmade Plate",
++    "name": "Guildmade Plate II",
+     "slot": "chest",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "setId": "guildmade",
+@@ -2106,10 +2106,10 @@
+   },
+   {
+     "id": "guildmade_boots",
+-    "name": "Guildmade Boots",
++    "name": "Guildmade Boots II",
+     "slot": "boots",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "setId": "guildmade",
+@@ -2121,10 +2121,10 @@
+   },
+   {
+     "id": "guildmade_cloak",
+-    "name": "Guildmade Cloak",
++    "name": "Guildmade Cloak II",
+     "slot": "cloak",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "setId": "guildmade",
+@@ -2142,7 +2142,7 @@
+     "reqLevel": 50,
+     "maxDurability": 330,
+     "value": 24000,
+-    "setId": "masterwork",
++    "setId": "guildmade",
+     "icon": "weapons/Weapon_08_hue5.png",
+     "raidExclusive": false,
+     "craftable": true,
+@@ -2157,7 +2157,7 @@
+     "reqLevel": 50,
+     "maxDurability": 320,
+     "value": 22500,
+-    "setId": "masterwork",
++    "setId": "guildmade",
+     "icon": "armor/Armor_44.png",
+     "raidExclusive": false,
+     "craftable": true,
+@@ -2176,7 +2176,7 @@
+     "icon": "armor/Armor_20.png",
+     "raidExclusive": false,
+     "craftable": true,
+-    "setId": "masterwork"
++    "setId": "guildmade"
+   },
+   {
+     "id": "masterwork_gauntlets",
+@@ -2190,7 +2190,7 @@
+     "icon": "armor/Armor_17.png",
+     "raidExclusive": false,
+     "craftable": true,
+-    "setId": "masterwork"
++    "setId": "guildmade"
+   },
+   {
+     "id": "masterwork_sabatons",
+@@ -2204,7 +2204,7 @@
+     "icon": "armor/Armor_76.png",
+     "raidExclusive": false,
+     "craftable": true,
+-    "setId": "masterwork"
++    "setId": "guildmade"
+   },
+   {
+     "id": "masterwork_sigil",
+@@ -2218,7 +2218,7 @@
+     "icon": "accessories/Accessory_23.png",
+     "raidExclusive": false,
+     "craftable": true,
+-    "setId": "masterwork"
++    "setId": "guildmade"
+   },
+   {
+     "id": "quartermasters_token",
+@@ -2710,36 +2710,39 @@
+   },
+   {
+     "id": "guildmade_gauntlets",
+-    "name": "Guildmade Gauntlets",
++    "name": "Guildmade Gauntlets II",
+     "slot": "gloves",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "mods": {},
+-    "craftable": true
++    "craftable": true,
++    "setId": "guildmade"
+   },
+   {
+     "id": "guildmade_buckler",
+-    "name": "Guildmade Buckler",
++    "name": "Guildmade Buckler II",
+     "slot": "shield",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "mods": {},
+-    "craftable": true
++    "craftable": true,
++    "setId": "guildmade"
+   },
+   {
+     "id": "guildmade_talisman",
+-    "name": "Guildmade Talisman",
++    "name": "Guildmade Talisman II",
+     "slot": "amulet",
+     "rarity": "rare",
+-    "reqLevel": 12,
++    "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
+     "mods": {},
+-    "craftable": true
++    "craftable": true,
++    "setId": "guildmade"
+   },
+   {
+     "id": "masterwork_band",
+@@ -2750,7 +2753,8 @@
+     "maxDurability": 320,
+     "value": 13000,
+     "mods": {},
+-    "craftable": true
++    "craftable": true,
++    "setId": "guildmade"
+   },
+   {
+     "id": "masterwork_bulwark",
+@@ -2761,7 +2765,8 @@
+     "maxDurability": 320,
+     "value": 13000,
+     "mods": {},
+-    "craftable": true
++    "craftable": true,
++    "setId": "guildmade"
+   },
+   {
+     "id": "masterwork_mantle",
+@@ -2772,6 +2777,439 @@
+     "maxDurability": 320,
+     "value": 13000,
+     "mods": {},
+-    "craftable": true
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_blade_t1",
++    "name": "Guildmade Blade I",
++    "slot": "weapon",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_blade_t3",
++    "name": "Guildmade Blade III",
++    "slot": "weapon",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_blade_t4",
++    "name": "Guildmade Blade IV",
++    "slot": "weapon",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_blade_t5",
++    "name": "Guildmade Blade V",
++    "slot": "weapon",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_band_t1",
++    "name": "Guildmade Band I",
++    "slot": "ring",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_band_t3",
++    "name": "Guildmade Band III",
++    "slot": "ring",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_band_t4",
++    "name": "Guildmade Band IV",
++    "slot": "ring",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_band_t5",
++    "name": "Guildmade Band V",
++    "slot": "ring",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_helm_t1",
++    "name": "Guildmade Helm I",
++    "slot": "helmet",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_helm_t3",
++    "name": "Guildmade Helm III",
++    "slot": "helmet",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_helm_t4",
++    "name": "Guildmade Helm IV",
++    "slot": "helmet",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_helm_t5",
++    "name": "Guildmade Helm V",
++    "slot": "helmet",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_plate_t1",
++    "name": "Guildmade Plate I",
++    "slot": "chest",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_plate_t3",
++    "name": "Guildmade Plate III",
++    "slot": "chest",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_plate_t4",
++    "name": "Guildmade Plate IV",
++    "slot": "chest",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_plate_t5",
++    "name": "Guildmade Plate V",
++    "slot": "chest",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_boots_t1",
++    "name": "Guildmade Boots I",
++    "slot": "boots",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_boots_t3",
++    "name": "Guildmade Boots III",
++    "slot": "boots",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_boots_t4",
++    "name": "Guildmade Boots IV",
++    "slot": "boots",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_boots_t5",
++    "name": "Guildmade Boots V",
++    "slot": "boots",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_cloak_t1",
++    "name": "Guildmade Cloak I",
++    "slot": "cloak",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_cloak_t3",
++    "name": "Guildmade Cloak III",
++    "slot": "cloak",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_cloak_t4",
++    "name": "Guildmade Cloak IV",
++    "slot": "cloak",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_cloak_t5",
++    "name": "Guildmade Cloak V",
++    "slot": "cloak",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_gauntlets_t1",
++    "name": "Guildmade Gauntlets I",
++    "slot": "gloves",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_gauntlets_t3",
++    "name": "Guildmade Gauntlets III",
++    "slot": "gloves",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_gauntlets_t4",
++    "name": "Guildmade Gauntlets IV",
++    "slot": "gloves",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_gauntlets_t5",
++    "name": "Guildmade Gauntlets V",
++    "slot": "gloves",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_buckler_t1",
++    "name": "Guildmade Buckler I",
++    "slot": "shield",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_buckler_t3",
++    "name": "Guildmade Buckler III",
++    "slot": "shield",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_buckler_t4",
++    "name": "Guildmade Buckler IV",
++    "slot": "shield",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_buckler_t5",
++    "name": "Guildmade Buckler V",
++    "slot": "shield",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_talisman_t1",
++    "name": "Guildmade Talisman I",
++    "slot": "amulet",
++    "rarity": "uncommon",
++    "reqLevel": 1,
++    "maxDurability": 70,
++    "value": 150,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_talisman_t3",
++    "name": "Guildmade Talisman III",
++    "slot": "amulet",
++    "rarity": "rare",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 1800,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_talisman_t4",
++    "name": "Guildmade Talisman IV",
++    "slot": "amulet",
++    "rarity": "epic",
++    "reqLevel": 30,
++    "maxDurability": 200,
++    "value": 5000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
++  },
++  {
++    "id": "guildmade_talisman_t5",
++    "name": "Guildmade Talisman V",
++    "slot": "amulet",
++    "rarity": "epic",
++    "reqLevel": 40,
++    "maxDurability": 260,
++    "value": 10000,
++    "mods": {},
++    "craftable": true,
++    "setId": "guildmade"
+   }
+ ]
+diff --git a/src/game/data/json/recipe-scrolls.json b/src/game/data/json/recipe-scrolls.json
+index 35b89d2..c90cae6 100644
+--- a/src/game/data/json/recipe-scrolls.json
++++ b/src/game/data/json/recipe-scrolls.json
+@@ -550,5 +550,167 @@
+     "recipeId": "craft_masterwork_mantle",
+     "reqLevel": 50,
+     "rarity": "legendary"
++  },
++  {
++    "id": "scroll_craft_guildmade_blade_t3",
++    "recipeId": "craft_guildmade_blade_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_blade_t4",
++    "recipeId": "craft_guildmade_blade_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_blade_t5",
++    "recipeId": "craft_guildmade_blade_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_band_t3",
++    "recipeId": "craft_guildmade_band_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_band_t4",
++    "recipeId": "craft_guildmade_band_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_band_t5",
++    "recipeId": "craft_guildmade_band_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_helm_t3",
++    "recipeId": "craft_guildmade_helm_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_helm_t4",
++    "recipeId": "craft_guildmade_helm_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_helm_t5",
++    "recipeId": "craft_guildmade_helm_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_plate_t3",
++    "recipeId": "craft_guildmade_plate_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_plate_t4",
++    "recipeId": "craft_guildmade_plate_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_plate_t5",
++    "recipeId": "craft_guildmade_plate_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_boots_t3",
++    "recipeId": "craft_guildmade_boots_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_boots_t4",
++    "recipeId": "craft_guildmade_boots_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_boots_t5",
++    "recipeId": "craft_guildmade_boots_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_cloak_t3",
++    "recipeId": "craft_guildmade_cloak_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_cloak_t4",
++    "recipeId": "craft_guildmade_cloak_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_cloak_t5",
++    "recipeId": "craft_guildmade_cloak_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_gauntlets_t3",
++    "recipeId": "craft_guildmade_gauntlets_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_gauntlets_t4",
++    "recipeId": "craft_guildmade_gauntlets_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_gauntlets_t5",
++    "recipeId": "craft_guildmade_gauntlets_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_buckler_t3",
++    "recipeId": "craft_guildmade_buckler_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_buckler_t4",
++    "recipeId": "craft_guildmade_buckler_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_buckler_t5",
++    "recipeId": "craft_guildmade_buckler_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_talisman_t3",
++    "recipeId": "craft_guildmade_talisman_t3",
++    "reqLevel": 20,
++    "rarity": "rare"
++  },
++  {
++    "id": "scroll_craft_guildmade_talisman_t4",
++    "recipeId": "craft_guildmade_talisman_t4",
++    "reqLevel": 30,
++    "rarity": "epic"
++  },
++  {
++    "id": "scroll_craft_guildmade_talisman_t5",
++    "recipeId": "craft_guildmade_talisman_t5",
++    "reqLevel": 40,
++    "rarity": "epic"
+   }
+ ]
+diff --git a/src/game/data/recipeScrolls.ts b/src/game/data/recipeScrolls.ts
+index 11292f6..adcee6e 100644
+--- a/src/game/data/recipeScrolls.ts
++++ b/src/game/data/recipeScrolls.ts
+@@ -29,23 +29,31 @@ export const RECIPE_SCROLL_BY_RECIPE_ID: Record<string, RecipeScrollDef> = Objec
+ /**
+  * Every recipe a brand-new guild already knows, with no scroll needed --
+  * the lowest tier of every gated family, plus everything that was never
+- * part of a tier ladder to begin with (patch 0357, direct design pass):
++ * part of a tier ladder to begin with (patch 0357, direct design pass;
++ * Gear's own tier ladder added patch 0362, see below):
+  *   - Gems: the `common` tier of all 8 element/type lines (elemental +
+  *     resistance, x4 elements) -- uncommon/rare/epic/legendary all gated.
+  *   - Enchant Sigils: `enchant_minor_sigil` -- standard/greater gated.
+  *   - Charms: Lucky Charm (gold + xp) -- Fortune Weave and Windfall
+  *     Sigil (both variants each) gated.
+- *   - Gear: none -- all 12 (6 Guildmade, 6 Masterwork) are individually
+- *     gated, direct request ("each gear recipe has its own individual
+- *     scroll") rather than one flat unlock or a free starting tier, since
+- *     Gear has no natural tier ladder to anchor a "lowest tier" on in
+- *     the first place.
++ *   - Gear: Guildmade Tier I (level 1) of all 9 slots -- Tiers II-VI
++ *     (level 10/20/30/40/50, II and VI being the original Guildmade/
++ *     Masterwork items respectively, now folded into one continuous
++ *     6-tier Guildmade Set) are all gated. Originally NONE of Gear was
++ *     free (patch 0357: "Gear has no natural tier ladder to anchor a
++ *     lowest tier on") -- now that it has one (patch 0362, direct
++ *     design discussion), Tier I follows the same "bottom rung is free"
++ *     rule every other tiered family already does.
+  *   - Consumables: the tier-1 recipe of each of the 3 tiered "food type"
+  *     lines identified from the actual data (Herbal Tonic / Trail
+  *     Rations / Forager's Bundle), plus Pet Treat and Beckoning Charm,
+  *     neither of which has any tiered siblings at all.
+- * 16 always-known + 56 gated (RECIPE_SCROLLS.length) == all 72 recipes
+- * in crafting-recipes.json.
++ * 25 always-known + 119 gated (RECIPE_SCROLLS.length) == all 144
++ * recipes in crafting-recipes.json (25 + 119 = 144, cross-checked by
++ * script before writing this up) -- Heirloom's own 30 are all gated
++ * separately (patch 0359), none of them ever free -- see that patch's
++ * own writeup for why Gear-shaped tiering doesn't automatically mean a
++ * free tier for every family that has one.
+  */
+ export const ALWAYS_KNOWN_RECIPE_IDS: string[] = [
+   'craft_elemental_gem_fire_common',
+@@ -64,6 +72,23 @@ export const ALWAYS_KNOWN_RECIPE_IDS: string[] = [
+   'craft_foragers_bundle',
+   'craft_pet_treat',
+   'craft_beckoning_charm',
++  // Patch 0362 -- Guildmade's own tier I (level 1) is now the Gear
++  // category's lowest tier, same "the bottom rung of any tiered family
++  // is free" rule every other category (Gems/Sigils/Charms/
++  // Consumables) already followed; Gear was the one exception before
++  // this patch specifically because it had no tier ladder to anchor a
++  // "lowest tier" on. See RECIPE_SCROLLS' own comment above for tiers
++  // II-VI (all still gated) and CraftingStation's own tiered-crafting
++  // writeup in guild-idler-status.md for the full redesign.
++  'craft_guildmade_blade_t1',
++  'craft_guildmade_band_t1',
++  'craft_guildmade_helm_t1',
++  'craft_guildmade_plate_t1',
++  'craft_guildmade_boots_t1',
++  'craft_guildmade_cloak_t1',
++  'craft_guildmade_gauntlets_t1',
++  'craft_guildmade_buckler_t1',
++  'craft_guildmade_talisman_t1',
+ ];
+ 
+ /** Flat gold value on sale, by rarity -- same "curios have no other use
+-- 
+2.43.0
+

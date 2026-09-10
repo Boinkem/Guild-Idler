@@ -550,5 +550,167 @@
     "recipeId": "craft_masterwork_mantle",
     "reqLevel": 50,
     "rarity": "legendary"
+  },
+  {
+    "id": "scroll_craft_guildmade_blade_t3",
+    "recipeId": "craft_guildmade_blade_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_blade_t4",
+    "recipeId": "craft_guildmade_blade_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_blade_t5",
+    "recipeId": "craft_guildmade_blade_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_band_t3",
+    "recipeId": "craft_guildmade_band_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_band_t4",
+    "recipeId": "craft_guildmade_band_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_band_t5",
+    "recipeId": "craft_guildmade_band_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_helm_t3",
+    "recipeId": "craft_guildmade_helm_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_helm_t4",
+    "recipeId": "craft_guildmade_helm_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_helm_t5",
+    "recipeId": "craft_guildmade_helm_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_plate_t3",
+    "recipeId": "craft_guildmade_plate_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_plate_t4",
+    "recipeId": "craft_guildmade_plate_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_plate_t5",
+    "recipeId": "craft_guildmade_plate_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_boots_t3",
+    "recipeId": "craft_guildmade_boots_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_boots_t4",
+    "recipeId": "craft_guildmade_boots_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_boots_t5",
+    "recipeId": "craft_guildmade_boots_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_cloak_t3",
+    "recipeId": "craft_guildmade_cloak_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_cloak_t4",
+    "recipeId": "craft_guildmade_cloak_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_cloak_t5",
+    "recipeId": "craft_guildmade_cloak_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_gauntlets_t3",
+    "recipeId": "craft_guildmade_gauntlets_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_gauntlets_t4",
+    "recipeId": "craft_guildmade_gauntlets_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_gauntlets_t5",
+    "recipeId": "craft_guildmade_gauntlets_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_buckler_t3",
+    "recipeId": "craft_guildmade_buckler_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_buckler_t4",
+    "recipeId": "craft_guildmade_buckler_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_buckler_t5",
+    "recipeId": "craft_guildmade_buckler_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_talisman_t3",
+    "recipeId": "craft_guildmade_talisman_t3",
+    "reqLevel": 20,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_guildmade_talisman_t4",
+    "recipeId": "craft_guildmade_talisman_t4",
+    "reqLevel": 30,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_guildmade_talisman_t5",
+    "recipeId": "craft_guildmade_talisman_t5",
+    "reqLevel": 40,
+    "rarity": "epic"
   }
 ]

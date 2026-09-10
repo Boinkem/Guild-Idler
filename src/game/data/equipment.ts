@@ -404,31 +404,52 @@ export const ITEM_SETS: ItemSet[] = [
     // set bonus below is a supplement on top of that choice, not the
     // main draw, same balance philosophy the material-tier sets
     // (Leather/Steel/Cutpurse's) already use at nearby levels.
-    pieces: ['guildmade_blade', 'guildmade_band', 'guildmade_helm', 'guildmade_plate', 'guildmade_boots', 'guildmade_cloak'],
+    //
+    // Patch 0362 -- tiered crafting redesign, direct design discussion.
+    // Merged with the former standalone `masterwork` set (below this
+    // comment used to sit its own separate ItemSet entry; deleted, its
+    // 6 pieces folded in here instead) into one continuous 6-tier line
+    // spanning level 1 to 50, direct decision: "merge into one set --
+    // Guildmade becomes the umbrella name for all 6 tiers, Masterwork
+    // survives only as top-tier flavor text." The former Masterwork
+    // items keep their own `name` untouched (still "Masterwork
+    // Warblade" etc, not renamed to "Guildmade Blade VI") -- only
+    // `setId` changed, so flavor naming and mechanical set membership
+    // are independent here on purpose. `pieces` grew from 6 to 54 (9
+    // slots x 6 tiers, patch 0359's 3 gap-filler slots -- Shield/
+    // Gloves/Amulet -- included per direct decision) -- counting still
+    // works unmodified (EquipmentPanel.tsx/LorePanel.tsx/RaidsPanel.tsx
+    // all just do `pieces.filter(p => equipped/discovered.includes(p))`)
+    // since a hero can only ever wear ONE item per physical slot
+    // regardless of how many tier options exist for it -- whichever
+    // tier of Blade someone has equipped still only ever counts as "1
+    // of 9," so widening the pool of valid ids per slot doesn't risk
+    // double-counting. Direct decision: "you get the bonus regardless
+    // of if you're wearing a level 1 item, mixed in with level 20s" --
+    // the bonus thresholds below are tier-blind by construction, same
+    // as the counting always was.
+    pieces: [
+      'guildmade_blade', 'guildmade_blade_t1', 'guildmade_blade_t3', 'guildmade_blade_t4', 'guildmade_blade_t5', 'masterwork_warblade',
+      'guildmade_band', 'guildmade_band_t1', 'guildmade_band_t3', 'guildmade_band_t4', 'guildmade_band_t5', 'masterwork_band',
+      'guildmade_helm', 'guildmade_helm_t1', 'guildmade_helm_t3', 'guildmade_helm_t4', 'guildmade_helm_t5', 'masterwork_greathelm',
+      'guildmade_plate', 'guildmade_plate_t1', 'guildmade_plate_t3', 'guildmade_plate_t4', 'guildmade_plate_t5', 'masterwork_plate',
+      'guildmade_boots', 'guildmade_boots_t1', 'guildmade_boots_t3', 'guildmade_boots_t4', 'guildmade_boots_t5', 'masterwork_sabatons',
+      'guildmade_cloak', 'guildmade_cloak_t1', 'guildmade_cloak_t3', 'guildmade_cloak_t4', 'guildmade_cloak_t5', 'masterwork_mantle',
+      'guildmade_gauntlets', 'guildmade_gauntlets_t1', 'guildmade_gauntlets_t3', 'guildmade_gauntlets_t4', 'guildmade_gauntlets_t5', 'masterwork_gauntlets',
+      'guildmade_buckler', 'guildmade_buckler_t1', 'guildmade_buckler_t3', 'guildmade_buckler_t4', 'guildmade_buckler_t5', 'masterwork_bulwark',
+      'guildmade_talisman', 'guildmade_talisman_t1', 'guildmade_talisman_t3', 'guildmade_talisman_t4', 'guildmade_talisman_t5', 'masterwork_sigil',
+    ],
     bonuses: [
       { count: 2, mods: { success: 6, injuryResist: 6 }, label: 'Guild Standard' },
       { count: 4, mods: { success: 12, injuryResist: 12, gold: 8 }, label: 'Built to Spec' },
       { count: 6, mods: { success: 18, injuryResist: 18, gold: 14, speed: 10 }, label: 'Commissioned Complete' },
-    ],
-  },
-  {
-    id: 'masterwork',
-    name: 'Masterwork Set',
-    // The endgame counterpart to Guildmade above -- reqLevel 50,
-    // deliberately sitting between Empyrean (45, a chain-reward
-    // capstone) and Requiem (55, the final raid) as a genuine crafting-
-    // only chase rather than a byproduct of finishing a specific chain
-    // or raid. Fully new items, no existing base to build on. Durability/
-    // value calibrated against empyrean_*/requiem_* items at the same
-    // slots; modsToPick=3 at modValue=14 (vs. Guildmade's 2 picks at
-    // value 6) is what actually distinguishes an endgame craft from an
-    // early one -- more player-chosen precision, not just bigger flat
-    // numbers.
-    pieces: ['masterwork_warblade', 'masterwork_greathelm', 'masterwork_plate', 'masterwork_gauntlets', 'masterwork_sabatons', 'masterwork_sigil'],
-    bonuses: [
-      { count: 2, mods: { success: 16, injuryResist: 18 }, label: 'Guild-Forged' },
-      { count: 4, mods: { success: 32, gold: 52, loot: 30, injuryResist: 28 }, label: 'Nothing Left to Improve' },
-      { count: 6, mods: { success: 44, gold: 65, loot: 38, injuryResist: 36, xp: 50, speed: 20 }, label: "The Guild's Own Masterwork" },
+      // New patch 0362 -- direct decision: "add just one more tier at 9
+      // on top of the existing 2/4/6, skip 7/8." A hero now has 9
+      // possible slots to fill from this one line (up from 6 before the
+      // merge), so 9/9 is the new genuine "every slot, this line, full
+      // commitment" ceiling -- 6 stays exactly as it was rather than
+      // being redefined, this is purely an additional rung above it.
+      { count: 9, mods: { success: 26, injuryResist: 26, gold: 20, speed: 16, xp: 14 }, label: "The Guild's Own" },
     ],
   },
 ];
