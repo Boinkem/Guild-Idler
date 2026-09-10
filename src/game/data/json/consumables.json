@@ -491,11 +491,9 @@
     "cost": 40,
     "rarity": "common",
     "glyph": "♦",
+    "icon": "food/Food_12.png",
     "craftable": true,
-    "effect": {
-      "lootWeightStat": "luck",
-      "lootWeightMultiplier": 1.15
-    }
+    "effect": {}
   },
   {
     "id": "lucky_charm_xp",

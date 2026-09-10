@@ -5,7 +5,15 @@
     "weight": 10,
     "kind": "nothing",
     "flavorText": "Grimsby shrugs. \"Card's blank. Wasn't me who printed it.\"",
-    "glyph": "📄"
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "glyph": "📄",
+    "icon": "misc/Misc_44.png"
   },
   {
     "id": "bust_nothing_proud",
@@ -13,7 +21,15 @@
     "weight": 10,
     "kind": "nothing",
     "flavorText": "Absolutely nothing happens. Grimsby looks almost proud of that.",
-    "glyph": "🎭"
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "glyph": "🎭",
+    "icon": "misc/Misc_44.png"
   },
   {
     "id": "bust_joke_rock",
@@ -255,8 +271,15 @@
     "tier": "jackpot",
     "weight": 2,
     "kind": "egg",
+    "flavorText": "He won't look you in the eye handing this one over. It's warm. It's definitely real.",
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
     "eggRarity": "rare",
-    "flavorText": "He won't look you in the eye handing this one over. It's warm. It's definitely real."
+    "icon": "misc/Misc_08.png"
   },
   {
     "id": "jackpot_material_haul",

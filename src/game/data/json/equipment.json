@@ -1122,7 +1122,12 @@
       "strength": 17,
       "endurance": 12
     },
-    "setId": "wyrmkeep"
+    "setId": "wyrmkeep",
+    "icon": "weapons/Weapon_10_hue4.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "keepers_warded_charm",
@@ -1138,7 +1143,12 @@
       "luck": 7,
       "wisdom": 4
     },
-    "setId": "wyrmkeep"
+    "setId": "wyrmkeep",
+    "icon": "accessories/Accessory_19.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "frostwalker_treads",
@@ -1151,7 +1161,12 @@
     "stats": {
       "endurance": 31
     },
-    "setId": "wyrmkeep"
+    "setId": "wyrmkeep",
+    "icon": "armor/Armor_48.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "frozen_maw_shield",
@@ -1168,7 +1183,12 @@
       "strength": 15,
       "endurance": 51
     },
-    "setId": "wyrmkeep"
+    "setId": "wyrmkeep",
+    "icon": "shields/Shield_26_hue5.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "cinder_ash_grip",
@@ -1182,7 +1202,12 @@
       "strength": 24,
       "luck": 18
     },
-    "setId": "what_got_out"
+    "setId": "what_got_out",
+    "icon": "armor/Armor_77.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "loyalists_brand",
@@ -1198,7 +1223,12 @@
       "luck": 7,
       "wisdom": 6
     },
-    "setId": "what_got_out"
+    "setId": "what_got_out",
+    "icon": "accessories/Accessory_08_hue2.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "cornered_fang",
@@ -1212,7 +1242,12 @@
       "strength": 50,
       "luck": 38
     },
-    "setId": "what_got_out"
+    "setId": "what_got_out",
+    "icon": "weapons/Weapon_05_hue5.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "desperate_ends_crown",
@@ -1227,7 +1262,12 @@
       "endurance": 46,
       "wisdom": 27
     },
-    "setId": "what_got_out"
+    "setId": "what_got_out",
+    "icon": "armor/Armor_110.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "guildmade_blade",
@@ -2042,11 +2082,12 @@
     "reqLevel": 12,
     "maxDurability": 100,
     "value": 550,
-    "mods": {},
-    "icon": "armor/Armor_11.png",
+    "setId": "guildmade",
+    "icon": "armor/Armor_32.png",
     "raidExclusive": false,
     "craftable": true,
-    "setId": "guildmade"
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "guildmade_plate",
@@ -2056,11 +2097,12 @@
     "reqLevel": 12,
     "maxDurability": 100,
     "value": 550,
-    "mods": {},
-    "icon": "armor/Armor_08.png",
+    "setId": "guildmade",
+    "icon": "armor/Armor_10.png",
     "raidExclusive": false,
     "craftable": true,
-    "setId": "guildmade"
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "guildmade_boots",
@@ -2070,11 +2112,12 @@
     "reqLevel": 12,
     "maxDurability": 100,
     "value": 550,
-    "mods": {},
-    "icon": "armor/Armor_75.png",
+    "setId": "guildmade",
+    "icon": "armor/Armor_52.png",
     "raidExclusive": false,
     "craftable": true,
-    "setId": "guildmade"
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "guildmade_cloak",
@@ -2084,11 +2127,12 @@
     "reqLevel": 12,
     "maxDurability": 100,
     "value": 550,
-    "mods": {},
-    "icon": "armor/Armor_63.png",
+    "setId": "guildmade",
+    "icon": "armor/Armor_142.png",
     "raidExclusive": false,
     "craftable": true,
-    "setId": "guildmade"
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "masterwork_warblade",
@@ -2098,11 +2142,12 @@
     "reqLevel": 50,
     "maxDurability": 330,
     "value": 24000,
-    "mods": {},
-    "icon": "weapons/Weapon_48.png",
+    "setId": "masterwork",
+    "icon": "weapons/Weapon_08_hue5.png",
     "raidExclusive": false,
     "craftable": true,
-    "setId": "masterwork"
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "masterwork_greathelm",
@@ -2112,11 +2157,12 @@
     "reqLevel": 50,
     "maxDurability": 320,
     "value": 22500,
-    "mods": {},
+    "setId": "masterwork",
     "icon": "armor/Armor_44.png",
     "raidExclusive": false,
     "craftable": true,
-    "setId": "masterwork"
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "masterwork_plate",
