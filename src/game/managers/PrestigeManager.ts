@@ -4,6 +4,7 @@ import {
 } from '../data/progression';
 import { GameState, Hero, HeroRenownPerkDef } from '../types';
 import { HeroManager } from './HeroManager';
+import { InventoryManager } from './InventoryManager';
 
 /**
  * Prestige/Retirement Rework (patch 0317). Classic Retire -- level-cap
@@ -43,6 +44,15 @@ export const PrestigeManager = {
     for (const item of Object.values(hero.equipment)) {
       if (item) state.stash.push(item);
     }
+    // Patch 0367 companion fix: equipping a consumable now actually moves
+    // the unit out of state.inventory (engine.equipConsumable's own
+    // comment) instead of leaving it lazily deducted, so a retiring hero
+    // holding equipped consumables needs the same refund gear already got
+    // just above -- without this, the reserved units would just silently
+    // vanish, the exact "asset destroyed for nothing" complaint patch
+    // 0317's own retirement rework was written to get away from in the
+    // first place, just relocated to a spot this patch newly introduced.
+    for (const defId of hero.equippedConsumables ?? []) InventoryManager.add(state, defId);
     state.heroes = state.heroes.filter((h) => h.id !== hero.id);
     return null;
   },

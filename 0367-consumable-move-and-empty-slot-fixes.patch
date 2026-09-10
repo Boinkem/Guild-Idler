@@ -1,0 +1,397 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0d2b5d1..aa473b0 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28131,6 +28131,33 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Empty consumable slots get art, empty gear slots lose the emoji, and equipping a consumable now actually moves it (patch 0367)
++
++```discord-update
++Dev Update | Consumables & Empty Slots
++- Empty consumable slots now show the same card art as everything else, instead of a plain dark box
++- Removed the leftover emoji glyph from empty gear slots -- read as a stray placeholder on the new art
++- Equipping a consumable on a hero now actually moves it out of the stash immediately, instead of quietly leaving it there until used
++- Unequipping (and retiring a hero) gives it back
++```
++
++Three separate direct reports, bundled together since two are small follow-ups to the last three patches and the third touches the same UI.
++
++**Empty consumable slots.** The "+ / consumable / Empty" picker button (`ConsumableSlotCard`'s empty branch, EquipmentPanel.tsx) never actually got the `.rarity-banner` treatment patches 0364-0366 gave every other card -- it was still a plain dark box the whole time. Now uses `EMPTY_SLOT_BANNER`, same art the empty GEAR slot already uses (there's no separate "consumable-flavored" empty art to speak of, and using the same one is consistent with the direct ask elsewhere in this series to keep every card type reading as the same family). Its existing `consumable-empty` brass border/opacity styling (the "click me" affordance, distinct from a plain dimmed empty gear slot) is untouched -- purely additive.
++
++**Empty gear slots, emoji removed.** Direct report: the generic weapon/helmet/etc. glyph floating on top of `EMPTY_SLOT_BANNER`'s own painted art read as a stray placeholder, not an intentional icon. `hideFallback` (IconBox, icons.tsx -- originally added patch 0343 for this exact same complaint against the OLD silver-outline Design A art) is back on `SlotCard`'s empty branch; patch 0365 had dropped it on the assumption a fully-painted background would make the glyph read as intentional instead. It didn't, per this report, so it's reverted.
++
++**Consumables actually move on equip now.** Direct report: equipping a consumable left the exact unit still sitting in the stash count until a quest actually consumed it (`QuestManager.start`'s own deduction, unchanged since the feature first shipped) -- nothing could actually double-spend that unit (`equippedElsewhereCount` in EquipmentPanel.tsx already blocked a second hero from equipping the same reserved item), but it plainly looked unmoved, unlike gear's own stash-to-equipped Equip button. `engine.equipConsumable` now calls `InventoryManager.remove` immediately (with a "none left" server-side guard, same last-resort-backstop shape the existing isLoadoutEffect check already has), and `unequipConsumable` calls `InventoryManager.add` to give it back -- the same real "move," not a copy, gear already has.
++
++This ripples through three other places that assumed the old lazy-deduction model:
++- `QuestManager.start` no longer deducts a second time at send -- the reserved unit was already spent at equip time. Its old "reconcile against remaining stock, drop what's no longer available" logic (there specifically to handle a slot still pointing at an item a PRIOR send already used up) is replaced with a much lighter "attempt to reserve a fresh unit of the same type from what's left" step run right after a quest consumes the old one -- reproduces the same practical result (a loadout stays "sticky" across quests as long as supply lasts, clears once it runs out) one send later instead of one send earlier, without needing the old stock-reconciliation math at all.
++- `fillEmptyConsumableSlots` (the "Equip Best"/auto-equip-on-send bulk fill) dropped its own cross-hero `reservedElsewhere` bookkeeping -- every other hero's already-equipped units are already excluded from `InventoryManager.count` by construction now, so it just deducts as each slot fills instead.
++- `PrestigeManager.earlyRetire` already returned equipped GEAR to the stash on retirement but never touched equipped consumables (never needed to, under the old model) -- now refunds those too, so retiring a hero holding a potion doesn't just silently delete it. This was a real gap this patch would otherwise have introduced, caught while auditing every `equippedConsumables` call site rather than after the fact.
++
++**Save migration.** SAVE_VERSION 65 -> 66. An existing save can already have real entries in a hero's `equippedConsumables` from before this patch, where the matching unit was never actually deducted (that only ever happened later, whenever a quest consumed it). Without a migration, every already-equipped consumable on every existing save would silently double as a free extra unit -- still sitting in `inventory`, AND already equipped -- until the next unequip added a second refunded copy on top of the one that was never really removed. The migration walks every hero's `equippedConsumables` once and deducts a matching unit from `inventory`, so an existing save ends up exactly where it would be if every currently-equipped consumable had just been equipped under the new model.
++
++**Verified.** Wrote two standalone sanity scripts (not checked in) exercising the full loop directly against the real engine/managers, no mocks: equip (deducts), equip-elsewhere (still deducts correctly, second hero), equip-when-out-of-stock (correctly refused, slot stays empty), unequip (refunds), quest-start consumption with stock remaining (spends the reserved unit, sticky-refills a fresh one), quest-start consumption with nothing left (slot correctly clears instead), retiring a hero mid-hold (refunds, hero actually leaves the roster), and the SAVE_VERSION 65->66 migration itself (2 pre-equipped units correctly deducted from a stock of 5, landing on exactly 3). Every case printed the expected number. `npx tsc --noEmit` and `npx vite build` both pass clean on top of that.
++
+ ### Curios join the rarity-banner revert -- the last piece of Design A is gone (patch 0366)
+ 
+ ```discord-update
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 5cd5fef..117717d 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1948,9 +1948,18 @@ export class GameEngine {
+   }
+ 
+   /** Adds a consumable to a hero's equipped slots -- persists until removed
+-   *  or consumed by a quest, capped at ModifierManager.consumableSlots. Does
+-   *  not touch state.inventory; that deduction still happens at quest-start
+-   *  time inside QuestManager.start, same as it always did.
++   *  or consumed by a quest, capped at ModifierManager.consumableSlots.
++   *
++   *  Patch 0367, direct report: used to leave state.inventory completely
++   *  untouched here, only actually deducting the item at quest-start time
++   *  (QuestManager.start) -- so a slotted-but-not-yet-sent consumable kept
++   *  showing as ordinary stash inventory the whole time. Nothing could
++   *  actually double-spend it (equippedElsewhereCount in
++   *  EquipmentPanel.tsx already blocked a second hero from equipping the
++   *  same not-yet-consumed unit), but it plainly LOOKED unmoved, which read
++   *  as broken. Now moves the unit out of state.inventory immediately, the
++   *  same "stash to equipped, right now" shape gear's own Equip already
++   *  has, rather than leaving it in a reserved-but-still-visible limbo.
+    *
+    *  Blocked while the hero is away questing, same "can't touch a hero's
+    *  loadout mid-quest" rule EquipmentManager.canEquip already enforces for
+@@ -1976,15 +1985,26 @@ export class GameEngine {
+     const current = hero.equippedConsumables ?? [];
+     const maxSlots = ModifierManager.consumableSlots(this.state);
+     if (current.length >= maxSlots) return this.say('No free consumable slots.');
++    // Patch 0367: this is the actual "move," server-side backstop same as
++    // the isLoadoutEffect check above -- the UI's own available list
++    // (EquipmentPanel.tsx) already excludes anything with zero left after
++    // equippedElsewhereCount, so this should only ever fail on a genuine
++    // race (another tab, a stale render), not in normal single-session play.
++    if (!InventoryManager.remove(this.state, defId)) return this.say('None of that left in the stash.');
+     hero.equippedConsumables = [...current, defId];
+     playSound('equip');
+     void this.saveNow();
+   }
+ 
+-  /** Removes one instance of a consumable from a hero's equipped slots.
+-   *  Same deployed-hero guard as equipConsumable above -- matches
+-   *  EquipmentManager.unequip's own "can't touch gear on a questing hero"
+-   *  rule for the gear side. */
++  /** Removes one instance of a consumable from a hero's equipped slots,
++   *  returning it to the stash. Same deployed-hero guard as equipConsumable
++   *  above -- matches EquipmentManager.unequip's own "can't touch gear on a
++   *  questing hero" rule for the gear side.
++   *
++   *  Patch 0367, companion to equipConsumable's own move-not-copy fix:
++   *  since equipping now actually removes the unit from state.inventory,
++   *  unequipping has to actually give it back, the same round-trip gear's
++   *  own Equip/Remove pair already does. */
+   unequipConsumable(heroId: string, defId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+@@ -1993,6 +2013,7 @@ export class GameEngine {
+     const index = current.indexOf(defId);
+     if (index === -1) return;
+     hero.equippedConsumables = [...current.slice(0, index), ...current.slice(index + 1)];
++    InventoryManager.add(this.state, defId);
+     playSound('unequip');
+     void this.saveNow();
+   }
+@@ -2006,12 +2027,16 @@ export class GameEngine {
+    * something already slotted, unlike equipBestGear's tie-breaking --
+    * there's no obvious "better" ordering between two already-chosen
+    * consumables to justify displacing a manual pick the way a higher Gear
+-   * Score item justifies displacing worse gear. Availability is computed
+-   * the same "owned minus reserved on this hero or any other" way the
+-   * manual per-slot picker already does (EquipmentPanel's own
+-   * `equippedElsewhereCount`), including reservations made earlier in
+-   * this same batch, so it can never try to equip more of one consumable
+-   * than the guild actually owns. Returns how many slots were filled.
++   * Score item justifies displacing worse gear. Patch 0367: availability
++   * is just InventoryManager.count directly now -- equipping actually
++   * moves a unit out of state.inventory immediately (equipConsumable's own
++   * comment), so every other hero's already-equipped units are already
++   * excluded by construction; fillEmptyConsumableSlots' own loop deducts
++   * as it goes so reservations made earlier in this same batch are
++   * accounted for too, same end guarantee (never equips more of one
++   * consumable than the guild actually owns) the old cross-hero
++   * `equippedElsewhereCount`-style math gave before this patch. Returns
++   * how many slots were filled.
+    */
+   equipBestConsumables(heroId: string): number {
+     const hero = this.hero(heroId);
+@@ -2049,15 +2074,20 @@ export class GameEngine {
+     const working = [...(hero.equippedConsumables ?? [])];
+     let filled = 0;
+     while (working.length < maxSlots) {
+-      const reservedElsewhere = (defId: string) => this.state.heroes.reduce((sum, other) => {
+-        const list = other.id === hero.id ? working : (other.equippedConsumables ?? []);
+-        return sum + list.filter((id) => id === defId).length;
+-      }, 0);
+-      const available = InventoryManager.owned(this.state)
+-        .filter(({ def }) => reservedElsewhere(def.id) < InventoryManager.count(this.state, def.id))
+-        .sort((a, b) => b.def.cost - a.def.cost);
++      // Patch 0367: no more reservedElsewhere cross-hero bookkeeping needed
++      // here -- every OTHER hero's already-equipped units are already
++      // excluded from InventoryManager.count by construction now (equipping
++      // moves the unit out of state.inventory immediately, see
++      // equipConsumable's own comment). Deducting a unit as each slot in
++      // THIS loop fills is what keeps a second/third slot in the same call
++      // from grabbing the same last unit twice -- InventoryManager.owned
++      // is recomputed fresh each iteration, so it naturally reflects
++      // whatever this loop has already spent so far.
++      const available = InventoryManager.owned(this.state).sort((a, b) => b.def.cost - a.def.cost);
+       if (available.length === 0) break;
+-      working.push(available[0].def.id);
++      const defId = available[0].def.id;
++      if (!InventoryManager.remove(this.state, defId)) break;
++      working.push(defId);
+       filled++;
+     }
+     if (filled > 0) hero.equippedConsumables = working;
+diff --git a/src/game/managers/PrestigeManager.ts b/src/game/managers/PrestigeManager.ts
+index 89fcaec..2fe71ca 100644
+--- a/src/game/managers/PrestigeManager.ts
++++ b/src/game/managers/PrestigeManager.ts
+@@ -4,6 +4,7 @@ import {
+ } from '../data/progression';
+ import { GameState, Hero, HeroRenownPerkDef } from '../types';
+ import { HeroManager } from './HeroManager';
++import { InventoryManager } from './InventoryManager';
+ 
+ /**
+  * Prestige/Retirement Rework (patch 0317). Classic Retire -- level-cap
+@@ -43,6 +44,15 @@ export const PrestigeManager = {
+     for (const item of Object.values(hero.equipment)) {
+       if (item) state.stash.push(item);
+     }
++    // Patch 0367 companion fix: equipping a consumable now actually moves
++    // the unit out of state.inventory (engine.equipConsumable's own
++    // comment) instead of leaving it lazily deducted, so a retiring hero
++    // holding equipped consumables needs the same refund gear already got
++    // just above -- without this, the reserved units would just silently
++    // vanish, the exact "asset destroyed for nothing" complaint patch
++    // 0317's own retirement rework was written to get away from in the
++    // first place, just relocated to a spot this patch newly introduced.
++    for (const defId of hero.equippedConsumables ?? []) InventoryManager.add(state, defId);
+     state.heroes = state.heroes.filter((h) => h.id !== hero.id);
+     return null;
+   },
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index b6d6287..a79c373 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -931,29 +931,23 @@ export const QuestManager = {
+     if (hero.status === 'questing') return { error: `${hero.name} is already out.` };
+     if (hero.status === 'fallen') return { error: `${hero.name} is Fallen and needs to be revived first.` };
+ 
+-    // A hero's equipped consumable slots can end up pointing at an item the
+-    // guild no longer actually has -- the previous version of this hard-
+-    // failed the whole send with "Not enough consumables for that loadout"
+-    // whenever that happened, which is exactly what a slot still assigned
+-    // to an item consumed on a PRIOR send does (equipping never touches
+-    // state.inventory; the deduction below is what actually spends the
+-    // item, and nothing ever cleared the slot afterward). That turned "used
+-    // your last potion last time" into "this hero can never be sent again
+-    // until you notice and manually unequip," and made sendAllIdle silently
+-    // skip every affected hero, reporting "no idle heroes have an open
+-    // contract" even though they plainly did. Fixed by reconciling instead
+-    // of failing: drop whatever's no longer actually in stock and proceed
+-    // with whatever legitimately still is, keeping the hero's own equipped
+-    // slots in sync so the next send doesn't hit the same wall.
+-    const remaining: Record<string, number> = {};
+-    consumables = consumables.filter((id) => {
+-      remaining[id] = remaining[id] ?? InventoryManager.count(state, id);
+-      if (remaining[id] > 0) {
+-        remaining[id] -= 1;
+-        return true;
+-      }
+-      return false;
+-    });
++    // Patch 0367: equipping a consumable now moves it out of `inventory`
++    // immediately (engine.equipConsumable), rather than leaving it lazily
++    // deducted here at send time -- so by construction, anything still in
++    // hero.equippedConsumables is already a reserved, real unit; there's
++    // no more "does the guild actually still have this in stock" question
++    // left to answer here. The one thing that CAN still go stale is
++    // content itself changing out from under an old save (a consumable
++    // def removed or renamed since it was equipped) -- resolveDef
++    // returning undefined for an id is the only case this still guards
++    // against, same "never crash on stale saved state" reasoning as
++    // everywhere else content lookups get validated. (Before this patch,
++    // this block also reconciled against remaining stock -- see patch
++    // 0367's own guild-idler-status.md writeup and SaveManager's version-
++    // 65 migration for the full "why," including how an already-equipped
++    // consumable on a pre-patch save gets its stock deducted exactly
++    // once, retroactively, instead of at this now-removed check.)
++    consumables = consumables.filter((id) => InventoryManager.resolveDef(state, id) !== undefined);
+     if (hero.equippedConsumables) hero.equippedConsumables = [...consumables];
+ 
+     const loadout = InventoryManager.loadoutEffects(state, consumables);
+@@ -990,7 +984,25 @@ export const QuestManager = {
+       healthDamageReduction: loadout.healthDamageReduction,
+     };
+ 
+-    for (const id of consumables) InventoryManager.remove(state, id);
++    // Patch 0367: the reserved units this quest is about to use were
++    // already deducted from `inventory` back when they were equipped
++    // (engine.equipConsumable) -- consuming them here is just letting go
++    // of that reservation for good, not a second deduction. The old
++    // lazy-deduction model gave a nice side effect for free though: a
++    // hero's loadout stayed "sticky" across quests as long as the guild
++    // kept having more of the same consumable in stock, since nothing
++    // ever cleared hero.equippedConsumables except the reconciliation
++    // this patch removed above. Reproduced deliberately here instead of
++    // dropped: attempt to reserve a FRESH unit of each just-used
++    // consumable from whatever stock remains, same best-effort "if it's
++    // still available, keep the loadout" convenience -- succeeds (and
++    // the slot stays filled for the hero's next quest) exactly when the
++    // guild still has another one; fails and clears that slot back to
++    // empty exactly when it doesn't, matching the old reconciliation's
++    // own end result one quest later rather than one quest earlier.
++    if (hero.equippedConsumables) {
++      hero.equippedConsumables = consumables.filter((id) => InventoryManager.remove(state, id));
++    }
+     hero.status = 'questing';
+     hero.activeQuestId = quest.id;
+     state.activeQuests.push(quest);
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 5466aad..a76a32e 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -1412,6 +1412,52 @@ const MIGRATIONS: Record<number, Migration> = {
+     unlockedRecipes: (save.unlockedRecipes as string[] | undefined)
+       ?? [...ALWAYS_KNOWN_RECIPE_IDS, ...RECIPE_SCROLLS.map((s) => s.recipeId)],
+   }),
++  /**
++   * Patch 0367, direct request: equipping a consumable on a hero now
++   * actually moves it out of the stash immediately (engine.
++   * equipConsumable/unequipConsumable), instead of the old lazy model
++   * where the item stayed counted in `state.inventory` right up until a
++   * quest actually consumed it (QuestManager.start). Direct report: that
++   * lazy model let a slotted consumable keep showing as available stash
++   * inventory, so a *different* hero's own picker (or the Blacksmith's
++   * sell/scrap flows) could still see and act on the exact same
++   * not-yet-spent unit -- `equippedElsewhereCount` (EquipmentPanel.tsx)
++   * blocked a SECOND hero from actually equipping it, but the item still
++   * visually sat in the stash the whole time, which read as broken even
++   * though nothing could double-spend it.
++   *
++   * An existing save's heroes can already have real entries in
++   * `equippedConsumables` from before this patch, where the matching
++   * unit was NEVER actually deducted (that only happened later, at
++   * whatever quest eventually consumed it) -- under the new model, an
++   * equipped consumable is supposed to already be missing from
++   * `inventory`. Without this migration, every already-equipped
++   * consumable on every existing save would silently double as a free
++   * extra unit (still sitting in inventory, AND already equipped)
++   * until the next time it got unequipped and the refund added a
++   * second copy on top of the one that was never actually removed.
++   * Walks every hero's `equippedConsumables` and deducts one unit of
++   * each from `inventory` here, once, so an existing save lines up with
++   * the new model exactly as if every currently-equipped consumable had
++   * just been equipped under it. Floors at 0 (never goes negative) for
++   * the unlikely case of a save whose `equippedConsumables` already
++   * drifted ahead of its own `inventory` count somehow -- matches
++   * InventoryManager.remove's own "never below zero, delete the key at
++   * zero" behavior rather than reimplementing it differently here.
++   */
++  65: (save) => {
++    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
++    const inventory = { ...((save.inventory as Record<string, number> | undefined) ?? {}) };
++    for (const h of heroes) {
++      const equipped = (h.equippedConsumables as string[] | undefined) ?? [];
++      for (const defId of equipped) {
++        const have = inventory[defId] ?? 0;
++        if (have <= 1) delete inventory[defId];
++        else inventory[defId] = have - 1;
++      }
++    }
++    return { ...save, version: 66, inventory };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 684df78..31d1cbc 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 65;
++export const SAVE_VERSION = 66;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+index f131292..5a078e2 100644
+--- a/src/ui/icons.tsx
++++ b/src/ui/icons.tsx
+@@ -44,21 +44,18 @@ function IconBox({
+         // and needs SOME backdrop to stay legible against whatever art is
+         // behind it (a bright background, a busy crafting scene, etc.).
+         // `hideFallback` (patch 0343, direct request) skips this entirely
+-        // for an EMPTY gear slot specifically -- that slot's own outline
+-        // art (EMPTY_SLOT_FRAME, patch 0342) is already a complete,
+-        // closed shape on its own, and a generic weapon/helmet/etc. glyph
+-        // floating in the middle on top of it read as a stray placeholder
+-        // rather than a real icon. Every OTHER IconBox caller (an actual
+-        // owned item with no art yet, a consumable, a curio...) still
+-        // wants the glyph -- there's a real item there, it just needs
+-        // something to stand in for its missing art.
+-        // Patch 0365: no remaining callers pass hideFallback -- the empty
+-        // gear slot moved to EMPTY_SLOT_BANNER's fully-painted card
+-        // background (same .rarity-banner treatment every other reverted
+-        // card uses), where the fallback glyph reads as intentional again
+-        // rather than a stray placeholder. Prop left in place (harmless,
+-        // optional, defaults off) rather than removed, in case an
+-        // outline-style empty state is wanted again later.
++        // for an EMPTY gear slot specifically -- a generic weapon/
++        // helmet/etc. glyph floating on top of that slot's own dedicated
++        // empty-state art reads as a stray placeholder rather than a real
++        // icon. Every OTHER IconBox caller (an actual owned item with no
++        // art yet, a consumable, a curio...) still wants the glyph --
++        // there's a real item there, it just needs something to stand in
++        // for its missing art. Patch 0365 briefly dropped the empty
++        // gear slot's own hideFallback call on the assumption that
++        // switching to a fully-painted background (EMPTY_SLOT_BANNER)
++        // would make the glyph read as intentional -- direct report
++        // confirmed it still read as a stray placeholder either way, so
++        // patch 0367 restored the call.
+         : (!hideFallback && <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>)}
+       {/* Broken-gear indicator (patch 0295), direct request: a red ring
+           plus a small "!" badge, same corner-badge shape used elsewhere
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 7c858d1..8cdcf3a 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -624,6 +624,7 @@ function ConsumableSlotCard({
+   return (
+     <>
+       <div className="item-card empty clickable consumable-empty">
++        <div className="rarity-banner" style={{ backgroundImage: `url(${EMPTY_SLOT_BANNER})` }} />
+         <div
+           className="item-card-summary"
+           onClick={() => setOpen(true)}
+@@ -727,7 +728,14 @@ function SlotCard({
+       <div className="item-card empty rarity-card">
+         <div className="rarity-banner" style={{ backgroundImage: `url(${EMPTY_SLOT_BANNER})` }} />
+         <div className="item-card-summary">
+-          <ItemIcon slot={slot} size={48} />
++          {/* hideFallback (patch 0343, re-added patch 0367 direct
++              request): the generic weapon/helmet/etc. emoji glyph read
++              as a stray placeholder floating on top of EMPTY_SLOT_BANNER's
++              own art, same complaint that motivated hideFallback the
++              first time around, before patch 0365 briefly dropped it on
++              the assumption a fully-painted background would make the
++              glyph read as intentional -- it didn't, per direct report. */}
++          <ItemIcon slot={slot} size={48} hideFallback />
+           <div className="item-card-body">
+             <div className="slot-name">{slot}</div>
+             <div className="tiny muted">Empty</div>

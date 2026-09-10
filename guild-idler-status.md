@@ -28131,6 +28131,33 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Empty consumable slots get art, empty gear slots lose the emoji, and equipping a consumable now actually moves it (patch 0367)
+
+```discord-update
+Dev Update | Consumables & Empty Slots
+- Empty consumable slots now show the same card art as everything else, instead of a plain dark box
+- Removed the leftover emoji glyph from empty gear slots -- read as a stray placeholder on the new art
+- Equipping a consumable on a hero now actually moves it out of the stash immediately, instead of quietly leaving it there until used
+- Unequipping (and retiring a hero) gives it back
+```
+
+Three separate direct reports, bundled together since two are small follow-ups to the last three patches and the third touches the same UI.
+
+**Empty consumable slots.** The "+ / consumable / Empty" picker button (`ConsumableSlotCard`'s empty branch, EquipmentPanel.tsx) never actually got the `.rarity-banner` treatment patches 0364-0366 gave every other card -- it was still a plain dark box the whole time. Now uses `EMPTY_SLOT_BANNER`, same art the empty GEAR slot already uses (there's no separate "consumable-flavored" empty art to speak of, and using the same one is consistent with the direct ask elsewhere in this series to keep every card type reading as the same family). Its existing `consumable-empty` brass border/opacity styling (the "click me" affordance, distinct from a plain dimmed empty gear slot) is untouched -- purely additive.
+
+**Empty gear slots, emoji removed.** Direct report: the generic weapon/helmet/etc. glyph floating on top of `EMPTY_SLOT_BANNER`'s own painted art read as a stray placeholder, not an intentional icon. `hideFallback` (IconBox, icons.tsx -- originally added patch 0343 for this exact same complaint against the OLD silver-outline Design A art) is back on `SlotCard`'s empty branch; patch 0365 had dropped it on the assumption a fully-painted background would make the glyph read as intentional instead. It didn't, per this report, so it's reverted.
+
+**Consumables actually move on equip now.** Direct report: equipping a consumable left the exact unit still sitting in the stash count until a quest actually consumed it (`QuestManager.start`'s own deduction, unchanged since the feature first shipped) -- nothing could actually double-spend that unit (`equippedElsewhereCount` in EquipmentPanel.tsx already blocked a second hero from equipping the same reserved item), but it plainly looked unmoved, unlike gear's own stash-to-equipped Equip button. `engine.equipConsumable` now calls `InventoryManager.remove` immediately (with a "none left" server-side guard, same last-resort-backstop shape the existing isLoadoutEffect check already has), and `unequipConsumable` calls `InventoryManager.add` to give it back -- the same real "move," not a copy, gear already has.
+
+This ripples through three other places that assumed the old lazy-deduction model:
+- `QuestManager.start` no longer deducts a second time at send -- the reserved unit was already spent at equip time. Its old "reconcile against remaining stock, drop what's no longer available" logic (there specifically to handle a slot still pointing at an item a PRIOR send already used up) is replaced with a much lighter "attempt to reserve a fresh unit of the same type from what's left" step run right after a quest consumes the old one -- reproduces the same practical result (a loadout stays "sticky" across quests as long as supply lasts, clears once it runs out) one send later instead of one send earlier, without needing the old stock-reconciliation math at all.
+- `fillEmptyConsumableSlots` (the "Equip Best"/auto-equip-on-send bulk fill) dropped its own cross-hero `reservedElsewhere` bookkeeping -- every other hero's already-equipped units are already excluded from `InventoryManager.count` by construction now, so it just deducts as each slot fills instead.
+- `PrestigeManager.earlyRetire` already returned equipped GEAR to the stash on retirement but never touched equipped consumables (never needed to, under the old model) -- now refunds those too, so retiring a hero holding a potion doesn't just silently delete it. This was a real gap this patch would otherwise have introduced, caught while auditing every `equippedConsumables` call site rather than after the fact.
+
+**Save migration.** SAVE_VERSION 65 -> 66. An existing save can already have real entries in a hero's `equippedConsumables` from before this patch, where the matching unit was never actually deducted (that only ever happened later, whenever a quest consumed it). Without a migration, every already-equipped consumable on every existing save would silently double as a free extra unit -- still sitting in `inventory`, AND already equipped -- until the next unequip added a second refunded copy on top of the one that was never really removed. The migration walks every hero's `equippedConsumables` once and deducts a matching unit from `inventory`, so an existing save ends up exactly where it would be if every currently-equipped consumable had just been equipped under the new model.
+
+**Verified.** Wrote two standalone sanity scripts (not checked in) exercising the full loop directly against the real engine/managers, no mocks: equip (deducts), equip-elsewhere (still deducts correctly, second hero), equip-when-out-of-stock (correctly refused, slot stays empty), unequip (refunds), quest-start consumption with stock remaining (spends the reserved unit, sticky-refills a fresh one), quest-start consumption with nothing left (slot correctly clears instead), retiring a hero mid-hold (refunds, hero actually leaves the roster), and the SAVE_VERSION 65->66 migration itself (2 pre-equipped units correctly deducted from a stock of 5, landing on exactly 3). Every case printed the expected number. `npx tsc --noEmit` and `npx vite build` both pass clean on top of that.
+
 ### Curios join the rarity-banner revert -- the last piece of Design A is gone (patch 0366)
 
 ```discord-update

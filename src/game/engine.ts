@@ -1948,9 +1948,18 @@ export class GameEngine {
   }
 
   /** Adds a consumable to a hero's equipped slots -- persists until removed
-   *  or consumed by a quest, capped at ModifierManager.consumableSlots. Does
-   *  not touch state.inventory; that deduction still happens at quest-start
-   *  time inside QuestManager.start, same as it always did.
+   *  or consumed by a quest, capped at ModifierManager.consumableSlots.
+   *
+   *  Patch 0367, direct report: used to leave state.inventory completely
+   *  untouched here, only actually deducting the item at quest-start time
+   *  (QuestManager.start) -- so a slotted-but-not-yet-sent consumable kept
+   *  showing as ordinary stash inventory the whole time. Nothing could
+   *  actually double-spend it (equippedElsewhereCount in
+   *  EquipmentPanel.tsx already blocked a second hero from equipping the
+   *  same not-yet-consumed unit), but it plainly LOOKED unmoved, which read
+   *  as broken. Now moves the unit out of state.inventory immediately, the
+   *  same "stash to equipped, right now" shape gear's own Equip already
+   *  has, rather than leaving it in a reserved-but-still-visible limbo.
    *
    *  Blocked while the hero is away questing, same "can't touch a hero's
    *  loadout mid-quest" rule EquipmentManager.canEquip already enforces for
@@ -1976,15 +1985,26 @@ export class GameEngine {
     const current = hero.equippedConsumables ?? [];
     const maxSlots = ModifierManager.consumableSlots(this.state);
     if (current.length >= maxSlots) return this.say('No free consumable slots.');
+    // Patch 0367: this is the actual "move," server-side backstop same as
+    // the isLoadoutEffect check above -- the UI's own available list
+    // (EquipmentPanel.tsx) already excludes anything with zero left after
+    // equippedElsewhereCount, so this should only ever fail on a genuine
+    // race (another tab, a stale render), not in normal single-session play.
+    if (!InventoryManager.remove(this.state, defId)) return this.say('None of that left in the stash.');
     hero.equippedConsumables = [...current, defId];
     playSound('equip');
     void this.saveNow();
   }
 
-  /** Removes one instance of a consumable from a hero's equipped slots.
-   *  Same deployed-hero guard as equipConsumable above -- matches
-   *  EquipmentManager.unequip's own "can't touch gear on a questing hero"
-   *  rule for the gear side. */
+  /** Removes one instance of a consumable from a hero's equipped slots,
+   *  returning it to the stash. Same deployed-hero guard as equipConsumable
+   *  above -- matches EquipmentManager.unequip's own "can't touch gear on a
+   *  questing hero" rule for the gear side.
+   *
+   *  Patch 0367, companion to equipConsumable's own move-not-copy fix:
+   *  since equipping now actually removes the unit from state.inventory,
+   *  unequipping has to actually give it back, the same round-trip gear's
+   *  own Equip/Remove pair already does. */
   unequipConsumable(heroId: string, defId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
@@ -1993,6 +2013,7 @@ export class GameEngine {
     const index = current.indexOf(defId);
     if (index === -1) return;
     hero.equippedConsumables = [...current.slice(0, index), ...current.slice(index + 1)];
+    InventoryManager.add(this.state, defId);
     playSound('unequip');
     void this.saveNow();
   }
@@ -2006,12 +2027,16 @@ export class GameEngine {
    * something already slotted, unlike equipBestGear's tie-breaking --
    * there's no obvious "better" ordering between two already-chosen
    * consumables to justify displacing a manual pick the way a higher Gear
-   * Score item justifies displacing worse gear. Availability is computed
-   * the same "owned minus reserved on this hero or any other" way the
-   * manual per-slot picker already does (EquipmentPanel's own
-   * `equippedElsewhereCount`), including reservations made earlier in
-   * this same batch, so it can never try to equip more of one consumable
-   * than the guild actually owns. Returns how many slots were filled.
+   * Score item justifies displacing worse gear. Patch 0367: availability
+   * is just InventoryManager.count directly now -- equipping actually
+   * moves a unit out of state.inventory immediately (equipConsumable's own
+   * comment), so every other hero's already-equipped units are already
+   * excluded by construction; fillEmptyConsumableSlots' own loop deducts
+   * as it goes so reservations made earlier in this same batch are
+   * accounted for too, same end guarantee (never equips more of one
+   * consumable than the guild actually owns) the old cross-hero
+   * `equippedElsewhereCount`-style math gave before this patch. Returns
+   * how many slots were filled.
    */
   equipBestConsumables(heroId: string): number {
     const hero = this.hero(heroId);
@@ -2049,15 +2074,20 @@ export class GameEngine {
     const working = [...(hero.equippedConsumables ?? [])];
     let filled = 0;
     while (working.length < maxSlots) {
-      const reservedElsewhere = (defId: string) => this.state.heroes.reduce((sum, other) => {
-        const list = other.id === hero.id ? working : (other.equippedConsumables ?? []);
-        return sum + list.filter((id) => id === defId).length;
-      }, 0);
-      const available = InventoryManager.owned(this.state)
-        .filter(({ def }) => reservedElsewhere(def.id) < InventoryManager.count(this.state, def.id))
-        .sort((a, b) => b.def.cost - a.def.cost);
+      // Patch 0367: no more reservedElsewhere cross-hero bookkeeping needed
+      // here -- every OTHER hero's already-equipped units are already
+      // excluded from InventoryManager.count by construction now (equipping
+      // moves the unit out of state.inventory immediately, see
+      // equipConsumable's own comment). Deducting a unit as each slot in
+      // THIS loop fills is what keeps a second/third slot in the same call
+      // from grabbing the same last unit twice -- InventoryManager.owned
+      // is recomputed fresh each iteration, so it naturally reflects
+      // whatever this loop has already spent so far.
+      const available = InventoryManager.owned(this.state).sort((a, b) => b.def.cost - a.def.cost);
       if (available.length === 0) break;
-      working.push(available[0].def.id);
+      const defId = available[0].def.id;
+      if (!InventoryManager.remove(this.state, defId)) break;
+      working.push(defId);
       filled++;
     }
     if (filled > 0) hero.equippedConsumables = working;

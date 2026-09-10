@@ -44,21 +44,18 @@ function IconBox({
         // and needs SOME backdrop to stay legible against whatever art is
         // behind it (a bright background, a busy crafting scene, etc.).
         // `hideFallback` (patch 0343, direct request) skips this entirely
-        // for an EMPTY gear slot specifically -- that slot's own outline
-        // art (EMPTY_SLOT_FRAME, patch 0342) is already a complete,
-        // closed shape on its own, and a generic weapon/helmet/etc. glyph
-        // floating in the middle on top of it read as a stray placeholder
-        // rather than a real icon. Every OTHER IconBox caller (an actual
-        // owned item with no art yet, a consumable, a curio...) still
-        // wants the glyph -- there's a real item there, it just needs
-        // something to stand in for its missing art.
-        // Patch 0365: no remaining callers pass hideFallback -- the empty
-        // gear slot moved to EMPTY_SLOT_BANNER's fully-painted card
-        // background (same .rarity-banner treatment every other reverted
-        // card uses), where the fallback glyph reads as intentional again
-        // rather than a stray placeholder. Prop left in place (harmless,
-        // optional, defaults off) rather than removed, in case an
-        // outline-style empty state is wanted again later.
+        // for an EMPTY gear slot specifically -- a generic weapon/
+        // helmet/etc. glyph floating on top of that slot's own dedicated
+        // empty-state art reads as a stray placeholder rather than a real
+        // icon. Every OTHER IconBox caller (an actual owned item with no
+        // art yet, a consumable, a curio...) still wants the glyph --
+        // there's a real item there, it just needs something to stand in
+        // for its missing art. Patch 0365 briefly dropped the empty
+        // gear slot's own hideFallback call on the assumption that
+        // switching to a fully-painted background (EMPTY_SLOT_BANNER)
+        // would make the glyph read as intentional -- direct report
+        // confirmed it still read as a stray placeholder either way, so
+        // patch 0367 restored the call.
         : (!hideFallback && <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>)}
       {/* Broken-gear indicator (patch 0295), direct request: a red ring
           plus a small "!" badge, same corner-badge shape used elsewhere

@@ -1412,6 +1412,52 @@ const MIGRATIONS: Record<number, Migration> = {
     unlockedRecipes: (save.unlockedRecipes as string[] | undefined)
       ?? [...ALWAYS_KNOWN_RECIPE_IDS, ...RECIPE_SCROLLS.map((s) => s.recipeId)],
   }),
+  /**
+   * Patch 0367, direct request: equipping a consumable on a hero now
+   * actually moves it out of the stash immediately (engine.
+   * equipConsumable/unequipConsumable), instead of the old lazy model
+   * where the item stayed counted in `state.inventory` right up until a
+   * quest actually consumed it (QuestManager.start). Direct report: that
+   * lazy model let a slotted consumable keep showing as available stash
+   * inventory, so a *different* hero's own picker (or the Blacksmith's
+   * sell/scrap flows) could still see and act on the exact same
+   * not-yet-spent unit -- `equippedElsewhereCount` (EquipmentPanel.tsx)
+   * blocked a SECOND hero from actually equipping it, but the item still
+   * visually sat in the stash the whole time, which read as broken even
+   * though nothing could double-spend it.
+   *
+   * An existing save's heroes can already have real entries in
+   * `equippedConsumables` from before this patch, where the matching
+   * unit was NEVER actually deducted (that only happened later, at
+   * whatever quest eventually consumed it) -- under the new model, an
+   * equipped consumable is supposed to already be missing from
+   * `inventory`. Without this migration, every already-equipped
+   * consumable on every existing save would silently double as a free
+   * extra unit (still sitting in inventory, AND already equipped)
+   * until the next time it got unequipped and the refund added a
+   * second copy on top of the one that was never actually removed.
+   * Walks every hero's `equippedConsumables` and deducts one unit of
+   * each from `inventory` here, once, so an existing save lines up with
+   * the new model exactly as if every currently-equipped consumable had
+   * just been equipped under it. Floors at 0 (never goes negative) for
+   * the unlikely case of a save whose `equippedConsumables` already
+   * drifted ahead of its own `inventory` count somehow -- matches
+   * InventoryManager.remove's own "never below zero, delete the key at
+   * zero" behavior rather than reimplementing it differently here.
+   */
+  65: (save) => {
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    const inventory = { ...((save.inventory as Record<string, number> | undefined) ?? {}) };
+    for (const h of heroes) {
+      const equipped = (h.equippedConsumables as string[] | undefined) ?? [];
+      for (const defId of equipped) {
+        const have = inventory[defId] ?? 0;
+        if (have <= 1) delete inventory[defId];
+        else inventory[defId] = have - 1;
+      }
+    }
+    return { ...save, version: 66, inventory };
+  },
 };
 
 export const SaveManager = {

@@ -931,29 +931,23 @@ export const QuestManager = {
     if (hero.status === 'questing') return { error: `${hero.name} is already out.` };
     if (hero.status === 'fallen') return { error: `${hero.name} is Fallen and needs to be revived first.` };
 
-    // A hero's equipped consumable slots can end up pointing at an item the
-    // guild no longer actually has -- the previous version of this hard-
-    // failed the whole send with "Not enough consumables for that loadout"
-    // whenever that happened, which is exactly what a slot still assigned
-    // to an item consumed on a PRIOR send does (equipping never touches
-    // state.inventory; the deduction below is what actually spends the
-    // item, and nothing ever cleared the slot afterward). That turned "used
-    // your last potion last time" into "this hero can never be sent again
-    // until you notice and manually unequip," and made sendAllIdle silently
-    // skip every affected hero, reporting "no idle heroes have an open
-    // contract" even though they plainly did. Fixed by reconciling instead
-    // of failing: drop whatever's no longer actually in stock and proceed
-    // with whatever legitimately still is, keeping the hero's own equipped
-    // slots in sync so the next send doesn't hit the same wall.
-    const remaining: Record<string, number> = {};
-    consumables = consumables.filter((id) => {
-      remaining[id] = remaining[id] ?? InventoryManager.count(state, id);
-      if (remaining[id] > 0) {
-        remaining[id] -= 1;
-        return true;
-      }
-      return false;
-    });
+    // Patch 0367: equipping a consumable now moves it out of `inventory`
+    // immediately (engine.equipConsumable), rather than leaving it lazily
+    // deducted here at send time -- so by construction, anything still in
+    // hero.equippedConsumables is already a reserved, real unit; there's
+    // no more "does the guild actually still have this in stock" question
+    // left to answer here. The one thing that CAN still go stale is
+    // content itself changing out from under an old save (a consumable
+    // def removed or renamed since it was equipped) -- resolveDef
+    // returning undefined for an id is the only case this still guards
+    // against, same "never crash on stale saved state" reasoning as
+    // everywhere else content lookups get validated. (Before this patch,
+    // this block also reconciled against remaining stock -- see patch
+    // 0367's own guild-idler-status.md writeup and SaveManager's version-
+    // 65 migration for the full "why," including how an already-equipped
+    // consumable on a pre-patch save gets its stock deducted exactly
+    // once, retroactively, instead of at this now-removed check.)
+    consumables = consumables.filter((id) => InventoryManager.resolveDef(state, id) !== undefined);
     if (hero.equippedConsumables) hero.equippedConsumables = [...consumables];
 
     const loadout = InventoryManager.loadoutEffects(state, consumables);
@@ -990,7 +984,25 @@ export const QuestManager = {
       healthDamageReduction: loadout.healthDamageReduction,
     };
 
-    for (const id of consumables) InventoryManager.remove(state, id);
+    // Patch 0367: the reserved units this quest is about to use were
+    // already deducted from `inventory` back when they were equipped
+    // (engine.equipConsumable) -- consuming them here is just letting go
+    // of that reservation for good, not a second deduction. The old
+    // lazy-deduction model gave a nice side effect for free though: a
+    // hero's loadout stayed "sticky" across quests as long as the guild
+    // kept having more of the same consumable in stock, since nothing
+    // ever cleared hero.equippedConsumables except the reconciliation
+    // this patch removed above. Reproduced deliberately here instead of
+    // dropped: attempt to reserve a FRESH unit of each just-used
+    // consumable from whatever stock remains, same best-effort "if it's
+    // still available, keep the loadout" convenience -- succeeds (and
+    // the slot stays filled for the hero's next quest) exactly when the
+    // guild still has another one; fails and clears that slot back to
+    // empty exactly when it doesn't, matching the old reconciliation's
+    // own end result one quest later rather than one quest earlier.
+    if (hero.equippedConsumables) {
+      hero.equippedConsumables = consumables.filter((id) => InventoryManager.remove(state, id));
+    }
     hero.status = 'questing';
     hero.activeQuestId = quest.id;
     state.activeQuests.push(quest);

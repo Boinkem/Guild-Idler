@@ -624,6 +624,7 @@ function ConsumableSlotCard({
   return (
     <>
       <div className="item-card empty clickable consumable-empty">
+        <div className="rarity-banner" style={{ backgroundImage: `url(${EMPTY_SLOT_BANNER})` }} />
         <div
           className="item-card-summary"
           onClick={() => setOpen(true)}
@@ -727,7 +728,14 @@ function SlotCard({
       <div className="item-card empty rarity-card">
         <div className="rarity-banner" style={{ backgroundImage: `url(${EMPTY_SLOT_BANNER})` }} />
         <div className="item-card-summary">
-          <ItemIcon slot={slot} size={48} />
+          {/* hideFallback (patch 0343, re-added patch 0367 direct
+              request): the generic weapon/helmet/etc. emoji glyph read
+              as a stray placeholder floating on top of EMPTY_SLOT_BANNER's
+              own art, same complaint that motivated hideFallback the
+              first time around, before patch 0365 briefly dropped it on
+              the assumption a fully-painted background would make the
+              glyph read as intentional -- it didn't, per direct report. */}
+          <ItemIcon slot={slot} size={48} hideFallback />
           <div className="item-card-body">
             <div className="slot-name">{slot}</div>
             <div className="tiny muted">Empty</div>
