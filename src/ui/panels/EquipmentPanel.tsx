@@ -16,7 +16,7 @@ import { CRAFTING_RECIPE_BY_ID } from '../../game/data/craftingRecipes';
 import { scrollSellValue } from '../../game/data/recipeScrolls';
 import { rerollsUsedToday } from '../../game/data/reroll';
 import {
-  describeMods, describeStats, formatGold, RARITY_BANNER, CURIO_FRAME, EMPTY_SLOT_FRAME,
+  describeMods, describeStats, formatGold, RARITY_BANNER, CURIO_FRAME, EMPTY_SLOT_BANNER,
   RARITY_COLOR, MAIN_STAT_TOOLTIP,
 } from '../../game/util';
 import { ItemIcon, ConsumableIcon, CurioIcon, RecipeIcon } from '../icons';
@@ -724,17 +724,10 @@ function SlotCard({
 
   if (!item || !def) {
     return (
-      <div
-        className="item-card empty rarity-frame-card-outline"
-        style={{ backgroundImage: `url(${EMPTY_SLOT_FRAME})` }}
-      >
+      <div className="item-card empty rarity-card">
+        <div className="rarity-banner" style={{ backgroundImage: `url(${EMPTY_SLOT_BANNER})` }} />
         <div className="item-card-summary">
-          {/* hideFallback (patch 0343, direct request): the old
-              weapon/helmet/etc. emoji placeholder sat awkwardly in the
-              middle of the outline art now that this slot has no card
-              background of its own (patch 0342) -- the frame art alone
-              already reads as "empty," so the glyph was just clutter. */}
-          <ItemIcon slot={slot} hideFallback />
+          <ItemIcon slot={slot} size={48} />
           <div className="item-card-body">
             <div className="slot-name">{slot}</div>
             <div className="tiny muted">Empty</div>

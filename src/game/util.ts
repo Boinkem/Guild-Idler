@@ -76,6 +76,21 @@ export const RARITY_BANNER: Record<Rarity, string> = {
 };
 
 /**
+ * Patch 0365, direct follow-up to patch 0364's rarity-banner revert:
+ * an empty/unequipped gear slot (SlotCard's own empty branch,
+ * EquipmentPanel.tsx) moves off EMPTY_SLOT_FRAME's silver-outline
+ * Design A treatment onto this instead, for the same "old style, direct
+ * request" reason as every real-rarity card in patch 0364 -- a
+ * freshly-supplied, same-1008x226 banner, NOT an outline overlay (unlike
+ * EMPTY_SLOT_FRAME, this is a fully painted background, same shape as
+ * RARITY_BANNER above), so it uses the exact same .rarity-banner CSS
+ * treatment every other reverted card does rather than needing its own
+ * variant. A single constant, not a Record like RARITY_BANNER, since an
+ * empty slot has no rarity to key off of.
+ */
+export const EMPTY_SLOT_BANNER = './rarity-banners/empty.png';
+
+/**
  * Patch 0338, direct approval on a mocked-up design ("Design A"): the full
  * ornate frame art used AS the whole card background for every
  * rarity-carrying item card. Patch 0364, direct revert: the real-rarity
@@ -83,12 +98,14 @@ export const RARITY_BANNER: Record<Rarity, string> = {
  * RARITY_BANNER above -- the old style "looked nicer" per direct
  * feedback, its one real problem (mismatched banner art sizes) is now
  * fixed at the source instead. No remaining callers key off this map
- * directly as of patch 0364 (CURIO_FRAME/EMPTY_SLOT_FRAME below are their
- * own single-file constants, untouched by this revert and still live),
- * so this Record is currently dead code -- left in place rather than
- * deleted in case a rarity-keyed frame is wanted again later; flag for
- * the CSS/dead-code cleanup pass in the backlog if it's still unused
- * next time that runs. Files live in public/rarity-frames/.
+ * directly as of patch 0364 (CURIO_FRAME below is its own single-file
+ * constant, still live via CurioCard -- EMPTY_SLOT_FRAME just below it
+ * was ALSO still live as of patch 0364, but patch 0365 moved the
+ * empty-slot card onto EMPTY_SLOT_BANNER the same way, so it's dead too
+ * now), so this Record is currently dead code -- left in place rather
+ * than deleted in case a rarity-keyed frame is wanted again later; flag
+ * for the CSS/dead-code cleanup pass in the backlog if it's still
+ * unused next time that runs. Files live in public/rarity-frames/.
  */
 export const RARITY_FRAME: Record<Rarity, string> = {
   common: './rarity-frames/common.png',
@@ -117,6 +134,9 @@ export const CURIO_FRAME = './rarity-frames/grey.png';
  * the way a fully-painted frame does -- see .rarity-frame-card-outline
  * in app.css, a deliberately different CSS treatment from
  * .rarity-frame-card for exactly this reason.
+ * Patch 0365: no remaining callers -- SlotCard's empty branch moved to
+ * EMPTY_SLOT_BANNER above, same reasoning as RARITY_FRAME's own comment.
+ * Dead code, left in place for the same reasons given there.
  */
 export const EMPTY_SLOT_FRAME = './rarity-frames/silver.png';
 

@@ -28131,6 +28131,25 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Rarity banner follow-up: fixed the background-repeat tiling bug, empty gear slots reverted too (patch 0365)
+
+```discord-update
+Dev Update | Rarity Cards
+- Fixed rarity banner art visibly repeating/tiling on some item cards, especially at a maximized window size
+- Empty gear slots now use the same old-style banner treatment as everything else, on new dedicated art
+- Icons on empty gear slots are a bit bigger, matching filled slots
+```
+
+Direct follow-up report with screenshots, on top of patch 0364's own rarity-banner revert.
+
+**The tiling bug.** Reported as "cards visually repeat on themselves" at a maximized window, and as literal duplicate copies of an equipped item's card stacked underneath the real one on a narrow single-column layout ("showing sets of three"). Root cause: `.rarity-banner` (app.css) has never set `background-repeat`, which defaults to `repeat` -- harmless as long as `background-size: contain` (the setting inherited from before patch 0338) happened to leave no leftover space in the box, which is exactly what a second report showing the art "lining up perfectly" after shrinking the window down confirmed was the boundary case. `.rarity-banner`'s box has no fixed aspect ratio of its own (width from the grid, height from content), so anything that pushed the box's aspect away from the art's own ~4.46:1 -- a maximized window's wider grid columns, or a narrow equipped-slot column going the other way -- opened up letterboxed empty space that the default `repeat` then tiled the banner into, worse the further the mismatch went (confirmed by the "sets of three" report being the same bug at a more extreme aspect ratio, not a separate issue). Fixed with the same approach patch 0338's Design A frame art already used for this exact reason: `background-size: 100% 100%` stretches the art to exactly fill whatever box the card renders at, on both axes, every time -- there's never any leftover space for a repeat to land in, so `background-repeat: no-repeat` was also added explicitly, belt-and-braces. `image-rendering: pixelated` added too (same reasoning as `.rarity-frame-card`'s own patch 0340 fix), since a stretched card is exactly the kind of scaling that blurs this pixel-art line/gem detail into a haze otherwise. Uniform banner art size across every rarity as of patch 0364 means every card now gets the same small, consistent stretch rather than a different amount of distortion per rarity.
+
+**Empty gear slots, reverted too.** Not part of patch 0364's original scope (no rarity to key a `RARITY_BANNER` lookup on, and no replacement art had been supplied yet) -- direct request this round, plus dedicated new art (`EMPTY_SLOT_BANNER` in util.ts, `public/rarity-banners/empty.png`, same 1008x226 as the five real rarities). Moves `SlotCard`'s empty branch off `EMPTY_SLOT_FRAME`'s silver-outline Design A treatment onto the exact same `.rarity-banner`/`.item-card`/`.item-card-summary` shape every reverted card already uses, rather than a bespoke outline variant -- direct ask was for equipped and empty slots to read as the same card size/treatment, and sharing the actual CSS class is what guarantees that rather than two separately-tuned classes drifting apart again later. `hideFallback` (patch 0343, only ever needed because the old thin outline art made the generic weapon/helmet emoji glyph look like a stray placeholder) is dropped -- the new banner is a fully painted card background same as everything else, so the slot glyph reads as intentional now, consistent with how a real item's own icon shows on this same card style. Icon size bumped to `size={48}` to match every other reverted card (was unsized, i.e. IconBox's 40px default). `.item-card.empty`'s existing base opacity/dimming rule (pre-dates patch 0338 entirely) applies here again unmodified, same as it already does for every other non-Design-A empty state in the game.
+
+**Scope note.** `RARITY_FRAME` and now `EMPTY_SLOT_FRAME` (util.ts) are both fully dead code as of this patch -- no remaining callers for either. Left in place rather than deleted, same reasoning as patch 0364's own note on `RARITY_FRAME`. `.rarity-frame-card`/`CURIO_FRAME` are the only pieces of the Design A system still live, both via `CurioCard` alone -- Curios weren't touched this round (new art was requested and is expected in a follow-up patch once supplied).
+
+**Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean. Same caveat as patch 0364: no headless browser available in this sandbox to confirm visually, so this is a careful read of the actual CSS box model rather than a live screenshot -- worth a real look in-game at a maximized window and at the narrow equipped-slot layout specifically, since those are exactly the two cases reported.
+
 ### Rarity cards revert to the old banner treatment, on freshly re-supplied evenly-sized art (patch 0364)
 
 ```discord-update

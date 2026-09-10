@@ -5578,19 +5578,43 @@ button.harvest-item:hover {
    * columns fit side by side at a wide window width (this class's box
    * isn't a fixed size -- width comes from the grid, height from
    * content -- so its aspect isn't guaranteed to match the art's own).
-   * `contain` scales to fit entirely inside the box on both axes
-   * instead, so the full banner is always visible with no cropping
-   * ever, at the cost of a little empty space on whichever axis has
-   * room to spare -- which just shows the card's own dark background
-   * underneath, close enough to the art's own dark fill that the seam
-   * isn't distracting. Deliberately fixed here rather than by capping
-   * the grid's own column width back down -- direct request was to
-   * keep these cards at their current (bigger, preferred) size and fix
-   * the art instead, not shrink the cards back down to fit the art.
+   * `contain` was tried next, fitting the art entirely inside the box
+   * on both axes at the cost of a little letterboxed empty space on
+   * whichever axis had room to spare.
+   *
+   * Patch 0365, direct report with screenshots: that letterboxed empty
+   * space was NOT just showing the card's own dark background through
+   * as assumed at the time -- `background-repeat` was never set here,
+   * so it defaulted to `repeat`, and the browser tiled the banner art
+   * into that leftover space instead of leaving it blank. Barely
+   * visible at a card aspect close to the art's own 1008x226 (~4.46:1,
+   * confirmed clean in the direct report's own "scaled down, lines up
+   * perfectly" screenshot), but the wider the mismatch got -- a
+   * maximized window's wider grid columns, or a narrow single-column
+   * equipped-slot layout going the other way -- the more of a second
+   * (or, per the report, a full third) copy of the banner became
+   * visible stacked above/below the real one. Switched to the same
+   * `background-size: 100% 100%` approach patch 0338's Design A frame
+   * art already used for exactly this reason (see the old
+   * .rarity-frame-card comment further down) -- stretches the art to
+   * exactly fill whatever box the card actually renders at, on both
+   * axes, every time, so there is never any leftover space for a
+   * repeat to fill in the first place. `background-repeat: no-repeat`
+   * added explicitly too, belt-and-braces, in case a future box shape
+   * ever reintroduces a sliver of leftover space some other way.
+   * Uniform art size across every rarity as of patch 0364 means this
+   * stretch reads as a consistent, near-imperceptible squash/stretch
+   * rather than a per-rarity difference in distortion.
    */
-  background-size: contain;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   background-position: center;
+  /* Same reasoning as .rarity-frame-card's own image-rendering rule
+     (patch 0340) -- this is pixel-art line/gem detail, and a stretched
+     bilinear-downscaled render blurs it into a soft haze. */
+  image-rendering: pixelated;
   opacity: 0.42;
+
   pointer-events: none;
 }
 /* Painting order quirk: an absolutely-positioned sibling paints ABOVE
@@ -5628,12 +5652,16 @@ button.harvest-item:hover {
  * moved back to the old .rarity-banner treatment just above -- direct
  * feedback that the old style "looked nicer," with its one real problem
  * (mismatched banner art sizes) fixed at the source with a freshly
- * re-supplied, evenly-sized (1008x226) set. This class now only applies
- * to the two non-rarity special cases that were never part of that
- * revert: CurioCard (grey -- Curios have no real rarity to bank a
- * .rarity-banner lookup on) and the empty-slot branch of SlotCard
- * (silver outline). RARITY_FRAME itself (the per-rarity map) has no
- * remaining callers as of this patch -- see its own comment in util.ts.
+ * re-supplied, evenly-sized (1008x226) set. Patch 0365, same direct
+ * feedback, same treatment: the empty-slot branch of SlotCard (silver
+ * outline, the `.rarity-frame-card-outline` variant below) moved to
+ * .rarity-banner too, on its own freshly-supplied art (EMPTY_SLOT_BANNER
+ * in util.ts) -- so `.rarity-frame-card-outline` now has NO remaining
+ * callers at all, and `.rarity-frame-card` itself has exactly one:
+ * CurioCard's grey frame (Curios have no real rarity to bank a
+ * .rarity-banner lookup on, and no replacement art has been supplied for
+ * them yet). RARITY_FRAME and EMPTY_SLOT_FRAME (util.ts) are both dead
+ * code as of patch 0365 for the same reason -- see their own comments.
  *
  * aspect-ratio here is a PREFERRED ratio, not a hard clamp -- a card
  * whose real content needs more vertical room (StashCard can carry up to
