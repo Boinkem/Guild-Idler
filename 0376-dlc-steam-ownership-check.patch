@@ -1,0 +1,326 @@
+From 2cd2eafcdeafe2f9500a70b79065afcedaa8d13c Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Fri, 11 Sep 2026 07:15:49 +0000
+Subject: [PATCH] Patch 0376: DLC ownership backed by the real Steam SDK, not
+ file presence
+
+- electron/main.ts: DLC_APP_IDS map (founders_pack: 5256720, the real
+  registered App ID), new steam:isDlcOwned IPC handler calling
+  steamClient.apps.isDlcInstalled(). Returns null (not false) whenever
+  Steam genuinely can't answer -- only an explicit true/false is treated
+  as authoritative.
+- preload.ts / SaveManager.ts: isDlcOwned exposed on the littleKnight
+  bridge, same null-vs-boolean contract documented at both call sites.
+- DlcManager.ts: loadInstalledPacks now checks Steam ownership FIRST for
+  each pack -- an explicit false skips it entirely without even
+  attempting to fetch pack.json (closes the actual gap: nothing
+  previously stopped a non-owner's disk from having a stray pack.json
+  and being treated as owning it). true or null both fall through to
+  the existing file-presence fetch, so dev/testing without Steam running
+  is unaffected.
+- Found and documented, not fixed here: public/dlc/founders_pack/
+  pack.json gets bundled INSIDE the base app's own app.asar during vite
+  build, confirmed via npx asar list -- a Steam depot split alone can't
+  fix this, since the file is already sealed into the base bundle before
+  Steam is involved. Deliberately deferred (discussed and confirmed
+  before proceeding) -- the actual grant is already correctly gated by
+  real ownership regardless, so this is a content-exposure gap, not a
+  functional one.
+- Verified: tsc --noEmit, vite build, electron-builder --linux dir
+  package build, a real launch under xvfb-run confirming no crash from
+  the new IPC path, and four scripted ownership scenarios (mocked fetch
+  + mocked isDlcOwned) covering no-bridge/false/true/null.
+---
+ electron/main.ts                 | 42 +++++++++++++++
+ electron/preload.ts              |  7 +++
+ guild-idler-status.md            | 92 +++++++++++++++++++++++++++++---
+ src/game/managers/DlcManager.ts  | 49 +++++++++++++++--
+ src/game/managers/SaveManager.ts |  4 ++
+ 5 files changed, 183 insertions(+), 11 deletions(-)
+
+diff --git a/electron/main.ts b/electron/main.ts
+index 50e87d1..ac30db7 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -74,6 +74,23 @@ if (!gotSingleInstanceLock) {
+  */
+ const STEAM_APP_ID = 5143490;
+ 
++/**
++ * Child App IDs for each DLC pack this game knows about, keyed by the same
++ * pack id string DlcManager.ts's KNOWN_DLC_PACKS/FOUNDER_PACK_ID use --
++ * patch 0376, the "real child App IDs that don't exist yet" gap the
++ * comment above already flagged as the reason `apps.isDlcInstalled`
++ * wasn't wired in at patch 0370. Founder's Pack registered for real:
++ * GuildBound - Founder's Pack, App ID 5256720. A pack id with no entry
++ * here (or an entry whose id isn't actually registered on Steam yet)
++ * simply can't be ownership-checked via the SDK -- see
++ * steam:isDlcOwned's own handler below for how that's treated (falls
++ * back to file-presence detection, same graceful-degradation shape
++ * every other Steam feature in this file already has).
++ */
++const DLC_APP_IDS: Record<string, number> = {
++  founders_pack: 5256720,
++};
++
+ /**
+  * `steamworks.js`'s `init()` starts its own internal ~33ms runCallbacks
+  * loop (see node_modules/steamworks.js/index.js) — nothing to wire up for
+@@ -1048,6 +1065,31 @@ ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
+   }
+ });
+ 
++/**
++ * Real Steam DLC ownership check (patch 0376) -- replaces file-presence
++ * detection as the AUTHORITATIVE signal whenever it's actually available.
++ * Returns `null`, not `false`, in every case where Steam genuinely
++ * can't answer the question (no steamClient at all, or a pack id with
++ * no entry in DLC_APP_IDS) -- DlcManager.ts's own caller treats `null`
++ * as "couldn't check, fall back to whether pack.json fetches" rather
++ * than as a definitive "not owned", which matters for local dev/testing
++ * without Steam running: that path still needs to keep working exactly
++ * as it did before this patch, driven purely by whether the file exists
++ * on disk. Only an explicit `true`/`false` from the real SDK call is
++ * ever treated as authoritative.
++ */
++ipcMain.handle('steam:isDlcOwned', (_e, packId: string) => {
++  if (!steamClient) return null;
++  const appId = DLC_APP_IDS[packId];
++  if (!appId) return null;
++  try {
++    return steamClient.apps.isDlcInstalled(appId);
++  } catch (err) {
++    console.log(`[steam] isDlcInstalled failed for ${packId} (app ${appId}):`, err);
++    return null;
++  }
++});
++
+ /* ------------------------------ lifecycle ------------------------------ */
+ 
+ /**
+diff --git a/electron/preload.ts b/electron/preload.ts
+index 3c8b471..db4e59d 100644
+--- a/electron/preload.ts
++++ b/electron/preload.ts
+@@ -39,6 +39,13 @@ const api = {
+   minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+   quit: (): Promise<void> => ipcRenderer.invoke('window:quit'),
+   unlockAchievement: (steamApiName: string): Promise<boolean> => ipcRenderer.invoke('steam:unlockAchievement', steamApiName),
++  /**
++   * Real Steam DLC ownership check (patch 0376) -- see main.ts's own
++   * steam:isDlcOwned handler for the full null-vs-boolean contract.
++   * `null` means "couldn't check" (no Steam, or this pack id isn't
++   * registered with a real App ID yet), never a definitive "not owned".
++   */
++  isDlcOwned: (packId: string): Promise<boolean | null> => ipcRenderer.invoke('steam:isDlcOwned', packId),
+   /**
+    * The one main-to-renderer direction in this bridge -- everything else is
+    * the renderer asking main to do something. This lets the tray's "Show
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0696fdd..0329464 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7507,13 +7507,26 @@ pass (same caveat as the two entries above).
+     (checking `public/dlc/` folders too, coordinated with
+     `DlcManager`'s own async pack-loading) -- not done, a real future
+     option if the exposure gap ever matters enough to justify it.
+-  - **The base game's own Steam depot build must still exclude
+-    `public/dlc/` entirely**, uploading it only as the Founder's Pack's
+-    own separate depot (child App ID/store item already registered:
+-    store item 1324580, package 1817980) -- that depot-split build
+-    configuration doesn't exist yet. Unaffected by the correction above:
+-    `pack.json` itself (the DLC-gating data, not the sprite art) still
+-    belongs under `public/dlc/`, still needs the same depot split.
++  - **Done (patch 0376): DLC ownership is gated by the real Steam SDK now,
++    not file presence alone.** `DLC_APP_IDS` (`electron/main.ts`) has the
++    real registered App ID (Founder's Pack: 5256720). Real remaining gap,
++    packaging not logic: the base game's Steam depot build must still
++    exclude `public/dlc/` entirely, uploading it only as the Founder's
++    Pack's own separate depot (store item 1324580, package 1817980) --
++    that depot-split build configuration doesn't exist yet, and (found
++    while investigating patch 0376) isn't sufficient on its own even once
++    it does: `public/dlc/founders_pack/pack.json` currently gets bundled
++    INSIDE the base app's own `app.asar` during `vite build`, before
++    Steam is ever involved, confirmed directly via `npx asar list`. A
++    genuine fix needs the base build itself to stop bundling
++    `public/dlc/` into its own asar, plus a way for the renderer to
++    reach DLC files living outside it at runtime (a plain relative
++    `fetch()` can't cross that boundary) -- a custom protocol handler or
++    IPC call, not attempted yet. Deliberately deferred: the actual
++    GRANT is already correctly gated by real Steam ownership regardless
++    of this gap, so nobody can obtain or use DLC content without owning
++    it -- what ships unfixed is art sitting unused on a non-owner's
++    disk, a content-exposure gap, not a functional one.
+   - **No UI reads `DlcManager.allSkins()`/`allPets()`/`allHeroClasses()`
+     anywhere yet, except the one path that now matters: `PetManager.hatch`
+     (patch 0374) does.** Every skin picker, pet roster, and class list
+@@ -28170,6 +28183,71 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### DLC ownership now backed by the real Steam SDK, not file presence alone (patch 0376)
++```discord-update
++Dev Update | Patch 0376
++
++- DLC ownership (the Founder's Pack, and any future pack) now checks Steam for real, not just whether a file happens to exist on disk
++- Local testing without Steam running still works exactly as before -- nothing changes for dev/testing
++```
++
++Direct follow-up to the "Steam DLC depot split" request -- turned out the
++depot split itself doesn't actually solve anything on its own. Built the
++packaged app and looked inside it directly: `public/dlc/founders_pack/
++pack.json` gets bundled INSIDE `app.asar` during the base game's own
++`vite build`, before Steam is ever involved -- a Steam-side depot split
++can't retroactively un-bundle a file that's already sealed into the base
++app's own archive by the time Steam uploads anything. Confirmed with
++`npx asar list`, not assumed.
++
++That's actually two separable problems, discussed explicitly before
++picking which to fix now: whether the game *grants* DLC content
++correctly (a logic problem), and whether the DLC *art file* physically
++ships to non-owners' disks (a packaging problem, still real and still
++open -- see this doc's own DLC backlog section). This patch is the
++first one, the one that was actually gate-worthy from a game-integrity
++standpoint.
++
++**Real ownership check, `electron/main.ts`.** New `DLC_APP_IDS` map
++(currently just `founders_pack: 5256720`, the actual registered
++Founder's Pack App ID -- confirmed by you directly, not guessed) and a
++new `steam:isDlcOwned` IPC handler calling `steamClient.apps
++.isDlcInstalled(appId)`. Returns `null`, not `false`, whenever Steam
++genuinely can't answer (`steamClient` unavailable, or a pack id with no
++`DLC_APP_IDS` entry) -- an explicit `true`/`false` from the real SDK is
++the only thing ever treated as authoritative; `null` means "couldn't
++check," never "not owned."
++
++**`DlcManager.loadInstalledPacks` -- Steam ownership checked first, file
++presence only as a fallback, not the whole story anymore.** An explicit
++`false` from Steam skips a pack entirely, without even attempting to
++fetch its `pack.json` -- closes the actual gap: nothing before this
++patch stopped a non-owner's disk from having a stray `pack.json` some
++other way and being silently treated as owning the pack. `true` or
++`null` both fall through to the existing file-presence fetch, so local
++dev/testing without Steam running is completely unaffected -- verified
++directly with four scripted scenarios (mocked `fetch` + a mocked
++`window.littleKnight.isDlcOwned`): no Electron bridge at all still
++resolves owned via file presence (dev fallback intact), Steam explicitly
++saying not-owned correctly excludes the pack even with `pack.json`
++present (the actual fix, confirmed working), Steam saying owned
++resolves owned, and Steam-available-but-`null` falls back to file
++presence exactly like the no-bridge case.
++
++**Still open, explicitly not solved here (see backlog):** the DLC art
++file itself still ships inside the base game's own `app.asar` for every
++player, gated only in-code now rather than by file absence. Actually
++keeping it off a non-owner's disk needs the harder fix discussed and
++deliberately deferred -- excluding `public/dlc/` from the base asar and
++serving it via a custom protocol/IPC instead of a raw relative `fetch()`
++(which can't cross the asar boundary on its own).
++
++**Verified:** `npx tsc --noEmit`, `npx vite build`, a full
++`electron-builder --linux dir` package build, a real launch of that
++packaged binary under `xvfb-run` (no Steam here, confirmed graceful
++fallback logs and no crash from the new IPC path), and the four-scenario
++ownership test above.
++
+ ### Wisplet's real source path fixed, Flying Eye is finally obtainable, Ruby Dragonling's sprite-location guidance corrected (patch 0375)
+ ```discord-update
+ Dev Update | Bug Fix
+diff --git a/src/game/managers/DlcManager.ts b/src/game/managers/DlcManager.ts
+index e92c4a8..af7ce38 100644
+--- a/src/game/managers/DlcManager.ts
++++ b/src/game/managers/DlcManager.ts
+@@ -50,6 +50,16 @@ import { PETS } from '../data/pets';
+  * below, though -- no skin picker or recruit screen reads
+  * `allSkins()`/`allHeroClasses()` yet, only the pet-hatch path does.
+  *
++ * Patch 0376 update: ownership is no longer purely file-presence-based.
++ * `loadInstalledPacks` now checks real Steam ownership via the SDK
++ * (`apps.isDlcInstalled`, through `window.littleKnight.isDlcOwned`) FIRST
++ * for every pack with a registered App ID, and only falls through to
++ * "does pack.json fetch" when Steam can't answer (not running, or no App
++ * ID registered yet) -- see `checkSteamOwnership`'s own comment. This
++ * closes a real gap the original design had: nothing previously stopped
++ * a non-owner's disk from having a stray `pack.json` some other way and
++ * being treated as owning it regardless.
++ *
+  * SKINS/HERO_CLASSES still drive every skin picker and recruit screen
+  * exactly as they did before this existed. This is the tested mechanism
+  * sitting ready; once a pack actually adds a skin or hero class, those
+@@ -112,6 +122,25 @@ async function fetchPack(packId: string): Promise<DlcPackManifest | null> {
+   }
+ }
+ 
++/**
++ * Real Steam ownership check via the SDK (patch 0376), when available --
++ * see electron/main.ts's own steam:isDlcOwned handler for the full
++ * null-vs-boolean contract. `null` (no Electron bridge at all -- the
++ * browser/dev-mode fallback -- or Steam not running, or this pack id not
++ * registered with a real App ID yet) means "couldn't check", never "not
++ * owned" -- loadInstalledPacks below falls back to file-presence in that
++ * case, exactly the same check every pack was gated by before this
++ * patch existed.
++ */
++async function checkSteamOwnership(packId: string): Promise<boolean | null> {
++  if (typeof window === 'undefined' || !window.littleKnight?.isDlcOwned) return null;
++  try {
++    return await window.littleKnight.isDlcOwned(packId);
++  } catch {
++    return null;
++  }
++}
++
+ export const DlcManager = {
+   /**
+    * Checks every known pack id once, in parallel, and caches the result
+@@ -119,16 +148,28 @@ export const DlcManager = {
+    * "load once, keep using the cached result" shape the hero/pet sprite
+    * manifests already follow). Safe to call more than once; only the
+    * first call actually does the fetching.
++   *
++   * Patch 0376: real Steam ownership (checkSteamOwnership) is now the
++   * AUTHORITATIVE signal whenever it's actually available -- an explicit
++   * `false` skips a pack entirely without even trying to fetch its
++   * pack.json, closing the gap file-presence-only detection always had
++   * (nothing previously stopped a non-owner's disk from having a stray
++   * pack.json some other way). `true` or `null` (couldn't check) both
++   * fall through to the pre-existing file-presence fetch, so local
++   * dev/testing without Steam running keeps working exactly as it did
++   * before this patch -- driven purely by whether the file exists.
+    */
+   async loadInstalledPacks(): Promise<void> {
+     if (loaded) return;
+     if (loadPromise) return loadPromise;
+     loadPromise = (async () => {
+-      const results = await Promise.all(KNOWN_DLC_PACKS.map(fetchPack));
+       const found: Record<string, DlcPackManifest> = {};
+-      for (const manifest of results) {
+-        if (manifest) found[manifest.id] = manifest;
+-      }
++      await Promise.all(KNOWN_DLC_PACKS.map(async (packId) => {
++        const steamOwned = await checkSteamOwnership(packId);
++        if (steamOwned === false) return;
++        const manifest = await fetchPack(packId);
++        if (manifest) found[packId] = manifest;
++      }));
+       installedPacks = found;
+       loaded = true;
+     })();
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 1130227..b52d76c 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -43,6 +43,10 @@ declare global {
+       minimize(): Promise<void>;
+       quit(): Promise<void>;
+       unlockAchievement(steamApiName: string): Promise<boolean>;
++      /** Patch 0376. `null` means "couldn't check" (no Steam, or the
++       *  pack id has no registered App ID yet) -- see main.ts's own
++       *  steam:isDlcOwned handler for the full contract. */
++      isDlcOwned(packId: string): Promise<boolean | null>;
+       /** Main-to-renderer only -- the tray's "Show Guild Hall" item. See
+        *  preload.ts's own comment on this same method for the full reasoning. */
+       onOpenGuildHall(callback: () => void): () => void;
+-- 
+2.43.0
+

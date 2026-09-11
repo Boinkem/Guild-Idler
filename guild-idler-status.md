@@ -7507,13 +7507,26 @@ pass (same caveat as the two entries above).
     (checking `public/dlc/` folders too, coordinated with
     `DlcManager`'s own async pack-loading) -- not done, a real future
     option if the exposure gap ever matters enough to justify it.
-  - **The base game's own Steam depot build must still exclude
-    `public/dlc/` entirely**, uploading it only as the Founder's Pack's
-    own separate depot (child App ID/store item already registered:
-    store item 1324580, package 1817980) -- that depot-split build
-    configuration doesn't exist yet. Unaffected by the correction above:
-    `pack.json` itself (the DLC-gating data, not the sprite art) still
-    belongs under `public/dlc/`, still needs the same depot split.
+  - **Done (patch 0376): DLC ownership is gated by the real Steam SDK now,
+    not file presence alone.** `DLC_APP_IDS` (`electron/main.ts`) has the
+    real registered App ID (Founder's Pack: 5256720). Real remaining gap,
+    packaging not logic: the base game's Steam depot build must still
+    exclude `public/dlc/` entirely, uploading it only as the Founder's
+    Pack's own separate depot (store item 1324580, package 1817980) --
+    that depot-split build configuration doesn't exist yet, and (found
+    while investigating patch 0376) isn't sufficient on its own even once
+    it does: `public/dlc/founders_pack/pack.json` currently gets bundled
+    INSIDE the base app's own `app.asar` during `vite build`, before
+    Steam is ever involved, confirmed directly via `npx asar list`. A
+    genuine fix needs the base build itself to stop bundling
+    `public/dlc/` into its own asar, plus a way for the renderer to
+    reach DLC files living outside it at runtime (a plain relative
+    `fetch()` can't cross that boundary) -- a custom protocol handler or
+    IPC call, not attempted yet. Deliberately deferred: the actual
+    GRANT is already correctly gated by real Steam ownership regardless
+    of this gap, so nobody can obtain or use DLC content without owning
+    it -- what ships unfixed is art sitting unused on a non-owner's
+    disk, a content-exposure gap, not a functional one.
   - **No UI reads `DlcManager.allSkins()`/`allPets()`/`allHeroClasses()`
     anywhere yet, except the one path that now matters: `PetManager.hatch`
     (patch 0374) does.** Every skin picker, pet roster, and class list
@@ -28169,6 +28182,71 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
 clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
+
+### DLC ownership now backed by the real Steam SDK, not file presence alone (patch 0376)
+```discord-update
+Dev Update | Patch 0376
+
+- DLC ownership (the Founder's Pack, and any future pack) now checks Steam for real, not just whether a file happens to exist on disk
+- Local testing without Steam running still works exactly as before -- nothing changes for dev/testing
+```
+
+Direct follow-up to the "Steam DLC depot split" request -- turned out the
+depot split itself doesn't actually solve anything on its own. Built the
+packaged app and looked inside it directly: `public/dlc/founders_pack/
+pack.json` gets bundled INSIDE `app.asar` during the base game's own
+`vite build`, before Steam is ever involved -- a Steam-side depot split
+can't retroactively un-bundle a file that's already sealed into the base
+app's own archive by the time Steam uploads anything. Confirmed with
+`npx asar list`, not assumed.
+
+That's actually two separable problems, discussed explicitly before
+picking which to fix now: whether the game *grants* DLC content
+correctly (a logic problem), and whether the DLC *art file* physically
+ships to non-owners' disks (a packaging problem, still real and still
+open -- see this doc's own DLC backlog section). This patch is the
+first one, the one that was actually gate-worthy from a game-integrity
+standpoint.
+
+**Real ownership check, `electron/main.ts`.** New `DLC_APP_IDS` map
+(currently just `founders_pack: 5256720`, the actual registered
+Founder's Pack App ID -- confirmed by you directly, not guessed) and a
+new `steam:isDlcOwned` IPC handler calling `steamClient.apps
+.isDlcInstalled(appId)`. Returns `null`, not `false`, whenever Steam
+genuinely can't answer (`steamClient` unavailable, or a pack id with no
+`DLC_APP_IDS` entry) -- an explicit `true`/`false` from the real SDK is
+the only thing ever treated as authoritative; `null` means "couldn't
+check," never "not owned."
+
+**`DlcManager.loadInstalledPacks` -- Steam ownership checked first, file
+presence only as a fallback, not the whole story anymore.** An explicit
+`false` from Steam skips a pack entirely, without even attempting to
+fetch its `pack.json` -- closes the actual gap: nothing before this
+patch stopped a non-owner's disk from having a stray `pack.json` some
+other way and being silently treated as owning the pack. `true` or
+`null` both fall through to the existing file-presence fetch, so local
+dev/testing without Steam running is completely unaffected -- verified
+directly with four scripted scenarios (mocked `fetch` + a mocked
+`window.littleKnight.isDlcOwned`): no Electron bridge at all still
+resolves owned via file presence (dev fallback intact), Steam explicitly
+saying not-owned correctly excludes the pack even with `pack.json`
+present (the actual fix, confirmed working), Steam saying owned
+resolves owned, and Steam-available-but-`null` falls back to file
+presence exactly like the no-bridge case.
+
+**Still open, explicitly not solved here (see backlog):** the DLC art
+file itself still ships inside the base game's own `app.asar` for every
+player, gated only in-code now rather than by file absence. Actually
+keeping it off a non-owner's disk needs the harder fix discussed and
+deliberately deferred -- excluding `public/dlc/` from the base asar and
+serving it via a custom protocol/IPC instead of a raw relative `fetch()`
+(which can't cross the asar boundary on its own).
+
+**Verified:** `npx tsc --noEmit`, `npx vite build`, a full
+`electron-builder --linux dir` package build, a real launch of that
+packaged binary under `xvfb-run` (no Steam here, confirmed graceful
+fallback logs and no crash from the new IPC path), and the four-scenario
+ownership test above.
 
 ### Wisplet's real source path fixed, Flying Eye is finally obtainable, Ruby Dragonling's sprite-location guidance corrected (patch 0375)
 ```discord-update

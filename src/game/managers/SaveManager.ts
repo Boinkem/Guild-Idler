@@ -43,6 +43,10 @@ declare global {
       minimize(): Promise<void>;
       quit(): Promise<void>;
       unlockAchievement(steamApiName: string): Promise<boolean>;
+      /** Patch 0376. `null` means "couldn't check" (no Steam, or the
+       *  pack id has no registered App ID yet) -- see main.ts's own
+       *  steam:isDlcOwned handler for the full contract. */
+      isDlcOwned(packId: string): Promise<boolean | null>;
       /** Main-to-renderer only -- the tray's "Show Guild Hall" item. See
        *  preload.ts's own comment on this same method for the full reasoning. */
       onOpenGuildHall(callback: () => void): () => void;

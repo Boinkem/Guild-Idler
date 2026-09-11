@@ -50,6 +50,16 @@ import { PETS } from '../data/pets';
  * below, though -- no skin picker or recruit screen reads
  * `allSkins()`/`allHeroClasses()` yet, only the pet-hatch path does.
  *
+ * Patch 0376 update: ownership is no longer purely file-presence-based.
+ * `loadInstalledPacks` now checks real Steam ownership via the SDK
+ * (`apps.isDlcInstalled`, through `window.littleKnight.isDlcOwned`) FIRST
+ * for every pack with a registered App ID, and only falls through to
+ * "does pack.json fetch" when Steam can't answer (not running, or no App
+ * ID registered yet) -- see `checkSteamOwnership`'s own comment. This
+ * closes a real gap the original design had: nothing previously stopped
+ * a non-owner's disk from having a stray `pack.json` some other way and
+ * being treated as owning it regardless.
+ *
  * SKINS/HERO_CLASSES still drive every skin picker and recruit screen
  * exactly as they did before this existed. This is the tested mechanism
  * sitting ready; once a pack actually adds a skin or hero class, those
@@ -112,6 +122,25 @@ async function fetchPack(packId: string): Promise<DlcPackManifest | null> {
   }
 }
 
+/**
+ * Real Steam ownership check via the SDK (patch 0376), when available --
+ * see electron/main.ts's own steam:isDlcOwned handler for the full
+ * null-vs-boolean contract. `null` (no Electron bridge at all -- the
+ * browser/dev-mode fallback -- or Steam not running, or this pack id not
+ * registered with a real App ID yet) means "couldn't check", never "not
+ * owned" -- loadInstalledPacks below falls back to file-presence in that
+ * case, exactly the same check every pack was gated by before this
+ * patch existed.
+ */
+async function checkSteamOwnership(packId: string): Promise<boolean | null> {
+  if (typeof window === 'undefined' || !window.littleKnight?.isDlcOwned) return null;
+  try {
+    return await window.littleKnight.isDlcOwned(packId);
+  } catch {
+    return null;
+  }
+}
+
 export const DlcManager = {
   /**
    * Checks every known pack id once, in parallel, and caches the result
@@ -119,16 +148,28 @@ export const DlcManager = {
    * "load once, keep using the cached result" shape the hero/pet sprite
    * manifests already follow). Safe to call more than once; only the
    * first call actually does the fetching.
+   *
+   * Patch 0376: real Steam ownership (checkSteamOwnership) is now the
+   * AUTHORITATIVE signal whenever it's actually available -- an explicit
+   * `false` skips a pack entirely without even trying to fetch its
+   * pack.json, closing the gap file-presence-only detection always had
+   * (nothing previously stopped a non-owner's disk from having a stray
+   * pack.json some other way). `true` or `null` (couldn't check) both
+   * fall through to the pre-existing file-presence fetch, so local
+   * dev/testing without Steam running keeps working exactly as it did
+   * before this patch -- driven purely by whether the file exists.
    */
   async loadInstalledPacks(): Promise<void> {
     if (loaded) return;
     if (loadPromise) return loadPromise;
     loadPromise = (async () => {
-      const results = await Promise.all(KNOWN_DLC_PACKS.map(fetchPack));
       const found: Record<string, DlcPackManifest> = {};
-      for (const manifest of results) {
-        if (manifest) found[manifest.id] = manifest;
-      }
+      await Promise.all(KNOWN_DLC_PACKS.map(async (packId) => {
+        const steamOwned = await checkSteamOwnership(packId);
+        if (steamOwned === false) return;
+        const manifest = await fetchPack(packId);
+        if (manifest) found[packId] = manifest;
+      }));
       installedPacks = found;
       loaded = true;
     })();

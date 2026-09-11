@@ -40,6 +40,13 @@ const api = {
   quit: (): Promise<void> => ipcRenderer.invoke('window:quit'),
   unlockAchievement: (steamApiName: string): Promise<boolean> => ipcRenderer.invoke('steam:unlockAchievement', steamApiName),
   /**
+   * Real Steam DLC ownership check (patch 0376) -- see main.ts's own
+   * steam:isDlcOwned handler for the full null-vs-boolean contract.
+   * `null` means "couldn't check" (no Steam, or this pack id isn't
+   * registered with a real App ID yet), never a definitive "not owned".
+   */
+  isDlcOwned: (packId: string): Promise<boolean | null> => ipcRenderer.invoke('steam:isDlcOwned', packId),
+  /**
    * The one main-to-renderer direction in this bridge -- everything else is
    * the renderer asking main to do something. This lets the tray's "Show
    * Guild Hall" item tell the already-running renderer to switch modes,

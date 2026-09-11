@@ -75,6 +75,23 @@ if (!gotSingleInstanceLock) {
 const STEAM_APP_ID = 5143490;
 
 /**
+ * Child App IDs for each DLC pack this game knows about, keyed by the same
+ * pack id string DlcManager.ts's KNOWN_DLC_PACKS/FOUNDER_PACK_ID use --
+ * patch 0376, the "real child App IDs that don't exist yet" gap the
+ * comment above already flagged as the reason `apps.isDlcInstalled`
+ * wasn't wired in at patch 0370. Founder's Pack registered for real:
+ * GuildBound - Founder's Pack, App ID 5256720. A pack id with no entry
+ * here (or an entry whose id isn't actually registered on Steam yet)
+ * simply can't be ownership-checked via the SDK -- see
+ * steam:isDlcOwned's own handler below for how that's treated (falls
+ * back to file-presence detection, same graceful-degradation shape
+ * every other Steam feature in this file already has).
+ */
+const DLC_APP_IDS: Record<string, number> = {
+  founders_pack: 5256720,
+};
+
+/**
  * `steamworks.js`'s `init()` starts its own internal ~33ms runCallbacks
  * loop (see node_modules/steamworks.js/index.js) — nothing to wire up for
  * that here, it's not a separate step this file owns.
@@ -1045,6 +1062,31 @@ ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
   } catch (err) {
     console.log(`[steam] achievement.activate failed for ${steamApiName}:`, err);
     return false;
+  }
+});
+
+/**
+ * Real Steam DLC ownership check (patch 0376) -- replaces file-presence
+ * detection as the AUTHORITATIVE signal whenever it's actually available.
+ * Returns `null`, not `false`, in every case where Steam genuinely
+ * can't answer the question (no steamClient at all, or a pack id with
+ * no entry in DLC_APP_IDS) -- DlcManager.ts's own caller treats `null`
+ * as "couldn't check, fall back to whether pack.json fetches" rather
+ * than as a definitive "not owned", which matters for local dev/testing
+ * without Steam running: that path still needs to keep working exactly
+ * as it did before this patch, driven purely by whether the file exists
+ * on disk. Only an explicit `true`/`false` from the real SDK call is
+ * ever treated as authoritative.
+ */
+ipcMain.handle('steam:isDlcOwned', (_e, packId: string) => {
+  if (!steamClient) return null;
+  const appId = DLC_APP_IDS[packId];
+  if (!appId) return null;
+  try {
+    return steamClient.apps.isDlcInstalled(appId);
+  } catch (err) {
+    console.log(`[steam] isDlcInstalled failed for ${packId} (app ${appId}):`, err);
+    return null;
   }
 });
 
