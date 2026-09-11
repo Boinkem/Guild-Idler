@@ -1,0 +1,152 @@
+From 48b45bd5921eb5e922f9992cd83e5f7fd1e925da Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Fri, 11 Sep 2026 08:33:49 +0000
+Subject: [PATCH] Patch 0379: leaderboard native addon built and verified
+ (Windows pending)
+
+Doc-only -- no game-repo code changed yet, deliberately. Records real,
+verified progress on the custom leaderboard addon (steamworks.js fork,
+not a separate module -- avoids a real double-SteamAPI_Init() risk
+confirmed via search). Compiles clean against the fork's real pinned
+steamworks-rs revision, a genuine Linux .node build exists via the real
+napi build toolchain, nm confirms it's wired to the real Steam API
+leaderboard functions. Not wired into electron/main.ts yet: doing so
+before a Windows build exists would break achievements/DLC on Windows
+too (index.js's platform loader has no fallback, and require() happens
+at module-import time before any try/catch runs), not just leave
+leaderboards unavailable there. Fork + Linux build + integration
+instructions handed over separately (steamworks-leaderboard-fork.zip),
+not committed into this repo -- it's a dependency, not part of
+Guildbound's own source, same as the plain npm steamworks.js package
+already is.
+---
+ guild-idler-status.md | 106 +++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 99 insertions(+), 7 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f9e8f46..fcf73df 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7599,13 +7599,16 @@ pass (same caveat as the two entries above).
+     still yours: mapping each of the 67 ids to a real Steam achievement
+     in the partner backend, and **the 134 icon assets (locked + unlocked
+     x 67)** -- the code change never touched that side of the work.
+-  - **Steam leaderboards** -- SDK integration (steamworks.js) is in as of
+-    patch 0370 for everything it supports, but it doesn't expose
+-    leaderboard calls at all (`FindOrCreateLeaderboard`/
+-    `UploadLeaderboardScore`/`DownloadLeaderboardEntries` aren't in its
+-    API) -- confirmed by inspecting its actual type declarations, not
+-    assumed. Real prerequisite now is the custom-addon-vs-defer decision
+-    from patch 0363's writeup, not "SDK integration" generically.
++  - **Steam leaderboards -- addon built and verified (patch 0379), one
++    real blocker left: a Windows build.** Custom-addon decision made
++    (patch 0363/0377); built as a fork of `steamworks.js` itself rather
++    than a separate module (avoids a real double-`SteamAPI_Init()` risk
++    -- see patch 0379's own writeup). Compiles clean, a genuine Linux
++    build exists and is confirmed wired to the real Steam API, full
++    fork + integration instructions handed over. Not wired into
++    `electron/main.ts` yet -- deliberately: doing so before a Windows
++    build exists would break achievements/DLC on Windows too, not just
++    leave leaderboards unavailable there.
+ 
+ ---
+ 
+@@ -28224,6 +28227,95 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Leaderboard native addon: built, compiled, and verified for real -- Windows build is the one remaining blocker (patch 0379)
++```discord-update
++Dev Update | Leaderboards
++
++- The leaderboard addon discussed since patch 0363 is now real, working code -- built as a fork of steamworks.js itself, not a separate addon
++- Compiles clean, produces a genuine working Linux build, confirmed wired to the real Steam API
++- One thing left before it can actually ship: a Windows build, which needs a real Windows machine or CI
++```
++
++Direct continuation of the custom-addon decision from patch 0363/0377's
++"which way on leaderboards" discussion -- "Custom native addon now
++(steamworks-rs based, Windows + Linux only since macOS is out)."
++
++**Corrected the architecture before writing any code.** A genuinely
++separate second native addon (the original framing) would have called
++its own `SteamAPI_Init()` independently of the existing `steamworks.js`
++dependency already wired in for achievements/DLC -- confirmed via search
++that two independent inits in one process is a real, documented failure
++mode ("Tried to Initialize the SteamAPI twice in one session!"), not a
++theoretical risk this doc had previously only flagged as "I genuinely
++don't know." Built as a **fork of `steamworks.js` itself** instead --
++its own maintainer explicitly points people at exactly this for missing
++features ("You can already use steamworks-rs, which is what this
++library is based on"), and existing forks doing the same thing were
++found for precedent. One native module in the whole process, one
++`init()` call, the leaderboard functions are just new methods sharing
++the same already-initialized client every other module in that source
++tree already uses (`crate::client::get_client()`).
++
++**Confirmed the underlying Rust crate already had everything needed,
++before assuming a from-scratch implementation was necessary.** The
++`steamworks` crate `steamworks.js` itself is built on already has full
++`find_or_create_leaderboard`/`upload_leaderboard_score`/
++`download_leaderboard_entries` support -- checked docs.rs directly, then
++confirmed by actually compiling a throwaway project against it (no
++Valve SDK download needed; `steamworks-sys` vendors what it needs).
++
++**Scoped to what this game actually needs, not a generic multi-
++leaderboard API** -- caught a design assumption from patch 0363 that
++turned out wrong once the real API was read properly: Global and
++Friends are a *download-time scope* (`LeaderboardDataRequest`) on ONE
++leaderboard, not two separately-created boards. `src/api/leaderboard.rs`
++reflects that: a single `GUILD_POWER` board, cached Rust-side after the
++first `find_or_create` rather than passed back to JS at all (the Steam
++`Leaderboard` handle's inner field isn't `pub` in steamworks-rs -- no
++public way to reconstruct one from a raw value across the JS boundary,
++so it never needs to cross it in the first place).
++
++**Every claim here is backed by something actually run, not just
++written:**
++- `cargo build` against the fork's own pinned `steamworks-rs` revision
++  (not just a generic crates.io version) -- clean, no errors.
++- `nm` on the resulting `.so` confirms `FindOrCreateLeaderboard`/
++  `UploadLeaderboardScore`/`DownloadLeaderboardEntries` show up as the
++  expected external symbols the real Steam API provides at runtime --
++  wired to the genuine SDK, not a stub.
++- A full **production build via the real `napi build` toolchain**
++  succeeded, producing an actual working
++  `steamworksjs.linux-x64-gnu.node` and auto-generating correct
++  TypeScript types (`leaderboard.uploadGuildPowerScore`,
++  `GuildPowerScope`, `GuildPowerEntry` all show up correctly camelCased
++  in the regenerated `client.d.ts`, doc comments carried through as
++  JSDoc).
++
++**Deliberately NOT wired into `electron/main.ts` yet -- a real
++regression risk was caught before shipping it, not after.** Swapping
++the existing npm `steamworks.js` dependency for this fork today would
++break Windows entirely, not just leaderboards: the fork only has a
++Linux build, `index.js`'s platform loader has no fallback for a missing
++platform `.node`, and that `require()` happens at module-import time,
++before the existing try/catch (which only wraps `.init()`) ever runs.
++Achievements and DLC currently work fine on Windows via the real npm
++package -- swapping prematurely would silently break both the moment
++this shipped, not just leave leaderboards unavailable. Held back
++explicitly rather than risk that.
++
++**What's actually left:** a real Windows build (needs an actual Windows
++machine or CI -- not something this sandboxed environment can produce,
++no MSVC toolchain available and cross-compiling a native napi module to
++Windows from Linux is fragile even with one), then the `package.json`
++swap, three new IPC handlers in `electron/main.ts`, and
++`src/game/leaderboard.ts`'s stub (`LEADERBOARD_READY` still `false`)
++swapping in the real calls. Full step-by-step instructions, plus the
++entire fork source and the working Linux build, handed over as
++`steamworks-leaderboard-fork.zip` -- not committed into this repo
++directly, since it's a separate dependency the same way the plain npm
++`steamworks.js` package already is, not part of Guildbound's own
++source.
++
+ ### A real, player-facing DLC display bug found and fixed: Ruby Dragonling would have shown up broken the moment anyone actually hatched one (patch 0377)
+ ```discord-update
+ Dev Update | Bug Fix
+-- 
+2.43.0
+
