@@ -1,0 +1,428 @@
+From d3a69aa41d8b43af6eec60f969ffdf567ba77504 Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Fri, 11 Sep 2026 04:36:27 +0000
+Subject: [PATCH] Patch 0372: Guild Power tier titles, Grimsby High Rollers,
+ Founder wording
+
+- Five auto-generated GUILD_RANK_* achievements (guildPowerLevel vs
+  GUILD_RANK_POWER_THRESHOLDS, now exported from guildRank.ts), granting
+  the existing tier names verbatim as guild titles.
+- Rising Guild is a starting default (createInitialState + migration
+  67->68, SAVE_VERSION 68), not an achievement -- fires instantly rather
+  than waiting on the first checkAll().
+- New PEDDLER_HIGH_ROLLERS_TITLE achievement: peddlerGoldSpent >=
+  1,000,000 -> 'High Rollers'.
+- DashboardPanel.tsx: Guild Rank readout removed (rank/currentGuildRank
+  cleaned up), title picker + 'next title at Y power' hint take its
+  place.
+- Founder title wording locked to 'The Founding Flame' in the status
+  doc -- not yet wired into code, still blocked on a real founder-pack
+  App ID.
+- Verified: tsc --noEmit, vite build, electron-builder --linux dir
+  package build, and a 7-check runtime script (via tsx) covering fresh-
+  state defaults, migration (both the empty and non-empty cases),
+  achievement threshold/title data, and id-collision safety.
+---
+ guild-idler-status.md                   | 125 +++++++++++++++++++++++-
+ src/game/data/guildRank.ts              |  18 +++-
+ src/game/data/json/achievements.json    |  48 +++++++++
+ src/game/managers/AchievementManager.ts |  38 +++++++
+ src/game/managers/SaveManager.ts        |  24 ++++-
+ src/game/types.ts                       |   2 +-
+ src/ui/panels/DashboardPanel.tsx        |  10 +-
+ 7 files changed, 250 insertions(+), 15 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 5969074..4e1fc11 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7475,9 +7475,16 @@ pass (same caveat as the two entries above).
+   and a future class/skin reskin pack are the same mechanism, just
+   different content inside `pack.json`. Two real gaps before either can
+   actually ship, beyond the "Consolidated" partner-backend steps below:
+-  - **What's actually in the founder pack** isn't decided -- a unique
+-    skin, a unique pet recolour, a title, some combination. Content
+-    decision, not a technical one.
++  - **Decided (patch 0372): a Ruby or Emerald recolour of the existing
++    Black Dragonling pet, granted via a dedicated "Founder's Egg" (same
++    guaranteed-species mechanism the Black Dragonling itself already
++    uses -- see the raid-drop version further up this doc), plus the
++    guild title "The Founding Flame" (wording locked patch 0372, not yet
++    wired in -- see that patch's own writeup). Two real gaps before
++    either can actually ship, beyond the "Consolidated" partner-backend
++    steps below:
++  - **The exact recolour (Ruby vs Emerald) isn't picked yet** -- cosmetic
++    call, not a technical one.
+   - **No UI reads `DlcManager.allSkins()`/`allPets()`/`allHeroClasses()`
+     anywhere yet.** Every skin picker, pet roster, and class list still
+     reads the base `SKINS`/`PETS`/`HERO_CLASSES` directly. The first
+@@ -28133,6 +28140,118 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Guild Power titles, a Grimsby title, and Founder's wording decided (patch 0372)
++```discord-update
++Dev Update | Guild Titles
++
++- Guild Power milestones now grant their own title, same way achievements already do -- reach a new rank, earn its title to display
++- Every guild starts life as Rising Guild -- the very first title, no achievement needed
++- New: spend a million gold at Grimsby's tables to become known as High Rollers
++- Dashboard: the old Guild Rank readout is gone -- your chosen title (and how much further to the next one) lives in its place now
++```
++
++Direct follow-up to patch 0371: "Guild Power has thresholds that have text
++associated with them, realm power and what not -- we should have titles
++granted at those thresholds too, and a start title perhaps 'Rising
++Guild'", plus "I'd like a Grimsby Title too -- Spend X amount of gold,
++get 'High Rollers'." Discussed first, patched together after, per direct
++request.
++
++**Guild Power tier titles -- the existing GUILD_RANK_TIERS names, made
++literal, not new epithets.** `guildRank.ts`'s six tiers already read as
++world-facing descriptors (Freelance Operators, Professional Contractors,
++Actors of Greater Calls, A Realm's Influence, A Realm's Protector,
++Ascended) -- reusing them verbatim as titles, rather than inventing
++separate flavour text, is a direct read of "move those Guild Rank
++display names into actual titles." `GUILD_RANK_POWER_THRESHOLDS` (the
++private threshold array driving the Dashboard's existing rank display)
++is now exported from `guildRank.ts` so AchievementManager.ts's checks
++read the literal same numbers the Dashboard's own tier boundaries use --
++never two sources of truth that could drift apart.
++
++Five of the six tiers (everything above Freelance Operators) are new
++auto-generated achievements, `GUILD_RANK_<TIER_ID>`, the exact same
++code-shape the existing `CHAIN_*`/`RAID_*` auto-generated loops already
++use -- one loop over `GUILD_RANK_TIERS`, no per-tier hand-written
++entries. Each checks `guildPowerLevel(state) >= <that tier's own
++threshold>` and grants its tier's name as a guild title through the
++same `grantsGuildTitle` mechanism patch 0371 already built -- no new
++grant plumbing, only new data. Titles are permanent once earned (an
++achievement never un-fires, per `checkAll`'s own `isUnlocked` guard), so
++a title earned at peak Guild Power stays available to select even if
++power later dips -- a record of what was reached, not a live meter.
++
++**Tier 0 (Freelance Operators / Rising Guild) is deliberately NOT one of
++those achievements.** A threshold of 0 would technically be true from
++the instant a save exists, but achievements only actually fire the next
++time `checkAll()` happens to run (the first quest resolving, say) --
++late for something meant to read as how the guild started out, and your
++own wording ("a start title") asked for exactly that immediacy. Instead:
++`createInitialState()` now seeds `guildTitles: ['Rising Guild']`,
++`activeGuildTitle: 'Rising Guild'` directly, so a brand-new guild has it
++from the very first frame, no action required. A new migration (67 ->
++68, `SAVE_VERSION` bumped to match) gives every EXISTING save the same
++default -- safe unconditionally, checked against `guildTitles.length ===
++0` first rather than assumed, since patch 0371 (the immediately prior
++migration) is what introduced `guildTitles` at all: every pre-0372 save
++is genuinely still empty at this point, nobody could have earned or
++picked a different title yet.
++
++**Grimsby's High Rollers -- a new manually-written achievement (not
++auto-generated, there's only one of it), `PEDDLER_HIGH_ROLLERS_TITLE`:
++`state.stats.peddlerGoldSpent >= 1,000,000`, granting "High Rollers".**
++Deliberately the Peddler-scoped lifetime-spend stat, not the game-wide
++`goldSpent` stat -- matches "a Grimsby Title" exactly, per your own
++clarification once the two were distinguished. Named identically to the
++existing `HIGH_ROLLER_UNLOCKED` achievement's own concept on purpose,
++confirmed as intentional rather than an accidental collision -- that one
++is the one-time unlock for playing at higher stakes at all; this one is
++the cumulative payoff for actually doing it a lot.
++
++**Founder's actual wording decided, not yet wired in.** "The Founding
++Flame" replaces the placeholder "Founder" name discussed alongside the
++founder-pack Egg idea -- ties to the Emerald/Ruby Dragonling recolour
++theme rather than reading as a plain purchase receipt. Deliberately NOT
++built into code this patch: granting it needs `DlcManager.owns()`
++against a real founder-pack App ID, which still doesn't exist (same
++standing blocker noted in the DLC backlog section of this doc). Recorded
++here so the wording is locked and ready the moment that pack is
++registered -- see this doc's own DLC section for the updated note.
++
++**Dashboard change: Guild Rank display removed, not just repainted.**
++The `<b>{rank.name}</b>` / blurb / "Next: X, Y more Guild Power" block
++is gone from `DashboardPanel.tsx` entirely -- `rank`/`currentGuildRank`
++(now unused there) removed along with it, caught by `noUnusedLocals`
++rather than left as dead code. In its place: the existing title
++`<select>` (patch 0371) is now the Dashboard's whole guild-identity
++block, followed by a small "Next title at Y more Guild Power: Z" line
++reusing the exact same `nextGuildRank`/`powerToNextRank` values the old
++block already computed -- per your own call to keep some form of that
++progress hint rather than drop it outright. This is a real behavior
++change flagged before building, not a silent one: Guild Rank was a live,
++always-current readout; the title shown now is whatever's selected,
++which the player can deliberately leave on an earlier one -- identity,
++not a meter, consistent with how Hero titles already worked before this
++system existed. LorePanel's own separate Guild Rank reference is
++untouched -- this only removes it from the Dashboard, per the specific
++request.
++
++**Verified:** `npx tsc --noEmit`, `npx vite build`, and a full
++`electron-builder --linux dir` package build all pass clean. Runtime
++logic (via `tsx`, not just inferred from types): a fresh guild starting
++with exactly `['Rising Guild']` already active, a pre-0372 empty save
++correctly migrating to the same default, a save that hypothetically
++already had a different title correctly NOT being clobbered by that
++migration, all five new `GUILD_RANK_*` achievement entries reading back
++their correct threshold and `grantsGuildTitle` text (matching the exact
++numbers `GUILD_RANK_POWER_THRESHOLDS` computes), the new
++`PEDDLER_HIGH_ROLLERS_TITLE` entry reading back correctly, and all 73
++achievement ids confirmed unique (no accidental collision from the six
++new entries) -- seven checks, all passing. Not yet checked: the actual
++picker/hint layout in a real running window, same standing caveat as
++every UI change in this environment (no display available for a visual
++pass).
++
+ ### New system: Guild Titles, a guild-wide subtitle earned through play (patch 0371)
+ ```discord-update
+ Dev Update | Guild Titles
+diff --git a/src/game/data/guildRank.ts b/src/game/data/guildRank.ts
+index c3d9f4d..7f0fdcc 100644
+--- a/src/game/data/guildRank.ts
++++ b/src/game/data/guildRank.ts
+@@ -60,7 +60,23 @@ export function rankTierForLevel(level: number): GuildRankTier {
+  * from there, further ascension stacks (uncapped, see power.ts) are the
+  * only thing left to grow.
+  */
+-const GUILD_RANK_POWER_THRESHOLDS = [0, 0.2, 0.4, 0.6, 0.8, 1.0].map(
++/**
++ * Thresholds for GUILD rank tiering, evenly spaced across
++ * GUILD_POWER_CEILING (see power.ts for how that ceiling is derived).
++ * A brand-new guild sits at 0/9,900 -> Freelance Operators. A single
++ * level-55 hero with nothing else invested sits at roughly 550/9,900 --
++ * still comfortably Freelance Operators, not Ascended, which is the bug
++ * this replaces (guild rank used to be driven off a single hero's level
++ * alone). "Ascended" is reserved for actually reaching the ceiling --
++ * from there, further ascension stacks (uncapped, see power.ts) are the
++ * only thing left to grow.
++ *
++ * Exported as of patch 0372 -- AchievementManager.ts's auto-generated
++ * GUILD_RANK_* achievements read these same thresholds directly, so a
++ * guild's title-earning cutoffs can never silently drift out of sync
++ * with the Dashboard's own tier boundaries.
++ */
++export const GUILD_RANK_POWER_THRESHOLDS = [0, 0.2, 0.4, 0.6, 0.8, 1.0].map(
+   (fraction) => Math.round(fraction * GUILD_POWER_CEILING),
+ );
+ 
+diff --git a/src/game/data/json/achievements.json b/src/game/data/json/achievements.json
+index e2dbd0c..295f381 100644
+--- a/src/game/data/json/achievements.json
++++ b/src/game/data/json/achievements.json
+@@ -534,5 +534,53 @@
+     "hidden": false,
+     "unlocksTrackId": "",
+     "grantsGuildTitle": ""
++  },
++  {
++    "id": "GUILD_RANK_PROFESSIONAL_CONTRACTORS",
++    "name": "Professional Contractors",
++    "description": "Reach Professional Contractors guild rank.",
++    "hidden": false,
++    "unlocksTrackId": "",
++    "grantsGuildTitle": "Professional Contractors"
++  },
++  {
++    "id": "GUILD_RANK_ACTORS_OF_GREATER_CALLS",
++    "name": "Actors of Greater Calls",
++    "description": "Reach Actors of Greater Calls guild rank.",
++    "hidden": false,
++    "unlocksTrackId": "",
++    "grantsGuildTitle": "Actors of Greater Calls"
++  },
++  {
++    "id": "GUILD_RANK_REALMS_INFLUENCE",
++    "name": "A Realm's Influence",
++    "description": "Reach A Realm's Influence guild rank.",
++    "hidden": false,
++    "unlocksTrackId": "",
++    "grantsGuildTitle": "A Realm's Influence"
++  },
++  {
++    "id": "GUILD_RANK_REALMS_PROTECTOR",
++    "name": "A Realm's Protector",
++    "description": "Reach A Realm's Protector guild rank.",
++    "hidden": false,
++    "unlocksTrackId": "",
++    "grantsGuildTitle": "A Realm's Protector"
++  },
++  {
++    "id": "GUILD_RANK_ASCENDED",
++    "name": "Ascended",
++    "description": "Reach Ascended, the highest tier of Guild Power.",
++    "hidden": false,
++    "unlocksTrackId": "",
++    "grantsGuildTitle": "Ascended"
++  },
++  {
++    "id": "PEDDLER_HIGH_ROLLERS_TITLE",
++    "name": "High Rollers",
++    "description": "Spend 1,000,000 gold at Grimsby's tables over your guild's lifetime.",
++    "hidden": false,
++    "unlocksTrackId": "",
++    "grantsGuildTitle": "High Rollers"
+   }
+ ]
+diff --git a/src/game/managers/AchievementManager.ts b/src/game/managers/AchievementManager.ts
+index 96b0f30..edf8dba 100644
+--- a/src/game/managers/AchievementManager.ts
++++ b/src/game/managers/AchievementManager.ts
+@@ -4,12 +4,19 @@ import { QUEST_CHAINS } from '../data/quests';
+ import { RAIDS } from '../data/raids';
+ import { PETS } from '../data/pets';
+ import { HARVEST_TOOLS, WAREHOUSE_UPGRADE } from '../data/harvestUpgrades';
++import { GUILD_RANK_TIERS, GUILD_RANK_POWER_THRESHOLDS } from '../data/guildRank';
++import { guildPowerLevel } from '../power';
+ import { GameState } from '../types';
+ 
+ const ASCENSION_FOR_LIVING_LEGEND = 10;
+ const STREAK_FOR_ON_A_ROLL = 5;
+ const AGAINST_THE_ODDS_THRESHOLD = 30;
+ const PRESTIGE_COUNT_FOR_VETERAN_RETIREE = 5;
++/** Patch 0372, direct request ("Million gold at Grimsby") -- lifetime
++ *  gold spent AT GRIMSBY specifically (state.stats.peddlerGoldSpent),
++ *  not the game-wide goldSpent stat -- deliberately the Peddler-scoped
++ *  number, matching "a Grimsby Title" as asked for. */
++const PEDDLER_GOLD_SPENT_FOR_HIGH_ROLLERS = 1_000_000;
+ 
+ /**
+  * Every check reads only GameState — no event payload required. That's
+@@ -147,6 +154,15 @@ const CHECKS: Record<string, Check> = {
+    *  for the general milestone" pattern PEDDLER_HIGH_ROLLER_JACKPOT
+    *  already established for Cards. */
+   PEDDLER_TAB_JACKPOT: (state) => (state.stats.peddlerTabJackpots ?? 0) >= 1,
++
++  /** Patch 0372 -- grants the "High Rollers" guild title (see
++   *  achievements.json's own grantsGuildTitle entry for this id).
++   *  Deliberately named distinctly from the existing HIGH_ROLLER_UNLOCKED
++   *  achievement above (a one-time fee to unlock higher stakes) -- this
++   *  one is the cumulative payoff for actually playing at those stakes a
++   *  lot, not the unlock itself. */
++  PEDDLER_HIGH_ROLLERS_TITLE: (state) =>
++    (state.stats.peddlerGoldSpent ?? 0) >= PEDDLER_GOLD_SPENT_FOR_HIGH_ROLLERS,
+ };
+ 
+ /**
+@@ -181,6 +197,28 @@ for (const raid of RAIDS) {
+   CHECKS[`RAID_${raid.id.toUpperCase()}_CLEARED`] = (state) => (state.completedRaids ?? []).includes(raid.id);
+ }
+ 
++/**
++ * Auto-generated, one per Guild Power rank tier ABOVE the first -- id
++ * `GUILD_RANK_<UPPER_SNAKE_TIER_ID>`, checking current Guild Power
++ * against that tier's own threshold (GUILD_RANK_POWER_THRESHOLDS,
++ * index-aligned with GUILD_RANK_TIERS). Tier 0 (freelance_operators) is
++ * deliberately skipped here -- its title ("Rising Guild") is a starting
++ * default baked into createInitialState/the SaveManager migration
++ * instead of an achievement, since a threshold of 0 would technically
++ * unlock instantly but only actually FIRE the next time checkAll()
++ * happens to run (the first quest, say) -- late for something meant to
++ * read as "how the guild started out." Every achievement fired here is
++ * permanent once granted (state.unlockedAchievements never un-sets an
++ * entry), so this correctly stays true forever even if Guild Power ever
++ * dipped back below a threshold afterward -- titles are a record of
++ * what was reached, not a live meter.
++ */
++for (let i = 1; i < GUILD_RANK_TIERS.length; i++) {
++  const tier = GUILD_RANK_TIERS[i];
++  const threshold = GUILD_RANK_POWER_THRESHOLDS[i];
++  CHECKS[`GUILD_RANK_${tier.id.toUpperCase()}`] = (state) => guildPowerLevel(state) >= threshold;
++}
++
+ export const AchievementManager = {
+   isUnlocked(state: GameState, id: string): boolean {
+     return id in state.unlockedAchievements;
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 918ee2d..f541dd6 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -257,8 +257,13 @@ export function createInitialState(now = Date.now()): GameState {
+     grimsbyPermanentSpotUnlocked: false,
+     goldRenownExchangeUnlocked: false,
+     guildDonationsTotal: 0,
+-    guildTitles: [],
+-    activeGuildTitle: null,
++    // Patch 0372: "Rising Guild" is a starting default, not an earned
++    // achievement -- see AchievementManager.ts's own comment on why a
++    // threshold-0 tier is deliberately NOT one of the auto-generated
++    // GUILD_RANK_* achievements. Every brand-new guild starts with this
++    // already earned and already displayed.
++    guildTitles: ['Rising Guild'],
++    activeGuildTitle: 'Rising Guild',
+   };
+ }
+ 
+@@ -1474,6 +1479,21 @@ const MIGRATIONS: Record<number, Migration> = {
+     guildTitles: save.guildTitles ?? [],
+     activeGuildTitle: save.activeGuildTitle ?? null,
+   }),
++  /**
++   * Patch 0372 -- gives every existing save the same "Rising Guild"
++   * starting default a brand-new one gets from createInitialState. Only
++   * ever touches a save that has NO titles at all yet (guildTitles.length
++   * === 0) -- the Guild Titles feature is brand new as of the immediately
++   * prior migration, so at this point every existing save's guildTitles
++   * is genuinely still empty (nobody could have earned or picked a
++   * different one yet), making this safe as an unconditional default
++   * rather than something that could ever clobber a real earned choice.
++   */
++  67: (save) => {
++    const titles = Array.isArray(save.guildTitles) ? save.guildTitles as string[] : [];
++    if (titles.length > 0) return { ...save, version: 68 };
++    return { ...save, version: 68, guildTitles: ['Rising Guild'], activeGuildTitle: 'Rising Guild' };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 4128e0c..bf27b60 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 67;
++export const SAVE_VERSION = 68;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index 42a9b42..06fa9b3 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -9,7 +9,7 @@ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression
+ import { AchievementManager } from '../../game/managers/AchievementManager';
+ import { attentionCounts } from '../../game/attention';
+ import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
+-import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
++import { nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+ import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
+ import { formatGold, formatNumber } from '../../game/util';
+ import { LeaderboardModal } from '../LeaderboardModal';
+@@ -212,7 +212,6 @@ export function DashboardPanel() {
+   const { settings } = useSettings();
+   const breakdown = guildPowerBreakdown(state);
+   const power = breakdown.total;
+-  const rank = currentGuildRank(state);
+   const next = nextGuildRank(state);
+   const powerNeeded = powerToNextRank(state);
+   const [showBreakdown, setShowBreakdown] = useState(false);
+@@ -304,14 +303,9 @@ export function DashboardPanel() {
+             </select>
+           </div>
+         )}
+-        <div className="spread" style={{ marginTop: 6 }}>
+-          <span className="tiny muted">Guild Rank</span>
+-          <b className="gold-text">{rank.name}</b>
+-        </div>
+-        <p className="tiny muted" style={{ margin: '2px 0 0' }}>{rank.blurb}</p>
+         {next && powerNeeded !== null && (
+           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-            Next: {next.name}, {formatNumber(powerNeeded)} more Guild Power.
++            Next title at {formatNumber(powerNeeded)} more Guild Power: {next.name}.
+           </p>
+         )}
+       </div>
+-- 
+2.43.0
+

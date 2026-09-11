@@ -7475,9 +7475,16 @@ pass (same caveat as the two entries above).
   and a future class/skin reskin pack are the same mechanism, just
   different content inside `pack.json`. Two real gaps before either can
   actually ship, beyond the "Consolidated" partner-backend steps below:
-  - **What's actually in the founder pack** isn't decided -- a unique
-    skin, a unique pet recolour, a title, some combination. Content
-    decision, not a technical one.
+  - **Decided (patch 0372): a Ruby or Emerald recolour of the existing
+    Black Dragonling pet, granted via a dedicated "Founder's Egg" (same
+    guaranteed-species mechanism the Black Dragonling itself already
+    uses -- see the raid-drop version further up this doc), plus the
+    guild title "The Founding Flame" (wording locked patch 0372, not yet
+    wired in -- see that patch's own writeup). Two real gaps before
+    either can actually ship, beyond the "Consolidated" partner-backend
+    steps below:
+  - **The exact recolour (Ruby vs Emerald) isn't picked yet** -- cosmetic
+    call, not a technical one.
   - **No UI reads `DlcManager.allSkins()`/`allPets()`/`allHeroClasses()`
     anywhere yet.** Every skin picker, pet roster, and class list still
     reads the base `SKINS`/`PETS`/`HERO_CLASSES` directly. The first
@@ -28132,6 +28139,118 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
 clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
+
+### Guild Power titles, a Grimsby title, and Founder's wording decided (patch 0372)
+```discord-update
+Dev Update | Guild Titles
+
+- Guild Power milestones now grant their own title, same way achievements already do -- reach a new rank, earn its title to display
+- Every guild starts life as Rising Guild -- the very first title, no achievement needed
+- New: spend a million gold at Grimsby's tables to become known as High Rollers
+- Dashboard: the old Guild Rank readout is gone -- your chosen title (and how much further to the next one) lives in its place now
+```
+
+Direct follow-up to patch 0371: "Guild Power has thresholds that have text
+associated with them, realm power and what not -- we should have titles
+granted at those thresholds too, and a start title perhaps 'Rising
+Guild'", plus "I'd like a Grimsby Title too -- Spend X amount of gold,
+get 'High Rollers'." Discussed first, patched together after, per direct
+request.
+
+**Guild Power tier titles -- the existing GUILD_RANK_TIERS names, made
+literal, not new epithets.** `guildRank.ts`'s six tiers already read as
+world-facing descriptors (Freelance Operators, Professional Contractors,
+Actors of Greater Calls, A Realm's Influence, A Realm's Protector,
+Ascended) -- reusing them verbatim as titles, rather than inventing
+separate flavour text, is a direct read of "move those Guild Rank
+display names into actual titles." `GUILD_RANK_POWER_THRESHOLDS` (the
+private threshold array driving the Dashboard's existing rank display)
+is now exported from `guildRank.ts` so AchievementManager.ts's checks
+read the literal same numbers the Dashboard's own tier boundaries use --
+never two sources of truth that could drift apart.
+
+Five of the six tiers (everything above Freelance Operators) are new
+auto-generated achievements, `GUILD_RANK_<TIER_ID>`, the exact same
+code-shape the existing `CHAIN_*`/`RAID_*` auto-generated loops already
+use -- one loop over `GUILD_RANK_TIERS`, no per-tier hand-written
+entries. Each checks `guildPowerLevel(state) >= <that tier's own
+threshold>` and grants its tier's name as a guild title through the
+same `grantsGuildTitle` mechanism patch 0371 already built -- no new
+grant plumbing, only new data. Titles are permanent once earned (an
+achievement never un-fires, per `checkAll`'s own `isUnlocked` guard), so
+a title earned at peak Guild Power stays available to select even if
+power later dips -- a record of what was reached, not a live meter.
+
+**Tier 0 (Freelance Operators / Rising Guild) is deliberately NOT one of
+those achievements.** A threshold of 0 would technically be true from
+the instant a save exists, but achievements only actually fire the next
+time `checkAll()` happens to run (the first quest resolving, say) --
+late for something meant to read as how the guild started out, and your
+own wording ("a start title") asked for exactly that immediacy. Instead:
+`createInitialState()` now seeds `guildTitles: ['Rising Guild']`,
+`activeGuildTitle: 'Rising Guild'` directly, so a brand-new guild has it
+from the very first frame, no action required. A new migration (67 ->
+68, `SAVE_VERSION` bumped to match) gives every EXISTING save the same
+default -- safe unconditionally, checked against `guildTitles.length ===
+0` first rather than assumed, since patch 0371 (the immediately prior
+migration) is what introduced `guildTitles` at all: every pre-0372 save
+is genuinely still empty at this point, nobody could have earned or
+picked a different title yet.
+
+**Grimsby's High Rollers -- a new manually-written achievement (not
+auto-generated, there's only one of it), `PEDDLER_HIGH_ROLLERS_TITLE`:
+`state.stats.peddlerGoldSpent >= 1,000,000`, granting "High Rollers".**
+Deliberately the Peddler-scoped lifetime-spend stat, not the game-wide
+`goldSpent` stat -- matches "a Grimsby Title" exactly, per your own
+clarification once the two were distinguished. Named identically to the
+existing `HIGH_ROLLER_UNLOCKED` achievement's own concept on purpose,
+confirmed as intentional rather than an accidental collision -- that one
+is the one-time unlock for playing at higher stakes at all; this one is
+the cumulative payoff for actually doing it a lot.
+
+**Founder's actual wording decided, not yet wired in.** "The Founding
+Flame" replaces the placeholder "Founder" name discussed alongside the
+founder-pack Egg idea -- ties to the Emerald/Ruby Dragonling recolour
+theme rather than reading as a plain purchase receipt. Deliberately NOT
+built into code this patch: granting it needs `DlcManager.owns()`
+against a real founder-pack App ID, which still doesn't exist (same
+standing blocker noted in the DLC backlog section of this doc). Recorded
+here so the wording is locked and ready the moment that pack is
+registered -- see this doc's own DLC section for the updated note.
+
+**Dashboard change: Guild Rank display removed, not just repainted.**
+The `<b>{rank.name}</b>` / blurb / "Next: X, Y more Guild Power" block
+is gone from `DashboardPanel.tsx` entirely -- `rank`/`currentGuildRank`
+(now unused there) removed along with it, caught by `noUnusedLocals`
+rather than left as dead code. In its place: the existing title
+`<select>` (patch 0371) is now the Dashboard's whole guild-identity
+block, followed by a small "Next title at Y more Guild Power: Z" line
+reusing the exact same `nextGuildRank`/`powerToNextRank` values the old
+block already computed -- per your own call to keep some form of that
+progress hint rather than drop it outright. This is a real behavior
+change flagged before building, not a silent one: Guild Rank was a live,
+always-current readout; the title shown now is whatever's selected,
+which the player can deliberately leave on an earlier one -- identity,
+not a meter, consistent with how Hero titles already worked before this
+system existed. LorePanel's own separate Guild Rank reference is
+untouched -- this only removes it from the Dashboard, per the specific
+request.
+
+**Verified:** `npx tsc --noEmit`, `npx vite build`, and a full
+`electron-builder --linux dir` package build all pass clean. Runtime
+logic (via `tsx`, not just inferred from types): a fresh guild starting
+with exactly `['Rising Guild']` already active, a pre-0372 empty save
+correctly migrating to the same default, a save that hypothetically
+already had a different title correctly NOT being clobbered by that
+migration, all five new `GUILD_RANK_*` achievement entries reading back
+their correct threshold and `grantsGuildTitle` text (matching the exact
+numbers `GUILD_RANK_POWER_THRESHOLDS` computes), the new
+`PEDDLER_HIGH_ROLLERS_TITLE` entry reading back correctly, and all 73
+achievement ids confirmed unique (no accidental collision from the six
+new entries) -- seven checks, all passing. Not yet checked: the actual
+picker/hint layout in a real running window, same standing caveat as
+every UI change in this environment (no display available for a visual
+pass).
 
 ### New system: Guild Titles, a guild-wide subtitle earned through play (patch 0371)
 ```discord-update

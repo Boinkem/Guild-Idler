@@ -9,7 +9,7 @@ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression
 import { AchievementManager } from '../../game/managers/AchievementManager';
 import { attentionCounts } from '../../game/attention';
 import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
-import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+import { nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
 import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { formatGold, formatNumber } from '../../game/util';
 import { LeaderboardModal } from '../LeaderboardModal';
@@ -212,7 +212,6 @@ export function DashboardPanel() {
   const { settings } = useSettings();
   const breakdown = guildPowerBreakdown(state);
   const power = breakdown.total;
-  const rank = currentGuildRank(state);
   const next = nextGuildRank(state);
   const powerNeeded = powerToNextRank(state);
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -304,14 +303,9 @@ export function DashboardPanel() {
             </select>
           </div>
         )}
-        <div className="spread" style={{ marginTop: 6 }}>
-          <span className="tiny muted">Guild Rank</span>
-          <b className="gold-text">{rank.name}</b>
-        </div>
-        <p className="tiny muted" style={{ margin: '2px 0 0' }}>{rank.blurb}</p>
         {next && powerNeeded !== null && (
           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-            Next: {next.name}, {formatNumber(powerNeeded)} more Guild Power.
+            Next title at {formatNumber(powerNeeded)} more Guild Power: {next.name}.
           </p>
         )}
       </div>

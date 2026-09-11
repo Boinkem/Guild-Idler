@@ -257,8 +257,13 @@ export function createInitialState(now = Date.now()): GameState {
     grimsbyPermanentSpotUnlocked: false,
     goldRenownExchangeUnlocked: false,
     guildDonationsTotal: 0,
-    guildTitles: [],
-    activeGuildTitle: null,
+    // Patch 0372: "Rising Guild" is a starting default, not an earned
+    // achievement -- see AchievementManager.ts's own comment on why a
+    // threshold-0 tier is deliberately NOT one of the auto-generated
+    // GUILD_RANK_* achievements. Every brand-new guild starts with this
+    // already earned and already displayed.
+    guildTitles: ['Rising Guild'],
+    activeGuildTitle: 'Rising Guild',
   };
 }
 
@@ -1474,6 +1479,21 @@ const MIGRATIONS: Record<number, Migration> = {
     guildTitles: save.guildTitles ?? [],
     activeGuildTitle: save.activeGuildTitle ?? null,
   }),
+  /**
+   * Patch 0372 -- gives every existing save the same "Rising Guild"
+   * starting default a brand-new one gets from createInitialState. Only
+   * ever touches a save that has NO titles at all yet (guildTitles.length
+   * === 0) -- the Guild Titles feature is brand new as of the immediately
+   * prior migration, so at this point every existing save's guildTitles
+   * is genuinely still empty (nobody could have earned or picked a
+   * different one yet), making this safe as an unconditional default
+   * rather than something that could ever clobber a real earned choice.
+   */
+  67: (save) => {
+    const titles = Array.isArray(save.guildTitles) ? save.guildTitles as string[] : [];
+    if (titles.length > 0) return { ...save, version: 68 };
+    return { ...save, version: 68, guildTitles: ['Rising Guild'], activeGuildTitle: 'Rising Guild' };
+  },
 };
 
 export const SaveManager = {

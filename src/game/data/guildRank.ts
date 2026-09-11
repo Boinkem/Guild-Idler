@@ -60,7 +60,23 @@ export function rankTierForLevel(level: number): GuildRankTier {
  * from there, further ascension stacks (uncapped, see power.ts) are the
  * only thing left to grow.
  */
-const GUILD_RANK_POWER_THRESHOLDS = [0, 0.2, 0.4, 0.6, 0.8, 1.0].map(
+/**
+ * Thresholds for GUILD rank tiering, evenly spaced across
+ * GUILD_POWER_CEILING (see power.ts for how that ceiling is derived).
+ * A brand-new guild sits at 0/9,900 -> Freelance Operators. A single
+ * level-55 hero with nothing else invested sits at roughly 550/9,900 --
+ * still comfortably Freelance Operators, not Ascended, which is the bug
+ * this replaces (guild rank used to be driven off a single hero's level
+ * alone). "Ascended" is reserved for actually reaching the ceiling --
+ * from there, further ascension stacks (uncapped, see power.ts) are the
+ * only thing left to grow.
+ *
+ * Exported as of patch 0372 -- AchievementManager.ts's auto-generated
+ * GUILD_RANK_* achievements read these same thresholds directly, so a
+ * guild's title-earning cutoffs can never silently drift out of sync
+ * with the Dashboard's own tier boundaries.
+ */
+export const GUILD_RANK_POWER_THRESHOLDS = [0, 0.2, 0.4, 0.6, 0.8, 1.0].map(
   (fraction) => Math.round(fraction * GUILD_POWER_CEILING),
 );
 

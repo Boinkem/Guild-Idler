@@ -4,12 +4,19 @@ import { QUEST_CHAINS } from '../data/quests';
 import { RAIDS } from '../data/raids';
 import { PETS } from '../data/pets';
 import { HARVEST_TOOLS, WAREHOUSE_UPGRADE } from '../data/harvestUpgrades';
+import { GUILD_RANK_TIERS, GUILD_RANK_POWER_THRESHOLDS } from '../data/guildRank';
+import { guildPowerLevel } from '../power';
 import { GameState } from '../types';
 
 const ASCENSION_FOR_LIVING_LEGEND = 10;
 const STREAK_FOR_ON_A_ROLL = 5;
 const AGAINST_THE_ODDS_THRESHOLD = 30;
 const PRESTIGE_COUNT_FOR_VETERAN_RETIREE = 5;
+/** Patch 0372, direct request ("Million gold at Grimsby") -- lifetime
+ *  gold spent AT GRIMSBY specifically (state.stats.peddlerGoldSpent),
+ *  not the game-wide goldSpent stat -- deliberately the Peddler-scoped
+ *  number, matching "a Grimsby Title" as asked for. */
+const PEDDLER_GOLD_SPENT_FOR_HIGH_ROLLERS = 1_000_000;
 
 /**
  * Every check reads only GameState — no event payload required. That's
@@ -147,6 +154,15 @@ const CHECKS: Record<string, Check> = {
    *  for the general milestone" pattern PEDDLER_HIGH_ROLLER_JACKPOT
    *  already established for Cards. */
   PEDDLER_TAB_JACKPOT: (state) => (state.stats.peddlerTabJackpots ?? 0) >= 1,
+
+  /** Patch 0372 -- grants the "High Rollers" guild title (see
+   *  achievements.json's own grantsGuildTitle entry for this id).
+   *  Deliberately named distinctly from the existing HIGH_ROLLER_UNLOCKED
+   *  achievement above (a one-time fee to unlock higher stakes) -- this
+   *  one is the cumulative payoff for actually playing at those stakes a
+   *  lot, not the unlock itself. */
+  PEDDLER_HIGH_ROLLERS_TITLE: (state) =>
+    (state.stats.peddlerGoldSpent ?? 0) >= PEDDLER_GOLD_SPENT_FOR_HIGH_ROLLERS,
 };
 
 /**
@@ -179,6 +195,28 @@ for (const chain of QUEST_CHAINS) {
 for (const raid of RAIDS) {
   if (raid.id === 'requiem_last_god') continue;
   CHECKS[`RAID_${raid.id.toUpperCase()}_CLEARED`] = (state) => (state.completedRaids ?? []).includes(raid.id);
+}
+
+/**
+ * Auto-generated, one per Guild Power rank tier ABOVE the first -- id
+ * `GUILD_RANK_<UPPER_SNAKE_TIER_ID>`, checking current Guild Power
+ * against that tier's own threshold (GUILD_RANK_POWER_THRESHOLDS,
+ * index-aligned with GUILD_RANK_TIERS). Tier 0 (freelance_operators) is
+ * deliberately skipped here -- its title ("Rising Guild") is a starting
+ * default baked into createInitialState/the SaveManager migration
+ * instead of an achievement, since a threshold of 0 would technically
+ * unlock instantly but only actually FIRE the next time checkAll()
+ * happens to run (the first quest, say) -- late for something meant to
+ * read as "how the guild started out." Every achievement fired here is
+ * permanent once granted (state.unlockedAchievements never un-sets an
+ * entry), so this correctly stays true forever even if Guild Power ever
+ * dipped back below a threshold afterward -- titles are a record of
+ * what was reached, not a live meter.
+ */
+for (let i = 1; i < GUILD_RANK_TIERS.length; i++) {
+  const tier = GUILD_RANK_TIERS[i];
+  const threshold = GUILD_RANK_POWER_THRESHOLDS[i];
+  CHECKS[`GUILD_RANK_${tier.id.toUpperCase()}`] = (state) => guildPowerLevel(state) >= threshold;
 }
 
 export const AchievementManager = {

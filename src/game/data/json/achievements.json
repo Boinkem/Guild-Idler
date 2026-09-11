@@ -534,5 +534,53 @@
     "hidden": false,
     "unlocksTrackId": "",
     "grantsGuildTitle": ""
+  },
+  {
+    "id": "GUILD_RANK_PROFESSIONAL_CONTRACTORS",
+    "name": "Professional Contractors",
+    "description": "Reach Professional Contractors guild rank.",
+    "hidden": false,
+    "unlocksTrackId": "",
+    "grantsGuildTitle": "Professional Contractors"
+  },
+  {
+    "id": "GUILD_RANK_ACTORS_OF_GREATER_CALLS",
+    "name": "Actors of Greater Calls",
+    "description": "Reach Actors of Greater Calls guild rank.",
+    "hidden": false,
+    "unlocksTrackId": "",
+    "grantsGuildTitle": "Actors of Greater Calls"
+  },
+  {
+    "id": "GUILD_RANK_REALMS_INFLUENCE",
+    "name": "A Realm's Influence",
+    "description": "Reach A Realm's Influence guild rank.",
+    "hidden": false,
+    "unlocksTrackId": "",
+    "grantsGuildTitle": "A Realm's Influence"
+  },
+  {
+    "id": "GUILD_RANK_REALMS_PROTECTOR",
+    "name": "A Realm's Protector",
+    "description": "Reach A Realm's Protector guild rank.",
+    "hidden": false,
+    "unlocksTrackId": "",
+    "grantsGuildTitle": "A Realm's Protector"
+  },
+  {
+    "id": "GUILD_RANK_ASCENDED",
+    "name": "Ascended",
+    "description": "Reach Ascended, the highest tier of Guild Power.",
+    "hidden": false,
+    "unlocksTrackId": "",
+    "grantsGuildTitle": "Ascended"
+  },
+  {
+    "id": "PEDDLER_HIGH_ROLLERS_TITLE",
+    "name": "High Rollers",
+    "description": "Spend 1,000,000 gold at Grimsby's tables over your guild's lifetime.",
+    "hidden": false,
+    "unlocksTrackId": "",
+    "grantsGuildTitle": "High Rollers"
   }
 ]
