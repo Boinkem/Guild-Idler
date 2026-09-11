@@ -7382,6 +7382,44 @@ pass (same caveat as the two entries above).
   bar the first batch set.
 
 ### Platform / distribution
+- **Needs manual testing with a real Steam client -- nothing here can be
+  verified further without one.** Every patch that touched Steam
+  integration (0370, 0374, 0376, 0377) was verified as far as this
+  sandbox environment allows -- type-checking, real packaged builds, and
+  even actual launches under `xvfb-run` -- but none of that environment
+  has ever had a real Steam client installed or logged in, so the
+  following has only ever been exercised via mocked/simulated responses,
+  never the genuine SDK:
+  - **Achievement unlocking, live, with Steam actually running.** The
+    graceful no-Steam fallback path is thoroughly confirmed; the actual
+    overlay notification popping and the achievement showing unlocked in
+    Steam's own UI never has been.
+  - **The 67 achievement ids in `achievements.json` actually match what
+    was entered in the Steamworks partner backend** -- the export sheet
+    was handed over, but whether it was pasted in correctly (and whether
+    every icon pair was uploaded) isn't something this environment can
+    check at all.
+  - **DLC ownership (`apps.isDlcInstalled`, patch 0376) against a real
+    owning account and a real non-owning account.** Confirmed correct
+    via four scripted mock scenarios; never against Steam's actual
+    answer for a real purchase.
+  - **The Founder's Pack grant actually firing end-to-end** -- Ruby
+    Dragonling egg + "The Founding Flame" title -- for a real account
+    that owns the pack, including confirming it displays correctly
+    everywhere patch 0377 fixed (hatch-reveal screen, Nests tab,
+    enlarged view, idle companion) rather than just passing the
+    synthetic-pool test that stood in for it here.
+  - **A Windows build, specifically.** Every build/package verification
+    this whole thread has been Linux-only (the only target buildable in
+    this sandbox) -- the `.node`/`.dll` pair for `steamworks.js` ships
+    identically per its own `dist/win64/` contents, but Windows' own
+    dynamic loader has never actually been exercised.
+  - **The Hatchery-access navigation fix (patch 0374)** -- confirmed by
+    reading the code path and fixing the exact mechanism a real
+    playtester already hit once; worth deliberately trying to reproduce
+    the original bug again (egg in storage, Hatchery still locked, try
+    every "Go to Hatchery" entry point) to confirm it's actually closed
+    in a live build, not just in the diff.
 - **Done (patch 0363): the App ID exists -- GuildBound (5143490).** The
   one action item on this list that wasn't code or waiting on anyone
   else is now cleared, unblocking the "Consolidated" list below all at
