@@ -1,0 +1,285 @@
+From 8ffa49d0c6efe4d8f826129dcd3f2d0092350638 Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Fri, 11 Sep 2026 07:20:39 +0000
+Subject: [PATCH] Patch 0377: fix DLC pet display -- Ruby Dragonling would've
+ shown blank
+
+- New DlcManager.petDef(id), same fallback shape as heroClassDef: base
+  PET_BY_ID first, then any installed pack's own pets.
+- Fixed 4 real UI call sites that were still reading base-only
+  PET_BY_ID directly for an already-owned pet's display data:
+  HatchRevealModal (the actual hatch-reveal screen), HatcheryPanel
+  (Nests tab card), PetEnlargedModal, IdleView (equipped companion).
+  A hatched Ruby Dragonling would have shown as blank/'Unnamed' in all
+  four before this patch.
+- TestingPanel.tsx now lists DlcManager.allPets() so DLC pets can be
+  test-spawned directly.
+- StatsPanel.tsx's 'Pet breeds collected' deliberately left reading the
+  base PETS array -- same reasoning ALL_PETS_COLLECTED's own achievement
+  check already applies (a base-game completionist stat shouldn't
+  require owning DLC to complete).
+- Verified: tsc --noEmit, vite build, electron-builder --linux dir
+  package build, a direct runtime test confirming petDef() resolves a
+  DLC pet/base pet/unknown id correctly, and a full-tree grep confirming
+  no other PET_BY_ID[...] lookup remains outside the two intentional
+  ones.
+---
+ guild-idler-status.md           | 76 +++++++++++++++++++++++++++++----
+ src/game/managers/DlcManager.ts | 27 +++++++++++-
+ src/ui/HatchRevealModal.tsx     |  4 +-
+ src/ui/IdleView.tsx             |  4 +-
+ src/ui/PetEnlargedModal.tsx     |  4 +-
+ src/ui/panels/HatcheryPanel.tsx |  5 ++-
+ src/ui/panels/TestingPanel.tsx  |  4 +-
+ 7 files changed, 105 insertions(+), 19 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0329464..830fdbf 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7527,14 +7527,17 @@ pass (same caveat as the two entries above).
+     of this gap, so nobody can obtain or use DLC content without owning
+     it -- what ships unfixed is art sitting unused on a non-owner's
+     disk, a content-exposure gap, not a functional one.
+-  - **No UI reads `DlcManager.allSkins()`/`allPets()`/`allHeroClasses()`
+-    anywhere yet, except the one path that now matters: `PetManager.hatch`
+-    (patch 0374) does.** Every skin picker, pet roster, and class list
+-    still reads the base `SKINS`/`PETS`/`HERO_CLASSES` directly for
+-    everything else. Not a blocker for the founder pack specifically
+-    (its content is a dedicated-egg pet and a title, neither needs a
+-    picker UI), but still true for any future pack that adds a skin,
+-    pet the general pool can roll, or hero class.
++  - **Done (patch 0377): every display-side DLC pet lookup fixed, not
++    just hatch-resolution.** `DlcManager.petDef(id)` is now used by
++    `HatchRevealModal`, `HatcheryPanel`, `PetEnlargedModal`, `IdleView`,
++    and `TestingPanel` -- a hatched Ruby Dragonling reads correctly
++    everywhere a player (or a dev testing it) would actually see it,
++    fixed after finding it would have shown as blank/"Unnamed" on the
++    literal reveal screen. Still true, and still real work for a future
++    pack: `allSkins()`/`allHeroClasses()` aren't read by any skin picker
++    or recruit screen yet -- not a gap for the Founder's Pack itself
++    (no skin or hero class in its content), but real the moment a
++    future pack adds either.
+ - **Consolidated: everything blocked on a real Steam App ID existing.**
+   Nothing here needs code today -- all of it is either partner-backend
+   configuration or a small, well-scoped follow-up once the account/App ID
+@@ -28183,6 +28186,63 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### A real, player-facing DLC display bug found and fixed: Ruby Dragonling would have shown up broken the moment anyone actually hatched one (patch 0377)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed a bug where a hatched Ruby Dragonling would show up with no name or description anywhere in the UI
++- Affected the exact "you hatched X!" reveal screen, the Nests tab, the enlarged pet view, and the idle companion view
++- The Testing panel can now spawn any DLC pet directly too, for easier testing going forward
++```
++
++Direct follow-up to "DLC-aware UI" -- checked what that phrase actually
++meant concretely rather than assuming, and found something worse than a
++missing picker: patch 0374 fixed `PetManager.hatch` to correctly
++*resolve* a dedicated DLC egg to its real species, but nothing fixed
++what happens *after* that -- every UI surface that displays an
++already-owned pet's name/description was still reading the base-only
++`PET_BY_ID` directly. A real player hatching their Founder's Egg would
++have hit `HatchRevealModal` -- the actual "you hatched X!" screen,
++patch 0303's own comment even calls out `def?.name ?? 'Unnamed'` as the
++existing fallback -- and seen exactly that: "Unnamed," no description,
++for the literal first look at premium DLC content. Same gap in
++`HatcheryPanel` (the Nests tab card), `PetEnlargedModal` (the enlarged
++view), and `IdleView` (equipping it as the active companion). Found by
++grepping every UI import of pet data directly, not assumed from the
++hatch-resolution fix alone being "probably enough."
++
++**New `DlcManager.petDef(id)`**, same fallback shape `heroClassDef`
++already established: checks the base `PET_BY_ID` first, then any
++installed pack's own pets, stamping `requiresDlc` on a DLC hit the same
++way `allPets()`/`allSkins()`/`allHeroClasses()` already do. One shared
++lookup, used at all four call sites, rather than four separate ad hoc
++fixes that could drift apart from each other later.
++
++**`TestingPanel.tsx`'s pet-spawn buttons now read `DlcManager.allPets()`**
++instead of the base `PETS` array -- a developer can now test-spawn Ruby
++Dragonling directly rather than needing to actually own the pack and
++trigger a real grant to see how it renders. `engine.testAddPet` itself
++needed no change -- it already routes through `PetManager.hatch`, which
++patch 0374 already made DLC-aware.
++
++**`StatsPanel.tsx`'s "Pet breeds collected X/Y" deliberately left
++untouched**, checked consciously rather than overlooked: that's a
++base-game completionist stat, and counting DLC pets against it would
++make it uncompletable for anyone who doesn't own the pack -- same
++reasoning `ALL_PETS_COLLECTED`'s own achievement check already applies
++by reading the base `PETS` array specifically, not `allPets()`.
++
++**Verified:** `npx tsc --noEmit`, `npx vite build`, a full
++`electron-builder --linux dir` package build, and a direct runtime test
++(via `tsx`, mocked Steam ownership + `pack.json` fetch) confirming
++`DlcManager.petDef('ruby_dragonling')` actually resolves with the
++correct name and `requiresDlc` stamp, a base pet still resolves
++unaffected, and an unknown id correctly returns `undefined`. A final
++grep across the whole `src` tree confirms no other `PET_BY_ID[...]`
++lookup remains outside the two intentional ones (`petDef`'s own base-
++first check, and `PetManager.hatch`'s already-redundant defensive
++fallback).
++
+ ### DLC ownership now backed by the real Steam SDK, not file presence alone (patch 0376)
+ ```discord-update
+ Dev Update | Patch 0376
+diff --git a/src/game/managers/DlcManager.ts b/src/game/managers/DlcManager.ts
+index af7ce38..fc7a02e 100644
+--- a/src/game/managers/DlcManager.ts
++++ b/src/game/managers/DlcManager.ts
+@@ -1,6 +1,6 @@
+ import { SkinDef, SKINS, HeroClassDef, HERO_CLASSES, RECRUIT_COST } from '../data/progression';
+ import { PetDef } from '../types';
+-import { PETS } from '../data/pets';
++import { PETS, PET_BY_ID } from '../data/pets';
+ 
+ /**
+  * How DLC content actually gets added later without touching this app's
+@@ -208,6 +208,31 @@ export const DlcManager = {
+     return [...PETS, ...extra];
+   },
+ 
++  /**
++   * DLC-aware single-pet lookup, same fallback shape as heroClassDef
++   * below -- checks the base PET_BY_ID first (the common case), then
++   * falls through to any installed pack's own pets. Added patch 0377,
++   * genuinely needed rather than theoretical: every UI surface that
++   * shows an already-owned pet's name/description (HatcheryPanel,
++   * PetEnlargedModal, HatchRevealModal, IdleView's equipped-companion
++   * view) was still reading the base-only PET_BY_ID directly, which
++   * would have shown a DLC-only species like Ruby Dragonling as blank/
++   * "Unnamed" the moment a real player actually hatched one -- the
++   * display-side counterpart to patch 0374's hatch-resolution fix
++   * (correctly ASSIGNING a DLC species was fixed then; correctly
++   * DISPLAYING it afterward wasn't, until this). Returns undefined for
++   * a pet id that isn't in either, same as a plain PET_BY_ID index
++   * already could.
++   */
++  petDef(id: string): PetDef | undefined {
++    if (id in PET_BY_ID) return PET_BY_ID[id];
++    for (const pack of Object.values(installedPacks)) {
++      const found = pack.pets?.find((p) => p.id === id);
++      if (found) return { ...found, requiresDlc: pack.id };
++    }
++    return undefined;
++  },
++
+   /** Base hero classes plus whatever any currently-owned DLC pack adds. */
+   allHeroClasses(): HeroClassDef[] {
+     const extra = Object.values(installedPacks).flatMap(
+diff --git a/src/ui/HatchRevealModal.tsx b/src/ui/HatchRevealModal.tsx
+index 4043f0a..a74b1f0 100644
+--- a/src/ui/HatchRevealModal.tsx
++++ b/src/ui/HatchRevealModal.tsx
+@@ -1,6 +1,6 @@
+ import { useState } from 'react';
+ import { useEngine } from './useEngine';
+-import { PET_BY_ID } from '../game/data/pets';
++import { DlcManager } from '../game/managers/DlcManager';
+ import { PetSprite } from './sprites/PetSprite';
+ import { RarityPill } from './RarityPill';
+ 
+@@ -31,7 +31,7 @@ export function HatchRevealModal() {
+   }
+   if (!pet) return null;
+ 
+-  const def = PET_BY_ID[pet.defId];
++  const def = DlcManager.petDef(pet.defId);
+ 
+   // Commits whatever's in the draft field (if it actually differs from
+   // the pet's current name) before running the given follow-up action --
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index 093e456..b210d91 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -6,7 +6,7 @@ import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
+ import { RaidPartySprites, raidPartyScale } from './sprites/RaidPartySprites';
+ import { HeroStatusList } from './HeroStatusBar';
+ import { PetSprite } from './sprites/PetSprite';
+-import { PET_BY_ID } from '../game/data/pets';
++import { DlcManager } from '../game/managers/DlcManager';
+ import { HeroManager } from '../game/managers/HeroManager';
+ import { formatDuration, formatGold } from '../game/util';
+ 
+@@ -154,7 +154,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   // most equipped species (red panda, crow) don't have anything
+   // analogous to attack frames anyway.
+   const equippedPet = hero.equippedPetId ? engine.state.pets.find((p) => p.uid === hero.equippedPetId) : undefined;
+-  const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
++  const petDef = equippedPet ? DlcManager.petDef(equippedPet.defId) ?? null : null;
+ 
+   /**
+    * Free-drag the pet to a custom spot, reusing the SAME lock/unlock state
+diff --git a/src/ui/PetEnlargedModal.tsx b/src/ui/PetEnlargedModal.tsx
+index f39a8d0..f2de3aa 100644
+--- a/src/ui/PetEnlargedModal.tsx
++++ b/src/ui/PetEnlargedModal.tsx
+@@ -1,6 +1,6 @@
+ import { useState } from 'react';
+ import { Pet } from '../game/types';
+-import { PET_BY_ID } from '../game/data/pets';
++import { DlcManager } from '../game/managers/DlcManager';
+ import { PetSprite, PetAnimation } from './sprites/PetSprite';
+ import { RarityPill } from './RarityPill';
+ 
+@@ -21,7 +21,7 @@ const VIEW_OPTIONS: { key: PetAnimation; label: string }[] = [
+  * asked for either way.
+  */
+ export function PetEnlargedModal({ pet, onClose }: { pet: Pet; onClose: () => void }) {
+-  const def = PET_BY_ID[pet.defId];
++  const def = DlcManager.petDef(pet.defId);
+   const [view, setView] = useState<PetAnimation>('idle');
+ 
+   return (
+diff --git a/src/ui/panels/HatcheryPanel.tsx b/src/ui/panels/HatcheryPanel.tsx
+index 5805bc1..62115ba 100644
+--- a/src/ui/panels/HatcheryPanel.tsx
++++ b/src/ui/panels/HatcheryPanel.tsx
+@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { PetManager } from '../../game/managers/PetManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { PET_BY_ID, hatchXpThreshold } from '../../game/data/pets';
++import { DlcManager } from '../../game/managers/DlcManager';
++import { hatchXpThreshold } from '../../game/data/pets';
+ import { FEEDABLE_MATERIALS } from '../../game/data/materials';
+ import { EggInstance, MaterialId, Pet } from '../../game/types';
+ import { RarityPill } from '../RarityPill';
+@@ -231,7 +232,7 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
+   const engine = useEngine();
+   const state = engine.state;
+   const now = useNow(5000);
+-  const def = PET_BY_ID[pet.defId];
++  const def = DlcManager.petDef(pet.defId);
+   const [editing, setEditing] = useState(false);
+   const [draft, setDraft] = useState(pet.name);
+   const [feedMaterial, setFeedMaterial] = useState<MaterialId>('herbs');
+diff --git a/src/ui/panels/TestingPanel.tsx b/src/ui/panels/TestingPanel.tsx
+index e68ae24..a64116b 100644
+--- a/src/ui/panels/TestingPanel.tsx
++++ b/src/ui/panels/TestingPanel.tsx
+@@ -1,7 +1,7 @@
+ import { useState } from 'react';
+ import { useEngine } from '../useEngine';
+ import { formatGold, formatDuration, RARITY_ORDER } from '../../game/util';
+-import { PETS } from '../../game/data/pets';
++import { DlcManager } from '../../game/managers/DlcManager';
+ import { RAIDS } from '../../game/data/raids';
+ import { PeddlerManager } from '../../game/managers/PeddlerManager';
+ import { GUILD_HALL_DECORATIONS } from '../../game/data/guildHallDecor';
+@@ -149,7 +149,7 @@ export function TestingPanel() {
+       </div>
+       <p className="tiny muted" style={{ marginBottom: 4 }}>Hatch a specific species directly (skips the egg entirely):</p>
+       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+-        {PETS.map((def) => (
++        {DlcManager.allPets().map((def) => (
+           <button key={def.id} onClick={() => engine.testAddPet(def.id)}>+ {def.name}</button>
+         ))}
+       </div>
+-- 
+2.43.0
+

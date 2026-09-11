@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { PetManager } from '../../game/managers/PetManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { PET_BY_ID, hatchXpThreshold } from '../../game/data/pets';
+import { DlcManager } from '../../game/managers/DlcManager';
+import { hatchXpThreshold } from '../../game/data/pets';
 import { FEEDABLE_MATERIALS } from '../../game/data/materials';
 import { EggInstance, MaterialId, Pet } from '../../game/types';
 import { RarityPill } from '../RarityPill';
@@ -231,7 +232,7 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
   const engine = useEngine();
   const state = engine.state;
   const now = useNow(5000);
-  const def = PET_BY_ID[pet.defId];
+  const def = DlcManager.petDef(pet.defId);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(pet.name);
   const [feedMaterial, setFeedMaterial] = useState<MaterialId>('herbs');

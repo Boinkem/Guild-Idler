@@ -1,6 +1,6 @@
 import { SkinDef, SKINS, HeroClassDef, HERO_CLASSES, RECRUIT_COST } from '../data/progression';
 import { PetDef } from '../types';
-import { PETS } from '../data/pets';
+import { PETS, PET_BY_ID } from '../data/pets';
 
 /**
  * How DLC content actually gets added later without touching this app's
@@ -206,6 +206,31 @@ export const DlcManager = {
       (pack) => (pack.pets ?? []).map((p) => ({ ...p, requiresDlc: pack.id })),
     );
     return [...PETS, ...extra];
+  },
+
+  /**
+   * DLC-aware single-pet lookup, same fallback shape as heroClassDef
+   * below -- checks the base PET_BY_ID first (the common case), then
+   * falls through to any installed pack's own pets. Added patch 0377,
+   * genuinely needed rather than theoretical: every UI surface that
+   * shows an already-owned pet's name/description (HatcheryPanel,
+   * PetEnlargedModal, HatchRevealModal, IdleView's equipped-companion
+   * view) was still reading the base-only PET_BY_ID directly, which
+   * would have shown a DLC-only species like Ruby Dragonling as blank/
+   * "Unnamed" the moment a real player actually hatched one -- the
+   * display-side counterpart to patch 0374's hatch-resolution fix
+   * (correctly ASSIGNING a DLC species was fixed then; correctly
+   * DISPLAYING it afterward wasn't, until this). Returns undefined for
+   * a pet id that isn't in either, same as a plain PET_BY_ID index
+   * already could.
+   */
+  petDef(id: string): PetDef | undefined {
+    if (id in PET_BY_ID) return PET_BY_ID[id];
+    for (const pack of Object.values(installedPacks)) {
+      const found = pack.pets?.find((p) => p.id === id);
+      if (found) return { ...found, requiresDlc: pack.id };
+    }
+    return undefined;
   },
 
   /** Base hero classes plus whatever any currently-owned DLC pack adds. */

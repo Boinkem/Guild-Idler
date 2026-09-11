@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { formatGold, formatDuration, RARITY_ORDER } from '../../game/util';
-import { PETS } from '../../game/data/pets';
+import { DlcManager } from '../../game/managers/DlcManager';
 import { RAIDS } from '../../game/data/raids';
 import { PeddlerManager } from '../../game/managers/PeddlerManager';
 import { GUILD_HALL_DECORATIONS } from '../../game/data/guildHallDecor';
@@ -149,7 +149,7 @@ export function TestingPanel() {
       </div>
       <p className="tiny muted" style={{ marginBottom: 4 }}>Hatch a specific species directly (skips the egg entirely):</p>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        {PETS.map((def) => (
+        {DlcManager.allPets().map((def) => (
           <button key={def.id} onClick={() => engine.testAddPet(def.id)}>+ {def.name}</button>
         ))}
       </div>

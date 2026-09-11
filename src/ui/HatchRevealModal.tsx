@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEngine } from './useEngine';
-import { PET_BY_ID } from '../game/data/pets';
+import { DlcManager } from '../game/managers/DlcManager';
 import { PetSprite } from './sprites/PetSprite';
 import { RarityPill } from './RarityPill';
 
@@ -31,7 +31,7 @@ export function HatchRevealModal() {
   }
   if (!pet) return null;
 
-  const def = PET_BY_ID[pet.defId];
+  const def = DlcManager.petDef(pet.defId);
 
   // Commits whatever's in the draft field (if it actually differs from
   // the pet's current name) before running the given follow-up action --

@@ -7527,14 +7527,17 @@ pass (same caveat as the two entries above).
     of this gap, so nobody can obtain or use DLC content without owning
     it -- what ships unfixed is art sitting unused on a non-owner's
     disk, a content-exposure gap, not a functional one.
-  - **No UI reads `DlcManager.allSkins()`/`allPets()`/`allHeroClasses()`
-    anywhere yet, except the one path that now matters: `PetManager.hatch`
-    (patch 0374) does.** Every skin picker, pet roster, and class list
-    still reads the base `SKINS`/`PETS`/`HERO_CLASSES` directly for
-    everything else. Not a blocker for the founder pack specifically
-    (its content is a dedicated-egg pet and a title, neither needs a
-    picker UI), but still true for any future pack that adds a skin,
-    pet the general pool can roll, or hero class.
+  - **Done (patch 0377): every display-side DLC pet lookup fixed, not
+    just hatch-resolution.** `DlcManager.petDef(id)` is now used by
+    `HatchRevealModal`, `HatcheryPanel`, `PetEnlargedModal`, `IdleView`,
+    and `TestingPanel` -- a hatched Ruby Dragonling reads correctly
+    everywhere a player (or a dev testing it) would actually see it,
+    fixed after finding it would have shown as blank/"Unnamed" on the
+    literal reveal screen. Still true, and still real work for a future
+    pack: `allSkins()`/`allHeroClasses()` aren't read by any skin picker
+    or recruit screen yet -- not a gap for the Founder's Pack itself
+    (no skin or hero class in its content), but real the moment a
+    future pack adds either.
 - **Consolidated: everything blocked on a real Steam App ID existing.**
   Nothing here needs code today -- all of it is either partner-backend
   configuration or a small, well-scoped follow-up once the account/App ID
@@ -28182,6 +28185,63 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
 clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
+
+### A real, player-facing DLC display bug found and fixed: Ruby Dragonling would have shown up broken the moment anyone actually hatched one (patch 0377)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed a bug where a hatched Ruby Dragonling would show up with no name or description anywhere in the UI
+- Affected the exact "you hatched X!" reveal screen, the Nests tab, the enlarged pet view, and the idle companion view
+- The Testing panel can now spawn any DLC pet directly too, for easier testing going forward
+```
+
+Direct follow-up to "DLC-aware UI" -- checked what that phrase actually
+meant concretely rather than assuming, and found something worse than a
+missing picker: patch 0374 fixed `PetManager.hatch` to correctly
+*resolve* a dedicated DLC egg to its real species, but nothing fixed
+what happens *after* that -- every UI surface that displays an
+already-owned pet's name/description was still reading the base-only
+`PET_BY_ID` directly. A real player hatching their Founder's Egg would
+have hit `HatchRevealModal` -- the actual "you hatched X!" screen,
+patch 0303's own comment even calls out `def?.name ?? 'Unnamed'` as the
+existing fallback -- and seen exactly that: "Unnamed," no description,
+for the literal first look at premium DLC content. Same gap in
+`HatcheryPanel` (the Nests tab card), `PetEnlargedModal` (the enlarged
+view), and `IdleView` (equipping it as the active companion). Found by
+grepping every UI import of pet data directly, not assumed from the
+hatch-resolution fix alone being "probably enough."
+
+**New `DlcManager.petDef(id)`**, same fallback shape `heroClassDef`
+already established: checks the base `PET_BY_ID` first, then any
+installed pack's own pets, stamping `requiresDlc` on a DLC hit the same
+way `allPets()`/`allSkins()`/`allHeroClasses()` already do. One shared
+lookup, used at all four call sites, rather than four separate ad hoc
+fixes that could drift apart from each other later.
+
+**`TestingPanel.tsx`'s pet-spawn buttons now read `DlcManager.allPets()`**
+instead of the base `PETS` array -- a developer can now test-spawn Ruby
+Dragonling directly rather than needing to actually own the pack and
+trigger a real grant to see how it renders. `engine.testAddPet` itself
+needed no change -- it already routes through `PetManager.hatch`, which
+patch 0374 already made DLC-aware.
+
+**`StatsPanel.tsx`'s "Pet breeds collected X/Y" deliberately left
+untouched**, checked consciously rather than overlooked: that's a
+base-game completionist stat, and counting DLC pets against it would
+make it uncompletable for anyone who doesn't own the pack -- same
+reasoning `ALL_PETS_COLLECTED`'s own achievement check already applies
+by reading the base `PETS` array specifically, not `allPets()`.
+
+**Verified:** `npx tsc --noEmit`, `npx vite build`, a full
+`electron-builder --linux dir` package build, and a direct runtime test
+(via `tsx`, mocked Steam ownership + `pack.json` fetch) confirming
+`DlcManager.petDef('ruby_dragonling')` actually resolves with the
+correct name and `requiresDlc` stamp, a base pet still resolves
+unaffected, and an unknown id correctly returns `undefined`. A final
+grep across the whole `src` tree confirms no other `PET_BY_ID[...]`
+lookup remains outside the two intentional ones (`petDef`'s own base-
+first check, and `PetManager.hatch`'s already-redundant defensive
+fallback).
 
 ### DLC ownership now backed by the real Steam SDK, not file presence alone (patch 0376)
 ```discord-update

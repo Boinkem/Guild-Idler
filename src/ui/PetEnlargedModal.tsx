@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pet } from '../game/types';
-import { PET_BY_ID } from '../game/data/pets';
+import { DlcManager } from '../game/managers/DlcManager';
 import { PetSprite, PetAnimation } from './sprites/PetSprite';
 import { RarityPill } from './RarityPill';
 
@@ -21,7 +21,7 @@ const VIEW_OPTIONS: { key: PetAnimation; label: string }[] = [
  * asked for either way.
  */
 export function PetEnlargedModal({ pet, onClose }: { pet: Pet; onClose: () => void }) {
-  const def = PET_BY_ID[pet.defId];
+  const def = DlcManager.petDef(pet.defId);
   const [view, setView] = useState<PetAnimation>('idle');
 
   return (

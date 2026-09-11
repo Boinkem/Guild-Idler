@@ -6,7 +6,7 @@ import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
 import { RaidPartySprites, raidPartyScale } from './sprites/RaidPartySprites';
 import { HeroStatusList } from './HeroStatusBar';
 import { PetSprite } from './sprites/PetSprite';
-import { PET_BY_ID } from '../game/data/pets';
+import { DlcManager } from '../game/managers/DlcManager';
 import { HeroManager } from '../game/managers/HeroManager';
 import { formatDuration, formatGold } from '../game/util';
 
@@ -154,7 +154,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   // most equipped species (red panda, crow) don't have anything
   // analogous to attack frames anyway.
   const equippedPet = hero.equippedPetId ? engine.state.pets.find((p) => p.uid === hero.equippedPetId) : undefined;
-  const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
+  const petDef = equippedPet ? DlcManager.petDef(equippedPet.defId) ?? null : null;
 
   /**
    * Free-drag the pet to a custom spot, reusing the SAME lock/unlock state
