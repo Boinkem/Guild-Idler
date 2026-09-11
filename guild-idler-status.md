@@ -28140,6 +28140,88 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Pet sprite pipeline: Squirrel and Glimmerwing cut, Mossback/Tidewhelp source paths corrected, four "2D Pixel Art" species confirmed import-ready (patch 0373)
+```discord-update
+Dev Update | Pet Sprites
+
+- Removed Squirrel and Glimmerwing -- Squirrel's sprite wasn't up to standard, Glimmerwing never had one
+- Fixed the Mossback and Tidewhelp source paths after both packs turned out to live in differently-named folders than expected
+- Confirmed (by actually running the import) that Skelly, Imp, Dragonling, and Mimic are ready to go -- including Dragonling's black recolour, which reads exactly as a proper "Black Dragonling" should
+```
+
+Follow-up to the pet-sprite-folder audit from a few patches back. Real asset
+files (`public/pets/`) never travel through a text patch -- gitignored on
+purpose, regenerated locally via `tools/import_pets.py` -- so this patch is
+entirely the import script and `pets.json` catching up to the actual source
+packs now in hand, not new sprite files themselves.
+
+**Squirrel removed** (`tools/import_pets.py`, `pets.json`) -- direct
+request, the supplied sheet's quality wasn't up to standard for this pet.
+Same treatment the Bandit (raccoon) spec already got earlier in this file
+for the same reason: removed entirely rather than left dormant with a
+`PetDef` pointing at nothing, comment left in its place explaining why in
+case a better pack replaces it later.
+
+**Glimmerwing removed** from `pets.json` -- never had an `import_pets.py`
+spec to begin with, so this is pure data cleanup, nothing lost on the
+tooling side.
+
+**Two path corrections, both caught by actually trying to run the
+import against the real packs rather than assuming the existing specs
+were right:**
+- **Mossback** -- the correct `ToxicFrog` pack was supplied (a first
+  upload turned out to be an unrelated frog sheet, caught and corrected
+  before this shipped). Its own top-level folder is `ToxicFrog`, not the
+  `Frog` the spec previously expected -- corrected to match exactly what
+  a plain unzip of the real pack produces, same "unrenamed, zero manual
+  steps" principle the six-species comment block above it already
+  established.
+- **Tidewhelp** -- re-supplied pack's top-level folder is
+  `otter_sprite_pack`, not `Otter`. Raised as possibly a different pack
+  entirely; checked directly and it isn't -- same filenames, same
+  uniform 200x200 frames, run cycle already faces right in the raw art.
+  Only the folder name needed correcting.
+
+**Verified by actually running `tools/import_pets.py` against the real
+combined source packs, not just reading the spec and assuming it's
+right** -- genuinely necessary here, since a spec that merely looks
+correct on paper is exactly what both path bugs above would have looked
+like right up until someone tried to run it. Every frame count produced
+matched the previously-supplied `manifest.json` exactly (Mossback
+idle 8/movement 7/catch 6/damage 4, Tidewhelp idle 4/movement 3, Skelly
+idle 6/movement 6/catch 9/damage 4, Imp idle 7/movement 7/catch 9/damage 6,
+Dragonling idle 4/movement 4/catch 6/damage 3, Mimic idle 8/movement 12/
+catch 14/damage 6) -- confirming that manifest was already generated
+from these exact assets at some point, not a stale or placeholder file.
+Spot-checked the actual output pixels too: Dragonling's `common` tier
+renders as a genuine charcoal-black dragon with deep-maroon wings and
+glowing red eyes -- confirming, concretely rather than by inference, that
+this recolour mechanism already fully **is** what "Black Dragonling" was
+ever going to be. No separate `black_dragonling` PetDef is needed or was
+ever missing -- the recoloured `common` tier of the single `dragonling`
+species already is it. Legendary tier spot-checked too (hue-shifts to
+purple wings from the black base, as designed). Skelly, Imp, Dragonling,
+and Mimic all ran clean against their existing specs with zero changes
+needed -- confirming last patch's discovery that these four were already
+fully spec'd and simply waiting on the real source packs, which now
+exist.
+
+**Not yet touched, still open:** Wisplet's spec (`Whisp/
+NoobGodoter'sSpritesheet.png`) wasn't re-verified against the
+`FireSprite.png` supplied a few patches back -- same kind of path
+mismatch the two fixed here both turned out to be is plausible there
+too, worth a check before assuming it's clean. Skeleton Warrior, Flying
+Eye, and Gargoyle weren't touched this patch (no new source packs
+supplied for them). `flying_eye` remains a confirmed gap from last
+patch's audit -- `dedicatedOnly: true` with no `eggLoot` source anywhere,
+currently unobtainable.
+
+**Verified:** `npx tsc --noEmit`, `npx vite build`, a full
+`electron-builder --linux dir` package build, and (uniquely for this
+patch) an actual end-to-end run of `tools/import_pets.py` itself against
+the real combined source packs, with output frame counts and recoloured
+pixels checked directly rather than inferred.
+
 ### Guild Power titles, a Grimsby title, and Founder's wording decided (patch 0372)
 ```discord-update
 Dev Update | Guild Titles

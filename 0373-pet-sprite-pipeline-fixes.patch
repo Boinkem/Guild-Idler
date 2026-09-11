@@ -1,0 +1,395 @@
+From b97631b1ce8983a61ebb09a87c1d7ecd3aff93b7 Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Fri, 11 Sep 2026 05:50:10 +0000
+Subject: [PATCH] Patch 0373: pet sprite pipeline -- Squirrel/Glimmerwing cut,
+ path fixes
+
+- Removed SQUIRREL spec + registry entry (import_pets.py) and squirrel/
+  glimmerwing entries (pets.json). Squirrel's sprite wasn't up to
+  standard; Glimmerwing never had a spec at all.
+- Mossback source path corrected: Frog/ -> ToxicFrog/ (real pack's
+  actual top-level folder name).
+- Tidewhelp source path corrected: Otter/ -> otter_sprite_pack/ (same
+  issue, re-supplied pack checked and confirmed NOT a different pack --
+  same filenames, same 200x200 frames, already right-facing).
+- Verified by actually running tools/import_pets.py against the real
+  combined source packs (not just reading the specs): every frame count
+  matches the previously-supplied manifest.json exactly across Mossback/
+  Tidewhelp/Skelly/Imp/Dragonling/Mimic. Dragonling's black-recolor
+  output pixel-checked directly -- confirms the common tier already IS
+  'Black Dragonling', no separate PetDef ever needed.
+---
+ guild-idler-status.md        | 82 ++++++++++++++++++++++++++++++++++++
+ src/game/data/json/pets.json | 52 +++++++++--------------
+ tools/import_pets.py         | 59 +++++++++++++++-----------
+ 3 files changed, 135 insertions(+), 58 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 4e1fc11..5af8a7b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28140,6 +28140,88 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Pet sprite pipeline: Squirrel and Glimmerwing cut, Mossback/Tidewhelp source paths corrected, four "2D Pixel Art" species confirmed import-ready (patch 0373)
++```discord-update
++Dev Update | Pet Sprites
++
++- Removed Squirrel and Glimmerwing -- Squirrel's sprite wasn't up to standard, Glimmerwing never had one
++- Fixed the Mossback and Tidewhelp source paths after both packs turned out to live in differently-named folders than expected
++- Confirmed (by actually running the import) that Skelly, Imp, Dragonling, and Mimic are ready to go -- including Dragonling's black recolour, which reads exactly as a proper "Black Dragonling" should
++```
++
++Follow-up to the pet-sprite-folder audit from a few patches back. Real asset
++files (`public/pets/`) never travel through a text patch -- gitignored on
++purpose, regenerated locally via `tools/import_pets.py` -- so this patch is
++entirely the import script and `pets.json` catching up to the actual source
++packs now in hand, not new sprite files themselves.
++
++**Squirrel removed** (`tools/import_pets.py`, `pets.json`) -- direct
++request, the supplied sheet's quality wasn't up to standard for this pet.
++Same treatment the Bandit (raccoon) spec already got earlier in this file
++for the same reason: removed entirely rather than left dormant with a
++`PetDef` pointing at nothing, comment left in its place explaining why in
++case a better pack replaces it later.
++
++**Glimmerwing removed** from `pets.json` -- never had an `import_pets.py`
++spec to begin with, so this is pure data cleanup, nothing lost on the
++tooling side.
++
++**Two path corrections, both caught by actually trying to run the
++import against the real packs rather than assuming the existing specs
++were right:**
++- **Mossback** -- the correct `ToxicFrog` pack was supplied (a first
++  upload turned out to be an unrelated frog sheet, caught and corrected
++  before this shipped). Its own top-level folder is `ToxicFrog`, not the
++  `Frog` the spec previously expected -- corrected to match exactly what
++  a plain unzip of the real pack produces, same "unrenamed, zero manual
++  steps" principle the six-species comment block above it already
++  established.
++- **Tidewhelp** -- re-supplied pack's top-level folder is
++  `otter_sprite_pack`, not `Otter`. Raised as possibly a different pack
++  entirely; checked directly and it isn't -- same filenames, same
++  uniform 200x200 frames, run cycle already faces right in the raw art.
++  Only the folder name needed correcting.
++
++**Verified by actually running `tools/import_pets.py` against the real
++combined source packs, not just reading the spec and assuming it's
++right** -- genuinely necessary here, since a spec that merely looks
++correct on paper is exactly what both path bugs above would have looked
++like right up until someone tried to run it. Every frame count produced
++matched the previously-supplied `manifest.json` exactly (Mossback
++idle 8/movement 7/catch 6/damage 4, Tidewhelp idle 4/movement 3, Skelly
++idle 6/movement 6/catch 9/damage 4, Imp idle 7/movement 7/catch 9/damage 6,
++Dragonling idle 4/movement 4/catch 6/damage 3, Mimic idle 8/movement 12/
++catch 14/damage 6) -- confirming that manifest was already generated
++from these exact assets at some point, not a stale or placeholder file.
++Spot-checked the actual output pixels too: Dragonling's `common` tier
++renders as a genuine charcoal-black dragon with deep-maroon wings and
++glowing red eyes -- confirming, concretely rather than by inference, that
++this recolour mechanism already fully **is** what "Black Dragonling" was
++ever going to be. No separate `black_dragonling` PetDef is needed or was
++ever missing -- the recoloured `common` tier of the single `dragonling`
++species already is it. Legendary tier spot-checked too (hue-shifts to
++purple wings from the black base, as designed). Skelly, Imp, Dragonling,
++and Mimic all ran clean against their existing specs with zero changes
++needed -- confirming last patch's discovery that these four were already
++fully spec'd and simply waiting on the real source packs, which now
++exist.
++
++**Not yet touched, still open:** Wisplet's spec (`Whisp/
++NoobGodoter'sSpritesheet.png`) wasn't re-verified against the
++`FireSprite.png` supplied a few patches back -- same kind of path
++mismatch the two fixed here both turned out to be is plausible there
++too, worth a check before assuming it's clean. Skeleton Warrior, Flying
++Eye, and Gargoyle weren't touched this patch (no new source packs
++supplied for them). `flying_eye` remains a confirmed gap from last
++patch's audit -- `dedicatedOnly: true` with no `eggLoot` source anywhere,
++currently unobtainable.
++
++**Verified:** `npx tsc --noEmit`, `npx vite build`, a full
++`electron-builder --linux dir` package build, and (uniquely for this
++patch) an actual end-to-end run of `tools/import_pets.py` itself against
++the real combined source packs, with output frame counts and recoloured
++pixels checked directly rather than inferred.
++
+ ### Guild Power titles, a Grimsby title, and Founder's wording decided (patch 0372)
+ ```discord-update
+ Dev Update | Guild Titles
+diff --git a/src/game/data/json/pets.json b/src/game/data/json/pets.json
+index 58849bc..dc0cf6b 100644
+--- a/src/game/data/json/pets.json
++++ b/src/game/data/json/pets.json
+@@ -3,56 +3,49 @@
+     "id": "ember_kit",
+     "name": "Ember Kit",
+     "description": "A fox-shaped cinder that never quite goes out. Naps in the hearth ash and follows whoever last fed it.",
+-    "glyph": "🦊",
++    "glyph": "\ud83e\udd8a",
+     "spriteFolder": "ember_kit"
+   },
+   {
+     "id": "mossback",
+     "name": "Mossback",
+     "description": "Somewhere between a toad and a boulder. Slow, unbothered, and quietly load-bearing.",
+-    "glyph": "🐸",
++    "glyph": "\ud83d\udc38",
+     "spriteFolder": "mossback"
+   },
+-  {
+-    "id": "glimmerwing",
+-    "name": "Glimmerwing",
+-    "description": "A moth the size of a hand, wings that catch light like stained glass. Circles the nearest lantern until it's carried off somewhere darker.",
+-    "glyph": "🦋",
+-    "spriteFolder": "glimmerwing"
+-  },
+   {
+     "id": "ashwing",
+     "name": "Ashwing",
+     "description": "A crow that's taken a shine to the guild's rooftops. Turns up wherever something's about to be dropped, forgotten, or fed to it.",
+-    "glyph": "🐦‍⬛",
++    "glyph": "\ud83d\udc26\u200d\u2b1b",
+     "spriteFolder": "ashwing"
+   },
+   {
+     "id": "rooftail",
+     "name": "Rooftail",
+     "description": "Spends most of the day curled along a rafter, tail wrapped twice around itself. Comes down for food and almost nothing else.",
+-    "glyph": "🐼",
++    "glyph": "\ud83d\udc3c",
+     "spriteFolder": "rooftail"
+   },
+   {
+     "id": "tidewhelp",
+     "name": "Tidewhelp",
+     "description": "A pup-sized thing that's more sea-foam than fur. Leaves damp footprints on dry stone for reasons nobody's explained.",
+-    "glyph": "🦦",
++    "glyph": "\ud83e\udda6",
+     "spriteFolder": "tidewhelp"
+   },
+   {
+     "id": "wisplet",
+     "name": "Wisplet",
+     "description": "A knot of campfire light that never quite burns out. Crackles faintly when it's happy, and has never once needed relighting.",
+-    "glyph": "✨",
++    "glyph": "\u2728",
+     "spriteFolder": "wisplet"
+   },
+   {
+     "id": "hatchery_hound",
+     "name": "Hatchery Hound",
+     "description": "Raised alongside the very first clutch the hatchery ever saved - it still checks every new egg like it's personally responsible for them.",
+-    "glyph": "🐕",
++    "glyph": "\ud83d\udc15",
+     "spriteFolder": "hatchery_hound",
+     "dedicatedOnly": true
+   },
+@@ -60,7 +53,7 @@
+     "id": "dragonling",
+     "name": "Dragonling",
+     "description": "Small enough to perch on a shoulder, for now. Still lets out a puff of real smoke when startled, and has already learned that food arrives faster if it looks pitiful about asking.",
+-    "glyph": "🐉",
++    "glyph": "\ud83d\udc09",
+     "spriteFolder": "dragonling",
+     "dedicatedOnly": true
+   },
+@@ -68,7 +61,7 @@
+     "id": "goldenpaw",
+     "name": "Goldenpaw",
+     "description": "Never once returned from a walk without something in its mouth - a stick, a glove, occasionally somebody else's dinner. Entirely too pleased with itself about all of it.",
+-    "glyph": "🐕",
++    "glyph": "\ud83d\udc15",
+     "spriteFolder": "goldenpaw",
+     "dedicatedOnly": false
+   },
+@@ -76,21 +69,21 @@
+     "id": "farwatch",
+     "name": "Farwatch",
+     "description": "Picks one spot near the door and holds it for hours, watching the horizon like something is definitely about to happen. Occasionally something does.",
+-    "glyph": "🐕",
++    "glyph": "\ud83d\udc15",
+     "spriteFolder": "farwatch"
+   },
+   {
+     "id": "longshadow",
+     "name": "Longshadow",
+     "description": "Takes up an entire doorway just standing in it. Moves like it has never once been in a hurry, and has apparently never needed to be.",
+-    "glyph": "🐕",
++    "glyph": "\ud83d\udc15",
+     "spriteFolder": "longshadow"
+   },
+   {
+     "id": "briarbeard",
+     "name": "Briarbeard",
+     "description": "Eager for a quest and a tummy rub",
+-    "glyph": "🐕",
++    "glyph": "\ud83d\udc15",
+     "spriteFolder": "briarbeard",
+     "dedicatedOnly": false
+   },
+@@ -98,21 +91,14 @@
+     "id": "frostrunner",
+     "name": "Frostrunner",
+     "description": "Built for distances nobody here is actually travelling. Happiest mid-sprint for no particular reason, gone quiet and thoughtful the moment it has to stop.",
+-    "glyph": "🐕",
++    "glyph": "\ud83d\udc15",
+     "spriteFolder": "frostrunner"
+   },
+-  {
+-    "id": "squirrel",
+-    "name": "Squirrel",
+-    "description": "Buries a season's worth of anything shiny and forgets exactly none of it, no matter how insulted it looks when questioned.",
+-    "glyph": "🐿️",
+-    "spriteFolder": "squirrel"
+-  },
+   {
+     "id": "skelly",
+     "name": "Skelly",
+     "description": "It stares at you, awaiting a command. He makes guttural sounds at you, awaiting.. food? can he eat?",
+-    "glyph": "💀",
++    "glyph": "\ud83d\udc80",
+     "spriteFolder": "skelly",
+     "dedicatedOnly": true
+   },
+@@ -120,7 +106,7 @@
+     "id": "imp",
+     "name": "Imp",
+     "description": "Small, loud, and delighted by fire. ",
+-    "glyph": "😈",
++    "glyph": "\ud83d\ude08",
+     "spriteFolder": "imp",
+     "dedicatedOnly": true
+   },
+@@ -128,7 +114,7 @@
+     "id": "mimic",
+     "name": "Mimic",
+     "description": "Mostly stopped trying to bite the hand that feeds it - mostly.",
+-    "glyph": "📦",
++    "glyph": "\ud83d\udce6",
+     "spriteFolder": "mimic",
+     "dedicatedOnly": false
+   },
+@@ -136,7 +122,7 @@
+     "id": "skeleton_warrior",
+     "name": "Rattles",
+     "description": "Still stands guard duty out of old habit, sword arm swinging at nothing in particular until someone gives it an actual job.",
+-    "glyph": "🦴",
++    "glyph": "\ud83e\uddb4",
+     "spriteFolder": "skeleton_warrior",
+     "dedicatedOnly": true
+   },
+@@ -144,7 +130,7 @@
+     "id": "flying_eye",
+     "name": "Flying Eye",
+     "description": "Watches everything, blinks at nothing, and reports back to something.",
+-    "glyph": "👁️",
++    "glyph": "\ud83d\udc41\ufe0f",
+     "spriteFolder": "flying_eye",
+     "dedicatedOnly": true
+   },
+@@ -152,7 +138,7 @@
+     "id": "gargoyle",
+     "name": "Gargoyle",
+     "description": "Held its post on Blackford Keep's wall for longer than the lord upstairs realizes. Still counts every visitor -- guild included -- as trespassing, technically.",
+-    "glyph": "🗿",
++    "glyph": "\ud83d\uddff",
+     "spriteFolder": "gargoyle",
+     "dedicatedOnly": true
+   }
+diff --git a/tools/import_pets.py b/tools/import_pets.py
+index 79c4bd9..7dcee38 100644
+--- a/tools/import_pets.py
++++ b/tools/import_pets.py
+@@ -346,11 +346,17 @@ MOSSBACK = PetSpec(
+     # 'Explosion' (9 frames, a toxic special-attack burst) has no matching
+     # PetAnimation slot yet -- skipped, not lost; the source file stays in
+     # the pack if that vocabulary ever grows.
++    #
++    # Path prefix corrected patch 0373: the pack's own top-level folder is
++    # "ToxicFrog", not "Frog" -- confirmed directly against the re-supplied
++    # zip (a first upload turned out to be an unrelated frog sheet, caught
++    # before this shipped; this is the real pack, frame counts confirmed
++    # to match manifest.json exactly: idle 8, hop 7, attack 6, hurt 4).
+     anim_files={
+-        'idle': 'Frog/GreenBrown/ToxicFrogGreenBrown_Idle.png',
+-        'movement': 'Frog/GreenBrown/ToxicFrogGreenBrown_Hop.png',
+-        'catch': 'Frog/GreenBrown/ToxicFrogGreenBrown_Attack.png',
+-        'damage': 'Frog/GreenBrown/ToxicFrogGreenBrown_Hurt.png',
++        'idle': 'ToxicFrog/GreenBrown/ToxicFrogGreenBrown_Idle.png',
++        'movement': 'ToxicFrog/GreenBrown/ToxicFrogGreenBrown_Hop.png',
++        'catch': 'ToxicFrog/GreenBrown/ToxicFrogGreenBrown_Attack.png',
++        'damage': 'ToxicFrog/GreenBrown/ToxicFrogGreenBrown_Hurt.png',
+     },
+     recolor=['#63c74d', '#3e8948', '#265c42', '#e4a672', '#ead4aa', '#b86f50', '#733e39'],  # skin greens + belly/spot tans
+     keep=['#181425'],  # outline
+@@ -362,9 +368,23 @@ TIDEWHELP = PetSpec(
+     # Loose numbered frames, not a sheet -- see frame_files above. Only the
+     # idle/run frames were asked for; idle_alt/jump/land/sleep/spin are
+     # in the pack but deliberately unused this patch.
++    #
++    # Path prefix corrected patch 0373: the re-supplied pack's own
++    # top-level folder is "otter_sprite_pack", not "Otter" -- checked
++    # directly against the re-upload (raised as possibly a different pack
++    # entirely) and confirmed functionally identical to what this spec
++    # already expected: same filenames, same uniform 200x200 frames, and
++    # the run cycle already faces right in the raw art, so no
++    # PET_REVERSED_FACING entry is needed here.
+     frame_files={
+-        'idle': ['Otter/otter_idle_1.png', 'Otter/otter_idle_2.png', 'Otter/otter_idle_3.png', 'Otter/otter_idle_4.png'],
+-        'movement': ['Otter/otter_run_1.png', 'Otter/otter_run_2.png', 'Otter/otter_run_3.png'],
++        'idle': [
++            'otter_sprite_pack/otter_idle_1.png', 'otter_sprite_pack/otter_idle_2.png',
++            'otter_sprite_pack/otter_idle_3.png', 'otter_sprite_pack/otter_idle_4.png',
++        ],
++        'movement': [
++            'otter_sprite_pack/otter_run_1.png', 'otter_sprite_pack/otter_run_2.png',
++            'otter_sprite_pack/otter_run_3.png',
++        ],
+     },
+     recolor=['#8f563b', '#78432b', '#c4986e', '#eec39a'],  # fur + belly tones
+     keep=['#000000', '#45283c'],  # outline + eye/nose
+@@ -393,24 +413,13 @@ WISPLET = PetSpec(
+     keep=['#3d0202'],  # outline
+ )
+ 
+-SQUIRREL = PetSpec(
+-    species_id='squirrel',
+-    frame_w=32, frame_h=32,
+-    sheet_file='Squirrel/Squirrel Sprite Sheet.png',
+-    # Confirmed directly: this sheet IS a uniform 32x32, 8-col grid despite
+-    # not every row being fully populated (row 0 has 6 frames of 8 possible
+-    # columns, row 3 has 4) -- row/col placement read off a connected-
+-    # component scan, not assumed from a filled-grid guess. Row 0 (idle) and
+-    # row 3 (run) per direct instruction; rows 1/2/4/5/6 (a near-duplicate
+-    # idle variant, a longer leap cycle, a two-frame "found something" pose,
+-    # and a pounce) are real content but unused this patch.
+-    rows={
+-        'idle': (0, 0, 6),
+-        'movement': (3, 0, 4),
+-    },
+-    recolor=['#825235', '#694129', '#a67354'],  # fur tones (same bright/dark-tone family fox/red panda already use)
+-    keep=['#2f2f2e', '#e4e4e4'],  # outline + small highlight
+-)
++# Squirrel was removed entirely (patch 0373) -- direct request, the
++# supplied sheet's quality wasn't up to standard for this pet. Removed
++# from pets.json/PETS below rather than left dormant with no PetDef
++# pointing at it, same treatment Bandit (raccoon) already got above for
++# the same reason. Its old rows spec (Squirrel/Squirrel Sprite Sheet.png,
++# a confirmed 32x32 8-col grid) is gone with it -- if a higher-quality
++# squirrel pack ever replaces it, this is a from-scratch spec.
+ 
+ # The next six species (Skelly, Imp, Dragonling, Mimic, Skeleton Warrior,
+ # Flying Eye) are all from the same "2D Pixel Art" template pack family --
+@@ -582,7 +591,7 @@ GARGOYLE = PetSpec(
+ 
+ PETS: List[PetSpec] = [
+     FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER,
+-    MOSSBACK, TIDEWHELP, WISPLET, SQUIRREL, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE, GARGOYLE,
++    MOSSBACK, TIDEWHELP, WISPLET, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE, GARGOYLE,
+ ]
+ 
+ 
+-- 
+2.43.0
+

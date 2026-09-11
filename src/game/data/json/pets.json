@@ -3,56 +3,49 @@
     "id": "ember_kit",
     "name": "Ember Kit",
     "description": "A fox-shaped cinder that never quite goes out. Naps in the hearth ash and follows whoever last fed it.",
-    "glyph": "🦊",
+    "glyph": "\ud83e\udd8a",
     "spriteFolder": "ember_kit"
   },
   {
     "id": "mossback",
     "name": "Mossback",
     "description": "Somewhere between a toad and a boulder. Slow, unbothered, and quietly load-bearing.",
-    "glyph": "🐸",
+    "glyph": "\ud83d\udc38",
     "spriteFolder": "mossback"
-  },
-  {
-    "id": "glimmerwing",
-    "name": "Glimmerwing",
-    "description": "A moth the size of a hand, wings that catch light like stained glass. Circles the nearest lantern until it's carried off somewhere darker.",
-    "glyph": "🦋",
-    "spriteFolder": "glimmerwing"
   },
   {
     "id": "ashwing",
     "name": "Ashwing",
     "description": "A crow that's taken a shine to the guild's rooftops. Turns up wherever something's about to be dropped, forgotten, or fed to it.",
-    "glyph": "🐦‍⬛",
+    "glyph": "\ud83d\udc26\u200d\u2b1b",
     "spriteFolder": "ashwing"
   },
   {
     "id": "rooftail",
     "name": "Rooftail",
     "description": "Spends most of the day curled along a rafter, tail wrapped twice around itself. Comes down for food and almost nothing else.",
-    "glyph": "🐼",
+    "glyph": "\ud83d\udc3c",
     "spriteFolder": "rooftail"
   },
   {
     "id": "tidewhelp",
     "name": "Tidewhelp",
     "description": "A pup-sized thing that's more sea-foam than fur. Leaves damp footprints on dry stone for reasons nobody's explained.",
-    "glyph": "🦦",
+    "glyph": "\ud83e\udda6",
     "spriteFolder": "tidewhelp"
   },
   {
     "id": "wisplet",
     "name": "Wisplet",
     "description": "A knot of campfire light that never quite burns out. Crackles faintly when it's happy, and has never once needed relighting.",
-    "glyph": "✨",
+    "glyph": "\u2728",
     "spriteFolder": "wisplet"
   },
   {
     "id": "hatchery_hound",
     "name": "Hatchery Hound",
     "description": "Raised alongside the very first clutch the hatchery ever saved - it still checks every new egg like it's personally responsible for them.",
-    "glyph": "🐕",
+    "glyph": "\ud83d\udc15",
     "spriteFolder": "hatchery_hound",
     "dedicatedOnly": true
   },
@@ -60,7 +53,7 @@
     "id": "dragonling",
     "name": "Dragonling",
     "description": "Small enough to perch on a shoulder, for now. Still lets out a puff of real smoke when startled, and has already learned that food arrives faster if it looks pitiful about asking.",
-    "glyph": "🐉",
+    "glyph": "\ud83d\udc09",
     "spriteFolder": "dragonling",
     "dedicatedOnly": true
   },
@@ -68,7 +61,7 @@
     "id": "goldenpaw",
     "name": "Goldenpaw",
     "description": "Never once returned from a walk without something in its mouth - a stick, a glove, occasionally somebody else's dinner. Entirely too pleased with itself about all of it.",
-    "glyph": "🐕",
+    "glyph": "\ud83d\udc15",
     "spriteFolder": "goldenpaw",
     "dedicatedOnly": false
   },
@@ -76,21 +69,21 @@
     "id": "farwatch",
     "name": "Farwatch",
     "description": "Picks one spot near the door and holds it for hours, watching the horizon like something is definitely about to happen. Occasionally something does.",
-    "glyph": "🐕",
+    "glyph": "\ud83d\udc15",
     "spriteFolder": "farwatch"
   },
   {
     "id": "longshadow",
     "name": "Longshadow",
     "description": "Takes up an entire doorway just standing in it. Moves like it has never once been in a hurry, and has apparently never needed to be.",
-    "glyph": "🐕",
+    "glyph": "\ud83d\udc15",
     "spriteFolder": "longshadow"
   },
   {
     "id": "briarbeard",
     "name": "Briarbeard",
     "description": "Eager for a quest and a tummy rub",
-    "glyph": "🐕",
+    "glyph": "\ud83d\udc15",
     "spriteFolder": "briarbeard",
     "dedicatedOnly": false
   },
@@ -98,21 +91,14 @@
     "id": "frostrunner",
     "name": "Frostrunner",
     "description": "Built for distances nobody here is actually travelling. Happiest mid-sprint for no particular reason, gone quiet and thoughtful the moment it has to stop.",
-    "glyph": "🐕",
+    "glyph": "\ud83d\udc15",
     "spriteFolder": "frostrunner"
-  },
-  {
-    "id": "squirrel",
-    "name": "Squirrel",
-    "description": "Buries a season's worth of anything shiny and forgets exactly none of it, no matter how insulted it looks when questioned.",
-    "glyph": "🐿️",
-    "spriteFolder": "squirrel"
   },
   {
     "id": "skelly",
     "name": "Skelly",
     "description": "It stares at you, awaiting a command. He makes guttural sounds at you, awaiting.. food? can he eat?",
-    "glyph": "💀",
+    "glyph": "\ud83d\udc80",
     "spriteFolder": "skelly",
     "dedicatedOnly": true
   },
@@ -120,7 +106,7 @@
     "id": "imp",
     "name": "Imp",
     "description": "Small, loud, and delighted by fire. ",
-    "glyph": "😈",
+    "glyph": "\ud83d\ude08",
     "spriteFolder": "imp",
     "dedicatedOnly": true
   },
@@ -128,7 +114,7 @@
     "id": "mimic",
     "name": "Mimic",
     "description": "Mostly stopped trying to bite the hand that feeds it - mostly.",
-    "glyph": "📦",
+    "glyph": "\ud83d\udce6",
     "spriteFolder": "mimic",
     "dedicatedOnly": false
   },
@@ -136,7 +122,7 @@
     "id": "skeleton_warrior",
     "name": "Rattles",
     "description": "Still stands guard duty out of old habit, sword arm swinging at nothing in particular until someone gives it an actual job.",
-    "glyph": "🦴",
+    "glyph": "\ud83e\uddb4",
     "spriteFolder": "skeleton_warrior",
     "dedicatedOnly": true
   },
@@ -144,7 +130,7 @@
     "id": "flying_eye",
     "name": "Flying Eye",
     "description": "Watches everything, blinks at nothing, and reports back to something.",
-    "glyph": "👁️",
+    "glyph": "\ud83d\udc41\ufe0f",
     "spriteFolder": "flying_eye",
     "dedicatedOnly": true
   },
@@ -152,7 +138,7 @@
     "id": "gargoyle",
     "name": "Gargoyle",
     "description": "Held its post on Blackford Keep's wall for longer than the lord upstairs realizes. Still counts every visitor -- guild included -- as trespassing, technically.",
-    "glyph": "🗿",
+    "glyph": "\ud83d\uddff",
     "spriteFolder": "gargoyle",
     "dedicatedOnly": true
   }

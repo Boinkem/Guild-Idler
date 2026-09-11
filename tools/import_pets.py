@@ -346,11 +346,17 @@ MOSSBACK = PetSpec(
     # 'Explosion' (9 frames, a toxic special-attack burst) has no matching
     # PetAnimation slot yet -- skipped, not lost; the source file stays in
     # the pack if that vocabulary ever grows.
+    #
+    # Path prefix corrected patch 0373: the pack's own top-level folder is
+    # "ToxicFrog", not "Frog" -- confirmed directly against the re-supplied
+    # zip (a first upload turned out to be an unrelated frog sheet, caught
+    # before this shipped; this is the real pack, frame counts confirmed
+    # to match manifest.json exactly: idle 8, hop 7, attack 6, hurt 4).
     anim_files={
-        'idle': 'Frog/GreenBrown/ToxicFrogGreenBrown_Idle.png',
-        'movement': 'Frog/GreenBrown/ToxicFrogGreenBrown_Hop.png',
-        'catch': 'Frog/GreenBrown/ToxicFrogGreenBrown_Attack.png',
-        'damage': 'Frog/GreenBrown/ToxicFrogGreenBrown_Hurt.png',
+        'idle': 'ToxicFrog/GreenBrown/ToxicFrogGreenBrown_Idle.png',
+        'movement': 'ToxicFrog/GreenBrown/ToxicFrogGreenBrown_Hop.png',
+        'catch': 'ToxicFrog/GreenBrown/ToxicFrogGreenBrown_Attack.png',
+        'damage': 'ToxicFrog/GreenBrown/ToxicFrogGreenBrown_Hurt.png',
     },
     recolor=['#63c74d', '#3e8948', '#265c42', '#e4a672', '#ead4aa', '#b86f50', '#733e39'],  # skin greens + belly/spot tans
     keep=['#181425'],  # outline
@@ -362,9 +368,23 @@ TIDEWHELP = PetSpec(
     # Loose numbered frames, not a sheet -- see frame_files above. Only the
     # idle/run frames were asked for; idle_alt/jump/land/sleep/spin are
     # in the pack but deliberately unused this patch.
+    #
+    # Path prefix corrected patch 0373: the re-supplied pack's own
+    # top-level folder is "otter_sprite_pack", not "Otter" -- checked
+    # directly against the re-upload (raised as possibly a different pack
+    # entirely) and confirmed functionally identical to what this spec
+    # already expected: same filenames, same uniform 200x200 frames, and
+    # the run cycle already faces right in the raw art, so no
+    # PET_REVERSED_FACING entry is needed here.
     frame_files={
-        'idle': ['Otter/otter_idle_1.png', 'Otter/otter_idle_2.png', 'Otter/otter_idle_3.png', 'Otter/otter_idle_4.png'],
-        'movement': ['Otter/otter_run_1.png', 'Otter/otter_run_2.png', 'Otter/otter_run_3.png'],
+        'idle': [
+            'otter_sprite_pack/otter_idle_1.png', 'otter_sprite_pack/otter_idle_2.png',
+            'otter_sprite_pack/otter_idle_3.png', 'otter_sprite_pack/otter_idle_4.png',
+        ],
+        'movement': [
+            'otter_sprite_pack/otter_run_1.png', 'otter_sprite_pack/otter_run_2.png',
+            'otter_sprite_pack/otter_run_3.png',
+        ],
     },
     recolor=['#8f563b', '#78432b', '#c4986e', '#eec39a'],  # fur + belly tones
     keep=['#000000', '#45283c'],  # outline + eye/nose
@@ -393,24 +413,13 @@ WISPLET = PetSpec(
     keep=['#3d0202'],  # outline
 )
 
-SQUIRREL = PetSpec(
-    species_id='squirrel',
-    frame_w=32, frame_h=32,
-    sheet_file='Squirrel/Squirrel Sprite Sheet.png',
-    # Confirmed directly: this sheet IS a uniform 32x32, 8-col grid despite
-    # not every row being fully populated (row 0 has 6 frames of 8 possible
-    # columns, row 3 has 4) -- row/col placement read off a connected-
-    # component scan, not assumed from a filled-grid guess. Row 0 (idle) and
-    # row 3 (run) per direct instruction; rows 1/2/4/5/6 (a near-duplicate
-    # idle variant, a longer leap cycle, a two-frame "found something" pose,
-    # and a pounce) are real content but unused this patch.
-    rows={
-        'idle': (0, 0, 6),
-        'movement': (3, 0, 4),
-    },
-    recolor=['#825235', '#694129', '#a67354'],  # fur tones (same bright/dark-tone family fox/red panda already use)
-    keep=['#2f2f2e', '#e4e4e4'],  # outline + small highlight
-)
+# Squirrel was removed entirely (patch 0373) -- direct request, the
+# supplied sheet's quality wasn't up to standard for this pet. Removed
+# from pets.json/PETS below rather than left dormant with no PetDef
+# pointing at it, same treatment Bandit (raccoon) already got above for
+# the same reason. Its old rows spec (Squirrel/Squirrel Sprite Sheet.png,
+# a confirmed 32x32 8-col grid) is gone with it -- if a higher-quality
+# squirrel pack ever replaces it, this is a from-scratch spec.
 
 # The next six species (Skelly, Imp, Dragonling, Mimic, Skeleton Warrior,
 # Flying Eye) are all from the same "2D Pixel Art" template pack family --
@@ -582,7 +591,7 @@ GARGOYLE = PetSpec(
 
 PETS: List[PetSpec] = [
     FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER,
-    MOSSBACK, TIDEWHELP, WISPLET, SQUIRREL, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE, GARGOYLE,
+    MOSSBACK, TIDEWHELP, WISPLET, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE, GARGOYLE,
 ]
 
 
