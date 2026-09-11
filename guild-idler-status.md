@@ -7501,18 +7501,20 @@ pass (same caveat as the two entries above).
     real `BIsDlcInstalled` check via the SDK integration above is
     optional hardening, not required for the groundwork already built to
     work.
-  - **Achievements.** The existing local achievement popups/unlock logic
-    (`AchievementManager.ts`, `achievements.json`, 65 entries today) need
-    their ids mapped to real Steam achievement ids in the partner
-    backend, then the unlock call swapped from the local stub to the
-    real SDK call. **Each of the 65 needs its own locked AND unlocked
-    icon image -- 130 individual art assets, not 65** -- easy to
-    under-scope by reading this as "just an id-mapping pass." `hidden`
-    already matches Steam's own hidden-achievement semantics, so that
-    part needs no rework.
-  - **Steam leaderboards** -- SDK integration is the only remaining
-    prerequisite; scope itself is now decided above (Global + Friends,
-    Guild Power), not still open.
+  - **Achievements -- the id-mapping/art half is still on you, the code
+    half is done (patch 0370).** The unlock call itself now goes through
+    the real SDK (`steamClient.achievement.activate`) rather than the
+    local stub -- nothing left to build there. Still outstanding, and
+    still yours: mapping each of the 67 ids to a real Steam achievement
+    in the partner backend, and **the 134 icon assets (locked + unlocked
+    x 67)** -- the code change never touched that side of the work.
+  - **Steam leaderboards** -- SDK integration (steamworks.js) is in as of
+    patch 0370 for everything it supports, but it doesn't expose
+    leaderboard calls at all (`FindOrCreateLeaderboard`/
+    `UploadLeaderboardScore`/`DownloadLeaderboardEntries` aren't in its
+    API) -- confirmed by inspecting its actual type declarations, not
+    assumed. Real prerequisite now is the custom-addon-vs-defer decision
+    from patch 0363's writeup, not "SDK integration" generically.
 
 ---
 
@@ -28130,6 +28132,115 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
 clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
+
+### Steamworks SDK wired in for real -- achievements side (patch 0370)
+```discord-update
+Dev Update | Patch 0370
+
+- Achievements now unlock on Steam for real, not just locally -- the steamworks.js SDK is wired in against the GuildBound App ID
+- No Steam running? The game plays exactly as before, achievements just stay local until it is
+```
+
+Direct follow-up to patch 0363's "next step" list: "let's start with
+steamworks.js, seeing as I'm doing the achievements on the Steam side at
+the moment" -- DLC and leaderboards are explicitly next, not this patch.
+
+**Note on numbering:** this was first built and handed over as "patch
+0364" against a local clone that was current at the time, but patches
+0364-0369 (rarity card revert, rarity banner tiling, curio banner
+revert, consumable move/empty-slot fixes, gold/xp/guild hall rebalance,
+blackmarket gear level review) landed in the real repo in the meantime
+from other work entirely unrelated to this one. None of them touched
+`electron/main.ts`, `vite.config.ts`, or `package.json`, so nothing here
+needed reconciling beyond the number itself -- this is that same patch,
+rebuilt fresh against the real current HEAD (confirmed via a clean
+`git clone` immediately before rebuilding, not assumed) and
+re-verified in full rather than just renamed.
+
+**`steamworks.js@0.4.0` installed, `electron/main.ts` only.** The
+`steam:unlockAchievement` IPC handler already existed as a stub since
+patch 0009 ("Kept as a no-op-but-logged IPC call rather than skipped
+entirely so the renderer side... never needs to change when the real SDK
+goes in -- only this handler's body does"), and that held up exactly as
+written: `engine.ts` (three call sites) and `SaveManager.ts`'s own
+retroactive-unlock path already called
+`window.littleKnight?.unlockAchievement(id)` on every achievement unlock,
+untouched by this patch. Only the stub's body changed, from a console.log
+to `steamClient.achievement.activate(steamApiName)`.
+
+**Two things worth being explicit about, both confirmed by actually
+running a packaged build in this environment, not assumed:**
+
+1. **`steamworks.js` must be externalized in the bundler, not just
+   installed.** Its `index.js` does a platform-conditional `require()` of
+   a prebuilt native `.node` binary; Rollup (via vite-plugin-electron)
+   tries to statically parse whatever that resolves to as JS source and
+   fails outright -- hit this for real on the first production build
+   attempt (`Unexpected character '\u{1}'`, Rollup trying to read the raw
+   bytes of the Windows `.node` file as text). Fixed in `vite.config.ts`
+   by adding `rollupOptions: { external: ['steamworks.js'] }` to the
+   `main` entry's own vite config -- standard requirement for any native
+   addon in a bundler, not specific to this library, just not something
+   `npm install` alone surfaces until the first real build attempt.
+2. **Electron-builder's native-module unpacking needed no config at
+   all.** Genuinely verified rather than assumed: ran
+   `npx electron-builder --linux dir` against this exact patch and
+   confirmed `steamworksjs.linux-x64-gnu.node` lands in
+   `app.asar.unpacked/node_modules/steamworks.js/dist/linux64/` in the
+   packaged output -- electron-builder's default `.node`-file handling
+   already covers this, `package.json`'s `build.files` allowlist (still
+   just `dist/**/*`, `dist-electron/**/*`, `build/icon.png`) needed no
+   new entry.
+
+**Graceful degradation, also actually run, not assumed.** Launched the
+packaged Linux build in this environment (no Steam client installed
+here, by construction) and got exactly the intended path: Steam's own
+`steam_api` shim logs `SteamAPI_Init(): ... did not locate a running
+instance of Steam` and fails to dlopen `steamclient.so` (the *installed
+Steam client's* runtime, not anything this game ships -- this failure
+mode is inherent to Steamworks, no packaging fix touches it), the
+try/catch around `steamworks.init()` catches it, logs
+`[steam] not available (Steam not running / no steam_appid.txt in
+dev): ...`, `steamClient` stays `null`, and the app carried on running
+normally afterward. `steam:unlockAchievement`'s existing `!steamClient`
+branch is exactly the original patch-0009 stub behavior, unchanged -- a
+player without Steam running still gets a fully working game,
+achievements just stay local.
+
+**`restartAppIfNecessary` gated to `app.isPackaged` only.** Valve's own
+"was this actually launched through Steam" check -- ungated, it'd force
+Steam to be installed and running just to run `npm run dev` locally.
+Packaged-but-run-outside-Steam still correctly hits it and
+relaunches/requires Steam, which is the intended behavior for a real
+build.
+
+**New `steam_appid.txt` at the repo root** (containing `5143490`),
+committed -- lets `steamworks.init()` succeed for local dev/testing
+without Steam actually being installed, no per-developer setup step
+needed. Harmless to ship; the App ID itself is public information
+regardless (visible in the store URL and partner backend to anyone).
+
+**Deliberately out of scope for this patch, per the plan:** DLC
+ownership checks (`apps.isDlcInstalled`) need real child App IDs that
+don't exist yet -- still the founder-pack-contents decision noted
+earlier in this doc. Leaderboards need the custom-addon-vs-defer
+decision from patch 0363's own writeup, tracked separately.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build` both pass clean.
+Beyond that -- and beyond what's normally claimed for an untestable
+Steam feature -- this patch's actual packaging and graceful-degradation
+behavior were run for real in this environment, against the real
+current repo: a full `electron-builder --linux dir` package build,
+confirmed native binary placement in the unpacked output, and a launch
+of that packaged binary under `xvfb-run` confirming the no-Steam
+fallback path logs correctly and the process keeps running rather than
+crashing. Still explicitly deferred to a real pass on your end, per
+your own note: the actual Steam overlay achievement-unlock notification
+firing with Steam running and logged in, and a Windows build
+specifically (only Linux was buildable in this sandbox) -- the
+`.node`/`.dll` pair ships identically per the `dist/win64/` contents
+inspected, but Windows' own dynamic loader hasn't actually been
+exercised.
 
 ### Blacksmith shop: hand-authored gear no longer inherits a slot's rolled level (patch 0369)
 ```discord-update

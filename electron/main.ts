@@ -4,6 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import * as steamworks from 'steamworks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -58,6 +59,55 @@ if (!gotSingleInstanceLock) {
   // ipcMain handlers, the tray) would just be duplicate setup in a process
   // that's about to exit anyway.
   app.quit();
+}
+
+/**
+ * Steamworks SDK setup — patch 0370. Achievements side of the Steam Admin
+ * integration; DLC and leaderboards are separate later patches (see
+ * guild-idler-status.md's backlog) since `apps.isDlcInstalled` needs real
+ * child App IDs that don't exist yet, and leaderboards need the addon
+ * decision from that same doc.
+ *
+ * Public information, not a secret — visible to anyone in the store URL or
+ * partner backend — so no reason to hide it behind an env var or config
+ * file.
+ */
+const STEAM_APP_ID = 5143490;
+
+/**
+ * `steamworks.js`'s `init()` starts its own internal ~33ms runCallbacks
+ * loop (see node_modules/steamworks.js/index.js) — nothing to wire up for
+ * that here, it's not a separate step this file owns.
+ *
+ * `restartAppIfNecessary` is Valve's "was this actually launched through
+ * Steam" check — if not, it relaunches the process via Steam and returns
+ * true, in which case this process must exit immediately rather than carry
+ * on starting a second, doomed copy. Gated to packaged builds only
+ * (`app.isPackaged`): in dev (`npm run dev` / `npm start`), nobody's
+ * launching through Steam, and this would otherwise force Steam to be
+ * installed and running just to iterate locally. A packaged build run
+ * directly (outside Steam) still hits this and relaunches/requires Steam —
+ * that's the intended behavior for a real build, not a dev-vs-packaged
+ * shortcut.
+ *
+ * Both this call and the `init()` below are wrapped — a player without
+ * Steam running (or, in dev, without a steam_appid.txt present) must still
+ * get a fully playable game with achievements simply not reaching Steam,
+ * not a crash on launch. `steamClient` staying `null` is exactly what the
+ * `steam:unlockAchievement` handler further down already checks for,
+ * falling back to its original stub-and-log behavior.
+ */
+let steamClient: ReturnType<typeof steamworks.init> | null = null;
+try {
+  if (app.isPackaged && steamworks.restartAppIfNecessary(STEAM_APP_ID)) {
+    app.quit();
+  } else {
+    steamClient = steamworks.init(STEAM_APP_ID);
+    console.log('[steam] initialized, app id', STEAM_APP_ID);
+  }
+} catch (err) {
+  console.log('[steam] not available (Steam not running / no steam_appid.txt in dev):', err);
+  steamClient = null;
 }
 
 /**
@@ -978,21 +1028,24 @@ ipcMain.handle('window:minimize', () => win?.minimize());
 ipcMain.handle('window:quit', () => app.quit());
 
 /**
- * Steam achievement unlock — currently a stub. Swap the body for a real
- * steamworks.js call once the SDK is installed and an App ID exists:
- *
- *   import steamworks from 'steamworks.js';
- *   const client = steamworks.init(APP_ID);
- *   client.achievement.activate(steamApiName);
- *
- * Kept as a no-op-but-logged IPC call rather than skipped entirely so the
- * renderer side (engine.ts, AchievementManager) can be built and tested now
- * and never needs to change when the real SDK goes in — only this handler's
- * body does.
+ * Steam achievement unlock. Falls back to the original stub-and-log
+ * behavior whenever `steamClient` is `null` (Steam not running, or dev
+ * without a steam_appid.txt) — the renderer side (engine.ts,
+ * AchievementManager) never needed to change for this patch and still
+ * doesn't; only this handler's body did, exactly as the prior stub's own
+ * comment said it would.
  */
 ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
-  console.log(`[steam stub] would unlock achievement: ${steamApiName}`);
-  return true;
+  if (!steamClient) {
+    console.log(`[steam stub] would unlock achievement: ${steamApiName}`);
+    return true;
+  }
+  try {
+    return steamClient.achievement.activate(steamApiName);
+  } catch (err) {
+    console.log(`[steam] achievement.activate failed for ${steamApiName}:`, err);
+    return false;
+  }
 });
 
 /* ------------------------------ lifecycle ------------------------------ */

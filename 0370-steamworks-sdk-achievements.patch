@@ -1,0 +1,403 @@
+From 2e6b08eb81f8dd67c672768923de21c11c45c214 Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Fri, 11 Sep 2026 02:11:54 +0000
+Subject: [PATCH] Patch 0370: Steamworks SDK wired in for real -- achievements
+ side
+
+(Rebuilt against the real current HEAD -- this was first handed over as
+'0364' against a now-stale local clone; patches 0364-0369 landed from
+unrelated work in the meantime. Same content, renumbered, re-verified.)
+
+- steamworks.js@0.4.0 installed; electron/main.ts inits it against App ID
+  5143490, gated by app.isPackaged for restartAppIfNecessary, wrapped in
+  try/catch so no-Steam-running is a graceful no-op, not a crash.
+- steam:unlockAchievement's patch-0009 stub swapped for the real
+  client.achievement.activate() call -- renderer side untouched.
+- vite.config.ts: steamworks.js marked external for the main-process
+  Rollup bundle (native .node require otherwise fails to parse).
+- New steam_appid.txt at repo root for local dev/testing outside Steam.
+- Verified for real: npx tsc --noEmit, npx vite build, a full
+  electron-builder --linux dir package build (confirmed native binary
+  placement in app.asar.unpacked), and a launch of that packaged binary
+  confirming the no-Steam fallback path.
+---
+ electron/main.ts      |  79 ++++++++++++++++++++----
+ guild-idler-status.md | 135 ++++++++++++++++++++++++++++++++++++++----
+ package-lock.json     |  17 +++++-
+ package.json          |   5 +-
+ steam_appid.txt       |   1 +
+ vite.config.ts        |  17 +++++-
+ 6 files changed, 223 insertions(+), 31 deletions(-)
+ create mode 100644 steam_appid.txt
+
+diff --git a/electron/main.ts b/electron/main.ts
+index 9cc9ee9..50e87d1 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -4,6 +4,7 @@ import path from 'node:path';
+ import fs from 'node:fs/promises';
+ import crypto from 'node:crypto';
+ import { fileURLToPath } from 'node:url';
++import * as steamworks from 'steamworks.js';
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ 
+@@ -60,6 +61,55 @@ if (!gotSingleInstanceLock) {
+   app.quit();
+ }
+ 
++/**
++ * Steamworks SDK setup — patch 0370. Achievements side of the Steam Admin
++ * integration; DLC and leaderboards are separate later patches (see
++ * guild-idler-status.md's backlog) since `apps.isDlcInstalled` needs real
++ * child App IDs that don't exist yet, and leaderboards need the addon
++ * decision from that same doc.
++ *
++ * Public information, not a secret — visible to anyone in the store URL or
++ * partner backend — so no reason to hide it behind an env var or config
++ * file.
++ */
++const STEAM_APP_ID = 5143490;
++
++/**
++ * `steamworks.js`'s `init()` starts its own internal ~33ms runCallbacks
++ * loop (see node_modules/steamworks.js/index.js) — nothing to wire up for
++ * that here, it's not a separate step this file owns.
++ *
++ * `restartAppIfNecessary` is Valve's "was this actually launched through
++ * Steam" check — if not, it relaunches the process via Steam and returns
++ * true, in which case this process must exit immediately rather than carry
++ * on starting a second, doomed copy. Gated to packaged builds only
++ * (`app.isPackaged`): in dev (`npm run dev` / `npm start`), nobody's
++ * launching through Steam, and this would otherwise force Steam to be
++ * installed and running just to iterate locally. A packaged build run
++ * directly (outside Steam) still hits this and relaunches/requires Steam —
++ * that's the intended behavior for a real build, not a dev-vs-packaged
++ * shortcut.
++ *
++ * Both this call and the `init()` below are wrapped — a player without
++ * Steam running (or, in dev, without a steam_appid.txt present) must still
++ * get a fully playable game with achievements simply not reaching Steam,
++ * not a crash on launch. `steamClient` staying `null` is exactly what the
++ * `steam:unlockAchievement` handler further down already checks for,
++ * falling back to its original stub-and-log behavior.
++ */
++let steamClient: ReturnType<typeof steamworks.init> | null = null;
++try {
++  if (app.isPackaged && steamworks.restartAppIfNecessary(STEAM_APP_ID)) {
++    app.quit();
++  } else {
++    steamClient = steamworks.init(STEAM_APP_ID);
++    console.log('[steam] initialized, app id', STEAM_APP_ID);
++  }
++} catch (err) {
++  console.log('[steam] not available (Steam not running / no steam_appid.txt in dev):', err);
++  steamClient = null;
++}
++
+ /**
+  * Taskbar/window icon, and the source Tray falls back to once real art
+  * exists. Windows wants an .ico; this .png path is what actually gets read
+@@ -978,21 +1028,24 @@ ipcMain.handle('window:minimize', () => win?.minimize());
+ ipcMain.handle('window:quit', () => app.quit());
+ 
+ /**
+- * Steam achievement unlock — currently a stub. Swap the body for a real
+- * steamworks.js call once the SDK is installed and an App ID exists:
+- *
+- *   import steamworks from 'steamworks.js';
+- *   const client = steamworks.init(APP_ID);
+- *   client.achievement.activate(steamApiName);
+- *
+- * Kept as a no-op-but-logged IPC call rather than skipped entirely so the
+- * renderer side (engine.ts, AchievementManager) can be built and tested now
+- * and never needs to change when the real SDK goes in — only this handler's
+- * body does.
++ * Steam achievement unlock. Falls back to the original stub-and-log
++ * behavior whenever `steamClient` is `null` (Steam not running, or dev
++ * without a steam_appid.txt) — the renderer side (engine.ts,
++ * AchievementManager) never needed to change for this patch and still
++ * doesn't; only this handler's body did, exactly as the prior stub's own
++ * comment said it would.
+  */
+ ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
+-  console.log(`[steam stub] would unlock achievement: ${steamApiName}`);
+-  return true;
++  if (!steamClient) {
++    console.log(`[steam stub] would unlock achievement: ${steamApiName}`);
++    return true;
++  }
++  try {
++    return steamClient.achievement.activate(steamApiName);
++  } catch (err) {
++    console.log(`[steam] achievement.activate failed for ${steamApiName}:`, err);
++    return false;
++  }
+ });
+ 
+ /* ------------------------------ lifecycle ------------------------------ */
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index daf07f6..a9d0546 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7501,18 +7501,20 @@ pass (same caveat as the two entries above).
+     real `BIsDlcInstalled` check via the SDK integration above is
+     optional hardening, not required for the groundwork already built to
+     work.
+-  - **Achievements.** The existing local achievement popups/unlock logic
+-    (`AchievementManager.ts`, `achievements.json`, 65 entries today) need
+-    their ids mapped to real Steam achievement ids in the partner
+-    backend, then the unlock call swapped from the local stub to the
+-    real SDK call. **Each of the 65 needs its own locked AND unlocked
+-    icon image -- 130 individual art assets, not 65** -- easy to
+-    under-scope by reading this as "just an id-mapping pass." `hidden`
+-    already matches Steam's own hidden-achievement semantics, so that
+-    part needs no rework.
+-  - **Steam leaderboards** -- SDK integration is the only remaining
+-    prerequisite; scope itself is now decided above (Global + Friends,
+-    Guild Power), not still open.
++  - **Achievements -- the id-mapping/art half is still on you, the code
++    half is done (patch 0370).** The unlock call itself now goes through
++    the real SDK (`steamClient.achievement.activate`) rather than the
++    local stub -- nothing left to build there. Still outstanding, and
++    still yours: mapping each of the 67 ids to a real Steam achievement
++    in the partner backend, and **the 134 icon assets (locked + unlocked
++    x 67)** -- the code change never touched that side of the work.
++  - **Steam leaderboards** -- SDK integration (steamworks.js) is in as of
++    patch 0370 for everything it supports, but it doesn't expose
++    leaderboard calls at all (`FindOrCreateLeaderboard`/
++    `UploadLeaderboardScore`/`DownloadLeaderboardEntries` aren't in its
++    API) -- confirmed by inspecting its actual type declarations, not
++    assumed. Real prerequisite now is the custom-addon-vs-defer decision
++    from patch 0363's writeup, not "SDK integration" generically.
+ 
+ ---
+ 
+@@ -28131,6 +28133,115 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### Steamworks SDK wired in for real -- achievements side (patch 0370)
++```discord-update
++Dev Update | Patch 0370
++
++- Achievements now unlock on Steam for real, not just locally -- the steamworks.js SDK is wired in against the GuildBound App ID
++- No Steam running? The game plays exactly as before, achievements just stay local until it is
++```
++
++Direct follow-up to patch 0363's "next step" list: "let's start with
++steamworks.js, seeing as I'm doing the achievements on the Steam side at
++the moment" -- DLC and leaderboards are explicitly next, not this patch.
++
++**Note on numbering:** this was first built and handed over as "patch
++0364" against a local clone that was current at the time, but patches
++0364-0369 (rarity card revert, rarity banner tiling, curio banner
++revert, consumable move/empty-slot fixes, gold/xp/guild hall rebalance,
++blackmarket gear level review) landed in the real repo in the meantime
++from other work entirely unrelated to this one. None of them touched
++`electron/main.ts`, `vite.config.ts`, or `package.json`, so nothing here
++needed reconciling beyond the number itself -- this is that same patch,
++rebuilt fresh against the real current HEAD (confirmed via a clean
++`git clone` immediately before rebuilding, not assumed) and
++re-verified in full rather than just renamed.
++
++**`steamworks.js@0.4.0` installed, `electron/main.ts` only.** The
++`steam:unlockAchievement` IPC handler already existed as a stub since
++patch 0009 ("Kept as a no-op-but-logged IPC call rather than skipped
++entirely so the renderer side... never needs to change when the real SDK
++goes in -- only this handler's body does"), and that held up exactly as
++written: `engine.ts` (three call sites) and `SaveManager.ts`'s own
++retroactive-unlock path already called
++`window.littleKnight?.unlockAchievement(id)` on every achievement unlock,
++untouched by this patch. Only the stub's body changed, from a console.log
++to `steamClient.achievement.activate(steamApiName)`.
++
++**Two things worth being explicit about, both confirmed by actually
++running a packaged build in this environment, not assumed:**
++
++1. **`steamworks.js` must be externalized in the bundler, not just
++   installed.** Its `index.js` does a platform-conditional `require()` of
++   a prebuilt native `.node` binary; Rollup (via vite-plugin-electron)
++   tries to statically parse whatever that resolves to as JS source and
++   fails outright -- hit this for real on the first production build
++   attempt (`Unexpected character '\u{1}'`, Rollup trying to read the raw
++   bytes of the Windows `.node` file as text). Fixed in `vite.config.ts`
++   by adding `rollupOptions: { external: ['steamworks.js'] }` to the
++   `main` entry's own vite config -- standard requirement for any native
++   addon in a bundler, not specific to this library, just not something
++   `npm install` alone surfaces until the first real build attempt.
++2. **Electron-builder's native-module unpacking needed no config at
++   all.** Genuinely verified rather than assumed: ran
++   `npx electron-builder --linux dir` against this exact patch and
++   confirmed `steamworksjs.linux-x64-gnu.node` lands in
++   `app.asar.unpacked/node_modules/steamworks.js/dist/linux64/` in the
++   packaged output -- electron-builder's default `.node`-file handling
++   already covers this, `package.json`'s `build.files` allowlist (still
++   just `dist/**/*`, `dist-electron/**/*`, `build/icon.png`) needed no
++   new entry.
++
++**Graceful degradation, also actually run, not assumed.** Launched the
++packaged Linux build in this environment (no Steam client installed
++here, by construction) and got exactly the intended path: Steam's own
++`steam_api` shim logs `SteamAPI_Init(): ... did not locate a running
++instance of Steam` and fails to dlopen `steamclient.so` (the *installed
++Steam client's* runtime, not anything this game ships -- this failure
++mode is inherent to Steamworks, no packaging fix touches it), the
++try/catch around `steamworks.init()` catches it, logs
++`[steam] not available (Steam not running / no steam_appid.txt in
++dev): ...`, `steamClient` stays `null`, and the app carried on running
++normally afterward. `steam:unlockAchievement`'s existing `!steamClient`
++branch is exactly the original patch-0009 stub behavior, unchanged -- a
++player without Steam running still gets a fully working game,
++achievements just stay local.
++
++**`restartAppIfNecessary` gated to `app.isPackaged` only.** Valve's own
++"was this actually launched through Steam" check -- ungated, it'd force
++Steam to be installed and running just to run `npm run dev` locally.
++Packaged-but-run-outside-Steam still correctly hits it and
++relaunches/requires Steam, which is the intended behavior for a real
++build.
++
++**New `steam_appid.txt` at the repo root** (containing `5143490`),
++committed -- lets `steamworks.init()` succeed for local dev/testing
++without Steam actually being installed, no per-developer setup step
++needed. Harmless to ship; the App ID itself is public information
++regardless (visible in the store URL and partner backend to anyone).
++
++**Deliberately out of scope for this patch, per the plan:** DLC
++ownership checks (`apps.isDlcInstalled`) need real child App IDs that
++don't exist yet -- still the founder-pack-contents decision noted
++earlier in this doc. Leaderboards need the custom-addon-vs-defer
++decision from patch 0363's own writeup, tracked separately.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build` both pass clean.
++Beyond that -- and beyond what's normally claimed for an untestable
++Steam feature -- this patch's actual packaging and graceful-degradation
++behavior were run for real in this environment, against the real
++current repo: a full `electron-builder --linux dir` package build,
++confirmed native binary placement in the unpacked output, and a launch
++of that packaged binary under `xvfb-run` confirming the no-Steam
++fallback path logs correctly and the process keeps running rather than
++crashing. Still explicitly deferred to a real pass on your end, per
++your own note: the actual Steam overlay achievement-unlock notification
++firing with Steam running and logged in, and a Windows build
++specifically (only Linux was buildable in this sandbox) -- the
++`.node`/`.dll` pair ships identically per the `dist/win64/` contents
++inspected, but Windows' own dynamic loader hasn't actually been
++exercised.
++
+ ### Blacksmith shop: hand-authored gear no longer inherits a slot's rolled level (patch 0369)
+ ```discord-update
+ Dev Update | Bug Fix
+diff --git a/package-lock.json b/package-lock.json
+index 5bd9ef9..3865833 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -10,7 +10,8 @@
+       "license": "MIT",
+       "dependencies": {
+         "react": "^18.3.1",
+-        "react-dom": "^18.3.1"
++        "react-dom": "^18.3.1",
++        "steamworks.js": "^0.4.0"
+       },
+       "devDependencies": {
+         "@types/react": "^18.3.12",
+@@ -1935,7 +1936,6 @@
+       "version": "20.19.43",
+       "resolved": "https://registry.npmjs.org/@types/node/-/node-20.19.43.tgz",
+       "integrity": "sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "undici-types": "~6.21.0"
+@@ -6373,6 +6373,18 @@
+         "node": ">= 6"
+       }
+     },
++    "node_modules/steamworks.js": {
++      "version": "0.4.0",
++      "resolved": "https://registry.npmjs.org/steamworks.js/-/steamworks.js-0.4.0.tgz",
++      "integrity": "sha512-O5TTRs7ucCRql4IA/kYUIQYeghTsXqf3rAm81sC22RDId264LQYqQjuaMEUSqL60I5LdULiGu0W2/A+ZDcKBKA==",
++      "license": "MIT",
++      "dependencies": {
++        "@types/node": "*"
++      },
++      "engines": {
++        "node": ">= 14"
++      }
++    },
+     "node_modules/string_decoder": {
+       "version": "1.3.0",
+       "resolved": "https://registry.npmjs.org/string_decoder/-/string_decoder-1.3.0.tgz",
+@@ -7084,7 +7096,6 @@
+       "version": "6.21.0",
+       "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-6.21.0.tgz",
+       "integrity": "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==",
+-      "dev": true,
+       "license": "MIT"
+     },
+     "node_modules/unique-filename": {
+diff --git a/package.json b/package.json
+index c9f5acd..bca222a 100644
+--- a/package.json
++++ b/package.json
+@@ -19,7 +19,8 @@
+   },
+   "dependencies": {
+     "react": "^18.3.1",
+-    "react-dom": "^18.3.1"
++    "react-dom": "^18.3.1",
++    "steamworks.js": "^0.4.0"
+   },
+   "devDependencies": {
+     "@types/react": "^18.3.12",
+@@ -27,8 +28,8 @@
+     "@vitejs/plugin-react": "^4.3.3",
+     "electron": "^33.2.0",
+     "electron-builder": "^25.1.8",
+-    "typescript": "^5.6.3",
+     "tsx": "^4.19.2",
++    "typescript": "^5.6.3",
+     "vite": "^5.4.11",
+     "vite-plugin-electron": "^0.29.0",
+     "vite-plugin-electron-renderer": "^0.14.6"
+diff --git a/steam_appid.txt b/steam_appid.txt
+new file mode 100644
+index 0000000..adbdf6d
+--- /dev/null
++++ b/steam_appid.txt
+@@ -0,0 +1 @@
++5143490
+\ No newline at end of file
+diff --git a/vite.config.ts b/vite.config.ts
+index 8b8926d..4503a12 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -7,7 +7,22 @@ export default defineConfig({
+   plugins: [
+     react(),
+     electron({
+-      main: { entry: 'electron/main.ts' },
++      main: {
++        entry: 'electron/main.ts',
++        vite: {
++          build: {
++            // steamworks.js ships a platform-conditional `require()` of a
++            // prebuilt native .node binary (see its own index.js) -- Rollup
++            // tries to statically parse whichever binary that require()
++            // resolves to as JS source and fails outright (hit this for
++            // real running a production build: "Unexpected character").
++            // Marking it external keeps the require() as a genuine runtime
++            // call instead, which is required for any native addon in a
++            // bundler, not something specific to this library.
++            rollupOptions: { external: ['steamworks.js'] },
++          },
++        },
++      },
+       preload: { input: 'electron/preload.ts' },
+     }),
+   ],
+-- 
+2.43.0
+
