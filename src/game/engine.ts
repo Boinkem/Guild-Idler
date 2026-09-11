@@ -20,6 +20,7 @@ import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
+import { GuildTitleManager } from './managers/GuildTitleManager';
 import { ACHIEVEMENT_BY_ID } from './data/achievements';
 import { BARD_TRACK_BY_ID } from './data/bard';
 import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
@@ -357,6 +358,11 @@ export class GameEngine {
    * at each of those call sites. Folded into the same archived line
    * rather than a second toast, same "one moment, not two" reasoning as
    * the achievement popup itself.
+   *
+   * Patch 0371: a guild title (AchievementDef.grantsGuildTitle) is
+   * granted the same way, through the same chokepoint, right alongside
+   * the bard-track grant -- deliberately not its own separate archive
+   * line, same "one moment" reasoning.
    */
   private reportAchievements(ids: string[]) {
     if (ids.length === 0) return;
@@ -368,6 +374,9 @@ export class GameEngine {
         this.state.unlockedBardTracks.push(def.unlocksTrackId);
         const track = BARD_TRACK_BY_ID[def.unlocksTrackId];
         if (track) message += `. New track for the guild bard: "${track.name}."`;
+      }
+      if (def?.grantsGuildTitle && GuildTitleManager.grant(this.state, def.grantsGuildTitle)) {
+        message += ` The guild is now known as ${def.grantsGuildTitle}.`;
       }
       this.archive(message);
       this.achievementQueue.push(id);
@@ -3186,6 +3195,16 @@ export class GameEngine {
     if (!hero) return;
     if (title !== null && !hero.titles.includes(title)) return;
     hero.activeTitle = title;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Same shape, one level up -- switches which of the guild's own
+   *  already-earned titles displays under its name (MenuWindow's
+   *  titlebar), via GuildTitleManager.setActive's own no-op-on-mismatch
+   *  guard. */
+  setActiveGuildTitle(title: string | null) {
+    GuildTitleManager.setActive(this.state, title);
     this.notify();
     void this.saveNow();
   }

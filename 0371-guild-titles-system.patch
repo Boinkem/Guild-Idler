@@ -1,0 +1,1071 @@
+From 9449e139d2c7eb004c6fda8c01aa365d0efdb35a Mon Sep 17 00:00:00 2001
+From: patch-author <a@a.com>
+Date: Fri, 11 Sep 2026 03:35:33 +0000
+Subject: [PATCH] Patch 0371: new Guild Titles system
+
+- GameState.guildTitles/activeGuildTitle, exactly Hero.titles/activeTitle
+  one level up. SAVE_VERSION 66 -> 67, migration adds empty defaults.
+- New GuildTitleManager.ts (grant/display/setActive), direct one-level-up
+  mirror of HeroManager's per-hero title functions.
+- AchievementDef.grantsGuildTitle (empty-string sentinel, same convention
+  as unlocksTrackId) granted through the same reportAchievements
+  chokepoint that already grants bard tracks -- no new hook needed at
+  any call site.
+- Three titles granted for real: CHAIN_DRAGON_HUNT -> The Dragon
+  Trackers, WORLDS_END -> Saviors of the Realm, LAST_GOD_DEFEATED -> The
+  Godslayers. More addable purely via the devtool going forward.
+- MenuWindow.tsx titlebar subtitle + Dashboard guild-name-card picker
+  (plain <select>, mirroring HeroBlock.tsx's own hero title picker).
+- tools/devtool/server.mjs: grantsGuildTitle added to the achievements
+  schema.
+- Verified: tsc --noEmit, vite build, electron-builder --linux dir
+  package build, and an 11-check runtime script (via tsx) exercising
+  grant/display/setActive/migration/achievement-data directly rather
+  than just inferring correctness from types.
+---
+ guild-idler-status.md                  |  97 ++++++++++++
+ src/game/data/achievements.ts          |  16 ++
+ src/game/data/json/achievements.json   | 201 ++++++++++++++++---------
+ src/game/engine.ts                     |  19 +++
+ src/game/managers/GuildTitleManager.ts |  48 ++++++
+ src/game/managers/SaveManager.ts       |  16 ++
+ src/game/types.ts                      |  23 ++-
+ src/styles/app.css                     |  22 +++
+ src/ui/MenuWindow.tsx                  |   7 +-
+ src/ui/panels/DashboardPanel.tsx       |  12 ++
+ tools/devtool/server.mjs               |  16 +-
+ 11 files changed, 401 insertions(+), 76 deletions(-)
+ create mode 100644 src/game/managers/GuildTitleManager.ts
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a9d0546..5969074 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -28133,6 +28133,103 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
+ specific box-shadow fix to confirm the shared `.rarity-frame-card` class
+ didn't regress anything there -- it didn't.
+ 
++### New system: Guild Titles, a guild-wide subtitle earned through play (patch 0371)
++```discord-update
++Dev Update | Guild Titles
++
++- New: your guild can now earn its own title, shown right under its name -- "how the world sees you"
++- Complete the Dragon Hunt to become The Dragon Trackers, finish the World-Ender's Vigil to become Saviors of the Realm, or clear Requiem for the Last God to become The Godslayers
++- Earned more than one? Pick which one displays from a simple dropdown, same as a hero's own title
++```
++
++Direct follow-up to the founder-pack discussion: "Founder" needed a home
++that wasn't the existing per-hero title system, since it isn't something
++any one hero personally earned -- it belongs to the whole guild. Built
++that system now, then filled it with three real titles matching existing
++achievements per the direct request to "build it out while we're here" --
++the founder pack's own "Founder" title is a separate follow-up patch
++once the DLC pack itself exists (still blocked on the same App ID
++registration `DlcManager.ts`'s own comment already flags), not this one.
++
++**Exactly Hero.titles/HeroManager's own shape, one level up.** Every
++design decision here is a direct mirror of the per-hero title system
++that already existed, not a new pattern: `GameState.guildTitles: string[]`
++(append-only, earned order) + `activeGuildTitle: string | null`
++(currently displayed, auto-set to the newest earned, player free to
++switch to an earlier one or None). New `GuildTitleManager.ts` carries
++`grant`/`display`/`setActive`, each one a direct one-level-up copy of
++`HeroManager.grantTitle`/`displayTitle` and engine.ts's own
++`setActiveTitle` -- deliberately not reinventing the shape, since the
++existing one was already proven and the picker UX (a plain `<select>`,
++"None" plus every earned entry) needed no rethinking either.
++
++**Granted through the achievement system, not a new trigger.**
++`AchievementDef` gets a new `grantsGuildTitle: string` field -- same
++empty-string-sentinel convention `unlocksTrackId` already uses for "grants
++nothing extra," same reasoning (devtool-editable as a plain text field,
++no separate nullable-vs-empty case to handle). The actual grant happens
++in engine.ts's `reportAchievements`, the exact chokepoint every
++`AchievementManager.checkAll()` call site in the file already funnels
++through -- so every quest/raid/peddler/purchase action that can newly
++unlock an achievement grants its guild title for free, no new hook
++needed at any individual call site, identical to how `unlocksTrackId`
++already piggybacks on that same chokepoint for bard tracks. Folded into
++the same archived unlock message rather than a second toast ("The guild
++is now known as The Dragon Trackers.") -- one moment, not two, matching
++the achievement popup's own existing restraint.
++
++**Three titles granted for real**, matching the direct request to tie
++titles to existing achievements: `CHAIN_DRAGON_HUNT` (Dragonbane) ->
++"The Dragon Trackers", `WORLDS_END` -> "Saviors of the Realm",
++`LAST_GOD_DEFEATED` -> "The Godslayers". Deliberately NOT every
++achievement -- a title is meant to read as "how the world sees this
++guild," which vendor-maxing or pet-collecting achievements aren't
++really about; reserved for guild-scale, world-facing accomplishments
++(defeating a named world-ending threat, a major raid chain clear) to
++keep them meaning something. `RAID_BLACK_DRAGON_NEST_CLEARED` was
++deliberately left ungranted despite also being dragon-themed -- granting
++it too would read as two different titles for the same "dragons" theme
++rather than one title feeling earned. More can be added anytime purely
++through the devtool (name/description/hidden/unlocksTrackId/
++grantsGuildTitle are all edited the same way already) -- no code change
++needed for a new title tied to an existing achievement, only for a
++genuinely new achievement.
++
++**Two display spots, matching what already existed.** The titlebar
++(`MenuWindow.tsx`) gets a small subtitle line directly under the guild
++name -- "how the world sees them" front and center, on the one screen
++that's visible regardless of which tab is open. The actual picker lives
++on the Dashboard's guild-name card, right where the rename control
++already sits -- the natural "manage your guild's identity" surface,
++same spot patch 0363's Leaderboard button also grew from. `app.css`'s
++`.titlebar h1` wraps in a new `.titlebar-name` flex column so the
++subtitle can sit directly beneath it without disturbing `.titlebar`'s
++own flex row; entirely absent (no empty gap) for a guild with no title
++active, same as before this patch.
++
++**SAVE_VERSION 66 -> 67**, migration adds `guildTitles: []` /
++`activeGuildTitle: null` to any existing save that doesn't have them --
++nobody's guild retroactively earns a title it didn't actually earn under
++the old system, same "don't fabricate history" stance every other
++migration in this file already takes.
++
++**Verified:** `npx tsc --noEmit`, `npx vite build`, and a full
++`electron-builder --linux dir` package build all pass clean. Beyond
++type-checking, the actual runtime logic was exercised directly (via
++`tsx`, not just inferred from types): fresh-state defaults, a grant
++correctly appending and auto-switching display, a duplicate grant
++correctly staying a no-op, a second grant correctly switching display to
++the newest while keeping both earned, manually switching back to an
++earlier title, an invalid title being silently rejected, `None`
++correctly clearing to `null`, a pre-0371 save correctly migrating to
++empty defaults, and all three real achievement-to-title mappings reading
++back correctly from `achievements.json` -- eleven checks, all passing.
++Not yet checked: the actual picker `<select>` and titlebar subtitle
++rendering in a real running window (no display available in this
++sandbox for a full visual pass) -- worth a quick look on your end to
++confirm the layout reads well next to the existing rename button and
++resource icons.
++
+ ### Steamworks SDK wired in for real -- achievements side (patch 0370)
+ ```discord-update
+ Dev Update | Patch 0370
+diff --git a/src/game/data/achievements.ts b/src/game/data/achievements.ts
+index 8e1ec29..869e162 100644
+--- a/src/game/data/achievements.ts
++++ b/src/game/data/achievements.ts
+@@ -26,6 +26,22 @@ export interface AchievementDef {
+    * from a bought facility to scattered achievement rewards.
+    */
+   unlocksTrackId: string;
++  /**
++   * Guild-wide title text this achievement also grants the moment it
++   * unlocks, or '' for the vast majority that grant nothing extra --
++   * same "empty string sentinel" convention unlocksTrackId already uses,
++   * for the same reason (devtool-editable via a plain text field, no
++   * separate nullable-vs-empty distinction to reason about). The actual
++   * grant happens in engine.ts's reportAchievements, alongside the
++   * unlocksTrackId grant it already does there -- see
++   * GuildTitleManager.grant. Deliberately reserved for guild-wide,
++   * world-facing accomplishments (defeating a world-ending threat,
++   * clearing a major raid chain) rather than every achievement -- a
++   * title is meant to read as "how the world sees this guild," which
++   * most achievements (maxing a vendor, collecting every pet) aren't
++   * about.
++   */
++  grantsGuildTitle: string;
+ }
+ 
+ import achievementsJson from './json/achievements.json';
+diff --git a/src/game/data/json/achievements.json b/src/game/data/json/achievements.json
+index cd48752..e2dbd0c 100644
+--- a/src/game/data/json/achievements.json
++++ b/src/game/data/json/achievements.json
+@@ -4,468 +4,535 @@
+     "name": "First Contract",
+     "description": "Complete your first quest.",
+     "hidden": false,
+-    "unlocksTrackId": "dawn_of_blades"
++    "unlocksTrackId": "dawn_of_blades",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "AGAINST_THE_ODDS",
+     "name": "Against the Odds",
+     "description": "Win a quest with less than 30% success chance.",
+     "hidden": false,
+-    "unlocksTrackId": "riders_of_the_storm"
++    "unlocksTrackId": "riders_of_the_storm",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "FIRST_LEGENDARY",
+     "name": "The Good Stuff",
+     "description": "Find your first legendary item.",
+     "hidden": false,
+-    "unlocksTrackId": "echoes_of_the_keep"
++    "unlocksTrackId": "echoes_of_the_keep",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RETIREMENT_PARTY",
+     "name": "Retirement Party",
+     "description": "Retire a hero for the first time.",
+     "hidden": false,
+-    "unlocksTrackId": "the_old_tavern"
++    "unlocksTrackId": "the_old_tavern",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "LIVING_LEGEND",
+     "name": "Living Legend",
+     "description": "Retire the same hero identity ten times.",
+     "hidden": false,
+-    "unlocksTrackId": "legends_of_the_flame"
++    "unlocksTrackId": "legends_of_the_flame",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_BREAKER",
+     "name": "Chain Breaker",
+     "description": "Complete your first multi-stage quest chain.",
+     "hidden": false,
+-    "unlocksTrackId": "twilight_march"
++    "unlocksTrackId": "twilight_march",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "WORLDS_END",
+     "name": "World's End",
+     "description": "Complete the World-Ender's Vigil.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": "Saviors of the Realm"
+   },
+   {
+     "id": "ON_A_ROLL",
+     "name": "On a Roll",
+     "description": "Reach a prestige streak of 5.",
+     "hidden": false,
+-    "unlocksTrackId": "march_of_iron"
++    "unlocksTrackId": "march_of_iron",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "FULL_ROSTER",
+     "name": "Full Roster",
+     "description": "Recruit at least one hero of every class.",
+     "hidden": false,
+-    "unlocksTrackId": "banners_in_the_wind"
++    "unlocksTrackId": "banners_in_the_wind",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "BLACK_MARKET_REGULAR",
+     "name": "No Questions Asked",
+     "description": "Buy something from the black market.",
+     "hidden": false,
+-    "unlocksTrackId": "whispers_in_the_fog"
++    "unlocksTrackId": "whispers_in_the_fog",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "COMPLETE_WARDROBE",
+     "name": "Complete Wardrobe",
+     "description": "Unlock every livery.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_NORMAL_CLEARED",
+     "name": "The Guild Marches",
+     "description": "Full-clear a raid on Normal difficulty.",
+     "hidden": false,
+-    "unlocksTrackId": "ballad_of_ashenwood"
++    "unlocksTrackId": "ballad_of_ashenwood",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_HEROIC_CLEARED",
+     "name": "Heroic Effort",
+     "description": "Full-clear a raid on Heroic difficulty.",
+     "hidden": false,
+-    "unlocksTrackId": "hymn_of_valor"
++    "unlocksTrackId": "hymn_of_valor",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_MYTHIC_CLEARED",
+     "name": "Mythic Reckoning",
+     "description": "Full-clear a raid on Mythic difficulty.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_LEGENDARY_CLEARED",
+     "name": "Legendary Reckoning",
+     "description": "Full-clear a raid on Legendary difficulty.",
+     "hidden": false,
+-    "unlocksTrackId": "the_last_watch"
++    "unlocksTrackId": "the_last_watch",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_ALL_DIFFICULTIES",
+     "name": "Every Banner Flying",
+     "description": "Full-clear a raid at every difficulty -- Normal, Heroic, Mythic, and Legendary.",
+     "hidden": false,
+-    "unlocksTrackId": "the_broken_crown"
++    "unlocksTrackId": "the_broken_crown",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "LAST_GOD_DEFEATED",
+     "name": "The Last Mile",
+     "description": "Clear Requiem for the Last God.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": "The Godslayers"
+   },
+   {
+     "id": "CHAIN_MILLERS_PROBLEM",
+     "name": "First Real Job",
+     "description": "Complete \"The Miller's Problem,\" the guild's first real job.",
+     "hidden": false,
+-    "unlocksTrackId": "sacred_springs"
++    "unlocksTrackId": "sacred_springs",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_THE_LAST_CLUTCH",
+     "name": "Keeper of the Clutch",
+     "description": "Complete \"The Last Clutch\" and open the Hatchery for good.",
+     "hidden": false,
+-    "unlocksTrackId": "moonlit_vale"
++    "unlocksTrackId": "moonlit_vale",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_CROWS_WARNING",
+     "name": "Crow-Friend",
+     "description": "Complete \"The Crow's Warning.\"",
+     "hidden": false,
+-    "unlocksTrackId": "call_of_the_raven"
++    "unlocksTrackId": "call_of_the_raven",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_HARROWERS_FOOT",
+     "name": "Ash-Reader",
+     "description": "Complete \"The Harrower's Foot.\"",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_DEMON_GENERALS_LEDGER",
+     "name": "Tally-Breaker",
+     "description": "Break a demon general's ledger.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_WHAT_THE_CULLED_BECOME",
+     "name": "Grave-Watcher",
+     "description": "Complete \"What the Culled Become.\"",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_PROVING_THE_BASTION",
+     "name": "Lord of the Keep",
+     "description": "Complete \"Proving the Bastion.\"",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_GRANITE_CROSSING",
+     "name": "Garrick's End",
+     "description": "Complete \"Granite Crossing.\"",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_FARM_AT_THE_EDGE",
+     "name": "Farmwarden",
+     "description": "Complete \"The Farm at the Edge.\"",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_THE_PALE_RIDER",
+     "name": "Ashen-Sworn",
+     "description": "Complete \"The Pale Rider.\"",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_DRAGON_HUNT",
+     "name": "Dragonbane",
+     "description": "Complete the Dragon Hunt.",
+     "hidden": false,
+-    "unlocksTrackId": "blood_and_honor"
++    "unlocksTrackId": "blood_and_honor",
++    "grantsGuildTitle": "The Dragon Trackers"
+   },
+   {
+     "id": "CHAIN_LOST_KINGDOM",
+     "name": "Kingdom-Finder",
+     "description": "Complete the Lost Kingdom Expedition.",
+     "hidden": false,
+-    "unlocksTrackId": "lament_of_kings"
++    "unlocksTrackId": "lament_of_kings",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_DEMON_FORTRESS",
+     "name": "Hellgate Breaker",
+     "description": "Break the demon fortress assault.",
+     "hidden": false,
+-    "unlocksTrackId": "the_dark_moor"
++    "unlocksTrackId": "the_dark_moor",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_ANCIENT_CROWN",
+     "name": "Crownbearer",
+     "description": "Recover the Ancient Crown.",
+     "hidden": false,
+-    "unlocksTrackId": "crown_of_thorns"
++    "unlocksTrackId": "crown_of_thorns",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_GOBLIN_WARBAND",
+     "name": "Warband-Breaker",
+     "description": "Break the Goblin King's warband for good.",
+     "hidden": false,
+-    "unlocksTrackId": "chant_of_the_fallen"
++    "unlocksTrackId": "chant_of_the_fallen",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_THIRD_CROWN",
+     "name": "Ridge-Watcher",
+     "description": "Complete \"The Third Crown.\"",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_HOLLOW_CHOIR",
+     "name": "Choir-Silencer",
+     "description": "Silence the Hollow Choir.",
+     "hidden": false,
+-    "unlocksTrackId": "silent_citadel"
++    "unlocksTrackId": "silent_citadel",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_LAST_PILGRIMAGE",
+     "name": "Pilgrim's Herald",
+     "description": "Complete the Last Pilgrimage.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_HOLLOW_KING",
+     "name": "Kingslayer Twice Over",
+     "description": "Face the Hollow King's return.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_THE_MAN_WHO_SELLS_MAYBE",
+     "name": "The One He Doesn't Cheat",
+     "description": "Complete \"The Man Who Sells Maybe\" and meet Grimsby.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_BANDITS_ON_THE_OLD_ROAD",
+     "name": "Roadwarden",
+     "description": "Break up the self-styled king of the old trade road.",
+     "hidden": false,
+-    "unlocksTrackId": "frostbound_path"
++    "unlocksTrackId": "frostbound_path",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_SOMETHING_BIG_IN_THE_FOOTHILLS",
+     "name": "Ridgebreaker",
+     "description": "Put down whatever's been nesting in the foothills.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_FULL_MOON_OVER_ASHVALE",
+     "name": "Moonhunter",
+     "description": "Hunt down what's really loose over Ashvale.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_BODY_SNATCHER_PROBLEM",
+     "name": "Unmasker",
+     "description": "Unmask what's been copying people from the inside out.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_HUNT_A_LICH",
+     "name": "Grave-Marked",
+     "description": "Track a lich back to his own front door.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_QUIET_IN_MILLBROOK",
+     "name": "Watcher of Millbrook",
+     "description": "Investigate the quiet in Millbrook.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_THE_LOOM_BENEATH",
+     "name": "Thread-Walker",
+     "description": "Find what's been directing Millbrook all along.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "CHAIN_THE_FIRST_HAUL",
+     "name": "Provisioner",
+     "description": "Complete \"The First Haul\" and open the Harvest tab for good.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_BLACKFORD_KEEP_CLEARED",
+     "name": "Siege's End",
+     "description": "Clear The Siege of Blackford Keep.",
+     "hidden": false,
+-    "unlocksTrackId": "echoes_of_eternity"
++    "unlocksTrackId": "echoes_of_eternity",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_BONEWROUGHT_VAULT_CLEARED",
+     "name": "Vault Broken",
+     "description": "Clear The Bonewrought Vault.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_FROZEN_WYRMKEEP_CLEARED",
+     "name": "Wyrmkeep Thawed",
+     "description": "Clear The Frozen Wyrmkeep.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_WHAT_GOT_OUT_CLEARED",
+     "name": "Put It Back",
+     "description": "Clear What Got Out.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_BLACK_DRAGON_NEST_CLEARED",
+     "name": "Nest Cleared",
+     "description": "Clear The Black Dragon Nest.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_HOUSE_OF_BONES_CLEARED",
+     "name": "Marrow to Ash",
+     "description": "Clear The House of Bones.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "RAID_SILENCE_THE_LOOM_CLEARED",
+     "name": "Thread Cut",
+     "description": "Clear Silence the Loom.",
+     "hidden": true,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "BLACKSMITH_MAXED",
+     "name": "Master Smith",
+     "description": "Fully upgrade every Blacksmith training line.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "ALCHEMIST_MAXED",
+     "name": "Master Alchemist",
+     "description": "Fully upgrade every Alchemist training line.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "ENCHANTER_MAXED",
+     "name": "Master Enchanter",
+     "description": "Fully upgrade every Enchanter training line.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "GUILD_HALL_MAXED",
+     "name": "Halls Unshakeable",
+     "description": "Fully upgrade every Guild facility.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "COMPLETIONIST",
+     "name": "Nothing Left to Buy",
+     "description": "Fully upgrade every Guild facility and every vendor training line.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "WAREHOUSE_MAXED",
+     "name": "Overflowing Stores",
+     "description": "Fully upgrade the Warehouse.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "ALL_TOOLS_MAXED",
+     "name": "Master Gatherer",
+     "description": "Fully upgrade every Harvest tool.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "FIRST_PET_HATCHED",
+     "name": "New Friend",
+     "description": "Hatch your first pet.",
+     "hidden": false,
+-    "unlocksTrackId": "the_hidden_glade"
++    "unlocksTrackId": "the_hidden_glade",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "ALL_PETS_COLLECTED",
+     "name": "Full Menagerie",
+     "description": "Hatch every pet species at least once.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "VETERAN_RETIREE",
+     "name": "Serial Retiree",
+     "description": "Retire 5 heroes over the guild's history.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "PEDDLER_FIRST_FLIP",
+     "name": "A Reasonable Bet",
+     "description": "Flip a card at Grimsby's table.",
+     "hidden": false,
+-    "unlocksTrackId": "tales_of_the_hearth"
++    "unlocksTrackId": "tales_of_the_hearth",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "PEDDLER_JACKPOT",
+     "name": "Jackpot!",
+     "description": "Flip a jackpot-tier card at Grimsby's table.",
+     "hidden": false,
+-    "unlocksTrackId": "arcane_whispers"
++    "unlocksTrackId": "arcane_whispers",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "HIGH_ROLLER_UNLOCKED",
+     "name": "Bigger Bets",
+     "description": "Unlock High Roller at Grimsby's table.",
+     "hidden": false,
+-    "unlocksTrackId": "the_forgotten_grove"
++    "unlocksTrackId": "the_forgotten_grove",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "PEDDLER_HIGH_ROLLER_JACKPOT",
+     "name": "The House Loses",
+     "description": "Flip a jackpot-tier card while playing High Roller.",
+     "hidden": false,
+-    "unlocksTrackId": "the_silent_lake"
++    "unlocksTrackId": "the_silent_lake",
++    "grantsGuildTitle": ""
+   },
+   {
+     "id": "PEDDLER_TAB_JACKPOT",
+     "name": "Knew When to Walk Away",
+     "description": "Settle Grimsby's Tab at round 5 or later.",
+     "hidden": false,
+-    "unlocksTrackId": ""
++    "unlocksTrackId": "",
++    "grantsGuildTitle": ""
+   }
+ ]
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 117717d..5ff65d4 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -20,6 +20,7 @@ import { GuildManager } from './managers/GuildManager';
+ import { PrestigeManager } from './managers/PrestigeManager';
+ import { ModifierManager } from './managers/ModifierManager';
+ import { AchievementManager } from './managers/AchievementManager';
++import { GuildTitleManager } from './managers/GuildTitleManager';
+ import { ACHIEVEMENT_BY_ID } from './data/achievements';
+ import { BARD_TRACK_BY_ID } from './data/bard';
+ import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
+@@ -357,6 +358,11 @@ export class GameEngine {
+    * at each of those call sites. Folded into the same archived line
+    * rather than a second toast, same "one moment, not two" reasoning as
+    * the achievement popup itself.
++   *
++   * Patch 0371: a guild title (AchievementDef.grantsGuildTitle) is
++   * granted the same way, through the same chokepoint, right alongside
++   * the bard-track grant -- deliberately not its own separate archive
++   * line, same "one moment" reasoning.
+    */
+   private reportAchievements(ids: string[]) {
+     if (ids.length === 0) return;
+@@ -369,6 +375,9 @@ export class GameEngine {
+         const track = BARD_TRACK_BY_ID[def.unlocksTrackId];
+         if (track) message += `. New track for the guild bard: "${track.name}."`;
+       }
++      if (def?.grantsGuildTitle && GuildTitleManager.grant(this.state, def.grantsGuildTitle)) {
++        message += ` The guild is now known as ${def.grantsGuildTitle}.`;
++      }
+       this.archive(message);
+       this.achievementQueue.push(id);
+       void window.littleKnight?.unlockAchievement(id);
+@@ -3190,6 +3199,16 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Same shape, one level up -- switches which of the guild's own
++   *  already-earned titles displays under its name (MenuWindow's
++   *  titlebar), via GuildTitleManager.setActive's own no-op-on-mismatch
++   *  guard. */
++  setActiveGuildTitle(title: string | null) {
++    GuildTitleManager.setActive(this.state, title);
++    this.notify();
++    void this.saveNow();
++  }
++
+   /** Buys a skin for the guild (usable by any hero of any class). */
+   buySkin(skinId: string) {
+     if (this.state.unlockedSkins.includes(skinId)) return this.say('Already owned.');
+diff --git a/src/game/managers/GuildTitleManager.ts b/src/game/managers/GuildTitleManager.ts
+new file mode 100644
+index 0000000..91da3fe
+--- /dev/null
++++ b/src/game/managers/GuildTitleManager.ts
+@@ -0,0 +1,48 @@
++import { GameState } from '../types';
++
++/**
++ * Guild-wide titles (patch 0371) -- "how the world sees this guild,"
++ * granted for guild-scale accomplishments (defeating a world-ending
++ * threat, clearing a major raid chain) rather than anything one hero did
++ * alone. Deliberately the exact shape HeroManager's own
++ * grantTitle/displayTitle already use for per-hero titles, one level up:
++ * append-only earned list, one currently-displayed entry, player free to
++ * switch among earned titles (or None) afterward. See
++ * AchievementDef.grantsGuildTitle for how a title actually gets earned --
++ * this module only owns the grant/display mechanics, not the trigger.
++ */
++export const GuildTitleManager = {
++  /**
++   * Adds a newly-earned title to the guild's collection and switches the
++   * displayed one to it, unless the guild already holds it. Returns true
++   * if the title was actually new, mirroring HeroManager.grantTitle's own
++   * return contract, for the same reason: a caller (engine.ts's
++   * reportAchievements) can decide whether a celebration should mention
++   * it.
++   */
++  grant(state: GameState, title: string): boolean {
++    if (state.guildTitles.includes(title)) return false;
++    state.guildTitles.push(title);
++    state.activeGuildTitle = title;
++    return true;
++  },
++
++  /** The title actually shown under the guild's name -- just
++   *  activeGuildTitle, directly. No fallback-to-most-recent logic here on
++   *  purpose (see HeroManager.displayTitle's own comment on why that
++   *  fallback was actually a bug for the per-hero version) -- null always
++   *  means null, whether that's "nothing earned yet" or "player
++   *  deliberately picked None." */
++  display(state: GameState): string | null {
++    return state.activeGuildTitle;
++  },
++
++  /** Player-driven picker action (Dashboard's guild-name card) -- setting
++   *  to any title not actually in guildTitles is a silent no-op rather
++   *  than an error, same defensive shape a stale/tampered dropdown value
++   *  elsewhere in this game would get. `null` (None) is always valid. */
++  setActive(state: GameState, title: string | null): void {
++    if (title !== null && !state.guildTitles.includes(title)) return;
++    state.activeGuildTitle = title;
++  },
++};
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index a76a32e..918ee2d 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -257,6 +257,8 @@ export function createInitialState(now = Date.now()): GameState {
+     grimsbyPermanentSpotUnlocked: false,
+     goldRenownExchangeUnlocked: false,
+     guildDonationsTotal: 0,
++    guildTitles: [],
++    activeGuildTitle: null,
+   };
+ }
+ 
+@@ -1458,6 +1460,20 @@ const MIGRATIONS: Record<number, Migration> = {
+     }
+     return { ...save, version: 66, inventory };
+   },
++  /**
++   * New Guild Titles system (patch 0371) -- earned guild-wide titles and
++   * which one's on display. `[]`/`null` for every existing save, exactly
++   * matching createInitialState's own defaults for a brand-new one --
++   * nobody's guild retroactively earns a title it didn't actually earn
++   * under the old system (there wasn't one), same "don't fabricate
++   * history" stance every other migration here takes.
++   */
++  66: (save) => ({
++    ...save,
++    version: 67,
++    guildTitles: save.guildTitles ?? [],
++    activeGuildTitle: save.activeGuildTitle ?? null,
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 31d1cbc..4128e0c 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 66;
++export const SAVE_VERSION = 67;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -2482,6 +2482,27 @@ export interface GameState {
+    * spot.
+    */
+   guildName: string;
++  /**
++   * Every guild-wide title ever earned -- append-only, in the order
++   * earned, granted via AchievementDef.grantsGuildTitle the moment its
++   * achievement unlocks (engine.ts's reportAchievements). Same shape as
++   * Hero.titles, one level up: a title here belongs to the whole guild,
++   * not any one hero, since "Saviors of the Realm" isn't something a
++   * single party member did alone.
++   */
++  guildTitles: string[];
++  /**
++   * Which entry in `guildTitles` is currently displayed (MenuWindow's
++   * titlebar, under the guild name) -- always a member of `guildTitles`
++   * when non-null. `null` means "show nothing," same as a guild with an
++   * empty `guildTitles` array resolves to regardless. Auto-set to the
++   * newest title the moment one's earned, but the player can pick any
++   * earlier one instead (or None) via the picker on the Dashboard's
++   * guild-name card -- see GuildTitleManager.display for the read side,
++   * DashboardPanel for the picker UI. Exactly Hero.activeTitle's own
++   * contract, one level up.
++   */
++  activeGuildTitle: string | null;
+   /**
+    * "setId:count" keys for every set-bonus threshold that's already
+    * triggered its one-time toast (see GameEngine.checkSetBonusMilestones).
+diff --git a/src/styles/app.css b/src/styles/app.css
+index f98bc3a..c632237 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1561,6 +1561,28 @@ button:focus-visible, [tabindex]:focus-visible {
+   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+ }
+ 
++/* Patch 0371 -- wraps the titlebar's h1 so an earned Guild Title can sit
++   directly under the guild name without disturbing .titlebar's own flex
++   row (this wrapper is a single flex child in that row, same as the
++   bare h1 was before; .titlebar > * above still applies to it, not to
++   h1 directly, which is fine -- position/z-index inherit through the
++   nesting either way). Absent when no title is active (guild-title-
++   subtitle only renders at all when MenuWindow.tsx's own condition is
++   true), so a guild with no earned title looks identical to before this
++   patch -- no empty gap left behind. */
++.titlebar-name {
++  display: flex;
++  flex-direction: column;
++  gap: 1px;
++}
++.guild-title-subtitle {
++  font-family: var(--font-display);
++  font-size: 0.625rem;
++  letter-spacing: 0.06em;
++  color: var(--text-muted);
++  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
++}
++
+ .titlebar .spacer { flex: 1; }
+ .titlebar button { -webkit-app-region: no-drag; }
+ 
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 09c80fd..d4a7047 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -439,7 +439,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+       </div>
+       <header className="titlebar" style={{ position: 'relative' }}>
+         <div className="rune-texture-overlay" style={{ backgroundImage: 'url(./textures/nav-runes.png)' }} aria-hidden="true" />
+-        <h1>{engine.state.guildName || 'Guildbound'}</h1>
++        <div className="titlebar-name">
++          <h1>{engine.state.guildName || 'Guildbound'}</h1>
++          {engine.state.activeGuildTitle && (
++            <div className="guild-title-subtitle">{engine.state.activeGuildTitle}</div>
++          )}
++        </div>
+         <div className="resources">
+           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index 4dc2041..42a9b42 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -292,6 +292,18 @@ export function DashboardPanel() {
+             </button>
+           </div>
+         )}
++        {state.guildTitles.length > 0 && (
++          <div className="row" style={{ gap: 8, marginTop: 6, alignItems: 'center' }}>
++            <span className="tiny muted">Title</span>
++            <select
++              value={state.activeGuildTitle ?? ''}
++              onChange={(e) => engine.setActiveGuildTitle(e.target.value || null)}
++            >
++              <option value="">None</option>
++              {state.guildTitles.map((t) => <option key={t} value={t}>{t}</option>)}
++            </select>
++          </div>
++        )}
+         <div className="spread" style={{ marginTop: 6 }}>
+           <span className="tiny muted">Guild Rank</span>
+           <b className="gold-text">{rank.name}</b>
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 941fce4..df31fc6 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -1357,19 +1357,21 @@ const SCHEMAS = {
+     label: 'Achievements',
+     group: 'Systems & Balance',
+     idField: 'id',
+-    // Editable here: name, description, hidden, unlocksTrackId. The
+-    // unlock CONDITION for each achievement id is not data — it's a
+-    // check function in AchievementManager.ts. Renaming an achievement,
+-    // rewriting its flavour text, or rewiring which bard track (if any)
+-    // it grants is fully safe and takes effect immediately; adding a
+-    // brand new achievement id here does nothing on its own until a
+-    // matching check is added in code. See DEVTOOL.md.
++    // Editable here: name, description, hidden, unlocksTrackId,
++    // grantsGuildTitle. The unlock CONDITION for each achievement id is
++    // not data — it's a check function in AchievementManager.ts.
++    // Renaming an achievement, rewriting its flavour text, or rewiring
++    // which bard track / guild title (if any) it grants is fully safe
++    // and takes effect immediately; adding a brand new achievement id
++    // here does nothing on its own until a matching check is added in
++    // code. See DEVTOOL.md.
+     fields: {
+       id: { type: 'string', required: true, steamId: true },
+       name: { type: 'string', required: true },
+       description: { type: 'string', required: true },
+       hidden: { type: 'boolean', required: true },
+       unlocksTrackId: { type: 'string', required: false },
++      grantsGuildTitle: { type: 'string', required: false },
+     },
+   },
+ };
+-- 
+2.43.0
+

@@ -292,6 +292,18 @@ export function DashboardPanel() {
             </button>
           </div>
         )}
+        {state.guildTitles.length > 0 && (
+          <div className="row" style={{ gap: 8, marginTop: 6, alignItems: 'center' }}>
+            <span className="tiny muted">Title</span>
+            <select
+              value={state.activeGuildTitle ?? ''}
+              onChange={(e) => engine.setActiveGuildTitle(e.target.value || null)}
+            >
+              <option value="">None</option>
+              {state.guildTitles.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
         <div className="spread" style={{ marginTop: 6 }}>
           <span className="tiny muted">Guild Rank</span>
           <b className="gold-text">{rank.name}</b>

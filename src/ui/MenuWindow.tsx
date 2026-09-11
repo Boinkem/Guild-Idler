@@ -439,7 +439,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
       </div>
       <header className="titlebar" style={{ position: 'relative' }}>
         <div className="rune-texture-overlay" style={{ backgroundImage: 'url(./textures/nav-runes.png)' }} aria-hidden="true" />
-        <h1>{engine.state.guildName || 'Guildbound'}</h1>
+        <div className="titlebar-name">
+          <h1>{engine.state.guildName || 'Guildbound'}</h1>
+          {engine.state.activeGuildTitle && (
+            <div className="guild-title-subtitle">{engine.state.activeGuildTitle}</div>
+          )}
+        </div>
         <div className="resources">
           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>

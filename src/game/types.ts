@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 66;
+export const SAVE_VERSION = 67;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2482,6 +2482,27 @@ export interface GameState {
    * spot.
    */
   guildName: string;
+  /**
+   * Every guild-wide title ever earned -- append-only, in the order
+   * earned, granted via AchievementDef.grantsGuildTitle the moment its
+   * achievement unlocks (engine.ts's reportAchievements). Same shape as
+   * Hero.titles, one level up: a title here belongs to the whole guild,
+   * not any one hero, since "Saviors of the Realm" isn't something a
+   * single party member did alone.
+   */
+  guildTitles: string[];
+  /**
+   * Which entry in `guildTitles` is currently displayed (MenuWindow's
+   * titlebar, under the guild name) -- always a member of `guildTitles`
+   * when non-null. `null` means "show nothing," same as a guild with an
+   * empty `guildTitles` array resolves to regardless. Auto-set to the
+   * newest title the moment one's earned, but the player can pick any
+   * earlier one instead (or None) via the picker on the Dashboard's
+   * guild-name card -- see GuildTitleManager.display for the read side,
+   * DashboardPanel for the picker UI. Exactly Hero.activeTitle's own
+   * contract, one level up.
+   */
+  activeGuildTitle: string | null;
   /**
    * "setId:count" keys for every set-bonus threshold that's already
    * triggered its one-time toast (see GameEngine.checkSetBonusMilestones).

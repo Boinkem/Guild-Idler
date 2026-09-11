@@ -26,6 +26,22 @@ export interface AchievementDef {
    * from a bought facility to scattered achievement rewards.
    */
   unlocksTrackId: string;
+  /**
+   * Guild-wide title text this achievement also grants the moment it
+   * unlocks, or '' for the vast majority that grant nothing extra --
+   * same "empty string sentinel" convention unlocksTrackId already uses,
+   * for the same reason (devtool-editable via a plain text field, no
+   * separate nullable-vs-empty distinction to reason about). The actual
+   * grant happens in engine.ts's reportAchievements, alongside the
+   * unlocksTrackId grant it already does there -- see
+   * GuildTitleManager.grant. Deliberately reserved for guild-wide,
+   * world-facing accomplishments (defeating a world-ending threat,
+   * clearing a major raid chain) rather than every achievement -- a
+   * title is meant to read as "how the world sees this guild," which
+   * most achievements (maxing a vendor, collecting every pet) aren't
+   * about.
+   */
+  grantsGuildTitle: string;
 }
 
 import achievementsJson from './json/achievements.json';

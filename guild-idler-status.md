@@ -28133,6 +28133,103 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### New system: Guild Titles, a guild-wide subtitle earned through play (patch 0371)
+```discord-update
+Dev Update | Guild Titles
+
+- New: your guild can now earn its own title, shown right under its name -- "how the world sees you"
+- Complete the Dragon Hunt to become The Dragon Trackers, finish the World-Ender's Vigil to become Saviors of the Realm, or clear Requiem for the Last God to become The Godslayers
+- Earned more than one? Pick which one displays from a simple dropdown, same as a hero's own title
+```
+
+Direct follow-up to the founder-pack discussion: "Founder" needed a home
+that wasn't the existing per-hero title system, since it isn't something
+any one hero personally earned -- it belongs to the whole guild. Built
+that system now, then filled it with three real titles matching existing
+achievements per the direct request to "build it out while we're here" --
+the founder pack's own "Founder" title is a separate follow-up patch
+once the DLC pack itself exists (still blocked on the same App ID
+registration `DlcManager.ts`'s own comment already flags), not this one.
+
+**Exactly Hero.titles/HeroManager's own shape, one level up.** Every
+design decision here is a direct mirror of the per-hero title system
+that already existed, not a new pattern: `GameState.guildTitles: string[]`
+(append-only, earned order) + `activeGuildTitle: string | null`
+(currently displayed, auto-set to the newest earned, player free to
+switch to an earlier one or None). New `GuildTitleManager.ts` carries
+`grant`/`display`/`setActive`, each one a direct one-level-up copy of
+`HeroManager.grantTitle`/`displayTitle` and engine.ts's own
+`setActiveTitle` -- deliberately not reinventing the shape, since the
+existing one was already proven and the picker UX (a plain `<select>`,
+"None" plus every earned entry) needed no rethinking either.
+
+**Granted through the achievement system, not a new trigger.**
+`AchievementDef` gets a new `grantsGuildTitle: string` field -- same
+empty-string-sentinel convention `unlocksTrackId` already uses for "grants
+nothing extra," same reasoning (devtool-editable as a plain text field,
+no separate nullable-vs-empty case to handle). The actual grant happens
+in engine.ts's `reportAchievements`, the exact chokepoint every
+`AchievementManager.checkAll()` call site in the file already funnels
+through -- so every quest/raid/peddler/purchase action that can newly
+unlock an achievement grants its guild title for free, no new hook
+needed at any individual call site, identical to how `unlocksTrackId`
+already piggybacks on that same chokepoint for bard tracks. Folded into
+the same archived unlock message rather than a second toast ("The guild
+is now known as The Dragon Trackers.") -- one moment, not two, matching
+the achievement popup's own existing restraint.
+
+**Three titles granted for real**, matching the direct request to tie
+titles to existing achievements: `CHAIN_DRAGON_HUNT` (Dragonbane) ->
+"The Dragon Trackers", `WORLDS_END` -> "Saviors of the Realm",
+`LAST_GOD_DEFEATED` -> "The Godslayers". Deliberately NOT every
+achievement -- a title is meant to read as "how the world sees this
+guild," which vendor-maxing or pet-collecting achievements aren't
+really about; reserved for guild-scale, world-facing accomplishments
+(defeating a named world-ending threat, a major raid chain clear) to
+keep them meaning something. `RAID_BLACK_DRAGON_NEST_CLEARED` was
+deliberately left ungranted despite also being dragon-themed -- granting
+it too would read as two different titles for the same "dragons" theme
+rather than one title feeling earned. More can be added anytime purely
+through the devtool (name/description/hidden/unlocksTrackId/
+grantsGuildTitle are all edited the same way already) -- no code change
+needed for a new title tied to an existing achievement, only for a
+genuinely new achievement.
+
+**Two display spots, matching what already existed.** The titlebar
+(`MenuWindow.tsx`) gets a small subtitle line directly under the guild
+name -- "how the world sees them" front and center, on the one screen
+that's visible regardless of which tab is open. The actual picker lives
+on the Dashboard's guild-name card, right where the rename control
+already sits -- the natural "manage your guild's identity" surface,
+same spot patch 0363's Leaderboard button also grew from. `app.css`'s
+`.titlebar h1` wraps in a new `.titlebar-name` flex column so the
+subtitle can sit directly beneath it without disturbing `.titlebar`'s
+own flex row; entirely absent (no empty gap) for a guild with no title
+active, same as before this patch.
+
+**SAVE_VERSION 66 -> 67**, migration adds `guildTitles: []` /
+`activeGuildTitle: null` to any existing save that doesn't have them --
+nobody's guild retroactively earns a title it didn't actually earn under
+the old system, same "don't fabricate history" stance every other
+migration in this file already takes.
+
+**Verified:** `npx tsc --noEmit`, `npx vite build`, and a full
+`electron-builder --linux dir` package build all pass clean. Beyond
+type-checking, the actual runtime logic was exercised directly (via
+`tsx`, not just inferred from types): fresh-state defaults, a grant
+correctly appending and auto-switching display, a duplicate grant
+correctly staying a no-op, a second grant correctly switching display to
+the newest while keeping both earned, manually switching back to an
+earlier title, an invalid title being silently rejected, `None`
+correctly clearing to `null`, a pre-0371 save correctly migrating to
+empty defaults, and all three real achievement-to-title mappings reading
+back correctly from `achievements.json` -- eleven checks, all passing.
+Not yet checked: the actual picker `<select>` and titlebar subtitle
+rendering in a real running window (no display available in this
+sandbox for a full visual pass) -- worth a quick look on your end to
+confirm the layout reads well next to the existing rename button and
+resource icons.
+
 ### Steamworks SDK wired in for real -- achievements side (patch 0370)
 ```discord-update
 Dev Update | Patch 0370

@@ -1561,6 +1561,28 @@ button:focus-visible, [tabindex]:focus-visible {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
+/* Patch 0371 -- wraps the titlebar's h1 so an earned Guild Title can sit
+   directly under the guild name without disturbing .titlebar's own flex
+   row (this wrapper is a single flex child in that row, same as the
+   bare h1 was before; .titlebar > * above still applies to it, not to
+   h1 directly, which is fine -- position/z-index inherit through the
+   nesting either way). Absent when no title is active (guild-title-
+   subtitle only renders at all when MenuWindow.tsx's own condition is
+   true), so a guild with no earned title looks identical to before this
+   patch -- no empty gap left behind. */
+.titlebar-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.guild-title-subtitle {
+  font-family: var(--font-display);
+  font-size: 0.625rem;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
 .titlebar .spacer { flex: 1; }
 .titlebar button { -webkit-app-region: no-drag; }
 

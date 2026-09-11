@@ -257,6 +257,8 @@ export function createInitialState(now = Date.now()): GameState {
     grimsbyPermanentSpotUnlocked: false,
     goldRenownExchangeUnlocked: false,
     guildDonationsTotal: 0,
+    guildTitles: [],
+    activeGuildTitle: null,
   };
 }
 
@@ -1458,6 +1460,20 @@ const MIGRATIONS: Record<number, Migration> = {
     }
     return { ...save, version: 66, inventory };
   },
+  /**
+   * New Guild Titles system (patch 0371) -- earned guild-wide titles and
+   * which one's on display. `[]`/`null` for every existing save, exactly
+   * matching createInitialState's own defaults for a brand-new one --
+   * nobody's guild retroactively earns a title it didn't actually earn
+   * under the old system (there wasn't one), same "don't fabricate
+   * history" stance every other migration here takes.
+   */
+  66: (save) => ({
+    ...save,
+    version: 67,
+    guildTitles: save.guildTitles ?? [],
+    activeGuildTitle: save.activeGuildTitle ?? null,
+  }),
 };
 
 export const SaveManager = {

@@ -1357,19 +1357,21 @@ const SCHEMAS = {
     label: 'Achievements',
     group: 'Systems & Balance',
     idField: 'id',
-    // Editable here: name, description, hidden, unlocksTrackId. The
-    // unlock CONDITION for each achievement id is not data — it's a
-    // check function in AchievementManager.ts. Renaming an achievement,
-    // rewriting its flavour text, or rewiring which bard track (if any)
-    // it grants is fully safe and takes effect immediately; adding a
-    // brand new achievement id here does nothing on its own until a
-    // matching check is added in code. See DEVTOOL.md.
+    // Editable here: name, description, hidden, unlocksTrackId,
+    // grantsGuildTitle. The unlock CONDITION for each achievement id is
+    // not data — it's a check function in AchievementManager.ts.
+    // Renaming an achievement, rewriting its flavour text, or rewiring
+    // which bard track / guild title (if any) it grants is fully safe
+    // and takes effect immediately; adding a brand new achievement id
+    // here does nothing on its own until a matching check is added in
+    // code. See DEVTOOL.md.
     fields: {
       id: { type: 'string', required: true, steamId: true },
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
       hidden: { type: 'boolean', required: true },
       unlocksTrackId: { type: 'string', required: false },
+      grantsGuildTitle: { type: 'string', required: false },
     },
   },
 };
