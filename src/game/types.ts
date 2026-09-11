@@ -3137,6 +3137,29 @@ export interface PetDef {
    * GENERAL_PET_POOL are unaffected, only the cosmetic result once rolled.
    */
   minRarity?: Rarity;
+  /**
+   * Per-species correction multiplier on top of the corner companion's
+   * base pet height (and any player-chosen `Settings.petSpriteScale` on
+   * top of that) -- same role `HERO_DISPLAY_SCALE` plays for hero classes
+   * in HeroSprite.tsx, except species-authored here as data instead of
+   * hardcoded in a TS const table, so it's tunable from the DevTool's Pet
+   * Sprite Lab (see PetSprite.tsx) without a code change or a rebuild.
+   * Unset means 1 (no correction) -- same "omitted means default"
+   * convention every other optional numeric field on this type follows.
+   */
+  displayScale?: number;
+  /**
+   * Per-species nudge, as a percentage of the pet's own frame size,
+   * layered underneath the player's free-drag `Settings.petOffsetX/Y`
+   * (which stays in raw px on the outer companion button -- see
+   * IdleView.tsx). Deliberately NOT gated to the idle pose the way
+   * HeroSprite's own HERO_DISPLAY_OFFSET is: a pet's companion position
+   * shouldn't visibly hop when its animation switches between idle and
+   * movement, unlike a hero's occasional pose-specific bounding-box
+   * quirk. Unset means 0 for both axes.
+   */
+  displayOffsetX?: number;
+  displayOffsetY?: number;
 }
 
 /**

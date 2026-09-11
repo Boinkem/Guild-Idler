@@ -548,6 +548,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
               animation={petAnimation}
               flip={facingReturn}
               height={Math.round(90 * settings.petSpriteScale)}
+              displayScale={petDef.displayScale}
+              displayOffsetX={petDef.displayOffsetX}
+              displayOffsetY={petDef.displayOffsetY}
               title={equippedPet.name}
               fallback={<span style={{ fontSize: '1.4rem' }}>{petDef.glyph}</span>}
             />

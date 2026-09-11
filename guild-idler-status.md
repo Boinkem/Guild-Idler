@@ -30948,3 +30948,107 @@ it's the only vendor with a same-category dedicated station duplicating
 it.
 
 **Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
+
+### DevTool: Pet Sprite Lab -- adventurer + pet live preview, per-species default scale/position (patch 0380)
+```discord-update
+Dev Update | Pet Sprite Lab
+
+- Added a new DevTool tab: pick a pet and a reference hero class, see them side by side at real size, in Idle or Moving pose
+- Added scale and X/Y position sliders that tune where a species sits by default on the corner companion -- no more guessing from a screenshot
+- Save writes straight to that species' pets.json entry -- the player's own sprite-size setting and free-drag position still layer on top of it, unaffected
+```
+
+Direct ask: whether the corner companion's pet sprite could get a
+per-species default scale/placement, plus a screen to check idle vs
+running animations without having to actually get the pet in-game first.
+Landed on the exact same shape HeroSprite.tsx already solved this for --
+`HERO_DISPLAY_SCALE`/`HERO_DISPLAY_OFFSET`, two hardcoded per-class
+correction tables, added because different character packs fill their own
+frame box wildly differently (gladiator/adventurer ~97%, samurai ~62%).
+That table's own comment admits its offset values were "a bigger,
+eyeballed correction from the reported screenshot" -- exactly the
+workflow this patch replaces for pets, and does it as data instead of a
+second hardcoded TS table.
+
+**`PetDef` gains three optional fields.** `displayScale`,
+`displayOffsetX`, `displayOffsetY` (types.ts) -- a multiplier and a
+percent-of-frame X/Y nudge, same "omitted means default (1, 0, 0)"
+convention every other optional numeric field on this type already
+follows. Deliberately NOT gated to the idle pose the way Hero's own
+`HERO_DISPLAY_OFFSET` is (that gate exists because a hero's occasional
+pose-specific bounding-box quirk shouldn't apply outside idle) -- a pet's
+companion position visibly hopping every time its animation switches
+between idle and movement would be worse than a slightly-off resting
+position, so the offset here applies to every pose uniformly.
+
+**`PetSprite.tsx` applies both**, same formula HeroSprite already uses for
+its own tables: `scale = (height / frameH) * displayScale`, and the
+offset joins the existing flip logic in one `transform` list
+(`translate(x%, y%)`, mirrored on X when the sprite is also flipped, so a
+nudge still reads as "toward the pet's own right" regardless of facing).
+Passed in as three new optional props rather than looked up internally by
+species the way Hero's tables are -- `IdleView.tsx` already resolves the
+equipped pet's real def through `DlcManager.petDef` (base roster or an
+owned DLC pack), so asking `PetSprite` to re-derive that from a bare
+species string would either duplicate that lookup or silently miss DLC
+species. Every other caller (Pets tab roster, Hatchery reveal, Egg Select,
+the enlarged-pet modal) passes nothing for these and gets the same 1/0/0
+defaults as before this patch.
+
+**DevTool schema** (`server.mjs`) picked up the same three fields as plain
+numbers on the existing Pets content type, so they're editable by hand
+too -- but the real workflow is the new tab.
+
+**New "Pet Lab" tab**, next to Sandbox, same "bespoke standalone tool, not
+a schema-driven row editor" shape Sandbox already established. Three
+dropdowns (pet species, rarity/recolour tier, reference hero class --
+defaults to the Adventurer, matching the corner companion's actual
+starter), an Idle/Moving pose toggle that drives both sprites together
+(mirrors the real `idle <-> run`/`idle <-> movement` pairing IdleView.tsx
+already uses), a live preview stage, and three sliders (scale 40-250%,
+X/Y offset -60 to 60%) that restyle the pet sprite directly on `oninput`
+-- deliberately NOT a full re-render per tick, so the animation loop
+doesn't visibly restart on every slider nudge. Save writes the whole
+`pets.json` array back through the existing generic `POST /api/data/pets`
+endpoint (same one the plain Pets tab form already uses), with the three
+fields omitted from the payload entirely when left at their defaults,
+same save-time filtering convention `guild-hall-decorations`' own
+scale/focus fields already follow.
+
+**New art routes.** The DevTool had never served `public/heroes/` or
+`public/pets/` to its own frontend before this -- only the game's Vite
+dev server ever loaded them. Two new guarded static routes,
+`/heroes-art/` and `/pets-art/`, same path-traversal-guard shape as the
+existing `/decor-art/`/`/guildhall-art/` routes, rooted at two new dir
+constants (`HEROES_DIR`, `PETS_ART_DIR`). Read-only on purpose -- unlike
+`ICONS_DIR`/`BANNERS_DIR`/`DECOR_DIR` there's no upload endpoint, since
+these packs come from `tools/import_characters.py`/`tools/import_pets.py`,
+not picked one file at a time. Both trees are gitignored (licensed art)
+and commonly absent on a fresh clone -- a missing manifest is the expected
+case, handled the same "degrades gracefully" way the real
+`PetSprite`/`HeroSprite` components already do, not surfaced as an error.
+
+**The animated preview is a hand-written mirror, not a shared import.**
+The DevTool has no build step and can't pull the real React components in
+directly, so `app.js` re-implements the same
+scale/backgroundSize/backgroundPosition frame-stepping math
+`PetSprite.tsx`/`HeroSprite.tsx` use, closely enough that a Lab preview
+and the real in-game companion agree. Kept deliberately small -- a light
+subset of `PetSprite`'s own `resolveAnimation` fallback chain, not a full
+port, since the Lab only ever needs an idle-or-moving pose, never the
+full animation vocabulary (attack/defend/hurt/etc.) the real game
+resolves for other contexts.
+
+**Verified:** `npx tsc --noEmit` passes clean. Ran the DevTool server
+directly and drove it end-to-end: `/api/schema` reports the three new
+`pets` fields, `/api/data/pets` returns all 19 real base-roster pets,
+`/api/data/hero-classes` returns all 14 classes including `adventurer`,
+both new art routes correctly 404 (no local art installed in this
+environment -- expected, `public/heroes`/`public/pets` are gitignored) and
+a path-traversal attempt against `/heroes-art/` does not escape the guard.
+Round-trip tested the actual save path directly against the running
+server: POSTed a modified `pets.json` with `displayScale`/
+`displayOffsetX`/`displayOffsetY` set on one entry, confirmed the file
+persisted them and a fresh GET read them back correctly, then reverted
+that test write -- ships with `pets.json` unchanged, same as every other
+patch's out-of-the-box state.

@@ -100,6 +100,12 @@ async function init() {
   sandboxBtn.onclick = () => selectSandboxTab();
   tabsEl.appendChild(sandboxBtn);
 
+  const petLabBtn = document.createElement('button');
+  petLabBtn.innerHTML = '<i class="ph ph-paw-print"></i><span>Pet Lab</span>';
+  petLabBtn.dataset.group = '__petlab__';
+  petLabBtn.onclick = () => selectPetLabTab();
+  tabsEl.appendChild(petLabBtn);
+
   groupOrder.forEach((group) => {
     const btn = document.createElement('button');
     // Caret + label: the caret marks that this group opens a nested strip of
@@ -3015,7 +3021,337 @@ function renderPatches() {
   };
 }
 
-/* ---------------------------------------------------------------- sandbox --- */
+/* -------------------------------------------------------------- petlab --- */
+// Pet Sprite Lab -- adventurer + pet side by side with a live animated
+// preview, so a per-species PetDef.displayScale/displayOffsetX/Y
+// correction (see types.ts's own comment on PetDef for why these are data
+// instead of a hardcoded HERO_DISPLAY_SCALE-style table) can be dialed in
+// by eye instead of guessed from a screenshot and re-patched blind -- the
+// exact problem HeroSprite.tsx's own HERO_DISPLAY_OFFSET comment admits to
+// ("a bigger, eyeballed correction from the reported screenshot"). Its own
+// bespoke tab (not schema-driven) -- same shape as the Sandbox tab, since
+// neither is really "edit one row of one JSON file"; both are small
+// standalone tools that happen to read/write real game JSON as a side
+// effect. Companion base height (90px) and fallback rate table below are
+// duplicated from IdleView.tsx/PetSprite.tsx/HeroSprite.tsx on purpose --
+// this file has no build step and can't import the React components
+// directly, so the closest it can do is mirror their math closely enough
+// that a Lab preview and the real in-game companion agree.
+const PETLAB_COMPANION_HEIGHT = 90; // matches IdleView.tsx's own base pet height
+const PETLAB_HERO_HEIGHT = 120; // bigger than the real companion on purpose -- a reference silhouette, not a 1:1 mock of the tiny corner window
+const PETLAB_FPS = { idle: 6, idle2: 6, walk: 9, run: 12, movement: 10, walking: 6, flying: 10, perched: 5, sitting: 6, laying: 4 };
+
+const petLabState = {
+  pets: [], heroClasses: [],
+  petId: null, heroClassId: 'adventurer', rarity: 'common',
+  pose: 'idle', // 'idle' | 'moving' -- drives both sprites together, same pairing IdleView.tsx already uses (hero idle/run <-> pet idle/movement)
+  heroManifest: null, petManifest: null,
+  // Live-edited values for the selected pet, seeded from its saved
+  // displayScale/displayOffsetX/Y on every species switch (see
+  // loadPetLabDefaults) -- 1/0/0 for a species that's never been tuned.
+  scale: 1, offsetX: 0, offsetY: 0,
+  dirty: false, saving: false,
+};
+
+// Two independent frame-steppers (hero, pet) -- kept outside petLabState
+// since setInterval handles have no business going through a re-render.
+const petLabAnimators = { hero: null, pet: null };
+
+async function selectPetLabTab() {
+  state.kind = '__petlab__';
+  state.group = null;
+  markActiveGroup('__petlab__');
+  subtabsEl.style.display = 'none';
+  subtabsEl.innerHTML = '';
+  setStatus('Loading…');
+  try {
+    const [{ data: pets }, { data: heroClasses }, heroManifest, petManifest] = await Promise.all([
+      api('/api/data/pets'),
+      api('/api/data/hero-classes'),
+      fetchLabManifest('/heroes-art/manifest.json'),
+      fetchLabManifest('/pets-art/manifest.json'),
+    ]);
+    petLabState.pets = pets;
+    petLabState.heroClasses = heroClasses;
+    petLabState.heroManifest = heroManifest;
+    petLabState.petManifest = petManifest;
+    if (!petLabState.petId || !pets.some((p) => p.id === petLabState.petId)) {
+      petLabState.petId = pets[0]?.id ?? null;
+    }
+    if (!heroClasses.some((h) => h.id === petLabState.heroClassId)) {
+      petLabState.heroClassId = heroClasses.find((h) => h.id === 'adventurer')?.id ?? heroClasses[0]?.id ?? null;
+    }
+    loadPetLabDefaults();
+    setStatus('');
+    renderPetLab();
+  } catch (err) {
+    setStatus(err.message, 'err');
+  }
+}
+
+/** Both art trees are gitignored (licensed, not redistributable) and
+ *  commonly absent on a fresh clone -- a missing manifest is the expected
+ *  case here, not an error, same "degrades gracefully" convention
+ *  PetSprite.tsx/HeroSprite.tsx already follow for the real game. */
+async function fetchLabManifest(url) {
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function loadPetLabDefaults() {
+  const def = petLabState.pets.find((p) => p.id === petLabState.petId);
+  petLabState.scale = def?.displayScale ?? 1;
+  petLabState.offsetX = def?.displayOffsetX ?? 0;
+  petLabState.offsetY = def?.displayOffsetY ?? 0;
+  petLabState.dirty = false;
+}
+
+function stopLabAnimator(key) {
+  const a = petLabAnimators[key];
+  if (a?.intervalId) clearInterval(a.intervalId);
+  petLabAnimators[key] = null;
+}
+
+/** Same scale/backgroundSize/backgroundPosition formula PetSprite.tsx and
+ *  HeroSprite.tsx use, split out from the interval tick so a scale/offset
+ *  slider can restyle the element without restarting (and visibly
+ *  resetting) the animation loop -- see the two slider oninput handlers in
+ *  renderPetLab. */
+function applyPetLabSpriteStyle(key) {
+  const el = document.getElementById(key === 'hero' ? 'petLabHeroSprite' : 'petLabPetSprite');
+  const a = petLabAnimators[key];
+  if (!el || !a) return;
+  const scale = key === 'hero'
+    ? PETLAB_HERO_HEIGHT / a.frameH
+    : (PETLAB_COMPANION_HEIGHT * petLabState.scale) / a.frameH;
+  el.style.width = `${a.frameW * scale}px`;
+  el.style.height = `${a.frameH * scale}px`;
+  el.style.backgroundSize = `${a.frameW * a.frames * scale}px ${a.frameH * scale}px`;
+  el.style.backgroundPosition = `-${a.index * a.frameW * scale}px 0`;
+  el.style.transform = key === 'pet' ? `translate(${petLabState.offsetX}%, ${petLabState.offsetY}%)` : '';
+}
+
+function startLabAnimator(key, opts) {
+  stopLabAnimator(key);
+  petLabAnimators[key] = { ...opts, index: 0 };
+  const el = document.getElementById(key === 'hero' ? 'petLabHeroSprite' : 'petLabPetSprite');
+  if (el) { el.style.backgroundImage = `url(${opts.url})`; el.style.backgroundRepeat = 'no-repeat'; el.style.imageRendering = 'pixelated'; }
+  applyPetLabSpriteStyle(key);
+  if (opts.frames > 1) {
+    petLabAnimators[key].intervalId = setInterval(() => {
+      const a = petLabAnimators[key];
+      if (!a) return;
+      a.index = (a.index + 1) % a.frames;
+      applyPetLabSpriteStyle(key);
+    }, 1000 / opts.fps);
+  }
+}
+
+/** A light subset of PetSprite.tsx's own resolveAnimation -- enough to
+ *  find a sensible idle/movement pose for the Lab's two-button toggle, not
+ *  a full port of every fallback the real component supports. */
+function resolvePetLabAnimation(char, requested) {
+  if (char.animations[requested]) return requested;
+  if (requested === 'movement' && char.animations.walking) return 'walking';
+  if (requested === 'movement' && char.animations.flying) return 'flying';
+  if (requested === 'idle' && char.animations.perched) return 'perched';
+  return char.animations.idle ? 'idle' : Object.keys(char.animations)[0];
+}
+
+/** Re-reads the currently selected class/species/rarity/pose and
+ *  (re)starts both animators -- called on every dropdown/pose change, but
+ *  NOT on scale/offset slider input (see applyPetLabSpriteStyle). */
+function refreshPetLabAnimators() {
+  const heroChar = petLabState.heroManifest?.[petLabState.heroClassId];
+  const heroCaption = document.getElementById('petLabHeroCaption');
+  if (heroChar) {
+    const heroAnim = petLabState.pose === 'moving'
+      ? (heroChar.animations.run ? 'run' : heroChar.animations.walk ? 'walk' : 'idle')
+      : 'idle';
+    startLabAnimator('hero', {
+      frameW: heroChar.frameW, frameH: heroChar.frameH,
+      frames: heroChar.animations[heroAnim] || 1,
+      fps: PETLAB_FPS[heroAnim] || 8,
+      url: `/heroes-art/${petLabState.heroClassId}/original/${heroAnim}.png`,
+    });
+    if (heroCaption) heroCaption.textContent = `${petLabState.heroClassId} — ${heroAnim}`;
+  } else {
+    stopLabAnimator('hero');
+    if (heroCaption) heroCaption.textContent = petLabState.heroManifest === null
+      ? 'No hero art installed locally (public/heroes is gitignored)' : 'No art for this class';
+  }
+
+  const petDef = petLabState.pets.find((p) => p.id === petLabState.petId);
+  const petChar = petDef ? petLabState.petManifest?.[petDef.spriteFolder] : null;
+  const petCaption = document.getElementById('petLabPetCaption');
+  if (petDef && petChar) {
+    const petAnim = resolvePetLabAnimation(petChar, petLabState.pose === 'moving' ? 'movement' : 'idle');
+    startLabAnimator('pet', {
+      frameW: petChar.frameW, frameH: petChar.frameH,
+      frames: petChar.animations[petAnim] || 1,
+      fps: PETLAB_FPS[petAnim] || 8,
+      url: `/pets-art/${petDef.spriteFolder}/${petLabState.rarity}/${petAnim}.png`,
+    });
+    if (petCaption) petCaption.textContent = `${petDef.name} — ${petAnim}`;
+  } else {
+    stopLabAnimator('pet');
+    if (petCaption) petCaption.textContent = petLabState.petManifest === null
+      ? 'No pet art installed locally (public/pets is gitignored)' : (petDef ? 'No art for this species yet' : '');
+  }
+}
+
+async function savePetLabDefaults() {
+  const idx = petLabState.pets.findIndex((p) => p.id === petLabState.petId);
+  if (idx === -1) return;
+  // Omitted rather than written as 1/0/0 when untouched -- same
+  // "omitted means default" convention PetDef's own doc comment commits
+  // to, and the same shape decorationImage's save-time filtering already
+  // follows for its own scale/focus fields.
+  const updated = petLabState.pets.map((p, i) => {
+    if (i !== idx) return p;
+    const next = { ...p };
+    if (petLabState.scale !== 1) next.displayScale = petLabState.scale; else delete next.displayScale;
+    if (petLabState.offsetX !== 0) next.displayOffsetX = petLabState.offsetX; else delete next.displayOffsetX;
+    if (petLabState.offsetY !== 0) next.displayOffsetY = petLabState.offsetY; else delete next.displayOffsetY;
+    return next;
+  });
+  petLabState.saving = true;
+  renderPetLab();
+  setStatus('Saving…');
+  try {
+    const result = await api('/api/data/pets', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    petLabState.pets = updated;
+    petLabState.dirty = false;
+    setStatus(`Saved (${result.count} entries).`, 'ok');
+  } catch (err) {
+    const detail = err.details ? '\n' + err.details.join('\n') : '';
+    setStatus('Save failed — see console.', 'err');
+    console.error(err.message + detail);
+    alert(`Could not save:\n\n${err.message}${detail}\n\nYour slider values were kept on screen; fix the issue and save again.`);
+  }
+  petLabState.saving = false;
+  renderPetLab();
+}
+
+function renderPetLab() {
+  const selectedPet = petLabState.pets.find((p) => p.id === petLabState.petId);
+  appEl.innerHTML = `
+    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Pet Sprite Lab</h2>
+    <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
+      Preview a pet next to the corner companion's hero sprite at its real default size, in both
+      poses, then dial in a per-species scale/position correction -- the same fix HeroSprite.tsx's
+      own HERO_DISPLAY_SCALE/OFFSET table applies for hero classes, except saved here as data on the
+      pet itself instead of hardcoded in TypeScript. Saves straight to pets.json; nothing here
+      touches the player's own Settings scale/drag position, which still applies on top of this.
+    </p>
+
+    <div class="field-row" style="margin-bottom: 12px;">
+      <div class="field">
+        <label>Pet species</label>
+        <select id="petLabPetSelect">
+          ${petLabState.pets.map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === petLabState.petId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Rarity (recolour tier)</label>
+        <select id="petLabRaritySelect">
+          ${['common', 'uncommon', 'rare', 'epic', 'legendary'].map((r) => `<option value="${r}" ${r === petLabState.rarity ? 'selected' : ''}>${r}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Reference hero class</label>
+        <select id="petLabHeroSelect">
+          ${petLabState.heroClasses.map((h) => `<option value="${escapeHtml(h.id)}" ${h.id === petLabState.heroClassId ? 'selected' : ''}>${escapeHtml(h.name || h.id)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="row" style="gap: 8px; margin-bottom: 12px;">
+      <button id="petLabPoseIdle" class="${petLabState.pose === 'idle' ? 'primary' : ''}">Idle (at the guild)</button>
+      <button id="petLabPoseMoving" class="${petLabState.pose === 'moving' ? 'primary' : ''}">Moving (on a quest)</button>
+    </div>
+
+    <div id="petLabStage" class="pet-lab-stage">
+      <div id="petLabHeroSprite" class="pet-lab-sprite pet-lab-hero-sprite"></div>
+      <div id="petLabPetSprite" class="pet-lab-sprite pet-lab-pet-sprite"></div>
+    </div>
+    <div class="row" style="justify-content: space-between; margin: 4px 0 16px;">
+      <span id="petLabHeroCaption" class="tiny muted"></span>
+      <span id="petLabPetCaption" class="tiny muted"></span>
+    </div>
+
+    <div class="section-heading">Default scale &amp; position for ${selectedPet ? escapeHtml(selectedPet.name) : 'this species'}</div>
+    <div class="field-row" style="margin-bottom: 8px;">
+      <div class="field">
+        <label>Scale (${Math.round(petLabState.scale * 100)}%)</label>
+        <input type="range" id="petLabScaleSlider" min="40" max="250" step="1" value="${Math.round(petLabState.scale * 100)}" />
+      </div>
+      <div class="field">
+        <label>Horizontal offset (${petLabState.offsetX}%)</label>
+        <input type="range" id="petLabOffsetXSlider" min="-60" max="60" step="1" value="${petLabState.offsetX}" />
+      </div>
+      <div class="field">
+        <label>Vertical offset (${petLabState.offsetY}%)</label>
+        <input type="range" id="petLabOffsetYSlider" min="-60" max="60" step="1" value="${petLabState.offsetY}" />
+        <div class="hint">Offsets are a % of the pet's own frame, applied underneath the player's free-drag position -- resetting to 0/0 leaves the corner companion exactly where the player last dragged it.</div>
+      </div>
+    </div>
+
+    <div class="row" style="gap: 8px;">
+      <button id="petLabResetBtn">Reset to 1x, centred</button>
+      <button id="petLabSaveBtn" class="primary" ${petLabState.dirty ? '' : 'disabled'}>${petLabState.saving ? 'Saving…' : 'Save default'}</button>
+    </div>
+  `;
+
+  refreshPetLabAnimators();
+
+  const bind = (id, evt, fn) => { const el = document.getElementById(id); if (el) el[evt] = fn; };
+
+  bind('petLabPetSelect', 'onchange', (e) => { petLabState.petId = e.target.value; loadPetLabDefaults(); renderPetLab(); });
+  bind('petLabRaritySelect', 'onchange', (e) => { petLabState.rarity = e.target.value; refreshPetLabAnimators(); });
+  bind('petLabHeroSelect', 'onchange', (e) => { petLabState.heroClassId = e.target.value; refreshPetLabAnimators(); });
+  bind('petLabPoseIdle', 'onclick', () => { petLabState.pose = 'idle'; renderPetLab(); });
+  bind('petLabPoseMoving', 'onclick', () => { petLabState.pose = 'moving'; renderPetLab(); });
+
+  bind('petLabScaleSlider', 'oninput', (e) => {
+    petLabState.scale = parseInt(e.target.value, 10) / 100;
+    petLabState.dirty = true;
+    applyPetLabSpriteStyle('pet');
+    const label = e.target.previousElementSibling; if (label) label.textContent = `Scale (${e.target.value}%)`;
+    const saveBtn = document.getElementById('petLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
+  });
+  bind('petLabOffsetXSlider', 'oninput', (e) => {
+    petLabState.offsetX = parseInt(e.target.value, 10);
+    petLabState.dirty = true;
+    applyPetLabSpriteStyle('pet');
+    const label = e.target.previousElementSibling; if (label) label.textContent = `Horizontal offset (${e.target.value}%)`;
+    const saveBtn = document.getElementById('petLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
+  });
+  bind('petLabOffsetYSlider', 'oninput', (e) => {
+    petLabState.offsetY = parseInt(e.target.value, 10);
+    petLabState.dirty = true;
+    applyPetLabSpriteStyle('pet');
+    const label = e.target.previousElementSibling; if (label) label.textContent = `Vertical offset (${e.target.value}%)`;
+    const saveBtn = document.getElementById('petLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
+  });
+
+  bind('petLabResetBtn', 'onclick', () => {
+    petLabState.scale = 1; petLabState.offsetX = 0; petLabState.offsetY = 0;
+    petLabState.dirty = true;
+    renderPetLab();
+  });
+  bind('petLabSaveBtn', 'onclick', () => savePetLabDefaults());
+}
+
+
 
 async function selectSandboxTab() {
   state.kind = '__sandbox__';

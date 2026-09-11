@@ -1,0 +1,709 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index fcf73df..6de5a9f 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -30948,3 +30948,107 @@ it's the only vendor with a same-category dedicated station duplicating
+ it.
+ 
+ **Verified.** `npx tsc --noEmit` and `npx vite build` both pass clean.
++
++### DevTool: Pet Sprite Lab -- adventurer + pet live preview, per-species default scale/position (patch 0380)
++```discord-update
++Dev Update | Pet Sprite Lab
++
++- Added a new DevTool tab: pick a pet and a reference hero class, see them side by side at real size, in Idle or Moving pose
++- Added scale and X/Y position sliders that tune where a species sits by default on the corner companion -- no more guessing from a screenshot
++- Save writes straight to that species' pets.json entry -- the player's own sprite-size setting and free-drag position still layer on top of it, unaffected
++```
++
++Direct ask: whether the corner companion's pet sprite could get a
++per-species default scale/placement, plus a screen to check idle vs
++running animations without having to actually get the pet in-game first.
++Landed on the exact same shape HeroSprite.tsx already solved this for --
++`HERO_DISPLAY_SCALE`/`HERO_DISPLAY_OFFSET`, two hardcoded per-class
++correction tables, added because different character packs fill their own
++frame box wildly differently (gladiator/adventurer ~97%, samurai ~62%).
++That table's own comment admits its offset values were "a bigger,
++eyeballed correction from the reported screenshot" -- exactly the
++workflow this patch replaces for pets, and does it as data instead of a
++second hardcoded TS table.
++
++**`PetDef` gains three optional fields.** `displayScale`,
++`displayOffsetX`, `displayOffsetY` (types.ts) -- a multiplier and a
++percent-of-frame X/Y nudge, same "omitted means default (1, 0, 0)"
++convention every other optional numeric field on this type already
++follows. Deliberately NOT gated to the idle pose the way Hero's own
++`HERO_DISPLAY_OFFSET` is (that gate exists because a hero's occasional
++pose-specific bounding-box quirk shouldn't apply outside idle) -- a pet's
++companion position visibly hopping every time its animation switches
++between idle and movement would be worse than a slightly-off resting
++position, so the offset here applies to every pose uniformly.
++
++**`PetSprite.tsx` applies both**, same formula HeroSprite already uses for
++its own tables: `scale = (height / frameH) * displayScale`, and the
++offset joins the existing flip logic in one `transform` list
++(`translate(x%, y%)`, mirrored on X when the sprite is also flipped, so a
++nudge still reads as "toward the pet's own right" regardless of facing).
++Passed in as three new optional props rather than looked up internally by
++species the way Hero's tables are -- `IdleView.tsx` already resolves the
++equipped pet's real def through `DlcManager.petDef` (base roster or an
++owned DLC pack), so asking `PetSprite` to re-derive that from a bare
++species string would either duplicate that lookup or silently miss DLC
++species. Every other caller (Pets tab roster, Hatchery reveal, Egg Select,
++the enlarged-pet modal) passes nothing for these and gets the same 1/0/0
++defaults as before this patch.
++
++**DevTool schema** (`server.mjs`) picked up the same three fields as plain
++numbers on the existing Pets content type, so they're editable by hand
++too -- but the real workflow is the new tab.
++
++**New "Pet Lab" tab**, next to Sandbox, same "bespoke standalone tool, not
++a schema-driven row editor" shape Sandbox already established. Three
++dropdowns (pet species, rarity/recolour tier, reference hero class --
++defaults to the Adventurer, matching the corner companion's actual
++starter), an Idle/Moving pose toggle that drives both sprites together
++(mirrors the real `idle <-> run`/`idle <-> movement` pairing IdleView.tsx
++already uses), a live preview stage, and three sliders (scale 40-250%,
++X/Y offset -60 to 60%) that restyle the pet sprite directly on `oninput`
++-- deliberately NOT a full re-render per tick, so the animation loop
++doesn't visibly restart on every slider nudge. Save writes the whole
++`pets.json` array back through the existing generic `POST /api/data/pets`
++endpoint (same one the plain Pets tab form already uses), with the three
++fields omitted from the payload entirely when left at their defaults,
++same save-time filtering convention `guild-hall-decorations`' own
++scale/focus fields already follow.
++
++**New art routes.** The DevTool had never served `public/heroes/` or
++`public/pets/` to its own frontend before this -- only the game's Vite
++dev server ever loaded them. Two new guarded static routes,
++`/heroes-art/` and `/pets-art/`, same path-traversal-guard shape as the
++existing `/decor-art/`/`/guildhall-art/` routes, rooted at two new dir
++constants (`HEROES_DIR`, `PETS_ART_DIR`). Read-only on purpose -- unlike
++`ICONS_DIR`/`BANNERS_DIR`/`DECOR_DIR` there's no upload endpoint, since
++these packs come from `tools/import_characters.py`/`tools/import_pets.py`,
++not picked one file at a time. Both trees are gitignored (licensed art)
++and commonly absent on a fresh clone -- a missing manifest is the expected
++case, handled the same "degrades gracefully" way the real
++`PetSprite`/`HeroSprite` components already do, not surfaced as an error.
++
++**The animated preview is a hand-written mirror, not a shared import.**
++The DevTool has no build step and can't pull the real React components in
++directly, so `app.js` re-implements the same
++scale/backgroundSize/backgroundPosition frame-stepping math
++`PetSprite.tsx`/`HeroSprite.tsx` use, closely enough that a Lab preview
++and the real in-game companion agree. Kept deliberately small -- a light
++subset of `PetSprite`'s own `resolveAnimation` fallback chain, not a full
++port, since the Lab only ever needs an idle-or-moving pose, never the
++full animation vocabulary (attack/defend/hurt/etc.) the real game
++resolves for other contexts.
++
++**Verified:** `npx tsc --noEmit` passes clean. Ran the DevTool server
++directly and drove it end-to-end: `/api/schema` reports the three new
++`pets` fields, `/api/data/pets` returns all 19 real base-roster pets,
++`/api/data/hero-classes` returns all 14 classes including `adventurer`,
++both new art routes correctly 404 (no local art installed in this
++environment -- expected, `public/heroes`/`public/pets` are gitignored) and
++a path-traversal attempt against `/heroes-art/` does not escape the guard.
++Round-trip tested the actual save path directly against the running
++server: POSTed a modified `pets.json` with `displayScale`/
++`displayOffsetX`/`displayOffsetY` set on one entry, confirmed the file
++persisted them and a fresh GET read them back correctly, then reverted
++that test write -- ships with `pets.json` unchanged, same as every other
++patch's out-of-the-box state.
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 18e9f1b..4e7e6be 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3137,6 +3137,29 @@ export interface PetDef {
+    * GENERAL_PET_POOL are unaffected, only the cosmetic result once rolled.
+    */
+   minRarity?: Rarity;
++  /**
++   * Per-species correction multiplier on top of the corner companion's
++   * base pet height (and any player-chosen `Settings.petSpriteScale` on
++   * top of that) -- same role `HERO_DISPLAY_SCALE` plays for hero classes
++   * in HeroSprite.tsx, except species-authored here as data instead of
++   * hardcoded in a TS const table, so it's tunable from the DevTool's Pet
++   * Sprite Lab (see PetSprite.tsx) without a code change or a rebuild.
++   * Unset means 1 (no correction) -- same "omitted means default"
++   * convention every other optional numeric field on this type follows.
++   */
++  displayScale?: number;
++  /**
++   * Per-species nudge, as a percentage of the pet's own frame size,
++   * layered underneath the player's free-drag `Settings.petOffsetX/Y`
++   * (which stays in raw px on the outer companion button -- see
++   * IdleView.tsx). Deliberately NOT gated to the idle pose the way
++   * HeroSprite's own HERO_DISPLAY_OFFSET is: a pet's companion position
++   * shouldn't visibly hop when its animation switches between idle and
++   * movement, unlike a hero's occasional pose-specific bounding-box
++   * quirk. Unset means 0 for both axes.
++   */
++  displayOffsetX?: number;
++  displayOffsetY?: number;
+ }
+ 
+ /**
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index b210d91..f54f148 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -548,6 +548,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+               animation={petAnimation}
+               flip={facingReturn}
+               height={Math.round(90 * settings.petSpriteScale)}
++              displayScale={petDef.displayScale}
++              displayOffsetX={petDef.displayOffsetX}
++              displayOffsetY={petDef.displayOffsetY}
+               title={equippedPet.name}
+               fallback={<span style={{ fontSize: '1.4rem' }}>{petDef.glyph}</span>}
+             />
+diff --git a/src/ui/sprites/PetSprite.tsx b/src/ui/sprites/PetSprite.tsx
+index 70b24c1..bf7dade 100644
+--- a/src/ui/sprites/PetSprite.tsx
++++ b/src/ui/sprites/PetSprite.tsx
+@@ -148,11 +148,26 @@ export interface PetSpriteProps {
+    *  else, kept as a prop rather than baked in since callers already know
+    *  their own PetDef.glyph. */
+   fallback?: React.ReactNode;
++  /**
++   * PetDef.displayScale/displayOffsetX/displayOffsetY, passed in rather
++   * than looked up internally by species (the way HeroSprite's own
++   * HERO_DISPLAY_SCALE/OFFSET tables are) -- a caller like IdleView
++   * already resolves the equipped pet's real def through DlcManager
++   * (base roster or an owned DLC pack), so asking PetSprite to re-derive
++   * that from a bare species string would either duplicate that lookup or
++   * silently miss DLC species entirely. Every caller that doesn't pass
++   * these (icons, the Pets tab roster, hatchery reveals, etc.) gets the
++   * same defaults (1, 0, 0) as before this existed.
++   */
++  displayScale?: number;
++  displayOffsetX?: number;
++  displayOffsetY?: number;
+ }
+ 
+ export function PetSprite({
+   species, rarity = 'common', animation = 'idle', height = 48, fps, once = false,
+   onComplete, flip = false, className, title, fallback,
++  displayScale = 1, displayOffsetX = 0, displayOffsetY = 0,
+ }: PetSpriteProps) {
+   const manifest = useManifest(species);
+   const char = manifest?.[species];
+@@ -195,12 +210,21 @@ export function PetSprite({
+     return <div className={className} style={{ height, width: height, display: 'grid', placeItems: 'center' }}>{fallback}</div>;
+   }
+ 
+-  const scale = height / char.frameH;
++  const scale = (height / char.frameH) * displayScale;
+   const url = `./pets/${species}/${rarity}/${resolved}.png`;
+   // XOR, not OR/AND -- a reversed-facing species should flip exactly when
+   // a normal species WOULDN'T, and vice versa, not simply flip more often.
+   // Same logic as HeroSprite's effectiveFlip.
+   const effectiveFlip = PET_REVERSED_FACING[species] ? !flip : flip;
++  // Same transform-list-join shape as HeroSprite: flip first so a mirrored
++  // offset reads correctly (an X nudge meant to shift the sprite toward
++  // the viewer's right should still shift toward the pet's own right once
++  // flipped), then the dev-authored nudge itself.
++  const transforms: string[] = [];
++  if (effectiveFlip) transforms.push('scaleX(-1)');
++  if (displayOffsetX || displayOffsetY) {
++    transforms.push(`translate(${effectiveFlip ? -displayOffsetX : displayOffsetX}%, ${displayOffsetY}%)`);
++  }
+   const style: CSSProperties = {
+     width: char.frameW * scale,
+     height: char.frameH * scale,
+@@ -209,7 +233,7 @@ export function PetSprite({
+     backgroundPosition: `-${index * char.frameW * scale}px 0`,
+     backgroundRepeat: 'no-repeat',
+     imageRendering: 'pixelated',
+-    transform: effectiveFlip ? 'scaleX(-1)' : undefined,
++    transform: transforms.length > 0 ? transforms.join(' ') : undefined,
+   };
+ 
+   return (
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index b718e4b..fc9c87e 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -100,6 +100,12 @@ async function init() {
+   sandboxBtn.onclick = () => selectSandboxTab();
+   tabsEl.appendChild(sandboxBtn);
+ 
++  const petLabBtn = document.createElement('button');
++  petLabBtn.innerHTML = '<i class="ph ph-paw-print"></i><span>Pet Lab</span>';
++  petLabBtn.dataset.group = '__petlab__';
++  petLabBtn.onclick = () => selectPetLabTab();
++  tabsEl.appendChild(petLabBtn);
++
+   groupOrder.forEach((group) => {
+     const btn = document.createElement('button');
+     // Caret + label: the caret marks that this group opens a nested strip of
+@@ -3015,7 +3021,337 @@ function renderPatches() {
+   };
+ }
+ 
+-/* ---------------------------------------------------------------- sandbox --- */
++/* -------------------------------------------------------------- petlab --- */
++// Pet Sprite Lab -- adventurer + pet side by side with a live animated
++// preview, so a per-species PetDef.displayScale/displayOffsetX/Y
++// correction (see types.ts's own comment on PetDef for why these are data
++// instead of a hardcoded HERO_DISPLAY_SCALE-style table) can be dialed in
++// by eye instead of guessed from a screenshot and re-patched blind -- the
++// exact problem HeroSprite.tsx's own HERO_DISPLAY_OFFSET comment admits to
++// ("a bigger, eyeballed correction from the reported screenshot"). Its own
++// bespoke tab (not schema-driven) -- same shape as the Sandbox tab, since
++// neither is really "edit one row of one JSON file"; both are small
++// standalone tools that happen to read/write real game JSON as a side
++// effect. Companion base height (90px) and fallback rate table below are
++// duplicated from IdleView.tsx/PetSprite.tsx/HeroSprite.tsx on purpose --
++// this file has no build step and can't import the React components
++// directly, so the closest it can do is mirror their math closely enough
++// that a Lab preview and the real in-game companion agree.
++const PETLAB_COMPANION_HEIGHT = 90; // matches IdleView.tsx's own base pet height
++const PETLAB_HERO_HEIGHT = 120; // bigger than the real companion on purpose -- a reference silhouette, not a 1:1 mock of the tiny corner window
++const PETLAB_FPS = { idle: 6, idle2: 6, walk: 9, run: 12, movement: 10, walking: 6, flying: 10, perched: 5, sitting: 6, laying: 4 };
++
++const petLabState = {
++  pets: [], heroClasses: [],
++  petId: null, heroClassId: 'adventurer', rarity: 'common',
++  pose: 'idle', // 'idle' | 'moving' -- drives both sprites together, same pairing IdleView.tsx already uses (hero idle/run <-> pet idle/movement)
++  heroManifest: null, petManifest: null,
++  // Live-edited values for the selected pet, seeded from its saved
++  // displayScale/displayOffsetX/Y on every species switch (see
++  // loadPetLabDefaults) -- 1/0/0 for a species that's never been tuned.
++  scale: 1, offsetX: 0, offsetY: 0,
++  dirty: false, saving: false,
++};
++
++// Two independent frame-steppers (hero, pet) -- kept outside petLabState
++// since setInterval handles have no business going through a re-render.
++const petLabAnimators = { hero: null, pet: null };
++
++async function selectPetLabTab() {
++  state.kind = '__petlab__';
++  state.group = null;
++  markActiveGroup('__petlab__');
++  subtabsEl.style.display = 'none';
++  subtabsEl.innerHTML = '';
++  setStatus('Loading…');
++  try {
++    const [{ data: pets }, { data: heroClasses }, heroManifest, petManifest] = await Promise.all([
++      api('/api/data/pets'),
++      api('/api/data/hero-classes'),
++      fetchLabManifest('/heroes-art/manifest.json'),
++      fetchLabManifest('/pets-art/manifest.json'),
++    ]);
++    petLabState.pets = pets;
++    petLabState.heroClasses = heroClasses;
++    petLabState.heroManifest = heroManifest;
++    petLabState.petManifest = petManifest;
++    if (!petLabState.petId || !pets.some((p) => p.id === petLabState.petId)) {
++      petLabState.petId = pets[0]?.id ?? null;
++    }
++    if (!heroClasses.some((h) => h.id === petLabState.heroClassId)) {
++      petLabState.heroClassId = heroClasses.find((h) => h.id === 'adventurer')?.id ?? heroClasses[0]?.id ?? null;
++    }
++    loadPetLabDefaults();
++    setStatus('');
++    renderPetLab();
++  } catch (err) {
++    setStatus(err.message, 'err');
++  }
++}
++
++/** Both art trees are gitignored (licensed, not redistributable) and
++ *  commonly absent on a fresh clone -- a missing manifest is the expected
++ *  case here, not an error, same "degrades gracefully" convention
++ *  PetSprite.tsx/HeroSprite.tsx already follow for the real game. */
++async function fetchLabManifest(url) {
++  try {
++    const res = await fetch(url, { cache: 'no-store' });
++    if (!res.ok) return null;
++    return await res.json();
++  } catch {
++    return null;
++  }
++}
++
++function loadPetLabDefaults() {
++  const def = petLabState.pets.find((p) => p.id === petLabState.petId);
++  petLabState.scale = def?.displayScale ?? 1;
++  petLabState.offsetX = def?.displayOffsetX ?? 0;
++  petLabState.offsetY = def?.displayOffsetY ?? 0;
++  petLabState.dirty = false;
++}
++
++function stopLabAnimator(key) {
++  const a = petLabAnimators[key];
++  if (a?.intervalId) clearInterval(a.intervalId);
++  petLabAnimators[key] = null;
++}
++
++/** Same scale/backgroundSize/backgroundPosition formula PetSprite.tsx and
++ *  HeroSprite.tsx use, split out from the interval tick so a scale/offset
++ *  slider can restyle the element without restarting (and visibly
++ *  resetting) the animation loop -- see the two slider oninput handlers in
++ *  renderPetLab. */
++function applyPetLabSpriteStyle(key) {
++  const el = document.getElementById(key === 'hero' ? 'petLabHeroSprite' : 'petLabPetSprite');
++  const a = petLabAnimators[key];
++  if (!el || !a) return;
++  const scale = key === 'hero'
++    ? PETLAB_HERO_HEIGHT / a.frameH
++    : (PETLAB_COMPANION_HEIGHT * petLabState.scale) / a.frameH;
++  el.style.width = `${a.frameW * scale}px`;
++  el.style.height = `${a.frameH * scale}px`;
++  el.style.backgroundSize = `${a.frameW * a.frames * scale}px ${a.frameH * scale}px`;
++  el.style.backgroundPosition = `-${a.index * a.frameW * scale}px 0`;
++  el.style.transform = key === 'pet' ? `translate(${petLabState.offsetX}%, ${petLabState.offsetY}%)` : '';
++}
++
++function startLabAnimator(key, opts) {
++  stopLabAnimator(key);
++  petLabAnimators[key] = { ...opts, index: 0 };
++  const el = document.getElementById(key === 'hero' ? 'petLabHeroSprite' : 'petLabPetSprite');
++  if (el) { el.style.backgroundImage = `url(${opts.url})`; el.style.backgroundRepeat = 'no-repeat'; el.style.imageRendering = 'pixelated'; }
++  applyPetLabSpriteStyle(key);
++  if (opts.frames > 1) {
++    petLabAnimators[key].intervalId = setInterval(() => {
++      const a = petLabAnimators[key];
++      if (!a) return;
++      a.index = (a.index + 1) % a.frames;
++      applyPetLabSpriteStyle(key);
++    }, 1000 / opts.fps);
++  }
++}
++
++/** A light subset of PetSprite.tsx's own resolveAnimation -- enough to
++ *  find a sensible idle/movement pose for the Lab's two-button toggle, not
++ *  a full port of every fallback the real component supports. */
++function resolvePetLabAnimation(char, requested) {
++  if (char.animations[requested]) return requested;
++  if (requested === 'movement' && char.animations.walking) return 'walking';
++  if (requested === 'movement' && char.animations.flying) return 'flying';
++  if (requested === 'idle' && char.animations.perched) return 'perched';
++  return char.animations.idle ? 'idle' : Object.keys(char.animations)[0];
++}
++
++/** Re-reads the currently selected class/species/rarity/pose and
++ *  (re)starts both animators -- called on every dropdown/pose change, but
++ *  NOT on scale/offset slider input (see applyPetLabSpriteStyle). */
++function refreshPetLabAnimators() {
++  const heroChar = petLabState.heroManifest?.[petLabState.heroClassId];
++  const heroCaption = document.getElementById('petLabHeroCaption');
++  if (heroChar) {
++    const heroAnim = petLabState.pose === 'moving'
++      ? (heroChar.animations.run ? 'run' : heroChar.animations.walk ? 'walk' : 'idle')
++      : 'idle';
++    startLabAnimator('hero', {
++      frameW: heroChar.frameW, frameH: heroChar.frameH,
++      frames: heroChar.animations[heroAnim] || 1,
++      fps: PETLAB_FPS[heroAnim] || 8,
++      url: `/heroes-art/${petLabState.heroClassId}/original/${heroAnim}.png`,
++    });
++    if (heroCaption) heroCaption.textContent = `${petLabState.heroClassId} — ${heroAnim}`;
++  } else {
++    stopLabAnimator('hero');
++    if (heroCaption) heroCaption.textContent = petLabState.heroManifest === null
++      ? 'No hero art installed locally (public/heroes is gitignored)' : 'No art for this class';
++  }
++
++  const petDef = petLabState.pets.find((p) => p.id === petLabState.petId);
++  const petChar = petDef ? petLabState.petManifest?.[petDef.spriteFolder] : null;
++  const petCaption = document.getElementById('petLabPetCaption');
++  if (petDef && petChar) {
++    const petAnim = resolvePetLabAnimation(petChar, petLabState.pose === 'moving' ? 'movement' : 'idle');
++    startLabAnimator('pet', {
++      frameW: petChar.frameW, frameH: petChar.frameH,
++      frames: petChar.animations[petAnim] || 1,
++      fps: PETLAB_FPS[petAnim] || 8,
++      url: `/pets-art/${petDef.spriteFolder}/${petLabState.rarity}/${petAnim}.png`,
++    });
++    if (petCaption) petCaption.textContent = `${petDef.name} — ${petAnim}`;
++  } else {
++    stopLabAnimator('pet');
++    if (petCaption) petCaption.textContent = petLabState.petManifest === null
++      ? 'No pet art installed locally (public/pets is gitignored)' : (petDef ? 'No art for this species yet' : '');
++  }
++}
++
++async function savePetLabDefaults() {
++  const idx = petLabState.pets.findIndex((p) => p.id === petLabState.petId);
++  if (idx === -1) return;
++  // Omitted rather than written as 1/0/0 when untouched -- same
++  // "omitted means default" convention PetDef's own doc comment commits
++  // to, and the same shape decorationImage's save-time filtering already
++  // follows for its own scale/focus fields.
++  const updated = petLabState.pets.map((p, i) => {
++    if (i !== idx) return p;
++    const next = { ...p };
++    if (petLabState.scale !== 1) next.displayScale = petLabState.scale; else delete next.displayScale;
++    if (petLabState.offsetX !== 0) next.displayOffsetX = petLabState.offsetX; else delete next.displayOffsetX;
++    if (petLabState.offsetY !== 0) next.displayOffsetY = petLabState.offsetY; else delete next.displayOffsetY;
++    return next;
++  });
++  petLabState.saving = true;
++  renderPetLab();
++  setStatus('Saving…');
++  try {
++    const result = await api('/api/data/pets', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify(updated),
++    });
++    petLabState.pets = updated;
++    petLabState.dirty = false;
++    setStatus(`Saved (${result.count} entries).`, 'ok');
++  } catch (err) {
++    const detail = err.details ? '\n' + err.details.join('\n') : '';
++    setStatus('Save failed — see console.', 'err');
++    console.error(err.message + detail);
++    alert(`Could not save:\n\n${err.message}${detail}\n\nYour slider values were kept on screen; fix the issue and save again.`);
++  }
++  petLabState.saving = false;
++  renderPetLab();
++}
++
++function renderPetLab() {
++  const selectedPet = petLabState.pets.find((p) => p.id === petLabState.petId);
++  appEl.innerHTML = `
++    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Pet Sprite Lab</h2>
++    <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
++      Preview a pet next to the corner companion's hero sprite at its real default size, in both
++      poses, then dial in a per-species scale/position correction -- the same fix HeroSprite.tsx's
++      own HERO_DISPLAY_SCALE/OFFSET table applies for hero classes, except saved here as data on the
++      pet itself instead of hardcoded in TypeScript. Saves straight to pets.json; nothing here
++      touches the player's own Settings scale/drag position, which still applies on top of this.
++    </p>
++
++    <div class="field-row" style="margin-bottom: 12px;">
++      <div class="field">
++        <label>Pet species</label>
++        <select id="petLabPetSelect">
++          ${petLabState.pets.map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === petLabState.petId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
++        </select>
++      </div>
++      <div class="field">
++        <label>Rarity (recolour tier)</label>
++        <select id="petLabRaritySelect">
++          ${['common', 'uncommon', 'rare', 'epic', 'legendary'].map((r) => `<option value="${r}" ${r === petLabState.rarity ? 'selected' : ''}>${r}</option>`).join('')}
++        </select>
++      </div>
++      <div class="field">
++        <label>Reference hero class</label>
++        <select id="petLabHeroSelect">
++          ${petLabState.heroClasses.map((h) => `<option value="${escapeHtml(h.id)}" ${h.id === petLabState.heroClassId ? 'selected' : ''}>${escapeHtml(h.name || h.id)}</option>`).join('')}
++        </select>
++      </div>
++    </div>
++
++    <div class="row" style="gap: 8px; margin-bottom: 12px;">
++      <button id="petLabPoseIdle" class="${petLabState.pose === 'idle' ? 'primary' : ''}">Idle (at the guild)</button>
++      <button id="petLabPoseMoving" class="${petLabState.pose === 'moving' ? 'primary' : ''}">Moving (on a quest)</button>
++    </div>
++
++    <div id="petLabStage" class="pet-lab-stage">
++      <div id="petLabHeroSprite" class="pet-lab-sprite pet-lab-hero-sprite"></div>
++      <div id="petLabPetSprite" class="pet-lab-sprite pet-lab-pet-sprite"></div>
++    </div>
++    <div class="row" style="justify-content: space-between; margin: 4px 0 16px;">
++      <span id="petLabHeroCaption" class="tiny muted"></span>
++      <span id="petLabPetCaption" class="tiny muted"></span>
++    </div>
++
++    <div class="section-heading">Default scale &amp; position for ${selectedPet ? escapeHtml(selectedPet.name) : 'this species'}</div>
++    <div class="field-row" style="margin-bottom: 8px;">
++      <div class="field">
++        <label>Scale (${Math.round(petLabState.scale * 100)}%)</label>
++        <input type="range" id="petLabScaleSlider" min="40" max="250" step="1" value="${Math.round(petLabState.scale * 100)}" />
++      </div>
++      <div class="field">
++        <label>Horizontal offset (${petLabState.offsetX}%)</label>
++        <input type="range" id="petLabOffsetXSlider" min="-60" max="60" step="1" value="${petLabState.offsetX}" />
++      </div>
++      <div class="field">
++        <label>Vertical offset (${petLabState.offsetY}%)</label>
++        <input type="range" id="petLabOffsetYSlider" min="-60" max="60" step="1" value="${petLabState.offsetY}" />
++        <div class="hint">Offsets are a % of the pet's own frame, applied underneath the player's free-drag position -- resetting to 0/0 leaves the corner companion exactly where the player last dragged it.</div>
++      </div>
++    </div>
++
++    <div class="row" style="gap: 8px;">
++      <button id="petLabResetBtn">Reset to 1x, centred</button>
++      <button id="petLabSaveBtn" class="primary" ${petLabState.dirty ? '' : 'disabled'}>${petLabState.saving ? 'Saving…' : 'Save default'}</button>
++    </div>
++  `;
++
++  refreshPetLabAnimators();
++
++  const bind = (id, evt, fn) => { const el = document.getElementById(id); if (el) el[evt] = fn; };
++
++  bind('petLabPetSelect', 'onchange', (e) => { petLabState.petId = e.target.value; loadPetLabDefaults(); renderPetLab(); });
++  bind('petLabRaritySelect', 'onchange', (e) => { petLabState.rarity = e.target.value; refreshPetLabAnimators(); });
++  bind('petLabHeroSelect', 'onchange', (e) => { petLabState.heroClassId = e.target.value; refreshPetLabAnimators(); });
++  bind('petLabPoseIdle', 'onclick', () => { petLabState.pose = 'idle'; renderPetLab(); });
++  bind('petLabPoseMoving', 'onclick', () => { petLabState.pose = 'moving'; renderPetLab(); });
++
++  bind('petLabScaleSlider', 'oninput', (e) => {
++    petLabState.scale = parseInt(e.target.value, 10) / 100;
++    petLabState.dirty = true;
++    applyPetLabSpriteStyle('pet');
++    const label = e.target.previousElementSibling; if (label) label.textContent = `Scale (${e.target.value}%)`;
++    const saveBtn = document.getElementById('petLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
++  });
++  bind('petLabOffsetXSlider', 'oninput', (e) => {
++    petLabState.offsetX = parseInt(e.target.value, 10);
++    petLabState.dirty = true;
++    applyPetLabSpriteStyle('pet');
++    const label = e.target.previousElementSibling; if (label) label.textContent = `Horizontal offset (${e.target.value}%)`;
++    const saveBtn = document.getElementById('petLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
++  });
++  bind('petLabOffsetYSlider', 'oninput', (e) => {
++    petLabState.offsetY = parseInt(e.target.value, 10);
++    petLabState.dirty = true;
++    applyPetLabSpriteStyle('pet');
++    const label = e.target.previousElementSibling; if (label) label.textContent = `Vertical offset (${e.target.value}%)`;
++    const saveBtn = document.getElementById('petLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
++  });
++
++  bind('petLabResetBtn', 'onclick', () => {
++    petLabState.scale = 1; petLabState.offsetX = 0; petLabState.offsetY = 0;
++    petLabState.dirty = true;
++    renderPetLab();
++  });
++  bind('petLabSaveBtn', 'onclick', () => savePetLabDefaults());
++}
++
++
+ 
+ async function selectSandboxTab() {
+   state.kind = '__sandbox__';
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index c8a4c37..6c13a7c 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -619,6 +619,33 @@ td.icon-cell { width: 1%; padding-right: 0; }
+ .decor-nudge-left { left: 4px; top: 50%; margin-top: -11px; }
+ .decor-nudge-right { right: 4px; top: 50%; margin-top: -11px; }
+ 
++/* ------------------------------- pet lab ----------------------------- */
++/* Reuses the same checkerboard-backdrop reasoning as .decor-preview-box
++   above (transparency needs to read clearly against something other than
++   a flat colour), but the two sprites inside it are sized/positioned
++   entirely from JS (see applyPetLabSpriteStyle in app.js), not dragged --
++   this stage is a live preview, not an input surface, so it gets none of
++   .decor-preview-box's cursor/touch-action/pointer handling. */
++.pet-lab-stage {
++  position: relative; width: 100%; max-width: 480px; height: 240px;
++  background-image:
++    linear-gradient(45deg, var(--panel2) 25%, transparent 25%), linear-gradient(-45deg, var(--panel2) 25%, transparent 25%),
++    linear-gradient(45deg, transparent 75%, var(--panel2) 75%), linear-gradient(-45deg, transparent 75%, var(--panel2) 75%);
++  background-size: 16px 16px;
++  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
++  background-color: var(--panel3);
++  border: 1px solid var(--panel3); border-radius: var(--radius);
++  overflow: hidden;
++}
++.pet-lab-sprite { position: absolute; }
++/* Fixed anchor points, same rough hero-centre / pet-trails-behind layout
++   the real corner companion uses -- the pet's own displayOffsetX/Y (set
++   via inline transform in app.js) nudges it relative to THIS anchor, not
++   the stage centre, matching how the offset composes with the player's
++   own drag position in the real game. */
++.pet-lab-hero-sprite { left: 50%; bottom: 16px; transform: translateX(-50%); }
++.pet-lab-pet-sprite { left: 64%; bottom: 16px; }
++
+ /* Contain-fit thumbnails (not cover, same reasoning as the field itself)
+    for the picker grid and the content-list table column -- reuses
+    .banner-picker-item/.banner-picker-grid/.table-banner's layout/sizing
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index df31fc6..73b02d9 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -48,6 +48,17 @@ const ICONS_DIR = path.join(ROOT, 'public', 'item-icons');
+ // public/lore/ (unlike item-icons/) also has real loose files sitting
+ // directly in the root instead of only inside subfolders.
+ const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
++// Hero and pet sprite packs -- both gitignored (licensed, not
++// redistributable), same convention as every other art tree here. Not
++// previously served to the DevTool at all (only the game's own Vite dev
++// server ever loaded them) -- added so the Pet Sprite Lab tab can show a
++// real animated preview instead of asking for scale/offset numbers blind.
++// Read-only from the DevTool's side: unlike ICONS_DIR/BANNERS_DIR/DECOR_DIR
++// there is no upload endpoint here, since these packs are generated by
++// tools/import_characters.py and tools/import_pets.py, not hand-picked
++// one file at a time.
++const HEROES_DIR = path.join(ROOT, 'public', 'heroes');
++const PETS_ART_DIR = path.join(ROOT, 'public', 'pets');
+ // Guild Hall decoration art -- its own tree (public/decor/) rather than
+ // reusing ICONS_DIR or BANNERS_DIR, same "different root, kept separate"
+ // reasoning as BANNERS_DIR's own comment just above. Doesn't reuse
+@@ -877,6 +888,17 @@ const SCHEMAS = {
+       // pass meant a DLC species' description/glyph couldn't be edited
+       // through the DevTool without silently stripping its DLC gate.
+       requiresDlc: { type: 'string', required: false },
++      // Corner-companion display corrections -- same role HeroSprite's own
++      // hardcoded HERO_DISPLAY_SCALE/OFFSET tables play for hero classes,
++      // except authored here as data so they're tunable without a code
++      // change. Editable as plain numbers in this form, but normally set
++      // from the Pet Sprite Lab tab instead (adventurer + pet side by
++      // side, live animated preview, slider-driven) -- see selectPetLabTab
++      // in app.js. Omitted = 1/0/0, no correction, same as before these
++      // fields existed.
++      displayScale: { type: 'number', required: false },
++      displayOffsetX: { type: 'number', required: false },
++      displayOffsetY: { type: 'number', required: false },
+     },
+   },
+   'events': {
+@@ -3106,6 +3128,51 @@ const server = http.createServer(async (req, res) => {
+     return;
+   }
+ 
++  // Hero and pet sprite packs, for the Pet Sprite Lab tab's live preview --
++  // same guarded shape as every other art route above, but the mime map
++  // also needs '.json' here (unlike the others), since each tree's own
++  // manifest.json -- frame sizes and per-animation frame counts -- lives
++  // inside the same folder as the .png frames and is fetched through this
++  // same route, not a separate endpoint. Both trees are commonly ABSENT
++  // (gitignored, licensed art the DevTool has no reason to assume is
++  // installed) -- a 404 here is the normal, expected case on a fresh
++  // clone, not an error condition, and the Lab tab's own fetch handles it
++  // as "no art yet" rather than surfacing it as a failure.
++  if (url.pathname.startsWith('/heroes-art/')) {
++    const rel = decodeURIComponent(url.pathname.slice('/heroes-art/'.length)).split('?')[0];
++    const filePath = path.join(HEROES_DIR, rel);
++    if (!filePath.startsWith(HEROES_DIR)) { res.writeHead(403); res.end(); return; }
++    try {
++      const body = await fs.readFile(filePath);
++      const ext = path.extname(filePath).toLowerCase();
++      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.json': 'application/json' }[ext]
++        ?? 'application/octet-stream';
++      res.writeHead(200, { 'Content-Type': mime });
++      res.end(body);
++    } catch {
++      res.writeHead(404);
++      res.end('Not found');
++    }
++    return;
++  }
++  if (url.pathname.startsWith('/pets-art/')) {
++    const rel = decodeURIComponent(url.pathname.slice('/pets-art/'.length)).split('?')[0];
++    const filePath = path.join(PETS_ART_DIR, rel);
++    if (!filePath.startsWith(PETS_ART_DIR)) { res.writeHead(403); res.end(); return; }
++    try {
++      const body = await fs.readFile(filePath);
++      const ext = path.extname(filePath).toLowerCase();
++      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.json': 'application/json' }[ext]
++        ?? 'application/octet-stream';
++      res.writeHead(200, { 'Content-Type': mime });
++      res.end(body);
++    } catch {
++      res.writeHead(404);
++      res.end('Not found');
++    }
++    return;
++  }
++
+   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);
+   if (match) {
+     const kind = match[1];

@@ -148,11 +148,26 @@ export interface PetSpriteProps {
    *  else, kept as a prop rather than baked in since callers already know
    *  their own PetDef.glyph. */
   fallback?: React.ReactNode;
+  /**
+   * PetDef.displayScale/displayOffsetX/displayOffsetY, passed in rather
+   * than looked up internally by species (the way HeroSprite's own
+   * HERO_DISPLAY_SCALE/OFFSET tables are) -- a caller like IdleView
+   * already resolves the equipped pet's real def through DlcManager
+   * (base roster or an owned DLC pack), so asking PetSprite to re-derive
+   * that from a bare species string would either duplicate that lookup or
+   * silently miss DLC species entirely. Every caller that doesn't pass
+   * these (icons, the Pets tab roster, hatchery reveals, etc.) gets the
+   * same defaults (1, 0, 0) as before this existed.
+   */
+  displayScale?: number;
+  displayOffsetX?: number;
+  displayOffsetY?: number;
 }
 
 export function PetSprite({
   species, rarity = 'common', animation = 'idle', height = 48, fps, once = false,
   onComplete, flip = false, className, title, fallback,
+  displayScale = 1, displayOffsetX = 0, displayOffsetY = 0,
 }: PetSpriteProps) {
   const manifest = useManifest(species);
   const char = manifest?.[species];
@@ -195,12 +210,21 @@ export function PetSprite({
     return <div className={className} style={{ height, width: height, display: 'grid', placeItems: 'center' }}>{fallback}</div>;
   }
 
-  const scale = height / char.frameH;
+  const scale = (height / char.frameH) * displayScale;
   const url = `./pets/${species}/${rarity}/${resolved}.png`;
   // XOR, not OR/AND -- a reversed-facing species should flip exactly when
   // a normal species WOULDN'T, and vice versa, not simply flip more often.
   // Same logic as HeroSprite's effectiveFlip.
   const effectiveFlip = PET_REVERSED_FACING[species] ? !flip : flip;
+  // Same transform-list-join shape as HeroSprite: flip first so a mirrored
+  // offset reads correctly (an X nudge meant to shift the sprite toward
+  // the viewer's right should still shift toward the pet's own right once
+  // flipped), then the dev-authored nudge itself.
+  const transforms: string[] = [];
+  if (effectiveFlip) transforms.push('scaleX(-1)');
+  if (displayOffsetX || displayOffsetY) {
+    transforms.push(`translate(${effectiveFlip ? -displayOffsetX : displayOffsetX}%, ${displayOffsetY}%)`);
+  }
   const style: CSSProperties = {
     width: char.frameW * scale,
     height: char.frameH * scale,
@@ -209,7 +233,7 @@ export function PetSprite({
     backgroundPosition: `-${index * char.frameW * scale}px 0`,
     backgroundRepeat: 'no-repeat',
     imageRendering: 'pixelated',
-    transform: effectiveFlip ? 'scaleX(-1)' : undefined,
+    transform: transforms.length > 0 ? transforms.join(' ') : undefined,
   };
 
   return (

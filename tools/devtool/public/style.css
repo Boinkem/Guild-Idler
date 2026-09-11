@@ -619,6 +619,33 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .decor-nudge-left { left: 4px; top: 50%; margin-top: -11px; }
 .decor-nudge-right { right: 4px; top: 50%; margin-top: -11px; }
 
+/* ------------------------------- pet lab ----------------------------- */
+/* Reuses the same checkerboard-backdrop reasoning as .decor-preview-box
+   above (transparency needs to read clearly against something other than
+   a flat colour), but the two sprites inside it are sized/positioned
+   entirely from JS (see applyPetLabSpriteStyle in app.js), not dragged --
+   this stage is a live preview, not an input surface, so it gets none of
+   .decor-preview-box's cursor/touch-action/pointer handling. */
+.pet-lab-stage {
+  position: relative; width: 100%; max-width: 480px; height: 240px;
+  background-image:
+    linear-gradient(45deg, var(--panel2) 25%, transparent 25%), linear-gradient(-45deg, var(--panel2) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--panel2) 75%), linear-gradient(-45deg, transparent 75%, var(--panel2) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: var(--panel3);
+  border: 1px solid var(--panel3); border-radius: var(--radius);
+  overflow: hidden;
+}
+.pet-lab-sprite { position: absolute; }
+/* Fixed anchor points, same rough hero-centre / pet-trails-behind layout
+   the real corner companion uses -- the pet's own displayOffsetX/Y (set
+   via inline transform in app.js) nudges it relative to THIS anchor, not
+   the stage centre, matching how the offset composes with the player's
+   own drag position in the real game. */
+.pet-lab-hero-sprite { left: 50%; bottom: 16px; transform: translateX(-50%); }
+.pet-lab-pet-sprite { left: 64%; bottom: 16px; }
+
 /* Contain-fit thumbnails (not cover, same reasoning as the field itself)
    for the picker grid and the content-list table column -- reuses
    .banner-picker-item/.banner-picker-grid/.table-banner's layout/sizing
