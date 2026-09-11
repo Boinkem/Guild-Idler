@@ -1500,9 +1500,9 @@
     "id": "renown_perk.legacy_of_wealth.goldPerLevel",
     "label": "Legacy of Wealth: gold per level",
     "category": "renown_perks",
-    "value": 4,
-    "default": 4,
-    "description": "gold bonus granted per Legacy of Wealth level. -- squished from 8 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox.",
+    "value": 1.5,
+    "default": 1.5,
+    "description": "gold bonus granted per Legacy of Wealth level. Patch 0368, direct request: dropped from 4 to 1.5 -- Treasury's own gold% is already self-capped at 12 of its 20 levels (modsMaxLevel), but this perk's tier-2 extension had no equivalent clamp, so it kept compounding across all 25 levels uncapped. Combined guild-hall gold (Treasury 72% fixed + this) drops from a 172% raw / 2.56x soft-capped ceiling to 109.5% raw / ~2.04x -- see guild-idler-status.md's own patch 0368 writeup for the full reasoning and the table of alternatives considered. Deliberately NOT a modsMaxLevel-style clamp on top of the existing per-level rate -- gold% is this perk's only reward, so capping it while leaving levels purchasable past that point would just create dead, wasted-investment levels, the exact problem this patch exists to fix. Lowering the rate itself means every level, all the way to max, still does something.",
     "min": 0
   },
   {
@@ -1752,9 +1752,9 @@
     "id": "renown_perk.scholars_legacy.xpPerLevel",
     "label": "Scholar's Legacy: xp per level",
     "category": "renown_perks",
-    "value": 5,
-    "default": 5,
-    "description": "xp bonus granted per Scholar's Legacy level. -- squished from 10 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox.",
+    "value": 1.5,
+    "default": 1.5,
+    "description": "xp bonus granted per Scholar's Legacy level. Patch 0368, direct request: dropped from 5 to 1.5 -- same reasoning as Legacy of Wealth's own goldPerLevel change this same patch (see that entry's description, and guild-idler-status.md's patch 0368 writeup). Library's own xp% is already self-capped at its 10-level maxLevel, but this perk's tier-2 extension had no equivalent clamp across its 19 levels. Combined guild-hall xp (Library 60% fixed + this) drops from a 155% raw / 2.20x soft-capped ceiling to 88.5% raw / ~1.79x. Rate lowered rather than clamped, same \"no dead levels\" reasoning as the gold change.",
     "min": 0
   },
   {

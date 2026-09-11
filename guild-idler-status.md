@@ -28131,6 +28131,34 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Guild-hall gold and XP rebalance: Legacy of Wealth and Scholar's Legacy trimmed (patch 0368)
+
+```discord-update
+Dev Update | Guild Hall Balance
+- Reduced Legacy of Wealth's gold bonus per level (renown perk)
+- Reduced Scholar's Legacy's XP bonus per level (renown perk)
+- Both now scale to a more reasonable ceiling instead of compounding past what Treasury/Library alone were ever meant to reach
+```
+
+Direct feedback, across a few different angles converging on the same root cause: guild upgrades were getting bought out (~90% of the tree) well ahead of the intended pace, and separately, a second tester's report of going from "struggling to pay repairs" to "raking in thousands" abruptly rather than gradually. Investigated at length before landing here -- see the last several sessions' worth of discussion for the full trail, summarized below.
+
+**Root cause: an asymmetry between the facility and renown-perk sides of the SAME stat.** Every guild facility self-caps its own % bonus at its own level ceiling (Treasury explicitly via `modsMaxLevel: 12` on a 20-level facility, since levels 13-20 are storage-only; Library/Tavern/Barracks self-cap simply because their % bonus stops the moment the facility itself can't level any further). The renown-perk side has no equivalent clamp anywhere in `ModifierManager.renownMods` -- and every renown perk with a %-mod has a tier-2 extension that keeps the SAME per-level rate compounding across MORE levels with nothing capping it. Legacy of Wealth (gold) and Scholar's Legacy (xp) were the two largest examples: combined with their guild-facility counterpart (Treasury, Library), raw totals of 172% and 155% respectively pushed well into `softCap`'s exponential territory (gold's own decay is gentle -- 590 -- so it barely tapered at all).
+
+**Deliberately NOT a modsMaxLevel-style clamp on either perk.** Gold%/xp% is the *entire* reward either perk offers -- unlike Treasury, there's no secondary benefit (storage, an unlock, anything) to justify a level becoming purchasable-but-functionally-dead past some cap. Adding a clamp here would just relocate the exact "guild upgrades feel like they stop mattering" complaint from "everything, eventually" to "these two specifically, past an arbitrary level" -- worse in some ways, since the level-up button would still be right there costing real gold for nothing. Lowered the per-level rate instead, so every level all the way to max keeps contributing something, just less of it in total.
+
+**The numbers, worked through directly before landing on 1.5%/level for both:**
+
+| | Facility (unchanged) | Perk, before | Perk, after | Combined raw, before → after | Multiplier, before → after |
+|---|---|---|---|---|---|
+| Gold | Treasury 72% | Legacy of Wealth 4%/lvl (100% max) | 1.5%/lvl (37.5% max) | 172% → 109.5% | 2.562x → 2.044x |
+| XP | Library 60% | Scholar's Legacy 5%/lvl (95% max) | 1.5%/lvl (28.5% max) | 155% → 88.5% | 2.200x → 1.792x |
+
+This is the guild-hall contribution specifically, not the game's full ceiling -- gear, pets, and (for gold specifically) equippable Lucky Potions still stack on top through the same soft cap, and were deliberately left alone this patch; guild hall was the piece that was structurally lopsided (uncapped renown side vs. capped facility side) regardless of how those other sources are tuned.
+
+**Success was investigated in the same pass and deliberately left untouched.** Direct concern raised was that Barracks/Renowned Skill's success bonus felt too easy to fully invest, similarly to gold/xp -- but tracing the actual formula (`QuestManager.previewSuccess`/`curveInvestment`) found that guild-hall success is *already* routed through the same diminishing-returns curve gear and consumables use, with a firm combined cap (~38 points, regardless of source) that already prevents any single source -- guild hall included -- from trivializing the rest. The curve is doing its job correctly as designed; no change made here.
+
+**Verified.** Confirmed `Tuning.get` returns the new 1.5 values for both keys, and recomputed the combined-raw/soft-cap numbers directly against the real `softCap` function rather than by hand -- both match the table above exactly. `npx tsc --noEmit` and `npx vite build` both pass clean. This is a pure data change (two `tuning.json` values); no code paths touched, so no gameplay logic risk beyond the numbers themselves.
+
 ### Empty consumable slots get art, empty gear slots lose the emoji, and equipping a consumable now actually moves it (patch 0367)
 
 ```discord-update
