@@ -62,7 +62,14 @@ export const ShopManager = {
    *  within heroLevelWindow (see that function's own comment) rather than
    *  every slot in the stock sharing one flat ceiling -- a roster with a
    *  wide level spread now actually sees a wide spread of stock, not just
-   *  everything clustered near the guild's single strongest hero. */
+   *  everything clustered near the guild's single strongest hero.
+   *
+   *  Patch 0369: that per-slot itemLevel only ever really applies to a
+   *  procedural-template pick, whose stats are rolled fresh against it
+   *  right here. A hand-authored pick's `stats`/`mods` are fixed at
+   *  authoring time and never rescale to a slot's higher roll, so its
+   *  recorded level is clamped back down to its own `reqLevel` after
+   *  selection -- see the loop body below. */
   rollEquipment(state: GameState, seed: number | string) {
     const window = ShopManager.heroLevelWindow(state);
     const rng = createRng(`shop-equipment:${seed}:${state.createdAt}`);
@@ -96,10 +103,26 @@ export const ShopManager = {
       // stats a purchase will actually hand over, instead of a level
       // number that quietly reverted and stats that only appeared after
       // the fact. See ShopStock.equipment's own comment in types.ts.
-      const rolled = isProceduralTemplate(def)
+      const procedural = isProceduralTemplate(def);
+      const rolled = procedural
         ? rollProceduralItem(def.rarity, itemLevel, 'normal', def.name, rng)
         : undefined;
-      picks.push({ defId: def.id, itemLevel, rolledStats: rolled?.stats, proceduralName: rolled?.displayName });
+      // Patch 0369, direct report: `eligible` above only checks
+      // `def.reqLevel <= itemLevel`, not equality, so a hand-authored
+      // item (fixed def.stats/def.mods, never rolled) could land in a
+      // slot rolled well above its own reqLevel -- the card displayed
+      // and priced (shopPrice's own patch 0356 fix) that higher level,
+      // while the stats handed over at purchase stayed frozen at the
+      // item's real, lower authored level. A procedural template rolls
+      // genuine new stats for whatever level it lands at (see `rolled`
+      // above), so it has no such gap and keeps using the slot's own
+      // itemLevel unchanged; a hand-authored pick now records its own
+      // reqLevel instead, matching the level its fixed stats actually
+      // represent -- same "display level == stat level, always" guarantee
+      // refreshBlackMarket already gives every hand-authored Black Market
+      // pick (see that function's own itemLevel comment).
+      const recordedLevel = procedural ? itemLevel : def.reqLevel;
+      picks.push({ defId: def.id, itemLevel: recordedLevel, rolledStats: rolled?.stats, proceduralName: rolled?.displayName });
     }
     return picks.map(({ defId, itemLevel, rolledStats, proceduralName }) => ({
       uid: uid('shopitem'),

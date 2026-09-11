@@ -28131,6 +28131,73 @@ clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
 
+### Blacksmith shop: hand-authored gear no longer inherits a slot's rolled level (patch 0369)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed hand-authored Blacksmith stock (Set pieces, etc.) sometimes showing a higher level -- and a price to match -- than its actual stats were ever designed for
+- Their price and displayed level now always match what they actually grant
+- Procedural gear (the "blank template" items whose stats roll fresh per level) is unaffected -- still rolls exactly as before
+```
+
+Follow-up to the Black Market review requested this session: traced the
+full gear-generation pipeline (`ShopManager` -> `EquipmentManager` ->
+`proceduralLoot.ts`) end to end. **Black Market itself was already
+correct** -- `refreshBlackMarket` has always pinned every pick's
+`itemLevel` to that item's own `def.reqLevel` (never a randomized
+window), so its price, displayed level, and (for procedural templates)
+rolled stats already agree by construction. Confirmed against live data
+too: `cutpurse_stiletto` (rare, reqLevel 10, hand-authored, 8 total stat
+points) sits right in line with what `rollProceduralItem`'s own budget
+formula (`GEAR_SCORE_BY_RARITY.rare(7) * budgetRarityMultiplier(6) *
+levelFactor(10)~=0.18` -> ~7.6) would generate for a procedural rare at
+the same level -- no discrepancy to fix there.
+
+**The real gap was the ordinary Blacksmith shop, not the Black Market.**
+`ShopManager.rollEquipment`'s eligibility check is `def.reqLevel <=
+itemLevel`, not equality -- by design, so a wide hero-level roster
+window (see `heroLevelWindow`'s own comment) produces a real spread of
+stock. That's fine for procedural templates, whose stats roll fresh
+against whatever `itemLevel` the slot landed on. It was NOT fine for
+hand-authored items (fixed `def.stats`/`def.mods`, e.g. `work_gloves` at
+reqLevel 1): a low-level hand-authored item could land in a much
+higher-level slot, and while patch 0356 already fixed the *price* to
+scale with that higher displayed level, the *stats* the purchase
+actually handed over stayed frozen at the item's real, lower authored
+numbers the whole time -- a "Lv 30" card quietly granting reqLevel-1
+stats.
+
+**The fix (`ShopManager.rollEquipment`).** Simplest option, matching
+what Black Market already does correctly: after a slot's pick is
+selected, a hand-authored (`!isProceduralTemplate`) item's *recorded*
+`itemLevel` is clamped down to its own `def.reqLevel` before being
+pushed into `picks` -- so the downstream `shopPrice` call and the stock
+card's displayed level both key off the item's real level, not the
+slot's rolled one. A procedural template's recorded `itemLevel` is left
+completely untouched, still the slot's own rolled value, exactly as
+before -- its stats already roll fresh against that number, so there
+was never a mismatch to fix on that side. `rollEquipment`'s eligibility
+filter itself (`def.reqLevel <= itemLevel`) is unchanged -- a
+low-level hand-authored item can still be picked into a high-level
+slot's roll, it just no longer reports or prices itself as though it
+were that high-level slot's own item once picked.
+
+**Not touched:** `refreshBlackMarket` (already correct, see above),
+`scaleDedicatedItem`/raid & chain-replay dedicated drops (a separate,
+already-working level-scaling mechanism, unrelated to shop/Black Market
+purchases), and every procedural-template roll path.
+
+**Verified:** hand-traced `rollEquipment`'s pick loop against the change
+-- a hand-authored pick's `itemLevel` field now always equals its own
+`def.reqLevel` regardless of which window slot it was drawn into;
+`shopPrice`/the stock card both read that same corrected field, so
+display level, price, and actual granted stats agree for every
+hand-authored pick. No live in-app playtest in this environment (no
+browser available) -- worth a real-window pass to confirm a
+previously-high-priced hand-authored Blacksmith card now shows its true
+(lower) level and price, and that procedural stock is visually
+unchanged.
+
 ### Guild-hall gold and XP rebalance: Legacy of Wealth and Scholar's Legacy trimmed (patch 0368)
 
 ```discord-update
