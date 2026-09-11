@@ -7488,10 +7488,32 @@ pass (same caveat as the two entries above).
     depot (child App ID/store item already registered: store item
     1324580, package 1817980) -- that depot-split build configuration
     doesn't exist yet.
-  - **`ruby_dragonling`'s actual sprite art still needs dropping into
-    `public/dlc/founders_pack/ruby_dragonling/`** on whoever's building
-    the depot's machine -- gitignored same as `public/pets`, generated
-    locally via `tools/import_pets.py --only ruby_dragonling`.
+  - **Corrected (patch 0375): `ruby_dragonling`'s sprite art actually
+    needs to live in `public/pets/ruby_dragonling/`, not
+    `public/dlc/founders_pack/ruby_dragonling/` as this bullet said
+    before.** Found by actually checking the renderer, not assumed:
+    `PetSprite.tsx` is hardcoded to `./pets/manifest.json` and
+    `./pets/${species}/${rarity}/...` with zero awareness that
+    `public/dlc/` exists at all, so a DLC species' sprite files (and its
+    `manifest.json` entry) have to sit alongside every base pet's for the
+    existing component to find them. Real consequence, stated plainly:
+    this means the Ruby Dragonling's art physically ships in every
+    player's install, DLC or not, even though nobody without the pack
+    can ever unlock it in-game (the egg is only ever granted through the
+    real DLC-ownership check) -- a content-exposure gap (findable by
+    digging through game files), not a functional one (no route to
+    actually obtain or use it without owning the pack). Closing that gap
+    for real would mean making `PetSprite.tsx` itself DLC-aware
+    (checking `public/dlc/` folders too, coordinated with
+    `DlcManager`'s own async pack-loading) -- not done, a real future
+    option if the exposure gap ever matters enough to justify it.
+  - **The base game's own Steam depot build must still exclude
+    `public/dlc/` entirely**, uploading it only as the Founder's Pack's
+    own separate depot (child App ID/store item already registered:
+    store item 1324580, package 1817980) -- that depot-split build
+    configuration doesn't exist yet. Unaffected by the correction above:
+    `pack.json` itself (the DLC-gating data, not the sprite art) still
+    belongs under `public/dlc/`, still needs the same depot split.
   - **No UI reads `DlcManager.allSkins()`/`allPets()`/`allHeroClasses()`
     anywhere yet, except the one path that now matters: `PetManager.hatch`
     (patch 0374) does.** Every skin picker, pet roster, and class list
@@ -28147,6 +28169,65 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
 clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
+
+### Wisplet's real source path fixed, Flying Eye is finally obtainable, Ruby Dragonling's sprite-location guidance corrected (patch 0375)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed Wisplet's source path -- same "pack lives in a different folder than the code expected" issue Mossback and Tidewhelp both had
+- Flying Eye can now actually drop -- from Silence the Loom, at every difficulty tier -- after being completely unobtainable since it was added
+- Corrected last patch's own guidance on where the Ruby Dragonling sprite needs to live
+```
+
+**Wisplet, confirmed the same way Mossback/Tidewhelp were.** The
+re-supplied `FireSprite.png` sits flat at `--src`'s own top level, not
+nested under a `Whisp` folder with the odd original filename the spec
+still expected. Measured before assuming: 2880x288, exactly 10 frames at
+288x288, matching `manifest.json`'s existing wisplet entry exactly.
+Actually ran the import against the real file -- output confirmed
+(grounding-trim 288 -> 279px, matching the manifest) and the recoloured
+frame visually checked, not just schema-matched.
+
+**Flying Eye -- a real gap closed, not a cosmetic one.** Found during
+the dedicated-drops audit a few patches back: `flying_eye` is
+`dedicatedOnly: true` in `pets.json` but had no `eggLoot` source
+anywhere in the game -- completely unobtainable by any means, confirmed
+by grepping every raid encounter, not assumed from the pet existing.
+Paired with **Silence the Loom** (reqLevel 43) on theme, not just
+whichever raid happened to be free: the only three raids without an
+existing dedicated drop were Frozen Wyrmkeep, Silence the Loom, and
+Requiem for the Last God, and Flying Eye's own flavour text ("Watches
+everything, blinks at nothing, and reports back to something") lines up
+with the Loom's own description far better than a dragon-lair raid would
+have -- a hive-mind entity "speaking through every voice it has taken"
+is exactly the kind of thing that would have an eye reporting back to
+it. Drop rates on `loom_the_presiding_intelligence` (the raid's single
+boss encounter) match Rattles' own curve exactly (uncommon/rare ->
+rare/epic -> epic/legendary across Normal/Heroic/Legendary) -- Rattles'
+own raid (House of Bones, reqLevel 41) sits at almost the same tier, so
+reusing its exact rates rather than inventing a new curve keeps this
+consistent with the existing pattern rather than an arbitrary new one.
+Confirmed loading through the real data module (`RAID_ENCOUNTER_BY_ID`),
+not just read back from the JSON file directly.
+
+**Ruby Dragonling sprite-location guidance corrected.** Patch 0374 said
+the sprite art belongs under `public/dlc/founders_pack/` -- checked
+`PetSprite.tsx` for real this time (it wasn't checked before writing
+that guidance) and it's hardcoded to `public/pets/` only, no DLC-folder
+awareness at all. Corrected in this doc's own DLC backlog section, with
+the real consequence stated plainly rather than glossed over: the art
+now has to ship in every player's install regardless of DLC ownership
+for the existing renderer to find it, a content-exposure gap (not a
+functional one -- nobody can actually obtain or use it without owning
+the pack) that a genuinely DLC-aware `PetSprite.tsx` would close, not
+done here.
+
+**Verified:** `npx tsc --noEmit`, `npx vite build`, a full
+`electron-builder --linux dir` package build, an actual run of
+`tools/import_pets.py` against the real re-supplied Wisplet file with
+output visually checked, and the new `eggLoot` data read back through
+`RAID_ENCOUNTER_BY_ID` (the real code path, not just the JSON file) to
+confirm it actually loads.
 
 ### Fixed a real early-Hatchery-access bug, and the Founder's Pack DLC grant now actually exists (patch 0374)
 ```discord-update

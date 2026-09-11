@@ -386,6 +386,18 @@
       "woven_mind_circlet@6",
       "unraveling_cloak@6",
       "threadcutter@3"
+    ],
+    "eggLoot": [
+      "uncommon:flying_eye@10",
+      "rare:flying_eye@3"
+    ],
+    "eggLootHeroic": [
+      "rare:flying_eye@10",
+      "epic:flying_eye@3"
+    ],
+    "eggLootLegendary": [
+      "epic:flying_eye@10",
+      "legendary:flying_eye@3"
     ]
   }
 ]

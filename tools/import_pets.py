@@ -408,7 +408,15 @@ WISPLET = PetSpec(
     # wisp (orange/red/cream), not the pale cool light Wisplet's own flavour
     # text originally described -- flavour text updated in this same patch
     # (pets.json) to match the actual art instead of the other way around.
-    anim_files={'idle': "Whisp/NoobGodoter'sSpritesheet.png"},
+    #
+    # Path corrected patch 0375: the re-supplied file is a flat
+    # FireSprite.png at --src's own top level, not nested under a "Whisp"
+    # folder with the odd original filename -- same folder-name-mismatch
+    # pattern Mossback and Tidewhelp both turned out to have (patch 0373),
+    # caught here by actually measuring the real file before assuming the
+    # spec was right: 2880x288, exactly 10 frames at 288x288, matching
+    # manifest.json's existing wisplet entry exactly.
+    anim_files={'idle': 'FireSprite.png'},
     recolor=['#e02807', '#fa6f19', '#f5e98b'],  # flame body + pale core
     keep=['#3d0202'],  # outline
 )
