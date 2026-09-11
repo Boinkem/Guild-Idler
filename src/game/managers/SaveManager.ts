@@ -264,6 +264,7 @@ export function createInitialState(now = Date.now()): GameState {
     // already earned and already displayed.
     guildTitles: ['Rising Guild'],
     activeGuildTitle: 'Rising Guild',
+    founderPackGranted: false,
   };
 }
 
@@ -1494,6 +1495,14 @@ const MIGRATIONS: Record<number, Migration> = {
     if (titles.length > 0) return { ...save, version: 68 };
     return { ...save, version: 68, guildTitles: ['Rising Guild'], activeGuildTitle: 'Rising Guild' };
   },
+  /**
+   * Patch 0374 -- adds the Founder's Pack one-time-grant flag. `false`
+   * for every existing save unconditionally: nobody could have received
+   * the grant before this patch (the mechanism didn't exist yet), so
+   * there's no "might already be true" case to preserve, unlike migration
+   * 67's own guildTitles guard just above.
+   */
+  68: (save) => ({ ...save, version: 69, founderPackGranted: save.founderPackGranted ?? false }),
 };
 
 export const SaveManager = {

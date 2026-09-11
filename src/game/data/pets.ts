@@ -18,14 +18,25 @@ export const GENERAL_PET_POOL: PetDef[] = PETS.filter((p) => !p.dedicatedOnly);
 /**
  * Picks a species for a freshly-hatched egg. A dedicated egg
  * (EggInstance.dedicatedPetId set) always resolves to that exact species;
- * an ordinary egg rolls uniformly from GENERAL_PET_POOL. Falls back to the
+ * an ordinary egg rolls uniformly from the general pool. Falls back to the
  * first general-pool entry if the pool is somehow empty (devtool data
  * drift safety, same defensive pattern raid/loot resolution already uses).
+ *
+ * `knownPets` defaults to the base roster (PETS) so every existing caller
+ * keeps working identically -- but PetManager.hatch (patch 0374) passes
+ * DlcManager.allPets() instead, so a dedicated DLC pet id (e.g. the
+ * founder pack's Ruby Dragonling) actually resolves instead of silently
+ * falling through to a random base-roster pick. This module deliberately
+ * doesn't import DlcManager itself to supply that default -- DlcManager
+ * already imports PETS from here, and importing it back would make this
+ * a circular dependency for no real benefit; the caller supplying the
+ * merged pool is simpler and keeps this file pure base-roster data.
  */
-export function pickHatchedPetDefId(dedicatedPetId: string | undefined): string {
-  if (dedicatedPetId && PET_BY_ID[dedicatedPetId]) return dedicatedPetId;
-  const pool = GENERAL_PET_POOL.length > 0 ? GENERAL_PET_POOL : PETS;
-  return pool[Math.floor(Math.random() * pool.length)]?.id ?? pool[0]?.id ?? '';
+export function pickHatchedPetDefId(dedicatedPetId: string | undefined, knownPets: PetDef[] = PETS): string {
+  if (dedicatedPetId && knownPets.some((p) => p.id === dedicatedPetId)) return dedicatedPetId;
+  const pool = knownPets.filter((p) => !p.dedicatedOnly);
+  const usable = pool.length > 0 ? pool : knownPets;
+  return usable[Math.floor(Math.random() * usable.length)]?.id ?? usable[0]?.id ?? '';
 }
 
 /**

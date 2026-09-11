@@ -1,0 +1,14 @@
+{
+  "id": "founders_pack",
+  "name": "Founder's Pack",
+  "pets": [
+    {
+      "id": "ruby_dragonling",
+      "name": "Ruby Dragonling",
+      "description": "The same clutch as the ones nesting the eastern ridge, but this one hatched wrong -- or right, depending who you ask. Scales like polished garnet, warm to the touch even asleep.",
+      "glyph": "🐉",
+      "spriteFolder": "ruby_dragonling",
+      "dedicatedOnly": true
+    }
+  ]
+}

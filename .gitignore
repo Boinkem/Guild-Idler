@@ -4,6 +4,16 @@ dist-electron
 release
 *.log
 
+# DLC pack sprite output (generated locally via tools/import_pets.py
+# --only <dlc species id> --out public/dlc/<packId>) -- binary art, not
+# committed, same reasoning as public/pets below. Each pack's own
+# pack.json (plain JSON metadata, no binary art) stays tracked -- see
+# DlcManager.ts and that file's own comment for why the base game's own
+# Steam depot build must still exclude this folder entirely; it's only
+# ever meant to reach a player's disk via that pack's own separate DLC
+# depot, never the base game's.
+public/dlc/*/*/
+
 # Licensed sprite pack: usable in the project, but not redistributable as files.
 # Regenerate with:  python3 tools/recolor.py --src <pack> --out public/heroes
 public/heroes

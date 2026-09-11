@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 68;
+export const SAVE_VERSION = 69;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -3054,6 +3054,17 @@ export interface GameState {
    *  linear, so it stays "a very small portion" no matter how large this
    *  gets) rather than granting any stat bonus directly. */
   guildDonationsTotal: number;
+  /**
+   * One-time-grant flag for the Founder's Pack DLC (patch 0374) -- flips
+   * true the moment GameEngine.boot's own DLC-ownership check actually
+   * grants the Ruby Dragonling egg + "The Founding Flame" guild title,
+   * so a player who owns the pack only ever receives that grant once,
+   * not on every single launch. Deliberately does NOT gate on (or set)
+   * hatcheryUnlocked -- see GameEngine's own grant method for why the
+   * egg has to sit inert in storage until the player unlocks the
+   * Hatchery through the real quest chain, same as any other egg.
+   */
+  founderPackGranted: boolean;
 }
 
 /**

@@ -234,7 +234,42 @@ const PANEL_BREAKDOWNS: Partial<Record<TabId, string[]>> = {
 export function MenuWindow({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
   const { settings, update } = useSettings();
-  const [tab, setTab] = useState<TabId>(() => (engine.consumeRequestedTab() as TabId) ?? 'dashboard');
+  // Moved above the tab-request handling below (patch 0374) -- both the
+  // initial mount and the live-update effect need this now, not just the
+  // nav-bar filter further down. Same predicate, unchanged. Also shared
+  // with the tour's own step list -- previously the tour hardcoded its
+  // own separate exclusion list ('hatchery'/'peddler' always skipped,
+  // regardless of whether they'd actually unlocked), which only happened
+  // to match the nav because a brand-new save always has both locked at
+  // the exact moment the first-run tour fires. That coupling breaks for
+  // an on-demand replay later in the game, once either (or Harvest/
+  // Training) really has unlocked -- a replay should show every tab
+  // actually in the nav right now, not the fresh-save snapshot. One
+  // predicate, used everywhere, so they can't drift apart again the way
+  // that duplication already had.
+  const isTabVisible = (id: TabId) => (id === 'hatchery' ? engine.state.hatcheryUnlocked
+    : id === 'peddler' ? engine.state.peddlerUnlocked
+    : id === 'harvest' ? engine.state.harvestUnlocked : true);
+  /**
+   * Patch 0374 bug fix: a requested tab used to switch unconditionally,
+   * with no check against isTabVisible at all -- that predicate only ever
+   * filtered which tab BUTTONS render in the nav bar below, never
+   * actually gated requestTab()/consumeRequestedTab() itself. Concretely:
+   * HatchReadyModal's (and any Guide/Lore notification's) "Go to
+   * Hatchery" button called engine.requestTab('hatchery') directly, and
+   * this component just switched straight to it -- reachable even for a
+   * player who'd never actually unlocked the Hatchery, confirmed by a
+   * real playtester report (an egg reaching storage through some other
+   * means, then "Go to Hatchery" opening the panel with no unlock quest
+   * ever completed). Falls back to whatever `tab` already was (the
+   * initial mount default further down still falls back to 'dashboard')
+   * rather than switching to a tab that isn't actually visible right now.
+   */
+  const safeRequestedTab = (): TabId | null => {
+    const requested = engine.consumeRequestedTab() as TabId | null;
+    return requested && isTabVisible(requested) ? requested : null;
+  };
+  const [tab, setTab] = useState<TabId>(() => safeRequestedTab() ?? 'dashboard');
   const [onTop, setOnTop] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   // Forces the full first-run tour back open on demand, regardless of
@@ -298,7 +333,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   // request comes in while already mounted, not just on the next mount.
   useEffect(() => {
     if (engine.requestedTab) {
-      setTab(engine.consumeRequestedTab() as TabId);
+      const next = safeRequestedTab();
+      if (next) setTab(next);
     }
   }, [engine, engine.requestedTab]);
 
@@ -308,19 +344,6 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const activeTabDef = ALL_TABS.find((t) => t.id === tab)!;
   const Panel = activeTabDef.Panel;
   const panelBreakdown = PANEL_BREAKDOWNS[tab];
-  // Shared by the nav filter below and the tour's own step list --
-  // previously the tour hardcoded its own separate exclusion list
-  // ('hatchery'/'peddler' always skipped, regardless of whether they'd
-  // actually unlocked), which only happened to match the nav because a
-  // brand-new save always has both locked at the exact moment the
-  // first-run tour fires. That coupling breaks for an on-demand replay
-  // later in the game, once either (or Harvest/Training) really has
-  // unlocked -- a replay should show every tab actually in the nav right
-  // now, not the fresh-save snapshot. One predicate, used both places, so
-  // they can't drift apart again the way that duplication already had.
-  const isTabVisible = (id: TabId) => (id === 'hatchery' ? engine.state.hatcheryUnlocked
-    : id === 'peddler' ? engine.state.peddlerUnlocked
-    : id === 'harvest' ? engine.state.harvestUnlocked : true);
   const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
   // Acknowledges the bare (no-sub-tab) key for whichever top-level tab is
   // currently active, every time it changes -- clears the nav shimmer for

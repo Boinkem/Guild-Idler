@@ -15,7 +15,7 @@ import { RECIPE_SCROLL_BY_ID, RECIPE_SCROLLS } from './data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from './data/craftingRecipes';
 import { GuildHallDecorManager } from './managers/GuildHallDecorManager';
 import { GUILD_HALL_DECORATIONS } from './data/guildHallDecor';
-import { DlcManager } from './managers/DlcManager';
+import { DlcManager, FOUNDER_PACK_ID } from './managers/DlcManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
@@ -204,13 +204,59 @@ export class GameEngine {
     engine.refreshWorld(Date.now());
     engine.start();
     // Fire-and-forget, not awaited -- checking for owned DLC packs
-    // shouldn't hold up the game's own startup, and today KNOWN_DLC_PACKS
-    // is empty anyway (this resolves instantly with nothing found). Not
-    // wired into any live UI yet; see DlcManager's own doc comment for
-    // what a future consumer (a skin picker, a pet roster) needs to do to
-    // pick up a pack that finishes loading after that UI's first render.
-    void DlcManager.loadInstalledPacks();
+    // shouldn't hold up the game's own startup. Patch 0374: chained
+    // .then() so the Founder's Pack grant check (which needs to know
+    // whether founders_pack actually loaded) runs the moment that
+    // resolves, rather than racing it.
+    void DlcManager.loadInstalledPacks().then(() => engine.grantFounderPackContentIfOwned());
     return engine;
+  }
+
+  /**
+   * Founder's Pack DLC grant (patch 0374) -- called once, right after
+   * DlcManager finishes checking which packs are actually installed.
+   * `founderPackGranted` makes this genuinely one-time: a player who owns
+   * the pack gets the Ruby Dragonling egg + "The Founding Flame" guild
+   * title exactly once, on whichever launch first sees the pack present,
+   * never again on every subsequent boot. Does nothing at all for anyone
+   * who doesn't own it (DlcManager.owns returns false, same as any other
+   * unowned pack) -- and does nothing yet for a save that already
+   * received it, so re-checking on every boot is safe and cheap rather
+   * than needing its own separate "already checked this session" guard.
+   *
+   * Deliberately does NOT touch state.hatcheryUnlocked, unlike the
+   * TESTING_TOOLS_ENABLED-gated testAddEgg's own force-unlock (see that
+   * method's own comment -- "an egg with nowhere to be equipped isn't
+   * much of a test" is a reasonable testing shortcut, but a REAL grant
+   * skipping the actual unlock quest is exactly the bug patch 0374 also
+   * fixed the navigation side of: a playtester reported reaching the
+   * Hatchery panel via a notification's "Go to" link despite never
+   * completing that quest, once an egg existed in storage. The egg
+   * granted here sits inert in eggStorage -- same as any other unhatched
+   * egg -- until the player unlocks the Hatchery for real; the DLC store
+   * page is expected to say as much explicitly ("an egg, ready the
+   * moment you unlock the Hatchery") rather than this needing to
+   * editorialise that in-game.
+   *
+   * `common` rarity specifically, not a higher tier -- confirmed by
+   * actually generating and inspecting every rarity tier's real output
+   * before picking this: the rarity-tier hue-shift system (same one the
+   * base game's own black Dragonling is already subject to at its higher
+   * tiers) pulls the recoloured ruby-red palette toward brown, green, and
+   * eventually purple at higher tiers, so `common` -- zero hue shift,
+   * the pure hand-authored ruby palette -- is the only tier that actually
+   * reads as "Ruby" at all. Stronger rarities for this species are a
+   * future addition (a different reward path granting it at a higher
+   * tier), not something this one-time grant tries to solve today.
+   */
+  private grantFounderPackContentIfOwned() {
+    if (this.state.founderPackGranted) return;
+    if (!DlcManager.owns(FOUNDER_PACK_ID)) return;
+    this.state.founderPackGranted = true;
+    PetManager.grantEgg(this.state, 'common', 'ruby_dragonling', Date.now());
+    GuildTitleManager.grant(this.state, 'The Founding Flame');
+    this.notify();
+    void this.saveNow();
   }
 
   /* --------------------------- subscriptions --------------------------- */

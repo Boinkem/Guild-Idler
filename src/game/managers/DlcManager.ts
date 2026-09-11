@@ -42,27 +42,38 @@ import { PETS } from '../data/pets';
  * icon, a hero class with no manifest entry): quietly absent, no error,
  * no broken state.
  *
- * Nothing in this file is wired into the live UI yet -- SKINS/PETS/
- * HERO_CLASSES still drive every skin picker, pet roster, and recruit
- * screen exactly as they did before this existed. This is the tested
- * mechanism sitting ready; once a real DLC pack exists, call sites switch
- * from `SKINS`/`PETS`/`HERO_CLASSES` to `DlcManager.allSkins()`/
- * `allPets()`/`allHeroClasses()` (or the single-lookup `heroClassDef`/
- * `recruitCost`) to actually include it. A brand-new hero class's sprite
- * art is discovered the same file-presence way -- see HeroSprite.tsx's
- * own `loadManifest`, which already checks every known pack for its own
+ * Patch 0374 update: this is no longer purely theoretical -- a real pack
+ * (Founder's Pack, `founders_pack`) exists in KNOWN_DLC_PACKS below, and
+ * `PetManager.hatch` (patch 0374) now calls `allPets()` for real, so a
+ * dedicated founder-pack egg correctly resolves to its DLC-only species.
+ * The skin/hero-class side of this file is still exactly as described
+ * below, though -- no skin picker or recruit screen reads
+ * `allSkins()`/`allHeroClasses()` yet, only the pet-hatch path does.
+ *
+ * SKINS/HERO_CLASSES still drive every skin picker and recruit screen
+ * exactly as they did before this existed. This is the tested mechanism
+ * sitting ready; once a pack actually adds a skin or hero class, those
+ * call sites switch from `SKINS`/`HERO_CLASSES` to `DlcManager.allSkins()`/
+ * `allHeroClasses()` (or the single-lookup `heroClassDef`/`recruitCost`)
+ * to actually include it. A brand-new hero class's sprite art is
+ * discovered the same file-presence way -- see HeroSprite.tsx's own
+ * `loadManifest`, which already checks every known pack for its own
  * `heroes-manifest.json` today, live, not just scaffolded.
  */
 
 /**
- * Every DLC pack id the base game currently knows to check for. Empty
- * today, on purpose -- no DLC exists yet. Grows by one entry per pack,
- * added here as part of shipping that pack (an ordinary base-game update,
- * not something that needs coordinating with when any individual player
- * happens to update), so every player's client -- whether they end up
- * owning that pack or not -- knows the path to check.
+ * Every DLC pack id the base game currently knows to check for. Was empty
+ * until patch 0374 -- the Founder's Pack is the first real one, App ID/
+ * store item registered on the Steam Admin side (store item 1324580,
+ * package 1817980). Grows by one entry per pack, added here as part of
+ * shipping that pack (an ordinary base-game update, not something that
+ * needs coordinating with when any individual player happens to update),
+ * so every player's client -- whether they end up owning that pack or
+ * not -- knows the path to check.
  */
-const KNOWN_DLC_PACKS: string[] = [];
+export const FOUNDER_PACK_ID = 'founders_pack';
+
+const KNOWN_DLC_PACKS: string[] = [FOUNDER_PACK_ID];
 
 export interface DlcPackManifest {
   id: string;

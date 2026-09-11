@@ -498,6 +498,45 @@ DRAGONLING = PetSpec(
     },
 )
 
+# Founder's Pack DLC content (patch 0374) -- same source green art as
+# DRAGONLING above, a second hand-authored base_recolor livery rather
+# than a hue-shift, same reasoning as the black one: a ruby dragon needs
+# deliberate warm ruby-red/amber tones, not whatever a mechanical hue
+# rotation of green happens to land on. `species_id` is deliberately its
+# own entry, not another rarity tier of the base 'dragonling' -- DLC
+# ownership is an orthogonal axis to rarity (see PetDef.requiresDlc's own
+# comment on the two being independent), and the base game's own
+# 'dragonling' species must stay exactly as black-recoloured as it
+# already is regardless of who owns this pack. Lives in its own DLC pack
+# folder (dlc-packs/founders_pack/), not public/pets/ -- see that pack's
+# own pack.json for why, and DlcManager.ts's FOUNDER_PACK_ID for the
+# matching id string.
+RUBY_DRAGONLING = PetSpec(
+    species_id='ruby_dragonling',
+    frame_w=158, frame_h=125,
+    anim_files={
+        'idle': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/IDLE.png',
+        'movement': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/MOVE.png',
+        'catch': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/ATTACK.png',
+        'damage': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/HURT.png',
+    },
+    # Same source keys as DRAGONLING's own recolor list -- deep ruby-red
+    # body tones with a warm gold/amber belly and horns for contrast
+    # (rather than a monochrome red silhouette), darkening to near-black
+    # maroon in the shadow tones. The existing c42430/ffffff accent+glint
+    # (kept, same as the black variant) now reads as part of the same
+    # ruby family rather than a contrasting spot colour -- intentional,
+    # not a clash.
+    recolor=['#1e6f50', '#33984b', '#5ac54f', '#e69c69', '#f6ca9f', '#bf6f4a', '#92a1b9', '#c7cfdd', '#657392', '#0c2e44', '#134c4c'],
+    keep=['#c42430', '#ffffff'],
+    base_recolor={
+        '#1e6f50': '#5c0f14', '#33984b': '#8c1c1c', '#5ac54f': '#c42430',
+        '#e69c69': '#c9702f', '#f6ca9f': '#e8a856', '#bf6f4a': '#8a4a1f',
+        '#92a1b9': '#3d1010', '#c7cfdd': '#701620', '#657392': '#521018',
+        '#0c2e44': '#1a0508', '#134c4c': '#2b0a0a',
+    },
+)
+
 MIMIC = PetSpec(
     species_id='mimic',
     frame_w=96, frame_h=96,  # confirmed visually against IDLE.png (768x96, 8 frames) -- the raw GCD across every file lands on 192, exactly double the real grid, since nothing forces it lower
@@ -593,6 +632,18 @@ PETS: List[PetSpec] = [
     FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER,
     MOSSBACK, TIDEWHELP, WISPLET, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE, GARGOYLE,
 ]
+
+# DLC content -- deliberately NOT part of PETS above. A plain, no-flags
+# `--out public/pets` run must only ever produce base-game content that
+# ships to every player; DLC species get their own explicit --only run
+# against their own pack's --out folder instead (see main()'s own
+# handling of this list, and dlc-packs/founders_pack/pack.json's own
+# comment for the full "why a separate folder at all" reasoning).
+#
+#   python3 tools/import_pets.py --src <raw sheets> \
+#       --out dlc-packs/founders_pack --only ruby_dragonling
+#
+DLC_PETS: List[PetSpec] = [RUBY_DRAGONLING]
 
 
 # -------------------------------------------------------------- recolour ---
@@ -730,7 +781,14 @@ def main() -> None:
     ap.add_argument('--only', nargs='*', help='limit to these species ids')
     args = ap.parse_args()
 
+    # Default (no --only) is PETS alone, unchanged from before DLC_PETS
+    # existed -- a plain run can never accidentally pull DLC content into
+    # a base-game --out folder. --only can explicitly name a DLC species
+    # to opt it in for its own separate --out run (see DLC_PETS's own
+    # comment above); it never appears in the default target list.
     targets = [p for p in PETS if not args.only or p.species_id in args.only]
+    if args.only:
+        targets += [p for p in DLC_PETS if p.species_id in args.only]
     manifest: Dict[str, dict] = {}
 
     for spec in targets:

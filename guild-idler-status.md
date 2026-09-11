@@ -7475,23 +7475,31 @@ pass (same caveat as the two entries above).
   and a future class/skin reskin pack are the same mechanism, just
   different content inside `pack.json`. Two real gaps before either can
   actually ship, beyond the "Consolidated" partner-backend steps below:
-  - **Decided (patch 0372): a Ruby or Emerald recolour of the existing
-    Black Dragonling pet, granted via a dedicated "Founder's Egg" (same
-    guaranteed-species mechanism the Black Dragonling itself already
-    uses -- see the raid-drop version further up this doc), plus the
-    guild title "The Founding Flame" (wording locked patch 0372, not yet
-    wired in -- see that patch's own writeup). Two real gaps before
-    either can actually ship, beyond the "Consolidated" partner-backend
-    steps below:
-  - **The exact recolour (Ruby vs Emerald) isn't picked yet** -- cosmetic
-    call, not a technical one.
+  - **Done (patch 0374): Ruby recolour built, egg + title grant wired in
+    for real.** `RUBY_DRAGONLING` (`tools/import_pets.py`, `common`
+    rarity only -- higher tiers hue-shift away from ruby, confirmed by
+    generating and checking every tier before deciding), `pack.json`
+    with its real `PetDef`, and `GameEngine.grantFounderPackContentIfOwned`
+    (chained onto `DlcManager.loadInstalledPacks`, grants the egg +
+    "The Founding Flame" title, never touches `hatcheryUnlocked`). Real
+    remaining gaps, all packaging/deployment rather than game logic:
+  - **The base game's own Steam depot build must exclude `public/dlc/`
+    entirely**, uploading it only as the Founder's Pack's own separate
+    depot (child App ID/store item already registered: store item
+    1324580, package 1817980) -- that depot-split build configuration
+    doesn't exist yet.
+  - **`ruby_dragonling`'s actual sprite art still needs dropping into
+    `public/dlc/founders_pack/ruby_dragonling/`** on whoever's building
+    the depot's machine -- gitignored same as `public/pets`, generated
+    locally via `tools/import_pets.py --only ruby_dragonling`.
   - **No UI reads `DlcManager.allSkins()`/`allPets()`/`allHeroClasses()`
-    anywhere yet.** Every skin picker, pet roster, and class list still
-    reads the base `SKINS`/`PETS`/`HERO_CLASSES` directly. The first
-    real pack needs that UI work done too -- surfacing DLC-sourced
-    content as available (and, for anyone who doesn't own it, visibly
-    locked rather than simply absent) -- not just dropping files in and
-    adding a `KNOWN_DLC_PACKS` entry.
+    anywhere yet, except the one path that now matters: `PetManager.hatch`
+    (patch 0374) does.** Every skin picker, pet roster, and class list
+    still reads the base `SKINS`/`PETS`/`HERO_CLASSES` directly for
+    everything else. Not a blocker for the founder pack specifically
+    (its content is a dedicated-egg pet and a title, neither needs a
+    picker UI), but still true for any future pack that adds a skin,
+    pet the general pool can roll, or hero class.
 - **Consolidated: everything blocked on a real Steam App ID existing.**
   Nothing here needs code today -- all of it is either partner-backend
   configuration or a small, well-scoped follow-up once the account/App ID
@@ -28139,6 +28147,133 @@ against the scene art, and a tight zoom on a Vendor stock card showing a
 clean edge with no outline. Also re-checked Inventory after the Vendor-
 specific box-shadow fix to confirm the shared `.rarity-frame-card` class
 didn't regress anything there -- it didn't.
+
+### Fixed a real early-Hatchery-access bug, and the Founder's Pack DLC grant now actually exists (patch 0374)
+```discord-update
+Dev Update | Bug Fix + Founder's Pack
+
+- Fixed a bug where a "Go to Hatchery" notification could open the Hatchery panel before it was actually unlocked
+- The Founder's Pack now actually grants its Ruby Dragonling egg and "The Founding Flame" guild title to anyone who owns it
+- That egg won't do anything until you unlock the Hatchery for real -- same as any other egg
+```
+
+Two things bundled together because the second genuinely depends on the
+first: a real playtester bug report ("got an egg... was able to use the
+Notification in the LORE tab to 'go to' hatchery -- without having done
+the quest") turned out to be a real, general navigation bug, and fixing
+it was a hard prerequisite for building the Founder's Pack grant safely
+-- without the fix, the exact same hole the playtester found would have
+been the intended, permanent behavior for a founder-pack egg too.
+
+**The actual bug (`MenuWindow.tsx`), traced to its root cause, not just
+the one symptom reported.** `isTabVisible` (hatchery/peddler/harvest
+gated on their own unlock flags) has only ever filtered which tab
+BUTTONS render in the nav bar -- it was never actually applied to
+`engine.requestTab()`/`consumeRequestedTab()`, the generic "jump to any
+tab" mechanism every notification's own "Go to" button already uses
+(`HatchReadyModal`, Guide/Lore notifications alike, per `requestTab`'s
+own doc comment). Concretely: nothing stopped `setTab('hatchery')` from
+firing regardless of whether Hatchery had actually been unlocked, at
+either of MenuWindow's two consumption points (initial mount, and the
+live-update effect for a request made while already open). Fixed at the
+one correct chokepoint -- both consumption points now run the requested
+tab through `isTabVisible` before ever switching, falling back to
+whatever tab was already showing (or the initial 'dashboard' default)
+rather than a tab that isn't actually visible. This fixes the bug for
+every existing and future "Go to X" notification, not just the Hatchery
+case that happened to get reported.
+
+**A real, separate gap found and closed while building the grant:**
+`PetManager.hatch` resolved a dedicated egg's species via the base-only
+`PET_BY_ID`/`pickHatchedPetDefId`, with no awareness that
+`DlcManager.allPets()` exists. A dedicated DLC egg would have silently
+fallen through to a random BASE-roster pick instead of guaranteeing its
+actual species -- exactly the kind of bug that wouldn't show up until a
+real paying customer opened their Founder's Egg and got a random Rat.
+`pickHatchedPetDefId` now takes an optional pool (defaulting to the base
+roster, so every other existing caller is unaffected), and
+`PetManager.hatch` passes `DlcManager.allPets()` -- confirmed directly,
+not assumed, via a synthetic-DLC-pool test: the same id that used to
+silently fail to resolve against the base-only pool now resolves
+correctly once a DLC pool is supplied.
+
+**Ruby Dragonling -- recoloured, actually run, and rarity-tier tested
+before picking a grant rarity.** Same green source art as the base
+(black) Dragonling, a second hand-authored `base_recolor` targeting
+ruby-red/amber tones rather than a hue-shift. Genuinely useful catch
+made by actually generating and looking at every rarity tier before
+deciding, not assumed: the rarity-tier hue-shift system (the same one
+already visible in the base Dragonling's own raid-loot table, which
+isn't purely black at its higher tiers either) pulls the ruby palette
+toward brown, then green, then purple as rarity climbs -- only `common`
+(zero hue shift) actually reads as "Ruby." Granted at `common`
+specifically for that reason, direct decision -- a higher-rarity Ruby
+Dragonling is left for a future, different acquisition path rather than
+solved today. `RUBY_DRAGONLING` deliberately lives in a new `DLC_PETS`
+list, not `PETS` -- a plain no-flags `tools/import_pets.py` run still
+only ever touches base-game content; DLC species need an explicit
+`--only <id>` naming them, so a base build can never accidentally
+include DLC art.
+
+**`public/dlc/founders_pack/pack.json` -- the actual `DlcPackManifest`,
+not a placeholder.** Contains the Ruby Dragonling `PetDef` (no
+`requiresDlc` field on it -- `DlcManager.loadInstalledPacks` stamps that
+on automatically at merge time, per its own existing contract). Verified
+for real, not just written and assumed correct: built the full
+production app, confirmed `pack.json` actually lands at
+`dist/dlc/founders_pack/pack.json` (exactly the path
+`DlcManager.fetchPack`'s runtime `fetch('./dlc/${packId}/pack.json')`
+expects), then served that real `dist` output over HTTP and fetched it
+for real -- not a simulated read. `.gitignore` now excludes
+`public/dlc/*/*/` (the generated sprite folder, binary art, same
+reasoning `public/pets` already has) while `pack.json` itself (plain
+data) stays tracked.
+
+**The DLC pack.json's own real-world packaging gap, stated plainly
+rather than glossed over:** this file living in the base game's own git
+repo and build output is fine for local dev (so `npm run dev` can
+simulate "owning" the pack just by the file being present) but is NOT
+yet how this should ship on Steam -- the base game's own Steam depot
+build must exclude `public/dlc/` entirely, uploading it only as the
+Founder's Pack's own separate depot (tied to its own child App ID/store
+item, already registered: store item 1324580, package 1817980) so a
+non-owner's install never receives it. That depot-split build
+configuration doesn't exist yet -- real remaining Steam Admin work, not
+solved by this patch.
+
+**The actual grant (`GameEngine.boot`)** -- chained onto
+`DlcManager.loadInstalledPacks()`'s own promise rather than a separate
+unrelated check, so it runs the moment pack-loading actually resolves.
+New `founderPackGranted` flag (`SAVE_VERSION` 68 -> 69) makes the grant
+genuinely one-time: safe to re-check on every boot (cheap, and does
+nothing once already granted) rather than needing its own "did I already
+check this session" guard. Grants a `common`-rarity Ruby Dragonling egg
+directly into `eggStorage` (`PetManager.grantEgg` never touched
+`hatcheryUnlocked` in the first place -- confirmed by reading it, not
+assumed) and "The Founding Flame" guild title (patch 0372's mechanism,
+finally wired to something real) in the same pass. Store page is
+expected to say outright that this is an early-access egg that activates
+once the Hatchery unlocks -- deliberate, not a gap: the egg sitting
+inert until the real unlock quest is now enforced by both the grant
+itself (never sets `hatcheryUnlocked`) and the navigation fix above
+(nothing can jump to the Hatchery panel before then, regardless of what
+sits in storage).
+
+**Verified:** `npx tsc --noEmit`, `npx vite build`, a full
+`electron-builder --linux dir` package build, and -- beyond the usual --
+an 8-check runtime script (via `tsx`) covering the actual DLC-pet
+resolution gap (confirmed both that it existed before this patch's fix
+and that it's fixed after), a full grant simulation (egg lands in
+storage with the right `dedicatedPetId`, `hatcheryUnlocked` stays
+untouched, the title grants and auto-selects), and the
+`founderPackGranted` default. Every rarity tier of Ruby Dragonling was
+generated and visually checked before picking `common` as the grant
+rarity, not assumed from the black variant's own precedent alone.
+`pack.json` was fetched for real over HTTP against the actual built
+`dist` output, not just schema-validated. Not yet checked: the actual
+Steam depot split needed to keep `public/dlc/` out of the base game's
+own store listing -- flagged above as real remaining work, not silently
+left for someone to discover later.
 
 ### Pet sprite pipeline: Squirrel and Glimmerwing cut, Mossback/Tidewhelp source paths corrected, four "2D Pixel Art" species confirmed import-ready (patch 0373)
 ```discord-update

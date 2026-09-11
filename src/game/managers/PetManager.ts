@@ -5,6 +5,7 @@ import { Tuning } from '../data/tuning';
 import { PET_BY_ID, hatchXpThreshold, pickHatchedPetDefId } from '../data/pets';
 import { kennelHealTimeMinutes } from '../data/progression';
 import { ModifierManager } from './ModifierManager';
+import { DlcManager } from './DlcManager';
 
 const PET_TREAT_ID = 'pet_treat';
 
@@ -99,8 +100,19 @@ export const PetManager = {
 
   /** Rolls a species, a rarity-scaled bonus, and adds the resulting Pet to state.pets. */
   hatch(state: GameState, egg: EggInstance, now: number): Pet {
-    const defId = pickHatchedPetDefId(egg.dedicatedPetId);
-    const def = PET_BY_ID[defId];
+    // DLC-aware as of patch 0374 -- DlcManager.allPets() is the base
+    // roster plus whatever any currently-owned DLC pack adds (empty extra
+    // when nothing's owned, so this is a no-op change for every player
+    // without DLC). Needed so a dedicated DLC egg (the founder pack's
+    // Ruby Dragonling, granted via GameEngine's own founder-grant check)
+    // actually resolves to that species instead of silently falling
+    // through to a random BASE-roster pick -- pickHatchedPetDefId's own
+    // dedicatedPetId branch only matches an id it can actually find in
+    // whatever pool it's given, and the base-only PET_BY_ID/PETS never
+    // contained a DLC pet id at all.
+    const allPets = DlcManager.allPets();
+    const defId = pickHatchedPetDefId(egg.dedicatedPetId, allPets);
+    const def = allPets.find((p) => p.id === defId) ?? PET_BY_ID[defId];
     const bonusTypes: PetBonusType[] = ['success', 'gold', 'xp', 'loot'];
     const bonusType = bonusTypes[Math.floor(Math.random() * bonusTypes.length)];
     // PetDef.minRarity (Mimic, patch 0250) floors the DISPLAYED rarity of
