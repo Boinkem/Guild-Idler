@@ -927,8 +927,12 @@ function ArmourStashCard({
               <p className="card-flavour" style={{ marginTop: 8 }}>
                 {(() => {
                   const modLines = describeMods(item.customMods ?? def.mods ?? {});
+                  // patch 0381 bug fix: def.stats (a hand-authored item's own
+                  // base stats, e.g. every Leather Set piece) was never shown
+                  // here -- only item.rolledStats made it into this line.
+                  const baseLines = describeStats(def.stats, true);
                   const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
-                  const lines = [...modLines, ...rolledLines];
+                  const lines = [...modLines, ...baseLines, ...rolledLines];
                   return lines.length > 0 ? lines.join(' · ') : 'No bonuses';
                 })()}
               </p>

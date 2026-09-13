@@ -728,7 +728,12 @@ function SagaItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () 
         <h3>{def.name}</h3>
         <RarityPill rarity={def.rarity} />
         <p className="tiny muted" style={{ marginTop: 8 }}>{def.slot} · requires level {def.reqLevel}</p>
-        <p className="small" style={{ marginTop: 8 }}>{describeMods(def.mods).join(' · ') || 'No bonuses'}</p>
+        <p className="small" style={{ marginTop: 8 }}>
+          {/* patch 0381 bug fix: a hand-authored item's own def.stats (e.g.
+              every Leather Set piece) was missing from this preview -- only
+              def.mods showed, same gap as the equipped-item modals. */}
+          {[...describeMods(def.mods), ...describeStats(def.stats, true)].join(' · ') || 'No bonuses'}
+        </p>
         <div className="row end" style={{ marginTop: 14 }}>
           <button className="btn-primary" onClick={onClose}>Close</button>
         </div>

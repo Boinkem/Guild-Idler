@@ -31052,3 +31052,71 @@ server: POSTed a modified `pets.json` with `displayScale`/
 persisted them and a fresh GET read them back correctly, then reverted
 that test write -- ships with `pets.json` unchanged, same as every other
 patch's out-of-the-box state.
+
+### Bug fix: hand-authored items (e.g. the Leather Set) showed "No bonuses" instead of their real stats (patch 0381)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: gear item detail screens now show an item's base stats (e.g. a Leather Set piece's Endurance/Wisdom) instead of reading "No bonuses"
+- Fixed: quest and raid loot preview screens had the same gap and now show base stats too
+- No change to how strong your gear actually is -- this was a display-only bug, your equipped items were already applying their real stats
+```
+
+Direct report, with screenshots: `Leather Talisman` and `Leather Cap`
+(both `leather`-set pieces) opened to "No bonuses" despite each having a
+real authored `def.stats` entry (`wisdom: 1` and `endurance: 1`
+respectively, in `equipment.json`). Read as "loot is rolling with no
+stats," but confirmed against `HeroManager.equipmentStats` that the
+underlying gameplay math was never broken -- that function has always
+summed `def.stats` (an item's own hand-authored base) alongside
+`item.rolledStats` (a procedural or dedicated-tier roll) correctly. The
+bug was purely in what the UI chose to display.
+
+**Root cause.** Every "bonuses" line across the item-detail surfaces
+built its list from `describeMods(item.customMods ?? def.mods ?? {})`
+plus, only if present, `describeStats(item.rolledStats, true)` --
+`def.stats` itself was never read at all. A procedurally-generated drop
+(patch 0214 onward) rolls its entire power into `rolledStats`, so those
+items always displayed fine. Any hand-authored item with no roll applied
+-- every ordinary Set piece, most notably, since Sets are deliberately
+`!isProceduralTemplate()` and carry their own small fixed `def.stats` --
+had nothing in `rolledStats` and so always rendered as if it granted
+nothing, regardless of what `def.stats` actually said.
+
+**Same copy-pasted block, five call sites, same fix.** Added a
+`baseLines = describeStats(def.stats, true)` line (or the equivalent
+inline `describeStats(def.stats, true)` for the two preview-only
+overlays that don't use the local-variable shape) and folded it into the
+existing `lines` array everywhere the old block appeared:
+- `EquipmentPanel.tsx` -- both item-detail modals (the roster/equip-slot
+  view and the inventory/stash view; identical blocks, fixed
+  identically).
+- `VendorsPanel.tsx` -- the stash/vault item modal.
+- `CraftingStation.tsx` -- the crafted-item preview.
+- `DiscoveredQuestsPanel.tsx`'s `SagaItemDetailOverlay` and
+  `RaidsPanel.tsx`'s `ItemDetailOverlay` -- the pre-drop loot preview
+  overlays (Quest Chains/Lore and Raids tabs respectively) had the exact
+  same gap, reading a def's `mods` but never its `stats`; fixed the same
+  way, plus a `describeStats` import added to `RaidsPanel.tsx` (already
+  present in `DiscoveredQuestsPanel.tsx`).
+
+Order matters slightly for display polish, not correctness: mod lines
+first, then base stat lines, then any rolled lines, so a Set piece with
+a small base stat and (rare) an on-top procedural roll reads
+base-then-bonus rather than out of order. `Enchanted:` stays its own
+separate line everywhere, untouched -- that's Armour Infusion's own
+additive purchase, never part of this "what does the item itself grant"
+line.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with this
+patch applied. Manually re-derived the two reported items by hand
+against `equipment.json` (`leather_cap`: Endurance +1, `leather_talisman`:
+Wisdom +1) and confirmed the new `baseLines` output matches. No
+`SAVE_VERSION` bump -- no `GameState`/`EquipmentItem` shape changed,
+this patch only touches what five components choose to render from data
+that already existed on every item. Worth a real playtest pass across a
+mixed inventory (a raw Set piece, a procedural rare, a Heroic-tier
+dedicated drop, and a crafted Guildmade item) to confirm each now shows
+the right combination of base/rolled/enchant lines with nothing doubled
+or missing.

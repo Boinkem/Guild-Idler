@@ -804,6 +804,14 @@ function SlotCard({
               </div>
               {(() => {
                 const modLines = describeMods(item.customMods ?? def.mods ?? {});
+                // patch 0381 bug fix: a hand-authored item's own def.stats
+                // (e.g. every Leather Set piece) was never shown here at all --
+                // only item.rolledStats (procedural/dedicated-tier rolls) made
+                // it into this line, so an un-rolled hand-authored drop always
+                // read "No bonuses" even though HeroManager.equipmentStats was
+                // correctly applying def.stats the whole time. Base stats now
+                // always render alongside any rolled/enchant lines.
+                const baseLines = describeStats(def.stats, true);
                 // patch 0255: a procedural roll or Guildmade/Masterwork craft's
                 // real power lives in item.rolledStats now (all-stats rework,
                 // see guild-idler-status.md) -- folded into the same bonuses
@@ -812,7 +820,7 @@ function SlotCard({
                 // "Enchanted:" line below, which is Armour Infusion's own
                 // purchased stats, never touched by this.
                 const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
-                const lines = [...modLines, ...rolledLines];
+                const lines = [...modLines, ...baseLines, ...rolledLines];
                 return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
               })()}
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
@@ -944,6 +952,9 @@ function StashCard({
               </div>
               {(() => {
                 const modLines = describeMods(item.customMods ?? def.mods ?? {});
+                // patch 0381 bug fix: see the sibling modal above -- a hand-
+                // authored item's own def.stats was never shown here either.
+                const baseLines = describeStats(def.stats, true);
                 // patch 0255: a procedural roll or Guildmade/Masterwork craft's
                 // real power lives in item.rolledStats now (all-stats rework,
                 // see guild-idler-status.md) -- folded into the same bonuses
@@ -952,7 +963,7 @@ function StashCard({
                 // "Enchanted:" line below, which is Armour Infusion's own
                 // purchased stats, never touched by this.
                 const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
-                const lines = [...modLines, ...rolledLines];
+                const lines = [...modLines, ...baseLines, ...rolledLines];
                 return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
               })()}
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
