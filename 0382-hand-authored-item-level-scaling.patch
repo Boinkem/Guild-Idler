@@ -1,0 +1,379 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9fb8870..74dfdd7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -31120,3 +31120,120 @@ mixed inventory (a raw Set piece, a procedural rare, a Heroic-tier
+ dedicated drop, and a crafted Guildmade item) to confirm each now shows
+ the right combination of base/rolled/enchant lines with nothing doubled
+ or missing.
++
++### Feature: ordinary hand-authored loot (Set pieces, raidExclusive items) now scales with the level it drops at, additively on top of its authored base (patch 0382)
++```discord-update
++Dev Update | Feature
++
++- Changed: gear from a Set (or any other hand-authored item) now gets stronger the higher-level the quest or raid it drops from -- previously only procedurally-rolled gear did this
++- Your existing gear is untouched -- this only applies to items dropped after this patch
++- No item can ever end up weaker than it is today -- the new bonus is always added on top of an item's normal stats, never replaces them
++```
++
++Direct follow-up to patch 0381's investigation (same conversation, same
++report): fixing the display bug that hid a hand-authored item's own
++`def.stats` surfaced the deeper question underneath it -- unlike a
++procedurally-generated drop, an ordinary hand-authored item (a Set
++piece, most visibly, but also a `raidExclusive` item on a Normal-
++difficulty clear) has never scaled with the level it actually drops at.
++`leather_cap`'s `endurance: 1` is identical whether a level-1 or a
++level-55 hero picks it up. Confirmed via `QuestManager`'s own difficulty
++loop that this isn't a narrow edge case: patch 0214 made quest
++difficulty tiers pure risk/reward picks with no level floor except
++Legendary, so a low-level hero's Epic-tier quest (loot pool already
++includes `legendary` rarity) can hand them a fixed-power legendary Set
++piece completely disconnected from their own level, same as a max-level
++hero's Easy quest can hand them a vestigial `leather_cap`. 61 ordinary
++quest-droppable Set pieces sit in this gap; `RaidManager.ts` already had
++a comment acknowledging the identical gap on Normal-difficulty raid
++drops of `raidExclusive` items.
++
++**Design discussion, direct with the user, before writing any code.**
++Three shapes were on the table: (1) reuse the existing
++Heroic/Mythic/Legendary scaling mechanism (`scaleDedicatedItem`)
++wholesale for ordinary drops too; (2) scale only common/uncommon/rare
++Set pieces, leave epic/legendary hand-authored items untouched; (3)
++scale everything, but floor the result at the item's current authored
++value so nothing already-tuned could get nerfed. Went in leaning toward
++(3), specifically to guard against a scenario worked out by hand: a
++level-5 hero's lucky Epic-quest drop of `boots_of_the_ashen_hand`
++(legendary, authored `endurance: 105`) recomputing down to roughly 18 at
++that level under a naive "replace the item's numbers" reading of
++`scaleDedicatedItem`.
++
++**That reading was wrong, caught while implementing.** Re-checked
++`HeroManager.equipmentStats` directly: `base` (`def.stats`) and `rolled`
++(`item.rolledStats`) are summed together, never one replacing the
++other -- same additive shape the patch 0381 item-detail modals already
++display as separate lines. `scaleDedicatedItem`'s own existing doc
++comment already said as much ("meant to fully replace item.rolledStats
++... not def.stats, which stays the item's own unscaled authored
++baseline") but got mis-read as "replaces the item's total power" during
++the design discussion rather than "replaces the empty field it's
++written into, on top of an untouched base." Once corrected, options (1)
++and (3) turned out to be the same thing: since `def.stats` is never
++touched, a hand-authored item's total power can only ever grow above
++its unscaled baseline, never fall below it, no matter how low the drop
++level is. No explicit floor logic was needed as a result -- correcting
++the mistaken assumption made the safety property free rather than
++something to engineer around. Flagged the correction back to the user
++before implementing rather than quietly building the more complex
++floored version the original (incorrect) analysis called for.
++
++**Implementation.** `scaleDedicatedItem` (`proceduralLoot.ts`) broadened
++from taking the six dedicated `LootSourceTag`s only to taking any of
++them -- an ordinary tag (`easy`/`normal`/`hard`/`epic`/`legendary`) now
++gets `tierMultiplier` pinned to `1` (no Heroic/Mythic/Legendary bonus,
++same "standard tier, no multiplier, power comes from the rarity/level
++curve itself" shape `rollProceduralItem`'s own tags already use) and its
++own budget constant, `loot_procedural.handAuthoredBudgetMultiplier`
++(new Tuning entry, seeded at `6` to match the existing
++`chain_replay_dedicated.levelScaleBudgetMultiplier` as a starting
++point -- deliberately its own separate knob so retuning ordinary drops
++never touches the already-tuned dedicated-tier number).
++`EquipmentManager.instantiate`'s second branch dropped its
++`roll.heroLevel != null && dedicatedTags.includes(...)` gate entirely --
++any hand-authored item with a `roll` at all now goes through
++`scaleDedicatedItem`, using `roll.heroLevel ?? roll.itemLevel` as the
++level basis (raids already pass `partyLevel` unconditionally regardless
++of difficulty tier, so a Set piece now scales off the same level basis
++whichever raid tier it drops from; ordinary quest drops fall back to
++`roll.itemLevel`, which already rolls near the hero's own level per
++patch 0214, so the two bases agree in practice). `rolledItemLevel` is
++now set for these items too, which -- as a real side effect, not just
++the stat growth -- also stops `HeroManager.gearRelevance` decay from
++crushing an ordinary Set piece toward the floor multiplier the moment
++it drops for anyone above its (often very low) authored `def.reqLevel`.
++
++**Caught and fixed one knock-on effect before shipping:** `referenceValue`
++(sellValue/upgradeCost/shopPrice's shared pricing reference) gated
++curve-vs-flat pricing purely on `item.rolledItemLevel != null` -- a
++signal that was safe when only procedural rolls and dedicated-tier
++scales ever set that field, but patch 0283's `guild-idler-status.md`
++writeup explicitly confirmed ordinary non-exclusive hand-authored gear
++should deliberately keep flat `def.value` pricing. Since this patch now
++sets `rolledItemLevel` on those same items too, the old gate would have
++silently opted them into curve pricing -- an economy change nobody
++discussed. Re-gated on `isProceduralTemplate(def) || def.raidExclusive
++|| def.chainExclusive` instead (the exact same set of items this
++function already curve-priced before this patch), so pricing for
++ordinary Set gear is completely unchanged; only its combat stats and
++gear-relevance decay are affected by this patch.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Hand-derived the budget formula in
++isolation and confirmed: `leather_cap` (common) goes from a flat +1
++Endurance to +1 at level 1 up through +7 at level 55; a level-5 Epic-
++quest drop of `boots_of_the_ashen_hand` (legendary) comes out to 123
++total Endurance (105 base + 18 rolled) rather than either its old fixed
++105 or a feared-then-disproven drop to ~18 -- confirming the "grows
++relative to baseline, never shrinks below it" property holds in
++practice, not just in the additive-combination argument above. No
++`SAVE_VERSION` bump -- existing items are untouched (no `rolledStats`/
++`rolledItemLevel` retroactively written onto anything already owned),
++this only changes what a NEW drop looks like going forward. Worth a
++live playtest pass specifically at low hero levels against high-rarity
++Set/raidExclusive items (the scenario this whole discussion centered
++on) to confirm the felt power curve lands right, plus a pass through
++the Balance Sandbox on `loot_procedural.handAuthoredBudgetMultiplier`
++before treating `6` as final.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index ff67579..7ff64c5 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -4374,6 +4374,16 @@
+     "max": 5,
+     "description": "The 'teeny bonus' for Hard-tier quest drops specifically -- small compared to the raid multipliers above."
+   },
++  {
++    "id": "loot_procedural.handAuthoredBudgetMultiplier",
++    "label": "Hand-authored loot: ordinary-tier level-scale multiplier",
++    "category": "loot_procedural",
++    "value": 6,
++    "default": 6,
++    "min": 0,
++    "max": 20,
++    "description": "Patch 0382 (see guild-idler-status.md). GEAR_SCORE_BY_RARITY[rarity] * this * levelFactor(itemLevel or heroLevel) is ADDED on top of a hand-authored item's own def.stats (never replaces it -- HeroManager.equipmentStats sums base + rolled together) for an ordinary quest/Normal-raid drop of any Set piece or other hand-authored item, the same shape scaleDedicatedItem already used for Heroic/Mythic/Legendary tiers via chain_replay_dedicated.levelScaleBudgetMultiplier, just its own separately-tunable constant so retuning ordinary drops never touches that already-tuned dedicated-tier number. Deliberately set equal to it (6) as a starting point -- verify against the Balance Sandbox before treating as final."
++  },
+   {
+     "id": "loot_procedural.charmedChance",
+     "label": "Procedural loot: Charmed roll chance (%)",
+diff --git a/src/game/data/proceduralLoot.ts b/src/game/data/proceduralLoot.ts
+index f3a7982..91ca9b3 100644
+--- a/src/game/data/proceduralLoot.ts
++++ b/src/game/data/proceduralLoot.ts
+@@ -227,10 +227,8 @@ export interface DedicatedItemScale {
+ }
+ 
+ /**
+- * Scales an already-authored hand-authored item's (chainExclusive
+- * reward OR ordinary raid Set piece) stats for a Heroic/Legendary drop
+- * -- the dedicated-item counterpart to rollProceduralItem above, but a
+- * genuinely different mechanism, not a variant of it.
++ * Scales an already-authored hand-authored item's (Set piece,
++ * chainExclusive reward, or raidExclusive item) stats for its drop.
+  *
+  * Patch 0258 (Dedicated Reward Level Scaling, see guild-idler-status.md)
+  * rework: previously this only multiplied the item's own fixed authored
+@@ -240,7 +238,7 @@ export interface DedicatedItemScale {
+  * was passed as the CHAIN's own reqLevel, and `rolledItemLevel` was
+  * deliberately never set, so gear_relevance decay applied against that
+  * same low number forever after). Now recomputes a fresh stat BUDGET
+- * against the hero's current level, the same `GEAR_SCORE_BY_RARITY *
++ * against the item's real drop level, the same `GEAR_SCORE_BY_RARITY *
+  * multiplier * levelFactor` shape rollProceduralItem/patch 0256's
+  * item-re-author already use, then redistributes that budget across the
+  * item's EXISTING stat proportions -- so `wardens_signet` stays an
+@@ -250,9 +248,32 @@ export interface DedicatedItemScale {
+  * level-scaled budget, not instead of it -- direct answer to "should
+  * this scale to hero level or difficulty tier": both, stacked.
+  *
+- * Extended from chainExclusive-only to any hand-authored item
+- * (`!isProceduralTemplate`), since raid Set pieces had literally no
+- * scaling mechanism before this patch, not even the old flat
++ * Patch 0382 (see guild-idler-status.md, direct report/discussion):
++ * extended a second time, from "the six dedicated Heroic/Mythic/
++ * Legendary tags only" to EVERY LootSourceTag -- an ordinary quest-tier
++ * drop (easy/normal/hard/epic/legendary) or a Normal-difficulty raid
++ * drop of a hand-authored item now gets the exact same treatment, just
++ * with `tierMultiplier` pinned to 1 (no Heroic/Mythic/Legendary bonus)
++ * and its own separately-tunable budget constant
++ * (`loot_procedural.handAuthoredBudgetMultiplier`, kept apart from
++ * `chain_replay_dedicated.levelScaleBudgetMultiplier` so retuning one
++ * never touches the other). Confirmed this is safe against every
++ * currently-authored hand-authored item, including big fixed-number
++ * legendary Set pieces like `boots_of_the_ashen_hand` (endurance 105):
++ * `rolledStats` is ADDITIVE on top of `def.stats` everywhere it's read
++ * (HeroManager.equipmentStats sums base + enchant + rolled; the item-
++ * detail modals fixed in patch 0381 display them as separate lines the
++ * same way) -- it was never a replacement, despite an earlier read of
++ * this function's own doc comment below suggesting otherwise during
++ * design discussion. A low-level drop's added budget is small but never
++ * negative, so a hand-authored item's total power can only ever grow
++ * relative to its unscaled authored baseline, never shrink below it, at
++ * any drop level. No separate floor logic needed as a result -- the
++ * additive combination already guarantees one.
++ *
++ * Extended (patch 0258) from chainExclusive-only to any hand-authored
++ * item (`!isProceduralTemplate`), since raid Set pieces had literally
++ * no scaling mechanism before that patch, not even the old flat
+  * multiplier chains had -- see EquipmentManager.instantiate's own
+  * comment for the branch condition. `raid_dedicated`'s own multiplier
+  * pair (1.5/2.2) matches loot_procedural's existing raidHeroic/
+@@ -265,33 +286,41 @@ export interface DedicatedItemScale {
+  * further -- confirmed design: an item is fixed at whatever level it
+  * dropped at (via `rolledItemLevel`, set by the caller), same as any
+  * other piece of gear. A player who wants it to keep pace either pays
+- * to re-level it at the Blacksmith (now open to hand-authored items
+- * too, see EquipmentManager.relevel's own comment) or farms a fresh,
++ * to re-level it at the Blacksmith (open to hand-authored items too,
++ * see EquipmentManager.relevel's own comment) or farms a fresh,
+  * higher-level drop.
+  *
+  * No Fortunate/Charmed bonus roll here, unlike rollProceduralItem --
+- * these are already unique, named story/raid rewards; a random bonus
+- * prefix on top would read as redundant rather than exciting, so this
+- * deliberately doesn't offer one.
++ * these are already unique, named story/raid/Set rewards; a random
++ * bonus prefix on top would read as redundant rather than exciting, so
++ * this deliberately doesn't offer one.
+  */
+ export function scaleDedicatedItem(
+   def: { name: string; rarity: Rarity; mods?: Partial<Modifiers>; stats?: Partial<Stats> },
+-  heroLevel: number,
+-  sourceTag: 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidMythic' | 'raidLegendary',
++  level: number,
++  sourceTag: LootSourceTag,
+ ): DedicatedItemScale {
++  const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayMythic', 'chainReplayLegendary', 'raidHeroic', 'raidMythic', 'raidLegendary'];
++  const isDedicatedTier = dedicatedTags.includes(sourceTag);
+   const isRaid = sourceTag === 'raidHeroic' || sourceTag === 'raidMythic' || sourceTag === 'raidLegendary';
+   const isLegendaryTier = sourceTag === 'chainReplayLegendary' || sourceTag === 'raidLegendary';
+   const isMythicTier = sourceTag === 'chainReplayMythic' || sourceTag === 'raidMythic';
+   const tierKey = isLegendaryTier ? 'legendaryMultiplier' : isMythicTier ? 'mythicMultiplier' : 'heroicMultiplier';
+-  const tierMultiplier = isRaid
+-    ? Tuning.get(`raid_dedicated.${tierKey}`)
+-    : Tuning.get(`chain_replay_dedicated.${tierKey}`);
++  // Ordinary (non-dedicated) tags get no tier bonus at all -- their
++  // budget comes purely from rarity * level, same as an ordinary
++  // procedural quest drop's `standard` tier (see LootSourceTag's own
++  // comment: Easy/Normal/Epic/Legendary quest-tier procedural rolls
++  // already get no multiplier either, "their extra power already comes
++  // through the rarity/level curve itself").
++  const tierMultiplier = !isDedicatedTier ? 1
++    : isRaid ? Tuning.get(`raid_dedicated.${tierKey}`)
++      : Tuning.get(`chain_replay_dedicated.${tierKey}`);
+ 
+   const originalStats = def.stats ?? {};
+   const originalTotal = Object.values(originalStats).reduce((a, b) => a + b, 0);
+   const levelBudget = GEAR_SCORE_BY_RARITY[def.rarity]
+-    * Tuning.get('chain_replay_dedicated.levelScaleBudgetMultiplier')
+-    * levelFactor(heroLevel);
++    * Tuning.get(isDedicatedTier ? 'chain_replay_dedicated.levelScaleBudgetMultiplier' : 'loot_procedural.handAuthoredBudgetMultiplier')
++    * levelFactor(level);
+   const scaledBudget = levelBudget * tierMultiplier;
+ 
+   const rolledStats: Partial<Stats> = {};
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index c62dda3..9cc7b92 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -33,23 +33,26 @@ export const EquipmentManager = {
+    * chain/raid reward grant, or a stray dev/test call), which just
+    * instantiate exactly as before, no scaling of any kind.
+    *
+-   * A second case (patch 0225, extended patch 0258 -- Dedicated Reward
+-   * Level Scaling, see guild-idler-status.md): any hand-authored item
+-   * (`!isProceduralTemplate` -- chainExclusive rewards AND ordinary raid
+-   * Set pieces alike, extended from chainExclusive-only in patch 0258)
+-   * gets real level-scaling when `roll.sourceTag` is one of the six
+-   * Heroic/Mythic/Legendary tags (`chainReplayHeroic/Mythic/Legendary`,
+-   * `raidHeroic/Mythic/Legendary`) AND `roll.heroLevel` is provided -- see
+-   * scaleDedicatedItem's own comment in proceduralLoot.ts for the full
+-   * formula. `rolledItemLevel` IS now set to the hero's level at drop
+-   * time (patch 0258 reversed the old "deliberately does NOT set" -- see
+-   * that patch's own writeup for why leaving it unset was actively
+-   * undermining the point of scaling the item up in the first place).
+-   * Missing `roll.heroLevel` on an otherwise-eligible sourceTag falls
+-   * through untouched rather than crashing, same "missing data degrades
+-   * gracefully" convention as the procedural branch above -- every real
+-   * call site (QuestManager's replay resolution, RaidManager's loot
+-   * resolution) always passes one.
++   * A second case (patch 0225, extended 0258 -- Dedicated Reward Level
++   * Scaling -- and extended again 0382 to every LootSourceTag, not just
++   * the six dedicated ones; see guild-idler-status.md for both): any
++   * hand-authored item (`!isProceduralTemplate` -- Set pieces,
++   * chainExclusive rewards, raidExclusive items alike) gets real level
++   * scaling whenever a `roll` is provided at all now, not just on a
++   * Heroic/Mythic/Legendary tag -- see scaleDedicatedItem's own comment
++   * in proceduralLoot.ts for the full formula and, as of 0382, why an
++   * ordinary-tier scale can never end up weaker than the item's own
++   * unscaled `def.stats` (it's additive, not a replacement).
++   * `rolledItemLevel` is set to whichever level basis was actually used
++   * (`roll.heroLevel` when the caller has one -- raids always pass
++   * `partyLevel`, so a hand-authored Set piece scales off the SAME level
++   * basis regardless of which raid difficulty tier dropped it; ordinary
++   * quest drops fall back to `roll.itemLevel`, which patch 0214 already
++   * rolls near the hero's own level, so the two bases agree in practice)
++   * -- this also means gear_relevance decay no longer needlessly crushes
++   * an ordinary Set piece down to the floor multiplier the moment it
++   * drops for anyone above its (often very low) authored `def.reqLevel`,
++   * a real side effect of 0382, not just the stat-budget growth itself.
+    */
+   instantiate(defId: string, roll?: {
+     itemLevel: number; sourceTag: LootSourceTag; rng: Rng;
+@@ -58,7 +61,6 @@ export const EquipmentManager = {
+     const def = EQUIPMENT_BY_ID[defId];
+     if (!def) return null;
+     const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
+-    const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayMythic', 'chainReplayLegendary', 'raidHeroic', 'raidMythic', 'raidLegendary'];
+     if (roll && isProceduralTemplate(def)) {
+       const result = rollProceduralItem(
+         def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng, roll.weightedKey, roll.weightMultiplier,
+@@ -70,12 +72,9 @@ export const EquipmentManager = {
+       item.rolledStats = result.stats;
+       item.proceduralName = result.displayName;
+       item.rolledItemLevel = roll.itemLevel;
+-    } else if (roll && !isProceduralTemplate(def) && roll.heroLevel != null
+-      && (dedicatedTags as string[]).includes(roll.sourceTag)) {
+-      const result = scaleDedicatedItem(
+-        def, roll.heroLevel,
+-        roll.sourceTag as 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidMythic' | 'raidLegendary',
+-      );
++    } else if (roll && !isProceduralTemplate(def)) {
++      const scaleLevel = roll.heroLevel ?? roll.itemLevel;
++      const result = scaleDedicatedItem(def, scaleLevel, roll.sourceTag);
+       item.rolledStats = result.rolledStats;
+       // patch 0256/0257: def.mods on a hand-authored item is now only
+       // ever the preserved durability/health pair (or empty) -- writing
+@@ -84,7 +83,7 @@ export const EquipmentManager = {
+       // def.mods`), same as a crafted item's mods already work.
+       if (Object.keys(result.mods).length > 0) item.customMods = result.mods;
+       item.proceduralName = result.displayName;
+-      item.rolledItemLevel = roll.heroLevel;
++      item.rolledItemLevel = scaleLevel;
+     }
+     return item;
+   },
+@@ -286,17 +285,26 @@ export const EquipmentManager = {
+    * roll) -- reqLevel is the one number that actually describes how
+    * powerful the design intends this specific item to be.
+    *
+-   * Ordinary hand-authored non-exclusive gear (starter armor sets like
+-   * `leather`/`steel`/`thief`, crafted bases) deliberately keeps pricing
+-   * off flat `def.value` unchanged -- these were never flagged as part
+-   * of the reviewed disproportion, their authored values already track
+-   * reasonably with rarity/reqLevel, and routing every hand-authored
+-   * item through the curve indiscriminately risked reshuffling balance
+-   * nobody asked to touch. `def.value` remains the reference only for
+-   * this narrower "ordinary, non-exclusive, unscaled" case now.
++   * Patch 0382: `item.rolledItemLevel != null` alone stopped being a
++   * reliable "this item's power scales with level, so its value should
++   * too" signal the moment ordinary Set drops started getting a
++   * `rolledItemLevel` of their own (for gear_relevance decay, see
++   * EquipmentManager.instantiate's own comment) without their PRICE
++   * being meant to scale -- the "deliberately keeps pricing off flat
++   * def.value" paragraph above is still exactly the confirmed design,
++   * just no longer implied for free by an absent `rolledItemLevel`.
++   * Gated explicitly now on `isProceduralTemplate(def) ||
++   * def.raidExclusive || def.chainExclusive` instead, which is exactly
++   * the same set of items this function already priced via the curve
++   * before 0382 (a procedural roll always had a rolledItemLevel; a
++   * raidExclusive/chainExclusive item hit the curve either via this
++   * branch when dedicated-tier scaled, or via the branch below on
++   * `def.reqLevel` otherwise) -- ordinary non-exclusive hand-authored
++   * gear now correctly falls through to flat `def.value` regardless of
++   * whether it happens to carry a `rolledItemLevel`.
+    */
+   referenceValue(item: EquipmentItem, def: EquipmentDef): number {
+-    if (item.rolledItemLevel != null) {
++    if (item.rolledItemLevel != null && (isProceduralTemplate(def) || def.raidExclusive || def.chainExclusive)) {
+       return scaledValueCurve(def.rarity, item.rolledItemLevel);
+     }
+     if (def.raidExclusive || def.chainExclusive) {

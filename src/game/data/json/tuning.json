@@ -4375,6 +4375,16 @@
     "description": "The 'teeny bonus' for Hard-tier quest drops specifically -- small compared to the raid multipliers above."
   },
   {
+    "id": "loot_procedural.handAuthoredBudgetMultiplier",
+    "label": "Hand-authored loot: ordinary-tier level-scale multiplier",
+    "category": "loot_procedural",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "max": 20,
+    "description": "Patch 0382 (see guild-idler-status.md). GEAR_SCORE_BY_RARITY[rarity] * this * levelFactor(itemLevel or heroLevel) is ADDED on top of a hand-authored item's own def.stats (never replaces it -- HeroManager.equipmentStats sums base + rolled together) for an ordinary quest/Normal-raid drop of any Set piece or other hand-authored item, the same shape scaleDedicatedItem already used for Heroic/Mythic/Legendary tiers via chain_replay_dedicated.levelScaleBudgetMultiplier, just its own separately-tunable constant so retuning ordinary drops never touches that already-tuned dedicated-tier number. Deliberately set equal to it (6) as a starting point -- verify against the Balance Sandbox before treating as final."
+  },
+  {
     "id": "loot_procedural.charmedChance",
     "label": "Procedural loot: Charmed roll chance (%)",
     "category": "loot_procedural",

@@ -33,23 +33,26 @@ export const EquipmentManager = {
    * chain/raid reward grant, or a stray dev/test call), which just
    * instantiate exactly as before, no scaling of any kind.
    *
-   * A second case (patch 0225, extended patch 0258 -- Dedicated Reward
-   * Level Scaling, see guild-idler-status.md): any hand-authored item
-   * (`!isProceduralTemplate` -- chainExclusive rewards AND ordinary raid
-   * Set pieces alike, extended from chainExclusive-only in patch 0258)
-   * gets real level-scaling when `roll.sourceTag` is one of the six
-   * Heroic/Mythic/Legendary tags (`chainReplayHeroic/Mythic/Legendary`,
-   * `raidHeroic/Mythic/Legendary`) AND `roll.heroLevel` is provided -- see
-   * scaleDedicatedItem's own comment in proceduralLoot.ts for the full
-   * formula. `rolledItemLevel` IS now set to the hero's level at drop
-   * time (patch 0258 reversed the old "deliberately does NOT set" -- see
-   * that patch's own writeup for why leaving it unset was actively
-   * undermining the point of scaling the item up in the first place).
-   * Missing `roll.heroLevel` on an otherwise-eligible sourceTag falls
-   * through untouched rather than crashing, same "missing data degrades
-   * gracefully" convention as the procedural branch above -- every real
-   * call site (QuestManager's replay resolution, RaidManager's loot
-   * resolution) always passes one.
+   * A second case (patch 0225, extended 0258 -- Dedicated Reward Level
+   * Scaling -- and extended again 0382 to every LootSourceTag, not just
+   * the six dedicated ones; see guild-idler-status.md for both): any
+   * hand-authored item (`!isProceduralTemplate` -- Set pieces,
+   * chainExclusive rewards, raidExclusive items alike) gets real level
+   * scaling whenever a `roll` is provided at all now, not just on a
+   * Heroic/Mythic/Legendary tag -- see scaleDedicatedItem's own comment
+   * in proceduralLoot.ts for the full formula and, as of 0382, why an
+   * ordinary-tier scale can never end up weaker than the item's own
+   * unscaled `def.stats` (it's additive, not a replacement).
+   * `rolledItemLevel` is set to whichever level basis was actually used
+   * (`roll.heroLevel` when the caller has one -- raids always pass
+   * `partyLevel`, so a hand-authored Set piece scales off the SAME level
+   * basis regardless of which raid difficulty tier dropped it; ordinary
+   * quest drops fall back to `roll.itemLevel`, which patch 0214 already
+   * rolls near the hero's own level, so the two bases agree in practice)
+   * -- this also means gear_relevance decay no longer needlessly crushes
+   * an ordinary Set piece down to the floor multiplier the moment it
+   * drops for anyone above its (often very low) authored `def.reqLevel`,
+   * a real side effect of 0382, not just the stat-budget growth itself.
    */
   instantiate(defId: string, roll?: {
     itemLevel: number; sourceTag: LootSourceTag; rng: Rng;
@@ -58,7 +61,6 @@ export const EquipmentManager = {
     const def = EQUIPMENT_BY_ID[defId];
     if (!def) return null;
     const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
-    const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayMythic', 'chainReplayLegendary', 'raidHeroic', 'raidMythic', 'raidLegendary'];
     if (roll && isProceduralTemplate(def)) {
       const result = rollProceduralItem(
         def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng, roll.weightedKey, roll.weightMultiplier,
@@ -70,12 +72,9 @@ export const EquipmentManager = {
       item.rolledStats = result.stats;
       item.proceduralName = result.displayName;
       item.rolledItemLevel = roll.itemLevel;
-    } else if (roll && !isProceduralTemplate(def) && roll.heroLevel != null
-      && (dedicatedTags as string[]).includes(roll.sourceTag)) {
-      const result = scaleDedicatedItem(
-        def, roll.heroLevel,
-        roll.sourceTag as 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidMythic' | 'raidLegendary',
-      );
+    } else if (roll && !isProceduralTemplate(def)) {
+      const scaleLevel = roll.heroLevel ?? roll.itemLevel;
+      const result = scaleDedicatedItem(def, scaleLevel, roll.sourceTag);
       item.rolledStats = result.rolledStats;
       // patch 0256/0257: def.mods on a hand-authored item is now only
       // ever the preserved durability/health pair (or empty) -- writing
@@ -84,7 +83,7 @@ export const EquipmentManager = {
       // def.mods`), same as a crafted item's mods already work.
       if (Object.keys(result.mods).length > 0) item.customMods = result.mods;
       item.proceduralName = result.displayName;
-      item.rolledItemLevel = roll.heroLevel;
+      item.rolledItemLevel = scaleLevel;
     }
     return item;
   },
@@ -286,17 +285,26 @@ export const EquipmentManager = {
    * roll) -- reqLevel is the one number that actually describes how
    * powerful the design intends this specific item to be.
    *
-   * Ordinary hand-authored non-exclusive gear (starter armor sets like
-   * `leather`/`steel`/`thief`, crafted bases) deliberately keeps pricing
-   * off flat `def.value` unchanged -- these were never flagged as part
-   * of the reviewed disproportion, their authored values already track
-   * reasonably with rarity/reqLevel, and routing every hand-authored
-   * item through the curve indiscriminately risked reshuffling balance
-   * nobody asked to touch. `def.value` remains the reference only for
-   * this narrower "ordinary, non-exclusive, unscaled" case now.
+   * Patch 0382: `item.rolledItemLevel != null` alone stopped being a
+   * reliable "this item's power scales with level, so its value should
+   * too" signal the moment ordinary Set drops started getting a
+   * `rolledItemLevel` of their own (for gear_relevance decay, see
+   * EquipmentManager.instantiate's own comment) without their PRICE
+   * being meant to scale -- the "deliberately keeps pricing off flat
+   * def.value" paragraph above is still exactly the confirmed design,
+   * just no longer implied for free by an absent `rolledItemLevel`.
+   * Gated explicitly now on `isProceduralTemplate(def) ||
+   * def.raidExclusive || def.chainExclusive` instead, which is exactly
+   * the same set of items this function already priced via the curve
+   * before 0382 (a procedural roll always had a rolledItemLevel; a
+   * raidExclusive/chainExclusive item hit the curve either via this
+   * branch when dedicated-tier scaled, or via the branch below on
+   * `def.reqLevel` otherwise) -- ordinary non-exclusive hand-authored
+   * gear now correctly falls through to flat `def.value` regardless of
+   * whether it happens to carry a `rolledItemLevel`.
    */
   referenceValue(item: EquipmentItem, def: EquipmentDef): number {
-    if (item.rolledItemLevel != null) {
+    if (item.rolledItemLevel != null && (isProceduralTemplate(def) || def.raidExclusive || def.chainExclusive)) {
       return scaledValueCurve(def.rarity, item.rolledItemLevel);
     }
     if (def.raidExclusive || def.chainExclusive) {

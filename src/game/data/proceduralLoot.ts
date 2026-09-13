@@ -227,10 +227,8 @@ export interface DedicatedItemScale {
 }
 
 /**
- * Scales an already-authored hand-authored item's (chainExclusive
- * reward OR ordinary raid Set piece) stats for a Heroic/Legendary drop
- * -- the dedicated-item counterpart to rollProceduralItem above, but a
- * genuinely different mechanism, not a variant of it.
+ * Scales an already-authored hand-authored item's (Set piece,
+ * chainExclusive reward, or raidExclusive item) stats for its drop.
  *
  * Patch 0258 (Dedicated Reward Level Scaling, see guild-idler-status.md)
  * rework: previously this only multiplied the item's own fixed authored
@@ -240,7 +238,7 @@ export interface DedicatedItemScale {
  * was passed as the CHAIN's own reqLevel, and `rolledItemLevel` was
  * deliberately never set, so gear_relevance decay applied against that
  * same low number forever after). Now recomputes a fresh stat BUDGET
- * against the hero's current level, the same `GEAR_SCORE_BY_RARITY *
+ * against the item's real drop level, the same `GEAR_SCORE_BY_RARITY *
  * multiplier * levelFactor` shape rollProceduralItem/patch 0256's
  * item-re-author already use, then redistributes that budget across the
  * item's EXISTING stat proportions -- so `wardens_signet` stays an
@@ -250,9 +248,32 @@ export interface DedicatedItemScale {
  * level-scaled budget, not instead of it -- direct answer to "should
  * this scale to hero level or difficulty tier": both, stacked.
  *
- * Extended from chainExclusive-only to any hand-authored item
- * (`!isProceduralTemplate`), since raid Set pieces had literally no
- * scaling mechanism before this patch, not even the old flat
+ * Patch 0382 (see guild-idler-status.md, direct report/discussion):
+ * extended a second time, from "the six dedicated Heroic/Mythic/
+ * Legendary tags only" to EVERY LootSourceTag -- an ordinary quest-tier
+ * drop (easy/normal/hard/epic/legendary) or a Normal-difficulty raid
+ * drop of a hand-authored item now gets the exact same treatment, just
+ * with `tierMultiplier` pinned to 1 (no Heroic/Mythic/Legendary bonus)
+ * and its own separately-tunable budget constant
+ * (`loot_procedural.handAuthoredBudgetMultiplier`, kept apart from
+ * `chain_replay_dedicated.levelScaleBudgetMultiplier` so retuning one
+ * never touches the other). Confirmed this is safe against every
+ * currently-authored hand-authored item, including big fixed-number
+ * legendary Set pieces like `boots_of_the_ashen_hand` (endurance 105):
+ * `rolledStats` is ADDITIVE on top of `def.stats` everywhere it's read
+ * (HeroManager.equipmentStats sums base + enchant + rolled; the item-
+ * detail modals fixed in patch 0381 display them as separate lines the
+ * same way) -- it was never a replacement, despite an earlier read of
+ * this function's own doc comment below suggesting otherwise during
+ * design discussion. A low-level drop's added budget is small but never
+ * negative, so a hand-authored item's total power can only ever grow
+ * relative to its unscaled authored baseline, never shrink below it, at
+ * any drop level. No separate floor logic needed as a result -- the
+ * additive combination already guarantees one.
+ *
+ * Extended (patch 0258) from chainExclusive-only to any hand-authored
+ * item (`!isProceduralTemplate`), since raid Set pieces had literally
+ * no scaling mechanism before that patch, not even the old flat
  * multiplier chains had -- see EquipmentManager.instantiate's own
  * comment for the branch condition. `raid_dedicated`'s own multiplier
  * pair (1.5/2.2) matches loot_procedural's existing raidHeroic/
@@ -265,33 +286,41 @@ export interface DedicatedItemScale {
  * further -- confirmed design: an item is fixed at whatever level it
  * dropped at (via `rolledItemLevel`, set by the caller), same as any
  * other piece of gear. A player who wants it to keep pace either pays
- * to re-level it at the Blacksmith (now open to hand-authored items
- * too, see EquipmentManager.relevel's own comment) or farms a fresh,
+ * to re-level it at the Blacksmith (open to hand-authored items too,
+ * see EquipmentManager.relevel's own comment) or farms a fresh,
  * higher-level drop.
  *
  * No Fortunate/Charmed bonus roll here, unlike rollProceduralItem --
- * these are already unique, named story/raid rewards; a random bonus
- * prefix on top would read as redundant rather than exciting, so this
- * deliberately doesn't offer one.
+ * these are already unique, named story/raid/Set rewards; a random
+ * bonus prefix on top would read as redundant rather than exciting, so
+ * this deliberately doesn't offer one.
  */
 export function scaleDedicatedItem(
   def: { name: string; rarity: Rarity; mods?: Partial<Modifiers>; stats?: Partial<Stats> },
-  heroLevel: number,
-  sourceTag: 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidMythic' | 'raidLegendary',
+  level: number,
+  sourceTag: LootSourceTag,
 ): DedicatedItemScale {
+  const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayMythic', 'chainReplayLegendary', 'raidHeroic', 'raidMythic', 'raidLegendary'];
+  const isDedicatedTier = dedicatedTags.includes(sourceTag);
   const isRaid = sourceTag === 'raidHeroic' || sourceTag === 'raidMythic' || sourceTag === 'raidLegendary';
   const isLegendaryTier = sourceTag === 'chainReplayLegendary' || sourceTag === 'raidLegendary';
   const isMythicTier = sourceTag === 'chainReplayMythic' || sourceTag === 'raidMythic';
   const tierKey = isLegendaryTier ? 'legendaryMultiplier' : isMythicTier ? 'mythicMultiplier' : 'heroicMultiplier';
-  const tierMultiplier = isRaid
-    ? Tuning.get(`raid_dedicated.${tierKey}`)
-    : Tuning.get(`chain_replay_dedicated.${tierKey}`);
+  // Ordinary (non-dedicated) tags get no tier bonus at all -- their
+  // budget comes purely from rarity * level, same as an ordinary
+  // procedural quest drop's `standard` tier (see LootSourceTag's own
+  // comment: Easy/Normal/Epic/Legendary quest-tier procedural rolls
+  // already get no multiplier either, "their extra power already comes
+  // through the rarity/level curve itself").
+  const tierMultiplier = !isDedicatedTier ? 1
+    : isRaid ? Tuning.get(`raid_dedicated.${tierKey}`)
+      : Tuning.get(`chain_replay_dedicated.${tierKey}`);
 
   const originalStats = def.stats ?? {};
   const originalTotal = Object.values(originalStats).reduce((a, b) => a + b, 0);
   const levelBudget = GEAR_SCORE_BY_RARITY[def.rarity]
-    * Tuning.get('chain_replay_dedicated.levelScaleBudgetMultiplier')
-    * levelFactor(heroLevel);
+    * Tuning.get(isDedicatedTier ? 'chain_replay_dedicated.levelScaleBudgetMultiplier' : 'loot_procedural.handAuthoredBudgetMultiplier')
+    * levelFactor(level);
   const scaledBudget = levelBudget * tierMultiplier;
 
   const rolledStats: Partial<Stats> = {};

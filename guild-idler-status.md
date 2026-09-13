@@ -31120,3 +31120,120 @@ mixed inventory (a raw Set piece, a procedural rare, a Heroic-tier
 dedicated drop, and a crafted Guildmade item) to confirm each now shows
 the right combination of base/rolled/enchant lines with nothing doubled
 or missing.
+
+### Feature: ordinary hand-authored loot (Set pieces, raidExclusive items) now scales with the level it drops at, additively on top of its authored base (patch 0382)
+```discord-update
+Dev Update | Feature
+
+- Changed: gear from a Set (or any other hand-authored item) now gets stronger the higher-level the quest or raid it drops from -- previously only procedurally-rolled gear did this
+- Your existing gear is untouched -- this only applies to items dropped after this patch
+- No item can ever end up weaker than it is today -- the new bonus is always added on top of an item's normal stats, never replaces them
+```
+
+Direct follow-up to patch 0381's investigation (same conversation, same
+report): fixing the display bug that hid a hand-authored item's own
+`def.stats` surfaced the deeper question underneath it -- unlike a
+procedurally-generated drop, an ordinary hand-authored item (a Set
+piece, most visibly, but also a `raidExclusive` item on a Normal-
+difficulty clear) has never scaled with the level it actually drops at.
+`leather_cap`'s `endurance: 1` is identical whether a level-1 or a
+level-55 hero picks it up. Confirmed via `QuestManager`'s own difficulty
+loop that this isn't a narrow edge case: patch 0214 made quest
+difficulty tiers pure risk/reward picks with no level floor except
+Legendary, so a low-level hero's Epic-tier quest (loot pool already
+includes `legendary` rarity) can hand them a fixed-power legendary Set
+piece completely disconnected from their own level, same as a max-level
+hero's Easy quest can hand them a vestigial `leather_cap`. 61 ordinary
+quest-droppable Set pieces sit in this gap; `RaidManager.ts` already had
+a comment acknowledging the identical gap on Normal-difficulty raid
+drops of `raidExclusive` items.
+
+**Design discussion, direct with the user, before writing any code.**
+Three shapes were on the table: (1) reuse the existing
+Heroic/Mythic/Legendary scaling mechanism (`scaleDedicatedItem`)
+wholesale for ordinary drops too; (2) scale only common/uncommon/rare
+Set pieces, leave epic/legendary hand-authored items untouched; (3)
+scale everything, but floor the result at the item's current authored
+value so nothing already-tuned could get nerfed. Went in leaning toward
+(3), specifically to guard against a scenario worked out by hand: a
+level-5 hero's lucky Epic-quest drop of `boots_of_the_ashen_hand`
+(legendary, authored `endurance: 105`) recomputing down to roughly 18 at
+that level under a naive "replace the item's numbers" reading of
+`scaleDedicatedItem`.
+
+**That reading was wrong, caught while implementing.** Re-checked
+`HeroManager.equipmentStats` directly: `base` (`def.stats`) and `rolled`
+(`item.rolledStats`) are summed together, never one replacing the
+other -- same additive shape the patch 0381 item-detail modals already
+display as separate lines. `scaleDedicatedItem`'s own existing doc
+comment already said as much ("meant to fully replace item.rolledStats
+... not def.stats, which stays the item's own unscaled authored
+baseline") but got mis-read as "replaces the item's total power" during
+the design discussion rather than "replaces the empty field it's
+written into, on top of an untouched base." Once corrected, options (1)
+and (3) turned out to be the same thing: since `def.stats` is never
+touched, a hand-authored item's total power can only ever grow above
+its unscaled baseline, never fall below it, no matter how low the drop
+level is. No explicit floor logic was needed as a result -- correcting
+the mistaken assumption made the safety property free rather than
+something to engineer around. Flagged the correction back to the user
+before implementing rather than quietly building the more complex
+floored version the original (incorrect) analysis called for.
+
+**Implementation.** `scaleDedicatedItem` (`proceduralLoot.ts`) broadened
+from taking the six dedicated `LootSourceTag`s only to taking any of
+them -- an ordinary tag (`easy`/`normal`/`hard`/`epic`/`legendary`) now
+gets `tierMultiplier` pinned to `1` (no Heroic/Mythic/Legendary bonus,
+same "standard tier, no multiplier, power comes from the rarity/level
+curve itself" shape `rollProceduralItem`'s own tags already use) and its
+own budget constant, `loot_procedural.handAuthoredBudgetMultiplier`
+(new Tuning entry, seeded at `6` to match the existing
+`chain_replay_dedicated.levelScaleBudgetMultiplier` as a starting
+point -- deliberately its own separate knob so retuning ordinary drops
+never touches the already-tuned dedicated-tier number).
+`EquipmentManager.instantiate`'s second branch dropped its
+`roll.heroLevel != null && dedicatedTags.includes(...)` gate entirely --
+any hand-authored item with a `roll` at all now goes through
+`scaleDedicatedItem`, using `roll.heroLevel ?? roll.itemLevel` as the
+level basis (raids already pass `partyLevel` unconditionally regardless
+of difficulty tier, so a Set piece now scales off the same level basis
+whichever raid tier it drops from; ordinary quest drops fall back to
+`roll.itemLevel`, which already rolls near the hero's own level per
+patch 0214, so the two bases agree in practice). `rolledItemLevel` is
+now set for these items too, which -- as a real side effect, not just
+the stat growth -- also stops `HeroManager.gearRelevance` decay from
+crushing an ordinary Set piece toward the floor multiplier the moment
+it drops for anyone above its (often very low) authored `def.reqLevel`.
+
+**Caught and fixed one knock-on effect before shipping:** `referenceValue`
+(sellValue/upgradeCost/shopPrice's shared pricing reference) gated
+curve-vs-flat pricing purely on `item.rolledItemLevel != null` -- a
+signal that was safe when only procedural rolls and dedicated-tier
+scales ever set that field, but patch 0283's `guild-idler-status.md`
+writeup explicitly confirmed ordinary non-exclusive hand-authored gear
+should deliberately keep flat `def.value` pricing. Since this patch now
+sets `rolledItemLevel` on those same items too, the old gate would have
+silently opted them into curve pricing -- an economy change nobody
+discussed. Re-gated on `isProceduralTemplate(def) || def.raidExclusive
+|| def.chainExclusive` instead (the exact same set of items this
+function already curve-priced before this patch), so pricing for
+ordinary Set gear is completely unchanged; only its combat stats and
+gear-relevance decay are affected by this patch.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Hand-derived the budget formula in
+isolation and confirmed: `leather_cap` (common) goes from a flat +1
+Endurance to +1 at level 1 up through +7 at level 55; a level-5 Epic-
+quest drop of `boots_of_the_ashen_hand` (legendary) comes out to 123
+total Endurance (105 base + 18 rolled) rather than either its old fixed
+105 or a feared-then-disproven drop to ~18 -- confirming the "grows
+relative to baseline, never shrinks below it" property holds in
+practice, not just in the additive-combination argument above. No
+`SAVE_VERSION` bump -- existing items are untouched (no `rolledStats`/
+`rolledItemLevel` retroactively written onto anything already owned),
+this only changes what a NEW drop looks like going forward. Worth a
+live playtest pass specifically at low hero levels against high-rarity
+Set/raidExclusive items (the scenario this whole discussion centered
+on) to confirm the felt power curve lands right, plus a pass through
+the Balance Sandbox on `loot_procedural.handAuthoredBudgetMultiplier`
+before treating `6` as final.
