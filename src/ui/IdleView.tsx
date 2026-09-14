@@ -445,9 +445,10 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         {/*
           Fixed height, tied to the exact same value passed to HeroSprite's
           own `height` prop below -- HeroSprite scales its rendered box down
-          per-class (HERO_DISPLAY_SCALE, see that component's own comment:
-          gladiator/adventurer/wizard/dwarf all render SMALLER than the
-          nominal height), so .hero-carousel's previous auto-height (sized
+          per-class (each class's own displayScale in hero-classes.json, see
+          HeroSprite.tsx's own comment: gladiator/adventurer/wizard/dwarf all
+          render SMALLER than the nominal height), so .hero-carousel's previous
+          auto-height (sized
           to whatever the current hero's sprite box happened to be) shrank
           and grew every time cycleFocusedHero swapped in a different class.
           The arrows are `top: 50%` of THIS element (app.css), so that

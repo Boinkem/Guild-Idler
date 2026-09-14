@@ -55,7 +55,8 @@
       "ranged": "Reads the land like a second language, then picks fights from a distance no one saw coming.",
       "caster": "Magic pieced together from half-remembered lessons and whatever actually worked, cast with more nerve than training."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayScale": 0.83
   },
   {
     "id": "knight",
@@ -165,7 +166,8 @@
       "ranged": "Throws whatever's heavy enough to matter rather than carry it all the way into melee.",
       "caster": "Magic hammered, not spoken, forge-song and rune-carved stone in the old dwarven way."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayScale": 0.92
   },
   {
     "id": "gladiator",
@@ -220,7 +222,8 @@
       "ranged": "Bow in hand and a showman's grin for the ones smart enough to run.",
       "caster": "Arena tricks dressed up with whatever charm coin could buy, half showmanship, half genuine spellcraft."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayScale": 0.83
   },
   {
     "id": "samurai",
@@ -274,7 +277,9 @@
       "ranged": "Trades the blade for a bow, the same unbroken patience behind the string.",
       "caster": "Wards and rites learned alongside the sword, not instead of it, prayer and steel drawn in the same breath."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayOffsetX": 16,
+    "displayOffsetY": 13
   },
   {
     "id": "witch",
@@ -499,7 +504,8 @@
       "ranged": "Trades ritual for reflex, hurling raw arcane bolts wherever the staff used to point.",
       "caster": "Decades of study spent as much on arcane barriers to shield allies as on unleashing the arcane itself."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayScale": 0.86
   },
   {
     "id": "huge_knight",

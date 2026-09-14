@@ -31355,3 +31355,90 @@ Set/raidExclusive items (the scenario this whole discussion centered
 on) to confirm the felt power curve lands right, plus a pass through
 the Balance Sandbox on `loot_procedural.handAuthoredBudgetMultiplier`
 before treating `6` as final.
+
+### DevTool: Hero Sprite Lab -- single-sprite live preview, per-class default scale/position (patch 0384)
+```discord-update
+Dev Update | Hero Sprite Lab
+
+- Added a new DevTool tab: pick a hero class, see it at real corner-companion size, in Idle or Moving pose
+- Added scale and X/Y position sliders that tune where a class sits by default -- no more guessing from a screenshot
+- Save writes straight to that class' hero-classes.json entry -- the player's own sprite-size setting still layers on top of it, unaffected
+```
+
+Direct follow-up to patch 0380's Pet Sprite Lab: same ask, this time for
+hero classes -- adjust their default sizing/positioning from a live
+preview instead of hand-editing a hardcoded table and reloading to
+check the result.
+
+**`HeroClassDef` gains three optional fields (`progression.ts`).**
+`displayScale`, `displayOffsetX`, `displayOffsetY` -- exact same
+"omitted means default (1, 0, 0)" convention `PetDef`'s own matching
+fields already established in patch 0380. Unlike pets, hero classes
+already had a scale/offset correction; it just lived in two hardcoded
+TypeScript tables in `HeroSprite.tsx` (`HERO_DISPLAY_SCALE`,
+`HERO_DISPLAY_OFFSET`) rather than as data. This patch migrates those
+tables onto `hero-classes.json` instead of introducing a second,
+parallel mechanism -- gladiator/adventurer (0.83), wizard (0.86), and
+dwarf (0.92) keep their existing `displayScale`, and samurai keeps its
+existing `{x: 16, y: 13}` idle-pose offset, all seeded as explicit data
+so nothing changes visually out of the box.
+
+**`HeroSprite.tsx` reads the correction through `DlcManager.
+heroClassDef(heroClass)`**, not a direct `HERO_CLASSES` index --
+`resolveDisplayCorrection` replaces both old tables with one lookup,
+so a DLC pack's own hero class (which was never eligible for either
+hardcoded table before, since neither table nor `HeroClass` accounted
+for DLC ids) gets the exact same tuning surface as a base-game class,
+for free. `displayOffsetX`/`displayOffsetY` stay gated to the `idle`
+pose specifically, exactly matching `HERO_DISPLAY_OFFSET`'s old gate --
+action animations already fill their own shared crop box and don't
+need the same push, unchanged reasoning, just data-driven now.
+
+**DevTool schema (`server.mjs`)** picked up the same three fields as
+plain numbers on the existing `hero-classes` content type, same as
+pets did for their own fields -- editable by hand, but the real
+workflow is the new tab.
+
+**New "Hero Lab" tab**, next to Pet Lab, same "bespoke standalone tool"
+shape. One dropdown (hero class), an Idle/Moving pose toggle (same
+idle↔run/walk pairing Pet Lab's own reference-hero animator already
+uses), a live preview stage at the real default corner-companion height
+(120px, matching `IdleView.tsx`'s own `knightHeight` at the default
+sprite-size setting), and three sliders (scale 40-250%, X/Y offset -60
+to 60%) that restyle the sprite directly on `oninput`, same
+non-restarting-the-animation-loop approach `applyPetLabSpriteStyle`
+established. Deliberately a single sprite, not a pair -- a hero class's
+own correction isn't relative to anything else the way a pet's position
+is relative to its hero, so there's nothing to anchor a second sprite
+against. The Moving-pose preview intentionally does NOT show the offset
+correction, since the real game never applies it there either -- a
+Lab that faked the offset in a pose where it doesn't actually appear
+in-game would be actively misleading, not just incomplete. Save writes
+the whole `hero-classes.json` array back through the existing generic
+`POST /api/data/hero-classes` endpoint, fields omitted from the payload
+when left at their defaults, same convention Pet Lab's own save
+already follows.
+
+**No new art routes needed.** `/heroes-art/` already exists from patch
+0380 (Pet Lab's reference-hero preview used it first); Hero Lab reuses
+it directly, same gitignored/degrades-gracefully behaviour.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Ran the DevTool server directly:
+`/api/schema` reports the three new `hero-classes` fields, `/api/data/
+hero-classes` returns all 14 classes with gladiator/adventurer/wizard/
+dwarf/samurai carrying their seeded values and every other class
+carrying none, and the `/heroes-art/manifest.json` route correctly
+404s (no local art installed in this environment -- expected, `public/
+heroes` is gitignored). Round-trip tested the save path directly
+against the running server: POSTed a modified `hero-classes.json` with
+`displayScale`/`displayOffsetX`/`displayOffsetY` set on `knight`,
+confirmed the file persisted them and a fresh GET read them back
+correctly, then reverted that test write -- ships with `hero-classes.
+json` unchanged from its seeded state, same as every other patch's
+out-of-the-box state. No live in-app playtest in this environment (no
+browser available) -- worth a real-window pass to confirm the corner
+companion's on-screen sizing is pixel-identical to before this patch
+for every class (it should be, since the seeded values exactly match
+the old hardcoded tables) and that the new tab's slider behaviour feels
+as responsive as Pet Lab's.

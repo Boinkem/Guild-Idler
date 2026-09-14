@@ -965,6 +965,25 @@ export interface HeroClassDef {
    * destroy.
    */
   portrait?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+  /**
+   * Corner-companion display corrections -- same role PetDef's own
+   * displayScale/displayOffsetX/Y play for pets (see that field's own
+   * comment in types.ts), migrated here off HeroSprite.tsx's old
+   * hardcoded HERO_DISPLAY_SCALE/HERO_DISPLAY_OFFSET tables so they're
+   * tunable as data instead of a code change. `displayScale` applies to
+   * every pose; `displayOffsetX`/`displayOffsetY` apply to the idle pose
+   * only, same gating HERO_DISPLAY_OFFSET always had -- action animations
+   * already fill their own shared crop box and don't need the same push
+   * (see HeroSprite.tsx's own comment on why that gate exists). Editable
+   * as plain numbers in this form, but normally set from the Hero Sprite
+   * Lab tab instead (live animated preview, slider-driven) -- see
+   * selectHeroLabTab in tools/devtool/public/app.js. Omitted = 1/0/0, no
+   * correction, matching every class's actual behaviour before these
+   * fields existed.
+   */
+  displayScale?: number;
+  displayOffsetX?: number;
+  displayOffsetY?: number;
 }
 
 /**

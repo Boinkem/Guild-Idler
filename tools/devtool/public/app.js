@@ -106,6 +106,12 @@ async function init() {
   petLabBtn.onclick = () => selectPetLabTab();
   tabsEl.appendChild(petLabBtn);
 
+  const heroLabBtn = document.createElement('button');
+  heroLabBtn.innerHTML = '<i class="ph ph-person-simple-run"></i><span>Hero Lab</span>';
+  heroLabBtn.dataset.group = '__herolab__';
+  heroLabBtn.onclick = () => selectHeroLabTab();
+  tabsEl.appendChild(heroLabBtn);
+
   groupOrder.forEach((group) => {
     const btn = document.createElement('button');
     // Caret + label: the caret marks that this group opens a nested strip of
@@ -3351,6 +3357,270 @@ function renderPetLab() {
   bind('petLabSaveBtn', 'onclick', () => savePetLabDefaults());
 }
 
+
+/* -------------------------------- Hero Lab -------------------------------- */
+/* Same treatment as Pet Sprite Lab just above, for hero classes' own
+ * corner-companion sizing. Hero classes never had a per-species data field
+ * for this before -- HeroSprite.tsx carried two hardcoded TS tables
+ * (HERO_DISPLAY_SCALE/HERO_DISPLAY_OFFSET) instead of the pets' data-driven
+ * approach -- so this patch migrates those tables onto HeroClassDef
+ * (displayScale/displayOffsetX/displayOffsetY, hero-classes.json) the exact
+ * same way pets.json already carries theirs, and this tab is the new
+ * editor for it. Deliberately a SINGLE sprite, not a side-by-side pair --
+ * Pet Lab needs two sprites because it's tuning a pet's position RELATIVE
+ * to its hero; a hero class's own correction is about the hero alone, so
+ * there's nothing to pair it against here. */
+
+const HEROLAB_HEIGHT = 120; // matches IdleView.tsx's own knightHeight (120 * settings.spriteScale, default scale 1) -- a faithful preview of the real corner companion's default size, not an arbitrary reference size.
+const HEROLAB_FPS = { idle: 6, walk: 9, run: 12, hurt: 6, death: 8, defend: 8, jump: 10, attack_1: 11, attack_2: 11, attack_3: 11, throw: 11 }; // mirrors HeroSprite.tsx's own DEFAULT_FPS
+
+const heroLabState = {
+  heroClasses: [],
+  heroClassId: null,
+  pose: 'idle', // 'idle' | 'moving' -- same idle<->run/walk pairing Pet Lab's own reference hero already uses
+  heroManifest: null,
+  // Live-edited values for the selected class, seeded from its saved
+  // displayScale/displayOffsetX/Y on every class switch (see
+  // loadHeroLabDefaults) -- 1/0/0 for a class that's never been tuned.
+  scale: 1, offsetX: 0, offsetY: 0,
+  dirty: false, saving: false,
+};
+
+// Single frame-stepper -- Hero Lab only ever animates one sprite (unlike
+// Pet Lab's hero+pet pair), so this doesn't need petLabAnimators' keyed shape.
+let heroLabAnimator = null;
+
+async function selectHeroLabTab() {
+  state.kind = '__herolab__';
+  state.group = null;
+  markActiveGroup('__herolab__');
+  subtabsEl.style.display = 'none';
+  subtabsEl.innerHTML = '';
+  setStatus('Loading…');
+  try {
+    const [{ data: heroClasses }, heroManifest] = await Promise.all([
+      api('/api/data/hero-classes'),
+      fetchLabManifest('/heroes-art/manifest.json'),
+    ]);
+    heroLabState.heroClasses = heroClasses;
+    heroLabState.heroManifest = heroManifest;
+    if (!heroLabState.heroClassId || !heroClasses.some((h) => h.id === heroLabState.heroClassId)) {
+      heroLabState.heroClassId = heroClasses.find((h) => h.id === 'adventurer')?.id ?? heroClasses[0]?.id ?? null;
+    }
+    loadHeroLabDefaults();
+    setStatus('');
+    renderHeroLab();
+  } catch (err) {
+    setStatus(err.message, 'err');
+  }
+}
+
+function loadHeroLabDefaults() {
+  const def = heroLabState.heroClasses.find((h) => h.id === heroLabState.heroClassId);
+  heroLabState.scale = def?.displayScale ?? 1;
+  heroLabState.offsetX = def?.displayOffsetX ?? 0;
+  heroLabState.offsetY = def?.displayOffsetY ?? 0;
+  heroLabState.dirty = false;
+}
+
+function stopHeroLabAnimator() {
+  if (heroLabAnimator?.intervalId) clearInterval(heroLabAnimator.intervalId);
+  heroLabAnimator = null;
+}
+
+/** Same scale/backgroundSize/backgroundPosition formula HeroSprite.tsx
+ *  uses, split out from the interval tick so a scale/offset slider can
+ *  restyle the element without restarting (and visibly resetting) the
+ *  animation loop -- same reasoning as applyPetLabSpriteStyle. Offset is
+ *  only ever applied while previewing the Idle pose, matching HeroSprite.
+ *  tsx's own gate (resolveDisplayCorrection) exactly -- Moving
+ *  intentionally shows the sprite WITHOUT the offset correction, since
+ *  that's exactly what a player sees in-game, not a Lab-only shortcut. */
+function applyHeroLabSpriteStyle() {
+  const el = document.getElementById('heroLabSprite');
+  const a = heroLabAnimator;
+  if (!el || !a) return;
+  const scale = (HEROLAB_HEIGHT * heroLabState.scale) / a.frameH;
+  el.style.width = `${a.frameW * scale}px`;
+  el.style.height = `${a.frameH * scale}px`;
+  el.style.backgroundSize = `${a.frameW * a.frames * scale}px ${a.frameH * scale}px`;
+  el.style.backgroundPosition = `-${a.index * a.frameW * scale}px 0`;
+  el.style.transform = heroLabState.pose === 'idle'
+    ? `translate(${heroLabState.offsetX}%, ${heroLabState.offsetY}%)`
+    : '';
+}
+
+function startHeroLabAnimator(opts) {
+  stopHeroLabAnimator();
+  heroLabAnimator = { ...opts, index: 0 };
+  const el = document.getElementById('heroLabSprite');
+  if (el) { el.style.backgroundImage = `url(${opts.url})`; el.style.backgroundRepeat = 'no-repeat'; el.style.imageRendering = 'pixelated'; }
+  applyHeroLabSpriteStyle();
+  if (opts.frames > 1) {
+    heroLabAnimator.intervalId = setInterval(() => {
+      const a = heroLabAnimator;
+      if (!a) return;
+      a.index = (a.index + 1) % a.frames;
+      applyHeroLabSpriteStyle();
+    }, 1000 / opts.fps);
+  }
+}
+
+/** Re-reads the currently selected class/pose and (re)starts the animator
+ *  -- called on every dropdown/pose change, but NOT on scale/offset
+ *  slider input (see applyHeroLabSpriteStyle). Same run-then-walk
+ *  fallback for the Moving pose Pet Lab's own reference-hero animator
+ *  already uses. */
+function refreshHeroLabAnimator() {
+  const char = heroLabState.heroManifest?.[heroLabState.heroClassId];
+  const caption = document.getElementById('heroLabCaption');
+  if (char) {
+    const anim = heroLabState.pose === 'moving'
+      ? (char.animations.run ? 'run' : char.animations.walk ? 'walk' : 'idle')
+      : 'idle';
+    startHeroLabAnimator({
+      frameW: char.frameW, frameH: char.frameH,
+      frames: char.animations[anim] || 1,
+      fps: HEROLAB_FPS[anim] || 8,
+      url: `/heroes-art/${heroLabState.heroClassId}/original/${anim}.png`,
+    });
+    if (caption) caption.textContent = `${heroLabState.heroClassId} — ${anim}`;
+  } else {
+    stopHeroLabAnimator();
+    if (caption) caption.textContent = heroLabState.heroManifest === null
+      ? 'No hero art installed locally (public/heroes is gitignored)' : 'No art for this class';
+  }
+}
+
+async function saveHeroLabDefaults() {
+  const idx = heroLabState.heroClasses.findIndex((h) => h.id === heroLabState.heroClassId);
+  if (idx === -1) return;
+  // Omitted rather than written as 1/0/0 when untouched -- same
+  // "omitted means default" convention HeroClassDef's own doc comment
+  // commits to, and the same shape savePetLabDefaults already follows.
+  const updated = heroLabState.heroClasses.map((h, i) => {
+    if (i !== idx) return h;
+    const next = { ...h };
+    if (heroLabState.scale !== 1) next.displayScale = heroLabState.scale; else delete next.displayScale;
+    if (heroLabState.offsetX !== 0) next.displayOffsetX = heroLabState.offsetX; else delete next.displayOffsetX;
+    if (heroLabState.offsetY !== 0) next.displayOffsetY = heroLabState.offsetY; else delete next.displayOffsetY;
+    return next;
+  });
+  heroLabState.saving = true;
+  renderHeroLab();
+  setStatus('Saving…');
+  try {
+    const result = await api('/api/data/hero-classes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    heroLabState.heroClasses = updated;
+    heroLabState.dirty = false;
+    setStatus(`Saved (${result.count} entries).`, 'ok');
+  } catch (err) {
+    const detail = err.details ? '\n' + err.details.join('\n') : '';
+    setStatus('Save failed — see console.', 'err');
+    console.error(err.message + detail);
+    alert(`Could not save:\n\n${err.message}${detail}\n\nYour slider values were kept on screen; fix the issue and save again.`);
+  }
+  heroLabState.saving = false;
+  renderHeroLab();
+}
+
+function renderHeroLab() {
+  const selectedClass = heroLabState.heroClasses.find((h) => h.id === heroLabState.heroClassId);
+  appEl.innerHTML = `
+    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Hero Sprite Lab</h2>
+    <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
+      Preview a hero class at its real default corner-companion size, in both poses, then dial in a
+      per-class scale/position correction -- the same fix Pet Sprite Lab applies for pet species, now
+      data-driven here too instead of HeroSprite.tsx's old hardcoded HERO_DISPLAY_SCALE/OFFSET tables.
+      Saves straight to hero-classes.json. The offset only ever shows in the Idle pose, matching
+      exactly what the real corner companion does -- action animations already fill their own crop box
+      and never get the offset applied.
+    </p>
+
+    <div class="field-row" style="margin-bottom: 12px;">
+      <div class="field">
+        <label>Hero class</label>
+        <select id="heroLabClassSelect">
+          ${heroLabState.heroClasses.map((h) => `<option value="${escapeHtml(h.id)}" ${h.id === heroLabState.heroClassId ? 'selected' : ''}>${escapeHtml(h.name || h.id)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="row" style="gap: 8px; margin-bottom: 12px;">
+      <button id="heroLabPoseIdle" class="${heroLabState.pose === 'idle' ? 'primary' : ''}">Idle (at the guild)</button>
+      <button id="heroLabPoseMoving" class="${heroLabState.pose === 'moving' ? 'primary' : ''}">Moving (on a quest)</button>
+    </div>
+
+    <div id="heroLabStage" class="hero-lab-stage">
+      <div id="heroLabSprite" class="hero-lab-sprite"></div>
+    </div>
+    <div class="row" style="justify-content: flex-end; margin: 4px 0 16px;">
+      <span id="heroLabCaption" class="tiny muted"></span>
+    </div>
+
+    <div class="section-heading">Default scale &amp; position for ${selectedClass ? escapeHtml(selectedClass.name || selectedClass.id) : 'this class'}</div>
+    <div class="field-row" style="margin-bottom: 8px;">
+      <div class="field">
+        <label>Scale (${Math.round(heroLabState.scale * 100)}%)</label>
+        <input type="range" id="heroLabScaleSlider" min="40" max="250" step="1" value="${Math.round(heroLabState.scale * 100)}" />
+      </div>
+      <div class="field">
+        <label>Horizontal offset (${heroLabState.offsetX}%)</label>
+        <input type="range" id="heroLabOffsetXSlider" min="-60" max="60" step="1" value="${heroLabState.offsetX}" />
+      </div>
+      <div class="field">
+        <label>Vertical offset (${heroLabState.offsetY}%)</label>
+        <input type="range" id="heroLabOffsetYSlider" min="-60" max="60" step="1" value="${heroLabState.offsetY}" />
+        <div class="hint">Idle-only, same as in-game -- switch to Moving above to confirm this class's action poses still look right unshifted.</div>
+      </div>
+    </div>
+
+    <div class="row" style="gap: 8px;">
+      <button id="heroLabResetBtn">Reset to 1x, centred</button>
+      <button id="heroLabSaveBtn" class="primary" ${heroLabState.dirty ? '' : 'disabled'}>${heroLabState.saving ? 'Saving…' : 'Save default'}</button>
+    </div>
+  `;
+
+  refreshHeroLabAnimator();
+
+  const bind = (id, evt, fn) => { const el = document.getElementById(id); if (el) el[evt] = fn; };
+
+  bind('heroLabClassSelect', 'onchange', (e) => { heroLabState.heroClassId = e.target.value; loadHeroLabDefaults(); renderHeroLab(); });
+  bind('heroLabPoseIdle', 'onclick', () => { heroLabState.pose = 'idle'; renderHeroLab(); });
+  bind('heroLabPoseMoving', 'onclick', () => { heroLabState.pose = 'moving'; renderHeroLab(); });
+
+  bind('heroLabScaleSlider', 'oninput', (e) => {
+    heroLabState.scale = parseInt(e.target.value, 10) / 100;
+    heroLabState.dirty = true;
+    applyHeroLabSpriteStyle();
+    const label = e.target.previousElementSibling; if (label) label.textContent = `Scale (${e.target.value}%)`;
+    const saveBtn = document.getElementById('heroLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
+  });
+  bind('heroLabOffsetXSlider', 'oninput', (e) => {
+    heroLabState.offsetX = parseInt(e.target.value, 10);
+    heroLabState.dirty = true;
+    applyHeroLabSpriteStyle();
+    const label = e.target.previousElementSibling; if (label) label.textContent = `Horizontal offset (${e.target.value}%)`;
+    const saveBtn = document.getElementById('heroLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
+  });
+  bind('heroLabOffsetYSlider', 'oninput', (e) => {
+    heroLabState.offsetY = parseInt(e.target.value, 10);
+    heroLabState.dirty = true;
+    applyHeroLabSpriteStyle();
+    const label = e.target.previousElementSibling; if (label) label.textContent = `Vertical offset (${e.target.value}%)`;
+    const saveBtn = document.getElementById('heroLabSaveBtn'); if (saveBtn) saveBtn.disabled = false;
+  });
+
+  bind('heroLabResetBtn', 'onclick', () => {
+    heroLabState.scale = 1; heroLabState.offsetX = 0; heroLabState.offsetY = 0;
+    heroLabState.dirty = true;
+    renderHeroLab();
+  });
+  bind('heroLabSaveBtn', 'onclick', () => saveHeroLabDefaults());
+}
 
 
 async function selectSandboxTab() {

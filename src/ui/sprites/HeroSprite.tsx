@@ -56,19 +56,14 @@ const DEFAULT_FPS: Partial<Record<HeroAnimation, number>> = {
  * ~80%, samurai only ~62%. Rendering every class at the same target `height`
  * therefore made some visibly bigger than others despite identical code.
  *
- * This corrects the oversized ones down to match knight (the longest-tuned
- * reference). Undersized classes are deliberately left at 1 rather than
- * scaled up — inflating them risks overflowing the tiny companion window,
- * especially stacked with the user's own sprite-size setting.
- */
-const HERO_DISPLAY_SCALE: Partial<Record<HeroClass, number>> = {
-  gladiator: 0.83,
-  adventurer: 0.83,
-  wizard: 0.86,
-  dwarf: 0.92,
-};
-
-/**
+ * Used to be a hardcoded HERO_DISPLAY_SCALE table here; migrated to
+ * HeroClassDef.displayScale (hero-classes.json) so it's tunable as data
+ * instead of a code change -- same role PetDef.displayScale plays for
+ * pets. See resolveDisplayCorrection below for the actual lookup.
+ * Undersized classes are deliberately left at 1 rather than scaled up --
+ * inflating them risks overflowing the tiny companion window, especially
+ * stacked with the user's own sprite-size setting.
+ *
  * `content_box` in tools/import_characters.py fits one shared crop box
  * across ALL of a character's animations, on purpose, so switching between
  * idle/walk/attack doesn't resize or re-anchor the sprite mid-transition.
@@ -76,15 +71,23 @@ const HERO_DISPLAY_SCALE: Partial<Record<HeroClass, number>> = {
  * that reach further right and down than a resting stance does, so that
  * shared box is sized for the widest pose -- and idle, the calm one shown
  * on the desktop 90%+ of the time, ends up sitting in the upper-left
- * portion of a box built for a much bigger swing. A first pass at this
- * (7%, 5%) was too small to actually read as centered; this is a bigger,
- * eyeballed correction from the reported screenshot. Gated to the idle
- * pose specifically below, since action animations already fill the box
- * they defined and don't need the same push.
+ * portion of a box built for a much bigger swing. Used to be a hardcoded
+ * HERO_DISPLAY_OFFSET table here; migrated to HeroClassDef.displayOffsetX/
+ * displayOffsetY the same way. Still gated to the idle pose specifically
+ * (see resolveDisplayCorrection), since action animations already fill
+ * the box they defined and don't need the same push.
  */
-const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>> = {
-  samurai: { x: 16, y: 13 },
-};
+function resolveDisplayCorrection(heroClass: HeroClass, resolvedAnim: HeroAnimation): {
+  scale: number;
+  offset?: { x: number; y: number };
+} {
+  const def = DlcManager.heroClassDef(heroClass);
+  const scale = def?.displayScale ?? 1;
+  const offset = resolvedAnim === 'idle' && (def?.displayOffsetX || def?.displayOffsetY)
+    ? { x: def?.displayOffsetX ?? 0, y: def?.displayOffsetY ?? 0 }
+    : undefined;
+  return { scale, offset };
+}
 
 /**
  * Every class's `flip` prop assumes the same default facing direction in
@@ -268,9 +271,10 @@ export function HeroSprite({
     );
   }
 
-  const scale = (height / char.frameH) * (HERO_DISPLAY_SCALE[heroClass] ?? 1);
+  const correction = resolveDisplayCorrection(heroClass, resolved);
+  const scale = (height / char.frameH) * correction.scale;
   const url = `${char.basePath ?? './heroes'}/${heroClass}/${skin}/${resolved}.png`;
-  const offset = resolved === 'idle' ? HERO_DISPLAY_OFFSET[heroClass] : undefined;
+  const offset = correction.offset;
   // XOR, not OR/AND -- a reversed-facing class should flip exactly when a
   // normal class WOULDN'T, and vice versa, not simply flip more often.
   const effectiveFlip = HERO_REVERSED_FACING[heroClass] ? !flip : flip;

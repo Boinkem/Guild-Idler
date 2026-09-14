@@ -307,6 +307,20 @@ const SCHEMAS = {
         type: 'bannerImage', required: false, defaultFolder: 'hero-portraits',
         previewAspect: '1/1', previewSize: '~1024x1024px, transparent background',
       },
+      // Corner-companion display corrections -- same role pets' own
+      // displayScale/displayOffsetX/Y play (see that schema's own
+      // comment just below). Migrated off HeroSprite.tsx's old hardcoded
+      // HERO_DISPLAY_SCALE/OFFSET tables. Editable as plain numbers in
+      // this form, but normally set from the Hero Sprite Lab tab instead
+      // (single-sprite live animated preview, slider-driven) -- see
+      // selectHeroLabTab in app.js. Omitted = 1/0/0, no correction, same
+      // as before these fields existed. displayOffsetX/Y only visibly
+      // apply in the idle pose in-game (HeroSprite.tsx's own gate) -- the
+      // Hero Lab's Moving preview reflects that honestly rather than
+      // faking a correction the real game never applies there.
+      displayScale: { type: 'number', required: false },
+      displayOffsetX: { type: 'number', required: false },
+      displayOffsetY: { type: 'number', required: false },
     },
   },
   'recruit-costs': {
