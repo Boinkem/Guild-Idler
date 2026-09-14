@@ -31724,6 +31724,62 @@ none of them ship inside the game and none are player-facing.
 grep after the edit -- zero em dashes remain outside comments and
 non-shipping markdown.
 
+### Bug fix: egg-select window box re-measured for the new Hatchery art (patch 0390)
+```discord-update
+Dev Update | Bug Fix
+
+- New day/night art for the egg-selection screen
+- The clickable egg slot now lines up with it properly
+```
+
+Direct follow-up to patch 0389, which moved the egg-select modal's
+background onto the standard `panels/` + `panels/bright/` path but kept
+the old hand-measured `WINDOW_RECT` unchanged, on the assumption the art
+itself wasn't changing yet -- it has now. Player supplied a new day/night
+pair for `hatchery-select.jpg` (1402x1122, replacing the old
+1448x1086-canvas art), and the old rect no longer lines up: the new
+window sits larger and shifted lower/left of where the previous art
+placed it.
+
+**`EggSelectModal.tsx`:** `WINDOW_RECT` re-measured against the new art
+directly (flood-filled the dark inset region from a known interior point
+on both the day and night variant, confirmed they agree to within a
+pixel or two since it's the same layout under different lighting) --
+`{ left: 42.6, top: 37.3, width: 14.1, height: 19.2 }` ->
+`{ left: 40.5, top: 38.5, width: 18.7, height: 21.1 }`. Comment updated
+from the old 1448x1086 canvas note to the new 1402x1122 one.
+
+**`app.css`:** `.hatchery-select-scene`'s `aspect-ratio` updated from
+`1448 / 1086` to `1402 / 1122` to match the new art's actual canvas --
+now the same ratio the crafting scenes use, though kept as its own rule
+rather than merged into `.craft-scene` since the two aren't otherwise
+coupled. Comment updated to match.
+
+**Art placement (player-supplied, not committed -- `public/` art is
+never committed per this project's convention):**
+- `public/lore/panels/hatchery-select.jpg` -- dim/default (night scene)
+- `public/lore/panels/bright/hatchery-select.jpg` -- Bright mood (day scene)
+
+Both new images were supplied as `.png`; the code path (unchanged from
+patch 0389) still expects `.jpg` at those two filenames, matching every
+other background asset's convention in this codebase. Assumed the player
+will save/export them as `.jpg` at those exact names when dropping them
+in -- flag if `.png` is actually wanted instead, since that would need an
+extension change in `EggSelectModal.tsx` too.
+
+**Not done, out of scope for this pass:** did not touch the Hatchery
+tab's own full background (`hatchery.jpg`/`bright/hatchery.jpg`) --
+only the egg-select modal's art and slot box were reported as changed.
+
+**Verified:** `npx tsc --noEmit` passes clean against the live repo with
+this patch applied. Measured the new window box independently against
+both supplied images (day and night) and got matching results, so the
+rect isn't overfit to one lighting variant. No live in-app playtest in
+this environment (no browser, and the new art isn't committed yet) --
+worth a real-window pass once the two files land at the paths above to
+confirm the slot box now sits flush against the new window in both Dim
+and Bright mood.
+
 ### Feature: Hatchery backgrounds moved onto the standard panels/ art path (patch 0389)
 ```discord-update
 Dev Update | Feature

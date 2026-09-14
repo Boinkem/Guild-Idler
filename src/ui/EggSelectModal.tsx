@@ -7,12 +7,18 @@ import { EggIcon } from './EggIcon';
 
 /**
  * Percent-based rect for the single content window painted into
- * hatchery-select.jpg, hand-measured against that art's own 1448x1086
+ * hatchery-select.jpg, hand-measured against that art's own 1402x1122
  * canvas -- same reasoning as CraftingStation's SLOT_RECTS. Just the one
  * slot here (unlike Crafting's three), since choosing an egg is a single
  * step, not a multi-part assembly.
+ *
+ * Re-measured for the patch-0390 art refresh (new day/night pair, same
+ * 1402x1122 canvas as the crafting scenes -- see app.css's updated
+ * aspect-ratio comment). The window sits noticeably larger and slightly
+ * lower/left of where the old art placed it, so this replaces rather than
+ * nudges the previous values.
  */
-const WINDOW_RECT: Rect = { left: 42.6, top: 37.3, width: 14.1, height: 19.2 };
+const WINDOW_RECT: Rect = { left: 40.5, top: 38.5, width: 18.7, height: 21.1 };
 
 export function EggSelectModal({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
