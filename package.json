@@ -1,6 +1,6 @@
 {
   "name": "guildbound",
-  "version": "13.11.2",
+  "version": "13.11.1",
   "description": "A cozy desktop companion idle game. Send heroes on quests, manage your guild's vendors, and grow a fantasy guild that runs while you work.",
   "author": "Guildbound",
   "license": "MIT",
@@ -20,7 +20,7 @@
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "steamworks.js": "^0.4.0"
+    "steamworks.js": "file:./electron/steamworks-leaderboards"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
@@ -41,6 +41,9 @@
       "dist/**/*",
       "dist-electron/**/*",
       "build/icon.png"
+    ],
+    "asarUnpack": [
+      "node_modules/steamworks.js/**/*"
     ],
     "directories": {
       "output": "release"

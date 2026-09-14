@@ -21,6 +21,7 @@ import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
 import { GuildTitleManager } from './managers/GuildTitleManager';
+import { uploadGuildPowerScore } from './leaderboard';
 import { ACHIEVEMENT_BY_ID } from './data/achievements';
 import { BARD_TRACK_BY_ID } from './data/bard';
 import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
@@ -1213,6 +1214,13 @@ export class GameEngine {
   }
 
   saveNow() {
+    // Patch 0382 -- throttled internally (leaderboard.ts's own
+    // UPLOAD_THROTTLE_MS), so calling this unconditionally on every
+    // saveNow() is correct: the decision on whether THIS particular call
+    // actually reaches Steam lives entirely in that one function, not
+    // here. No-ops completely when Steam/the leaderboard bridge isn't
+    // available, same as every other Steam call in this codebase.
+    uploadGuildPowerScore(this.state);
     return SaveManager.save(this.adapter, this.state);
   }
 

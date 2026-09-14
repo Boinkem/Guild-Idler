@@ -7599,16 +7599,20 @@ pass (same caveat as the two entries above).
     still yours: mapping each of the 67 ids to a real Steam achievement
     in the partner backend, and **the 134 icon assets (locked + unlocked
     x 67)** -- the code change never touched that side of the work.
-  - **Steam leaderboards -- addon built and verified (patch 0379), one
-    real blocker left: a Windows build.** Custom-addon decision made
-    (patch 0363/0377); built as a fork of `steamworks.js` itself rather
-    than a separate module (avoids a real double-`SteamAPI_Init()` risk
-    -- see patch 0379's own writeup). Compiles clean, a genuine Linux
-    build exists and is confirmed wired to the real Steam API, full
-    fork + integration instructions handed over. Not wired into
-    `electron/main.ts` yet -- deliberately: doing so before a Windows
-    build exists would break achievements/DLC on Windows too, not just
-    leave leaderboards unavailable there.
+  - **Done (patch 0383): Steam leaderboards are live.** Both platform
+    builds exist now (Windows built and handed over directly), wired
+    into `electron/main.ts`/`leaderboard.ts`/`LeaderboardModal.tsx` for
+    real -- Global/Friends, real player names, throttled background
+    uploads off `saveNow()`. Two real packaging bugs found and fixed
+    along the way: electron-builder's automatic `.node` unpacking didn't
+    follow the `file:` dependency's symlink (fixed via explicit
+    `asarUnpack` + `.npmrc`'s `install-links=true`), and a stale
+    `package-lock.json` silently overrode the new local path until a
+    genuinely clean reinstall was tried. Still open: the
+    `GUILD_POWER` leaderboard itself needs creating for real in the
+    Steamworks Admin panel (or auto-creates on the first genuine
+    upload), and the actual live round trip has never run against a
+    real Steam client -- see patch 0378's manual-testing checklist.
 
 ---
 
@@ -31120,6 +31124,120 @@ mixed inventory (a raw Set piece, a procedural rare, a Heroic-tier
 dedicated drop, and a crafted Guildmade item) to confirm each now shows
 the right combination of base/rolled/enchant lines with nothing doubled
 or missing.
+
+### Steam leaderboards are actually live -- the custom addon from patch 0379 is wired in for real (patch 0383)
+```discord-update
+Dev Update | Leaderboards
+
+- Steam leaderboards are live -- Global and Friends, ranked by Guild Power, with real player names
+- Guild Power quietly uploads in the background as you play, keeping your best score
+- If Steam isn't available for any reason, the panel still works exactly as before -- just as a preview instead of a live leaderboard
+```
+
+The real integration patch 0379 explicitly held back -- both platform builds
+now exist (Windows built and handed over directly), so the fork is
+actually wired in rather than just sitting ready.
+
+**Vendored into `electron/steamworks-leaderboards/`, both platforms
+present.** `package.json`'s `steamworks.js` dependency now points at it
+via `file:./electron/steamworks-leaderboards` instead of the npm
+package -- same package NAME on purpose, so every existing
+`import * as steamworks from 'steamworks.js'` across the codebase needed
+zero changes. Achievements and DLC now run through this same fork too,
+not a second package -- exactly the point of building it this way
+instead of a separate addon (see patch 0379's own writeup on the real,
+documented double-`SteamAPI_Init()` risk that would have caused).
+
+**A real TypeScript error caught and fixed, not routed around.**
+`GuildPowerScope` (napi-rs's generated `const enum`) can't be referenced
+by value under this project's `isolatedModules` setting (`TS2748`) --
+fixed by passing the raw `0`/`1` discriminant through a `Parameters<>`
+type extraction instead of touching the enum's value namespace, which
+sidesteps the restriction (a type-level operation, not a value access)
+without needing to disable `isolatedModules` or change the generated
+`.d.ts`.
+
+**A second real packaging bug found and fixed while verifying, not
+assumed away:** `npm install`'s default behavior for a `file:`
+dependency is a symlink, not a copy -- and electron-builder's automatic
+`.node`-file unpacking (which patch 0364's own writeup confirmed working
+correctly for the plain npm package) silently failed to follow that
+symlink, leaving both platform `.node` files sealed inside `app.asar`
+instead of unpacked -- confirmed directly via `npx asar list`, not
+inferred. Two-part fix: an explicit `asarUnpack` entry in `package.json`
+naming the dependency, and a new `.npmrc` (`install-links=true`) so a
+plain `npm install` produces a real copy instead of a symlink in the
+first place -- re-verified after both changes: `npx asar list` no
+longer shows the `.node` files inside `app.asar`, and
+`app.asar.unpacked/node_modules/steamworks.js/dist/{linux64,win64}/`
+correctly contains both.
+
+**A third real bug, this one caught only because a truly clean
+reinstall was actually tried, not assumed safe:** an existing, stale
+`package-lock.json` (still carrying the old npm-registry resolution from
+back when `steamworks.js` was a plain dependency) silently overrode the
+new `file:` path in `package.json` -- `npm install` alone did NOT
+self-correct this mismatch. Only `rm -rf node_modules package-lock.json`
+followed by a fresh `npm install` forced npm to actually re-resolve
+against the local fork. Confirmed both the broken and fixed states
+directly (`node_modules/steamworks.js/client.d.ts` missing the
+`leaderboard` namespace entirely before the clean reinstall, present
+after) rather than assuming a lockfile delete would obviously fix it.
+
+**Player names resolved server-side, not left as raw SteamIDs.** Caught
+before shipping: `DownloadLeaderboardEntries` only returns a
+`CSteamID`, no display name. Added to the fork's own `leaderboard.rs`
+(not this repo) -- `Friends::get_friend(id).name()` correctly returns a
+real persona name even for a stranger, not just a Steam friend, because
+Steam specifically caches that info for every user a leaderboard
+download returns. Resolved once per entry, server-side in Rust, rather
+than needing a second round-trip per row from the renderer.
+
+**Upload cadence: piggybacked on `saveNow()`, throttled to once per 5
+minutes internally** -- `engine.ts`'s `saveNow()` fires very frequently
+(near enough every state-changing action across this codebase) to make
+an unconditional Steam call on every single one wasteful; the throttle
+lives inside `leaderboard.ts`'s own `uploadGuildPowerScore`, not at the
+call site, so `saveNow()` itself stays a single unconditional call and
+the "should THIS particular save actually reach Steam" decision lives in
+exactly one place. `forceUpdate: false` keeps the player's best score,
+matching the keep-the-best decision already recorded before the fork
+even existed to enforce it.
+
+**"Who's you" resolved via a new `steam:getLocalSteamId` handler** --
+uses the plain, already-existing `localplayer.getSteamId()` call
+(nothing new needed in the fork itself for this one), compared against
+each downloaded entry's `steamId64` in `leaderboard.ts`.
+
+**`LeaderboardModal.tsx` now genuinely async** -- `fetchLeaderboard`
+returns a real `Promise` (a live Steam round trip when available), so
+the component gained a plain `useState`/`useEffect` loading pattern,
+re-fetching on scope change. Falls back to the exact same "just your own
+row" preview as before whenever Steam can't answer (not running, this
+platform's build unavailable, or the call itself fails) -- indistinguishable
+from patch 0363's own placeholder except that it's now the real fallback
+path, not the only path; `LeaderboardModal` never needs its own
+error-state branch because of it.
+
+**Verified for real, matching every other Steam-integration patch's own
+bar:** `npx tsc --noEmit` (clean after the `isolatedModules` fix), `npx
+vite build` (confirmed `steamworks.js` still externalized correctly in
+`dist-electron/main.js`), a full `electron-builder --linux dir` package
+build, `npx asar list` confirming both `.node` files land in
+`app.asar.unpacked` (not sealed inside `app.asar`), and a real launch of
+that packaged binary under `xvfb-run` -- clean graceful-degradation
+output, no crash, identical shape to every prior verified launch this
+whole thread.
+
+**Not verified, explicitly:** the actual live Steam round trip (real
+upload, real download, a real persona name coming back) -- nothing in
+this sandbox has ever had a real Steam client, so this is the same
+standing gap patch 0378's manual-testing checklist already tracks,
+joined now by "the leaderboard actually populating with real entries"
+specifically. The `GUILD_POWER` leaderboard itself also still needs
+creating for real in the Steamworks Admin panel (or will auto-create on
+the very first genuine upload -- both work, Valve's own recommended
+default for a small fixed set of boards like this one).
 
 ### Feature: ordinary hand-authored loot (Set pieces, raidExclusive items) now scales with the level it drops at, additively on top of its authored base (patch 0382)
 ```discord-update

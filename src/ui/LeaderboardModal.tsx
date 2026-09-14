@@ -1,18 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useEngine } from './useEngine';
 import { formatNumber } from '../game/util';
-import { fetchLeaderboard, LEADERBOARD_READY, LeaderboardScope } from '../game/leaderboard';
+import { fetchLeaderboard, LEADERBOARD_READY, LeaderboardEntry, LeaderboardScope } from '../game/leaderboard';
 
 /**
- * Steam leaderboards UI shell -- patch 0363, direct request (a button
- * next to Guild Power on the Dashboard). Design locked in
- * guild-idler-status.md: Global + Friends, tracking Guild Power. No live
- * Steam connection exists yet (Steamworks SDK integration is still the
- * prerequisite -- see leaderboard.ts's own doc comment), so this renders
- * the real tab structure and the player's own row today, with a plain
- * "not live yet" notice rather than faking real rankings. Swapping in
- * DownloadLeaderboardEntries later only touches leaderboard.ts's
- * fetchLeaderboard() -- this component doesn't change.
+ * Steam leaderboards UI -- patch 0363's shell, patch 0382's real data.
+ * Design locked in guild-idler-status.md: Global + Friends, tracking
+ * Guild Power. `fetchLeaderboard` is async now (a real Steam round trip
+ * when available) -- loading/refetch-on-scope-change handled here with
+ * a plain useState/useEffect pair, same pattern any other async-data
+ * panel in this codebase already uses. Falls back to the same "just
+ * your own row" preview whenever Steam can't answer, indistinguishable
+ * from patch 0363's own placeholder except that it's now the real
+ * fallback path, not the only path.
  *
  * Same overlay/modal shape FundGuildModal already uses.
  */
@@ -20,8 +20,21 @@ export function LeaderboardModal({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
   const state = engine.state;
   const [scope, setScope] = useState<LeaderboardScope>('global');
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const entries = fetchLeaderboard(state, scope);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchLeaderboard(state, scope).then((result) => {
+      if (!cancelled) {
+        setEntries(result);
+        setLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope]);
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -55,12 +68,14 @@ export function LeaderboardModal({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="card" style={{ marginBottom: 0 }}>
-          {entries.length === 0 ? (
+          {loading ? (
+            <p className="tiny muted" style={{ margin: 0 }}>Loading...</p>
+          ) : entries.length === 0 ? (
             <p className="tiny muted" style={{ margin: 0 }}>No entries yet.</p>
           ) : (
             entries.map((entry) => (
               <div
-                key={entry.rank}
+                key={`${entry.rank}-${entry.name}`}
                 className="spread"
                 style={{ padding: '4px 0', color: entry.isYou ? 'var(--brass)' : undefined }}
               >

@@ -47,6 +47,21 @@ const api = {
    */
   isDlcOwned: (packId: string): Promise<boolean | null> => ipcRenderer.invoke('steam:isDlcOwned', packId),
   /**
+   * Guild Power leaderboard (patch 0382). `forceUpdate` false keeps the
+   * player's best score -- see leaderboard.ts's own clampForUpload/
+   * upload-cadence comments for the full reasoning already recorded
+   * there.
+   */
+  uploadGuildPowerScore: (score: number, forceUpdate: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('steam:uploadGuildPowerScore', score, forceUpdate),
+  downloadGuildPowerEntries: (
+    scope: 'global' | 'friends',
+    start: number,
+    end: number,
+  ): Promise<{ steamId64: string; name: string; globalRank: number; score: number }[] | null> =>
+    ipcRenderer.invoke('steam:downloadGuildPowerEntries', scope, start, end),
+  getLocalSteamId: (): Promise<string | null> => ipcRenderer.invoke('steam:getLocalSteamId'),
+  /**
    * The one main-to-renderer direction in this bridge -- everything else is
    * the renderer asking main to do something. This lets the tray's "Show
    * Guild Hall" item tell the already-running renderer to switch modes,

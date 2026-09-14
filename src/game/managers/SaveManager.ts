@@ -47,6 +47,14 @@ declare global {
        *  pack id has no registered App ID yet) -- see main.ts's own
        *  steam:isDlcOwned handler for the full contract. */
       isDlcOwned(packId: string): Promise<boolean | null>;
+      /** Patch 0382. See preload.ts's own comment for the exact contract. */
+      uploadGuildPowerScore(score: number, forceUpdate: boolean): Promise<boolean>;
+      downloadGuildPowerEntries(
+        scope: 'global' | 'friends',
+        start: number,
+        end: number,
+      ): Promise<{ steamId64: string; name: string; globalRank: number; score: number }[] | null>;
+      getLocalSteamId(): Promise<string | null>;
       /** Main-to-renderer only -- the tray's "Show Guild Hall" item. See
        *  preload.ts's own comment on this same method for the full reasoning. */
       onOpenGuildHall(callback: () => void): () => void;
