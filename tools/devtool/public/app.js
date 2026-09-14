@@ -2397,7 +2397,7 @@ init().catch((err) => setStatus(err.message, 'err'));
 const patchState = {
   files: [], gitStatus: null, selected: null, checked: false, applied: false,
   discordConfigured: false, discordPreview: '', discordDraft: '',
-  steam: { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'beta' },
+  steam: { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'internal' },
   // Patches tab now splits into two panes (patch 0331 redesign) -- Patch
   // flow (steps 1-5) and Build & Ship (steps 6-11), toggled by the two
   // nav buttons rendered in renderPatches. false = Patch flow shown,
@@ -2619,6 +2619,12 @@ function renderPatches() {
       once from a real terminal (it'll prompt for your password and Steam Guard code that one time).
       The Upload step below reuses that cached session.
     </p>
+    <p class="tiny muted">
+      One App ID and Depot ID cover all three Steam packages (Store, Beta Testing, Dev Comp) — they
+      all point at the same depot, just on different branches. Pick which branch this upload targets
+      below; there's no separate "create a branch" step in Steamworks — targeting a branch name here
+      that doesn't exist yet is what creates it, the first time you actually upload to it.
+    </p>
     <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
       <input type="text" id="steamUsernameInput" placeholder="Steam builder account username"
         value="${escapeHtml(patchState.steam.username)}"
@@ -2634,9 +2640,10 @@ function renderPatches() {
       <input type="text" id="steamContentBuilderInput" placeholder="Path to Steamworks SDK's ContentBuilder folder"
         value="${escapeHtml(patchState.steam.contentBuilderDir)}"
         style="flex: 2 1 320px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <select id="steamBranchInput" style="flex: 1 1 140px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;">
-        <option value="beta" ${patchState.steam.branch === 'beta' ? 'selected' : ''}>beta (safe default)</option>
-        <option value="default" ${patchState.steam.branch === 'default' ? 'selected' : ''}>default (live)</option>
+      <select id="steamBranchInput" style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;">
+        <option value="internal" ${patchState.steam.branch === 'internal' ? 'selected' : ''}>Dev Comp — internal (safe default)</option>
+        <option value="beta" ${patchState.steam.branch === 'beta' ? 'selected' : ''}>Beta Testing — beta</option>
+        <option value="default" ${patchState.steam.branch === 'default' ? 'selected' : ''}>Store — default (live)</option>
       </select>
       <button id="steamConfigSaveBtn">Save Steam config</button>
     </div>
@@ -2675,9 +2682,12 @@ function renderPatches() {
     <p class="tiny muted">
       Two separate steps on purpose: Generate writes VDF scripts only — no network call, safe to run
       repeatedly while you dial in the config above. Upload actually runs <code>steamcmd</code> against
-      whatever was last generated, targeting the branch selected above (defaults to <b>beta</b>, never
-      live, unless you changed it). Uses the newest installer in <code>release/</code> — run Package
-      (step 7) first if you haven't already for this batch.
+      whatever was last generated, targeting the branch selected above (defaults to <b>Dev Comp —
+      internal</b>, never Store/live, unless you changed it). Uses the newest installer in
+      <code>release/</code> — run Package (step 7) first if you haven't already for this batch.
+      Typical flow: upload to <b>internal</b> first and test it yourself, then once you're happy, use
+      Steamworks' own Builds page to set that exact same build live on <b>beta</b> for testers, then
+      later on <b>default</b> for the public release — no need to re-run Upload for each promotion.
     </p>
     <div class="row" style="gap:6px;">
       <button id="steamGenerateBtn">Generate build scripts</button>
@@ -2937,10 +2947,17 @@ function renderPatches() {
     document.getElementById('steamGenerateResult').innerHTML = resultBlock(result, 'Generate build scripts');
   };
 
+  // Friendly package label per branch, purely for the confirm dialog below
+  // -- makes it unmistakable which of the three Steam packages (Store,
+  // Beta Testing, Dev Comp) an upload is actually reaching, especially for
+  // "default", since that's the one that reaches every paying customer.
+  const STEAM_BRANCH_LABEL = { internal: 'Dev Comp (internal)', beta: 'Beta Testing (beta)', default: 'Store — LIVE (default)' };
+
   const steamUploadBtn = document.getElementById('steamUploadBtn');
   if (steamUploadBtn) steamUploadBtn.onclick = async () => {
-    const branch = patchState.steam.branch || 'beta';
-    if (!confirm(`Upload to Steam now, targeting the "${branch}" branch? This actually sends the build.`)) return;
+    const branch = patchState.steam.branch || 'internal';
+    const label = STEAM_BRANCH_LABEL[branch] || branch;
+    if (!confirm(`Upload to Steam now, targeting ${label}? This actually sends the build.`)) return;
     steamUploadBtn.disabled = true;
     steamUploadBtn.textContent = 'Uploading… (this can take a while)';
     const result = await api('/api/steam/upload', {

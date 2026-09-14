@@ -2613,10 +2613,17 @@ async function readSteamConfig() {
       appId: typeof parsed.appId === 'string' ? parsed.appId : '',
       depotId: typeof parsed.depotId === 'string' ? parsed.depotId : '',
       contentBuilderDir: typeof parsed.contentBuilderDir === 'string' ? parsed.contentBuilderDir : '',
-      branch: typeof parsed.branch === 'string' && parsed.branch ? parsed.branch : 'beta',
+      // Three real Steamworks branches share this one App ID/Depot ID (patch
+      // 0391): 'internal' (Dev Comp package, lowest trust -- upload here
+      // first), 'beta' (Beta Testing package, Release Override), 'default'
+      // (Store, public/live). 'internal' is now the safe fallback rather
+      // than 'beta' -- same "never live unless deliberately changed"
+      // reasoning as before, just one notch more cautious now that there's
+      // a lower tier to land on first.
+      branch: typeof parsed.branch === 'string' && parsed.branch ? parsed.branch : 'internal',
     };
   } catch {
-    return { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'beta' };
+    return { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'internal' };
   }
 }
 
@@ -2917,7 +2924,7 @@ const server = http.createServer(async (req, res) => {
       appId: typeof body.appId === 'string' ? body.appId.trim() : '',
       depotId: typeof body.depotId === 'string' ? body.depotId.trim() : '',
       contentBuilderDir: typeof body.contentBuilderDir === 'string' ? body.contentBuilderDir.trim() : '',
-      branch: typeof body.branch === 'string' && body.branch.trim() ? body.branch.trim() : 'beta',
+      branch: typeof body.branch === 'string' && body.branch.trim() ? body.branch.trim() : 'internal',
     };
     await writeSteamConfig(cfg);
     return json(res, 200, { ok: true, ...cfg });

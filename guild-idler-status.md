@@ -31859,3 +31859,83 @@ the old locations. No live in-app playtest in this environment (no
 browser available) -- worth a real-window pass once art lands at the
 new paths to confirm both the Hatchery tab-scene and the egg-select
 window render correctly in both Dim and Bright mood.
+
+### DevTool: Steam upload now targets all three real branches (patch 0391)
+```discord-update
+Dev Update | DevTool
+
+- The Steam upload tool now knows about all three real distribution channels (Dev Comp, Beta Testing, Store) instead of just two generic ones
+- Upload confirmation now spells out exactly which one you're about to hit
+```
+
+Direct follow-up to sorting out the account's actual Steamworks setup
+in conversation: GuildBound (App ID 5143490) has three real Packages
+-- Store (1781161), Beta Testing (1781160, Release Override type), and
+Developer Comp (1781159, Developer type) -- all three already sharing
+one Depot (5143491, confirmed "referenced by 3 package(s)" on the
+Manage Depots page). No builds had ever been uploaded, so no branches
+existed yet either; branches aren't pre-created in Steamworks, the
+first upload naming one is what creates it. Agreed a three-branch setup
+matching the three packages: `internal` (Dev Comp, upload here first),
+`beta` (Beta Testing, needs its package's Branch Override pointed at
+it once the branch exists), `default` (Store, public/live, always
+exists).
+
+**What changed vs. patch 0313's original two-option version.** App ID/
+Depot ID/username/ContentBuilder path all stay exactly as they were --
+one shared config, since all three branches sit under the same App ID
+and Depot. Only the branch picker changed:
+
+- **`server.mjs`:** `readSteamConfig()`'s fallback (both the parsed-but-
+  empty case and the JSON-parse-failure catch block) and the `POST /api/
+  steam/config` handler's fallback both moved from `'beta'` to
+  `'internal'` -- the safe starting point is now one notch more
+  cautious than before, since there's a lower tier to land on first.
+  No other backend logic changed: `generateSteamBuildScripts()`/
+  `runSteamUpload()` already just pass `cfg.branch` straight through to
+  the VDF/`steamcmd` call, so they work unmodified with any branch name,
+  including the two new ones.
+- **`app.js`:** the Step 7.5 branch `<select>` now lists all three named
+  targets (`internal` / `beta` / `default`) with their package name in
+  the label rather than a bare branch name, `patchState.steam`'s initial
+  default moved to `'internal'` to match, and a short new paragraph
+  explains that one App ID/Depot ID covers all three packages and that
+  targeting an unfamiliar branch name is *how* a branch gets created --
+  there's no separate "new branch" button in Steamworks, which was the
+  direct point of confusion that prompted this patch.
+- **Upload confirm dialog** now shows a friendly label
+  (`STEAM_BRANCH_LABEL`) instead of the raw branch string -- particularly
+  so hitting `default` reads as `"Store — LIVE (default)"` in the
+  confirm prompt, not just a bare word easy to click past.
+- **Step 10's description** updated to spell out the intended promotion
+  flow: upload to `internal` first and test it yourself, then use
+  Steamworks' own Builds page to set that exact same build live on
+  `beta` for testers and later `default` for the public -- no need to
+  re-run Upload for each promotion, since SteamPipe promotes an existing
+  Build across branches without re-uploading.
+
+**Steamworks-side admin, not code -- still needs doing by hand, tracked
+here since it's a direct dependency of this feature actually working:**
+- Package 1781160's Branch Override still needs pointing at `beta` --
+  can't be done until the `beta` branch exists, which happens the first
+  time an Upload actually targets it.
+- Package 1781159 (Developer Comp) needs Depot 5143491 confirmed
+  included on it directly (Steamworks' own Builds page warns about this
+  explicitly) -- Dev-type packages get automatic access to every branch,
+  but only for depots actually in the package.
+- Once `internal`/`beta` exist as real branches, set a branch password
+  on each from the Builds page -- private branch names are hidden from
+  players, but not access-controlled, until a password's set.
+
+**Not done, out of scope for this pass:** no automatic branch-promotion
+button (calling Steamworks' own "set live on branch" API for an
+existing Build) -- flagged as a possible follow-up, not asked for yet.
+No change to `runSteamUpload()`'s Steam Guard/missing-binary handling
+from patch 0313 -- unrelated to which branch is targeted.
+
+**Verified:** hand-traced every remaining `'beta'` string literal in
+both touched files -- none left assuming the old two-branch shape.
+No live run against a real `steamcmd`/Steamworks account in this
+environment (same limitation patch 0313 already noted) -- worth a real
+first upload targeting `internal` to confirm the branch actually gets
+created as expected before relying on this for anything real.
