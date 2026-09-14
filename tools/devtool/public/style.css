@@ -760,6 +760,24 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .patch-result.good { border-left-color: var(--good); }
 .patch-result.bad { border-left-color: var(--bad); }
 .patch-result-label { font-weight: 500; margin-bottom: 4px; color: var(--text-bright); }
+
+/* Patch 0393 -- direct request: a plain-language "how does this whole
+   thing work" reference, living right where the Steam steps themselves
+   are, rather than only in DEVTOOL.md (easy to forget exists mid-task).
+   Same border-left-accent language .patch-result already established
+   for "this is supplementary, not a primary action" content -- kept
+   visually distinct from .patch-result itself (which reports the
+   outcome of something that just ran) via its own brass accent rather
+   than reusing .good/.bad, since this box never reports success/failure
+   of anything. */
+.devtool-note {
+  margin: 8px 0 12px; border-left: 3px solid var(--brass);
+  background: var(--panel); border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 8px 12px; font-size: 11px; line-height: 1.5;
+}
+.devtool-note b { color: var(--text-bright); }
+.devtool-note ol, .devtool-note ul { margin: 4px 0 4px 18px; padding: 0; }
+.devtool-note li { margin-bottom: 3px; }
 .patch-result pre {
   max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
   background: var(--bg); border: 1px solid var(--panel3); border-radius: var(--radius);

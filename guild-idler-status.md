@@ -32048,3 +32048,76 @@ environment (no browser available) -- worth a real-window pass once the
 new table art lands at the two paths above to confirm both Dim and
 Bright read correctly across all three Grimsby modals, and that
 Grimsby's tab now visually matches the brightness of every other tab.
+
+### Bug fix / Feature: Hatchery subtitle plaque contrast, Steam publishing reference added to DevTool (patch 0393)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the Hatchery subtitle still being unreadable against dark background art
+- Added a full step-by-step Steam publishing guide right inside the DevTool
+```
+
+Two direct reports: patch 0392's Hatchery claim turned out to be wrong
+(re-reported with a fresh screenshot -- the subtitle plaque was still
+invisible), and a request for an in-tool reference explaining how the
+DevTool's Steam publishing flow actually works end to end.
+
+**Hatchery subtitle plaque, corrected (`app.css`).** Patch 0392 claimed
+this was already fixed by patch 0389's `.tab-scene`/`.tab-scene-content`
+rework -- wrong call. Re-checked against the actual rule this time
+instead of assuming: `.panel .subtitle` (patch 0321) only ever needs a
+`.panel` ancestor and the `.subtitle` class, regardless of whether
+`.tab-scene-content` sits in between -- patch 0389's wrapper change was
+real but never the thing gating this plaque's background in the first
+place, so it couldn't have fixed this even in principle. The actual bug:
+patch 0321's plaque was a 55%-opacity mix of `--night` (itself a
+near-black oklch value), tuned and screenshot-checked only against
+BRIGHT/busy art -- that comment's own named worst case was "a light
+wood/foliage background." Against Hatchery's dark stone-wall art, 55%
+of near-black over already-near-black reads as no box at all, not a
+faint one. Bumped to 78% opacity (matching the escalation
+`.peddler-facts-grid` already needed, at 70%) and added a real 1px
+`var(--edge)` border, so the plaque has a hard edge that doesn't depend
+on a fill-color contrast that can vanish depending on the art
+underneath. Global rule, so all 17 panels sharing it get the same
+sturdier plaque, not just Hatchery.
+
+**Steam publishing reference (`tools/devtool/public/app.js`,
+`tools/devtool/public/style.css`).** Direct request: a plain-language,
+step-by-step "how does this actually work" explanation, living right
+next to the Steam controls themselves rather than only in DEVTOOL.md
+(easy to forget exists mid-task, and DEVTOOL.md predates the three-
+branch setup from patch 0391 regardless). New `.devtool-note` box
+(brass-accented `border-left`, same visual language `.patch-result`
+already established for "supplementary, not a primary action" content,
+kept visually distinct from it since this box never reports a
+success/failure the way `.patch-result` does) sits directly above the
+"7.5. Configure Steam upload" section heading and walks through, in
+order: the one-time `steamcmd +login` outside this tool, filling in
+config, running Package first, what Generate vs. Upload each actually
+do, and that promotion across branches happens on Steamworks' own site,
+not a button in this tool. Also notes the Steam Guard re-login fix for
+when Upload comes back complaining about it (`runSteamUpload`'s own
+existing error message, just surfaced here too rather than only at the
+point of failure).
+
+**Not done, out of scope for this pass:** DEVTOOL.md itself wasn't
+updated to mirror this -- the new in-tool box is meant to be the primary
+reference going forward (seen exactly when it's needed), not a second
+copy to keep in sync by hand; worth reconciling DEVTOOL.md's own Steam
+section against it later if it drifts. The pre-existing "8 → 10" section
+numbering gap (no "9" anywhere in the ship flow) was noticed but not
+touched -- unrelated to either report, and renumbering everything below
+it wasn't asked for.
+
+**Verified:** hand-checked the `color-mix()` percentage math (78% of
+`--night` against the existing 55% baseline) and confirmed `--edge` is
+already defined at `:root` (used identically by `.peddler-facts-grid`).
+Confirmed `.devtool-note`'s CSS variables (`--brass`, `--text-bright`,
+`--good`, `--bad`) all already exist in `tools/devtool/public/style.css`'s
+own `:root`, a separate variable namespace from the main game's
+`app.css`. No live in-app playtest in this environment (no browser
+available) -- worth a real-window pass on Hatchery specifically (the
+reported tab) to confirm the plaque is now clearly visible, and a look
+at the DevTool's Ship tab to confirm the new reference box reads well
+alongside the existing Steam config fields.

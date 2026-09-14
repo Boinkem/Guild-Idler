@@ -2613,6 +2613,35 @@ function renderPatches() {
     <div id="copyBuildResult"></div>
 
     <div class="section-heading" style="margin-top:18px;">7.5. Configure Steam upload</div>
+    <div class="devtool-note">
+      <b>How Steam publishing works here, step by step:</b>
+      <ol>
+        <li><b>One-time setup, outside this tool:</b> install the Steamworks SDK, and from a real
+          terminal run <code>steamcmd +login &lt;your username&gt;</code> once. It'll prompt for your
+          password and a Steam Guard code, then caches that login on this machine — nothing below
+          asks for a password because of this.</li>
+        <li><b>Fill in the config below</b> (App ID, Depot ID, the SDK's <code>ContentBuilder</code>
+          folder, and which branch this upload targets) and hit <b>Save Steam config</b>. One App
+          ID/Depot ID covers all three real branches — <b>internal</b> (Dev Comp), <b>beta</b> (Beta
+          Testing), <b>default</b> (Store/live) — you're just picking which one THIS upload goes to.</li>
+        <li><b>Step 7, Package</b> (above) first, if you haven't already for this batch — Generate/
+          Upload below both work off the newest installer already sitting in <code>release/</code>.</li>
+        <li><b>Generate build scripts</b> (step 10, below) writes the VDF files SteamPipe reads. Pure
+          file-write, no network call — safe to click as many times as you want while dialing in
+          config above.</li>
+        <li><b>Upload to Steam</b> (step 10, below) is the one that actually talks to Steam — it runs
+          <code>steamcmd</code> against whatever Generate last wrote, targeting the branch selected
+          above. This can take a while for a full depot; the button stays disabled and says
+          "Uploading…" until it returns.</li>
+        <li><b>Promote on Steamworks' own site, not here.</b> This tool never auto-promotes a build
+          across branches. Typical flow: upload to <b>internal</b> and test it yourself first, then
+          once happy, use Steamworks' Builds page to set that exact same build live on <b>beta</b> for
+          testers, then later on <b>default</b> for the public — no need to re-run Upload for each
+          promotion, SteamPipe promotes an existing build without re-uploading.</li>
+      </ol>
+      If Upload comes back complaining about a Steam Guard prompt, your cached login from step 1 has
+      expired — re-run <code>steamcmd +login &lt;username&gt;</code> from a terminal and try again.
+    </div>
     <p class="tiny muted">
       Saved locally (<code>tools/devtool/steam.config.json</code>, gitignored). No password is stored
       here — <code>steamcmd</code> caches your login after you run <code>steamcmd +login &lt;username&gt;</code>

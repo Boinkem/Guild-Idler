@@ -1947,6 +1947,20 @@ button:focus-visible, [tabindex]:focus-visible {
  * already uses, rather than a full-width strip. h2 itself is
  * untouched -- it already reads fine in every report screenshot, this
  * was specifically the subtitle line under it.
+ *
+ * Patch 0393, direct report + screenshot (Hatchery specifically): the
+ * plaque above was still reading as fully invisible against a dark
+ * stone-wall background -- the reports 0321 was tuned against were all
+ * BRIGHT/busy art (the worst case named in that comment is "a light
+ * wood/foliage background"), so a 55%-opacity mix of --night (itself a
+ * near-black oklch value) was never actually checked against art that's
+ * already dark to begin with. 55% of near-black over near-black reads
+ * as no box at all, not a faint one. Bumped to 78% (same escalation
+ * .peddler-facts-grid already needed, at 70%, for its own always-legible
+ * requirement) and given a real 1px border (var(--edge), same token
+ * .peddler-facts-grid uses) so the plaque has a hard edge instead of
+ * relying purely on a fill-color contrast that can vanish depending on
+ * the art underneath.
  */
 .panel .subtitle {
   color: var(--muted);
@@ -1956,7 +1970,8 @@ button:focus-visible, [tabindex]:focus-visible {
   display: inline-block;
   padding: 4px 10px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--night) 55%, transparent);
+  border: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--night) 78%, transparent);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 

@@ -1,0 +1,185 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 2561154..118036d 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -32048,3 +32048,76 @@ environment (no browser available) -- worth a real-window pass once the
+ new table art lands at the two paths above to confirm both Dim and
+ Bright read correctly across all three Grimsby modals, and that
+ Grimsby's tab now visually matches the brightness of every other tab.
++
++### Bug fix / Feature: Hatchery subtitle plaque contrast, Steam publishing reference added to DevTool (patch 0393)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed the Hatchery subtitle still being unreadable against dark background art
++- Added a full step-by-step Steam publishing guide right inside the DevTool
++```
++
++Two direct reports: patch 0392's Hatchery claim turned out to be wrong
++(re-reported with a fresh screenshot -- the subtitle plaque was still
++invisible), and a request for an in-tool reference explaining how the
++DevTool's Steam publishing flow actually works end to end.
++
++**Hatchery subtitle plaque, corrected (`app.css`).** Patch 0392 claimed
++this was already fixed by patch 0389's `.tab-scene`/`.tab-scene-content`
++rework -- wrong call. Re-checked against the actual rule this time
++instead of assuming: `.panel .subtitle` (patch 0321) only ever needs a
++`.panel` ancestor and the `.subtitle` class, regardless of whether
++`.tab-scene-content` sits in between -- patch 0389's wrapper change was
++real but never the thing gating this plaque's background in the first
++place, so it couldn't have fixed this even in principle. The actual bug:
++patch 0321's plaque was a 55%-opacity mix of `--night` (itself a
++near-black oklch value), tuned and screenshot-checked only against
++BRIGHT/busy art -- that comment's own named worst case was "a light
++wood/foliage background." Against Hatchery's dark stone-wall art, 55%
++of near-black over already-near-black reads as no box at all, not a
++faint one. Bumped to 78% opacity (matching the escalation
++`.peddler-facts-grid` already needed, at 70%) and added a real 1px
++`var(--edge)` border, so the plaque has a hard edge that doesn't depend
++on a fill-color contrast that can vanish depending on the art
++underneath. Global rule, so all 17 panels sharing it get the same
++sturdier plaque, not just Hatchery.
++
++**Steam publishing reference (`tools/devtool/public/app.js`,
++`tools/devtool/public/style.css`).** Direct request: a plain-language,
++step-by-step "how does this actually work" explanation, living right
++next to the Steam controls themselves rather than only in DEVTOOL.md
++(easy to forget exists mid-task, and DEVTOOL.md predates the three-
++branch setup from patch 0391 regardless). New `.devtool-note` box
++(brass-accented `border-left`, same visual language `.patch-result`
++already established for "supplementary, not a primary action" content,
++kept visually distinct from it since this box never reports a
++success/failure the way `.patch-result` does) sits directly above the
++"7.5. Configure Steam upload" section heading and walks through, in
++order: the one-time `steamcmd +login` outside this tool, filling in
++config, running Package first, what Generate vs. Upload each actually
++do, and that promotion across branches happens on Steamworks' own site,
++not a button in this tool. Also notes the Steam Guard re-login fix for
++when Upload comes back complaining about it (`runSteamUpload`'s own
++existing error message, just surfaced here too rather than only at the
++point of failure).
++
++**Not done, out of scope for this pass:** DEVTOOL.md itself wasn't
++updated to mirror this -- the new in-tool box is meant to be the primary
++reference going forward (seen exactly when it's needed), not a second
++copy to keep in sync by hand; worth reconciling DEVTOOL.md's own Steam
++section against it later if it drifts. The pre-existing "8 → 10" section
++numbering gap (no "9" anywhere in the ship flow) was noticed but not
++touched -- unrelated to either report, and renumbering everything below
++it wasn't asked for.
++
++**Verified:** hand-checked the `color-mix()` percentage math (78% of
++`--night` against the existing 55% baseline) and confirmed `--edge` is
++already defined at `:root` (used identically by `.peddler-facts-grid`).
++Confirmed `.devtool-note`'s CSS variables (`--brass`, `--text-bright`,
++`--good`, `--bad`) all already exist in `tools/devtool/public/style.css`'s
++own `:root`, a separate variable namespace from the main game's
++`app.css`. No live in-app playtest in this environment (no browser
++available) -- worth a real-window pass on Hatchery specifically (the
++reported tab) to confirm the plaque is now clearly visible, and a look
++at the DevTool's Ship tab to confirm the new reference box reads well
++alongside the existing Steam config fields.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index abd74eb..fcfccf5 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1947,6 +1947,20 @@ button:focus-visible, [tabindex]:focus-visible {
+  * already uses, rather than a full-width strip. h2 itself is
+  * untouched -- it already reads fine in every report screenshot, this
+  * was specifically the subtitle line under it.
++ *
++ * Patch 0393, direct report + screenshot (Hatchery specifically): the
++ * plaque above was still reading as fully invisible against a dark
++ * stone-wall background -- the reports 0321 was tuned against were all
++ * BRIGHT/busy art (the worst case named in that comment is "a light
++ * wood/foliage background"), so a 55%-opacity mix of --night (itself a
++ * near-black oklch value) was never actually checked against art that's
++ * already dark to begin with. 55% of near-black over near-black reads
++ * as no box at all, not a faint one. Bumped to 78% (same escalation
++ * .peddler-facts-grid already needed, at 70%, for its own always-legible
++ * requirement) and given a real 1px border (var(--edge), same token
++ * .peddler-facts-grid uses) so the plaque has a hard edge instead of
++ * relying purely on a fill-color contrast that can vanish depending on
++ * the art underneath.
+  */
+ .panel .subtitle {
+   color: var(--muted);
+@@ -1956,7 +1970,8 @@ button:focus-visible, [tabindex]:focus-visible {
+   display: inline-block;
+   padding: 4px 10px;
+   border-radius: 4px;
+-  background: color-mix(in srgb, var(--night) 55%, transparent);
++  border: 1px solid var(--edge);
++  background: color-mix(in srgb, var(--night) 78%, transparent);
+   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+ }
+ 
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 820ce7f..732582c 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -2613,6 +2613,35 @@ function renderPatches() {
+     <div id="copyBuildResult"></div>
+ 
+     <div class="section-heading" style="margin-top:18px;">7.5. Configure Steam upload</div>
++    <div class="devtool-note">
++      <b>How Steam publishing works here, step by step:</b>
++      <ol>
++        <li><b>One-time setup, outside this tool:</b> install the Steamworks SDK, and from a real
++          terminal run <code>steamcmd +login &lt;your username&gt;</code> once. It'll prompt for your
++          password and a Steam Guard code, then caches that login on this machine — nothing below
++          asks for a password because of this.</li>
++        <li><b>Fill in the config below</b> (App ID, Depot ID, the SDK's <code>ContentBuilder</code>
++          folder, and which branch this upload targets) and hit <b>Save Steam config</b>. One App
++          ID/Depot ID covers all three real branches — <b>internal</b> (Dev Comp), <b>beta</b> (Beta
++          Testing), <b>default</b> (Store/live) — you're just picking which one THIS upload goes to.</li>
++        <li><b>Step 7, Package</b> (above) first, if you haven't already for this batch — Generate/
++          Upload below both work off the newest installer already sitting in <code>release/</code>.</li>
++        <li><b>Generate build scripts</b> (step 10, below) writes the VDF files SteamPipe reads. Pure
++          file-write, no network call — safe to click as many times as you want while dialing in
++          config above.</li>
++        <li><b>Upload to Steam</b> (step 10, below) is the one that actually talks to Steam — it runs
++          <code>steamcmd</code> against whatever Generate last wrote, targeting the branch selected
++          above. This can take a while for a full depot; the button stays disabled and says
++          "Uploading…" until it returns.</li>
++        <li><b>Promote on Steamworks' own site, not here.</b> This tool never auto-promotes a build
++          across branches. Typical flow: upload to <b>internal</b> and test it yourself first, then
++          once happy, use Steamworks' Builds page to set that exact same build live on <b>beta</b> for
++          testers, then later on <b>default</b> for the public — no need to re-run Upload for each
++          promotion, SteamPipe promotes an existing build without re-uploading.</li>
++      </ol>
++      If Upload comes back complaining about a Steam Guard prompt, your cached login from step 1 has
++      expired — re-run <code>steamcmd +login &lt;username&gt;</code> from a terminal and try again.
++    </div>
+     <p class="tiny muted">
+       Saved locally (<code>tools/devtool/steam.config.json</code>, gitignored). No password is stored
+       here — <code>steamcmd</code> caches your login after you run <code>steamcmd +login &lt;username&gt;</code>
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index ae6b4b9..af087df 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -760,6 +760,24 @@ td.icon-cell { width: 1%; padding-right: 0; }
+ .patch-result.good { border-left-color: var(--good); }
+ .patch-result.bad { border-left-color: var(--bad); }
+ .patch-result-label { font-weight: 500; margin-bottom: 4px; color: var(--text-bright); }
++
++/* Patch 0393 -- direct request: a plain-language "how does this whole
++   thing work" reference, living right where the Steam steps themselves
++   are, rather than only in DEVTOOL.md (easy to forget exists mid-task).
++   Same border-left-accent language .patch-result already established
++   for "this is supplementary, not a primary action" content -- kept
++   visually distinct from .patch-result itself (which reports the
++   outcome of something that just ran) via its own brass accent rather
++   than reusing .good/.bad, since this box never reports success/failure
++   of anything. */
++.devtool-note {
++  margin: 8px 0 12px; border-left: 3px solid var(--brass);
++  background: var(--panel); border-radius: 0 var(--radius) var(--radius) 0;
++  padding: 8px 12px; font-size: 11px; line-height: 1.5;
++}
++.devtool-note b { color: var(--text-bright); }
++.devtool-note ol, .devtool-note ul { margin: 4px 0 4px 18px; padding: 0; }
++.devtool-note li { margin-bottom: 3px; }
+ .patch-result pre {
+   max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+   background: var(--bg); border: 1px solid var(--panel3); border-radius: var(--radius);
