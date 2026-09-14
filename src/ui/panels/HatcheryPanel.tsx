@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { PetManager } from '../../game/managers/PetManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { DlcManager } from '../../game/managers/DlcManager';
@@ -25,6 +27,7 @@ const BONUS_LABEL: Record<string, string> = {
 export function HatcheryPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const [subTab, setSubTab] = useState<SubTab>('home');
 
   // Consumes a pending sub-tab request (see HatchRevealModal's "Go to
@@ -46,7 +49,8 @@ export function HatcheryPanel() {
   }, [engine, subTab]);
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/hatchery.jpg', settings.backgroundMood)})` }}>
+      <div className="tab-scene-content">
       <h2>Hatchery</h2>
       <p className="subtitle">
         Eggs incubate as your heroes earn xp anywhere in the guild. Once hatched, a pet can be equipped to
@@ -69,7 +73,8 @@ export function HatcheryPanel() {
       </div>
 
       {subTab === 'home' ? <NestsTab /> : <PetsTab />}
-    </>
+      </div>
+    </div>
   );
 }
 

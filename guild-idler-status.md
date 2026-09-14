@@ -31723,3 +31723,83 @@ none of them ship inside the game and none are player-facing.
 **Verified:** `npx tsc --noEmit` passes clean. Re-ran the same audit
 grep after the edit -- zero em dashes remain outside comments and
 non-shipping markdown.
+
+### Feature: Hatchery backgrounds moved onto the standard panels/ art path (patch 0389)
+```discord-update
+Dev Update | Feature
+
+- Hatchery now has its own full background scene, same as every other guild tab
+- The egg-selection window also moved onto that same standard art path
+```
+
+Direct report: the Hatchery tab's background art wasn't living in the
+same place every other tab's does, and the player wants it moved to
+match -- `public/lore/panels/` (+ `public/lore/panels/bright/` for the
+Bright mood variant), the same structure Heroes, Quests, Inventory,
+Training, Prestige, Guild Hall, Dashboard, Lore/Guide, and Settings all
+already use.
+
+**What Hatchery actually had before this patch.** No `.tab-scene`
+background of its own at all -- `HatcheryPanel.tsx` never called
+`backgroundSrc()`. What looked like its background was the shared,
+faint 35%-opacity ambient layer `MenuWindow.tsx` paints behind the
+whole menu shell, sourced from a one-off `./lore/hatchery-bg.jpg`
+(shared with Peddler), plus a second, separately hardcoded image for
+the egg-select modal, `./lore/hatchery-select-bg.jpg` -- both living
+directly under `lore/`, neither following the `panels/` + `panels/
+bright/` convention, and the modal one wasn't even mood-aware (no
+`backgroundSrc()` call at all, so Bright mode never touched it).
+
+**`HatcheryPanel.tsx`:** now wraps its return in the same `.tab-scene`/
+`.tab-scene-content` shape every other panel uses, reading
+`backgroundSrc('./lore/panels/hatchery.jpg', settings.backgroundMood)`
+-- a real full-strength background, not the shared ambient fallback.
+Needed its own `useSettings()` call and the `backgroundSrc` import,
+neither of which this file had before.
+
+**`EggSelectModal.tsx`:** its hand-measured `WINDOW_RECT` percent-box
+(same mechanism as `CraftingStation.tsx`'s `SLOT_RECTS`) still lines up
+identically -- only the image path changed, from the old hardcoded
+`./lore/hatchery-select-bg.jpg` to `backgroundSrc('./lore/panels/
+hatchery-select.jpg', settings.backgroundMood)`, now mood-aware like
+every other scene in the game. `app.css`'s `.hatchery-select-scene`
+comment updated to match the new path; the CSS rule itself
+(aspect-ratio, sizing) is unchanged since the art's own canvas
+dimensions haven't changed.
+
+**`MenuWindow.tsx`:** Hatchery dropped out of the shared ambient-
+backdrop branch, the same move Raids made earlier for the same reason
+(see that entry) -- the ternary now only special-cases `'peddler'`;
+every other tab, Hatchery included, falls through to the normal Guild
+Hall ambient backdrop underneath its own full-strength `.tab-scene`,
+exactly like Heroes, Quests, Training, etc. already did. The old
+`./lore/hatchery-bg.jpg` file is left on disk, unreferenced, same
+"orphaned rather than pruned" treatment `./lore/guild-hall-bg.jpg`
+already gets a few lines below it.
+
+**Where the art actually needs to live now (nothing shipped/committed,
+per usual for `public/`):**
+- `public/lore/panels/hatchery.jpg` -- Hatchery tab, dim/default
+- `public/lore/panels/bright/hatchery.jpg` -- Hatchery tab, Bright mood
+- `public/lore/panels/hatchery-select.jpg` -- egg-select modal, dim/default
+- `public/lore/panels/bright/hatchery-select.jpg` -- egg-select modal, Bright mood
+
+Same safe-fallback behaviour every other panel already relies on: a
+missing file just paints nothing, so this ships fine before the art
+lands, and Bright mode quietly falls back to the dim image until its
+own `bright/` counterpart is added -- no special-case code needed
+either way.
+
+**Not done, out of scope for this pass:** no new art was generated or
+committed here (`public/` art is never committed, per the project's
+own convention -- see `guild-idler-project-brief.md`). This patch only
+moves where the code looks; dropping real files at the four paths
+above is still a separate step.
+
+**Verified:** hand-traced every remaining reference to the old
+`hatchery-bg.jpg`/`hatchery-select-bg.jpg` paths (`MenuWindow.tsx`,
+`EggSelectModal.tsx`, `app.css`'s own comment) -- none left pointing at
+the old locations. No live in-app playtest in this environment (no
+browser available) -- worth a real-window pass once art lands at the
+new paths to confirm both the Hatchery tab-scene and the egg-select
+window render correctly in both Dim and Bright mood.

@@ -4413,10 +4413,10 @@ button.harvest-item:hover {
 }
 
 /* Same exact shape as .craft-scene above -- own aspect-ratio since
-   hatchery-select-bg.jpg's own canvas (1448x1086) isn't the same ratio as
-   the crafting scenes (1402x1122). Reuses SlotBox/PickerModal directly
-   from CraftingStation.tsx rather than duplicating that machinery for a
-   single-slot picker -- see EggSelectModal.tsx. */
+   lore/panels/hatchery-select.jpg's own canvas (1448x1086) isn't the same
+   ratio as the crafting scenes (1402x1122). Reuses SlotBox/PickerModal
+   directly from CraftingStation.tsx rather than duplicating that machinery
+   for a single-slot picker -- see EggSelectModal.tsx. */
 .hatchery-select-scene {
   position: relative;
   width: 100%;

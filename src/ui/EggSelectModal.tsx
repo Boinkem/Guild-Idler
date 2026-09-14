@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
+import { backgroundSrc } from '../game/settings';
 import { SlotBox, PickerModal, PickerOption, Rect } from './CraftingStation';
 import { EggIcon } from './EggIcon';
 
 /**
  * Percent-based rect for the single content window painted into
- * hatchery-select-bg.jpg, hand-measured against that art's own 1448x1086
+ * hatchery-select.jpg, hand-measured against that art's own 1448x1086
  * canvas -- same reasoning as CraftingStation's SLOT_RECTS. Just the one
  * slot here (unlike Crafting's three), since choosing an egg is a single
  * step, not a multi-part assembly.
@@ -15,6 +17,7 @@ const WINDOW_RECT: Rect = { left: 42.6, top: 37.3, width: 14.1, height: 19.2 };
 export function EggSelectModal({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const options: PickerOption[] = state.eggStorage.map((egg) => ({
@@ -37,7 +40,7 @@ export function EggSelectModal({ onClose }: { onClose: () => void }) {
           <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
 
-        <div className="hatchery-select-scene" style={{ backgroundImage: 'url(./lore/hatchery-select-bg.jpg)' }}>
+        <div className="hatchery-select-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/hatchery-select.jpg', settings.backgroundMood)})` }}>
           <SlotBox
             rect={WINDOW_RECT}
             filled={null}

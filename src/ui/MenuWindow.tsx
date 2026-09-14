@@ -417,17 +417,18 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         the panel content drawn on top. A missing file just paints nothing,
         so this is safe to ship before art lands -- same pattern as the Lore
         tab's per-chain card backgrounds. Now mood-aware (patch 0305) via
-        backgroundSrc(); Hatchery has no Bright counterpart yet, so it just
-        keeps showing its dim image in Bright mode until one's added --
-        same safe fallback, no special-case code needed.
+        backgroundSrc().
 
-        Raids dropped out of this list (direct report -- Raids was stuck
-        sharing this same faint 35%-opacity ambient layer with Hatchery/
-        Peddler, even though it already has its own dedicated first-class
-        raids-bg.jpg/bright pair; every other tab in the game gets its own
-        full-strength .tab-scene background, and Raids deserved the same
-        treatment rather than the fallback). RaidsPanel.tsx now carries
-        that background itself, same as any other panel. Peddler stays
+        Raids and Hatchery have both since dropped out of this list (same
+        report each time -- a tab stuck sharing this faint 35%-opacity
+        ambient layer with Peddler instead of getting its own full-strength
+        .tab-scene background like every other panel in the game). Raids
+        went first (RaidsPanel.tsx now carries its own raids-bg.jpg/bright
+        pair directly); Hatchery followed the same move, onto the standard
+        lore/panels/hatchery.jpg (+ lore/panels/bright/hatchery.jpg)
+        location every other tab already uses, rather than keeping its old
+        one-off lore/hatchery-bg.jpg path. That old file is left on disk,
+        unreferenced, same as lore/guild-hall-bg.jpg below. Peddler stays
         here for now -- its own tab uses fully custom .grimsby-* redesigned
         chrome (Claude Design handoff) rather than the standard .tab-scene/
         .tab-scene-content shape every other panel shares, so giving it the
@@ -435,14 +436,11 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         this patch's generic wrapper blind.
       */}
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', overflow: 'hidden' }}>
-        {tab === 'hatchery' || tab === 'peddler' ? (
+        {tab === 'peddler' ? (
           <div
             style={{
               position: 'absolute', inset: 0,
-              backgroundImage: `url(${backgroundSrc(
-                tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/peddler-bg.png',
-                settings.backgroundMood,
-              )})`,
+              backgroundImage: `url(${backgroundSrc('./lore/peddler-bg.png', settings.backgroundMood)})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
             }}
