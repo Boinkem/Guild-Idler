@@ -89,7 +89,7 @@ function NestsTab() {
 
   return (
     <>
-      <div className="spread" style={{ marginBottom: 10 }}>
+      <div className="spread" style={{ marginBottom: 6 }}>
         <p className="tiny muted" style={{ margin: 0 }}>
           {state.incubatingEggs.length}/{slots} nests filled. More come from the Nest Expansion upgrade
           in Guild Hall.
@@ -98,6 +98,21 @@ function NestsTab() {
           Storage ({state.eggStorage.length})
         </button>
       </div>
+      {/* Patch 0387, direct request: any "Guild Hall" mention that names a
+          specific upgrade gets a quick link + the same golden shimmer
+          treatment as RaidsPanel/VendorsPanel/HeroesPanel's own locked-
+          requirement links, rather than leaving the player to go find
+          Nest Expansion among every facility card by hand. Unconditional
+          (not gated on nests actually being full) since the prose above
+          it is unconditional too -- this is "here's where more capacity
+          comes from," not a blocked-purchase message. */}
+      <button
+        className="btn-ghost"
+        style={{ marginBottom: 10, fontSize: '0.6875rem' }}
+        onClick={() => engine.requestTab('guild', 'nest_expansion')}
+      >
+        Go to Guild Hall →
+      </button>
 
       <div className="grid two">
         {nestSlots.map((egg, i) => (egg
@@ -183,10 +198,20 @@ function PetsTab() {
 
   return (
     <>
-      <p className="tiny muted" style={{ marginBottom: 10 }}>
+      <p className="tiny muted" style={{ marginBottom: 6 }}>
         {state.heroes.filter((h) => h.equippedPetId).length}/{petSlots} companion slots filled. Pair a pet with a
         hero below -- more slots come from the Companion Bond upgrade in Guild Hall.
       </p>
+      {/* Patch 0387 -- same quick-link treatment as the Nests tab's own
+          Nest Expansion mention just above in this file; see that one's
+          comment for the full reasoning. */}
+      <button
+        className="btn-ghost"
+        style={{ marginBottom: 10, fontSize: '0.6875rem' }}
+        onClick={() => engine.requestTab('guild', 'companion_bond')}
+      >
+        Go to Guild Hall →
+      </button>
       {state.pets.length === 0 && (
         <div className="card"><p className="card-flavour">No pets hatched yet -- check the Nests tab.</p></div>
       )}

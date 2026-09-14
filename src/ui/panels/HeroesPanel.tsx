@@ -522,6 +522,37 @@ function HeroesRosterView() {
                   Go to Tavern →
                 </button>
               )}
+              {/* Patch 0387, direct request: the same "jump to and highlight
+                  the requirement" treatment just above, but for the OTHER
+                  reason this button can be greyed out -- a full roster
+                  rather than a locked class. Two links, not one, matching
+                  the page-level "No free slots" banner further up this
+                  tab exactly (same two paths, same colours) -- slot
+                  capacity comes from Tavern AND Extra Banner, so either
+                  fix is a legitimate next step depending on where the
+                  player actually is. Gated on unlocked/!alreadyRecruited
+                  so this never doubles up with the Tavern-unlock link
+                  above (mutually exclusive: a class can't be both locked
+                  and slots-full-blocked as the reason its button is
+                  disabled at the same time from the player's PoV). */}
+              {unlocked && !alreadyRecruited && slotsFull && (
+                <div className="row" style={{ gap: 8, marginTop: 10 }}>
+                  <button
+                    className="btn-primary"
+                    style={{ flex: 1, fontSize: '0.6875rem' }}
+                    onClick={() => { setSelectedRecruitId(null); engine.requestTab('guild', 'tavern'); }}
+                  >
+                    Go to Tavern →
+                  </button>
+                  <button
+                    className="btn-purple"
+                    style={{ flex: 1, fontSize: '0.6875rem' }}
+                    onClick={() => { setSelectedRecruitId(null); engine.requestTab('prestige', 'extra_banner'); }}
+                  >
+                    Go to Prestige →
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         );

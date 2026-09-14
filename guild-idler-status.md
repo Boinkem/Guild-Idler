@@ -31617,3 +31617,73 @@ shows up both in-game and in Pet Lab instead of falling back to its
 glyph. Hero Lab has the same latent gap for a future DLC hero class
 (no pack currently defines one, so nothing to fix yet) -- worth
 revisiting the same way if/when one ships.
+
+### Feature: quick links to the Guild Hall upgrade behind a locked purchase, audited across every tab (patch 0387)
+```discord-update
+Dev Update | Feature
+
+- Recruit modal now links straight to Tavern and Prestige when the block is a full roster, not just a locked class -- same golden-glow jump every other locked purchase already gets
+- Added the same quick link to two Hatchery mentions of Guild Hall upgrades (Nest Expansion, Companion Bond) that never had one
+```
+
+Direct request: a hero purchase blocked on "no free slots" should have
+a quick link to the Guild Hall upgrade that fixes it, next to the
+greyed-out button itself -- plus an audit of every other "Go to Guild
+Hall" spot in the game to confirm the same golden shimmer treatment
+fires everywhere it should.
+
+**The shimmer mechanism itself was already fully built and already
+correct everywhere it was already wired up.** `engine.requestTab(tab,
+highlightId)` -> `consumeRequestedHighlight()` -> `.card.requirement-
+highlight`'s rotating gold ring (`app.css`) has existed since patch
+0179/0180, and every EXISTING "Go to Guild Hall →" button already found
+(RaidsPanel's difficulty circles and whole-tab locked state,
+VendorsPanel's Black Market gate, HeroesPanel's own "locked class"
+Tavern link and its page-level "no free slots" banner) already passes
+the right highlightId and already glows correctly. Nothing to fix
+there -- this patch is entirely about the gaps, not the mechanism.
+
+**Gap 1 -- the actual report: the recruit MODAL's own greyed-out button
+had no link for the slots-full case (`HeroesPanel.tsx`).** The page-
+level "No free slots" banner above the tier chips already had both
+links (Tavern, Prestige/Extra Banner); the per-class detail modal only
+ever had the Tavern link, and only for the *locked class* reason
+(`!unlocked && !tavernUnlocked`) -- clicking a class, seeing "No free
+slots" on its own Recruit button, and finding no link right there was
+exactly the gap described. Added a second, mutually-exclusive block
+(`unlocked && !alreadyRecruited && slotsFull`) with the same two-link,
+two-colour treatment (brass Tavern / purple Prestige) the page banner
+already established, rather than inventing a third visual language for
+the same underlying choice.
+
+**Gap 2 & 3 -- two Guild Hall mentions with no link at all
+(`HatcheryPanel.tsx`).** Audited every literal "in Guild Hall" string
+in the UI; two had prose naming a specific upgrade (Nest Expansion,
+Companion Bond) with nothing clickable next to it -- the Nests and
+Pets tabs' own capacity readouts. Both got the same small ghost-button
+"Go to Guild Hall →" link, unconditional (not gated on the slot count
+actually being full) since the prose itself is unconditional -- this
+is "here's where more capacity comes from" reference text, not a
+blocked-purchase message, so the link should be available any time a
+player reads it, not just once they've hit the cap.
+
+**Confirmed NOT a gap:** VendorsPanel's own "Black Market Contact
+upgrade in Guild Hall" prose has an existing, already-correct "Go to
+Guild Hall →" link two lines below it (same file) -- found via the
+same audit, left untouched. DashboardPanel's `requestTab('guild',
+undefined, 'customize')` intentionally passes no highlightId -- it's a
+direct shortcut to the Customize sub-tab, not a locked-requirement
+link, so there's no single upgrade card to glow.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Confirmed `'nest_expansion'`/
+`'companion_bond'` (the two new highlightId values) are real entries in
+the same `UPGRADES` array (`progression.ts`) every already-working
+highlightId (`'tavern'`, `'black_market_contact'`, the raid difficulty
+ids) already draws from, reached through GuildPanel's own
+`generalUpgrades` filter -- no new plumbing needed on the receiving end
+at all, this patch only ever adds call sites to an existing, already-
+correct mechanism. No live in-app playtest in this environment (no
+browser available) -- worth a real-window pass to confirm both new
+Hatchery links land on the right card and glow, and that the recruit
+modal's two-button row doesn't feel cramped on a narrow window.
