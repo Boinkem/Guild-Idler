@@ -277,8 +277,7 @@
       "ranged": "Trades the blade for a bow, the same unbroken patience behind the string.",
       "caster": "Wards and rites learned alongside the sword, not instead of it, prayer and steel drawn in the same breath."
     },
-    "milestoneGoldCost": 0,
-    "displayScale": 1.41
+    "milestoneGoldCost": 0
   },
   {
     "id": "witch",
@@ -561,9 +560,7 @@
       "caster": "Wards himself in old, borrowed magic rather than learning any of it properly -- just enough to shrug off what should have ended him."
     },
     "milestoneUnlockDescription": "Clear any raid on Legendary difficulty.",
-    "milestoneGoldCost": 4000,
-    "displayScale": 1.57,
-    "displayOffsetX": -15
+    "milestoneGoldCost": 4000
   },
   {
     "id": "kobold",
@@ -790,7 +787,6 @@
       "caster": "Old herd-lore about the stars, half-remembered and mostly self-taught, cast between one stride and the next."
     },
     "milestoneUnlockDescription": "Clear three different raids.",
-    "milestoneGoldCost": 3500,
-    "displayScale": 1.31
+    "milestoneGoldCost": 3500
   }
 ]
