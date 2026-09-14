@@ -562,8 +562,8 @@
     },
     "milestoneUnlockDescription": "Clear any raid on Legendary difficulty.",
     "milestoneGoldCost": 4000,
-    "displayScale": 1.68,
-    "displayOffsetX": -47
+    "displayScale": 1.57,
+    "displayOffsetX": -15
   },
   {
     "id": "kobold",
