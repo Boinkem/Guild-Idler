@@ -173,7 +173,7 @@ export function StatsPanel() {
   const stats = state.stats;
   const successRate = stats.totalQuests > 0
     ? `${Math.round((stats.successes / stats.totalQuests) * 100)}%`
-    : '—';
+    : 'N/A';
   const achProgress = AchievementManager.progress(state);
   // Both previously native `window.alert()`/`window.confirm()` calls --
   // unstyled OS dialogs, out of place next to every other prompt in the
