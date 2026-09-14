@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
+import { backgroundSrc } from '../game/settings';
 import { DiceFace, HighLowCall } from '../game/types';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { Tuning } from '../game/data/tuning';
@@ -67,6 +69,7 @@ function diceBurstCount(outcome: 'jackpot' | 'partial' | 'bust'): number {
  */
 export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
+  const { settings } = useSettings();
   const state = engine.state;
   const present = PeddlerManager.isPresent(state);
 
@@ -232,7 +235,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
     <div className="overlay" onClick={handleClose}>
       <div
         className="modal peddler-modal"
-        style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
+        style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)})` }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="peddler-modal-topbar">

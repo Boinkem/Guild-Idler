@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
+import { backgroundSrc } from '../game/settings';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { formatGold } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
@@ -39,6 +41,7 @@ function settleParticleCount(round: number): number {
 
 export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
+  const { settings } = useSettings();
   const state = engine.state;
   const tab = state.peddlerTab;
   const runResult = engine.lastGrimsbyTabResult;
@@ -124,7 +127,7 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
     <div className="overlay" onClick={handleClose}>
       <div
         className="modal peddler-modal"
-        style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
+        style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)})` }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="peddler-modal-topbar">

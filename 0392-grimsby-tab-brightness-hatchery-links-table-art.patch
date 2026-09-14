@@ -1,0 +1,368 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 56298af..2561154 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -31939,3 +31939,112 @@ No live run against a real `steamcmd`/Steamworks account in this
+ environment (same limitation patch 0313 already noted) -- worth a real
+ first upload targeting `internal` to confirm the branch actually gets
+ created as expected before relying on this for anything real.
++
++### Bug fix / Feature: Grimsby's dimmed tab, dark table art, Hatchery's transparent Guild Hall links (patch 0392)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed Grimsby's tab always looking dimmer than every other tab
++- Fixed the "Go to Guild Hall" buttons on the Hatchery tab having no visible background
++- Grimsby's card, dice, and tab tables now support new art and the day/night mood toggle
++```
++
++Four direct reports bundled into one patch: two visual bugs (Grimsby's
++whole tab reading darker than everywhere else, Hatchery's "Go to Guild
++Hall" buttons being invisible-background), one confirmed-already-fixed
++(Hatchery's subtitle plaque), and one confirmed-already-shipped
++(Grimsby's card-game reroll button) -- plus wiring up new table art for
++Grimsby's three game modals.
++
++**Already fixed on `main`, no change needed here.** Two of the four
++reports turned out to already be resolved by earlier patches, confirmed
++by re-reading the live repo rather than assuming from the screenshots:
++- **Hatchery subtitle's missing card background** -- patch 0389 already
++  moved `HatcheryPanel.tsx` onto the standard `.tab-scene`/
++  `.tab-scene-content` shape, which is what feeds `.panel .subtitle`
++  its plaque background (patch 0321). The reported screenshot predates
++  0389.
++- **Grimsby's card game needing a "flip again" button** --
++  `PeddlerCardModal.tsx` already has a "Roll Again -- N gold" button
++  once a round settles (any non-bust result), and `GrimsbyBustCard`'s
++  own "Try again?" covers the bust case -- both reset straight back to
++  a fresh face-down row, and both correctly charge the standard/High
++  Roller fee on the next pick rather than on the button itself (fee is
++  read fresh off `PeddlerManager.feeWithStake`, same as the very first
++  round). Also predates the report.
++
++**Grimsby's tab darker than every other tab (`MenuWindow.tsx`,
++`PeddlerPanel.tsx`).** Root cause: Grimsby was the one tab left reading
++its background through `MenuWindow.tsx`'s shared 35%-opacity ambient
++layer -- the same layer Raids and Hatchery used to share before each
++got its own full-strength `.tab-scene` (see that file's own long-
++running comment on the subject). `PeddlerPanel.tsx`'s custom
++`.grimsby-*` chrome (Claude Design handoff) never got the same
++treatment when it was built, since it doesn't use the standard
++`.tab-scene`/`.tab-scene-content` wrapper the way an ordinary panel
++does.
++
++Fixed by giving it exactly that wrapper: `PeddlerPanel.tsx` now reads
++`backgroundSrc('./lore/peddler-bg.png', settings.backgroundMood)` into
++its own `.tab-scene`, same call MenuWindow.tsx used to make at 35%
++opacity -- same art, full strength, same mood-awareness. The
++`.grimsby-*` internals (header row, status strip, game grid) are
++untouched; only the wrapper around them changed. `MenuWindow.tsx`'s
++ambient-backdrop ternary dropped its `tab === 'peddler'` branch
++entirely (mirroring the exact move already made for Raids and
++Hatchery), and its now-unused `backgroundSrc` import was removed
++(`noUnusedLocals` is on). `peddler-bg.png` itself is NOT orphaned by
++this -- it moved from being read here to being read by
++`PeddlerPanel.tsx`, still in active use either way.
++
++**Hatchery's "Go to Guild Hall" buttons (`HatcheryPanel.tsx`).** Both
++quick-link buttons (Nests tab's "Nest Expansion" link, Pets tab's
++"Companion Bond" link, both added in patch 0387) were sitting on plain
++`.btn-ghost`, which resolves to a fully transparent background --
++functionally invisible against this tab's busy art, per the direct
++report and screenshot. Both switched to `.btn-primary`, matching the
++solid-button precedent `HeroesPanel.tsx` already set for its own
++"empty tavern → Guild Hall" quick link. Deliberately did NOT touch
++`.btn-ghost` itself, and did NOT touch RaidsPanel's "Unlock →" circles
++or VendorsPanel's "Go to Guild Hall →" link -- those are small inline
++annotations riding next to other content, a different visual role than
++these two standalone call-to-action buttons, and weren't part of the
++report.
++
++**Grimsby's table art now supports the day/night toggle
++(`PeddlerCardModal.tsx`, `PeddlerDiceModal.tsx`, `PeddlerTabModal.tsx`).**
++All three game modals shared one hardcoded `url(./lore/peddler-table.png)`
++with no `backgroundSrc()` call at all -- the one remaining spot in the
++Peddler flow that wasn't mood-aware, now that the tab itself is (see
++above). All three now call `useSettings()` and resolve through
++`backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)`,
++same as every other scene in the game.
++
++**Where the new table art actually needs to live (nothing shipped/
++committed, per usual for `public/`):**
++- `public/lore/peddler-table.png` -- dim/night table (from the supplied
++  `GrimsbyTableNight.png`)
++- `public/lore/bright/peddler-table.png` -- bright/day table (from the
++  supplied `GrimsbyTableDay.png`)
++
++Same safe-fallback behaviour every other panel already relies on: Bright
++mode quietly falls back to the dim image until its own `bright/`
++counterpart exists, so this ships fine before the files are dropped in
++place.
++
++**Not done, out of scope for this pass:** no new art was generated or
++committed here (`public/` art is never committed, per the project's own
++convention). `peddler-bg.png` itself (the tab background, as opposed to
++the in-modal table art) was not replaced with new art -- only its
++opacity/wrapper changed; if new tab-level art is wanted separately from
++the table art, that's a follow-up.
++
++**Verified:** hand-traced every remaining reference to the old
++`./lore/peddler-table.png` string literal across all three modals --
++none left unwrapped. Confirmed `backgroundSrc` has no other call sites
++left in `MenuWindow.tsx` before dropping the import (`noUnusedLocals`
++would otherwise fail the build). No live in-app playtest in this
++environment (no browser available) -- worth a real-window pass once the
++new table art lands at the two paths above to confirm both Dim and
++Bright read correctly across all three Grimsby modals, and that
++Grimsby's tab now visually matches the brightness of every other tab.
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 5c07f21..cb1fa31 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -1,7 +1,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+-import { backgroundSrc, resolveBackgroundMood } from '../game/settings';
++import { resolveBackgroundMood } from '../game/settings';
+ import { OnboardingTour } from './OnboardingTour';
+ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+ import { QuestBoardIntroModal } from './QuestBoardIntroModal';
+@@ -419,33 +419,29 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+         tab's per-chain card backgrounds. Now mood-aware (patch 0305) via
+         backgroundSrc().
+ 
+-        Raids and Hatchery have both since dropped out of this list (same
+-        report each time -- a tab stuck sharing this faint 35%-opacity
+-        ambient layer with Peddler instead of getting its own full-strength
++        Raids, Hatchery, and Peddler have all since dropped out of this
++        list (same report each time -- a tab stuck sharing this faint
++        35%-opacity ambient layer instead of getting its own full-strength
+         .tab-scene background like every other panel in the game). Raids
+         went first (RaidsPanel.tsx now carries its own raids-bg.jpg/bright
+         pair directly); Hatchery followed the same move, onto the standard
+         lore/panels/hatchery.jpg (+ lore/panels/bright/hatchery.jpg)
+         location every other tab already uses, rather than keeping its old
+-        one-off lore/hatchery-bg.jpg path. That old file is left on disk,
+-        unreferenced, same as lore/guild-hall-bg.jpg below. Peddler stays
+-        here for now -- its own tab uses fully custom .grimsby-* redesigned
+-        chrome (Claude Design handoff) rather than the standard .tab-scene/
+-        .tab-scene-content shape every other panel shares, so giving it the
+-        same treatment needs its own dedicated pass rather than reusing
+-        this patch's generic wrapper blind.
++        one-off lore/hatchery-bg.jpg path. Peddler followed last (patch
++        0392, direct report: "Grimsby's tab has a filter over the whole
++        thing, making the background darker than every other tab") --
++        PeddlerPanel.tsx's own .grimsby-* redesigned chrome (Claude Design
++        handoff) now wraps itself in the same .tab-scene/.tab-scene-content
++        shape every other panel uses, painting the same peddler-bg.png at
++        full strength instead of the 35% this layer gave it -- same file,
++        just no longer read from here. (Only lore/hatchery-bg.jpg is
++        actually orphaned by these moves; peddler-bg.png stayed in active
++        use, it just changed which component reads it.) lore/hatchery-
++        bg.jpg is left on disk, unreferenced, same as lore/guild-hall-
++        bg.jpg below.
+       */}
+       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', overflow: 'hidden' }}>
+-        {tab === 'peddler' ? (
+-          <div
+-            style={{
+-              position: 'absolute', inset: 0,
+-              backgroundImage: `url(${backgroundSrc('./lore/peddler-bg.png', settings.backgroundMood)})`,
+-              backgroundSize: 'cover',
+-              backgroundPosition: 'center',
+-            }}
+-          />
+-        ) : activeGuildHallTheme ? (
++        {activeGuildHallTheme ? (
+           <GuildHallMenuBackdrop theme={activeGuildHallTheme} equipped={equippedGuildHallDecorations} />
+         ) : (
+           <div
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+index 34c6d4f..f19b528 100644
+--- a/src/ui/PeddlerCardModal.tsx
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -1,5 +1,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
++import { useSettings } from './useSettings';
++import { backgroundSrc } from '../game/settings';
+ import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
+ import { PeddlerManager } from '../game/managers/PeddlerManager';
+ import { MATERIAL_BY_ID } from '../game/data/materials';
+@@ -279,6 +281,7 @@ export function PeddlerCardModal({
+   highRoller = false, stake = 1, onClose,
+ }: { highRoller?: boolean; stake?: number; onClose: () => void }) {
+   const engine = useEngine();
++  const { settings } = useSettings();
+   const [showCards, setShowCards] = useState(false);
+   // Re-rolled on every "Lay out the cards" AND on Roll Again (see
+   // rollNewRound below) -- a fresh round should show fresh card backs,
+@@ -402,7 +405,7 @@ export function PeddlerCardModal({
+     <div className="overlay" onClick={handleClose}>
+       <div
+         className="modal peddler-modal"
+-        style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
++        style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)})` }}
+         onClick={(e) => e.stopPropagation()}
+       >
+         <div className="peddler-modal-topbar">
+diff --git a/src/ui/PeddlerDiceModal.tsx b/src/ui/PeddlerDiceModal.tsx
+index e0373c9..b1b63cb 100644
+--- a/src/ui/PeddlerDiceModal.tsx
++++ b/src/ui/PeddlerDiceModal.tsx
+@@ -1,5 +1,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
++import { useSettings } from './useSettings';
++import { backgroundSrc } from '../game/settings';
+ import { DiceFace, HighLowCall } from '../game/types';
+ import { PeddlerManager } from '../game/managers/PeddlerManager';
+ import { Tuning } from '../game/data/tuning';
+@@ -67,6 +69,7 @@ function diceBurstCount(outcome: 'jackpot' | 'partial' | 'bust'): number {
+  */
+ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+   const engine = useEngine();
++  const { settings } = useSettings();
+   const state = engine.state;
+   const present = PeddlerManager.isPresent(state);
+ 
+@@ -232,7 +235,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
+     <div className="overlay" onClick={handleClose}>
+       <div
+         className="modal peddler-modal"
+-        style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
++        style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)})` }}
+         onClick={(e) => e.stopPropagation()}
+       >
+         <div className="peddler-modal-topbar">
+diff --git a/src/ui/PeddlerTabModal.tsx b/src/ui/PeddlerTabModal.tsx
+index eddf07f..2edc238 100644
+--- a/src/ui/PeddlerTabModal.tsx
++++ b/src/ui/PeddlerTabModal.tsx
+@@ -1,5 +1,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
++import { useSettings } from './useSettings';
++import { backgroundSrc } from '../game/settings';
+ import { PeddlerManager } from '../game/managers/PeddlerManager';
+ import { formatGold } from '../game/util';
+ import { GrimsbySprite } from './sprites/GrimsbySprite';
+@@ -39,6 +41,7 @@ function settleParticleCount(round: number): number {
+ 
+ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+   const engine = useEngine();
++  const { settings } = useSettings();
+   const state = engine.state;
+   const tab = state.peddlerTab;
+   const runResult = engine.lastGrimsbyTabResult;
+@@ -124,7 +127,7 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+     <div className="overlay" onClick={handleClose}>
+       <div
+         className="modal peddler-modal"
+-        style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
++        style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)})` }}
+         onClick={(e) => e.stopPropagation()}
+       >
+         <div className="peddler-modal-topbar">
+diff --git a/src/ui/panels/HatcheryPanel.tsx b/src/ui/panels/HatcheryPanel.tsx
+index d6d8742..dbde848 100644
+--- a/src/ui/panels/HatcheryPanel.tsx
++++ b/src/ui/panels/HatcheryPanel.tsx
+@@ -104,15 +104,24 @@ function NestsTab() {
+         </button>
+       </div>
+       {/* Patch 0387, direct request: any "Guild Hall" mention that names a
+-          specific upgrade gets a quick link + the same golden shimmer
+-          treatment as RaidsPanel/VendorsPanel/HeroesPanel's own locked-
+-          requirement links, rather than leaving the player to go find
+-          Nest Expansion among every facility card by hand. Unconditional
+-          (not gated on nests actually being full) since the prose above
+-          it is unconditional too -- this is "here's where more capacity
+-          comes from," not a blocked-purchase message. */}
++          specific upgrade gets a quick link, rather than leaving the
++          player to go find Nest Expansion among every facility card by
++          hand. Unconditional (not gated on nests actually being full)
++          since the prose above it is unconditional too -- this is
++          "here's where more capacity comes from," not a blocked-purchase
++          message.
++          Patch 0392, direct report: this and the Pets tab's own Companion
++          Bond link just below were both sitting on plain .btn-ghost
++          (transparent background), which read as barely-there against
++          this tab's art -- both now use .btn-primary instead, matching
++          the solid-button treatment HeroesPanel's own Guild Hall link
++          (its Tavern quick-link) already uses. RaidsPanel/VendorsPanel's
++          locked-requirement links stay on .btn-ghost on purpose -- those
++          are small inline "Unlock →" annotations riding next to other
++          content, not a standalone call-to-action button the way these
++          two are. */}
+       <button
+-        className="btn-ghost"
++        className="btn-primary"
+         style={{ marginBottom: 10, fontSize: '0.6875rem' }}
+         onClick={() => engine.requestTab('guild', 'nest_expansion')}
+       >
+@@ -211,7 +220,7 @@ function PetsTab() {
+           Nest Expansion mention just above in this file; see that one's
+           comment for the full reasoning. */}
+       <button
+-        className="btn-ghost"
++        className="btn-primary"
+         style={{ marginBottom: 10, fontSize: '0.6875rem' }}
+         onClick={() => engine.requestTab('guild', 'companion_bond')}
+       >
+diff --git a/src/ui/panels/PeddlerPanel.tsx b/src/ui/panels/PeddlerPanel.tsx
+index c680acf..9504f67 100644
+--- a/src/ui/panels/PeddlerPanel.tsx
++++ b/src/ui/panels/PeddlerPanel.tsx
+@@ -1,5 +1,7 @@
+ import { useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
++import { useSettings } from '../useSettings';
++import { backgroundSrc } from '../../game/settings';
+ import { PeddlerManager } from '../../game/managers/PeddlerManager';
+ import { formatGold, formatDuration } from '../../game/util';
+ import { PeddlerCardModal } from '../PeddlerCardModal';
+@@ -22,10 +24,23 @@ import { vendorRepLevel, vendorRepPercent } from '../../game/data/vendorRep';
+  * numbered game grid instead. Every engine call, guard, and piece of
+  * copy below is identical to what the old version had; only the chrome
+  * around them changed.
++ *
++ * Patch 0392, direct report: this custom chrome never got its own
++ * `.tab-scene` background the way every other panel has -- it was
++ * quietly riding on MenuWindow.tsx's shared 35%-opacity ambient layer
++ * (same one Raids and Hatchery used to share before each got its own
++ * full-strength scene, see that file's own comment), which read as
++ * "this tab is darker than every other tab." Now wrapped in the same
++ * `.tab-scene`/`.tab-scene-content` pair every other panel uses,
++ * reusing the same mood-aware `peddler-bg.png` MenuWindow.tsx used to
++ * paint at 35% opacity -- same art, full strength. The `.grimsby-*`
++ * chrome itself (header row, status strip, game grid) is untouched;
++ * only the wrapper around it changed.
+  */
+ export function PeddlerPanel() {
+   const engine = useEngine();
+   const state = engine.state;
++  const { settings } = useSettings();
+   const now = useNow(1000);
+   const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller' | 'dice' | 'tab'>('none');
+   // Stake multiplier -- a player-chosen multiplier on top of whichever
+@@ -62,7 +77,8 @@ export function PeddlerPanel() {
+     : null;
+ 
+   return (
+-    <>
++    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-bg.png', settings.backgroundMood)})` }}>
++      <div className="tab-scene-content">
+       <div className="grimsby-header-row">
+         <div>
+           <div className="grimsby-kicker">Guild Hall / Vendors</div>
+@@ -345,6 +361,7 @@ export function PeddlerPanel() {
+           </button>
+         </div>
+       )}
+-    </>
++      </div>
++    </div>
+   );
+ }

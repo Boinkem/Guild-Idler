@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { useSettings } from '../useSettings';
+import { backgroundSrc } from '../../game/settings';
 import { PeddlerManager } from '../../game/managers/PeddlerManager';
 import { formatGold, formatDuration } from '../../game/util';
 import { PeddlerCardModal } from '../PeddlerCardModal';
@@ -22,10 +24,23 @@ import { vendorRepLevel, vendorRepPercent } from '../../game/data/vendorRep';
  * numbered game grid instead. Every engine call, guard, and piece of
  * copy below is identical to what the old version had; only the chrome
  * around them changed.
+ *
+ * Patch 0392, direct report: this custom chrome never got its own
+ * `.tab-scene` background the way every other panel has -- it was
+ * quietly riding on MenuWindow.tsx's shared 35%-opacity ambient layer
+ * (same one Raids and Hatchery used to share before each got its own
+ * full-strength scene, see that file's own comment), which read as
+ * "this tab is darker than every other tab." Now wrapped in the same
+ * `.tab-scene`/`.tab-scene-content` pair every other panel uses,
+ * reusing the same mood-aware `peddler-bg.png` MenuWindow.tsx used to
+ * paint at 35% opacity -- same art, full strength. The `.grimsby-*`
+ * chrome itself (header row, status strip, game grid) is untouched;
+ * only the wrapper around it changed.
  */
 export function PeddlerPanel() {
   const engine = useEngine();
   const state = engine.state;
+  const { settings } = useSettings();
   const now = useNow(1000);
   const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller' | 'dice' | 'tab'>('none');
   // Stake multiplier -- a player-chosen multiplier on top of whichever
@@ -62,7 +77,8 @@ export function PeddlerPanel() {
     : null;
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-bg.png', settings.backgroundMood)})` }}>
+      <div className="tab-scene-content">
       <div className="grimsby-header-row">
         <div>
           <div className="grimsby-kicker">Guild Hall / Vendors</div>
@@ -345,6 +361,7 @@ export function PeddlerPanel() {
           </button>
         </div>
       )}
-    </>
+      </div>
+    </div>
   );
 }

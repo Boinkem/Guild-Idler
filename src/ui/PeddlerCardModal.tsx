@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
+import { backgroundSrc } from '../game/settings';
 import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { MATERIAL_BY_ID } from '../game/data/materials';
@@ -279,6 +281,7 @@ export function PeddlerCardModal({
   highRoller = false, stake = 1, onClose,
 }: { highRoller?: boolean; stake?: number; onClose: () => void }) {
   const engine = useEngine();
+  const { settings } = useSettings();
   const [showCards, setShowCards] = useState(false);
   // Re-rolled on every "Lay out the cards" AND on Roll Again (see
   // rollNewRound below) -- a fresh round should show fresh card backs,
@@ -402,7 +405,7 @@ export function PeddlerCardModal({
     <div className="overlay" onClick={handleClose}>
       <div
         className="modal peddler-modal"
-        style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
+        style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)})` }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="peddler-modal-topbar">

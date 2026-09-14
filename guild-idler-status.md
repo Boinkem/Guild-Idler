@@ -31939,3 +31939,112 @@ No live run against a real `steamcmd`/Steamworks account in this
 environment (same limitation patch 0313 already noted) -- worth a real
 first upload targeting `internal` to confirm the branch actually gets
 created as expected before relying on this for anything real.
+
+### Bug fix / Feature: Grimsby's dimmed tab, dark table art, Hatchery's transparent Guild Hall links (patch 0392)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed Grimsby's tab always looking dimmer than every other tab
+- Fixed the "Go to Guild Hall" buttons on the Hatchery tab having no visible background
+- Grimsby's card, dice, and tab tables now support new art and the day/night mood toggle
+```
+
+Four direct reports bundled into one patch: two visual bugs (Grimsby's
+whole tab reading darker than everywhere else, Hatchery's "Go to Guild
+Hall" buttons being invisible-background), one confirmed-already-fixed
+(Hatchery's subtitle plaque), and one confirmed-already-shipped
+(Grimsby's card-game reroll button) -- plus wiring up new table art for
+Grimsby's three game modals.
+
+**Already fixed on `main`, no change needed here.** Two of the four
+reports turned out to already be resolved by earlier patches, confirmed
+by re-reading the live repo rather than assuming from the screenshots:
+- **Hatchery subtitle's missing card background** -- patch 0389 already
+  moved `HatcheryPanel.tsx` onto the standard `.tab-scene`/
+  `.tab-scene-content` shape, which is what feeds `.panel .subtitle`
+  its plaque background (patch 0321). The reported screenshot predates
+  0389.
+- **Grimsby's card game needing a "flip again" button** --
+  `PeddlerCardModal.tsx` already has a "Roll Again -- N gold" button
+  once a round settles (any non-bust result), and `GrimsbyBustCard`'s
+  own "Try again?" covers the bust case -- both reset straight back to
+  a fresh face-down row, and both correctly charge the standard/High
+  Roller fee on the next pick rather than on the button itself (fee is
+  read fresh off `PeddlerManager.feeWithStake`, same as the very first
+  round). Also predates the report.
+
+**Grimsby's tab darker than every other tab (`MenuWindow.tsx`,
+`PeddlerPanel.tsx`).** Root cause: Grimsby was the one tab left reading
+its background through `MenuWindow.tsx`'s shared 35%-opacity ambient
+layer -- the same layer Raids and Hatchery used to share before each
+got its own full-strength `.tab-scene` (see that file's own long-
+running comment on the subject). `PeddlerPanel.tsx`'s custom
+`.grimsby-*` chrome (Claude Design handoff) never got the same
+treatment when it was built, since it doesn't use the standard
+`.tab-scene`/`.tab-scene-content` wrapper the way an ordinary panel
+does.
+
+Fixed by giving it exactly that wrapper: `PeddlerPanel.tsx` now reads
+`backgroundSrc('./lore/peddler-bg.png', settings.backgroundMood)` into
+its own `.tab-scene`, same call MenuWindow.tsx used to make at 35%
+opacity -- same art, full strength, same mood-awareness. The
+`.grimsby-*` internals (header row, status strip, game grid) are
+untouched; only the wrapper around them changed. `MenuWindow.tsx`'s
+ambient-backdrop ternary dropped its `tab === 'peddler'` branch
+entirely (mirroring the exact move already made for Raids and
+Hatchery), and its now-unused `backgroundSrc` import was removed
+(`noUnusedLocals` is on). `peddler-bg.png` itself is NOT orphaned by
+this -- it moved from being read here to being read by
+`PeddlerPanel.tsx`, still in active use either way.
+
+**Hatchery's "Go to Guild Hall" buttons (`HatcheryPanel.tsx`).** Both
+quick-link buttons (Nests tab's "Nest Expansion" link, Pets tab's
+"Companion Bond" link, both added in patch 0387) were sitting on plain
+`.btn-ghost`, which resolves to a fully transparent background --
+functionally invisible against this tab's busy art, per the direct
+report and screenshot. Both switched to `.btn-primary`, matching the
+solid-button precedent `HeroesPanel.tsx` already set for its own
+"empty tavern → Guild Hall" quick link. Deliberately did NOT touch
+`.btn-ghost` itself, and did NOT touch RaidsPanel's "Unlock →" circles
+or VendorsPanel's "Go to Guild Hall →" link -- those are small inline
+annotations riding next to other content, a different visual role than
+these two standalone call-to-action buttons, and weren't part of the
+report.
+
+**Grimsby's table art now supports the day/night toggle
+(`PeddlerCardModal.tsx`, `PeddlerDiceModal.tsx`, `PeddlerTabModal.tsx`).**
+All three game modals shared one hardcoded `url(./lore/peddler-table.png)`
+with no `backgroundSrc()` call at all -- the one remaining spot in the
+Peddler flow that wasn't mood-aware, now that the tab itself is (see
+above). All three now call `useSettings()` and resolve through
+`backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)`,
+same as every other scene in the game.
+
+**Where the new table art actually needs to live (nothing shipped/
+committed, per usual for `public/`):**
+- `public/lore/peddler-table.png` -- dim/night table (from the supplied
+  `GrimsbyTableNight.png`)
+- `public/lore/bright/peddler-table.png` -- bright/day table (from the
+  supplied `GrimsbyTableDay.png`)
+
+Same safe-fallback behaviour every other panel already relies on: Bright
+mode quietly falls back to the dim image until its own `bright/`
+counterpart exists, so this ships fine before the files are dropped in
+place.
+
+**Not done, out of scope for this pass:** no new art was generated or
+committed here (`public/` art is never committed, per the project's own
+convention). `peddler-bg.png` itself (the tab background, as opposed to
+the in-modal table art) was not replaced with new art -- only its
+opacity/wrapper changed; if new tab-level art is wanted separately from
+the table art, that's a follow-up.
+
+**Verified:** hand-traced every remaining reference to the old
+`./lore/peddler-table.png` string literal across all three modals --
+none left unwrapped. Confirmed `backgroundSrc` has no other call sites
+left in `MenuWindow.tsx` before dropping the import (`noUnusedLocals`
+would otherwise fail the build). No live in-app playtest in this
+environment (no browser available) -- worth a real-window pass once the
+new table art lands at the two paths above to confirm both Dim and
+Bright read correctly across all three Grimsby modals, and that
+Grimsby's tab now visually matches the brightness of every other tab.

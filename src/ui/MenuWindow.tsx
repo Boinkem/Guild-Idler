@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
-import { backgroundSrc, resolveBackgroundMood } from '../game/settings';
+import { resolveBackgroundMood } from '../game/settings';
 import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { QuestBoardIntroModal } from './QuestBoardIntroModal';
@@ -419,33 +419,29 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         tab's per-chain card backgrounds. Now mood-aware (patch 0305) via
         backgroundSrc().
 
-        Raids and Hatchery have both since dropped out of this list (same
-        report each time -- a tab stuck sharing this faint 35%-opacity
-        ambient layer with Peddler instead of getting its own full-strength
+        Raids, Hatchery, and Peddler have all since dropped out of this
+        list (same report each time -- a tab stuck sharing this faint
+        35%-opacity ambient layer instead of getting its own full-strength
         .tab-scene background like every other panel in the game). Raids
         went first (RaidsPanel.tsx now carries its own raids-bg.jpg/bright
         pair directly); Hatchery followed the same move, onto the standard
         lore/panels/hatchery.jpg (+ lore/panels/bright/hatchery.jpg)
         location every other tab already uses, rather than keeping its old
-        one-off lore/hatchery-bg.jpg path. That old file is left on disk,
-        unreferenced, same as lore/guild-hall-bg.jpg below. Peddler stays
-        here for now -- its own tab uses fully custom .grimsby-* redesigned
-        chrome (Claude Design handoff) rather than the standard .tab-scene/
-        .tab-scene-content shape every other panel shares, so giving it the
-        same treatment needs its own dedicated pass rather than reusing
-        this patch's generic wrapper blind.
+        one-off lore/hatchery-bg.jpg path. Peddler followed last (patch
+        0392, direct report: "Grimsby's tab has a filter over the whole
+        thing, making the background darker than every other tab") --
+        PeddlerPanel.tsx's own .grimsby-* redesigned chrome (Claude Design
+        handoff) now wraps itself in the same .tab-scene/.tab-scene-content
+        shape every other panel uses, painting the same peddler-bg.png at
+        full strength instead of the 35% this layer gave it -- same file,
+        just no longer read from here. (Only lore/hatchery-bg.jpg is
+        actually orphaned by these moves; peddler-bg.png stayed in active
+        use, it just changed which component reads it.) lore/hatchery-
+        bg.jpg is left on disk, unreferenced, same as lore/guild-hall-
+        bg.jpg below.
       */}
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', overflow: 'hidden' }}>
-        {tab === 'peddler' ? (
-          <div
-            style={{
-              position: 'absolute', inset: 0,
-              backgroundImage: `url(${backgroundSrc('./lore/peddler-bg.png', settings.backgroundMood)})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          />
-        ) : activeGuildHallTheme ? (
+        {activeGuildHallTheme ? (
           <GuildHallMenuBackdrop theme={activeGuildHallTheme} equipped={equippedGuildHallDecorations} />
         ) : (
           <div

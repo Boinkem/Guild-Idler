@@ -104,15 +104,24 @@ function NestsTab() {
         </button>
       </div>
       {/* Patch 0387, direct request: any "Guild Hall" mention that names a
-          specific upgrade gets a quick link + the same golden shimmer
-          treatment as RaidsPanel/VendorsPanel/HeroesPanel's own locked-
-          requirement links, rather than leaving the player to go find
-          Nest Expansion among every facility card by hand. Unconditional
-          (not gated on nests actually being full) since the prose above
-          it is unconditional too -- this is "here's where more capacity
-          comes from," not a blocked-purchase message. */}
+          specific upgrade gets a quick link, rather than leaving the
+          player to go find Nest Expansion among every facility card by
+          hand. Unconditional (not gated on nests actually being full)
+          since the prose above it is unconditional too -- this is
+          "here's where more capacity comes from," not a blocked-purchase
+          message.
+          Patch 0392, direct report: this and the Pets tab's own Companion
+          Bond link just below were both sitting on plain .btn-ghost
+          (transparent background), which read as barely-there against
+          this tab's art -- both now use .btn-primary instead, matching
+          the solid-button treatment HeroesPanel's own Guild Hall link
+          (its Tavern quick-link) already uses. RaidsPanel/VendorsPanel's
+          locked-requirement links stay on .btn-ghost on purpose -- those
+          are small inline "Unlock →" annotations riding next to other
+          content, not a standalone call-to-action button the way these
+          two are. */}
       <button
-        className="btn-ghost"
+        className="btn-primary"
         style={{ marginBottom: 10, fontSize: '0.6875rem' }}
         onClick={() => engine.requestTab('guild', 'nest_expansion')}
       >
@@ -211,7 +220,7 @@ function PetsTab() {
           Nest Expansion mention just above in this file; see that one's
           comment for the full reasoning. */}
       <button
-        className="btn-ghost"
+        className="btn-primary"
         style={{ marginBottom: 10, fontSize: '0.6875rem' }}
         onClick={() => engine.requestTab('guild', 'companion_bond')}
       >
