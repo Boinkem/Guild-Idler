@@ -31523,3 +31523,97 @@ the three retirement ids present. No live in-app playtest in this
 environment (no browser available) -- worth a real-window pass at
 level 1 specifically to confirm the board now feels noticeably more
 usable, and a quick listen to both reassigned bard tracks.
+
+### Bug fix: DLC pets invisible to both the real game and Pet Sprite Lab (patch 0386)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed DLC pets (Ruby Dragonling, Founder's Pack) never showing their real sprite in-game -- they were silently stuck on the glyph fallback even for an owner
+- Pet Sprite Lab now lists DLC species too, labelled with their pack, with their own live preview and save path
+```
+
+Direct report: the DevTool's Pet Lab couldn't show Ruby Dragonling at
+all, "for whatever the reason is." Root cause traced back further than
+the DevTool -- it's actually two separate bugs, the second one much
+bigger than the report itself.
+
+**The real bug: `PetSprite.tsx` never merged DLC pack art (`src/ui/
+sprites/PetSprite.tsx`).** `HeroSprite.tsx` has merged each installed
+DLC pack's own `heroes-manifest.json` since the DLC groundwork patches
+(`DlcManager.knownPackIds()` + `fetchPackAsset`, stamping `basePath` per
+class); `PetSprite.tsx` never got the matching logic and only ever
+fetched the base `./pets/manifest.json`. `DlcManager.fetchPackAsset`'s
+own doc comment already anticipated this exact gap ("a hero sprite
+manifest... pet sprites or anything else added later can reuse the same
+discovery logic") but it was never actually wired up. Practical effect:
+a real player who owns the Founder's Pack and hatches a Ruby Dragonling
+would see it permanently glyph-only, in the actual shipped game, not
+just an incomplete DevTool preview -- the DevTool report was a symptom,
+not the root cause.
+
+**Fixed the same way HeroSprite.tsx already solved it.** `SpeciesManifest`
+gains an optional `basePath` field; `loadManifest` now fetches the base
+manifest AND every known pack's own `pets-manifest.json` in parallel,
+stamps `basePath: './dlc/<packId>/pets'` on each DLC species before
+merging (base spread last, so it always wins on a currently-impossible
+id collision -- same rule HeroSprite.tsx's own merge follows), and the
+sprite URL now reads `char.basePath ?? './pets'` instead of a hardcoded
+`'./pets'`. The existing "only cache a non-empty result, retry on a
+species-specific cache miss" logic is preserved unchanged, just now
+covering the merged result instead of the base-only one.
+
+**DevTool: Pet Lab now sees DLC content at all (`server.mjs`, `app.js`).**
+The DevTool server has zero Steam-ownership awareness (it's a plain
+Node process, not the Electron shell), so it falls back to the same
+file-presence convention `DlcManager.ts` itself uses when Steam can't
+answer: a new `listDlcPacks()` scans `public/dlc/*/pack.json` directly.
+Three additions:
+- `GET /api/dlc-packs` -- returns every pack found on disk, `pets`
+  array and all.
+- `POST /api/dlc-packs/:packId/pets` -- a DLC species lives in that
+  pack's own `pack.json`, not `pets.json`, so it needs its own save
+  path; reuses the exact same `pets` schema (and therefore the same
+  validateEntry rules) the base roster already validates against, and
+  only ever replaces that pack's own `pets` field, leaving `id`/`name`/
+  anything else untouched.
+- `/pets-art/dlc/<packId>/...` -- extends the existing `/pets-art/`
+  route rather than adding a whole separate one, mapped to
+  `public/dlc/<packId>/pets/...` with the same path-traversal guard
+  shape as every other art route here.
+
+**Pet Lab's species dropdown, art loading, and save all now DLC-aware.**
+`selectPetLabTab` merges `/api/dlc-packs` into the species list (tagged
+`requiresDlc`, same shape `DlcManager.allPets()` uses at runtime) and
+merges each pack's own art manifest into one combined manifest with the
+right `basePath` stamped per species -- same merge shape as the real
+`PetSprite.tsx` fix above, just rooted at this tool's own `/pets-art/
+dlc/<packId>/` route instead of the game's `./dlc/<packId>/pets/`. The
+dropdown labels a DLC entry with its pack's name ("Ruby Dragonling
+(DLC: Founder's Pack)"). Save now branches on `requiresDlc`: a DLC
+pet's edit posts only that pack's own slice to its dedicated endpoint
+(stripping the runtime-only `requiresDlc` stamp first, since the file
+on disk never stores it); a base pet's edit still posts to `/api/data/
+pets` exactly as before. Also fixed a stale comment left over from
+patch 0384 still referencing HeroSprite.tsx's old hardcoded
+`HERO_DISPLAY_SCALE`/`OFFSET` tables, which that patch already replaced
+with `hero-classes.json` data.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Ran the DevTool server directly:
+`/api/dlc-packs` correctly returns Founder's Pack with `ruby_dragonling`
+listed, and `/pets-art/dlc/founders_pack/manifest.json` correctly 404s
+(no local DLC art installed in this environment -- expected, same
+gitignored convention as every other art tree). Round-trip tested the
+new save path directly: POSTed a modified Founder's Pack `pets` array
+with `displayScale`/`displayOffsetX`/`displayOffsetY` set on
+`ruby_dragonling`, confirmed `pack.json` persisted them and a fresh GET
+read them back correctly, confirmed the pack's own `id`/`name` were
+left untouched, then reverted -- `pack.json` byte-identical to its
+pre-patch state afterward, no stray `.bak` left behind. No live in-app
+playtest in this environment (no browser, and no local Founder's Pack
+art to actually render) -- worth a real pass on a machine with the
+pack's art installed to confirm Ruby Dragonling's sprite now actually
+shows up both in-game and in Pet Lab instead of falling back to its
+glyph. Hero Lab has the same latent gap for a future DLC hero class
+(no pack currently defines one, so nothing to fix yet) -- worth
+revisiting the same way if/when one ships.

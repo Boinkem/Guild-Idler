@@ -3049,6 +3049,10 @@ const PETLAB_FPS = { idle: 6, idle2: 6, walk: 9, run: 12, movement: 10, walking:
 
 const petLabState = {
   pets: [], heroClasses: [],
+  // Patch 0386 -- every installed DLC pack's own manifest (id/name/pets),
+  // kept around so the species dropdown can label a DLC entry with its
+  // pack's name. See selectPetLabTab.
+  dlcPacks: [],
   petId: null, heroClassId: 'adventurer', rarity: 'common',
   pose: 'idle', // 'idle' | 'moving' -- drives both sprites together, same pairing IdleView.tsx already uses (hero idle/run <-> pet idle/movement)
   heroManifest: null, petManifest: null,
@@ -3071,18 +3075,49 @@ async function selectPetLabTab() {
   subtabsEl.innerHTML = '';
   setStatus('Loading…');
   try {
-    const [{ data: pets }, { data: heroClasses }, heroManifest, petManifest] = await Promise.all([
+    const [{ data: pets }, { data: heroClasses }, heroManifest, baseManifest, { packs: dlcPacks }] = await Promise.all([
       api('/api/data/pets'),
       api('/api/data/hero-classes'),
       fetchLabManifest('/heroes-art/manifest.json'),
       fetchLabManifest('/pets-art/manifest.json'),
+      api('/api/dlc-packs'),
     ]);
-    petLabState.pets = pets;
+
+    // Patch 0386 -- base roster plus whatever any installed DLC pack
+    // adds, same "base plus pack" shape DlcManager.allPets() already
+    // uses in the real game. Direct report: Pet Lab couldn't show Ruby
+    // Dragonling (Founder's Pack) at all -- this tab previously only
+    // ever read /api/data/pets, which has no concept of a DLC pack.
+    // Each pack's own pet manifest is merged into ONE combined
+    // petLabState.petManifest, same basePath-stamping shape PetSprite.
+    // tsx's own patch-0386 fix uses, just rooted at this tool's
+    // /pets-art/dlc/<packId>/ route instead of the game's own
+    // ./dlc/<packId>/pets/ -- see refreshPetLabAnimators below for where
+    // that basePath actually gets read.
+    petLabState.dlcPacks = dlcPacks;
+    const dlcPets = dlcPacks.flatMap((pack) => (pack.pets ?? []).map((p) => ({ ...p, requiresDlc: pack.id })));
+    petLabState.pets = [...pets, ...dlcPets];
+
+    let mergedManifest = baseManifest ?? {};
+    for (const pack of dlcPacks) {
+      const packManifest = await fetchLabManifest(`/pets-art/dlc/${pack.id}/manifest.json`);
+      if (!packManifest) continue;
+      for (const [species, char] of Object.entries(packManifest)) {
+        mergedManifest = { ...mergedManifest, [species]: { ...char, basePath: `/pets-art/dlc/${pack.id}` } };
+      }
+    }
+    // null (not {}) specifically means "found no art anywhere at all",
+    // same signal refreshPetLabAnimators' own caption fallback already
+    // keys off -- only collapse to null when every source (base AND
+    // every installed pack) came back empty; a real merged result
+    // (even a DLC-only one, on a machine with just the pack's art
+    // installed) should render normally.
+    petLabState.petManifest = (baseManifest === null && Object.keys(mergedManifest).length === 0) ? null : mergedManifest;
+
     petLabState.heroClasses = heroClasses;
     petLabState.heroManifest = heroManifest;
-    petLabState.petManifest = petManifest;
-    if (!petLabState.petId || !pets.some((p) => p.id === petLabState.petId)) {
-      petLabState.petId = pets[0]?.id ?? null;
+    if (!petLabState.petId || !petLabState.pets.some((p) => p.id === petLabState.petId)) {
+      petLabState.petId = petLabState.pets[0]?.id ?? null;
     }
     if (!heroClasses.some((h) => h.id === petLabState.heroClassId)) {
       petLabState.heroClassId = heroClasses.find((h) => h.id === 'adventurer')?.id ?? heroClasses[0]?.id ?? null;
@@ -3201,19 +3236,21 @@ function refreshPetLabAnimators() {
       frameW: petChar.frameW, frameH: petChar.frameH,
       frames: petChar.animations[petAnim] || 1,
       fps: PETLAB_FPS[petAnim] || 8,
-      url: `/pets-art/${petDef.spriteFolder}/${petLabState.rarity}/${petAnim}.png`,
+      url: `${petChar.basePath ?? '/pets-art'}/${petDef.spriteFolder}/${petLabState.rarity}/${petAnim}.png`,
     });
     if (petCaption) petCaption.textContent = `${petDef.name} — ${petAnim}`;
   } else {
     stopLabAnimator('pet');
     if (petCaption) petCaption.textContent = petLabState.petManifest === null
-      ? 'No pet art installed locally (public/pets is gitignored)' : (petDef ? 'No art for this species yet' : '');
+      ? 'No pet art installed locally (public/pets is gitignored)'
+      : (petDef ? `No art for this species yet${petDef.requiresDlc ? ` (public/dlc/${petDef.requiresDlc}/pets is gitignored)` : ''}` : '');
   }
 }
 
 async function savePetLabDefaults() {
   const idx = petLabState.pets.findIndex((p) => p.id === petLabState.petId);
   if (idx === -1) return;
+  const selected = petLabState.pets[idx];
   // Omitted rather than written as 1/0/0 when untouched -- same
   // "omitted means default" convention PetDef's own doc comment commits
   // to, and the same shape decorationImage's save-time filtering already
@@ -3230,10 +3267,28 @@ async function savePetLabDefaults() {
   renderPetLab();
   setStatus('Saving…');
   try {
-    const result = await api('/api/data/pets', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
+    // Patch 0386 -- a DLC species lives in its own pack's pack.json, not
+    // pets.json, so it needs its own save endpoint entirely (see the
+    // /api/dlc-packs/:packId/pets route's own comment in server.mjs).
+    // Each save only ever posts the ONE array the edited pet actually
+    // belongs to -- a DLC pack's own slice never gets mixed into the
+    // base pets.json write, and vice versa.
+    let result;
+    if (selected.requiresDlc) {
+      const packPets = updated
+        .filter((p) => p.requiresDlc === selected.requiresDlc)
+        .map(({ requiresDlc, ...rest }) => rest);
+      result = await api(`/api/dlc-packs/${selected.requiresDlc}/pets`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(packPets),
+      });
+    } else {
+      const basePets = updated.filter((p) => !p.requiresDlc);
+      result = await api('/api/data/pets', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(basePets),
+      });
+    }
     petLabState.pets = updated;
     petLabState.dirty = false;
     setStatus(`Saved (${result.count} entries).`, 'ok');
@@ -3253,17 +3308,21 @@ function renderPetLab() {
     <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Pet Sprite Lab</h2>
     <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
       Preview a pet next to the corner companion's hero sprite at its real default size, in both
-      poses, then dial in a per-species scale/position correction -- the same fix HeroSprite.tsx's
-      own HERO_DISPLAY_SCALE/OFFSET table applies for hero classes, except saved here as data on the
-      pet itself instead of hardcoded in TypeScript. Saves straight to pets.json; nothing here
-      touches the player's own Settings scale/drag position, which still applies on top of this.
+      poses, then dial in a per-species scale/position correction -- same fix Hero Sprite Lab applies
+      for hero classes. Saves straight to pets.json (or, for a DLC species, that pack's own pack.json --
+      see the species dropdown below); nothing here touches the player's own Settings scale/drag
+      position, which still applies on top of this.
     </p>
 
     <div class="field-row" style="margin-bottom: 12px;">
       <div class="field">
         <label>Pet species</label>
         <select id="petLabPetSelect">
-          ${petLabState.pets.map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === petLabState.petId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+          ${petLabState.pets.map((p) => {
+            const pack = p.requiresDlc ? petLabState.dlcPacks.find((d) => d.id === p.requiresDlc) : null;
+            const label = pack ? `${p.name} (DLC: ${pack.name})` : p.name;
+            return `<option value="${escapeHtml(p.id)}" ${p.id === petLabState.petId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+          }).join('')}
         </select>
       </div>
       <div class="field">

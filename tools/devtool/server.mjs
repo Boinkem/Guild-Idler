@@ -59,6 +59,17 @@ const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
 // one file at a time.
 const HEROES_DIR = path.join(ROOT, 'public', 'heroes');
 const PETS_ART_DIR = path.join(ROOT, 'public', 'pets');
+// DLC pack folders -- public/dlc/<packId>/pack.json (the small metadata
+// file: id, name, and whatever content arrays the pack adds) is checked
+// into git; each pack's own art/manifest subfolders underneath are
+// gitignored the same way public/heroes and public/pets are (licensed,
+// regenerated locally via tools/import_pets.py --out public/dlc/<packId>,
+// see .gitignore's own comment). Added patch 0386 alongside the
+// /api/dlc-packs and /pets-art/dlc/ routes below -- Pet Lab could only
+// ever see the base roster before this, so a DLC-only species like Ruby
+// Dragonling was invisible to the tool even on a machine with the pack's
+// real art sitting right there on disk.
+const DLC_DIR = path.join(ROOT, 'public', 'dlc');
 // Guild Hall decoration art -- its own tree (public/decor/) rather than
 // reusing ICONS_DIR or BANNERS_DIR, same "different root, kept separate"
 // reasoning as BANNERS_DIR's own comment just above. Doesn't reuse
@@ -2193,7 +2204,37 @@ async function listIcons() {
   return folders;
 }
 
-// Same shape as listIcons's output ({name, files}[]), but public/lore/ also
+/**
+ * Scans public/dlc/ for pack subfolders and reads each one's pack.json --
+ * file-presence based, same convention DlcManager.ts itself falls back to
+ * when Steam can't answer (this Node server has no Steam SDK access at
+ * all, so file presence is the only signal available here). Returns each
+ * pack's full manifest (id, name, pets/skins/heroClasses arrays) rather
+ * than just an id list, since Pet Lab needs the actual `pets` array to
+ * populate its species dropdown -- see selectPetLabTab in app.js.
+ */
+async function listDlcPacks() {
+  let topEntries;
+  try {
+    topEntries = await fs.readdir(DLC_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const packs = [];
+  for (const entry of topEntries) {
+    if (!entry.isDirectory()) continue;
+    try {
+      const raw = await fs.readFile(path.join(DLC_DIR, entry.name, 'pack.json'), 'utf8');
+      const manifest = JSON.parse(raw);
+      if (manifest.id === entry.name) packs.push(manifest);
+    } catch {
+      continue; // no pack.json in this folder, or it's malformed -- skip, don't fail the whole listing
+    }
+  }
+  return packs;
+}
+
+
 // has real loose images sitting directly in its root (guild-hall-bg.jpg,
 // raids-bg.jpg, etc) rather than only inside subfolders -- those get
 // grouped under a synthetic "(general)" entry rather than being dropped,
@@ -3040,6 +3081,57 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, await listDecorArt());
   }
 
+  // Patch 0386 -- lets Pet Lab (and, later, Hero Lab if a DLC hero class
+  // ever ships) see DLC-only content the same way the real game's own
+  // DlcManager.allPets()/allHeroClasses() do, instead of only ever
+  // reading the base roster. See listDlcPacks's own comment for why this
+  // is file-presence based rather than a real Steam ownership check.
+  if (url.pathname === '/api/dlc-packs' && req.method === 'GET') {
+    return json(res, 200, { packs: await listDlcPacks() });
+  }
+
+  // Saves a DLC pack's own `pets` array back to its pack.json -- the
+  // generic /api/data/:kind route just below only ever writes to
+  // src/game/data/json/*.json, which has no concept of a DLC pack, so
+  // Pet Lab's "Save default" needs a separate endpoint for a species
+  // that came from here instead. Reuses the exact same `pets` schema
+  // (and therefore the exact same validateArray/validateEntry rules) the
+  // base roster already validates against -- a DLC pet entry has the
+  // identical shape (minus `requiresDlc`, which is never actually stored
+  // in the file itself, only stamped on at runtime by DlcManager). Only
+  // the `pets` field of the pack's own pack.json is replaced; `id`,
+  // `name`, and anything else a future pack adds (skins, heroClasses)
+  // are read back untouched.
+  const dlcPetsMatch = url.pathname.match(/^\/api\/dlc-packs\/([\w-]+)\/pets$/);
+  if (dlcPetsMatch && req.method === 'POST') {
+    const packId = dlcPetsMatch[1];
+    const packPath = path.join(DLC_DIR, packId, 'pack.json');
+    let existing;
+    try {
+      existing = JSON.parse(await fs.readFile(packPath, 'utf8'));
+    } catch (err) {
+      return json(res, 404, { error: `Could not read pack.json for "${packId}": ${err.message}` });
+    }
+    let data;
+    try {
+      data = JSON.parse(await readBody(req));
+    } catch {
+      return json(res, 400, { error: 'Malformed JSON in request body.' });
+    }
+    const errors = validateArray('pets', data);
+    if (errors.length) return json(res, 400, { error: 'Validation failed.', details: errors });
+
+    const updated = { ...existing, pets: data };
+    try {
+      const previous = await fs.readFile(packPath, 'utf8').catch(() => null);
+      if (previous) await fs.writeFile(packPath + '.bak', previous, 'utf8');
+      await fs.writeFile(packPath, JSON.stringify(updated, null, 2) + '\n', 'utf8');
+    } catch (err) {
+      return json(res, 500, { error: `Could not write pack.json for "${packId}": ${err.message}` });
+    }
+    return json(res, 200, { ok: true, count: data.length });
+  }
+
   // Display-only metadata for the Guild Hall Slot Layout tool -- labels
   // and pools for the 30 fixed slot ids, so it can show "L2a" on a box
   // instead of a bare id. See GUILDHALL_SLOT_META's own comment.
@@ -3156,6 +3248,33 @@ const server = http.createServer(async (req, res) => {
     const rel = decodeURIComponent(url.pathname.slice('/heroes-art/'.length)).split('?')[0];
     const filePath = path.join(HEROES_DIR, rel);
     if (!filePath.startsWith(HEROES_DIR)) { res.writeHead(403); res.end(); return; }
+    try {
+      const body = await fs.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.json': 'application/json' }[ext]
+        ?? 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(body);
+    } catch {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+    return;
+  }
+  // Patch 0386: DLC pet art, at /pets-art/dlc/<packId>/<rest>, mapped to
+  // public/dlc/<packId>/pets/<rest> -- same file, same guarded-join
+  // pattern as the base branch just below, kept under this same route
+  // (rather than a whole separate endpoint) so Pet Lab's art-loading code
+  // only needs one base URL to branch on. A pack folder that doesn't
+  // exist, or doesn't own this species yet, 404s exactly the same way
+  // missing base art already does -- "not installed" is never an error
+  // here, see this route's own top comment.
+  if (url.pathname.startsWith('/pets-art/dlc/')) {
+    const rel = decodeURIComponent(url.pathname.slice('/pets-art/dlc/'.length)).split('?')[0];
+    const [packId, ...restParts] = rel.split('/');
+    const packDir = path.join(DLC_DIR, packId, 'pets');
+    const filePath = path.join(packDir, restParts.join('/'));
+    if (!packId || !filePath.startsWith(packDir)) { res.writeHead(403); res.end(); return; }
     try {
       const body = await fs.readFile(filePath);
       const ext = path.extname(filePath).toLowerCase();

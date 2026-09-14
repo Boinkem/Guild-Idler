@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Rarity } from '../../game/types';
+import { DlcManager } from '../../game/managers/DlcManager';
 
 /**
  * Renders pet sprite packs -- same manifest-driven, per-animation-strip
@@ -48,6 +49,27 @@ interface SpeciesManifest {
   frameW: number;
   frameH: number;
   animations: Partial<Record<PetAnimation, number>>;
+  /**
+   * Root folder this species' sprite files live under -- './pets' (the
+   * base game's own art) when unset, or './dlc/<packId>/pets' for a
+   * species a DLC pack added. Stamped automatically when a pack's own
+   * manifest is merged in (see loadManifest below); never present in the
+   * base game's own manifest.json on disk. Same shape HeroSprite.tsx's
+   * own CharManifest.basePath already established for DLC hero classes.
+   *
+   * Patch 0386 -- pets never actually got the matching merge logic until
+   * now, despite DlcManager.fetchPackAsset's own doc comment already
+   * anticipating it ("a hero sprite manifest... pet sprites or anything
+   * else added later can reuse the same discovery logic"). Direct
+   * report: the DevTool's Pet Lab couldn't show Ruby Dragonling at all.
+   * Tracing it back, the real bug was here, not in the DevTool -- this
+   * component never fetched a DLC pack's own pet manifest, so a DLC
+   * species' real art was undiscoverable by the actual game either. A
+   * player who genuinely owns the Founder's Pack and hatches a Ruby
+   * Dragonling would have seen it permanently glyph-fallen-back, not
+   * just the DevTool preview being incomplete.
+   */
+  basePath?: string;
 }
 
 type Manifest = Record<string, SpeciesManifest>;
@@ -60,26 +82,59 @@ const DEFAULT_FPS: Partial<Record<PetAnimation, number>> = {
 let manifestCache: Manifest | null = null;
 let manifestPromise: Promise<Manifest> | null = null;
 
-function fetchManifest(): Promise<Manifest> {
-  // no-store, not just a plain fetch -- this file changes any time new pet
-  // art lands, and a long-running Electron session (or an ordinary browser
-  // HTTP cache) holding onto a stale response would mean a freshly-added
-  // species never appears without a full app restart. Confirmed as the
-  // actual cause of a newly-added species staying glyph-only after art was
-  // pushed: the pet had been equipped/viewed once before its art existed,
-  // that first (empty-ish) manifest got cached, and nothing ever asked
-  // again.
+/**
+ * no-store, not just a plain fetch -- this file changes any time new pet
+ * art lands, and a long-running Electron session (or an ordinary browser
+ * HTTP cache) holding onto a stale response would mean a freshly-added
+ * species never appears without a full app restart. Confirmed as the
+ * actual cause of a newly-added species staying glyph-only after art was
+ * pushed: the pet had been equipped/viewed once before its art existed,
+ * that first (empty-ish) manifest got cached, and nothing ever asked
+ * again.
+ */
+function fetchBaseManifest(): Promise<Manifest> {
   return fetch('./pets/manifest.json', { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : {}))
+    .then((r) => (r.ok ? r.json() as Promise<Manifest> : {}))
     .catch(() => ({}));
+}
+
+/**
+ * Merges the base manifest with every known DLC pack's own
+ * pets-manifest.json (patch 0386) -- same shape HeroSprite.tsx's own
+ * loadManifest already established for hero classes. Packs the player
+ * doesn't own simply won't have that file (DlcManager.fetchPackAsset
+ * already gates on ownership before even trying), so they contribute
+ * nothing, same as today. Any species a pack DOES provide gets its
+ * basePath stamped to that pack's own art folder before merging, so
+ * later frame-URL construction knows to look under
+ * './dlc/<packId>/pets/...' instead of the base game's own './pets/'.
+ * Merged with the DLC packs spread first, base game's own manifest
+ * spread last and therefore taking priority on a (currently impossible,
+ * since DLC species ids are distinct from the base roster) id collision
+ * -- same "a pack should never silently override base-game art" rule
+ * HeroSprite.tsx's own merge already follows.
+ */
+function fetchMergedManifest(): Promise<Manifest> {
+  return Promise.all([
+    fetchBaseManifest(),
+    ...DlcManager.knownPackIds().map((packId) => DlcManager.fetchPackAsset<Manifest>(packId, 'pets-manifest.json')
+      .then((packManifest) => {
+        if (!packManifest) return {} as Manifest;
+        const stamped: Manifest = {};
+        for (const [species, char] of Object.entries(packManifest)) {
+          if (char) stamped[species] = { ...char, basePath: `./dlc/${packId}/pets` };
+        }
+        return stamped;
+      })),
+  ]).then(([base, ...packs]) => Object.assign({}, ...packs, base) as Manifest);
 }
 
 function loadManifest(): Promise<Manifest> {
   if (manifestCache) return Promise.resolve(manifestCache);
   if (!manifestPromise) {
-    manifestPromise = fetchManifest().then((m) => {
+    manifestPromise = fetchMergedManifest().then((m) => {
       // Only a genuinely non-empty result is cached -- an empty object
-      // means the fetch failed, or the file simply didn't exist yet.
+      // means every fetch failed, or none of the files existed yet.
       // Caching that permanently was the other half of the bug above: it
       // meant a session that started before ANY pet art existed would
       // never show ANY pet's real sprite for the rest of that session,
@@ -211,7 +266,7 @@ export function PetSprite({
   }
 
   const scale = (height / char.frameH) * displayScale;
-  const url = `./pets/${species}/${rarity}/${resolved}.png`;
+  const url = `${char.basePath ?? './pets'}/${species}/${rarity}/${resolved}.png`;
   // XOR, not OR/AND -- a reversed-facing species should flip exactly when
   // a normal species WOULDN'T, and vice versa, not simply flip more often.
   // Same logic as HeroSprite's effectiveFlip.

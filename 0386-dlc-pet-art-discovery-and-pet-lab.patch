@@ -1,0 +1,530 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index cc2a98d..0f5b984 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -31523,3 +31523,97 @@ the three retirement ids present. No live in-app playtest in this
+ environment (no browser available) -- worth a real-window pass at
+ level 1 specifically to confirm the board now feels noticeably more
+ usable, and a quick listen to both reassigned bard tracks.
++
++### Bug fix: DLC pets invisible to both the real game and Pet Sprite Lab (patch 0386)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed DLC pets (Ruby Dragonling, Founder's Pack) never showing their real sprite in-game -- they were silently stuck on the glyph fallback even for an owner
++- Pet Sprite Lab now lists DLC species too, labelled with their pack, with their own live preview and save path
++```
++
++Direct report: the DevTool's Pet Lab couldn't show Ruby Dragonling at
++all, "for whatever the reason is." Root cause traced back further than
++the DevTool -- it's actually two separate bugs, the second one much
++bigger than the report itself.
++
++**The real bug: `PetSprite.tsx` never merged DLC pack art (`src/ui/
++sprites/PetSprite.tsx`).** `HeroSprite.tsx` has merged each installed
++DLC pack's own `heroes-manifest.json` since the DLC groundwork patches
++(`DlcManager.knownPackIds()` + `fetchPackAsset`, stamping `basePath` per
++class); `PetSprite.tsx` never got the matching logic and only ever
++fetched the base `./pets/manifest.json`. `DlcManager.fetchPackAsset`'s
++own doc comment already anticipated this exact gap ("a hero sprite
++manifest... pet sprites or anything else added later can reuse the same
++discovery logic") but it was never actually wired up. Practical effect:
++a real player who owns the Founder's Pack and hatches a Ruby Dragonling
++would see it permanently glyph-only, in the actual shipped game, not
++just an incomplete DevTool preview -- the DevTool report was a symptom,
++not the root cause.
++
++**Fixed the same way HeroSprite.tsx already solved it.** `SpeciesManifest`
++gains an optional `basePath` field; `loadManifest` now fetches the base
++manifest AND every known pack's own `pets-manifest.json` in parallel,
++stamps `basePath: './dlc/<packId>/pets'` on each DLC species before
++merging (base spread last, so it always wins on a currently-impossible
++id collision -- same rule HeroSprite.tsx's own merge follows), and the
++sprite URL now reads `char.basePath ?? './pets'` instead of a hardcoded
++`'./pets'`. The existing "only cache a non-empty result, retry on a
++species-specific cache miss" logic is preserved unchanged, just now
++covering the merged result instead of the base-only one.
++
++**DevTool: Pet Lab now sees DLC content at all (`server.mjs`, `app.js`).**
++The DevTool server has zero Steam-ownership awareness (it's a plain
++Node process, not the Electron shell), so it falls back to the same
++file-presence convention `DlcManager.ts` itself uses when Steam can't
++answer: a new `listDlcPacks()` scans `public/dlc/*/pack.json` directly.
++Three additions:
++- `GET /api/dlc-packs` -- returns every pack found on disk, `pets`
++  array and all.
++- `POST /api/dlc-packs/:packId/pets` -- a DLC species lives in that
++  pack's own `pack.json`, not `pets.json`, so it needs its own save
++  path; reuses the exact same `pets` schema (and therefore the same
++  validateEntry rules) the base roster already validates against, and
++  only ever replaces that pack's own `pets` field, leaving `id`/`name`/
++  anything else untouched.
++- `/pets-art/dlc/<packId>/...` -- extends the existing `/pets-art/`
++  route rather than adding a whole separate one, mapped to
++  `public/dlc/<packId>/pets/...` with the same path-traversal guard
++  shape as every other art route here.
++
++**Pet Lab's species dropdown, art loading, and save all now DLC-aware.**
++`selectPetLabTab` merges `/api/dlc-packs` into the species list (tagged
++`requiresDlc`, same shape `DlcManager.allPets()` uses at runtime) and
++merges each pack's own art manifest into one combined manifest with the
++right `basePath` stamped per species -- same merge shape as the real
++`PetSprite.tsx` fix above, just rooted at this tool's own `/pets-art/
++dlc/<packId>/` route instead of the game's `./dlc/<packId>/pets/`. The
++dropdown labels a DLC entry with its pack's name ("Ruby Dragonling
++(DLC: Founder's Pack)"). Save now branches on `requiresDlc`: a DLC
++pet's edit posts only that pack's own slice to its dedicated endpoint
++(stripping the runtime-only `requiresDlc` stamp first, since the file
++on disk never stores it); a base pet's edit still posts to `/api/data/
++pets` exactly as before. Also fixed a stale comment left over from
++patch 0384 still referencing HeroSprite.tsx's old hardcoded
++`HERO_DISPLAY_SCALE`/`OFFSET` tables, which that patch already replaced
++with `hero-classes.json` data.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Ran the DevTool server directly:
++`/api/dlc-packs` correctly returns Founder's Pack with `ruby_dragonling`
++listed, and `/pets-art/dlc/founders_pack/manifest.json` correctly 404s
++(no local DLC art installed in this environment -- expected, same
++gitignored convention as every other art tree). Round-trip tested the
++new save path directly: POSTed a modified Founder's Pack `pets` array
++with `displayScale`/`displayOffsetX`/`displayOffsetY` set on
++`ruby_dragonling`, confirmed `pack.json` persisted them and a fresh GET
++read them back correctly, confirmed the pack's own `id`/`name` were
++left untouched, then reverted -- `pack.json` byte-identical to its
++pre-patch state afterward, no stray `.bak` left behind. No live in-app
++playtest in this environment (no browser, and no local Founder's Pack
++art to actually render) -- worth a real pass on a machine with the
++pack's art installed to confirm Ruby Dragonling's sprite now actually
++shows up both in-game and in Pet Lab instead of falling back to its
++glyph. Hero Lab has the same latent gap for a future DLC hero class
++(no pack currently defines one, so nothing to fix yet) -- worth
++revisiting the same way if/when one ships.
+diff --git a/src/ui/sprites/PetSprite.tsx b/src/ui/sprites/PetSprite.tsx
+index bf7dade..9505805 100644
+--- a/src/ui/sprites/PetSprite.tsx
++++ b/src/ui/sprites/PetSprite.tsx
+@@ -1,6 +1,7 @@
+ import { useEffect, useMemo, useRef, useState } from 'react';
+ import type { CSSProperties } from 'react';
+ import { Rarity } from '../../game/types';
++import { DlcManager } from '../../game/managers/DlcManager';
+ 
+ /**
+  * Renders pet sprite packs -- same manifest-driven, per-animation-strip
+@@ -48,6 +49,27 @@ interface SpeciesManifest {
+   frameW: number;
+   frameH: number;
+   animations: Partial<Record<PetAnimation, number>>;
++  /**
++   * Root folder this species' sprite files live under -- './pets' (the
++   * base game's own art) when unset, or './dlc/<packId>/pets' for a
++   * species a DLC pack added. Stamped automatically when a pack's own
++   * manifest is merged in (see loadManifest below); never present in the
++   * base game's own manifest.json on disk. Same shape HeroSprite.tsx's
++   * own CharManifest.basePath already established for DLC hero classes.
++   *
++   * Patch 0386 -- pets never actually got the matching merge logic until
++   * now, despite DlcManager.fetchPackAsset's own doc comment already
++   * anticipating it ("a hero sprite manifest... pet sprites or anything
++   * else added later can reuse the same discovery logic"). Direct
++   * report: the DevTool's Pet Lab couldn't show Ruby Dragonling at all.
++   * Tracing it back, the real bug was here, not in the DevTool -- this
++   * component never fetched a DLC pack's own pet manifest, so a DLC
++   * species' real art was undiscoverable by the actual game either. A
++   * player who genuinely owns the Founder's Pack and hatches a Ruby
++   * Dragonling would have seen it permanently glyph-fallen-back, not
++   * just the DevTool preview being incomplete.
++   */
++  basePath?: string;
+ }
+ 
+ type Manifest = Record<string, SpeciesManifest>;
+@@ -60,26 +82,59 @@ const DEFAULT_FPS: Partial<Record<PetAnimation, number>> = {
+ let manifestCache: Manifest | null = null;
+ let manifestPromise: Promise<Manifest> | null = null;
+ 
+-function fetchManifest(): Promise<Manifest> {
+-  // no-store, not just a plain fetch -- this file changes any time new pet
+-  // art lands, and a long-running Electron session (or an ordinary browser
+-  // HTTP cache) holding onto a stale response would mean a freshly-added
+-  // species never appears without a full app restart. Confirmed as the
+-  // actual cause of a newly-added species staying glyph-only after art was
+-  // pushed: the pet had been equipped/viewed once before its art existed,
+-  // that first (empty-ish) manifest got cached, and nothing ever asked
+-  // again.
++/**
++ * no-store, not just a plain fetch -- this file changes any time new pet
++ * art lands, and a long-running Electron session (or an ordinary browser
++ * HTTP cache) holding onto a stale response would mean a freshly-added
++ * species never appears without a full app restart. Confirmed as the
++ * actual cause of a newly-added species staying glyph-only after art was
++ * pushed: the pet had been equipped/viewed once before its art existed,
++ * that first (empty-ish) manifest got cached, and nothing ever asked
++ * again.
++ */
++function fetchBaseManifest(): Promise<Manifest> {
+   return fetch('./pets/manifest.json', { cache: 'no-store' })
+-    .then((r) => (r.ok ? r.json() : {}))
++    .then((r) => (r.ok ? r.json() as Promise<Manifest> : {}))
+     .catch(() => ({}));
+ }
+ 
++/**
++ * Merges the base manifest with every known DLC pack's own
++ * pets-manifest.json (patch 0386) -- same shape HeroSprite.tsx's own
++ * loadManifest already established for hero classes. Packs the player
++ * doesn't own simply won't have that file (DlcManager.fetchPackAsset
++ * already gates on ownership before even trying), so they contribute
++ * nothing, same as today. Any species a pack DOES provide gets its
++ * basePath stamped to that pack's own art folder before merging, so
++ * later frame-URL construction knows to look under
++ * './dlc/<packId>/pets/...' instead of the base game's own './pets/'.
++ * Merged with the DLC packs spread first, base game's own manifest
++ * spread last and therefore taking priority on a (currently impossible,
++ * since DLC species ids are distinct from the base roster) id collision
++ * -- same "a pack should never silently override base-game art" rule
++ * HeroSprite.tsx's own merge already follows.
++ */
++function fetchMergedManifest(): Promise<Manifest> {
++  return Promise.all([
++    fetchBaseManifest(),
++    ...DlcManager.knownPackIds().map((packId) => DlcManager.fetchPackAsset<Manifest>(packId, 'pets-manifest.json')
++      .then((packManifest) => {
++        if (!packManifest) return {} as Manifest;
++        const stamped: Manifest = {};
++        for (const [species, char] of Object.entries(packManifest)) {
++          if (char) stamped[species] = { ...char, basePath: `./dlc/${packId}/pets` };
++        }
++        return stamped;
++      })),
++  ]).then(([base, ...packs]) => Object.assign({}, ...packs, base) as Manifest);
++}
++
+ function loadManifest(): Promise<Manifest> {
+   if (manifestCache) return Promise.resolve(manifestCache);
+   if (!manifestPromise) {
+-    manifestPromise = fetchManifest().then((m) => {
++    manifestPromise = fetchMergedManifest().then((m) => {
+       // Only a genuinely non-empty result is cached -- an empty object
+-      // means the fetch failed, or the file simply didn't exist yet.
++      // means every fetch failed, or none of the files existed yet.
+       // Caching that permanently was the other half of the bug above: it
+       // meant a session that started before ANY pet art existed would
+       // never show ANY pet's real sprite for the rest of that session,
+@@ -211,7 +266,7 @@ export function PetSprite({
+   }
+ 
+   const scale = (height / char.frameH) * displayScale;
+-  const url = `./pets/${species}/${rarity}/${resolved}.png`;
++  const url = `${char.basePath ?? './pets'}/${species}/${rarity}/${resolved}.png`;
+   // XOR, not OR/AND -- a reversed-facing species should flip exactly when
+   // a normal species WOULDN'T, and vice versa, not simply flip more often.
+   // Same logic as HeroSprite's effectiveFlip.
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index d00b1ee..dd48d2b 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -3049,6 +3049,10 @@ const PETLAB_FPS = { idle: 6, idle2: 6, walk: 9, run: 12, movement: 10, walking:
+ 
+ const petLabState = {
+   pets: [], heroClasses: [],
++  // Patch 0386 -- every installed DLC pack's own manifest (id/name/pets),
++  // kept around so the species dropdown can label a DLC entry with its
++  // pack's name. See selectPetLabTab.
++  dlcPacks: [],
+   petId: null, heroClassId: 'adventurer', rarity: 'common',
+   pose: 'idle', // 'idle' | 'moving' -- drives both sprites together, same pairing IdleView.tsx already uses (hero idle/run <-> pet idle/movement)
+   heroManifest: null, petManifest: null,
+@@ -3071,18 +3075,49 @@ async function selectPetLabTab() {
+   subtabsEl.innerHTML = '';
+   setStatus('Loading…');
+   try {
+-    const [{ data: pets }, { data: heroClasses }, heroManifest, petManifest] = await Promise.all([
++    const [{ data: pets }, { data: heroClasses }, heroManifest, baseManifest, { packs: dlcPacks }] = await Promise.all([
+       api('/api/data/pets'),
+       api('/api/data/hero-classes'),
+       fetchLabManifest('/heroes-art/manifest.json'),
+       fetchLabManifest('/pets-art/manifest.json'),
++      api('/api/dlc-packs'),
+     ]);
+-    petLabState.pets = pets;
++
++    // Patch 0386 -- base roster plus whatever any installed DLC pack
++    // adds, same "base plus pack" shape DlcManager.allPets() already
++    // uses in the real game. Direct report: Pet Lab couldn't show Ruby
++    // Dragonling (Founder's Pack) at all -- this tab previously only
++    // ever read /api/data/pets, which has no concept of a DLC pack.
++    // Each pack's own pet manifest is merged into ONE combined
++    // petLabState.petManifest, same basePath-stamping shape PetSprite.
++    // tsx's own patch-0386 fix uses, just rooted at this tool's
++    // /pets-art/dlc/<packId>/ route instead of the game's own
++    // ./dlc/<packId>/pets/ -- see refreshPetLabAnimators below for where
++    // that basePath actually gets read.
++    petLabState.dlcPacks = dlcPacks;
++    const dlcPets = dlcPacks.flatMap((pack) => (pack.pets ?? []).map((p) => ({ ...p, requiresDlc: pack.id })));
++    petLabState.pets = [...pets, ...dlcPets];
++
++    let mergedManifest = baseManifest ?? {};
++    for (const pack of dlcPacks) {
++      const packManifest = await fetchLabManifest(`/pets-art/dlc/${pack.id}/manifest.json`);
++      if (!packManifest) continue;
++      for (const [species, char] of Object.entries(packManifest)) {
++        mergedManifest = { ...mergedManifest, [species]: { ...char, basePath: `/pets-art/dlc/${pack.id}` } };
++      }
++    }
++    // null (not {}) specifically means "found no art anywhere at all",
++    // same signal refreshPetLabAnimators' own caption fallback already
++    // keys off -- only collapse to null when every source (base AND
++    // every installed pack) came back empty; a real merged result
++    // (even a DLC-only one, on a machine with just the pack's art
++    // installed) should render normally.
++    petLabState.petManifest = (baseManifest === null && Object.keys(mergedManifest).length === 0) ? null : mergedManifest;
++
+     petLabState.heroClasses = heroClasses;
+     petLabState.heroManifest = heroManifest;
+-    petLabState.petManifest = petManifest;
+-    if (!petLabState.petId || !pets.some((p) => p.id === petLabState.petId)) {
+-      petLabState.petId = pets[0]?.id ?? null;
++    if (!petLabState.petId || !petLabState.pets.some((p) => p.id === petLabState.petId)) {
++      petLabState.petId = petLabState.pets[0]?.id ?? null;
+     }
+     if (!heroClasses.some((h) => h.id === petLabState.heroClassId)) {
+       petLabState.heroClassId = heroClasses.find((h) => h.id === 'adventurer')?.id ?? heroClasses[0]?.id ?? null;
+@@ -3201,19 +3236,21 @@ function refreshPetLabAnimators() {
+       frameW: petChar.frameW, frameH: petChar.frameH,
+       frames: petChar.animations[petAnim] || 1,
+       fps: PETLAB_FPS[petAnim] || 8,
+-      url: `/pets-art/${petDef.spriteFolder}/${petLabState.rarity}/${petAnim}.png`,
++      url: `${petChar.basePath ?? '/pets-art'}/${petDef.spriteFolder}/${petLabState.rarity}/${petAnim}.png`,
+     });
+     if (petCaption) petCaption.textContent = `${petDef.name} — ${petAnim}`;
+   } else {
+     stopLabAnimator('pet');
+     if (petCaption) petCaption.textContent = petLabState.petManifest === null
+-      ? 'No pet art installed locally (public/pets is gitignored)' : (petDef ? 'No art for this species yet' : '');
++      ? 'No pet art installed locally (public/pets is gitignored)'
++      : (petDef ? `No art for this species yet${petDef.requiresDlc ? ` (public/dlc/${petDef.requiresDlc}/pets is gitignored)` : ''}` : '');
+   }
+ }
+ 
+ async function savePetLabDefaults() {
+   const idx = petLabState.pets.findIndex((p) => p.id === petLabState.petId);
+   if (idx === -1) return;
++  const selected = petLabState.pets[idx];
+   // Omitted rather than written as 1/0/0 when untouched -- same
+   // "omitted means default" convention PetDef's own doc comment commits
+   // to, and the same shape decorationImage's save-time filtering already
+@@ -3230,10 +3267,28 @@ async function savePetLabDefaults() {
+   renderPetLab();
+   setStatus('Saving…');
+   try {
+-    const result = await api('/api/data/pets', {
+-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify(updated),
+-    });
++    // Patch 0386 -- a DLC species lives in its own pack's pack.json, not
++    // pets.json, so it needs its own save endpoint entirely (see the
++    // /api/dlc-packs/:packId/pets route's own comment in server.mjs).
++    // Each save only ever posts the ONE array the edited pet actually
++    // belongs to -- a DLC pack's own slice never gets mixed into the
++    // base pets.json write, and vice versa.
++    let result;
++    if (selected.requiresDlc) {
++      const packPets = updated
++        .filter((p) => p.requiresDlc === selected.requiresDlc)
++        .map(({ requiresDlc, ...rest }) => rest);
++      result = await api(`/api/dlc-packs/${selected.requiresDlc}/pets`, {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify(packPets),
++      });
++    } else {
++      const basePets = updated.filter((p) => !p.requiresDlc);
++      result = await api('/api/data/pets', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify(basePets),
++      });
++    }
+     petLabState.pets = updated;
+     petLabState.dirty = false;
+     setStatus(`Saved (${result.count} entries).`, 'ok');
+@@ -3253,17 +3308,21 @@ function renderPetLab() {
+     <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Pet Sprite Lab</h2>
+     <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
+       Preview a pet next to the corner companion's hero sprite at its real default size, in both
+-      poses, then dial in a per-species scale/position correction -- the same fix HeroSprite.tsx's
+-      own HERO_DISPLAY_SCALE/OFFSET table applies for hero classes, except saved here as data on the
+-      pet itself instead of hardcoded in TypeScript. Saves straight to pets.json; nothing here
+-      touches the player's own Settings scale/drag position, which still applies on top of this.
++      poses, then dial in a per-species scale/position correction -- same fix Hero Sprite Lab applies
++      for hero classes. Saves straight to pets.json (or, for a DLC species, that pack's own pack.json --
++      see the species dropdown below); nothing here touches the player's own Settings scale/drag
++      position, which still applies on top of this.
+     </p>
+ 
+     <div class="field-row" style="margin-bottom: 12px;">
+       <div class="field">
+         <label>Pet species</label>
+         <select id="petLabPetSelect">
+-          ${petLabState.pets.map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === petLabState.petId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
++          ${petLabState.pets.map((p) => {
++            const pack = p.requiresDlc ? petLabState.dlcPacks.find((d) => d.id === p.requiresDlc) : null;
++            const label = pack ? `${p.name} (DLC: ${pack.name})` : p.name;
++            return `<option value="${escapeHtml(p.id)}" ${p.id === petLabState.petId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
++          }).join('')}
+         </select>
+       </div>
+       <div class="field">
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index eea42d4..0374c2a 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -59,6 +59,17 @@ const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
+ // one file at a time.
+ const HEROES_DIR = path.join(ROOT, 'public', 'heroes');
+ const PETS_ART_DIR = path.join(ROOT, 'public', 'pets');
++// DLC pack folders -- public/dlc/<packId>/pack.json (the small metadata
++// file: id, name, and whatever content arrays the pack adds) is checked
++// into git; each pack's own art/manifest subfolders underneath are
++// gitignored the same way public/heroes and public/pets are (licensed,
++// regenerated locally via tools/import_pets.py --out public/dlc/<packId>,
++// see .gitignore's own comment). Added patch 0386 alongside the
++// /api/dlc-packs and /pets-art/dlc/ routes below -- Pet Lab could only
++// ever see the base roster before this, so a DLC-only species like Ruby
++// Dragonling was invisible to the tool even on a machine with the pack's
++// real art sitting right there on disk.
++const DLC_DIR = path.join(ROOT, 'public', 'dlc');
+ // Guild Hall decoration art -- its own tree (public/decor/) rather than
+ // reusing ICONS_DIR or BANNERS_DIR, same "different root, kept separate"
+ // reasoning as BANNERS_DIR's own comment just above. Doesn't reuse
+@@ -2193,7 +2204,37 @@ async function listIcons() {
+   return folders;
+ }
+ 
+-// Same shape as listIcons's output ({name, files}[]), but public/lore/ also
++/**
++ * Scans public/dlc/ for pack subfolders and reads each one's pack.json --
++ * file-presence based, same convention DlcManager.ts itself falls back to
++ * when Steam can't answer (this Node server has no Steam SDK access at
++ * all, so file presence is the only signal available here). Returns each
++ * pack's full manifest (id, name, pets/skins/heroClasses arrays) rather
++ * than just an id list, since Pet Lab needs the actual `pets` array to
++ * populate its species dropdown -- see selectPetLabTab in app.js.
++ */
++async function listDlcPacks() {
++  let topEntries;
++  try {
++    topEntries = await fs.readdir(DLC_DIR, { withFileTypes: true });
++  } catch {
++    return [];
++  }
++  const packs = [];
++  for (const entry of topEntries) {
++    if (!entry.isDirectory()) continue;
++    try {
++      const raw = await fs.readFile(path.join(DLC_DIR, entry.name, 'pack.json'), 'utf8');
++      const manifest = JSON.parse(raw);
++      if (manifest.id === entry.name) packs.push(manifest);
++    } catch {
++      continue; // no pack.json in this folder, or it's malformed -- skip, don't fail the whole listing
++    }
++  }
++  return packs;
++}
++
++
+ // has real loose images sitting directly in its root (guild-hall-bg.jpg,
+ // raids-bg.jpg, etc) rather than only inside subfolders -- those get
+ // grouped under a synthetic "(general)" entry rather than being dropped,
+@@ -3040,6 +3081,57 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, await listDecorArt());
+   }
+ 
++  // Patch 0386 -- lets Pet Lab (and, later, Hero Lab if a DLC hero class
++  // ever ships) see DLC-only content the same way the real game's own
++  // DlcManager.allPets()/allHeroClasses() do, instead of only ever
++  // reading the base roster. See listDlcPacks's own comment for why this
++  // is file-presence based rather than a real Steam ownership check.
++  if (url.pathname === '/api/dlc-packs' && req.method === 'GET') {
++    return json(res, 200, { packs: await listDlcPacks() });
++  }
++
++  // Saves a DLC pack's own `pets` array back to its pack.json -- the
++  // generic /api/data/:kind route just below only ever writes to
++  // src/game/data/json/*.json, which has no concept of a DLC pack, so
++  // Pet Lab's "Save default" needs a separate endpoint for a species
++  // that came from here instead. Reuses the exact same `pets` schema
++  // (and therefore the exact same validateArray/validateEntry rules) the
++  // base roster already validates against -- a DLC pet entry has the
++  // identical shape (minus `requiresDlc`, which is never actually stored
++  // in the file itself, only stamped on at runtime by DlcManager). Only
++  // the `pets` field of the pack's own pack.json is replaced; `id`,
++  // `name`, and anything else a future pack adds (skins, heroClasses)
++  // are read back untouched.
++  const dlcPetsMatch = url.pathname.match(/^\/api\/dlc-packs\/([\w-]+)\/pets$/);
++  if (dlcPetsMatch && req.method === 'POST') {
++    const packId = dlcPetsMatch[1];
++    const packPath = path.join(DLC_DIR, packId, 'pack.json');
++    let existing;
++    try {
++      existing = JSON.parse(await fs.readFile(packPath, 'utf8'));
++    } catch (err) {
++      return json(res, 404, { error: `Could not read pack.json for "${packId}": ${err.message}` });
++    }
++    let data;
++    try {
++      data = JSON.parse(await readBody(req));
++    } catch {
++      return json(res, 400, { error: 'Malformed JSON in request body.' });
++    }
++    const errors = validateArray('pets', data);
++    if (errors.length) return json(res, 400, { error: 'Validation failed.', details: errors });
++
++    const updated = { ...existing, pets: data };
++    try {
++      const previous = await fs.readFile(packPath, 'utf8').catch(() => null);
++      if (previous) await fs.writeFile(packPath + '.bak', previous, 'utf8');
++      await fs.writeFile(packPath, JSON.stringify(updated, null, 2) + '\n', 'utf8');
++    } catch (err) {
++      return json(res, 500, { error: `Could not write pack.json for "${packId}": ${err.message}` });
++    }
++    return json(res, 200, { ok: true, count: data.length });
++  }
++
+   // Display-only metadata for the Guild Hall Slot Layout tool -- labels
+   // and pools for the 30 fixed slot ids, so it can show "L2a" on a box
+   // instead of a bare id. See GUILDHALL_SLOT_META's own comment.
+@@ -3169,6 +3261,33 @@ const server = http.createServer(async (req, res) => {
+     }
+     return;
+   }
++  // Patch 0386: DLC pet art, at /pets-art/dlc/<packId>/<rest>, mapped to
++  // public/dlc/<packId>/pets/<rest> -- same file, same guarded-join
++  // pattern as the base branch just below, kept under this same route
++  // (rather than a whole separate endpoint) so Pet Lab's art-loading code
++  // only needs one base URL to branch on. A pack folder that doesn't
++  // exist, or doesn't own this species yet, 404s exactly the same way
++  // missing base art already does -- "not installed" is never an error
++  // here, see this route's own top comment.
++  if (url.pathname.startsWith('/pets-art/dlc/')) {
++    const rel = decodeURIComponent(url.pathname.slice('/pets-art/dlc/'.length)).split('?')[0];
++    const [packId, ...restParts] = rel.split('/');
++    const packDir = path.join(DLC_DIR, packId, 'pets');
++    const filePath = path.join(packDir, restParts.join('/'));
++    if (!packId || !filePath.startsWith(packDir)) { res.writeHead(403); res.end(); return; }
++    try {
++      const body = await fs.readFile(filePath);
++      const ext = path.extname(filePath).toLowerCase();
++      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.json': 'application/json' }[ext]
++        ?? 'application/octet-stream';
++      res.writeHead(200, { 'Content-Type': mime });
++      res.end(body);
++    } catch {
++      res.writeHead(404);
++      res.end('Not found');
++    }
++    return;
++  }
+   if (url.pathname.startsWith('/pets-art/')) {
+     const rel = decodeURIComponent(url.pathname.slice('/pets-art/'.length)).split('?')[0];
+     const filePath = path.join(PETS_ART_DIR, rel);
