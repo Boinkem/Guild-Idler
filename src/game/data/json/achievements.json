@@ -24,22 +24,6 @@
     "grantsGuildTitle": ""
   },
   {
-    "id": "RETIREMENT_PARTY",
-    "name": "Retirement Party",
-    "description": "Retire a hero for the first time.",
-    "hidden": false,
-    "unlocksTrackId": "the_old_tavern",
-    "grantsGuildTitle": ""
-  },
-  {
-    "id": "LIVING_LEGEND",
-    "name": "Living Legend",
-    "description": "Retire the same hero identity ten times.",
-    "hidden": false,
-    "unlocksTrackId": "legends_of_the_flame",
-    "grantsGuildTitle": ""
-  },
-  {
     "id": "CHAIN_BREAKER",
     "name": "Chain Breaker",
     "description": "Complete your first multi-stage quest chain.",
@@ -108,7 +92,7 @@
     "name": "Mythic Reckoning",
     "description": "Full-clear a raid on Mythic difficulty.",
     "hidden": false,
-    "unlocksTrackId": "",
+    "unlocksTrackId": "legends_of_the_flame",
     "grantsGuildTitle": ""
   },
   {
@@ -488,14 +472,6 @@
     "grantsGuildTitle": ""
   },
   {
-    "id": "VETERAN_RETIREE",
-    "name": "Serial Retiree",
-    "description": "Retire 5 heroes over the guild's history.",
-    "hidden": false,
-    "unlocksTrackId": "",
-    "grantsGuildTitle": ""
-  },
-  {
     "id": "PEDDLER_FIRST_FLIP",
     "name": "A Reasonable Bet",
     "description": "Flip a card at Grimsby's table.",
@@ -532,7 +508,7 @@
     "name": "Knew When to Walk Away",
     "description": "Settle Grimsby's Tab at round 5 or later.",
     "hidden": false,
-    "unlocksTrackId": "",
+    "unlocksTrackId": "the_old_tavern",
     "grantsGuildTitle": ""
   },
   {

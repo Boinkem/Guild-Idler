@@ -8,10 +8,8 @@ import { GUILD_RANK_TIERS, GUILD_RANK_POWER_THRESHOLDS } from '../data/guildRank
 import { guildPowerLevel } from '../power';
 import { GameState } from '../types';
 
-const ASCENSION_FOR_LIVING_LEGEND = 10;
 const STREAK_FOR_ON_A_ROLL = 5;
 const AGAINST_THE_ODDS_THRESHOLD = 30;
-const PRESTIGE_COUNT_FOR_VETERAN_RETIREE = 5;
 /** Patch 0372, direct request ("Million gold at Grimsby") -- lifetime
  *  gold spent AT GRIMSBY specifically (state.stats.peddlerGoldSpent),
  *  not the game-wide goldSpent stat -- deliberately the Peddler-scoped
@@ -38,10 +36,6 @@ const CHECKS: Record<string, Check> = {
     state.stats.lowestSuccessfulChance !== null && state.stats.lowestSuccessfulChance < AGAINST_THE_ODDS_THRESHOLD,
 
   FIRST_LEGENDARY: (state) => state.stats.legendaryItemsFound >= 1,
-
-  RETIREMENT_PARTY: (state) => state.stats.prestigeCount >= 1,
-
-  LIVING_LEGEND: (state) => (state.heroes ?? []).some((h) => h.ascension >= ASCENSION_FOR_LIVING_LEGEND),
 
   CHAIN_BREAKER: (state) => state.stats.chainsCompleted >= 1,
 
@@ -131,13 +125,6 @@ const CHECKS: Record<string, Check> = {
     const owned = new Set((state.pets ?? []).map((p) => p.defId));
     return PETS.every((p) => owned.has(p.id));
   },
-
-  /* ------------------------------ prestige ------------------------------ */
-  // Complements RETIREMENT_PARTY (>=1 retirement, already above) and
-  // ON_A_ROLL (a same-window streak of 5, already above) with a third,
-  // orthogonal axis: total retirements over the account's whole
-  // lifetime, streak or no streak.
-  VETERAN_RETIREE: (state) => state.stats.prestigeCount >= PRESTIGE_COUNT_FOR_VETERAN_RETIREE,
 
   /* --------------------------- Grimsby / peddler --------------------------- */
   PEDDLER_FIRST_FLIP: (state) => (state.stats.peddlerFlips ?? 0) >= 1,

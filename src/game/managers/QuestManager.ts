@@ -180,19 +180,19 @@ export const QuestManager = {
     // claiming the failure mode "can't happen anymore." rollReqLevel's
     // weighted offset table makes an at-or-under-level roll the
     // overwhelmingly likely outcome per offer (~61% at the live tuning
-    // values: offsets 0 and below sum to 54 of 88 total weight), but with
-    // BOARD_SIZE independently-rolled offers, ALL SIX landing above
-    // hero.level happens roughly 1 board generation in 300
-    // (0.386^6 ≈ 0.0033, confirmed by direct calculation from the live
-    // offsetWeight* tuning values) -- rare, but real, and the standard-
-    // length guarantee above only checks duration, not reqLevel. A board
-    // that rolls this way has nothing a hero can send on without being
-    // under-leveled for it -- reads exactly as "no level-appropriate
-    // quest available," the direct report this responds to. Targets the
-    // second-to-last slot so it can never collide with the guarantee
-    // above, which always owns the last slot; falls back to slot 0 if
-    // BOARD_SIZE is ever small enough that a distinct second slot
-    // doesn't exist.
+    // values away from the low-level cap: offsets 0 and below sum to 54
+    // of 88 total weight -- see rollReqLevel's own patch-0385 comment for
+    // how that share improves further for a low-level hero specifically),
+    // but with BOARD_SIZE independently-rolled offers, ALL SIX landing
+    // above hero.level still isn't mathematically impossible -- rare, but
+    // real, and the standard-length guarantee above only checks duration,
+    // not reqLevel. A board that rolls this way has nothing a hero can
+    // send on without being under-leveled for it -- reads exactly as "no
+    // level-appropriate quest available," the direct report this responds
+    // to. Targets the second-to-last slot so it can never collide with
+    // the guarantee above, which always owns the last slot; falls back to
+    // slot 0 if BOARD_SIZE is ever small enough that a distinct second
+    // slot doesn't exist.
     if (!offers.some((o) => hero.level >= o.reqLevel)) {
       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
       const targetIndex = offers.length > 1 ? offers.length - 2 : 0;
@@ -373,8 +373,33 @@ export const QuestManager = {
    * or under a given ceiling -- currently only used to force an
    * at-or-under-hero's-own-level roll (maxOffset: 0) for the "always a
    * level-appropriate quest" board guarantee in generateContractsForHero.
-   * Omitted (the default), this is 100% unchanged from before: the full
-   * 9-point weighted table, same as ever.
+   * Omitted (the default), this used to be 100% unchanged from before: the
+   * full 9-point weighted table, same as ever.
+   *
+   * Patch 0385: the positive side of that table is ALSO now capped at
+   * the hero's own level, regardless of whether a caller passed an
+   * explicit `maxOffset` -- direct report: "At lvl 1 60% of my quests on
+   * the board are over leveled. And half the time that's all the easy
+   * and normal ones." The offset table's positive-vs-non-positive split
+   * (54/88 non-positive, 34/88 positive -- see the comment on the
+   * board-guarantee below) is identical at every hero level, so that
+   * ~39% per-offer over-level chance was never actually the bug. The bug
+   * is `Math.max(1, ...)` below: every NEGATIVE offset a level-1 hero
+   * rolls collapses to the exact same reqLevel 1 (there's nowhere lower
+   * to go), so a fresh board has zero variety on the safe side and the
+   * full, unsquashed +1..+4 spread on the over-level side stands out
+   * starkly and repeatedly -- reads as "everything's over-leveled," and
+   * since difficulty tier is rolled completely independently of reqLevel
+   * (see generateContractsForHero's own patch-0214 comment), an
+   * Easy-tagged quest is exactly as likely to land there as a Hard one,
+   * matching the second half of the report directly. Capping the
+   * positive side at `heroLevel` mirrors what the floor already does to
+   * the negative side -- a level-1 hero can roll up to reqLevel 2 (+1)
+   * but not reqLevel 5 (+4, a 5x jump), tapering back to the table's
+   * full, unrestricted +-4 spread the moment heroLevel reaches 4 (this
+   * table's own ceiling), so nothing changes for the vast majority of
+   * the game -- only the first few levels, where the jump was
+   * disproportionate, get pulled in.
    */
   rollReqLevel(heroLevel: number, rng: Rng, maxOffset?: number): number {
     const allWeights: { item: number; weight: number }[] = [
@@ -388,7 +413,12 @@ export const QuestManager = {
       { item: 3, weight: Tuning.get('quest_reqlevel.offsetWeightP3') },
       { item: 4, weight: Tuning.get('quest_reqlevel.offsetWeightP4') },
     ];
-    const weights = maxOffset === undefined ? allWeights : allWeights.filter((w) => w.item <= maxOffset);
+    // Derived from the table itself (4), not hardcoded separately, so a
+    // future wider/narrower offset table stays in sync with this cap
+    // automatically instead of needing its own constant kept in step.
+    const tableMaxOffset = Math.max(...allWeights.map((w) => w.item));
+    const effectiveMaxOffset = Math.min(maxOffset ?? tableMaxOffset, heroLevel);
+    const weights = allWeights.filter((w) => w.item <= effectiveMaxOffset);
     const offset = rng.weighted(weights);
     return Math.max(1, heroLevel + offset);
   },

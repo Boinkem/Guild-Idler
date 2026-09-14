@@ -31442,3 +31442,84 @@ companion's on-screen sizing is pixel-identical to before this patch
 for every class (it should be, since the seeded values exactly match
 the old hardcoded tables) and that the new tab's slider behaviour feels
 as responsive as Pet Lab's.
+
+### Bug fix / Changes: retirement achievements removed, low-level quest board over-leveled fix (patch 0385)
+```discord-update
+Dev Update | Bug Fix
+
+- Removed the three achievements tied to retiring heroes (retiring a hero is not a core mechanic anymore) -- their bard-track unlocks moved to still-active achievements so nothing became unobtainable
+- Fixed low-level contract boards showing far more over-leveled quests than intended, including Easy/Normal ones -- a fresh level 1 hero should see a much more usable spread now
+```
+
+Two direct reports bundled into one patch: an achievement cleanup
+(retiring heroes isn't a core mechanic anymore) and a quest-board
+balance report from a level 1 player -- unrelated systems, small enough
+individually to ship together.
+
+**Retirement achievements removed (`achievements.json`,
+`AchievementManager.ts`).** `RETIREMENT_PARTY`, `LIVING_LEGEND`, and
+`VETERAN_RETIREE` deleted outright, along with their `CHECKS` entries
+and the two constants (`ASCENSION_FOR_LIVING_LEGEND`,
+`PRESTIGE_COUNT_FOR_VETERAN_RETIREE`) that existed only to support them.
+73 achievements -> 70.
+
+**Caught before shipping: two of the three granted bard tracks, not
+just guild titles.** `RETIREMENT_PARTY` unlocked `the_old_tavern`,
+`LIVING_LEGEND` unlocked `legends_of_the_flame` -- confirmed directly
+(cross-checked every achievement's `unlocksTrackId` against every
+`bard-tracks.json` entry) that this project runs a strict 1:1 mapping:
+all 29 tracks, each granted by exactly one achievement, no spares.
+Deleting these two achievements outright would have permanently
+orphaned both tracks -- no other unlock path exists for either. Moved
+both grants onto other, currently track-less achievements instead of
+leaving them stranded: `the_old_tavern` -> `PEDDLER_TAB_JACKPOT`
+("Knew When to Walk Away," a tavern/gambling-flavoured Grimsby
+achievement -- reasonable thematic fit), `legends_of_the_flame` ->
+`RAID_MYTHIC_CLEARED` ("Mythic Reckoning," a genuinely legendary-tier
+raid clear). `VETERAN_RETIREE` granted no track and needed no
+reassignment. Worth a listen-through to confirm both tracks still play
+correctly in their new slots; the reassignment is otherwise mechanical
+(same track file, same player-facing unlock notification, just a
+different trigger).
+
+**Quest board over-leveled fix (`QuestManager.ts`).** Direct report: "At
+lvl 1 60% of my quests on the board are over leveled. And half the time
+that's all the easy and normal ones." Root cause confirmed directly, not
+assumed: `rollReqLevel`'s weighted offset table (+-4 around hero.level)
+has an identical ~38.6% per-offer chance of landing above hero.level at
+every level -- that part was never actually the bug. The bug is
+`Math.max(1, heroLevel + offset)`: for a level 1 hero, all four negative
+offsets collapse to the exact same reqLevel (1) since there's nowhere
+lower to go, so a fresh board has zero variety on the safe side while
+the full, un-squashed +1..+4 spread on the over-level side stays intact
+-- every over-level roll stands out starkly and repeatedly. And since
+difficulty tier is rolled completely independently of reqLevel (by
+design, patch 0214), an Easy-tagged quest is exactly as likely to land
+there as a Hard one, matching the report's second half exactly.
+
+**The fix:** `rollReqLevel` now also caps the positive side at the
+hero's own level, mirroring what the floor already does to the negative
+side -- a level 1 hero can roll up to reqLevel 2 (+1) but not reqLevel 5
+(+4, a 5x jump). The cap is derived from the offset table's own max
+entry (4), not a second hardcoded number that could drift out of sync,
+and tapers back to the table's full, unrestricted +-4 spread the moment
+heroLevel reaches 4 -- nothing changes from level 4 onward, only the
+first few levels (where the jump was disproportionate) are pulled in.
+No new Tuning entry needed; the existing `quest_reqlevel.offsetWeight*`
+table still drives everything, just with an additional level-relative
+ceiling applied on top.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Reimplemented the exact same
+weighted-table math standalone and hand-confirmed the per-offer
+over-level chance at each level: 21.7% at level 1 (down from 38.6%),
+31.6% at level 2, 36.5% at level 3, back to the unchanged 38.6% at
+level 4 and above. Monte-Carlo'd the resulting board composition
+(BOARD_SIZE 6, 1 guaranteed at-or-under slot + 5 free-rolled, 200k
+trials): expected over-leveled fraction of a level 1 board drops from
+~32% to ~18%. Also confirmed via the running DevTool server that
+`/api/data/achievements` now returns exactly 70 entries with none of
+the three retirement ids present. No live in-app playtest in this
+environment (no browser available) -- worth a real-window pass at
+level 1 specifically to confirm the board now feels noticeably more
+usable, and a quick listen to both reassigned bard tracks.
