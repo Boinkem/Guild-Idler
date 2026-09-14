@@ -167,7 +167,8 @@
       "caster": "Magic hammered, not spoken, forge-song and rune-carved stone in the old dwarven way."
     },
     "milestoneGoldCost": 0,
-    "displayScale": 0.92
+    "displayScale": 0.92,
+    "displayOffsetX": -60
   },
   {
     "id": "gladiator",
@@ -222,8 +223,7 @@
       "ranged": "Bow in hand and a showman's grin for the ones smart enough to run.",
       "caster": "Arena tricks dressed up with whatever charm coin could buy, half showmanship, half genuine spellcraft."
     },
-    "milestoneGoldCost": 0,
-    "displayScale": 0.83
+    "milestoneGoldCost": 0
   },
   {
     "id": "samurai",
@@ -278,8 +278,7 @@
       "caster": "Wards and rites learned alongside the sword, not instead of it, prayer and steel drawn in the same breath."
     },
     "milestoneGoldCost": 0,
-    "displayOffsetX": 16,
-    "displayOffsetY": 13
+    "displayScale": 1.41
   },
   {
     "id": "witch",
@@ -562,7 +561,9 @@
       "caster": "Wards himself in old, borrowed magic rather than learning any of it properly -- just enough to shrug off what should have ended him."
     },
     "milestoneUnlockDescription": "Clear any raid on Legendary difficulty.",
-    "milestoneGoldCost": 4000
+    "milestoneGoldCost": 4000,
+    "displayScale": 1.68,
+    "displayOffsetX": -47
   },
   {
     "id": "kobold",
@@ -732,7 +733,8 @@
       "caster": "The curse left something behind besides teeth -- a low, half-understood magic he's still learning to use on purpose."
     },
     "milestoneUnlockDescription": "Complete The Kindred Moon quest chain.",
-    "milestoneGoldCost": 3000
+    "milestoneGoldCost": 3000,
+    "displayScale": 1.35
   },
   {
     "id": "centaur",
@@ -788,6 +790,7 @@
       "caster": "Old herd-lore about the stars, half-remembered and mostly self-taught, cast between one stride and the next."
     },
     "milestoneUnlockDescription": "Clear three different raids.",
-    "milestoneGoldCost": 3500
+    "milestoneGoldCost": 3500,
+    "displayScale": 1.31
   }
 ]
