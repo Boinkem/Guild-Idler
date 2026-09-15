@@ -1,0 +1,109 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a81f2ac..662c32f 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -32189,3 +32189,49 @@ installed for the game itself (would need a full `npm install` to run
+ `tsc` against real types), so a real Sandbox run on Windows (where the
+ crash actually reproduces) is worth doing to confirm both the fix and the
+ new charts render as expected.
++
++### Bug fix: Steam depot uploads were sweeping in every old build sitting in release/, not just the newest one (patch 0395)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed Steam uploads including every old build ever packaged instead of just the newest one
++```
++
++Direct report + steamcmd log evidence: a Steam upload sat scanning content
++for several minutes before even starting to upload, well past what a
++~400MB app should take. The pasted log confirmed it: "Scanning content"
++found **11.3GB** before uploading anything.
++
++**Root cause (`generateSteamBuildScripts()` in `tools/devtool/server.mjs`).**
++The depot's `FileMapping` used `"LocalPath" "*"` with `"recursive" "1"` --
++ContentRoot's entire contents, not the newest build specifically. Nothing
++in this tool or electron-builder itself clears out `release/` between
++Package runs, so it had accumulated "heaps" of old installers (the
++reporter's own words) from prior sessions, and every single one got
++scooped into the same VDF as the one build actually meant to ship.
++
++**Fix.** `FileMapping`'s `LocalPath`/`DepotPath` now name the exact file
++`findLatestReleaseFile()` already identifies as the newest installer --
++the same lookup Generate already used to build the `desc` field, just not
++previously used to narrow what gets mapped. `recursive` is dropped
++entirely (a single named file has nothing to recurse into), and the three
++`FileExclusion` entries (`win-unpacked*`, `*.blockmap`, `latest.yml`) are
++gone too -- they existed only to carve exceptions out of a whole-folder
++scan that no longer happens; naming one exact file already excludes
++everything else in `release/` by construction.
++
++**Not done, out of scope for this pass:** old builds already sitting in
++`release/` from before this patch aren't cleaned up automatically --
++worth clearing that folder by hand once (keep the current newest build,
++delete the rest). Nothing in this codebase currently automates that
++cleanup; worth a follow-up if it keeps growing.
++
++**Verified:** re-read `findLatestReleaseFile()`'s return shape
++(`{ full, name, mtimeMs }`) to confirm `latest.name` is the bare filename
++`generateSteamBuildScripts()` needs (not the full path, which
++`ContentRoot` already supplies) -- matches how `latest.name` was already
++being used one line below in `desc`. No live steamcmd run in this
++environment to confirm the resulting VDF actually uploads a sane content
++size -- worth watching the "Scanning content" line on the next real
++upload to confirm it now reports roughly the actual installer size
++instead of the whole folder.
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 40cf2e4..a7bd0a4 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -2680,6 +2680,31 @@ async function findLatestReleaseFile() {
+  * handed a single named artifact). Pure file-write, no network call, no
+  * steamcmd invocation -- safe to run as many times as needed while dialing
+  * in config before ever actually uploading anything.
++ *
++ * Patch 0395, direct report + steamcmd log: the depot's FileMapping used
++ * to be `"LocalPath" "*"` with `"recursive" "1"` -- ContentRoot's ENTIRE
++ * contents, not just the newest build. RELEASE_DIR accumulates every
++ * installer ever produced by Package (nothing in this tool or
++ * electron-builder itself clears it out), so a folder with "heaps" of old
++ * .exe's from prior sessions all got swept into the same upload as the one
++ * build actually meant to ship -- confirmed by the steamcmd log itself:
++ * "Scanning content" found 11.3GB against an app that's genuinely only
++ * ~400MB. FileMapping's LocalPath is now `latest.name` specifically (the
++ * exact file findLatestReleaseFile() already identified as the newest
++ * installer, the same lookup Generate already uses to build `desc` above),
++ * with `recursive` dropped entirely -- a single named file has nothing to
++ * recurse into. The three FileExclusion entries are gone too: they existed
++ * specifically to carve exceptions out of a whole-folder scan
++ * (win-unpacked/, .blockmap files, latest.yml) that no longer happens --
++ * mapping one exact file by name already excludes everything else in
++ * RELEASE_DIR by construction, no exception list needed.
++ *
++ * Old builds already sitting in RELEASE_DIR from before this patch are
++ * NOT cleaned up here -- this only stops the depot from including them
++ * going forward. Worth clearing that folder out by hand once (keep
++ * whatever's currently the newest build, delete the rest) rather than
++ * leaving it to grow indefinitely; nothing in this codebase currently
++ * automates that.
+  */
+ async function generateSteamBuildScripts() {
+   const cfg = await readSteamConfig();
+@@ -2706,16 +2731,9 @@ async function generateSteamBuildScripts() {
+     `\t"ContentRoot" "${RELEASE_DIR}"`,
+     `\t"FileMapping"`,
+     `\t{`,
+-    `\t\t"LocalPath" "*"`,
+-    `\t\t"DepotPath" "."`,
+-    `\t\t"recursive" "1"`,
++    `\t\t"LocalPath" "${latest.name}"`,
++    `\t\t"DepotPath" "${latest.name}"`,
+     `\t}`,
+-    // win-unpacked/ is electron-builder's unpacked-app-tree sibling of the
+-    // real NSIS installer -- useful locally for quick manual testing, not
+-    // something a Steam depot needs shipped alongside the installer itself.
+-    `\t"FileExclusion" "win-unpacked*"`,
+-    `\t"FileExclusion" "*.blockmap"`,
+-    `\t"FileExclusion" "latest.yml"`,
+     `}`,
+   ].join('\n') + '\n';
+ 
