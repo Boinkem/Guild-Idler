@@ -32235,3 +32235,76 @@ environment to confirm the resulting VDF actually uploads a sane content
 size -- worth watching the "Scanning content" line on the next real
 upload to confirm it now reports roughly the actual installer size
 instead of the whole folder.
+
+### Bug fix: Steam depot now ships the actual unpacked build instead of the version-named installer (patch 0396)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed Steam builds shipping the installer instead of the actual game, which would have broken launches on every future release
+- Steamworks Launch Options now only ever need setting once
+```
+
+Direct request, discovered while configuring Steamworks' Launch Options for
+the first time.
+
+**The problem 0395 didn't catch.** 0395 fixed the depot uploading every old
+build in `release/` by mapping the exact newest installer filename instead
+of the whole folder -- correct fix for that bug, but it surfaced a worse
+one: electron-builder's installer filename has the version baked in
+(`Guildbound Setup 1.1.0.exe`), and Steamworks' Launch Options Executable
+field is a fixed string, set once, not re-derived per build. Pointing it at
+today's filename would have silently broken launches for every customer on
+the very next release, the moment the installer's name changed to
+`Guildbound Setup 1.2.0.exe`.
+
+**Fix: ship the unpacked build, not the installer, at all
+(`generateSteamBuildScripts()`, `tools/devtool/server.mjs`).** New
+`findWinUnpackedBuild()` locates electron-builder's `win-unpacked/` output
+(the actual runnable game -- exe + resources -- that the installer exists
+only to install) and its exe, named `${productName}.exe` off
+`package.json`'s own `build.productName` rather than hardcoded a second
+time. `FileMapping` now recursively maps `win-unpacked/*` down to the
+depot's own root (`.`), so Launch Options' Executable is just
+`${productName}.exe` -- stable across every future release, set once in
+Steamworks and never touched again. This also happens to be the standard
+way Windows games ship on Steam: SteamPipe downloads these files directly
+into `steamapps/common/` itself, with proper delta-patching between
+versions and correct disk-usage/uninstall handling, none of which an
+installer-wrapped depot gets. `desc` switched from the (now gone) installer
+filename to the package version, read through a new `readPackageInfo()`
+helper (`readPackageVersion()` is now a thin wrapper over it, so its one
+existing caller is unaffected).
+
+**Deliberately untouched: `findLatestReleaseFile()` and the Google Drive
+tester-distribution path.** That flow still ships the installer on
+purpose -- testers without Steam access need something they can just
+double-click and run, not a folder of loose files. This patch only changes
+what Steam's depot itself contains.
+
+**Also folded into the in-tool Steam reference (patch 0393's
+`.devtool-note` box):** the corrected win-unpacked description, the fixed
+Launch Options Executable value, and a real Steamworks quirk hit live
+while testing this -- a brand-new branch (`internal`, `beta`) can't
+actually be created, via steamcmd *or* the Steamworks web UI, until
+`default` already has a real build set on it. Targeting a not-yet-existing
+branch before that fails at commit with a bare "Failure" and no further
+explanation -- confirmed against a real upload log and Steamworks' own
+build history.
+
+**Not done, out of scope for this pass:** builds already uploaded under
+0395's installer-based depot aren't retroactively fixed by this patch --
+Launch Options should simply be configured against the *next* upload's
+content (this patch's win-unpacked mapping) rather than anything already
+sitting on Steam from before. No change to `copyLatestBuild()` or the
+Google Drive distribution flow.
+
+**Verified:** `node --check` passes on both changed files
+(`server.mjs`, `app.js`). Confirmed `findWinUnpackedBuild()`'s exe-name
+derivation matches `package.json`'s actual `build.productName`
+(`"Guildbound"`) by reading the file directly, and that
+`readPackageVersion()`'s one existing call site (the version-bump UI) still
+gets the same return shape through the new shared `readPackageInfo()`.
+No live steamcmd run in this environment -- worth confirming on the next
+real Generate/Upload that `win-unpacked/Guildbound.exe` exists after
+Package, and that Steamworks accepts `Guildbound.exe` as the Launch
+Options Executable against the resulting build.

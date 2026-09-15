@@ -2107,11 +2107,27 @@ async function gitStatus() {
 }
 
 async function readPackageVersion() {
+  const info = await readPackageInfo();
+  return info.version;
+}
+
+/**
+ * Patch 0396: version alone used to be enough here -- productName is new,
+ * needed by generateSteamBuildScripts() to know the unpacked build's exe
+ * filename (electron-builder always names it `${productName}.exe`, no
+ * version suffix, unlike the installer). Reading it straight from
+ * package.json's own `build.productName` rather than hardcoding
+ * "Guildbound.exe" a second time keeps this in sync automatically if the
+ * product is ever renamed, instead of two independent copies of the same
+ * string quietly drifting apart.
+ */
+async function readPackageInfo() {
   try {
     const raw = await fs.readFile(path.join(ROOT, 'package.json'), 'utf8');
-    return JSON.parse(raw).version ?? null;
+    const parsed = JSON.parse(raw);
+    return { version: parsed.version ?? null, productName: parsed.build?.productName ?? null };
   } catch {
-    return null;
+    return { version: null, productName: null };
   }
 }
 
@@ -2646,11 +2662,42 @@ async function writeSteamConfig(cfg) {
 }
 
 /**
+ * Locates electron-builder's unpacked Windows build -- the actual runnable
+ * game (exe + resources), as opposed to the NSIS installer wrapped around
+ * it. Always the same folder name (`win-unpacked`) and the same exe name
+ * (`${productName}.exe`, version-independent) on every Package run --
+ * electron-builder overwrites this folder fresh each time rather than
+ * versioning it, so there's no "which one is newest" question the way
+ * findLatestReleaseFile() has to answer for the installer's own
+ * version-stamped filename. Patch 0396.
+ */
+async function findWinUnpackedBuild() {
+  const info = await readPackageInfo();
+  if (!info.productName) return { error: `Couldn't read build.productName from package.json.` };
+  const exeName = `${info.productName}.exe`;
+  const dir = path.join(RELEASE_DIR, 'win-unpacked');
+  const exePath = path.join(dir, exeName);
+  try {
+    const stat = await fs.stat(exePath);
+    return { dir, exeName, exePath, mtimeMs: stat.mtimeMs };
+  } catch {
+    return { error: `${exePath} not found -- run Package (step 7) first.` };
+  }
+}
+
+/**
  * Finds the newest packaged installer in RELEASE_DIR -- same file-filter and
  * "most recently modified wins" logic copyLatestBuild() already uses for the
  * Google Drive copy step, factored out here so both callers stay in sync
  * rather than drifting into two slightly different "what counts as the
  * latest build" definitions over time.
+ *
+ * Patch 0396: no longer used by generateSteamBuildScripts() itself (see
+ * findWinUnpackedBuild() and that function's own comment for why) -- still
+ * used by copyLatestBuild() for the Google Drive tester-distribution path,
+ * which deliberately keeps shipping the installer rather than a raw
+ * unpacked folder (testers without Steam access need something they can
+ * just double-click and run, not a folder of loose files).
  */
 async function findLatestReleaseFile() {
   let entries;
@@ -2672,14 +2719,10 @@ async function findLatestReleaseFile() {
 }
 
 /**
- * Writes app_build.vdf + depot_build.vdf into <contentBuilderDir>/scripts,
- * pointing ContentRoot at RELEASE_DIR directly (electron-builder's NSIS
- * target drops the installer as a loose .exe alongside a win-unpacked/
- * folder in that same directory -- SteamPipe just needs a folder of files,
- * it doesn't care that electron-builder produced them rather than being
- * handed a single named artifact). Pure file-write, no network call, no
- * steamcmd invocation -- safe to run as many times as needed while dialing
- * in config before ever actually uploading anything.
+ * Writes app_build.vdf + depot_build.vdf into <contentBuilderDir>/scripts.
+ * Pure file-write, no network call, no steamcmd invocation -- safe to run
+ * as many times as needed while dialing in config before ever actually
+ * uploading anything.
  *
  * Patch 0395, direct report + steamcmd log: the depot's FileMapping used
  * to be `"LocalPath" "*"` with `"recursive" "1"` -- ContentRoot's ENTIRE
@@ -2689,22 +2732,37 @@ async function findLatestReleaseFile() {
  * .exe's from prior sessions all got swept into the same upload as the one
  * build actually meant to ship -- confirmed by the steamcmd log itself:
  * "Scanning content" found 11.3GB against an app that's genuinely only
- * ~400MB. FileMapping's LocalPath is now `latest.name` specifically (the
- * exact file findLatestReleaseFile() already identified as the newest
- * installer, the same lookup Generate already uses to build `desc` above),
- * with `recursive` dropped entirely -- a single named file has nothing to
- * recurse into. The three FileExclusion entries are gone too: they existed
- * specifically to carve exceptions out of a whole-folder scan
- * (win-unpacked/, .blockmap files, latest.yml) that no longer happens --
- * mapping one exact file by name already excludes everything else in
- * RELEASE_DIR by construction, no exception list needed.
+ * ~400MB.
  *
- * Old builds already sitting in RELEASE_DIR from before this patch are
- * NOT cleaned up here -- this only stops the depot from including them
- * going forward. Worth clearing that folder out by hand once (keep
- * whatever's currently the newest build, delete the rest) rather than
- * leaving it to grow indefinitely; nothing in this codebase currently
- * automates that.
+ * Patch 0396, direct request: 0395's fix mapped the single newest
+ * installer .exe by exact filename -- correct for the bloat problem, but
+ * it surfaced a second, worse issue while configuring Steamworks' Launch
+ * Options: electron-builder's installer filename has the version baked
+ * into it (`Guildbound Setup 1.1.0.exe`), so a Launch Options Executable
+ * field pointed at today's filename would silently stop matching on the
+ * very next release, breaking launches for every customer until someone
+ * remembered to go update it by hand in Steamworks. Switched the depot's
+ * content entirely, from the installer to electron-builder's *unpacked*
+ * build (win-unpacked/, the actual runnable game -- exe + resources --
+ * that the installer exists only to install; see findWinUnpackedBuild()'s
+ * own comment). Its exe is always named `${productName}.exe`, no version
+ * suffix, so Launch Options gets configured once in Steamworks and stays
+ * correct across every future release. This also happens to be the
+ * standard way Windows games ship on Steam -- SteamPipe handles
+ * "installation" itself by downloading these files directly into
+ * steamapps/common/, with its own delta-patching between versions and
+ * proper disk-usage/uninstall accounting, none of which an
+ * installer-wrapped depot gets. FileMapping now recursively maps
+ * `win-unpacked/*` at ContentRoot down to the depot's own root (`.`), so
+ * Launch Options' Executable is just `${productName}.exe`, not a
+ * `win-unpacked/`-prefixed path. `desc` switched from the installer's own
+ * filename (gone now) to the package version, read via readPackageInfo()
+ * (the same helper backing the DevTool's version-bump UI, so this always
+ * matches what's already showing there).
+ *
+ * findLatestReleaseFile() (the installer-filename lookup) is untouched and
+ * still backs the separate Google Drive tester-distribution path -- that
+ * one deliberately keeps shipping the installer, unrelated to this change.
  */
 async function generateSteamBuildScripts() {
   const cfg = await readSteamConfig();
@@ -2715,10 +2773,11 @@ async function generateSteamBuildScripts() {
   if (missing.length) {
     return { ok: false, stdout: '', stderr: `Steam config incomplete -- missing: ${missing.join(', ')}. Fill these in above first.` };
   }
-  const latest = await findLatestReleaseFile();
-  if (!latest) {
-    return { ok: false, stdout: '', stderr: `No .exe installer found in ${RELEASE_DIR} -- run Package (step 7) first.` };
+  const build = await findWinUnpackedBuild();
+  if (build.error) {
+    return { ok: false, stdout: '', stderr: build.error };
   }
+  const { version } = await readPackageInfo();
   const scriptsDir = path.join(cfg.contentBuilderDir, 'scripts');
   const outputDir = path.join(cfg.contentBuilderDir, 'output');
   const depotVdfPath = path.join(scriptsDir, `depot_build_${cfg.depotId}.vdf`);
@@ -2731,8 +2790,9 @@ async function generateSteamBuildScripts() {
     `\t"ContentRoot" "${RELEASE_DIR}"`,
     `\t"FileMapping"`,
     `\t{`,
-    `\t\t"LocalPath" "${latest.name}"`,
-    `\t\t"DepotPath" "${latest.name}"`,
+    `\t\t"LocalPath" "win-unpacked/*"`,
+    `\t\t"DepotPath" "."`,
+    `\t\t"recursive" "1"`,
     `\t}`,
     `}`,
   ].join('\n') + '\n';
@@ -2741,7 +2801,7 @@ async function generateSteamBuildScripts() {
     `"appbuild"`,
     `{`,
     `\t"appid" "${cfg.appId}"`,
-    `\t"desc" "Guildbound -- ${latest.name}"`,
+    `\t"desc" "Guildbound -- v${version ?? '?'}"`,
     `\t"buildoutput" "${outputDir}"`,
     `\t"contentroot" "${RELEASE_DIR}"`,
     `\t"setlive" "${cfg.branch === 'default' ? '' : cfg.branch}"`,
@@ -2761,7 +2821,7 @@ async function generateSteamBuildScripts() {
     await fs.writeFile(appVdfPath, appVdf, 'utf8');
     return {
       ok: true,
-      stdout: `Wrote ${depotVdfPath}\nWrote ${appVdfPath}\nContentRoot: ${RELEASE_DIR}\nNewest installer found: ${latest.name}\nTarget branch: ${cfg.branch}`,
+      stdout: `Wrote ${depotVdfPath}\nWrote ${appVdfPath}\nContentRoot: ${RELEASE_DIR}\nUnpacked build: win-unpacked/${build.exeName}\nSteam Launch Options Executable should be: ${build.exeName}\nTarget branch: ${cfg.branch}`,
       stderr: '',
     };
   } catch (err) {

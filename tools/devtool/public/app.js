@@ -2625,7 +2625,9 @@ function renderPatches() {
           ID/Depot ID covers all three real branches — <b>internal</b> (Dev Comp), <b>beta</b> (Beta
           Testing), <b>default</b> (Store/live) — you're just picking which one THIS upload goes to.</li>
         <li><b>Step 7, Package</b> (above) first, if you haven't already for this batch — Generate/
-          Upload below both work off the newest installer already sitting in <code>release/</code>.</li>
+          Upload below both work off <code>release/win-unpacked/</code>, the actual unpacked game
+          electron-builder produces alongside the installer (not the installer itself — see the
+          note further down on why).</li>
         <li><b>Generate build scripts</b> (step 10, below) writes the VDF files SteamPipe reads. Pure
           file-write, no network call — safe to click as many times as you want while dialing in
           config above.</li>
@@ -2633,6 +2635,12 @@ function renderPatches() {
           <code>steamcmd</code> against whatever Generate last wrote, targeting the branch selected
           above. This can take a while for a full depot; the button stays disabled and says
           "Uploading…" until it returns.</li>
+        <li><b>Steamworks' own quirk, learned the hard way:</b> a brand-new branch (like
+          <b>internal</b>) can't actually be created — via steamcmd <em>or</em> the Steamworks web
+          UI — until the <b>default</b> branch already has at least one real build set on it.
+          Targeting a not-yet-existing branch before that will fail at the commit step with a bare
+          "Failure", no other explanation. If your very first-ever upload fails this way, set that
+          same build live on <b>default</b> once via Steamworks' Builds page first, then retry.</li>
         <li><b>Promote on Steamworks' own site, not here.</b> This tool never auto-promotes a build
           across branches. Typical flow: upload to <b>internal</b> and test it yourself first, then
           once happy, use Steamworks' Builds page to set that exact same build live on <b>beta</b> for
@@ -2641,6 +2649,12 @@ function renderPatches() {
       </ol>
       If Upload comes back complaining about a Steam Guard prompt, your cached login from step 1 has
       expired — re-run <code>steamcmd +login &lt;username&gt;</code> from a terminal and try again.
+      <br /><br />
+      <b>Steamworks' Launch Options, one-time setup:</b> Executable should be
+      <code>&lt;ProductName&gt;.exe</code> (whatever <code>build.productName</code> is in
+      <code>package.json</code>) — sitting at the depot's own root, not inside a
+      <code>win-unpacked/</code> path. This is stable across every future release (unlike the
+      installer's own version-stamped filename), so it only needs setting once, ever.
     </div>
     <p class="tiny muted">
       Saved locally (<code>tools/devtool/steam.config.json</code>, gitignored). No password is stored
