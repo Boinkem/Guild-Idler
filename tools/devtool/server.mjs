@@ -2003,7 +2003,21 @@ function runSimVariant(payload) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(TSX_BIN, [SIM_SCRIPT], { cwd: ROOT, timeout: SIM_TIMEOUT_MS });
+      // tsx.cmd, like npm.cmd above, is a shell shim rather than a real
+      // executable on Windows -- spawn() without shell:true fails immediately
+      // with the exact same `spawn EINVAL` npm.cmd hits (see runNpm's own
+      // comment above). Unlike runNpm, this can't just set shell:true on the
+      // options object and call it done: once shell:true is set, Node stops
+      // auto-quoting argv for cmd.exe, and both TSX_BIN and SIM_SCRIPT are
+      // absolute paths built from ROOT, which can contain spaces on a real
+      // Windows box (e.g. a "C:\Users\Jane Doe\..." profile) -- so the
+      // exe/script are quoted by hand here, same fix shape as runNpm, just
+      // with the manual quoting runNpm doesn't need since NPM_BIN has no path
+      // component to worry about.
+      const useShell = process.platform === 'win32';
+      const exe = useShell ? `"${TSX_BIN}"` : TSX_BIN;
+      const scriptArg = useShell ? `"${SIM_SCRIPT}"` : SIM_SCRIPT;
+      child = spawn(exe, [scriptArg], { cwd: ROOT, timeout: SIM_TIMEOUT_MS, shell: useShell });
     } catch (err) {
       resolve({ ok: false, error: String(err.message ?? err) });
       return;

@@ -1,0 +1,282 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 118036d..a81f2ac 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -32121,3 +32121,71 @@ available) -- worth a real-window pass on Hatchery specifically (the
+ reported tab) to confirm the plaque is now clearly visible, and a look
+ at the DevTool's Ship tab to confirm the new reference box reads well
+ alongside the existing Steam config fields.
++
++### Bug fix / Feature: Balance Sandbox sim crash fixed, gold/level/purchase curves added (patch 0394)
++```discord-update
++Dev Update | Balance Sandbox
++
++- Fixed the Balance Sandbox failing every run with a spawn error
++- Added gold-over-time, level-over-time, and purchases-over-time charts to sim results
++```
++
++Two-part report: every Sandbox run (baseline and proposed alike) was
++failing outright with `spawn EINVAL`, and once that's fixed, a request to
++actually chart gold gain, upgrades purchased, and time-to-level for each
++of the three play-style presets rather than only seeing end-of-run
++totals.
++
++**Sim crash fix (`tools/devtool/server.mjs`).** `runSimVariant` spawns a
++fresh `tsx` process per variant so a proposed tuning overlay can never
++leak into the baseline run (see `runSim.ts`'s own header on why that
++isolation matters) -- but unlike `runNpm`'s `npm.cmd` invocation just
++above it in this file, the `tsx.cmd` spawn was never given the matching
++`shell:true` fix. `tsx.cmd`, like `npm.cmd`, is a shell shim rather than a
++real executable on Windows; `spawn()` without `shell:true` fails
++immediately with exactly the `spawn EINVAL` the screenshot showed, on
++both the baseline and proposed runs, every time. Fixed the same way
++`runNpm` already documents for npm -- except `runNpm` can lean on
++`execFileAsync`'s automatic argv quoting even with `shell:true`, while
++this spawn call builds its command by hand, and once `shell:true` is set
++Node stops auto-quoting argv for `cmd.exe`. `TSX_BIN`/`SIM_SCRIPT` are
++absolute paths built from `ROOT`, which can contain spaces on a real
++Windows box (a `C:\Users\Jane Doe\...` profile, for one), so both are now
++quoted by hand on Windows specifically, `shell` only set to `true` on
++that platform -- non-Windows behavior (and the stdin-piping this whole
++function exists for, see its own header comment) is unchanged.
++
++**Gold and level curves (`tools/devtool/sim/runSim.ts`).** The sim
++already sampled `levelCurve` (day, level) at a fixed cadence but never an
++equivalent for gold, and nothing in the UI charted either one -- the
++Sandbox tab only ever showed single-number end-of-run totals ("Final
++level", "Final gold"). New `goldCurve`, sampled in the same per-tick
++block as `levelCurve` (same `sampleEveryDays` cadence, same rounding).
++Also added `purchaseLog`: one entry per individual facility/upgrade level
++bought (`{day, id, kind, level}`), pushed inside the existing spend loop
++right where `levels[next.id] += 1` already happens -- a finer-grained
++history than `facilityCompletionDays`/`upgradeCompletionDays`, which only
++ever recorded the day an item finally maxed out, not the running count of
++purchases leading up to that.
++
++**Sandbox tab charts (`tools/devtool/public/app.js`,
++`tools/devtool/public/style.css`).** New dependency-free inline-SVG
++`renderCurveChart()`, baseline and proposed overlaid on one set of axes
++(`--blue` / `--brass`, matching the live-vs-proposed contrast the rest of
++this tab already uses). Three charts now render per preset, between the
++metrics table and the existing facility/upgrade completion table: gold
++over time and level over time (straight off `goldCurve`/`levelCurve`),
++and cumulative purchases over time off a new `cumulativePurchaseCurve()`
++helper that turns `purchaseLog`'s per-event list into a running total.
++The existing completion-day table is unchanged and still answers "when
++did each specific item finish" -- the new purchase chart answers "how
++fast is spending happening overall," a different question the per-item
++table was never meant to cover.
++
++**Verified:** `node --check` against both changed `.js` files
++(`server.mjs`, `app.js`) passes clean. `runSim.ts`'s edits were reviewed
++by hand rather than type-checked -- this environment has no `node_modules`
++installed for the game itself (would need a full `npm install` to run
++`tsc` against real types), so a real Sandbox run on Windows (where the
++crash actually reproduces) is worth doing to confirm both the fix and the
++new charts render as expected.
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 732582c..86faa3e 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -3762,6 +3762,57 @@ function metricCell(run, pick) {
+   return v === null || v === undefined ? '<span class="muted">—</span>' : escapeHtml(String(v));
+ }
+ 
++/** Cumulative purchases over time, derived from runSim.ts's per-purchase
++ *  `purchaseLog` (one entry per facility/upgrade level bought) rather than
++ *  the completion-day table below, which only marks the day an item finally
++ *  maxes out. Turns "N items happened at some point" into a chartable
++ *  running total. */
++function cumulativePurchaseCurve(log) {
++  if (!Array.isArray(log) || log.length === 0) return [];
++  return log.map((p, i) => ({ day: p.day, count: i + 1 }));
++}
++
++/** Inline SVG line chart, baseline vs proposed overlaid on one set of axes.
++ *  Deliberately tiny/dependency-free (no chart lib in this tool) -- just
++ *  enough to see the shape of a curve at a glance, not a full analytics
++ *  widget. Either series can be empty (e.g. a failed run) without breaking
++ *  the other's line. */
++function renderCurveChart(baselinePts, modifiedPts, { yLabel, xLabel = 'Day' }) {
++  const bPts = baselinePts || [];
++  const mPts = modifiedPts || [];
++  if (bPts.length === 0 && mPts.length === 0) return '';
++  const allPts = [...bPts, ...mPts];
++  const maxX = Math.max(1, ...allPts.map((p) => p.x));
++  const maxY = Math.max(1, ...allPts.map((p) => p.y));
++  const W = 560;
++  const H = 150;
++  const PAD_L = 44;
++  const PAD_B = 20;
++  const PAD_T = 10;
++  const PAD_R = 10;
++  const sx = (x) => PAD_L + (x / maxX) * (W - PAD_L - PAD_R);
++  const sy = (y) => (H - PAD_B) - (y / maxY) * (H - PAD_B - PAD_T);
++  const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ');
++  return `
++    <div class="sandbox-chart-block">
++      <div class="tiny muted" style="margin-bottom:4px;">${escapeHtml(yLabel)} over ${escapeHtml(xLabel.toLowerCase())} &nbsp;
++        <span class="chart-legend-swatch chart-legend-baseline"></span>Baseline
++        &nbsp; <span class="chart-legend-swatch chart-legend-proposed"></span>Proposed
++      </div>
++      <svg viewBox="0 0 ${W} ${H}" class="sandbox-chart" role="img" aria-label="${escapeHtml(yLabel)} over ${escapeHtml(xLabel)}">
++        <line x1="${PAD_L}" y1="${H - PAD_B}" x2="${W - PAD_R}" y2="${H - PAD_B}" class="chart-axis" />
++        <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" class="chart-axis" />
++        ${bPts.length > 1 ? `<path d="${toPath(bPts)}" class="chart-line chart-line-baseline" />` : ''}
++        ${mPts.length > 1 ? `<path d="${toPath(mPts)}" class="chart-line chart-line-proposed" />` : ''}
++        <text x="${PAD_L}" y="${H - 4}" class="chart-tick">0</text>
++        <text x="${W - PAD_R}" y="${H - 4}" class="chart-tick" text-anchor="end">${Math.round(maxX)}d</text>
++        <text x="${PAD_L - 4}" y="${PAD_T + 8}" class="chart-tick" text-anchor="end">${Math.round(maxY).toLocaleString()}</text>
++        <text x="${PAD_L - 4}" y="${H - PAD_B}" class="chart-tick" text-anchor="end">0</text>
++      </svg>
++    </div>
++  `;
++}
++
+ function sandboxComparisonTable(preset, pair) {
+   const b = pair.baseline;
+   const m = pair.modified;
+@@ -3800,6 +3851,27 @@ function sandboxComparisonTable(preset, pair) {
+     return mc.dominant && bc && !bc.dominant;
+   });
+ 
++  // Three curves the Sandbox tab now charts, baseline vs proposed:
++  // gold gain over time, level (time-to-level) over time, and cumulative
++  // facility/upgrade purchases over time. All three come from runSim.ts's
++  // per-tick sampling (levelCurve/goldCurve) or per-purchase log
++  // (purchaseLog) -- see that file's own comments.
++  const goldChart = renderCurveChart(
++    (bResult?.goldCurve || []).map((p) => ({ x: p.day, y: p.gold })),
++    (mResult?.goldCurve || []).map((p) => ({ x: p.day, y: p.gold })),
++    { yLabel: 'Gold (unspent)' },
++  );
++  const levelChart = renderCurveChart(
++    (bResult?.levelCurve || []).map((p) => ({ x: p.day, y: p.level })),
++    (mResult?.levelCurve || []).map((p) => ({ x: p.day, y: p.level })),
++    { yLabel: 'Hero level' },
++  );
++  const purchaseChart = renderCurveChart(
++    cumulativePurchaseCurve(bResult?.purchaseLog).map((p) => ({ x: p.day, y: p.count })),
++    cumulativePurchaseCurve(mResult?.purchaseLog).map((p) => ({ x: p.day, y: p.count })),
++    { yLabel: 'Facility/upgrade levels purchased (cumulative)' },
++  );
++
+   return `
+     <div class="section-heading" style="margin-top:16px;">${escapeHtml(preset.label)}</div>
+     <table>
+@@ -3808,6 +3880,9 @@ function sandboxComparisonTable(preset, pair) {
+         ${rows.map(([label, bv, mv]) => `<tr><td>${escapeHtml(label)}</td><td>${bv}</td><td>${mv}</td></tr>`).join('')}
+       </tbody>
+     </table>
++    ${goldChart}
++    ${levelChart}
++    ${purchaseChart}
+     ${completionRows.length ? `
+       <p class="tiny muted" style="margin: 10px 0 4px;">Facility / upgrade completion (days elapsed, only items that finished in at least one variant):</p>
+       <table>
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index af087df..699d015 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -784,6 +784,28 @@ td.icon-cell { width: 1%; padding-right: 0; }
+   padding: 6px 8px; font-size: 10px; color: var(--muted);
+ }
+ 
++/* Patch 0394 -- Balance Sandbox's baseline-vs-proposed curve charts (gold
++   over time, level over time, cumulative purchases over time). --blue for
++   baseline and --brass for proposed, matching the "current/live vs a
++   proposed change" contrast the rest of the Sandbox tab already uses
++   (--brass is this tool's primary-action colour). */
++.sandbox-chart-block { margin: 12px 0; }
++.sandbox-chart {
++  width: 100%; height: auto; background: var(--panel);
++  border: 1px solid var(--panel3); border-radius: var(--radius-sm);
++}
++.chart-axis { stroke: var(--panel3); stroke-width: 1; }
++.chart-line { fill: none; stroke-width: 2; }
++.chart-line-baseline { stroke: var(--blue); }
++.chart-line-proposed { stroke: var(--brass); }
++.chart-tick { font-size: 9px; fill: var(--muted); font-family: var(--mono); }
++.chart-legend-swatch {
++  display: inline-block; width: 8px; height: 8px; border-radius: 2px;
++  margin-right: 3px; vertical-align: middle;
++}
++.chart-legend-baseline { background: var(--blue); }
++.chart-legend-proposed { background: var(--brass); }
++
+ /* --------------------------- shared text utilities ----------------------- */
+ /* Used throughout app.js (loot/banner pickers, tuning view, etc.) but never
+    actually defined -- previously rendered as plain unstyled text wherever
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index bb51ee3..40cf2e4 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -2003,7 +2003,21 @@ function runSimVariant(payload) {
+   return new Promise((resolve) => {
+     let child;
+     try {
+-      child = spawn(TSX_BIN, [SIM_SCRIPT], { cwd: ROOT, timeout: SIM_TIMEOUT_MS });
++      // tsx.cmd, like npm.cmd above, is a shell shim rather than a real
++      // executable on Windows -- spawn() without shell:true fails immediately
++      // with the exact same `spawn EINVAL` npm.cmd hits (see runNpm's own
++      // comment above). Unlike runNpm, this can't just set shell:true on the
++      // options object and call it done: once shell:true is set, Node stops
++      // auto-quoting argv for cmd.exe, and both TSX_BIN and SIM_SCRIPT are
++      // absolute paths built from ROOT, which can contain spaces on a real
++      // Windows box (e.g. a "C:\Users\Jane Doe\..." profile) -- so the
++      // exe/script are quoted by hand here, same fix shape as runNpm, just
++      // with the manual quoting runNpm doesn't need since NPM_BIN has no path
++      // component to worry about.
++      const useShell = process.platform === 'win32';
++      const exe = useShell ? `"${TSX_BIN}"` : TSX_BIN;
++      const scriptArg = useShell ? `"${SIM_SCRIPT}"` : SIM_SCRIPT;
++      child = spawn(exe, [scriptArg], { cwd: ROOT, timeout: SIM_TIMEOUT_MS, shell: useShell });
+     } catch (err) {
+       resolve({ ok: false, error: String(err.message ?? err) });
+       return;
+diff --git a/tools/devtool/sim/runSim.ts b/tools/devtool/sim/runSim.ts
+index 44cb2b1..dd4e014 100644
+--- a/tools/devtool/sim/runSim.ts
++++ b/tools/devtool/sim/runSim.ts
+@@ -215,6 +215,17 @@ async function main() {
+ 
+   const checkInHours = input.preset.checkInMinutes / 60;
+   const levelCurve: { day: number; level: number }[] = [];
++  // Gold curve tracks the same (unspent) balance finalGold reports, sampled
++  // at the same cadence as levelCurve -- a single sample point already
++  // existed for level, this just adds the equivalent for gold so "gold gain
++  // over time" can be charted the same way "time to level" already can.
++  const goldCurve: { day: number; gold: number }[] = [];
++  // Every individual facility/upgrade purchase (one entry per level bought,
++  // not just the day an item finally maxes out -- completionDay/
++  // facilityCompletionDays above only capture the latter). Lets the Sandbox
++  // tab chart *cumulative purchases over time*, not just per-item finish
++  // lines.
++  const purchaseLog: { day: number; id: string; kind: 'facility' | 'upgrade'; level: number }[] = [];
+   const tierFirstSeen: Record<string, { day: number; level: number }> = {};
+   let lastSampleDay = -Infinity;
+ 
+@@ -309,12 +320,14 @@ async function main() {
+       if (gold < cost) break;
+       gold -= cost;
+       levels[next.id] += 1;
++      purchaseLog.push({ day: Math.round(day), id: next.id, kind: next.kind, level: levels[next.id] });
+       if (levels[next.id] >= next.maxLevel) completionDay[next.id] = Math.round(day);
+     }
+ 
+     day += checkInHours / 24;
+     if (day - lastSampleDay >= sampleEveryDays) {
+       levelCurve.push({ day: Math.round(day), level });
++      goldCurve.push({ day: Math.round(day), gold: Math.round(gold) });
+       lastSampleDay = day;
+     }
+   }
+@@ -350,6 +363,8 @@ async function main() {
+     finalLevel: level,
+     finalGold: Math.round(gold),
+     levelCurve,
++    goldCurve,
++    purchaseLog,
+     facilityCompletionDays: Object.fromEntries(
+       spendList.filter((i) => i.kind === 'facility').map((i) => [i.id, completionDay[i.id]]),
+     ),

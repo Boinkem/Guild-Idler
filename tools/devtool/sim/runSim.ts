@@ -215,6 +215,17 @@ async function main() {
 
   const checkInHours = input.preset.checkInMinutes / 60;
   const levelCurve: { day: number; level: number }[] = [];
+  // Gold curve tracks the same (unspent) balance finalGold reports, sampled
+  // at the same cadence as levelCurve -- a single sample point already
+  // existed for level, this just adds the equivalent for gold so "gold gain
+  // over time" can be charted the same way "time to level" already can.
+  const goldCurve: { day: number; gold: number }[] = [];
+  // Every individual facility/upgrade purchase (one entry per level bought,
+  // not just the day an item finally maxes out -- completionDay/
+  // facilityCompletionDays above only capture the latter). Lets the Sandbox
+  // tab chart *cumulative purchases over time*, not just per-item finish
+  // lines.
+  const purchaseLog: { day: number; id: string; kind: 'facility' | 'upgrade'; level: number }[] = [];
   const tierFirstSeen: Record<string, { day: number; level: number }> = {};
   let lastSampleDay = -Infinity;
 
@@ -309,12 +320,14 @@ async function main() {
       if (gold < cost) break;
       gold -= cost;
       levels[next.id] += 1;
+      purchaseLog.push({ day: Math.round(day), id: next.id, kind: next.kind, level: levels[next.id] });
       if (levels[next.id] >= next.maxLevel) completionDay[next.id] = Math.round(day);
     }
 
     day += checkInHours / 24;
     if (day - lastSampleDay >= sampleEveryDays) {
       levelCurve.push({ day: Math.round(day), level });
+      goldCurve.push({ day: Math.round(day), gold: Math.round(gold) });
       lastSampleDay = day;
     }
   }
@@ -350,6 +363,8 @@ async function main() {
     finalLevel: level,
     finalGold: Math.round(gold),
     levelCurve,
+    goldCurve,
+    purchaseLog,
     facilityCompletionDays: Object.fromEntries(
       spendList.filter((i) => i.kind === 'facility').map((i) => [i.id, completionDay[i.id]]),
     ),

@@ -3762,6 +3762,57 @@ function metricCell(run, pick) {
   return v === null || v === undefined ? '<span class="muted">—</span>' : escapeHtml(String(v));
 }
 
+/** Cumulative purchases over time, derived from runSim.ts's per-purchase
+ *  `purchaseLog` (one entry per facility/upgrade level bought) rather than
+ *  the completion-day table below, which only marks the day an item finally
+ *  maxes out. Turns "N items happened at some point" into a chartable
+ *  running total. */
+function cumulativePurchaseCurve(log) {
+  if (!Array.isArray(log) || log.length === 0) return [];
+  return log.map((p, i) => ({ day: p.day, count: i + 1 }));
+}
+
+/** Inline SVG line chart, baseline vs proposed overlaid on one set of axes.
+ *  Deliberately tiny/dependency-free (no chart lib in this tool) -- just
+ *  enough to see the shape of a curve at a glance, not a full analytics
+ *  widget. Either series can be empty (e.g. a failed run) without breaking
+ *  the other's line. */
+function renderCurveChart(baselinePts, modifiedPts, { yLabel, xLabel = 'Day' }) {
+  const bPts = baselinePts || [];
+  const mPts = modifiedPts || [];
+  if (bPts.length === 0 && mPts.length === 0) return '';
+  const allPts = [...bPts, ...mPts];
+  const maxX = Math.max(1, ...allPts.map((p) => p.x));
+  const maxY = Math.max(1, ...allPts.map((p) => p.y));
+  const W = 560;
+  const H = 150;
+  const PAD_L = 44;
+  const PAD_B = 20;
+  const PAD_T = 10;
+  const PAD_R = 10;
+  const sx = (x) => PAD_L + (x / maxX) * (W - PAD_L - PAD_R);
+  const sy = (y) => (H - PAD_B) - (y / maxY) * (H - PAD_B - PAD_T);
+  const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ');
+  return `
+    <div class="sandbox-chart-block">
+      <div class="tiny muted" style="margin-bottom:4px;">${escapeHtml(yLabel)} over ${escapeHtml(xLabel.toLowerCase())} &nbsp;
+        <span class="chart-legend-swatch chart-legend-baseline"></span>Baseline
+        &nbsp; <span class="chart-legend-swatch chart-legend-proposed"></span>Proposed
+      </div>
+      <svg viewBox="0 0 ${W} ${H}" class="sandbox-chart" role="img" aria-label="${escapeHtml(yLabel)} over ${escapeHtml(xLabel)}">
+        <line x1="${PAD_L}" y1="${H - PAD_B}" x2="${W - PAD_R}" y2="${H - PAD_B}" class="chart-axis" />
+        <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" class="chart-axis" />
+        ${bPts.length > 1 ? `<path d="${toPath(bPts)}" class="chart-line chart-line-baseline" />` : ''}
+        ${mPts.length > 1 ? `<path d="${toPath(mPts)}" class="chart-line chart-line-proposed" />` : ''}
+        <text x="${PAD_L}" y="${H - 4}" class="chart-tick">0</text>
+        <text x="${W - PAD_R}" y="${H - 4}" class="chart-tick" text-anchor="end">${Math.round(maxX)}d</text>
+        <text x="${PAD_L - 4}" y="${PAD_T + 8}" class="chart-tick" text-anchor="end">${Math.round(maxY).toLocaleString()}</text>
+        <text x="${PAD_L - 4}" y="${H - PAD_B}" class="chart-tick" text-anchor="end">0</text>
+      </svg>
+    </div>
+  `;
+}
+
 function sandboxComparisonTable(preset, pair) {
   const b = pair.baseline;
   const m = pair.modified;
@@ -3800,6 +3851,27 @@ function sandboxComparisonTable(preset, pair) {
     return mc.dominant && bc && !bc.dominant;
   });
 
+  // Three curves the Sandbox tab now charts, baseline vs proposed:
+  // gold gain over time, level (time-to-level) over time, and cumulative
+  // facility/upgrade purchases over time. All three come from runSim.ts's
+  // per-tick sampling (levelCurve/goldCurve) or per-purchase log
+  // (purchaseLog) -- see that file's own comments.
+  const goldChart = renderCurveChart(
+    (bResult?.goldCurve || []).map((p) => ({ x: p.day, y: p.gold })),
+    (mResult?.goldCurve || []).map((p) => ({ x: p.day, y: p.gold })),
+    { yLabel: 'Gold (unspent)' },
+  );
+  const levelChart = renderCurveChart(
+    (bResult?.levelCurve || []).map((p) => ({ x: p.day, y: p.level })),
+    (mResult?.levelCurve || []).map((p) => ({ x: p.day, y: p.level })),
+    { yLabel: 'Hero level' },
+  );
+  const purchaseChart = renderCurveChart(
+    cumulativePurchaseCurve(bResult?.purchaseLog).map((p) => ({ x: p.day, y: p.count })),
+    cumulativePurchaseCurve(mResult?.purchaseLog).map((p) => ({ x: p.day, y: p.count })),
+    { yLabel: 'Facility/upgrade levels purchased (cumulative)' },
+  );
+
   return `
     <div class="section-heading" style="margin-top:16px;">${escapeHtml(preset.label)}</div>
     <table>
@@ -3808,6 +3880,9 @@ function sandboxComparisonTable(preset, pair) {
         ${rows.map(([label, bv, mv]) => `<tr><td>${escapeHtml(label)}</td><td>${bv}</td><td>${mv}</td></tr>`).join('')}
       </tbody>
     </table>
+    ${goldChart}
+    ${levelChart}
+    ${purchaseChart}
     ${completionRows.length ? `
       <p class="tiny muted" style="margin: 10px 0 4px;">Facility / upgrade completion (days elapsed, only items that finished in at least one variant):</p>
       <table>

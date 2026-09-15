@@ -32121,3 +32121,71 @@ available) -- worth a real-window pass on Hatchery specifically (the
 reported tab) to confirm the plaque is now clearly visible, and a look
 at the DevTool's Ship tab to confirm the new reference box reads well
 alongside the existing Steam config fields.
+
+### Bug fix / Feature: Balance Sandbox sim crash fixed, gold/level/purchase curves added (patch 0394)
+```discord-update
+Dev Update | Balance Sandbox
+
+- Fixed the Balance Sandbox failing every run with a spawn error
+- Added gold-over-time, level-over-time, and purchases-over-time charts to sim results
+```
+
+Two-part report: every Sandbox run (baseline and proposed alike) was
+failing outright with `spawn EINVAL`, and once that's fixed, a request to
+actually chart gold gain, upgrades purchased, and time-to-level for each
+of the three play-style presets rather than only seeing end-of-run
+totals.
+
+**Sim crash fix (`tools/devtool/server.mjs`).** `runSimVariant` spawns a
+fresh `tsx` process per variant so a proposed tuning overlay can never
+leak into the baseline run (see `runSim.ts`'s own header on why that
+isolation matters) -- but unlike `runNpm`'s `npm.cmd` invocation just
+above it in this file, the `tsx.cmd` spawn was never given the matching
+`shell:true` fix. `tsx.cmd`, like `npm.cmd`, is a shell shim rather than a
+real executable on Windows; `spawn()` without `shell:true` fails
+immediately with exactly the `spawn EINVAL` the screenshot showed, on
+both the baseline and proposed runs, every time. Fixed the same way
+`runNpm` already documents for npm -- except `runNpm` can lean on
+`execFileAsync`'s automatic argv quoting even with `shell:true`, while
+this spawn call builds its command by hand, and once `shell:true` is set
+Node stops auto-quoting argv for `cmd.exe`. `TSX_BIN`/`SIM_SCRIPT` are
+absolute paths built from `ROOT`, which can contain spaces on a real
+Windows box (a `C:\Users\Jane Doe\...` profile, for one), so both are now
+quoted by hand on Windows specifically, `shell` only set to `true` on
+that platform -- non-Windows behavior (and the stdin-piping this whole
+function exists for, see its own header comment) is unchanged.
+
+**Gold and level curves (`tools/devtool/sim/runSim.ts`).** The sim
+already sampled `levelCurve` (day, level) at a fixed cadence but never an
+equivalent for gold, and nothing in the UI charted either one -- the
+Sandbox tab only ever showed single-number end-of-run totals ("Final
+level", "Final gold"). New `goldCurve`, sampled in the same per-tick
+block as `levelCurve` (same `sampleEveryDays` cadence, same rounding).
+Also added `purchaseLog`: one entry per individual facility/upgrade level
+bought (`{day, id, kind, level}`), pushed inside the existing spend loop
+right where `levels[next.id] += 1` already happens -- a finer-grained
+history than `facilityCompletionDays`/`upgradeCompletionDays`, which only
+ever recorded the day an item finally maxed out, not the running count of
+purchases leading up to that.
+
+**Sandbox tab charts (`tools/devtool/public/app.js`,
+`tools/devtool/public/style.css`).** New dependency-free inline-SVG
+`renderCurveChart()`, baseline and proposed overlaid on one set of axes
+(`--blue` / `--brass`, matching the live-vs-proposed contrast the rest of
+this tab already uses). Three charts now render per preset, between the
+metrics table and the existing facility/upgrade completion table: gold
+over time and level over time (straight off `goldCurve`/`levelCurve`),
+and cumulative purchases over time off a new `cumulativePurchaseCurve()`
+helper that turns `purchaseLog`'s per-event list into a running total.
+The existing completion-day table is unchanged and still answers "when
+did each specific item finish" -- the new purchase chart answers "how
+fast is spending happening overall," a different question the per-item
+table was never meant to cover.
+
+**Verified:** `node --check` against both changed `.js` files
+(`server.mjs`, `app.js`) passes clean. `runSim.ts`'s edits were reviewed
+by hand rather than type-checked -- this environment has no `node_modules`
+installed for the game itself (would need a full `npm install` to run
+`tsc` against real types), so a real Sandbox run on Windows (where the
+crash actually reproduces) is worth doing to confirm both the fix and the
+new charts render as expected.

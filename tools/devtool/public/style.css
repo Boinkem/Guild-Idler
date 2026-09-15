@@ -784,6 +784,28 @@ td.icon-cell { width: 1%; padding-right: 0; }
   padding: 6px 8px; font-size: 10px; color: var(--muted);
 }
 
+/* Patch 0394 -- Balance Sandbox's baseline-vs-proposed curve charts (gold
+   over time, level over time, cumulative purchases over time). --blue for
+   baseline and --brass for proposed, matching the "current/live vs a
+   proposed change" contrast the rest of the Sandbox tab already uses
+   (--brass is this tool's primary-action colour). */
+.sandbox-chart-block { margin: 12px 0; }
+.sandbox-chart {
+  width: 100%; height: auto; background: var(--panel);
+  border: 1px solid var(--panel3); border-radius: var(--radius-sm);
+}
+.chart-axis { stroke: var(--panel3); stroke-width: 1; }
+.chart-line { fill: none; stroke-width: 2; }
+.chart-line-baseline { stroke: var(--blue); }
+.chart-line-proposed { stroke: var(--brass); }
+.chart-tick { font-size: 9px; fill: var(--muted); font-family: var(--mono); }
+.chart-legend-swatch {
+  display: inline-block; width: 8px; height: 8px; border-radius: 2px;
+  margin-right: 3px; vertical-align: middle;
+}
+.chart-legend-baseline { background: var(--blue); }
+.chart-legend-proposed { background: var(--brass); }
+
 /* --------------------------- shared text utilities ----------------------- */
 /* Used throughout app.js (loot/banner pickers, tuning view, etc.) but never
    actually defined -- previously rendered as plain unstyled text wherever
