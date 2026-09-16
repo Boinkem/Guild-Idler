@@ -32666,3 +32666,68 @@ highlight actually lands on Auction House Charter, and the offline-state
 copy reads well against `auction-house.jpg`'s art once that exists (no
 art asset yet -- same "renders once present, silently absent until then"
 convention every other panel background already follows).
+
+### DevTool "Auction House" tab: connection/health monitor (patch 0402)
+```discord-update
+Dev Update | Patch 0402
+
+- Internal tooling only -- nothing changes in the game itself
+```
+
+Build-order item 3 from the ranked list (DevTool connection/health
+monitor) -- see the Auction House entry above for the full design.
+Deliberately scoped to just this: no force-rotation, transaction search,
+trade reversal, or suspension yet -- all of those need real `/admin/*`
+routes on the backend, and `server/` only has `/health` so far (see
+patch 0399). This talks to exactly the one route that exists.
+
+**New top-level "Auction House" nav button** (`app.js`), same
+non-schema-driven "special tab" pattern Patches/Sandbox/Pet Lab/Hero Lab
+already use (`dataset.group`, `markActiveGroup`, a dedicated
+`select*Tab()` function) rather than forcing it through the generic
+SCHEMAS-driven content-type editor -- this isn't JSON CRUD, it's a live
+status check.
+
+**New `tools/devtool/ah.config.json`, gitignored** -- same local-only
+config pattern `steam.config.json`/`discord.config.json` already use.
+Holds just the backend's base URL, defaulting to `http://localhost:4000`
+(server/'s own dev default). Deliberately different from the client's
+own `auctionHouse.ts` (`AH_READY`/empty `AH_BACKEND_URL`, no network
+attempt pre-DNS) -- DevTools is never shipped to players, so defaulting
+to `localhost` here is exactly right: this is a developer checking their
+own locally-running `server/` process, not a real player's client
+guessing at a URL.
+
+**Three new routes in `server.mjs`** (`GET`/`POST /api/auction-house/config`,
+`GET /api/auction-house/status`) -- the status route hits the configured
+URL's real `/health` with a 4-second timeout (`AbortSignal.timeout`),
+and never throws to the client: a refused connection, a DNS failure, a
+timeout, and a non-JSON response are all just reported as "not reachable
+right now" rather than crashing the route handler.
+
+**Status card reuses `.patch-result`, not `.devtool-note`.** Checked
+`style.css` first rather than assuming -- found a comment explaining
+`.devtool-note` deliberately has no `.good`/`.bad` styling because it
+"never reports success/failure of anything." A health check very much
+does, so this uses `.patch-result` instead, the class that's actually
+meant for reporting an outcome -- avoided extending a component past
+its own stated purpose.
+
+**Verified for real, full loop, not mocked:** built and ran the actual
+`server/` backend (from patch 0399) alongside the real DevTool server in
+this environment, then drove all three routes with `curl` through five
+scenarios: backend up with `AH_ENABLED=false` (`reachable: true,
+ahEnabled: false, mode: "offline"`), backend killed
+(`reachable: false, error: "fetch failed"`, no crash), backend up with
+`AH_ENABLED=true` (`reachable: true, ahEnabled: true, mode: "online"`),
+saving a bogus URL and confirming it's both persisted and correctly
+reported unreachable, then restoring the real URL and confirming it
+reconnects immediately. Both `server.mjs` and `app.js` also re-checked
+with a direct syntax parse after editing (`node -c`, `new Function(...)`
+respectively) before the runtime test, not just visually reviewed.
+
+**Not verified:** no real browser click-through of the rendered tab in
+this environment (Node/curl only, no DOM) -- worth a real pass
+confirming the URL input/Save/Check buttons behave as expected in an
+actual browser, and that the sidebar icon (`ph-storefront`) renders
+correctly from the Phosphor Icons CDN.

@@ -39,3 +39,4 @@ src/game/data/json/*.bak
 # a local secret, never committed. See tools/devtool/server.mjs.
 tools/devtool/discord.config.json
 tools/devtool/steam.config.json
+tools/devtool/ah.config.json

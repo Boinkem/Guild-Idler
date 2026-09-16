@@ -109,6 +109,16 @@ const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
 // class than a scoped, revocable Discord webhook, and how steamcmd's own
 // cached-session login sidesteps needing one here at all.
 const STEAM_CONFIG_PATH = path.join(__dirname, 'steam.config.json');
+// Same shape/reasoning as STEAM_CONFIG_PATH above -- local-only, gitignored.
+// Holds just the AH backend's base URL (server/'s own dev default,
+// http://localhost:4000, until a real domain exists -- see
+// server/README.md and guild-idler-status.md's Auction House entry).
+// Unlike the client's own auctionHouse.ts (AH_READY/AH_BACKEND_URL,
+// deliberately empty pre-DNS), DevTools is never shipped to players --
+// pointing this at localhost by default is exactly right here, since
+// it's this developer checking their own locally-running server/
+// process, not a real player's game client guessing at a URL.
+const AH_CONFIG_PATH = path.join(__dirname, 'ah.config.json');
 // The running changelog/backlog doc at the repo root -- read (never written)
 // by the patch-summary lookup below, to pull a ready-made Discord blurb for
 // whichever patch is selected instead of guessing one from its filename.
@@ -2661,6 +2671,51 @@ async function writeSteamConfig(cfg) {
   await fs.writeFile(STEAM_CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
 }
 
+/* -------------------------------------------------------- auction house --- */
+// Build-order item 3 from guild-idler-status.md's Auction House entry --
+// connection/health monitor only. No force-rotation, transaction search,
+// trade reversal, or suspension yet: those all need real /admin/* routes
+// on the backend, which don't exist yet (server/ only has /health so
+// far). This talks to exactly the one route that does exist.
+
+const AH_DEFAULT_URL = 'http://localhost:4000';
+const AH_CHECK_TIMEOUT_MS = 4000;
+
+async function readAhConfig() {
+  try {
+    const raw = await fs.readFile(AH_CONFIG_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return { url: typeof parsed.url === 'string' && parsed.url ? parsed.url : AH_DEFAULT_URL };
+  } catch {
+    return { url: AH_DEFAULT_URL };
+  }
+}
+
+async function writeAhConfig(cfg) {
+  await fs.writeFile(AH_CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+}
+
+/**
+ * Hits the configured backend's /health directly -- the same route
+ * server/src/index.ts always answers on regardless of AH_ENABLED (see
+ * that file's own comment). Never throws: a refused connection, a DNS
+ * failure, a timeout, and a non-JSON response are all just different
+ * flavours of "not reachable right now" to this monitor, reported the
+ * same way rather than crashing the route handler.
+ */
+async function checkAhBackend(url) {
+  try {
+    const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(AH_CHECK_TIMEOUT_MS) });
+    if (!res.ok) {
+      return { reachable: false, error: `HTTP ${res.status}` };
+    }
+    const body = await res.json();
+    return { reachable: true, ahEnabled: !!body.ahEnabled, mode: body.mode ?? null };
+  } catch (err) {
+    return { reachable: false, error: err.message || String(err) };
+  }
+}
+
 /**
  * Locates electron-builder's unpacked Windows build -- the actual runnable
  * game (exe + resources), as opposed to the NSIS installer wrapped around
@@ -3020,6 +3075,23 @@ const server = http.createServer(async (req, res) => {
     };
     await writeSteamConfig(cfg);
     return json(res, 200, { ok: true, ...cfg });
+  }
+
+  if (url.pathname === '/api/auction-house/config' && req.method === 'GET') {
+    return json(res, 200, await readAhConfig());
+  }
+
+  if (url.pathname === '/api/auction-house/config' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const cfg = { url: typeof body.url === 'string' && body.url.trim() ? body.url.trim() : AH_DEFAULT_URL };
+    await writeAhConfig(cfg);
+    return json(res, 200, { ok: true, ...cfg });
+  }
+
+  if (url.pathname === '/api/auction-house/status' && req.method === 'GET') {
+    const cfg = await readAhConfig();
+    const result = await checkAhBackend(cfg.url);
+    return json(res, 200, { url: cfg.url, checkedAt: Date.now(), ...result });
   }
 
   if (url.pathname === '/api/steam/generate-scripts' && req.method === 'POST') {

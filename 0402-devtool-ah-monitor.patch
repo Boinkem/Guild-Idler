@@ -1,0 +1,323 @@
+diff --git a/.gitignore b/.gitignore
+index 724f536..94a4ec0 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -39,3 +39,4 @@ src/game/data/json/*.bak
+ # a local secret, never committed. See tools/devtool/server.mjs.
+ tools/devtool/discord.config.json
+ tools/devtool/steam.config.json
++tools/devtool/ah.config.json
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 94238b8..0324dec 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -32666,3 +32666,68 @@ highlight actually lands on Auction House Charter, and the offline-state
+ copy reads well against `auction-house.jpg`'s art once that exists (no
+ art asset yet -- same "renders once present, silently absent until then"
+ convention every other panel background already follows).
++
++### DevTool "Auction House" tab: connection/health monitor (patch 0402)
++```discord-update
++Dev Update | Patch 0402
++
++- Internal tooling only -- nothing changes in the game itself
++```
++
++Build-order item 3 from the ranked list (DevTool connection/health
++monitor) -- see the Auction House entry above for the full design.
++Deliberately scoped to just this: no force-rotation, transaction search,
++trade reversal, or suspension yet -- all of those need real `/admin/*`
++routes on the backend, and `server/` only has `/health` so far (see
++patch 0399). This talks to exactly the one route that exists.
++
++**New top-level "Auction House" nav button** (`app.js`), same
++non-schema-driven "special tab" pattern Patches/Sandbox/Pet Lab/Hero Lab
++already use (`dataset.group`, `markActiveGroup`, a dedicated
++`select*Tab()` function) rather than forcing it through the generic
++SCHEMAS-driven content-type editor -- this isn't JSON CRUD, it's a live
++status check.
++
++**New `tools/devtool/ah.config.json`, gitignored** -- same local-only
++config pattern `steam.config.json`/`discord.config.json` already use.
++Holds just the backend's base URL, defaulting to `http://localhost:4000`
++(server/'s own dev default). Deliberately different from the client's
++own `auctionHouse.ts` (`AH_READY`/empty `AH_BACKEND_URL`, no network
++attempt pre-DNS) -- DevTools is never shipped to players, so defaulting
++to `localhost` here is exactly right: this is a developer checking their
++own locally-running `server/` process, not a real player's client
++guessing at a URL.
++
++**Three new routes in `server.mjs`** (`GET`/`POST /api/auction-house/config`,
++`GET /api/auction-house/status`) -- the status route hits the configured
++URL's real `/health` with a 4-second timeout (`AbortSignal.timeout`),
++and never throws to the client: a refused connection, a DNS failure, a
++timeout, and a non-JSON response are all just reported as "not reachable
++right now" rather than crashing the route handler.
++
++**Status card reuses `.patch-result`, not `.devtool-note`.** Checked
++`style.css` first rather than assuming -- found a comment explaining
++`.devtool-note` deliberately has no `.good`/`.bad` styling because it
++"never reports success/failure of anything." A health check very much
++does, so this uses `.patch-result` instead, the class that's actually
++meant for reporting an outcome -- avoided extending a component past
++its own stated purpose.
++
++**Verified for real, full loop, not mocked:** built and ran the actual
++`server/` backend (from patch 0399) alongside the real DevTool server in
++this environment, then drove all three routes with `curl` through five
++scenarios: backend up with `AH_ENABLED=false` (`reachable: true,
++ahEnabled: false, mode: "offline"`), backend killed
++(`reachable: false, error: "fetch failed"`, no crash), backend up with
++`AH_ENABLED=true` (`reachable: true, ahEnabled: true, mode: "online"`),
++saving a bogus URL and confirming it's both persisted and correctly
++reported unreachable, then restoring the real URL and confirming it
++reconnects immediately. Both `server.mjs` and `app.js` also re-checked
++with a direct syntax parse after editing (`node -c`, `new Function(...)`
++respectively) before the runtime test, not just visually reviewed.
++
++**Not verified:** no real browser click-through of the rendered tab in
++this environment (Node/curl only, no DOM) -- worth a real pass
++confirming the URL input/Save/Check buttons behave as expected in an
++actual browser, and that the sidebar icon (`ph-storefront`) renders
++correctly from the Phosphor Icons CDN.
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 0e21f9b..b895cf2 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -112,6 +112,12 @@ async function init() {
+   heroLabBtn.onclick = () => selectHeroLabTab();
+   tabsEl.appendChild(heroLabBtn);
+ 
++  const ahBtn = document.createElement('button');
++  ahBtn.innerHTML = '<i class="ph ph-storefront"></i><span>Auction House</span>';
++  ahBtn.dataset.group = '__auctionhouse__';
++  ahBtn.onclick = () => selectAuctionHouseTab();
++  tabsEl.appendChild(ahBtn);
++
+   groupOrder.forEach((group) => {
+     const btn = document.createElement('button');
+     // Caret + label: the caret marks that this group opens a nested strip of
+@@ -2424,6 +2430,19 @@ const sandboxState = {
+   runError: null,
+ };
+ 
++/* --------------------------------- auction house --------------------------------- */
++// Connection/health monitor only, build-order item 3 from guild-idler-status.md's
++// Auction House entry -- pings server/'s real /health route. No force-rotation,
++// transaction search, trade reversal, or suspension yet -- those need real
++// /admin/* routes the backend doesn't have yet.
++
++const ahState = {
++  url: '',
++  status: null, // { reachable, ahEnabled, mode, error, checkedAt } | null before the first check
++  checking: false,
++  saving: false,
++};
++
+ 
+ function formatBytes(n) {
+   if (n < 1024) return `${n} B`;
+@@ -4064,3 +4083,106 @@ function renderSandbox() {
+     }
+   };
+ }
++
++/* ---------------------------- auction house tab ---------------------------- */
++
++async function selectAuctionHouseTab() {
++  state.kind = '__auctionhouse__';
++  state.group = null;
++  markActiveGroup('__auctionhouse__');
++  subtabsEl.style.display = 'none';
++  subtabsEl.innerHTML = '';
++  setStatus('Loading…');
++  try {
++    const cfg = await api('/api/auction-house/config');
++    ahState.url = cfg.url;
++    setStatus('');
++    renderAuctionHouse();
++    await checkAhNow();
++  } catch (err) {
++    setStatus(err.message, 'err');
++  }
++}
++
++async function checkAhNow() {
++  ahState.checking = true;
++  renderAuctionHouse();
++  try {
++    ahState.status = await api('/api/auction-house/status');
++  } catch (err) {
++    ahState.status = { reachable: false, error: err.message || String(err), checkedAt: Date.now() };
++  }
++  ahState.checking = false;
++  renderAuctionHouse();
++}
++
++/** Colour/label for the status card -- three states, same "reachable/
++ *  unreachable/checking" shape the client's own auctionHouse.ts checks
++ *  against, just from this DevTool's own point of view (always attempts
++ *  the real request, no AH_READY short-circuit -- see that module's own
++ *  comment for why the shipped client is different). */
++function ahStatusLine() {
++  if (ahState.checking) return { text: 'Checking…', cls: '' };
++  if (!ahState.status) return { text: 'Not checked yet.', cls: '' };
++  if (!ahState.status.reachable) {
++    return { text: `Unreachable — ${escapeHtml(ahState.status.error || 'unknown error')}`, cls: 'bad' };
++  }
++  const mode = ahState.status.ahEnabled ? 'online (AH_ENABLED=true)' : 'reachable, but off (AH_ENABLED=false)';
++  return { text: `Connected — ${mode}`, cls: ahState.status.ahEnabled ? 'good' : '' };
++}
++
++function renderAuctionHouse() {
++  const line = ahStatusLine();
++  const checkedAt = ahState.status?.checkedAt ? new Date(ahState.status.checkedAt).toLocaleTimeString() : null;
++
++  appEl.innerHTML = `
++    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Auction House</h2>
++    <p class="tiny muted" style="margin: 0 0 12px;">
++      Connection/health monitor for the AH backend (server/). Build-order item 3 from
++      guild-idler-status.md's Auction House entry -- nothing else here yet on purpose:
++      force-rotation, transaction search, trade reversal, and suspension all need real
++      <code>/admin/*</code> routes the backend doesn't have yet.
++    </p>
++
++    <div class="section-heading">Backend URL</div>
++    <div class="devtool-note">
++      Saved locally (<code>tools/devtool/ah.config.json</code>, gitignored). Defaults to
++      <code>http://localhost:4000</code> -- server/'s own dev default -- until there's a real
++      domain to point at (see server/README.md).
++    </div>
++    <div class="row" style="gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
++      <input type="text" id="ahUrlInput" placeholder="http://localhost:4000"
++        value="${escapeHtml(ahState.url)}"
++        style="flex: 1 1 260px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
++      <button id="ahSaveBtn" ${ahState.saving ? 'disabled' : ''}>${ahState.saving ? 'Saving…' : 'Save URL'}</button>
++      <button id="ahCheckBtn" ${ahState.checking ? 'disabled' : ''}>${ahState.checking ? 'Checking…' : 'Check now'}</button>
++    </div>
++
++    <div class="section-heading">Status</div>
++    <div class="patch-result ${line.cls}">
++      <div class="patch-result-label">${line.text}</div>
++      ${checkedAt ? `<div class="tiny muted">Last checked ${checkedAt}.</div>` : ''}
++    </div>
++  `;
++
++  const ahSaveBtn = document.getElementById('ahSaveBtn');
++  if (ahSaveBtn) ahSaveBtn.onclick = async () => {
++    ahState.saving = true;
++    renderAuctionHouse();
++    try {
++      const result = await api('/api/auction-house/config', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ url: document.getElementById('ahUrlInput').value.trim() }),
++      });
++      ahState.url = result.url;
++    } catch (err) {
++      setStatus(err.message, 'err');
++    }
++    ahState.saving = false;
++    renderAuctionHouse();
++    await checkAhNow();
++  };
++
++  const ahCheckBtn = document.getElementById('ahCheckBtn');
++  if (ahCheckBtn) ahCheckBtn.onclick = () => checkAhNow();
++}
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 2129b37..f740e24 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -109,6 +109,16 @@ const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
+ // class than a scoped, revocable Discord webhook, and how steamcmd's own
+ // cached-session login sidesteps needing one here at all.
+ const STEAM_CONFIG_PATH = path.join(__dirname, 'steam.config.json');
++// Same shape/reasoning as STEAM_CONFIG_PATH above -- local-only, gitignored.
++// Holds just the AH backend's base URL (server/'s own dev default,
++// http://localhost:4000, until a real domain exists -- see
++// server/README.md and guild-idler-status.md's Auction House entry).
++// Unlike the client's own auctionHouse.ts (AH_READY/AH_BACKEND_URL,
++// deliberately empty pre-DNS), DevTools is never shipped to players --
++// pointing this at localhost by default is exactly right here, since
++// it's this developer checking their own locally-running server/
++// process, not a real player's game client guessing at a URL.
++const AH_CONFIG_PATH = path.join(__dirname, 'ah.config.json');
+ // The running changelog/backlog doc at the repo root -- read (never written)
+ // by the patch-summary lookup below, to pull a ready-made Discord blurb for
+ // whichever patch is selected instead of guessing one from its filename.
+@@ -2661,6 +2671,51 @@ async function writeSteamConfig(cfg) {
+   await fs.writeFile(STEAM_CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+ }
+ 
++/* -------------------------------------------------------- auction house --- */
++// Build-order item 3 from guild-idler-status.md's Auction House entry --
++// connection/health monitor only. No force-rotation, transaction search,
++// trade reversal, or suspension yet: those all need real /admin/* routes
++// on the backend, which don't exist yet (server/ only has /health so
++// far). This talks to exactly the one route that does exist.
++
++const AH_DEFAULT_URL = 'http://localhost:4000';
++const AH_CHECK_TIMEOUT_MS = 4000;
++
++async function readAhConfig() {
++  try {
++    const raw = await fs.readFile(AH_CONFIG_PATH, 'utf8');
++    const parsed = JSON.parse(raw);
++    return { url: typeof parsed.url === 'string' && parsed.url ? parsed.url : AH_DEFAULT_URL };
++  } catch {
++    return { url: AH_DEFAULT_URL };
++  }
++}
++
++async function writeAhConfig(cfg) {
++  await fs.writeFile(AH_CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
++}
++
++/**
++ * Hits the configured backend's /health directly -- the same route
++ * server/src/index.ts always answers on regardless of AH_ENABLED (see
++ * that file's own comment). Never throws: a refused connection, a DNS
++ * failure, a timeout, and a non-JSON response are all just different
++ * flavours of "not reachable right now" to this monitor, reported the
++ * same way rather than crashing the route handler.
++ */
++async function checkAhBackend(url) {
++  try {
++    const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(AH_CHECK_TIMEOUT_MS) });
++    if (!res.ok) {
++      return { reachable: false, error: `HTTP ${res.status}` };
++    }
++    const body = await res.json();
++    return { reachable: true, ahEnabled: !!body.ahEnabled, mode: body.mode ?? null };
++  } catch (err) {
++    return { reachable: false, error: err.message || String(err) };
++  }
++}
++
+ /**
+  * Locates electron-builder's unpacked Windows build -- the actual runnable
+  * game (exe + resources), as opposed to the NSIS installer wrapped around
+@@ -3022,6 +3077,23 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, { ok: true, ...cfg });
+   }
+ 
++  if (url.pathname === '/api/auction-house/config' && req.method === 'GET') {
++    return json(res, 200, await readAhConfig());
++  }
++
++  if (url.pathname === '/api/auction-house/config' && req.method === 'POST') {
++    const body = JSON.parse(await readBody(req));
++    const cfg = { url: typeof body.url === 'string' && body.url.trim() ? body.url.trim() : AH_DEFAULT_URL };
++    await writeAhConfig(cfg);
++    return json(res, 200, { ok: true, ...cfg });
++  }
++
++  if (url.pathname === '/api/auction-house/status' && req.method === 'GET') {
++    const cfg = await readAhConfig();
++    const result = await checkAhBackend(cfg.url);
++    return json(res, 200, { url: cfg.url, checkedAt: Date.now(), ...result });
++  }
++
+   if (url.pathname === '/api/steam/generate-scripts' && req.method === 'POST') {
+     return json(res, 200, await generateSteamBuildScripts());
+   }

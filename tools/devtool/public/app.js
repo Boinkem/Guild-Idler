@@ -112,6 +112,12 @@ async function init() {
   heroLabBtn.onclick = () => selectHeroLabTab();
   tabsEl.appendChild(heroLabBtn);
 
+  const ahBtn = document.createElement('button');
+  ahBtn.innerHTML = '<i class="ph ph-storefront"></i><span>Auction House</span>';
+  ahBtn.dataset.group = '__auctionhouse__';
+  ahBtn.onclick = () => selectAuctionHouseTab();
+  tabsEl.appendChild(ahBtn);
+
   groupOrder.forEach((group) => {
     const btn = document.createElement('button');
     // Caret + label: the caret marks that this group opens a nested strip of
@@ -2424,6 +2430,19 @@ const sandboxState = {
   runError: null,
 };
 
+/* --------------------------------- auction house --------------------------------- */
+// Connection/health monitor only, build-order item 3 from guild-idler-status.md's
+// Auction House entry -- pings server/'s real /health route. No force-rotation,
+// transaction search, trade reversal, or suspension yet -- those need real
+// /admin/* routes the backend doesn't have yet.
+
+const ahState = {
+  url: '',
+  status: null, // { reachable, ahEnabled, mode, error, checkedAt } | null before the first check
+  checking: false,
+  saving: false,
+};
+
 
 function formatBytes(n) {
   if (n < 1024) return `${n} B`;
@@ -4063,4 +4082,107 @@ function renderSandbox() {
         `<div class="patch-result bad"><div class="patch-result-label">Simulation failed</div><pre>${escapeHtml(sandboxState.runError)}</pre></div>`;
     }
   };
+}
+
+/* ---------------------------- auction house tab ---------------------------- */
+
+async function selectAuctionHouseTab() {
+  state.kind = '__auctionhouse__';
+  state.group = null;
+  markActiveGroup('__auctionhouse__');
+  subtabsEl.style.display = 'none';
+  subtabsEl.innerHTML = '';
+  setStatus('Loading…');
+  try {
+    const cfg = await api('/api/auction-house/config');
+    ahState.url = cfg.url;
+    setStatus('');
+    renderAuctionHouse();
+    await checkAhNow();
+  } catch (err) {
+    setStatus(err.message, 'err');
+  }
+}
+
+async function checkAhNow() {
+  ahState.checking = true;
+  renderAuctionHouse();
+  try {
+    ahState.status = await api('/api/auction-house/status');
+  } catch (err) {
+    ahState.status = { reachable: false, error: err.message || String(err), checkedAt: Date.now() };
+  }
+  ahState.checking = false;
+  renderAuctionHouse();
+}
+
+/** Colour/label for the status card -- three states, same "reachable/
+ *  unreachable/checking" shape the client's own auctionHouse.ts checks
+ *  against, just from this DevTool's own point of view (always attempts
+ *  the real request, no AH_READY short-circuit -- see that module's own
+ *  comment for why the shipped client is different). */
+function ahStatusLine() {
+  if (ahState.checking) return { text: 'Checking…', cls: '' };
+  if (!ahState.status) return { text: 'Not checked yet.', cls: '' };
+  if (!ahState.status.reachable) {
+    return { text: `Unreachable — ${escapeHtml(ahState.status.error || 'unknown error')}`, cls: 'bad' };
+  }
+  const mode = ahState.status.ahEnabled ? 'online (AH_ENABLED=true)' : 'reachable, but off (AH_ENABLED=false)';
+  return { text: `Connected — ${mode}`, cls: ahState.status.ahEnabled ? 'good' : '' };
+}
+
+function renderAuctionHouse() {
+  const line = ahStatusLine();
+  const checkedAt = ahState.status?.checkedAt ? new Date(ahState.status.checkedAt).toLocaleTimeString() : null;
+
+  appEl.innerHTML = `
+    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Auction House</h2>
+    <p class="tiny muted" style="margin: 0 0 12px;">
+      Connection/health monitor for the AH backend (server/). Build-order item 3 from
+      guild-idler-status.md's Auction House entry -- nothing else here yet on purpose:
+      force-rotation, transaction search, trade reversal, and suspension all need real
+      <code>/admin/*</code> routes the backend doesn't have yet.
+    </p>
+
+    <div class="section-heading">Backend URL</div>
+    <div class="devtool-note">
+      Saved locally (<code>tools/devtool/ah.config.json</code>, gitignored). Defaults to
+      <code>http://localhost:4000</code> -- server/'s own dev default -- until there's a real
+      domain to point at (see server/README.md).
+    </div>
+    <div class="row" style="gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+      <input type="text" id="ahUrlInput" placeholder="http://localhost:4000"
+        value="${escapeHtml(ahState.url)}"
+        style="flex: 1 1 260px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <button id="ahSaveBtn" ${ahState.saving ? 'disabled' : ''}>${ahState.saving ? 'Saving…' : 'Save URL'}</button>
+      <button id="ahCheckBtn" ${ahState.checking ? 'disabled' : ''}>${ahState.checking ? 'Checking…' : 'Check now'}</button>
+    </div>
+
+    <div class="section-heading">Status</div>
+    <div class="patch-result ${line.cls}">
+      <div class="patch-result-label">${line.text}</div>
+      ${checkedAt ? `<div class="tiny muted">Last checked ${checkedAt}.</div>` : ''}
+    </div>
+  `;
+
+  const ahSaveBtn = document.getElementById('ahSaveBtn');
+  if (ahSaveBtn) ahSaveBtn.onclick = async () => {
+    ahState.saving = true;
+    renderAuctionHouse();
+    try {
+      const result = await api('/api/auction-house/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: document.getElementById('ahUrlInput').value.trim() }),
+      });
+      ahState.url = result.url;
+    } catch (err) {
+      setStatus(err.message, 'err');
+    }
+    ahState.saving = false;
+    renderAuctionHouse();
+    await checkAhNow();
+  };
+
+  const ahCheckBtn = document.getElementById('ahCheckBtn');
+  if (ahCheckBtn) ahCheckBtn.onclick = () => checkAhNow();
 }
