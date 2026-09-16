@@ -302,6 +302,37 @@ export const UPGRADES: UpgradeDef[] = [
 ];
 
 /**
+ * Auction House access-gating upgrade -- data-complete, deliberately NOT
+ * inserted into the live `UPGRADES` array above yet. See
+ * guild-idler-status.md's Auction House entry for the full design.
+ *
+ * Same reasoning the Steamworks leaderboard fork was held back from
+ * `electron/main.ts` for several patches until its Windows build was
+ * actually ready (patch 0379): shipping this into the real `UPGRADES`
+ * array right now would let a real player spend real gold on an unlock
+ * flag (`'auctionHouse'`) that nothing in the game reads yet -- no panel,
+ * no nav entry, no backend even reachable (see server/'s AH_ENABLED, off
+ * by default). That's not "early access to a real feature," it's a dead
+ * purchase with a real gold cost and zero payoff. Held back the same
+ * deliberate way, for the same reason.
+ *
+ * To go live: once the client AH panel exists and reads
+ * `ModifierManager.hasUnlock(state, 'auctionHouse')` for real (see the
+ * Auction House entry's build order), move this object into the
+ * `UPGRADES` array above -- everything else (tuning entries, the
+ * `unlocks` type, `hasUnlock`'s own checked union) is already wired and
+ * needs no further change at that point.
+ */
+export const AUCTION_HOUSE_CHARTER_STAGED: UpgradeDef = {
+  id: 'auction_house_charter', name: 'Auction House Charter',
+  description: 'A standing agreement with a neutral broker to run buy/sell postings between guilds -- list gear and consumables for other players to find, gold for gold. Absorbs everything Black Market Contact used to gate.',
+  baseCost: Tuning.get('upgrade.auction_house_charter.baseCost'),
+  costGrowth: Tuning.get('upgrade.auction_house_charter.costGrowth'),
+  maxLevel: Tuning.get('upgrade.auction_house_charter.maxLevel'),
+  modsPerLevel: {}, unlocks: 'auctionHouse', category: 'Unlocks',
+};
+
+/**
  * Auto-Chain quest-count range per upgrade level, indexed 1-4. A streak's
  * actual length is rolled within this range each time a fresh one starts
  * (via a manual send), so the exact stopping point stays a little

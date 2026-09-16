@@ -1,0 +1,178 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9611e4b..1680187 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -32539,3 +32539,67 @@ have not been run against a real Windows host, and DNS/TLS reachability
+ through the actual Cloudflare-managed domain has not been tested. Worth
+ a real pass through `server/README.md`'s deploy checklist on the actual
+ host before trusting any of it.
++
++### Auction House Charter defined, deliberately held out of the live Guild Hall upgrade list (patch 0400)
++```discord-update
++Dev Update | Patch 0400
++
++- More groundwork for the upcoming Auction House -- nothing purchasable or visible in the game yet
++```
++
++Build-order item 1 from the earlier ranked list (Guild facility for
++AH access-gating), pure content/data, no backend dependency -- see the
++Auction House entry above.
++
++**Followed the existing one-time-unlock upgrade pattern, not a leveled
++Guild Facility.** Checked `black_market_contact`/`raid_charter`/
++`training_grounds`/`guild_charter` first rather than assuming Barracks/
++Treasury's leveled-bonus shape was the right template -- all four are
++plain `UpgradeDef` entries with `modsPerLevel: {}`, `unlocks: '<flag>'`,
++`category: 'Unlocks'`, `maxLevel: 1`, exactly the "administrative/
++structural, not a craft or a scaling bonus" shape `UpgradeDef.vendor`'s
++own comment already describes -- a much closer match to "a Guild
++facility/upgrade... not a level or account-age gate" than a Treasury-
++style stacking bonus would have been.
++
++**`'auctionHouse'` added to the real `unlocks` type and
++`ModifierManager.hasUnlock`'s checked union** (`types.ts`,
++`ModifierManager.ts`) -- the same plumbing `black_market_unlocked` etc.
++already use in `GuidanceManager.ts`. `ModifierManager.hasUnlock(state,
++'auctionHouse')` is ready to call the moment something needs to check
++it.
++
++**Priced at 15,000 gold** (`upgrade.auction_house_charter.baseCost`,
++tuning-registry-driven like every other cost here), above Black Market
++Contact's 9,000 -- the Auction House absorbs everything Black Market
++Contact gates plus real cross-player trading, so it reads as the bigger
++of the two. `maxLevel: 1`, `costGrowth: 1`, same "single unlock, not a
++scaling tree" shape as Raid Charter/Training Grounds. Whether a second
++level ever gates the 48h listing-duration tier (still open, see the
++Auction House entry above) is unresolved -- easy to extend later without
++touching this shape, same way Enchanted Seal's own single level already
++does double duty (Legendary quests unlock + a Black Market discount) if
++that turns out to be the right shape instead.
++
++**Deliberately NOT inserted into the live `UPGRADES` array.** Exported
++separately as `AUCTION_HOUSE_CHARTER_STAGED` in `progression.ts`, fully
++defined and tuning-wired, with a comment explaining why: shipping it
++into `UPGRADES` right now would let a real player spend 15,000 real gold
++on an unlock flag nothing in the game reads yet -- no panel, no nav
++entry, no backend even reachable. That's a dead purchase with a real
++cost and zero payoff, not early access to something real. Same
++deliberate holdback the Steamworks leaderboard fork got before its
++Windows build was ready (patch 0379) -- built and verified, kept out of
++the live path until there's something real on the other end of it. Goes
++live with a one-line move into `UPGRADES` once the client AH panel
++(next up) actually reads `hasUnlock(state, 'auctionHouse')`.
++
++**Verified:** `npm install` + `npx tsc --noEmit` clean across the whole
++client (not just the new lines -- confirms `'auctionHouse'` didn't
++collide with anything in the existing `unlocks` union or `hasUnlock`
++callers). A direct runtime check via `tsx` confirms
++`AUCTION_HOUSE_CHARTER_STAGED` resolves correctly (all three tuning
++values present, `unlocks: 'auctionHouse'`, `category: 'Unlocks'`) and
++that `UPGRADES.some(u => u.id === 'auction_house_charter')` is `false` --
++confirmed absent from the live array, not assumed. `tuning.json`
++re-parsed clean after editing (valid JSON, not just visually checked).
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 7ff64c5..aaef33c 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -2108,6 +2108,33 @@
+     "description": "Level cap for Training Grounds -- a single one-time unlock, not a leveled bonus.",
+     "min": 0
+   },
++  {
++    "id": "upgrade.auction_house_charter.baseCost",
++    "label": "Auction House Charter: base cost",
++    "category": "vendor_upgrades",
++    "value": 15000,
++    "default": 15000,
++    "description": "Gold cost of Auction House Charter's single level. Priced above Black Market Contact (9000) since the Auction House absorbs everything Black Market Contact used to gate, plus real cross-player trading -- see guild-idler-status.md's Auction House entry. NOT yet live in UPGRADES -- see AUCTION_HOUSE_CHARTER_STAGED in progression.ts.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.auction_house_charter.costGrowth",
++    "label": "Auction House Charter: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Multiplier applied per level to Auction House Charter's cost. Irrelevant at maxLevel 1, kept only for schema consistency with every other one-time-unlock upgrade.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.auction_house_charter.maxLevel",
++    "label": "Auction House Charter: max level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Level cap for Auction House Charter -- a single one-time unlock, same shape as Raid Charter/Training Grounds. Whether a second level ever gates the 48h listing-duration tier is still an open design question -- see guild-idler-status.md.",
++    "min": 0
++  },
+   {
+     "id": "upgrade.raid_heroic_clearance.baseCost",
+     "label": "Heroic Clearance: base cost",
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 9c8ddda..0275888 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -301,6 +301,37 @@ export const UPGRADES: UpgradeDef[] = [
+   },
+ ];
+ 
++/**
++ * Auction House access-gating upgrade -- data-complete, deliberately NOT
++ * inserted into the live `UPGRADES` array above yet. See
++ * guild-idler-status.md's Auction House entry for the full design.
++ *
++ * Same reasoning the Steamworks leaderboard fork was held back from
++ * `electron/main.ts` for several patches until its Windows build was
++ * actually ready (patch 0379): shipping this into the real `UPGRADES`
++ * array right now would let a real player spend real gold on an unlock
++ * flag (`'auctionHouse'`) that nothing in the game reads yet -- no panel,
++ * no nav entry, no backend even reachable (see server/'s AH_ENABLED, off
++ * by default). That's not "early access to a real feature," it's a dead
++ * purchase with a real gold cost and zero payoff. Held back the same
++ * deliberate way, for the same reason.
++ *
++ * To go live: once the client AH panel exists and reads
++ * `ModifierManager.hasUnlock(state, 'auctionHouse')` for real (see the
++ * Auction House entry's build order), move this object into the
++ * `UPGRADES` array above -- everything else (tuning entries, the
++ * `unlocks` type, `hasUnlock`'s own checked union) is already wired and
++ * needs no further change at that point.
++ */
++export const AUCTION_HOUSE_CHARTER_STAGED: UpgradeDef = {
++  id: 'auction_house_charter', name: 'Auction House Charter',
++  description: 'A standing agreement with a neutral broker to run buy/sell postings between guilds -- list gear and consumables for other players to find, gold for gold. Absorbs everything Black Market Contact used to gate.',
++  baseCost: Tuning.get('upgrade.auction_house_charter.baseCost'),
++  costGrowth: Tuning.get('upgrade.auction_house_charter.costGrowth'),
++  maxLevel: Tuning.get('upgrade.auction_house_charter.maxLevel'),
++  modsPerLevel: {}, unlocks: 'auctionHouse', category: 'Unlocks',
++};
++
+ /**
+  * Auto-Chain quest-count range per upgrade level, indexed 1-4. A streak's
+  * actual length is rolled within this range each time a fresh one starts
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 5ed4215..9c5c357 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -240,7 +240,7 @@ export const ModifierManager = {
+     return Infinity;
+   },
+ 
+-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics'): boolean {
++  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics' | 'auctionHouse'): boolean {
+     return Object.entries(state.upgrades).some(([id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+       return !!def && def.unlocks === unlock && level > 0;
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 4e7e6be..8c68089 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1758,7 +1758,7 @@ export interface UpgradeDef {
+   // 'raidsLegendary' renamed to 'raidsMythic' in patch 0317 -- it gates
+   // the raid tier now called Mythic; the new top Legendary tier auto-
+   // unlocks once Mythic is cleared instead of needing its own purchase.
+-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics';
++  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics' | 'auctionHouse';
+   /**
+    * Which vendor offers this upgrade. Undefined means it's a general guild
+    * upgrade with no vendor attached (unlocks like Guild Charter or Black

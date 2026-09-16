@@ -32539,3 +32539,67 @@ have not been run against a real Windows host, and DNS/TLS reachability
 through the actual Cloudflare-managed domain has not been tested. Worth
 a real pass through `server/README.md`'s deploy checklist on the actual
 host before trusting any of it.
+
+### Auction House Charter defined, deliberately held out of the live Guild Hall upgrade list (patch 0400)
+```discord-update
+Dev Update | Patch 0400
+
+- More groundwork for the upcoming Auction House -- nothing purchasable or visible in the game yet
+```
+
+Build-order item 1 from the earlier ranked list (Guild facility for
+AH access-gating), pure content/data, no backend dependency -- see the
+Auction House entry above.
+
+**Followed the existing one-time-unlock upgrade pattern, not a leveled
+Guild Facility.** Checked `black_market_contact`/`raid_charter`/
+`training_grounds`/`guild_charter` first rather than assuming Barracks/
+Treasury's leveled-bonus shape was the right template -- all four are
+plain `UpgradeDef` entries with `modsPerLevel: {}`, `unlocks: '<flag>'`,
+`category: 'Unlocks'`, `maxLevel: 1`, exactly the "administrative/
+structural, not a craft or a scaling bonus" shape `UpgradeDef.vendor`'s
+own comment already describes -- a much closer match to "a Guild
+facility/upgrade... not a level or account-age gate" than a Treasury-
+style stacking bonus would have been.
+
+**`'auctionHouse'` added to the real `unlocks` type and
+`ModifierManager.hasUnlock`'s checked union** (`types.ts`,
+`ModifierManager.ts`) -- the same plumbing `black_market_unlocked` etc.
+already use in `GuidanceManager.ts`. `ModifierManager.hasUnlock(state,
+'auctionHouse')` is ready to call the moment something needs to check
+it.
+
+**Priced at 15,000 gold** (`upgrade.auction_house_charter.baseCost`,
+tuning-registry-driven like every other cost here), above Black Market
+Contact's 9,000 -- the Auction House absorbs everything Black Market
+Contact gates plus real cross-player trading, so it reads as the bigger
+of the two. `maxLevel: 1`, `costGrowth: 1`, same "single unlock, not a
+scaling tree" shape as Raid Charter/Training Grounds. Whether a second
+level ever gates the 48h listing-duration tier (still open, see the
+Auction House entry above) is unresolved -- easy to extend later without
+touching this shape, same way Enchanted Seal's own single level already
+does double duty (Legendary quests unlock + a Black Market discount) if
+that turns out to be the right shape instead.
+
+**Deliberately NOT inserted into the live `UPGRADES` array.** Exported
+separately as `AUCTION_HOUSE_CHARTER_STAGED` in `progression.ts`, fully
+defined and tuning-wired, with a comment explaining why: shipping it
+into `UPGRADES` right now would let a real player spend 15,000 real gold
+on an unlock flag nothing in the game reads yet -- no panel, no nav
+entry, no backend even reachable. That's a dead purchase with a real
+cost and zero payoff, not early access to something real. Same
+deliberate holdback the Steamworks leaderboard fork got before its
+Windows build was ready (patch 0379) -- built and verified, kept out of
+the live path until there's something real on the other end of it. Goes
+live with a one-line move into `UPGRADES` once the client AH panel
+(next up) actually reads `hasUnlock(state, 'auctionHouse')`.
+
+**Verified:** `npm install` + `npx tsc --noEmit` clean across the whole
+client (not just the new lines -- confirms `'auctionHouse'` didn't
+collide with anything in the existing `unlocks` union or `hasUnlock`
+callers). A direct runtime check via `tsx` confirms
+`AUCTION_HOUSE_CHARTER_STAGED` resolves correctly (all three tuning
+values present, `unlocks: 'auctionHouse'`, `category: 'Unlocks'`) and
+that `UPGRADES.some(u => u.id === 'auction_house_charter')` is `false` --
+confirmed absent from the live array, not assumed. `tuning.json`
+re-parsed clean after editing (valid JSON, not just visually checked).

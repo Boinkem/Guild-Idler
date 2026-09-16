@@ -240,7 +240,7 @@ export const ModifierManager = {
     return Infinity;
   },
 
-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics'): boolean {
+  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics' | 'auctionHouse'): boolean {
     return Object.entries(state.upgrades).some(([id, level]) => {
       const def = UPGRADE_BY_ID[id];
       return !!def && def.unlocks === unlock && level > 0;

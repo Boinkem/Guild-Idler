@@ -1758,7 +1758,7 @@ export interface UpgradeDef {
   // 'raidsLegendary' renamed to 'raidsMythic' in patch 0317 -- it gates
   // the raid tier now called Mythic; the new top Legendary tier auto-
   // unlocks once Mythic is cleared instead of needing its own purchase.
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics';
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics' | 'auctionHouse';
   /**
    * Which vendor offers this upgrade. Undefined means it's a general guild
    * upgrade with no vendor attached (unlocks like Guild Charter or Black

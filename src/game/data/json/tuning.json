@@ -2109,6 +2109,33 @@
     "min": 0
   },
   {
+    "id": "upgrade.auction_house_charter.baseCost",
+    "label": "Auction House Charter: base cost",
+    "category": "vendor_upgrades",
+    "value": 15000,
+    "default": 15000,
+    "description": "Gold cost of Auction House Charter's single level. Priced above Black Market Contact (9000) since the Auction House absorbs everything Black Market Contact used to gate, plus real cross-player trading -- see guild-idler-status.md's Auction House entry. NOT yet live in UPGRADES -- see AUCTION_HOUSE_CHARTER_STAGED in progression.ts.",
+    "min": 0
+  },
+  {
+    "id": "upgrade.auction_house_charter.costGrowth",
+    "label": "Auction House Charter: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "description": "Multiplier applied per level to Auction House Charter's cost. Irrelevant at maxLevel 1, kept only for schema consistency with every other one-time-unlock upgrade.",
+    "min": 1
+  },
+  {
+    "id": "upgrade.auction_house_charter.maxLevel",
+    "label": "Auction House Charter: max level",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "description": "Level cap for Auction House Charter -- a single one-time unlock, same shape as Raid Charter/Training Grounds. Whether a second level ever gates the 48h listing-duration tier is still an open design question -- see guild-idler-status.md.",
+    "min": 0
+  },
+  {
     "id": "upgrade.raid_heroic_clearance.baseCost",
     "label": "Heroic Clearance: base cost",
     "category": "vendor_upgrades",
