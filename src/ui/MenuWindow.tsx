@@ -20,6 +20,7 @@ import { HeroesPanel } from './panels/HeroesPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
 import { VendorsPanel } from './panels/VendorsPanel';
 import { GuildPanel } from './panels/GuildPanel';
+import { AuctionHousePanel } from './panels/AuctionHousePanel';
 import { HarvestPanel } from './panels/HarvestPanel';
 import { HatcheryPanel } from './panels/HatcheryPanel';
 import { PeddlerPanel } from './panels/PeddlerPanel';
@@ -63,6 +64,7 @@ const GUILD_GROUP = {
     { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel, tooltip: 'Gear and consumables in your stash, and what each hero has equipped.' },
     { id: 'vendors', label: 'Vendors', Panel: VendorsPanel, tooltip: 'Buy from the Blacksmith, Alchemist, and Enchanter, or craft your own gear.' },
     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel, tooltip: 'Facility and permanent upgrades that boost the whole guild.' },
+    { id: 'auction_house', label: 'Auction House', Panel: AuctionHousePanel, tooltip: 'Buy and sell gear and consumables with other players -- see the Guild Hall for the unlock.' },
     { id: 'harvest', label: 'Harvest', Panel: HarvestPanel, tooltip: 'Idle heroes gather materials here -- spend the stock crafting or sell it.' },
     { id: 'hatchery', label: 'Hatchery', Panel: HatcheryPanel, tooltip: 'Incubate eggs into pets, then equip one to accompany the guild.' },
     { id: 'peddler', label: 'Grimsby', Panel: PeddlerPanel, tooltip: 'A wandering chance merchant -- pay for a card, see what happens.' },

@@ -32603,3 +32603,66 @@ values present, `unlocks: 'auctionHouse'`, `category: 'Unlocks'`) and
 that `UPGRADES.some(u => u.id === 'auction_house_charter')` is `false` --
 confirmed absent from the live array, not assumed. `tuning.json`
 re-parsed clean after editing (valid JSON, not just visually checked).
+
+### Auction House panel shell + nav entry, Charter price cut to 3000 and moved live (patch 0401)
+```discord-update
+Dev Update | Patch 0401
+
+- Auction House now has its own tab in the Guild Hall -- purchase the Auction House Charter (3,000 gold) to unlock it
+- It's not connected to anything yet -- the panel correctly shows "needs a connection" for now, same as any other offline moment
+```
+
+Build-order item 2 from the ranked list (client AH panel shell + offline
+state) -- see the Auction House entry above for the full design.
+Direct request alongside this: cut the Charter's price from 15,000
+(patch 0400) to 3,000, "easy entry".
+
+**New `auction_house` nav tab, `GUILD_GROUP`** (`MenuWindow.tsx`), right
+after Guild Hall -- shown-but-locked like Raids/Black Market rather than
+hidden-until-triggered like Hatchery/Grimsby/Harvest, since its unlock is
+a Guild Hall purchase, not a quest trigger. `isTabVisible` needed no
+change -- defaults to always-visible for any tab id not explicitly
+listed there.
+
+**`AuctionHousePanel.tsx`, two states.** Locked: same
+"card + Go to Guild Hall →" pattern as `BlackMarketStock`
+(`VendorsPanel.tsx`) and Raids' own whole-tab locked state
+(`RaidsPanel.tsx`), `engine.requestTab('guild', 'auction_house_charter')`
+jumping straight to and highlighting the real upgrade. Unlocked: the
+"needs a connection" state the design doc calls for, via a new
+`src/game/auctionHouse.ts` module mirroring `leaderboard.ts`'s own
+`LEADERBOARD_READY`/`fetchLeaderboard` shape --
+`AH_READY` (currently `false`) and an empty `AH_BACKEND_URL` short-
+circuit `checkAhConnection()` to resolving `'offline'` with **no network
+attempt at all**, rather than a shipped client trying to hit `localhost`
+or a still-nonexistent domain. Building this state now isn't wasted --
+it's the actual correct production behaviour today, and stays correct
+with no further change once the domain and `AH_ENABLED` are both real
+(see server/README.md).
+
+**Auction House Charter moved into the live `UPGRADES` array.** Was
+held back as `AUCTION_HOUSE_CHARTER_STAGED` (patch 0400) specifically
+because nothing read its unlock flag yet -- that's no longer true now
+that `AuctionHousePanel.tsx` does, so the holdback's own stated condition
+for going live is met. Same object, same tuning wiring, just moved and
+re-priced.
+
+**Verified, real end-to-end, not just typechecked:** `npx tsc --noEmit`
+clean, a full `vite build` (app + electron main + preload) clean. Beyond
+that, a direct runtime test via `tsx`: confirmed the Charter is now
+present in the live `UPGRADES` array, `hasUnlock(state, 'auctionHouse')`
+is `false` on a fresh guild, a simulated `GuildManager.buyUpgrade`
+purchase succeeds and flips it to `true`, and a second purchase attempt
+is correctly blocked ("Already at maximum.", `maxLevel: 1`). The actual
+gold deducted (450, not the raw 3,000 `baseCost`) matches the existing
+early-tier discount curve every other upgrade's level-0 purchase already
+gets -- confirmed as expected existing behaviour, not a bug introduced
+here.
+
+**Not verified:** no real browser/Electron window in this environment,
+so the panel has not actually been clicked through -- worth a real pass
+confirming the locked-state copy fits the card, the jump-to-Guild-Hall
+highlight actually lands on Auction House Charter, and the offline-state
+copy reads well against `auction-house.jpg`'s art once that exists (no
+art asset yet -- same "renders once present, silently absent until then"
+convention every other panel background already follows).
