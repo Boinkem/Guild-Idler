@@ -4,6 +4,7 @@ import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { AH_READY, AhConnectionStatus, checkAhConnection } from '../../game/auctionHouse';
+import { MailboxModal } from '../MailboxModal';
 
 /**
  * Auction House panel shell -- build-order item 2 from the ranked list
@@ -17,6 +18,11 @@ import { AH_READY, AhConnectionStatus, checkAhConnection } from '../../game/auct
  * isn't wasted work: it's the actual correct production behaviour the
  * moment this ships, and stays correct without any further change once
  * the backend comes online for real -- see auctionHouse.ts's AH_READY.
+ *
+ * Mailbox button lives here too (patch 0403), deliberately NOT gated on
+ * connection status -- claiming is pure local save data, no network call
+ * involved, so it stays usable even while the browse/buy/sell side of
+ * the panel correctly shows "needs a connection".
  */
 export function AuctionHousePanel() {
   const engine = useEngine();
@@ -24,6 +30,8 @@ export function AuctionHousePanel() {
   const { settings } = useSettings();
   const unlocked = ModifierManager.hasUnlock(state, 'auctionHouse');
   const [status, setStatus] = useState<AhConnectionStatus>(AH_READY ? 'checking' : 'offline');
+  const [mailboxOpen, setMailboxOpen] = useState(false);
+  const mailboxCount = state.mailbox.length;
 
   useEffect(() => {
     if (!unlocked) return;
@@ -67,17 +75,24 @@ export function AuctionHousePanel() {
   return (
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/auction-house.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
-        <h2>Auction House</h2>
+        <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
+          <h2 style={{ margin: 0 }}>Auction House</h2>
+          <button className="btn-ghost mailbox-btn" onClick={() => setMailboxOpen(true)}>
+            📬 Mailbox
+            {mailboxCount > 0 && <span className="btn-count-badge">{mailboxCount > 99 ? '99+' : mailboxCount}</span>}
+          </button>
+        </div>
 
         {status === 'online' ? (
-          // Real listings/browse/buy/mailbox UI -- not built yet, later
-          // build-order steps. Reaching this branch means the backend is
+          // Real listings/browse/buy UI -- not built yet, later build-
+          // order steps. Reaching this branch means the backend is
           // genuinely live and enabled, which isn't possible yet -- see
-          // AH_READY's own comment in auctionHouse.ts.
+          // AH_READY's own comment in auctionHouse.ts. The mailbox above
+          // doesn't wait on this -- see this file's own header comment.
           <div className="card">
             <p className="small muted" style={{ margin: 0 }}>
-              Connected -- but there's nothing to show yet. Listings, browsing, and the mailbox
-              are still being built.
+              Connected -- but there's nothing to show yet. Listings and browsing are still
+              being built.
             </p>
           </div>
         ) : (
@@ -89,11 +104,13 @@ export function AuctionHousePanel() {
             </p>
             <p className="tiny muted" style={{ margin: '6px 0 0' }}>
               Everything else in the guild works exactly as it always has -- this is the only
-              part of the game that needs the internet.
+              part of the game that needs the internet. Your mailbox above still works.
             </p>
           </div>
         )}
       </div>
+
+      {mailboxOpen && <MailboxModal onClose={() => setMailboxOpen(false)} />}
     </div>
   );
 }

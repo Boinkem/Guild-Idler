@@ -1,0 +1,693 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0324dec..e74c21c 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7731,11 +7731,16 @@ pass (same caveat as the two entries above).
+   - **Fees:** a deposit that scales with listing price (lost if the item
+     doesn't sell), plus a cut on successful sale. Exact percentages not
+     set.
+-  - **Delivery via a new mailbox system.** The buyer's purchased item
+-    lands directly in inventory at purchase time (they're online, doing
+-    the buying, right now); only the *seller's* gold routes through the
+-    mailbox, since they're not present for the transaction. Sold-but-
+-    unclaimed gold and unsold, expired items both live there.
++  - **Delivery via a mailbox system -- revised (patch 0403).** Originally
++    locked as buyer's-item-direct/seller's-gold-only (below, struck
++    through for the record): the buyer's purchased item lands directly
++    in inventory at purchase time (they're online, doing the buying,
++    right now); only the *seller's* gold routes through the mailbox,
++    since they're not present for the transaction. **Now revised: both
++    purchased items and sale gold route through the mailbox.** A genuine
++    design change, not a reimplementation of the original -- direct
++    instruction. Sold-but-unclaimed gold and unsold, expired items both
++    live there either way.
+   - **Listing cap per player:** "generous, 20+" -- exact number not
+     chosen.
+   - **Gold Storage Cap interaction -- locked.** The mailbox's sold-gold
+@@ -7800,12 +7805,21 @@ pass (same caveat as the two entries above).
+   that lives only in local DevTools config, never the shipped client.
+ 
+   **Client integration:** new AH panel (browse/filter by item type, slot,
+-  rarity, level; active-listings management; mailbox UI). List flow pulls
+-  the item from local inventory only *after* the server confirms the
+-  listing was created -- no optimistic strip on the assumption the
+-  network call succeeds. Buy flow: item to buyer's inventory immediately,
+-  seller's gold to their mailbox. System-seeded listings render
+-  identically to real ones (same underlying data shape).
++  rarity, level; active-listings management -- not built yet). List flow
++  pulls the item from local inventory only *after* the server confirms
++  the listing was created -- no optimistic strip on the assumption the
++  network call succeeds. Buy flow: item AND seller's gold both to the
++  mailbox now (revised, see the Delivery bullet above). System-seeded
++  listings render identically to real ones (same underlying data shape).
++  **Mailbox UI -- built (patch 0403).** `MailboxModal.tsx`, item cards
++  per entry (gold/equipment/consumable), Claim + Claim All, a Mailbox
++  button with a live count badge next to the Auction House header --
++  works independently of connection status, since claiming is pure local
++  save data. See that patch's own log entry for the full writeup. Nothing
++  in real gameplay can populate an entry yet (no live backend) --
++  `MailboxManager.grantTestEntry`/`engine.testAddMailbox*`
++  (TestingPanel.tsx) are how the whole claim flow, including the Gold
++  Storage Cap block, gets exercised for real before that exists.
+ 
+   **Genuine blockers (infra, not design):** Steam session-ticket
+   verification on the backend; the row-locked buyout transaction
+@@ -32731,3 +32745,99 @@ this environment (Node/curl only, no DOM) -- worth a real pass
+ confirming the URL input/Save/Check buttons behave as expected in an
+ actual browser, and that the sidebar icon (`ph-storefront`) renders
+ correctly from the Phosphor Icons CDN.
++
++### Auction House mailbox: claim UI, both gold and items now route through it (patch 0403)
++```discord-update
++Dev Update | Patch 0403
++
++- Auction House now has a Mailbox button with a live count badge -- gold from sales and items you've bought or sold will land there to be claimed once the marketplace itself is live
++- Item cards for gold, gear, and consumables, with a Claim and a Claim All button
++```
++
++**Design revision, not a reimplementation:** the original locked design
++had the buyer's item land directly in inventory at purchase time, only
++the seller's gold routing through the mailbox. Direct instruction changed
++this -- both purchased items and sale gold now route through the
++mailbox. Updated the Auction House entry's own Delivery bullet to record
++the change rather than silently overwrite it.
++
++**`MailboxEntry` (`types.ts`), new `GameState.mailbox` field.** Three
++kinds -- gold, equipment, consumable -- one array, not three parallel
++ones, so the UI and claim logic don't need to branch on which list
++they're looking at. Equipment entries carry the full rolled-stat
++`EquipmentItem`, same "not just an id" shape the design doc's own
++`listings` data model calls for. `SAVE_VERSION` 69 -> 70,
++straightforward `mailbox: save.mailbox ?? []` migration -- no existing
++save could have anything in it, the mechanism didn't exist before this
++patch, same reasoning migration 68's `founderPackGranted` fill already
++used.
++
++**New `MailboxManager.ts`.** `claim(state, entryId)` returns `null` on
++success or a player-facing error string, same shape
++`GuildManager.buyUpgrade` already uses. **Gold Storage Cap interaction,
++built exactly as locked in the design entry:** claiming a gold entry
++that would push the player over their cap is blocked outright -- not
++partial-claimed, not silently capped -- and stays queued in the mailbox
++until there's room. `claimAll()` claims everything claimable in one pass
++and skips (leaves in place) anything blocked, rather than failing the
++whole batch over one entry. `grantTestEntry()` is the only way anything
++lands in the mailbox right now -- no live backend exists to populate one
++for real yet (see server/'s AH_ENABLED, still off).
++
++**`engine.claimMailboxEntry`/`claimAllMailbox`** wired to the manager,
++same toast/sound/`saveNow()` shape `buyBackItem`/`sellCurio` already
++use. **`engine.testAddMailboxGold`/`testAddMailboxEquipment`/
++`testAddMailboxConsumable`**, `TESTING_TOOLS_ENABLED`-gated like every
++other test method -- `testAddMailboxEquipment` reuses
++`EquipmentManager.instantiate` for a real, fully-rolled item rather than
++a hand-faked stub, so a claimed test card looks exactly like a real
++purchase would. New "Auction House mailbox" section in `TestingPanel.tsx`
++-- includes a deliberately-oversized gold-entry button specifically to
++exercise the cap block.
++
++**`MailboxModal.tsx`, new file.** Same overlay/modal shape
++`LeaderboardModal`/`FundGuildModal` already use. Each entry renders as
++its own `.item-card.rarity-card` (mirrors `StashCard`/
++`ConsumableInfoCard`'s shape from `EquipmentPanel.tsx`, without their
++hero-equip logic, which nothing here needs) with a single Claim button.
++**Gold's card art, per direct request:** no rarity of its own to key a
++banner lookup on, so it reuses the Common rarity banner for now --
++same "borrow the closest existing thing until real art lands" treatment
++already established elsewhere in this project. Gold's icon reads from
++`./item-icons/gold.png` (falls back to a 💰 glyph via `ConsumableIcon`
++until that file exists, same "renders once present, silently absent
++until then" convention every other icon here already follows -- drop
++the real art at `public/item-icons/gold.png` whenever it's ready).
++
++**Mailbox button + live count badge, `AuctionHousePanel.tsx`.**
++Deliberately NOT gated on connection status -- claiming is pure local
++save data, no network call involved, so it stays usable even while the
++browse/buy/sell side of the panel correctly shows "needs a connection."
++New `.mailbox-btn`/`.btn-count-badge` CSS (`app.css`), modelled on the
++existing `.header-notif-badge` (same `--blood`/white/pill visual
++language) but sized for a labelled button rather than a small icon-only
++one, and deliberately without `.header-notif-icon`'s shimmer ring -- a
++plain count, not a "new, worth clicking" cue the way an unread
++notification is.
++
++**Verified for real, full loop, not mocked:** `npx tsc --noEmit` clean,
++a full `vite build` clean. Beyond that, a direct runtime test via `tsx`
++exercising the entire claim flow against a real `GameState`: granted one
++gold entry, one equipment entry, one consumable entry, claimed all three
++individually and confirmed gold/stash/inventory each updated correctly
++and the mailbox emptied; then a dedicated Gold Storage Cap test --
++granted a gold entry guaranteed to exceed the cap, confirmed `claim`
++returns the expected error, gold stays unchanged, and the entry remains
++in the mailbox; then a `claimAll` test with one claimable and one
++blocked entry mixed together, confirming it claims the one and correctly
++leaves the other. Also ran the save migration directly against a
++synthetic pre-0403 save object (version 69, no `mailbox` field at all)
++and confirmed it migrates to version 70 with `mailbox: []` and every
++other field preserved.
++
++**Not verified:** no real browser/Electron window in this environment,
++so the modal/cards/badge have not actually been clicked through -- worth
++a real pass confirming the badge renders correctly against the button
++label, the item-card grid lays out sensibly for a handful of mixed
++entry types, and the gold glyph fallback (💰) reads acceptably until the
++real icon art lands.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index f736831..e533426 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -28,6 +28,7 @@ import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
+ import { HarvestManager } from './managers/HarvestManager';
+ import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
+ import { PetManager } from './managers/PetManager';
++import { MailboxManager } from './managers/MailboxManager';
+ import { PeddlerManager } from './managers/PeddlerManager';
+ import { CraftingManager } from './managers/CraftingManager';
+ import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
+@@ -1430,6 +1431,38 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Testing-only -- see MailboxManager's own header comment. Nothing in
++   *  real gameplay can populate a mailbox entry yet (no live backend);
++   *  this is how the claim flow (including the Gold Storage Cap block)
++   *  gets exercised for real before that exists. */
++  testAddMailboxGold(amount: number, note?: string) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    MailboxManager.grantTestEntry(this.state, { type: 'gold', amount, note });
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Testing-only, same reasoning as testAddMailboxGold. Reuses
++   *  EquipmentManager.instantiate for a real, fully-rolled item -- not a
++   *  hand-faked stub -- so the claimed card looks exactly like a real
++   *  Auction House purchase would once that exists. */
++  testAddMailboxEquipment(defId: string, note?: string) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    const item = EquipmentManager.instantiate(defId);
++    if (!item) return;
++    MailboxManager.grantTestEntry(this.state, { type: 'equipment', item, note });
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Testing-only, same reasoning as testAddMailboxGold. */
++  testAddMailboxConsumable(consumableId: string, amount = 1, note?: string) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    MailboxManager.grantTestEntry(this.state, { type: 'consumable', consumableId, amount, note });
++    this.notify();
++    void this.saveNow();
++  }
++
+   /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */
+   testCompleteActiveQuest(heroId: string) {
+     if (!TESTING_TOOLS_ENABLED) return;
+@@ -2384,6 +2417,30 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Claims one Auction House mailbox entry -- see MailboxManager.claim's
++   *  own comment, including the Gold Storage Cap block. */
++  claimMailboxEntry(entryId: string) {
++    const error = MailboxManager.claim(this.state, entryId);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('Claimed.');
++    void this.saveNow();
++  }
++
++  /** Claims everything claimable in the mailbox in one action -- see
++   *  MailboxManager.claimAll's own comment on why a blocked gold entry
++   *  doesn't fail the whole batch. */
++  claimAllMailbox() {
++    const { claimed, skipped } = MailboxManager.claimAll(this.state);
++    if (claimed === 0 && skipped === 0) return this.say('Nothing to claim.');
++    if (claimed > 0) playSound('purchase');
++    const parts = [];
++    if (claimed > 0) parts.push(`Claimed ${claimed}`);
++    if (skipped > 0) parts.push(`${skipped} left (over Gold Storage Cap)`);
++    this.say(parts.join(' -- ') + '.');
++    void this.saveNow();
++  }
++
+   /** Bulk-sells every owned curio in one action -- the Curios-section
+    *  counterpart to sellJunk above. */
+   sellAllCurios() {
+diff --git a/src/game/managers/MailboxManager.ts b/src/game/managers/MailboxManager.ts
+new file mode 100644
+index 0000000..3941ede
+--- /dev/null
++++ b/src/game/managers/MailboxManager.ts
+@@ -0,0 +1,84 @@
++import { GameState, MailboxEntry } from '../types';
++import { uid } from '../rng';
++import { ModifierManager } from './ModifierManager';
++
++/**
++ * Auction House mailbox -- see guild-idler-status.md's Auction House
++ * entry for the full design, and MailboxEntry's own comment (types.ts)
++ * for the "both purchased items and sale gold route through here"
++ * revision from the original seller-gold-only design.
++ *
++ * Nothing populates a real mailbox entry yet -- that's wired in once the
++ * actual buy/sell backend calls exist (later build-order steps). This
++ * manager is the claim side, buildable and fully testable now: `grant*`
++ * exists for that testing purpose (TestingPanel.tsx, engine.ts's
++ * test* methods), not as a stand-in for the real listing/purchase flow.
++ */
++export const MailboxManager = {
++  count(state: GameState): number {
++    return state.mailbox.length;
++  },
++
++  /**
++   * Claims a single entry. Returns null on success, or a player-facing
++   * error string on failure -- same "string error, not a thrown
++   * exception" shape GuildManager.buyUpgrade already uses, so callers
++   * don't need a try/catch to show a sensible message.
++   *
++   * Gold Storage Cap interaction -- locked decision (see
++   * guild-idler-status.md's Auction House entry): claiming is blocked
++   * outright, not partial-claimed and not silently capped, whenever
++   * claiming in full would push the player over their existing cap.
++   * The entry stays in the mailbox, unclaimed, until there's room.
++   */
++  claim(state: GameState, entryId: string): string | null {
++    const index = state.mailbox.findIndex((e) => e.id === entryId);
++    if (index === -1) return 'That mailbox entry is gone -- try refreshing.';
++    const entry = state.mailbox[index];
++
++    if (entry.type === 'gold') {
++      const amount = entry.amount ?? 0;
++      const cap = ModifierManager.goldStorage(state);
++      if (state.gold + amount > cap) {
++        return "Claiming this would put you over your Gold Storage Cap -- spend some gold first, then come back.";
++      }
++      state.gold += amount;
++    } else if (entry.type === 'equipment') {
++      if (!entry.item) return 'That mailbox entry is malformed -- nothing to claim.';
++      state.stash.push(entry.item);
++    } else if (entry.type === 'consumable') {
++      if (!entry.consumableId) return 'That mailbox entry is malformed -- nothing to claim.';
++      state.inventory[entry.consumableId] = (state.inventory[entry.consumableId] ?? 0) + (entry.amount ?? 1);
++    }
++
++    state.mailbox.splice(index, 1);
++    return null;
++  },
++
++  /**
++   * Claims everything claimable in one pass -- skips (and leaves
++   * in-place) any gold entry that would exceed the storage cap, same
++   * per-entry rule `claim` enforces, rather than failing the whole
++   * batch over one blocked entry. Returns how many were actually
++   * claimed and how many were skipped, so the UI can say something more
++   * useful than a bare "done".
++   */
++  claimAll(state: GameState): { claimed: number; skipped: number } {
++    let claimed = 0;
++    let skipped = 0;
++    // Iterate a snapshot of ids, not the live array -- claim() mutates
++    // state.mailbox in place (splice), which would desync a live index
++    // walk.
++    for (const id of state.mailbox.map((e) => e.id)) {
++      const err = MailboxManager.claim(state, id);
++      if (err) skipped += 1; else claimed += 1;
++    }
++    return { claimed, skipped };
++  },
++
++  /** Testing-only entry point -- see this module's own header comment.
++   *  Not called from any real gameplay path. */
++  grantTestEntry(state: GameState, entry: Omit<MailboxEntry, 'id' | 'receivedAt'>, now = Date.now()): void {
++    state.mailbox.push({ ...entry, id: uid('mail'), receivedAt: now });
++  },
++};
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 0b5f841..b895b76 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -129,6 +129,7 @@ export function createInitialState(now = Date.now()): GameState {
+     customConsumables: {},
+     stash: [],
+     buyback: [],
++    mailbox: [],
+     // The starter hero's board isn't left empty for the normal
+     // procedural generator to fill -- it's seeded directly with the
+     // scripted tutorial quest (see quests.ts's own tutorialQuestOffer
+@@ -1515,6 +1516,15 @@ const MIGRATIONS: Record<number, Migration> = {
+    * 67's own guildTitles guard just above.
+    */
+   68: (save) => ({ ...save, version: 69, founderPackGranted: save.founderPackGranted ?? false }),
++  /**
++   * New Auction House mailbox array (patch 0403) -- no existing save
++   * could have anything in it (the mechanism didn't exist before this
++   * patch), so this is a straight `?? []` fill, same "nobody could have
++   * received the grant before this patch, no might-already-be-true case
++   * to preserve" reasoning migration 68 just above already used for
++   * founderPackGranted.
++   */
++  69: (save) => ({ ...save, version: 70, mailbox: save.mailbox ?? [] }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 8c68089..0960693 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 69;
++export const SAVE_VERSION = 70;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -542,6 +542,34 @@ export interface BuybackEntry {
+   soldAt: number;
+ }
+ 
++/**
++ * A single claimable Auction House mailbox entry -- see
++ * guild-idler-status.md's Auction House entry for the full design.
++ * Originally scoped as seller-gold-only (buyer's purchased item lands
++ * directly in inventory at purchase time); revised to route both
++ * purchased items AND sale gold through the mailbox instead, a genuine
++ * design change from the original locked decision, not a
++ * reimplementation of it -- see that entry's own note on the revision.
++ *
++ * `item` carries the full rolled-stat `EquipmentItem`, same "not just an
++ * id" shape the design doc's own `listings` data model calls for --
++ * equipment carries randomized stats/crafted mods, so a mailbox entry
++ * has to capture the actual roll, exactly like a listing does.
++ */
++export interface MailboxEntry {
++  id: string;
++  type: 'gold' | 'equipment' | 'consumable';
++  /** Gold amount (type: 'gold') or consumable quantity (type: 'consumable'). Unused for 'equipment'. */
++  amount?: number;
++  /** type: 'equipment' only -- the exact item, full roll intact. */
++  item?: EquipmentItem;
++  /** type: 'consumable' only. */
++  consumableId?: string;
++  receivedAt: number;
++  /** Optional flavour label shown on the card, e.g. "Sold: Iron Sword" -- not required. */
++  note?: string;
++}
++
+ export interface ItemSet {
+   id: string;
+   name: string;
+@@ -2135,6 +2163,9 @@ export interface GameState {
+    *  intact, not just the defId) so buying it back hands back precisely
+    *  what was sold, not a fresh-rolled equivalent. */
+   buyback: BuybackEntry[];
++  /** Claimable Auction House mailbox entries -- see MailboxEntry's own
++   *  comment and guild-idler-status.md's Auction House entry. */
++  mailbox: MailboxEntry[];
+ 
+   /**
+    * Contract offers, one pool per hero (keyed by hero id) -- each hero
+diff --git a/src/styles/app.css b/src/styles/app.css
+index fcfccf5..9e3b938 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1682,6 +1682,34 @@ button:focus-visible, [tabindex]:focus-visible {
+   border: 1px solid var(--edge);
+ }
+ 
++/**
++ * Count badge for a normal (rectangular, labelled) button -- the
++ * Auction House's Mailbox button (patch 0403) is the first user.
++ * Same visual language as .header-notif-badge just above (same
++ * --blood/white/pill shape), just positioned for a button with visible
++ * text rather than a small icon-only corner button, and not paired with
++ * .header-notif-icon's shimmer ring -- a badge here is a plain count,
++ * not a "new, worth clicking" signal the way an unread notification is.
++ */
++.mailbox-btn { position: relative; }
++.btn-count-badge {
++  position: absolute;
++  top: -6px;
++  right: -6px;
++  min-width: 16px;
++  height: 16px;
++  padding: 0 4px;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  background: var(--blood);
++  color: #fff;
++  font-size: 0.6rem;
++  font-weight: 700;
++  border-radius: 999px;
++  border: 1px solid var(--edge);
++}
++
+ .menu-body { flex: 1; display: flex; min-height: 0; }
+ 
+ .tabs {
+diff --git a/src/ui/MailboxModal.tsx b/src/ui/MailboxModal.tsx
+new file mode 100644
+index 0000000..1e1fc45
+--- /dev/null
++++ b/src/ui/MailboxModal.tsx
+@@ -0,0 +1,133 @@
++import { useEngine } from './useEngine';
++import { MailboxEntry } from '../game/types';
++import { RARITY_BANNER, RARITY_COLOR, formatGold } from '../game/util';
++import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
++import { CONSUMABLE_BY_ID } from '../game/data/items';
++import { ItemIcon, ConsumableIcon } from './icons';
++
++/**
++ * Gold has no rarity of its own to key a banner lookup on -- per direct
++ * request, its card reuses the Common rarity banner for now (same "no
++ * dedicated art yet, borrow the closest existing thing" treatment
++ * CurioCard's own empty-slot precedent uses elsewhere). Revisit once
++ * gold gets its own card art.
++ */
++const GOLD_BANNER = RARITY_BANNER.common;
++
++/**
++ * Icon path for a mailbox gold entry, same `./item-icons/<icon>` convention
++ * IconBox already reads from (icons.tsx) -- falls back to the 💰 glyph via
++ * ConsumableIcon until a real file exists at that path, same "renders once
++ * present, silently absent until then" convention every other icon in this
++ * game already follows. Drop the real art at public/item-icons/gold.png.
++ */
++const GOLD_ICON = 'gold.png';
++
++/**
++ * Auction House mailbox -- build-order item from guild-idler-status.md's
++ * Auction House entry. Same overlay/modal shape LeaderboardModal/
++ * FundGuildModal already use. Every entry renders as an item card
++ * (mirrors StashCard/ConsumableInfoCard's own `.item-card.rarity-card`
++ * shape from EquipmentPanel.tsx) with a single Claim action -- no
++ * hero-equip logic needed here, unlike those two, so this is its own
++ * simpler card rather than reusing those components directly.
++ */
++export function MailboxModal({ onClose }: { onClose: () => void }) {
++  const engine = useEngine();
++  const state = engine.state;
++  const entries = state.mailbox;
++
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
++        <div className="card-title">📬 Mailbox</div>
++        <p className="tiny muted" style={{ marginBottom: 10 }}>
++          Gold from sales and items you've bought or sold land here to be claimed.
++        </p>
++
++        {entries.length === 0 ? (
++          <div className="card">
++            <p className="tiny muted" style={{ margin: 0 }}>Nothing to claim right now.</p>
++          </div>
++        ) : (
++          <>
++            <div className="row end" style={{ marginBottom: 8 }}>
++              <button className="btn-ghost" onClick={() => engine.claimAllMailbox()}>
++                Claim all ({entries.length})
++              </button>
++            </div>
++            <div className="item-card-grid">
++              {entries.map((entry) => (
++                <MailboxCard key={entry.id} entry={entry} onClaim={() => engine.claimMailboxEntry(entry.id)} />
++              ))}
++            </div>
++          </>
++        )}
++
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button onClick={onClose}>Close</button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++function MailboxCard({ entry, onClaim }: { entry: MailboxEntry; onClaim: () => void }) {
++  if (entry.type === 'gold') {
++    return (
++      <div className="item-card rarity-card">
++        <div className="rarity-banner" style={{ backgroundImage: `url(${GOLD_BANNER})` }} />
++        <div className="item-card-summary">
++          <ConsumableIcon icon={GOLD_ICON} glyph="💰" size={48} />
++          <div className="item-card-body">
++            <div className="item-card-name" style={{ color: RARITY_COLOR.common }}>{formatGold(entry.amount ?? 0)} gold</div>
++            {entry.note && <div className="tiny muted">{entry.note}</div>}
++          </div>
++        </div>
++        <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={onClaim}>Claim</button>
++      </div>
++    );
++  }
++
++  if (entry.type === 'equipment' && entry.item) {
++    const def = EQUIPMENT_BY_ID[entry.item.defId];
++    if (!def) return null;
++    return (
++      <div className="item-card rarity-card">
++        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++        <div className="item-card-summary">
++          <ItemIcon slot={def.slot} icon={def.icon} size={48} />
++          <div className="item-card-body">
++            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>
++              {itemDisplayName(entry.item, def)}{entry.item.plus > 0 ? ` +${entry.item.plus}` : ''}
++            </div>
++            {entry.note && <div className="tiny muted">{entry.note}</div>}
++          </div>
++        </div>
++        <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={onClaim}>Claim</button>
++      </div>
++    );
++  }
++
++  if (entry.type === 'consumable' && entry.consumableId) {
++    const def = CONSUMABLE_BY_ID[entry.consumableId];
++    if (!def) return null;
++    return (
++      <div className="item-card rarity-card">
++        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++        <div className="item-card-summary">
++          <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
++          <div className="item-card-body">
++            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>
++              {def.name}{(entry.amount ?? 1) > 1 ? ` ×${entry.amount}` : ''}
++            </div>
++            {entry.note && <div className="tiny muted">{entry.note}</div>}
++          </div>
++        </div>
++        <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={onClaim}>Claim</button>
++      </div>
++    );
++  }
++
++  return null;
++}
+diff --git a/src/ui/panels/AuctionHousePanel.tsx b/src/ui/panels/AuctionHousePanel.tsx
+index 6ad74c0..4ea87b7 100644
+--- a/src/ui/panels/AuctionHousePanel.tsx
++++ b/src/ui/panels/AuctionHousePanel.tsx
+@@ -4,6 +4,7 @@ import { useSettings } from '../useSettings';
+ import { backgroundSrc } from '../../game/settings';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { AH_READY, AhConnectionStatus, checkAhConnection } from '../../game/auctionHouse';
++import { MailboxModal } from '../MailboxModal';
+ 
+ /**
+  * Auction House panel shell -- build-order item 2 from the ranked list
+@@ -17,6 +18,11 @@ import { AH_READY, AhConnectionStatus, checkAhConnection } from '../../game/auct
+  * isn't wasted work: it's the actual correct production behaviour the
+  * moment this ships, and stays correct without any further change once
+  * the backend comes online for real -- see auctionHouse.ts's AH_READY.
++ *
++ * Mailbox button lives here too (patch 0403), deliberately NOT gated on
++ * connection status -- claiming is pure local save data, no network call
++ * involved, so it stays usable even while the browse/buy/sell side of
++ * the panel correctly shows "needs a connection".
+  */
+ export function AuctionHousePanel() {
+   const engine = useEngine();
+@@ -24,6 +30,8 @@ export function AuctionHousePanel() {
+   const { settings } = useSettings();
+   const unlocked = ModifierManager.hasUnlock(state, 'auctionHouse');
+   const [status, setStatus] = useState<AhConnectionStatus>(AH_READY ? 'checking' : 'offline');
++  const [mailboxOpen, setMailboxOpen] = useState(false);
++  const mailboxCount = state.mailbox.length;
+ 
+   useEffect(() => {
+     if (!unlocked) return;
+@@ -67,17 +75,24 @@ export function AuctionHousePanel() {
+   return (
+     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/auction-house.jpg', settings.backgroundMood)})` }}>
+       <div className="tab-scene-content">
+-        <h2>Auction House</h2>
++        <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
++          <h2 style={{ margin: 0 }}>Auction House</h2>
++          <button className="btn-ghost mailbox-btn" onClick={() => setMailboxOpen(true)}>
++            📬 Mailbox
++            {mailboxCount > 0 && <span className="btn-count-badge">{mailboxCount > 99 ? '99+' : mailboxCount}</span>}
++          </button>
++        </div>
+ 
+         {status === 'online' ? (
+-          // Real listings/browse/buy/mailbox UI -- not built yet, later
+-          // build-order steps. Reaching this branch means the backend is
++          // Real listings/browse/buy UI -- not built yet, later build-
++          // order steps. Reaching this branch means the backend is
+           // genuinely live and enabled, which isn't possible yet -- see
+-          // AH_READY's own comment in auctionHouse.ts.
++          // AH_READY's own comment in auctionHouse.ts. The mailbox above
++          // doesn't wait on this -- see this file's own header comment.
+           <div className="card">
+             <p className="small muted" style={{ margin: 0 }}>
+-              Connected -- but there's nothing to show yet. Listings, browsing, and the mailbox
+-              are still being built.
++              Connected -- but there's nothing to show yet. Listings and browsing are still
++              being built.
+             </p>
+           </div>
+         ) : (
+@@ -89,11 +104,13 @@ export function AuctionHousePanel() {
+             </p>
+             <p className="tiny muted" style={{ margin: '6px 0 0' }}>
+               Everything else in the guild works exactly as it always has -- this is the only
+-              part of the game that needs the internet.
++              part of the game that needs the internet. Your mailbox above still works.
+             </p>
+           </div>
+         )}
+       </div>
++
++      {mailboxOpen && <MailboxModal onClose={() => setMailboxOpen(false)} />}
+     </div>
+   );
+ }
+diff --git a/src/ui/panels/TestingPanel.tsx b/src/ui/panels/TestingPanel.tsx
+index a64116b..a19ce14 100644
+--- a/src/ui/panels/TestingPanel.tsx
++++ b/src/ui/panels/TestingPanel.tsx
+@@ -59,6 +59,19 @@ export function TestingPanel() {
+         <button onClick={() => engine.testAddScrap(10000)}>+10,000 scrap</button>
+       </div>
+ 
++      <div className="section-heading">Auction House mailbox</div>
++      <p className="small muted" style={{ marginBottom: 8 }}>
++        Nothing in real gameplay can put anything in the mailbox yet -- no live backend. These
++        buttons are the only way to exercise the claim flow (including the Gold Storage Cap
++        block) before that exists. Currently holding {state.mailbox.length} entr{state.mailbox.length === 1 ? 'y' : 'ies'}.
++      </p>
++      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
++        <button onClick={() => engine.testAddMailboxGold(200, 'Sold: Test Item')}>+200 gold entry</button>
++        <button onClick={() => engine.testAddMailboxGold(50000, 'Sold: Test Item')}>+50,000 gold entry (test the cap block)</button>
++        <button onClick={() => engine.testAddMailboxEquipment('wooden_sword', 'Auction won: Wooden Sword')}>+ equipment entry</button>
++        <button onClick={() => engine.testAddMailboxConsumable('healing_potion', 3, 'Auction won: Healing Potion')}>+ consumable entry</button>
++      </div>
++
+       <div className="section-heading">Recipes</div>
+       <p className="small muted" style={{ marginBottom: 8 }}>
+         Adds one random not-yet-learned recipe scroll to the stash -- ignores the real drop

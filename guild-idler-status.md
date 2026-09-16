@@ -7731,11 +7731,16 @@ pass (same caveat as the two entries above).
   - **Fees:** a deposit that scales with listing price (lost if the item
     doesn't sell), plus a cut on successful sale. Exact percentages not
     set.
-  - **Delivery via a new mailbox system.** The buyer's purchased item
-    lands directly in inventory at purchase time (they're online, doing
-    the buying, right now); only the *seller's* gold routes through the
-    mailbox, since they're not present for the transaction. Sold-but-
-    unclaimed gold and unsold, expired items both live there.
+  - **Delivery via a mailbox system -- revised (patch 0403).** Originally
+    locked as buyer's-item-direct/seller's-gold-only (below, struck
+    through for the record): the buyer's purchased item lands directly
+    in inventory at purchase time (they're online, doing the buying,
+    right now); only the *seller's* gold routes through the mailbox,
+    since they're not present for the transaction. **Now revised: both
+    purchased items and sale gold route through the mailbox.** A genuine
+    design change, not a reimplementation of the original -- direct
+    instruction. Sold-but-unclaimed gold and unsold, expired items both
+    live there either way.
   - **Listing cap per player:** "generous, 20+" -- exact number not
     chosen.
   - **Gold Storage Cap interaction -- locked.** The mailbox's sold-gold
@@ -7800,12 +7805,21 @@ pass (same caveat as the two entries above).
   that lives only in local DevTools config, never the shipped client.
 
   **Client integration:** new AH panel (browse/filter by item type, slot,
-  rarity, level; active-listings management; mailbox UI). List flow pulls
-  the item from local inventory only *after* the server confirms the
-  listing was created -- no optimistic strip on the assumption the
-  network call succeeds. Buy flow: item to buyer's inventory immediately,
-  seller's gold to their mailbox. System-seeded listings render
-  identically to real ones (same underlying data shape).
+  rarity, level; active-listings management -- not built yet). List flow
+  pulls the item from local inventory only *after* the server confirms
+  the listing was created -- no optimistic strip on the assumption the
+  network call succeeds. Buy flow: item AND seller's gold both to the
+  mailbox now (revised, see the Delivery bullet above). System-seeded
+  listings render identically to real ones (same underlying data shape).
+  **Mailbox UI -- built (patch 0403).** `MailboxModal.tsx`, item cards
+  per entry (gold/equipment/consumable), Claim + Claim All, a Mailbox
+  button with a live count badge next to the Auction House header --
+  works independently of connection status, since claiming is pure local
+  save data. See that patch's own log entry for the full writeup. Nothing
+  in real gameplay can populate an entry yet (no live backend) --
+  `MailboxManager.grantTestEntry`/`engine.testAddMailbox*`
+  (TestingPanel.tsx) are how the whole claim flow, including the Gold
+  Storage Cap block, gets exercised for real before that exists.
 
   **Genuine blockers (infra, not design):** Steam session-ticket
   verification on the backend; the row-locked buyout transaction
@@ -32731,3 +32745,99 @@ this environment (Node/curl only, no DOM) -- worth a real pass
 confirming the URL input/Save/Check buttons behave as expected in an
 actual browser, and that the sidebar icon (`ph-storefront`) renders
 correctly from the Phosphor Icons CDN.
+
+### Auction House mailbox: claim UI, both gold and items now route through it (patch 0403)
+```discord-update
+Dev Update | Patch 0403
+
+- Auction House now has a Mailbox button with a live count badge -- gold from sales and items you've bought or sold will land there to be claimed once the marketplace itself is live
+- Item cards for gold, gear, and consumables, with a Claim and a Claim All button
+```
+
+**Design revision, not a reimplementation:** the original locked design
+had the buyer's item land directly in inventory at purchase time, only
+the seller's gold routing through the mailbox. Direct instruction changed
+this -- both purchased items and sale gold now route through the
+mailbox. Updated the Auction House entry's own Delivery bullet to record
+the change rather than silently overwrite it.
+
+**`MailboxEntry` (`types.ts`), new `GameState.mailbox` field.** Three
+kinds -- gold, equipment, consumable -- one array, not three parallel
+ones, so the UI and claim logic don't need to branch on which list
+they're looking at. Equipment entries carry the full rolled-stat
+`EquipmentItem`, same "not just an id" shape the design doc's own
+`listings` data model calls for. `SAVE_VERSION` 69 -> 70,
+straightforward `mailbox: save.mailbox ?? []` migration -- no existing
+save could have anything in it, the mechanism didn't exist before this
+patch, same reasoning migration 68's `founderPackGranted` fill already
+used.
+
+**New `MailboxManager.ts`.** `claim(state, entryId)` returns `null` on
+success or a player-facing error string, same shape
+`GuildManager.buyUpgrade` already uses. **Gold Storage Cap interaction,
+built exactly as locked in the design entry:** claiming a gold entry
+that would push the player over their cap is blocked outright -- not
+partial-claimed, not silently capped -- and stays queued in the mailbox
+until there's room. `claimAll()` claims everything claimable in one pass
+and skips (leaves in place) anything blocked, rather than failing the
+whole batch over one entry. `grantTestEntry()` is the only way anything
+lands in the mailbox right now -- no live backend exists to populate one
+for real yet (see server/'s AH_ENABLED, still off).
+
+**`engine.claimMailboxEntry`/`claimAllMailbox`** wired to the manager,
+same toast/sound/`saveNow()` shape `buyBackItem`/`sellCurio` already
+use. **`engine.testAddMailboxGold`/`testAddMailboxEquipment`/
+`testAddMailboxConsumable`**, `TESTING_TOOLS_ENABLED`-gated like every
+other test method -- `testAddMailboxEquipment` reuses
+`EquipmentManager.instantiate` for a real, fully-rolled item rather than
+a hand-faked stub, so a claimed test card looks exactly like a real
+purchase would. New "Auction House mailbox" section in `TestingPanel.tsx`
+-- includes a deliberately-oversized gold-entry button specifically to
+exercise the cap block.
+
+**`MailboxModal.tsx`, new file.** Same overlay/modal shape
+`LeaderboardModal`/`FundGuildModal` already use. Each entry renders as
+its own `.item-card.rarity-card` (mirrors `StashCard`/
+`ConsumableInfoCard`'s shape from `EquipmentPanel.tsx`, without their
+hero-equip logic, which nothing here needs) with a single Claim button.
+**Gold's card art, per direct request:** no rarity of its own to key a
+banner lookup on, so it reuses the Common rarity banner for now --
+same "borrow the closest existing thing until real art lands" treatment
+already established elsewhere in this project. Gold's icon reads from
+`./item-icons/gold.png` (falls back to a 💰 glyph via `ConsumableIcon`
+until that file exists, same "renders once present, silently absent
+until then" convention every other icon here already follows -- drop
+the real art at `public/item-icons/gold.png` whenever it's ready).
+
+**Mailbox button + live count badge, `AuctionHousePanel.tsx`.**
+Deliberately NOT gated on connection status -- claiming is pure local
+save data, no network call involved, so it stays usable even while the
+browse/buy/sell side of the panel correctly shows "needs a connection."
+New `.mailbox-btn`/`.btn-count-badge` CSS (`app.css`), modelled on the
+existing `.header-notif-badge` (same `--blood`/white/pill visual
+language) but sized for a labelled button rather than a small icon-only
+one, and deliberately without `.header-notif-icon`'s shimmer ring -- a
+plain count, not a "new, worth clicking" cue the way an unread
+notification is.
+
+**Verified for real, full loop, not mocked:** `npx tsc --noEmit` clean,
+a full `vite build` clean. Beyond that, a direct runtime test via `tsx`
+exercising the entire claim flow against a real `GameState`: granted one
+gold entry, one equipment entry, one consumable entry, claimed all three
+individually and confirmed gold/stash/inventory each updated correctly
+and the mailbox emptied; then a dedicated Gold Storage Cap test --
+granted a gold entry guaranteed to exceed the cap, confirmed `claim`
+returns the expected error, gold stays unchanged, and the entry remains
+in the mailbox; then a `claimAll` test with one claimable and one
+blocked entry mixed together, confirming it claims the one and correctly
+leaves the other. Also ran the save migration directly against a
+synthetic pre-0403 save object (version 69, no `mailbox` field at all)
+and confirmed it migrates to version 70 with `mailbox: []` and every
+other field preserved.
+
+**Not verified:** no real browser/Electron window in this environment,
+so the modal/cards/badge have not actually been clicked through -- worth
+a real pass confirming the badge renders correctly against the button
+label, the item-card grid lays out sensibly for a handful of mixed
+entry types, and the gold glyph fallback (💰) reads acceptably until the
+real icon art lands.

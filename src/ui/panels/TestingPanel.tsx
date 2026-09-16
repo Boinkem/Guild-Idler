@@ -59,6 +59,19 @@ export function TestingPanel() {
         <button onClick={() => engine.testAddScrap(10000)}>+10,000 scrap</button>
       </div>
 
+      <div className="section-heading">Auction House mailbox</div>
+      <p className="small muted" style={{ marginBottom: 8 }}>
+        Nothing in real gameplay can put anything in the mailbox yet -- no live backend. These
+        buttons are the only way to exercise the claim flow (including the Gold Storage Cap
+        block) before that exists. Currently holding {state.mailbox.length} entr{state.mailbox.length === 1 ? 'y' : 'ies'}.
+      </p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={() => engine.testAddMailboxGold(200, 'Sold: Test Item')}>+200 gold entry</button>
+        <button onClick={() => engine.testAddMailboxGold(50000, 'Sold: Test Item')}>+50,000 gold entry (test the cap block)</button>
+        <button onClick={() => engine.testAddMailboxEquipment('wooden_sword', 'Auction won: Wooden Sword')}>+ equipment entry</button>
+        <button onClick={() => engine.testAddMailboxConsumable('healing_potion', 3, 'Auction won: Healing Potion')}>+ consumable entry</button>
+      </div>
+
       <div className="section-heading">Recipes</div>
       <p className="small muted" style={{ marginBottom: 8 }}>
         Adds one random not-yet-learned recipe scroll to the stash -- ignores the real drop

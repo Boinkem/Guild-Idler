@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 69;
+export const SAVE_VERSION = 70;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -540,6 +540,34 @@ export interface BuybackEntry {
    *  print gold by selling and rebuying the same item. */
   soldFor: number;
   soldAt: number;
+}
+
+/**
+ * A single claimable Auction House mailbox entry -- see
+ * guild-idler-status.md's Auction House entry for the full design.
+ * Originally scoped as seller-gold-only (buyer's purchased item lands
+ * directly in inventory at purchase time); revised to route both
+ * purchased items AND sale gold through the mailbox instead, a genuine
+ * design change from the original locked decision, not a
+ * reimplementation of it -- see that entry's own note on the revision.
+ *
+ * `item` carries the full rolled-stat `EquipmentItem`, same "not just an
+ * id" shape the design doc's own `listings` data model calls for --
+ * equipment carries randomized stats/crafted mods, so a mailbox entry
+ * has to capture the actual roll, exactly like a listing does.
+ */
+export interface MailboxEntry {
+  id: string;
+  type: 'gold' | 'equipment' | 'consumable';
+  /** Gold amount (type: 'gold') or consumable quantity (type: 'consumable'). Unused for 'equipment'. */
+  amount?: number;
+  /** type: 'equipment' only -- the exact item, full roll intact. */
+  item?: EquipmentItem;
+  /** type: 'consumable' only. */
+  consumableId?: string;
+  receivedAt: number;
+  /** Optional flavour label shown on the card, e.g. "Sold: Iron Sword" -- not required. */
+  note?: string;
 }
 
 export interface ItemSet {
@@ -2135,6 +2163,9 @@ export interface GameState {
    *  intact, not just the defId) so buying it back hands back precisely
    *  what was sold, not a fresh-rolled equivalent. */
   buyback: BuybackEntry[];
+  /** Claimable Auction House mailbox entries -- see MailboxEntry's own
+   *  comment and guild-idler-status.md's Auction House entry. */
+  mailbox: MailboxEntry[];
 
   /**
    * Contract offers, one pool per hero (keyed by hero id) -- each hero

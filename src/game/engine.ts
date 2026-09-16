@@ -28,6 +28,7 @@ import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
 import { HarvestManager } from './managers/HarvestManager';
 import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
 import { PetManager } from './managers/PetManager';
+import { MailboxManager } from './managers/MailboxManager';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
@@ -1430,6 +1431,38 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Testing-only -- see MailboxManager's own header comment. Nothing in
+   *  real gameplay can populate a mailbox entry yet (no live backend);
+   *  this is how the claim flow (including the Gold Storage Cap block)
+   *  gets exercised for real before that exists. */
+  testAddMailboxGold(amount: number, note?: string) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    MailboxManager.grantTestEntry(this.state, { type: 'gold', amount, note });
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Testing-only, same reasoning as testAddMailboxGold. Reuses
+   *  EquipmentManager.instantiate for a real, fully-rolled item -- not a
+   *  hand-faked stub -- so the claimed card looks exactly like a real
+   *  Auction House purchase would once that exists. */
+  testAddMailboxEquipment(defId: string, note?: string) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    const item = EquipmentManager.instantiate(defId);
+    if (!item) return;
+    MailboxManager.grantTestEntry(this.state, { type: 'equipment', item, note });
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Testing-only, same reasoning as testAddMailboxGold. */
+  testAddMailboxConsumable(consumableId: string, amount = 1, note?: string) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    MailboxManager.grantTestEntry(this.state, { type: 'consumable', consumableId, amount, note });
+    this.notify();
+    void this.saveNow();
+  }
+
   /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */
   testCompleteActiveQuest(heroId: string) {
     if (!TESTING_TOOLS_ENABLED) return;
@@ -2381,6 +2414,30 @@ export class GameEngine {
     if (gold === 0) return this.say("You don't have any of those.");
     playSound('sell');
     this.say(`Sold for ${gold} gold.`);
+    void this.saveNow();
+  }
+
+  /** Claims one Auction House mailbox entry -- see MailboxManager.claim's
+   *  own comment, including the Gold Storage Cap block. */
+  claimMailboxEntry(entryId: string) {
+    const error = MailboxManager.claim(this.state, entryId);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('Claimed.');
+    void this.saveNow();
+  }
+
+  /** Claims everything claimable in the mailbox in one action -- see
+   *  MailboxManager.claimAll's own comment on why a blocked gold entry
+   *  doesn't fail the whole batch. */
+  claimAllMailbox() {
+    const { claimed, skipped } = MailboxManager.claimAll(this.state);
+    if (claimed === 0 && skipped === 0) return this.say('Nothing to claim.');
+    if (claimed > 0) playSound('purchase');
+    const parts = [];
+    if (claimed > 0) parts.push(`Claimed ${claimed}`);
+    if (skipped > 0) parts.push(`${skipped} left (over Gold Storage Cap)`);
+    this.say(parts.join(' -- ') + '.');
     void this.saveNow();
   }
 

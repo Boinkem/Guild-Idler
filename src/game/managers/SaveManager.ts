@@ -129,6 +129,7 @@ export function createInitialState(now = Date.now()): GameState {
     customConsumables: {},
     stash: [],
     buyback: [],
+    mailbox: [],
     // The starter hero's board isn't left empty for the normal
     // procedural generator to fill -- it's seeded directly with the
     // scripted tutorial quest (see quests.ts's own tutorialQuestOffer
@@ -1515,6 +1516,15 @@ const MIGRATIONS: Record<number, Migration> = {
    * 67's own guildTitles guard just above.
    */
   68: (save) => ({ ...save, version: 69, founderPackGranted: save.founderPackGranted ?? false }),
+  /**
+   * New Auction House mailbox array (patch 0403) -- no existing save
+   * could have anything in it (the mechanism didn't exist before this
+   * patch), so this is a straight `?? []` fill, same "nobody could have
+   * received the grant before this patch, no might-already-be-true case
+   * to preserve" reasoning migration 68 just above already used for
+   * founderPackGranted.
+   */
+  69: (save) => ({ ...save, version: 70, mailbox: save.mailbox ?? [] }),
 };
 
 export const SaveManager = {
