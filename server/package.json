@@ -1,0 +1,23 @@
+{
+  "name": "guildbound-ah-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Guildbound Auction House backend. Standalone service, self-hosted -- not part of the Electron client build. See ../guild-idler-status.md's Auction House entry for the full design and build order.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "fastify": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18 <23"
+  }
+}

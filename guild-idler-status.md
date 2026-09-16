@@ -7828,12 +7828,21 @@ pass (same caveat as the two entries above).
   (`src/game/types.ts`) -- same-repo means the backend can import that
   type directly, so the listing payload shape can never silently drift
   from the client's own item shape the way it would across two repos.
-  **Must-do before any server code lands:** the Steam depot build
-  pipeline (patches 0394-0396) must explicitly exclude `server/` the same
-  deliberate way `public/dlc/` is already excluded from the base game's
-  depot -- confirm this as step zero, not an afterthought caught later.
+  **Depot-exclusion concern (raised, then checked, then closed):** the
+  worry was that the Steam depot build pipeline would need an explicit
+  `server/` exclusion the same way `public/dlc/` is. Checked directly
+  against the real root `tsconfig.json` (`"include": ["src", "electron",
+  "vite.config.ts"]`) and `package.json`'s `build.files`
+  (`dist/**/*`, `dist-electron/**/*`, `build/icon.png`) -- both are
+  allowlists, not blocklists, and neither mentions `server/`. `server/`
+  is already structurally invisible to `npm run build`, `tsc --noEmit`,
+  and `electron-builder` with zero changes needed. No action item here
+  after all -- confirmed, not assumed.
   Stack leans **Fastify** over Express for the skeleton (lighter, native
   TS types) -- not locked, revisit if there's a reason to prefer Express.
+  **Backend skeleton -- scaffolded, patch 0399.** Deliberately inert by
+  default (`AH_ENABLED=false`); see that patch-log entry further down
+  for the full off-state design and what was actually verified.
 
   **Build order once started:** host prep (subdomain -> DDNS, Postgres
   installed, empty Windows Service scaffolding) -> backend skeleton (an
@@ -32465,3 +32474,68 @@ No live steamcmd run in this environment -- worth confirming on the next
 real Generate/Upload that `win-unpacked/Guildbound.exe` exists after
 Package, and that Steamworks accepts `Guildbound.exe` as the Launch
 Options Executable against the resulting build.
+
+### AH backend skeleton scaffolded, deliberately inert until DNS/Postgres are live (patch 0399)
+```discord-update
+Dev Update | Patch 0399
+
+- Laid the first groundwork for the upcoming Auction House -- a small backend service, not turned on yet
+- Nothing changes for players today; the game itself is completely untouched by this patch
+```
+
+First real code for the Auction House build order's step 2 (see the
+Auction House entry above for the full design and build order). New
+top-level `server/` folder -- Fastify + TypeScript, one real route,
+deliberately built to do nothing beyond prove the deploy plumbing until
+DNS/Postgres/TLS are all confirmed working on the host.
+
+**Confirmed structurally invisible to the existing client build, not
+assumed.** Checked the real root `tsconfig.json`
+(`"include": ["src", "electron", "vite.config.ts"]`) and `package.json`'s
+`build.files` (`dist/**/*`, `dist-electron/**/*`, `build/icon.png`) --
+both allowlists, neither mentions `server/`. `npm run build`,
+`tsc --noEmit`, and `electron-builder` all ignore it with zero config
+changes. Closes the "must-do before any server code lands" concern raised
+in the design refinements pass -- turned out to be a non-issue once
+actually checked.
+
+**Three independent off-layers, by design, not just one flag:**
+1. **The Windows Service isn't installed automatically.**
+   `server/scripts/install-windows-service.ps1` (NSSM-based) is a manual
+   step, and deliberately does not start the service even once run --
+   see the script's own final `Write-Host`.
+2. **`AH_ENABLED` defaults to `false` in code** (`server/src/config.ts`),
+   not just in `.env.example` -- a missing `.env`, a missing line, or a
+   typo'd value all fail safe to disabled, never silently enabled.
+3. **Every route except `/health` 503s while disabled**
+   (`server/src/index.ts`'s `onRequest` hook, checked before any route
+   handler runs) -- `/health` itself still reports
+   `{ ahEnabled: false, mode: "offline" }` so the deploy plumbing can be
+   proven without exposing anything else. No real AH routes exist yet
+   (core listings/buyout is a later build step) -- this hook exists now
+   so future routes come up behind the gate by construction, rather than
+   needing each one to remember its own check.
+
+**Data model, auth, Postgres: deliberately not wired in yet.** This
+skeleton has no database client and makes no Steam calls -- matches the
+design doc's own step ordering (`/health` first, proving plumbing before
+logic). `server/.env.example`'s `DATABASE_URL` line is commented out,
+labelled for the "core listings + buyout" step.
+
+**Verified for real, not just written:** `npm install`, `npx tsc --noEmit`
+(clean), and `npm run build` all ran successfully in this environment.
+Started the compiled server directly and hit it with `curl`: with
+`AH_ENABLED=false` (the shipped default), `/health` returns
+`{"status":"ok","ahEnabled":false,"mode":"offline"}` and an arbitrary
+other route (`/listings`) returns `503` with the expected
+`auction_house_offline` body; with `AH_ENABLED=true`, `/health` reports
+`"mode":"online"` and the same unknown route correctly falls through to
+a plain `404` instead of the gate. Both states behave exactly as
+designed.
+
+**Not verified, explicitly:** no real Windows machine, Postgres instance,
+or live domain in this dev environment -- the Windows Service scripts
+have not been run against a real Windows host, and DNS/TLS reachability
+through the actual Cloudflare-managed domain has not been tested. Worth
+a real pass through `server/README.md`'s deploy checklist on the actual
+host before trusting any of it.
