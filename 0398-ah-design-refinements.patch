@@ -1,0 +1,92 @@
+From: GuildBound Dev <dev@guildbound.local>
+Subject: [PATCH] AH design refinements - Steam status, Gold Cap, Scrap, repo structure (patch 0398)
+
+--- a/guild-idler-status.md	2026-09-16 02:54:32.104032001 +0000
++++ b2/guild-idler-status.md	2026-09-16 03:07:08.729404766 +0000
+@@ -7714,8 +7714,12 @@
+   onto system-seeded listings specifically rather than needing a
+   redesign. Locked decisions:
+   - **Tradeable:** gear/equipment + consumables, every rarity including
+-    Legendary. Gold-for-gold only -- no Renown or other currency is
+-    tradeable.
++    Legendary. No Renown, ever. **Scrap now leaning tradeable too**
++    (post-dates the original design pass, which predates the Scrap
++    economy rework entirely) -- direction is listings priced in gold OR
++    Scrap, seller's choice, not gold-only as first decided. Not yet
++    locked: whether every listing picks one currency, or a listing could
++    ever ask a mixed gold+Scrap price.
+   - **Pricing: buyout only**, no bidding -- fits an idle game's async
+     play pattern (no need for two players online at once).
+   - **Undercut visibility on** -- players can see current listings/
+@@ -7734,6 +7738,13 @@
+     unclaimed gold and unsold, expired items both live there.
+   - **Listing cap per player:** "generous, 20+" -- exact number not
+     chosen.
++  - **Gold Storage Cap interaction -- locked.** The mailbox's sold-gold
++    claim is blocked outright (not partial-claimed, not silently capped)
++    whenever claiming it in full would push the player over their
++    existing Gold Storage Cap. Claim stays queued in the mailbox until
++    the player has spent enough to make room. Postdates the original
++    design pass -- Gold Storage Cap didn't exist as an enforced system
++    yet when this was first scoped.
+   - System-seeded stock pads supply during low real-listing periods;
+     whether that's a permanent mechanic or tapers off as real volume
+     grows is open. Whether to visibly tag it ("Broker Listing") or keep
+@@ -7766,13 +7777,21 @@
+   randomized stats/crafted mods, so a listing has to capture the actual
+   roll), `mailbox` (ownerSteamId, gold/item payload, claimed-at),
+   `transactions` (audit trail for support/dispute lookups). **Steam
+-  auth:** the client already obtains a session ticket via the integrated
+-  Steamworks SDK (`GetAuthSessionTicket`) -- proven working by the live
+-  Steam leaderboards -- but backend verification of that ticket via
+-  Steam's `AuthenticateUserTicket` Web API is **not yet built**;
+-  leaderboards only prove the client-side flow, not that a game-owned
+-  backend can validate a ticket (leaderboard uploads go straight to
+-  Valve's servers today, bypassing any backend of ours). DevTools
++  auth, corrected from the original design pass:** the game is not
++  actually live on Steam yet (store page still pending Valve approval,
++  first depot build just uploaded -- see the Steam launch backlog
++  above), so nothing about the client-side session flow has been proven
++  against a real Steam client; leaderboards pass every build/package
++  check but have never round-tripped a genuine Steam session in this
++  dev environment either. The good news: a working, proven
++  `steamworks-rs`-based native fork already exists and ships for real
++  (`electron/steamworks-leaderboards/`, vendored in-repo, built for both
++  Windows and Linux for leaderboards) -- adding `GetAuthSessionTicket`
++  to it is "extend a fork we already maintain and build," the same
++  pattern already used twice to add the leaderboard functions, not a
++  from-scratch SDK integration. Backend verification of that ticket via
++  Steam's `AuthenticateUserTicket` Web API is still **not yet built**
++  either way. DevTools
+   (already its own standalone local app, separate from the shipped
+   client, so no exposure risk) gets a new "AH Admin" tab: connection/DDNS
+   health, manual force-rotation of system-seeded stock, transaction
+@@ -7795,13 +7814,27 @@
+   the server, the automated dump/rotation script doesn't).
+ 
+   **Still open, needs another pass before implementation:** exact
+-  deposit-fee/sale-cut percentages; system-seeded stock framing
++  deposit-fee/sale-cut percentages; whether a listing can ever ask a
++  mixed gold+Scrap price or must pick one; system-seeded stock framing
+   (permanent padding vs. tapering as real volume grows); whether the 48h
+   tier is its own Guild upgrade or folded into the access-gating one;
+   exact listing cap; whether "Black Market" as a label should be renamed
+   now that it's a real player marketplace lane (e.g. "Broker's Stock") --
+   purely thematic, not urgent.
+ 
++  **Repo structure -- decided.** Backend lives in this same repo, a new
++  top-level `server/` folder, rather than a separate repository. Reason:
++  a listing has to carry the exact rolled-stat shape of `EquipmentInstance`
++  (`src/game/types.ts`) -- same-repo means the backend can import that
++  type directly, so the listing payload shape can never silently drift
++  from the client's own item shape the way it would across two repos.
++  **Must-do before any server code lands:** the Steam depot build
++  pipeline (patches 0394-0396) must explicitly exclude `server/` the same
++  deliberate way `public/dlc/` is already excluded from the base game's
++  depot -- confirm this as step zero, not an afterthought caught later.
++  Stack leans **Fastify** over Express for the skeleton (lighter, native
++  TS types) -- not locked, revisit if there's a reason to prefer Express.
++
+   **Build order once started:** host prep (subdomain -> DDNS, Postgres
+   installed, empty Windows Service scaffolding) -> backend skeleton (an
+   empty `/health` route reachable over HTTPS, proving the whole DNS/TLS/
