@@ -1,0 +1,161 @@
+From: GuildBound Dev <dev@guildbound.local>
+Subject: [PATCH] Auction House design doc landed in status backlog (patch 0397)
+
+--- a/guild-idler-status.md	2026-09-16 02:54:32.102522016 +0000
++++ b/guild-idler-status.md	2026-09-16 02:54:32.104032001 +0000
+@@ -7703,19 +7703,143 @@
+ - **Steam leaderboards** -- mentioned early as a distinct, larger feature;
+   the Guild Rank tooltip in the Lore tab was deliberately worded to become
+   literally true if this ever ships, without needing a rewrite.
++- **Auction House -- real cross-player trading, design locked, not yet
++  built.** WoW-style buyout marketplace, chosen explicitly over a
++  cheaper simulated/NPC-driven alternative after weighing the trade-off.
++  **Black Market is fully absorbed into it** rather than run as a
++  separate system -- a dev/system-seeded ("spoofed") listing is the same
++  data shape as a real player listing (same table, same buyout/escrow
++  path, just a special `sellerId`), so there's no case for two systems
++  doing the same job. The existing `blackMarketDiscount` upgrade maps
++  onto system-seeded listings specifically rather than needing a
++  redesign. Locked decisions:
++  - **Tradeable:** gear/equipment + consumables, every rarity including
++    Legendary. Gold-for-gold only -- no Renown or other currency is
++    tradeable.
++  - **Pricing: buyout only**, no bidding -- fits an idle game's async
++    play pattern (no need for two players online at once).
++  - **Undercut visibility on** -- players can see current listings/
++    lowest price for an item before pricing their own.
++  - **Duration: 24h base, up to 48h via a Guild upgrade**, same
++    cost-curve shape as Barracks/Treasury/etc. Whether the same upgrade
++    that gates access also unlocks 48h, or a separate follow-on tier
++    does, isn't decided.
++  - **Fees:** a deposit that scales with listing price (lost if the item
++    doesn't sell), plus a cut on successful sale. Exact percentages not
++    set.
++  - **Delivery via a new mailbox system.** The buyer's purchased item
++    lands directly in inventory at purchase time (they're online, doing
++    the buying, right now); only the *seller's* gold routes through the
++    mailbox, since they're not present for the transaction. Sold-but-
++    unclaimed gold and unsold, expired items both live there.
++  - **Listing cap per player:** "generous, 20+" -- exact number not
++    chosen.
++  - System-seeded stock pads supply during low real-listing periods;
++    whether that's a permanent mechanic or tapers off as real volume
++    grows is open. Whether to visibly tag it ("Broker Listing") or keep
++    it indistinguishable from real listings is a thematic call, not
++    made.
++  - **Anti-cheat: save-file signing/light protection only, deliberately
++    not** a server-authoritative trading ledger (gold/items only
++    becoming tradeable once earned through a server-witnessed event) --
++    considered and rejected as disproportionate engineering cost at
++    indie scale. Accepted risk applies both directions (a save-edited
++    account could list fabricated gear, or fabricate gold to buy real
++    players' real listings); revisit only if it's ever exploited at real
++    scale.
++
++  **Infrastructure (decided).** Self-hosted Node/TypeScript (Express or
++  Fastify) + Postgres on an existing server machine, not a managed cloud
++  platform -- ~99% uptime accepted as sufficient specifically because the
++  AH degrades gracefully (panel shows "needs a connection" and disables
++  itself; the rest of the game is entirely unaffected, same as any other
++  offline moment -- a genuinely new "this one feature needs the
++  internet" category in an otherwise fully offline-capable game).
++  Existing Cloudflare-managed domain covers TLS; an already-active
++  Dynamic DNS hostname just needs an AH subdomain pointed at it; a
++  Windows Service auto-starts the backend on boot. Postgres specifically
++  for row-locked buyout transactions -- two players clicking buyout on
++  the same listing within the same second needs an atomic check/debit/
++  transfer/mark-sold, not a race. Rough data model: `listings`
++  (sellerSteamId nullable/`SYSTEM` for system-seeded stock, full
++  rolled-stat JSON per item rather than just an id -- equipment carries
++  randomized stats/crafted mods, so a listing has to capture the actual
++  roll), `mailbox` (ownerSteamId, gold/item payload, claimed-at),
++  `transactions` (audit trail for support/dispute lookups). **Steam
++  auth:** the client already obtains a session ticket via the integrated
++  Steamworks SDK (`GetAuthSessionTicket`) -- proven working by the live
++  Steam leaderboards -- but backend verification of that ticket via
++  Steam's `AuthenticateUserTicket` Web API is **not yet built**;
++  leaderboards only prove the client-side flow, not that a game-owned
++  backend can validate a ticket (leaderboard uploads go straight to
++  Valve's servers today, bypassing any backend of ours). DevTools
++  (already its own standalone local app, separate from the shipped
++  client, so no exposure risk) gets a new "AH Admin" tab: connection/DDNS
++  health, manual force-rotation of system-seeded stock, transaction
++  search/audit lookup, manual trade reversal, per-Steam-ID suspension --
++  talking to the backend's own `/admin/*` routes behind an admin token
++  that lives only in local DevTools config, never the shipped client.
++
++  **Client integration:** new AH panel (browse/filter by item type, slot,
++  rarity, level; active-listings management; mailbox UI). List flow pulls
++  the item from local inventory only *after* the server confirms the
++  listing was created -- no optimistic strip on the assumption the
++  network call succeeds. Buy flow: item to buyer's inventory immediately,
++  seller's gold to their mailbox. System-seeded listings render
++  identically to real ones (same underlying data shape).
++
++  **Genuine blockers (infra, not design):** Steam session-ticket
++  verification on the backend; the row-locked buyout transaction
++  (approach scoped, not built); the Postgres backup routine (hardware --
++  a backup drive plus a separate external data drive -- already exists on
++  the server, the automated dump/rotation script doesn't).
++
++  **Still open, needs another pass before implementation:** exact
++  deposit-fee/sale-cut percentages; system-seeded stock framing
++  (permanent padding vs. tapering as real volume grows); whether the 48h
++  tier is its own Guild upgrade or folded into the access-gating one;
++  exact listing cap; whether "Black Market" as a label should be renamed
++  now that it's a real player marketplace lane (e.g. "Broker's Stock") --
++  purely thematic, not urgent.
++
++  **Build order once started:** host prep (subdomain -> DDNS, Postgres
++  installed, empty Windows Service scaffolding) -> backend skeleton (an
++  empty `/health` route reachable over HTTPS, proving the whole DNS/TLS/
++  service/firewall chain before any real logic) -> Steam ticket
++  verification (the one genuine remaining blocker -- nothing downstream
++  can be built against a "real player" concept without it) -> core
++  listings + buyout (the row-locked transaction, proven via the bare
++  API/DevTools before any client UI exists) -> system-seeded stock
++  (reuses the core listings code path) -> mailbox system -> client AH
++  panel (built last, depends on everything above being stable) ->
++  DevTools AH Admin tab (can run in parallel with the panel once the
++  backend/listings exist) -> backup routine + hardening, last, once
++  there's real data worth protecting. Suggested starting point: host prep
++  and the backend skeleton together -- get an empty backend live and
++  reachable at the domain before any real game logic sits behind it.
++
++  **Flagged, not resolved:** `guild-idler-project-brief.md` still says
++  "Guild Idler" throughout -- this doc and `package.json`'s
++  `productName` already use **Guildbound**; the brief needs its own pass
++  to catch up. Base price also needs reconciling there -- this entry and
++  the Post-launch DLC strategy entry below now reflect **$9** as current,
++  up from the $6.99 previously on record; confirm against the brief and
++  update it to match.
++
+ - **Post-launch DLC strategy** -- direction set for whenever this reaches
+-  Steam, not scoped or scheduled yet. Base game stays $6.99 with free
+-  quest-chain/feature drops (matches the pricing already locked in the
+-  project brief); paid DLC is planned to be cosmetic-only -- skins, pets,
+-  recolours. New story content, mechanics, and systems are meant to stay
+-  free forever rather than gated behind a purchase, on purpose -- the
+-  monetization split is "pay for how your guild looks," not "pay to see
+-  what happens next." No concrete DLC pack has been scoped yet (which
+-  skins, which pets, bundling/pricing per pack) -- revisit once the base
+-  game is actually on Steam and it's clear what the roster of cosmetics
+-  worth packaging even looks like. The technical groundwork for this is
+-  now built, ahead of any actual pack -- see "DLC groundwork -- built"
+-  in the main patch log above.
++  Steam, not scoped or scheduled yet. Base game stays $9 with free
++  quest-chain/feature drops (see the Auction House entry above -- price
++  updated from the earlier $6.99 on record; the project brief still
++  needs a pass to match); paid DLC is planned to be cosmetic-only --
++  skins, pets, recolours. New story content, mechanics, and systems are
++  meant to stay free forever rather than gated behind a purchase, on
++  purpose -- the monetization split is "pay for how your guild looks,"
++  not "pay to see what happens next." No concrete DLC pack has been
++  scoped yet (which skins, which pets, bundling/pricing per pack) --
++  revisit once the base game is actually on Steam and it's clear what
++  the roster of cosmetics worth packaging even looks like. The technical
++  groundwork for this is now built, ahead of any actual pack -- see "DLC
++  groundwork -- built" in the main patch log above.
+ - **Customizable Guild Hall background (trophies, banners, shelf
+   trinkets)** -- layout design locked through a visual mockup pass, and as
+   of patch 0204 actually playable end to end for gold-kind decorations.
