@@ -224,8 +224,20 @@
  * quest, not a background detail. Permanently at the same
  * border/opacity a gear slot only reaches ON hover, rather than adding
  * a genuinely new visual language -- distinguishes it without
- * introducing a third look. */
-.item-card.empty.consumable-empty { border-color: var(--brass); opacity: 0.85; }
+ * introducing a third look.
+ *
+ * Patch 0404, direct follow-up report: even at 0.85 (not the full 0.6
+ * dulled state), this was still the exact same bug rarity-frame-card-
+ * outline's own opacity fix (above) already diagnosed and fixed for
+ * empty gear slots -- the opacity applies to the whole element,
+ * including .item-card's own solid color-mix background rectangle, so
+ * the tab-scene art underneath still bled through as a visible haze
+ * rather than a clean, subtly-dimmed card. Same fix: full opacity, and
+ * the background rectangle itself dropped to transparent so there's no
+ * translucent panel left to haze in the first place -- the brass
+ * border alone (already distinct from a plain gear slot's default
+ * border) carries the "this one's clickable" signal now. */
+.item-card.empty.consumable-empty { border-color: var(--brass); opacity: 1; background-color: transparent; }
 .item-icon {
   position: relative;
   flex: none;

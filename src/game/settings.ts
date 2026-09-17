@@ -411,34 +411,27 @@ const MIGRATIONS: Record<number, Migration> = {
 };
 
 /**
- * Reads the OS/browser's `prefers-reduced-motion` accessibility preference,
- * used only to pick a sensible *default* for a brand-new save's
- * `reduceMotion` setting -- never checked again after that. This used to
- * also be enforced directly and unconditionally in CSS
- * (`@media (prefers-reduced-motion: reduce) { *, *::before, *::after {
- * animation-duration: 0.001ms !important; ... } }`), which was a real bug,
- * not a redundant safety net: that rule applied regardless of what the
- * in-game Animation Speed / Reduce Motion controls were set to, so a player
- * on a system reporting this preference (a genuinely common default on
- * some platforms, and not always chosen for a reason that has anything to
- * do with wanting *this* game's cosmetic animations suppressed) would see
- * every animation in the app -- Harvest's fall-in, the quest-completion
- * particle burst, all of it -- collapse to near-zero duration no matter
- * what Settings actually showed, with no way to turn it back on from
- * inside the game. That's likely the real explanation for the
- * long-standing "animations play instantly, root cause unknown" issue.
- * Respecting the OS preference as the *starting point* for a new player,
- * while leaving the in-game setting as the one actual source of truth from
- * then on (see `apply` below, which is now the only place motion gets
- * turned off), keeps the accessibility intent without permanently
- * overriding an explicit in-game choice to turn animations back on.
+ * Used to read the OS/browser's `prefers-reduced-motion` accessibility
+ * preference as the *default* for a brand-new save's `reduceMotion`
+ * setting. Direct report (patch 0404): a genuinely common number of
+ * players were landing on a fresh guild with every animation already
+ * dulled to near-zero -- Harvest's fall-in, the quest-completion particle
+ * burst, idle bobbing, all of it -- with no idea why, since nothing in
+ * Settings itself looked off (`animationSpeed` still showed 1). Root
+ * cause: `prefers-reduced-motion` is a genuinely common OS/browser default
+ * on some platforms for reasons that have nothing to do with wanting
+ * *this* game's cosmetic animations suppressed, and this function was
+ * quietly seeding a fresh save's `reduceMotion` from it before the player
+ * ever got a chance to choose. "Animations on by default" now means
+ * exactly that -- DEFAULT_SETTINGS.reduceMotion (false) is what every new
+ * guild actually starts with, full stop; the OS preference is no longer
+ * consulted at load time at all. Kept as a no-op-returning stub rather
+ * than deleted outright, since SettingsStore.load's two catch/no-raw
+ * branches below still reference it -- removing every call site cleanly
+ * is a slightly larger diff than this patch's actual scope.
  */
 function prefersReducedMotionByDefault(): boolean {
-  try {
-    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 /**

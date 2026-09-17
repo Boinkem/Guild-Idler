@@ -263,7 +263,10 @@
     "glyph": "♦",
     "icon": "misc/Misc_88.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 2
+    }
   },
   {
     "id": "fortune_charm_gold",
@@ -274,7 +277,10 @@
     "glyph": "♦",
     "icon": "misc/Misc_87.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 3.5
+    }
   },
   {
     "id": "grand_fortune_charm_gold",
@@ -285,7 +291,10 @@
     "glyph": "♦",
     "icon": "misc/Misc_84.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 6
+    }
   },
   {
     "id": "greater_fortune_charm_gold",
@@ -296,7 +305,10 @@
     "glyph": "♦",
     "icon": "misc/Misc_80.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 12
+    }
   },
   {
     "id": "boundless_fortune_charm_gold",
@@ -307,7 +319,10 @@
     "glyph": "♦",
     "icon": "misc/Misc_79.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 999
+    }
   },
   {
     "id": "minor_fortune_charm_xp",
@@ -318,7 +333,10 @@
     "glyph": "✦",
     "icon": "misc/Misc_75.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "wisdom",
+      "lootWeightMultiplier": 2
+    }
   },
   {
     "id": "fortune_charm_xp",
@@ -329,7 +347,10 @@
     "glyph": "✦",
     "icon": "misc/Misc_74.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "wisdom",
+      "lootWeightMultiplier": 3.5
+    }
   },
   {
     "id": "grand_fortune_charm_xp",
@@ -340,7 +361,10 @@
     "glyph": "✦",
     "icon": "misc/Misc_73.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "wisdom",
+      "lootWeightMultiplier": 6
+    }
   },
   {
     "id": "greater_fortune_charm_xp",
@@ -351,7 +375,10 @@
     "glyph": "✦",
     "icon": "misc/Misc_24.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "wisdom",
+      "lootWeightMultiplier": 12
+    }
   },
   {
     "id": "boundless_fortune_charm_xp",
@@ -362,7 +389,10 @@
     "glyph": "✦",
     "icon": "misc/Misc_25.png",
     "craftable": false,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "wisdom",
+      "lootWeightMultiplier": 999
+    }
   },
   {
     "id": "alchemists_reserve",
@@ -493,7 +523,10 @@
     "glyph": "♦",
     "icon": "food/Food_12.png",
     "craftable": true,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 2
+    }
   },
   {
     "id": "lucky_charm_xp",
@@ -504,7 +537,10 @@
     "glyph": "✦",
     "icon": "food/Food_12_hue2.png",
     "craftable": true,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "wisdom",
+      "lootWeightMultiplier": 2
+    }
   },
   {
     "id": "fortune_weave_gold",

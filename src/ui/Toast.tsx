@@ -6,9 +6,17 @@ import { useEngine } from './useEngine';
  *  and anything else banner-worthy -- see GameEngine.say's own comment)
  *  gets roughly double: these are actual instructional sentences, not a
  *  one-word confirmation, and are exactly the moments a new player most
- *  needs the extra time to actually finish reading before it's gone. */
+ *  needs the extra time to actually finish reading before it's gone.
+ *
+ *  Patch 0404, direct follow-up report (named example: the Strength
+ *  Potion pickup explainer): even the doubled window still read as too
+ *  short for a genuinely full instructional sentence, not just a
+ *  headline. Bumped further, to roughly triple the routine window
+ *  rather than double -- the pause-on-hover/manual-close behavior below
+ *  already covers anyone who needs even longer, so this is about the
+ *  unattended default actually being enough on a first read. */
 const TOAST_DURATION_MS = 3200;
-const TOAST_DURATION_LONG_MS = 6500;
+const TOAST_DURATION_LONG_MS = 9000;
 
 /**
  * Patch 0330, direct tester feedback: "Some written parts popped up for

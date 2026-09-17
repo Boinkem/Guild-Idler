@@ -84,8 +84,19 @@ export const InventoryManager = {
    */
   isLoadoutEffect(def: ConsumableDef): boolean {
     const e = def.effect;
+    // Patch 0404, direct bug report ("can't seem to equip charms"):
+    // Fortune/Lucky Charms are loadout effects too (see GameState's
+    // ConsumableDef.effect.lootWeightStat doc comment) but this check
+    // never looked at that field, so every charm whose only effect was
+    // a loot-weight bias silently failed both of isLoadoutEffect's two
+    // call sites -- the detail-popup "Equip" button and the empty
+    // Consumable Slot's own picker list -- with no error, just no
+    // button. Root cause turned out to be twofold: this missing check,
+    // AND every one of those charms' actual JSON data having shipped
+    // with an empty `effect: {}` (see consumables.json, same patch) --
+    // fixing only one half would have left the other still broken.
     return !!(e.success || e.gold || e.xp || e.loot || e.injuryResist || e.speed
-      || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction);
+      || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction || e.lootWeightStat);
   },
 
   /** Everything with stock > 0 -- both the static shop catalogue and any

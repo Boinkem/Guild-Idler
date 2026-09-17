@@ -286,8 +286,14 @@ function StoryQuestsTab() {
         </div>
       ))}
 
+      {/* Patch 0404, direct report ("text is hard to read"): plain muted
+          text with nothing behind it, sitting directly over the Lore
+          tab's own scene art. Reuses the same .subtitle plaque background
+          every other panel's subtext already gets (.panel .subtitle in
+          app.css) rather than a new rule -- see EquipmentPanel's Stash
+          empty-state fix, same patch, same root cause. */}
       {undiscovered > 0 && (
-        <p className="tiny muted" style={{ marginTop: 12 }}>
+        <p className="tiny muted subtitle" style={{ marginTop: 12 }}>
           {undiscovered} more {undiscovered === 1 ? 'story' : 'stories'} out there, waiting to be found.
         </p>
       )}

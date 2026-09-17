@@ -35,6 +35,28 @@ function RarityPill({ rarity }: { rarity: Rarity }) {
   );
 }
 
+/**
+ * Patch 0404, direct request: marks a card as a Consumable, next to its
+ * rarity pill -- same small-pill convention as CraftedPill/SetPill below.
+ * Direct report named charms specifically ("can't seem to equip charms
+ * too -- I believe they are meant to also be one-time consumables"),
+ * which turned out to be exactly right; this pill is the visible
+ * confirmation of that once the real equip bug (InventoryManager.
+ * isLoadoutEffect, consumables.json) is fixed too -- a charm card now
+ * reads the same as a potion card, both tagged Consumable, rather than
+ * looking like a different, unexplained kind of item. Sky-toned rather
+ * than reusing brass/teal (already CraftedPill/SetPill's colors) so all
+ * three pills stay visually distinct from each other when a card
+ * happens to show more than one.
+ */
+function ConsumablePill() {
+  return (
+    <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)' }}>
+      consumable
+    </span>
+  );
+}
+
 /** Marks a crafted instance -- orthogonal to rarity, which still governs power tier. */
 function CraftedPill() {
   return (
@@ -480,6 +502,7 @@ function ConsumableInfoCard({
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
             <div className="item-card-meta-row">
               <RarityPill rarity={def.rarity} />
+              <ConsumablePill />
               <span className="tiny muted">×{count}</span>
             </div>
           </div>
@@ -499,6 +522,7 @@ function ConsumableInfoCard({
               </div>
             </div>
             <RarityPill rarity={def.rarity} />
+            <ConsumablePill />
             <div className="tiny muted" style={{ marginTop: 6 }}>{def.description}</div>
             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
               <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
@@ -582,6 +606,7 @@ function ConsumableSlotCard({
               <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
               <div className="item-card-meta-row">
                 <RarityPill rarity={def.rarity} />
+                <ConsumablePill />
                 <span className="tiny muted">on {hero.name}</span>
               </div>
             </div>
@@ -601,6 +626,7 @@ function ConsumableSlotCard({
                 </div>
               </div>
               <RarityPill rarity={def.rarity} />
+              <ConsumablePill />
               <div className="tiny muted" style={{ marginTop: 6 }}>{def.description}</div>
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
@@ -1303,9 +1329,15 @@ export function EquipmentPanel() {
           </div>
         )}
       </div>
-      {state.stash.length === 0 && <p className="small muted">Nothing spare. Loot drops from successful quests.</p>}
+      {/* Patch 0404, direct report: unlike the "Consumables" section's own
+          subtext just above (which already carries the .subtitle class'
+          filled plaque background, .panel .subtitle in app.css), these two
+          Stash empty-state lines were plain muted text with nothing behind
+          them, reading as hard to make out against the tab-scene art. Same
+          fix, reusing the existing convention rather than a new rule. */}
+      {state.stash.length === 0 && <p className="small muted subtitle">Nothing spare. Loot drops from successful quests.</p>}
       {state.stash.length > 0 && filteredStash.length === 0 && (
-        <p className="small muted">Nothing in the stash matches that filter.</p>
+        <p className="small muted subtitle">Nothing in the stash matches that filter.</p>
       )}
       <div className="item-card-grid gear-card-grid">
         {filteredStash.map((item) => (

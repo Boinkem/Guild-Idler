@@ -93,6 +93,23 @@ export class GameEngine {
   private queuedResults: QuestResult[] = [];
   lastRaidResult: RaidResult | null = null;
   /**
+   * Patch 0404, direct bug report: a guidance banner (e.g. the durability/
+   * treat "explainer" topics) firing the instant its condition goes true
+   * -- with zero awareness of whether a QuestResultModal/RaidResultModal
+   * is currently the thing actually on screen -- read as broken two
+   * different ways at once: the banner could pop up layered over a result
+   * card the player was still mid-reading (regardless of which nav tab
+   * was behind it), and a topic with two messages fires as two back-to-
+   * back banners, which read as "the same notification firing twice"
+   * rather than two distinct lines. Anything reportGuidance is asked to
+   * show while a result card is up gets queued here instead of fired
+   * immediately; dismissResult()/dismissRaidResult() flush it the moment
+   * neither card is showing anymore, so the player actually sees it
+   * against whatever they're looking at next, not whatever they happened
+   * to be looking at the instant the underlying condition became true.
+   */
+  private queuedGuidance: GuidanceTopic[] = [];
+  /**
    * Set by hatchEgg, cleared by dismissHatchedPet -- same transient
    * (unsaved), read-then-cleared shape as lastResult/lastRaidResult. Feeds
    * HatchRevealModal, the "the egg hatched into 'xx'" card shown the
@@ -306,6 +323,24 @@ export class GameEngine {
    *  for, unlike the vast majority of other say() call sites (routine
    *  action confirmations), which stay Toast-only. */
   private reportGuidance(topics: GuidanceTopic[]) {
+    if (topics.length === 0) return;
+    // Patch 0404: hold off entirely while a result card is the thing
+    // actually on screen -- see queuedGuidance's own comment above for
+    // why. A topic is still marked seen in GuidanceManager.checkAll the
+    // instant its condition goes true either way (that bookkeeping isn't
+    // display-dependent), so this only ever delays WHEN it's shown, never
+    // whether it eventually is.
+    if (this.lastResult !== null || this.lastRaidResult !== null) {
+      this.queuedGuidance.push(...topics);
+      return;
+    }
+    this.fireGuidance(topics);
+  }
+
+  /** The actual display side of reportGuidance, split out so
+   *  dismissResult()/dismissRaidResult() can flush anything that queued
+   *  up behind a result card without duplicating this logic. */
+  private fireGuidance(topics: GuidanceTopic[]) {
     for (const topic of topics) {
       // The scripted tour's own final beat -- shown as a standalone modal
       // rather than a toast easy to miss, since this is specifically the
@@ -388,6 +423,23 @@ export class GameEngine {
    *  GameState.pendingQuestBoardIntro's own comment. */
   dismissQuestBoardIntro() {
     this.state.pendingQuestBoardIntro = false;
+    // Patch 0404 -- see GameState.questBoardIntroTabShimmer's own comment.
+    // Set on EITHER dismiss button (Close or View Quest Board), not just
+    // Close: even a player who clicks straight through to the board still
+    // benefits from the tab shimmering if they wander off it and come
+    // back, same as any other first-time nav cue in this game.
+    this.state.questBoardIntroTabShimmer = true;
+    void this.saveNow();
+  }
+
+  /** Patch 0404. Clears the Quests nav tab's post-intro shimmer the first
+   *  time the player actually switches to it after dismissing
+   *  QuestBoardIntroModal -- same shape as acknowledgeEquipmentTabVisit/
+   *  acknowledgeHeroesTabVisit below, called from MenuWindow's existing
+   *  per-tab-switch effect. */
+  acknowledgeQuestsTabAfterIntro() {
+    if (!this.state.questBoardIntroTabShimmer) return;
+    this.state.questBoardIntroTabShimmer = false;
     void this.saveNow();
   }
 
@@ -608,7 +660,21 @@ export class GameEngine {
     // why a batch of same-tick completions can leave more than one
     // waiting here.
     this.lastResult = this.queuedResults.shift() ?? null;
+    this.flushQueuedGuidanceIfClear();
     this.notify();
+  }
+
+  /** Patch 0404. Fires anything reportGuidance held back while a result
+   *  card was up -- called after both dismissResult and dismissRaidResult
+   *  advance, so this only actually flushes once NEITHER card is showing
+   *  anymore (a queued raid banner shouldn't jump the queue in front of a
+   *  quest result still waiting behind it, or vice versa). */
+  private flushQueuedGuidanceIfClear() {
+    if (this.lastResult !== null || this.lastRaidResult !== null) return;
+    if (this.queuedGuidance.length === 0) return;
+    const pending = this.queuedGuidance;
+    this.queuedGuidance = [];
+    this.fireGuidance(pending);
   }
 
   /**
@@ -629,6 +695,7 @@ export class GameEngine {
 
   dismissRaidResult() {
     this.lastRaidResult = null;
+    this.flushQueuedGuidanceIfClear();
     this.notify();
   }
 

@@ -244,6 +244,7 @@ export function createInitialState(now = Date.now()): GameState {
     harvestUnlocked: false,
     pendingHarvestSpotlight: false,
     pendingQuestBoardIntro: false,
+    questBoardIntroTabShimmer: false,
     overseerLevel: 0,
     harvestTraderGold: 0,
     harvestTraderGoldAt: now,
@@ -1525,6 +1526,19 @@ const MIGRATIONS: Record<number, Migration> = {
    * founderPackGranted.
    */
   69: (save) => ({ ...save, version: 70, mailbox: save.mailbox ?? [] }),
+  /**
+   * New Quest Board nav-tab shimmer flag (patch 0404) -- see its own
+   * comment in types.ts for the full trigger/clear reasoning. Straight
+   * `false` fill for every existing save, deliberately NOT derived from
+   * whether pendingQuestBoardIntro happens to be true on an old save: an
+   * existing player has necessarily already seen and dismissed that
+   * modal (or never will, if they started guided mode off), so there's
+   * no genuine "just closed the intro, hasn't looked yet" moment left to
+   * reconstruct for anyone migrating an old save -- a fresh shimmer
+   * appearing out of nowhere on an old, already-familiar guild would read
+   * as a bug, not a helpful nudge.
+   */
+  70: (save) => ({ ...save, version: 71, questBoardIntroTabShimmer: false }),
 };
 
 export const SaveManager = {

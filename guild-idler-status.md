@@ -32841,3 +32841,216 @@ a real pass confirming the badge renders correctly against the button
 label, the item-card grid lays out sensibly for a handful of mixed
 entry types, and the gold glyph fallback (💰) reads acceptably until the
 real icon art lands.
+
+### Batch: onboarding/notification polish, charm equip bug, Auction House art (patch 0404)
+```discord-update
+Dev Update | Patch 0404
+
+- Fixed Fortune and Lucky Charms doing nothing and not being equippable -- their loot-luck effect was missing entirely, now restored
+- Fixed the "Reading the Quest Board" card appearing stacked on top of a still-open quest results card
+- Fixed the durability/injury explainer notifications popping up mid-read on a result card, regardless of what tab you were actually on
+- Fixed empty Consumable slots showing a hazy, see-through background over the tab art
+- Changed animations to be on by default for every new guild
+- Changed the longer toast notifications (like item pickups) to stay onscreen longer
+- Added a "Consumable" tag to potion and charm cards, next to their rarity tag
+- Added a shimmer to the Quests tab after closing the quest board tutorial card, so it's easy to find again
+- Added new Auction House artwork (day and night)
+- Changed the Stash and Lore tab's small print to sit on a readable background plaque, matching the rest of the game
+```
+
+Direct tester report, a long list bundled into one patch -- grouped below by
+system rather than in the order reported, since several turned out to share
+one root cause once actually traced.
+
+**Charm equip bug, root cause found (`consumables.json`,
+`InventoryManager.ts`).** Reported as "can't seem to equip charms too... I
+believe they are meant to also be one-time consumables" -- correct on both
+counts. Traced to two compounding bugs, not one:
+1. Every Fortune Charm (Gold/Insight, all five tiers) and both Lucky Charms
+   shipped with a completely empty `"effect": {}` in `consumables.json` --
+   twelve entries total. The intended effect shape (`lootWeightStat`/
+   `lootWeightMultiplier`, biasing a procedural loot roll toward Gold or
+   Experience) is fully documented on `ConsumableDef.effect` itself
+   (`types.ts`, referencing the patch 0255 `gold`->`luck`/`xp`->`wisdom`
+   remap) -- the data just never carried it. Restored using that doc
+   comment's own worked examples (2x for Minor, 3.5x for the base tier) and
+   extrapolated the remaining Grand/Greater/Boundless tiers on the same
+   curve (6x/12x/999x -- 999 being the existing "full override every affix"
+   shape Boundless's own flavor text already described), plus the two
+   craft-only Lucky Charms at the Minor-equivalent 2x their own flavor text
+   ("a rough-cut equivalent to the Alchemist's own Fortune Charms") already
+   claims.
+2. `InventoryManager.isLoadoutEffect` -- the single shared gate behind both
+   equip paths (the detail-popup Equip button and the empty Consumable
+   Slot's own picker) -- never checked `lootWeightStat` at all, so even with
+   real effect data restored, a charm whose *only* effect is a loot-weight
+   bias would still have failed the check. Both fixed together; fixing only
+   one would have left the other half of the bug in place.
+
+**Guidance banner queued behind result cards (`engine.ts`).** Two related
+reports: the durability/treat "explainer" toasts appeared to "trigger
+twice," and could show up while looking at a quest result card, worded as
+if the player were already on the relevant tab ("from here you can heal and
+repair...") when they weren't. Root cause: `reportGuidance` fired the
+instant a topic's condition went true, with zero awareness of whether a
+`QuestResultModal`/`RaidResultModal` was the thing actually on screen --
+each of the topic's two messages landing as its own banner, back to back,
+read as a duplicate rather than two distinct lines once one was already
+stacked over a result card the player hadn't dismissed yet. New
+`queuedGuidance` array + `fireGuidance`/`flushQueuedGuidanceIfClear`:
+anything reportGuidance is asked to show while `lastResult`/`lastRaidResult`
+is non-null now queues instead, flushed the moment neither result card is
+showing anymore (checked from both `dismissResult` and `dismissRaidResult`,
+so a queued banner never jumps ahead of a result still waiting behind it).
+A topic is still marked seen in `GuidanceManager.checkAll` the instant its
+condition goes true either way -- this only ever delays *when* it's shown,
+never whether it eventually is. Also reworded both explainer messages
+(`guidance-topics.json`) to drop the "right here"/"here" phrasing that
+assumed the player was already looking at the target tab, which is no
+longer guaranteed to be true given the new queueing.
+
+**QuestBoardIntroModal stacking over the tutorial's own result card
+(`MenuWindow.tsx`).** Separate bug, same shape, worth its own note since it
+wasn't part of `reportGuidance` at all: `pendingQuestBoardIntro` is set
+directly by `QuestManager.resolve` (not through `say()`), the same tick the
+tutorial quest's own `QuestResult` is produced -- so the modal rendered
+immediately, stacked on top of the still-open `QuestResultModal` underneath
+it (both full-screen overlays; this one later in the DOM, so it visually
+won). That's the actual explanation for "fires after closing the tutorial
+quest results, doesn't matter what tab you're on" -- it wasn't firing
+*after*, it was firing *during*, on top. Added a `!engine.lastResult` guard
+to the render condition; React's existing re-render on `dismissResult()`
+means the modal now simply appears correctly the moment the result card
+actually clears, no separate queue needed. The modal's own "View Quest
+Board" button (`onView`, jumps straight to the Quests tab) was already
+wired correctly and needed no change -- the reported "needs a link to take
+you to the quest board" turned out to already exist; the bug was that the
+modal was unreadable/unreachable stacked behind the result card, not that
+the link was missing.
+
+**Quests tab shimmer after the intro card (`types.ts`, `attention.ts`,
+`engine.ts`, `MenuWindow.tsx`, `SaveManager.ts`).** Direct request: once
+the scripted tutorial quest resolves, the Quests nav tab's existing
+shimmer (patch 0308, tied to the tutorial offer still sitting un-sent)
+clears itself immediately, since that specific condition is now gone --
+leaving nothing drawing the eye back to the tab for a player who clicked
+Close instead of View Quest Board, or was elsewhere when the card fired.
+New `GameState.questBoardIntroTabShimmer`, same shape every other nav-
+shimmer flag in this file already uses: set true in
+`dismissQuestBoardIntro` (either button), read by `isNavTabUnread`
+(`attention.ts`) right alongside its tutorial-quest predecessor, cleared by
+a new `engine.acknowledgeQuestsTabAfterIntro()` wired into MenuWindow's
+existing per-tab-switch effect -- exact same pattern
+`hasVisitedEquipmentTab`/`hasVisitedHeroesTab` already established.
+`SAVE_VERSION` 70 -> 71, straightforward `questBoardIntroTabShimmer: false`
+fill for every existing save (an old save's own intro moment, if any, has
+necessarily already come and gone, so there's no real "just closed it"
+state to reconstruct -- a shimmer appearing out of nowhere on an old,
+familiar guild would read as a bug, not a nudge).
+
+**Empty Consumable slot haze (`app.css`).** Same root cause patch 0338
+already diagnosed and fixed for empty gear slots -- `.item-card.empty`'s
+blanket opacity dims the WHOLE element, including its own solid color-mix
+background rectangle, which against busy tab-scene art reads as a
+translucent haze rather than a subtly dimmed card. `.consumable-empty` was
+still at the older 0.85-opacity treatment, not yet given the "full opacity
++ transparent background" fix gear slots got. Same fix applied here: full
+opacity, background dropped to transparent, brass border alone carries the
+"this one's clickable" signal.
+
+**Animations on by default (`settings.ts`).** `DEFAULT_SETTINGS.animationSpeed`
+was already `1` and `reduceMotion` already `false` -- the actual bug was one
+level up: `SettingsStore.load()` seeded a brand-new save's `reduceMotion`
+from the browser's own `prefers-reduced-motion` media query, which the
+existing code comment on this exact function already documented as "a
+genuinely common default on some platforms... not always chosen for a
+reason that has anything to do with wanting *this* game's animations
+suppressed." `prefersReducedMotionByDefault()` now unconditionally returns
+`false` -- a fresh guild's animations are on, full stop, no OS query
+consulted. Left as a stub rather than removing every call site outright,
+since `SettingsStore.load`'s two branches still reference it; a pure
+`DEFAULT_SETTINGS` spread would read identically today given the stub's
+new return value, but the smaller diff was preferred for this pass.
+
+**Toast duration (`Toast.tsx`).** Direct follow-up: the long-toast window
+(guidance topics, banner-worthy messages -- already the mechanism behind
+the reported "picked up a Strength Potion" toast, already getting the
+longer of the two windows) still read as too short at 6.5s. Bumped to 9s.
+The existing pause-on-hover/manual-close behavior already covers anyone
+who needs longer still.
+
+**Consumable tag pill (`EquipmentPanel.tsx`).** New `ConsumablePill`
+component, same small-pill convention as the existing `CraftedPill`/
+`SetPill`, sky-toned to stay visually distinct from both. Wired into both
+card and modal views of `ConsumableInfoCard` and `ConsumableSlotCard` --
+every place a consumable's `RarityPill` already renders.
+
+**Stash/Lore subtext readability (`EquipmentPanel.tsx`, `LorePanel.tsx`).**
+Both reused the existing `.panel .subtitle` plaque-background rule
+(already used one section up, on the Consumables subtext in the same
+panel) rather than a new CSS rule -- the Stash empty-state lines and the
+Lore tab's "N more stories out there" line were both plain muted text with
+nothing behind them, sitting directly over each tab's own scene art.
+
+**Auction House art (`public/lore/panels/auction-house.jpg` +
+`bright/auction-house.jpg`).** Day/night key art dropped in at the exact
+path `AuctionHousePanel.tsx` has been reading from since patch 0401 --
+same "renders once present, silently absent until then" convention every
+other panel background already follows, so no code change was needed
+beyond adding the files themselves.
+
+**Black Market vs. Auction House stock -- confirmed already separate, no
+change made.** Checked `ShopManager.ts` and `auctionHouse.ts` directly
+rather than assuming: the Black Market runs its own entirely self-contained
+stock/refresh/purchase system (`state.blackMarket`), with no shared pool,
+code path, or data source with the Auction House (which doesn't have a
+live listings/stock system at all yet -- see patch 0399's `AH_ENABLED`
+gate, still off). A player reselling a Black Market purchase on the AH once
+it's live needs no special-casing either -- AH trading (once built) will
+operate on any owned `EquipmentItem` instance regardless of where it came
+from, the same way every other cross-system item movement in this game
+already works. Nothing to fix; recorded here so the concern doesn't get
+re-raised as a suspected bug later.
+
+**Deliberately NOT built this patch, scoped out on purpose:**
+- **In-panel guided-mode spotlighting for Heroes health/conditions/healing
+  and Equipment repair.** The request ("clicking the Heroes Tab should
+  guide you on clicking the buttons... maybe using the same System as the
+  background dimming/highlight system") asks for the existing
+  `OnboardingTour` spotlight to work on elements *inside* a panel (a
+  specific Heal/Repair button), not just nav tabs -- `OnboardingTour`
+  today only knows how to highlight a tab id (see its `steps` shape,
+  `pendingHatcherySpotlight`/`pendingPeddlerSpotlight`'s existing reuse of
+  it). Generalizing it to target an arbitrary in-panel element needs real
+  design work (a ref/selector API, highlight-box positioning relative to
+  scrolled content, a decision on whether it should also demand a click
+  before advancing) that's too large to responsibly rush into this batch.
+  The existing `first_durability_explainer`/`first_treat_explainer`
+  toasts (improved this same patch, see above) remain the actual guided-
+  mode help for this today.
+- **Red "?" tab-info button.** Doesn't exist anywhere in the current
+  codebase -- confirmed by search, not assumed. Needs its own design pass
+  (placement on each panel's header, and what content it actually shows
+  per tab) before a Guide Me tour step can point at it; building the
+  button and the tour step in the same rushed pass risked getting both
+  wrong.
+
+**Verified for real, not just typechecked:** `npm install`, `npx tsc
+--noEmit` (clean), and a full `npx vite build --config vite.web.config.ts`
+(clean) all ran successfully in this environment against the complete
+change set. Beyond that: a direct runtime test via `tsx` confirmed all
+twelve previously-empty charm entries now resolve real `lootWeightStat`/
+`lootWeightMultiplier` data and pass `InventoryManager.isLoadoutEffect`,
+alongside two control checks (an ordinary potion still passes, an inert
+item like a Pet Treat still correctly fails). The new `70 -> 71` save
+migration was run directly against a synthetic pre-0404 save object and
+confirmed to land on version 71 with `questBoardIntroTabShimmer: false`.
+
+**Not verified:** no real browser/Electron window in this environment, so
+nothing here has actually been clicked through -- worth a real pass
+confirming the ConsumablePill doesn't crowd the existing meta-row on a
+narrow card, the Quests tab shimmer visually reads the same as its
+tutorial-quest predecessor, the new Auction House art crops sensibly
+behind the panel's existing overlay content, and that a genuinely guided
+new-player run no longer sees the board-intro card stacked over a result
+card in practice.

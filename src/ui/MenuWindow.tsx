@@ -367,6 +367,10 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
     // comments.
     if (tab === 'equipment') engine.acknowledgeEquipmentTabVisit();
     if (tab === 'heroes') engine.acknowledgeHeroesTabVisit();
+    // Patch 0404: clears the Quests tab's post-QuestBoardIntroModal
+    // shimmer the first time the player actually lands back on it -- see
+    // engine.acknowledgeQuestsTabAfterIntro's own comment.
+    if (tab === 'quests') engine.acknowledgeQuestsTabAfterIntro();
   }, [engine, tab]);
   // Nav gold/renown count up to a new value rather than snapping -- the
   // numeric equivalent of the .bar fill transition. No animation on first
@@ -752,8 +756,22 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           when guide mode is on, but the check is repeated here too, same
           defense-in-depth pattern the tour's own render guard already
           uses, in case guide mode gets turned off in Settings between the
-          flag arming and this actually rendering. */}
-      {engine.state.guildName !== '' && engine.state.guidedOnboarding && engine.state.pendingQuestBoardIntro && (
+          flag arming and this actually rendering.
+          Patch 0404, direct bug report: pendingQuestBoardIntro is set the
+          same tick QuestManager.resolve produces the tutorial quest's own
+          QuestResult -- with no `!engine.lastResult` guard here, this
+          modal used to render immediately stacked on top of that still-
+          showing QuestResultModal (both full-screen overlays, this one
+          later in the DOM so it visually wins), which read as "fires
+          after closing the results, regardless of tab" once the player
+          worked through both. QuestResultModal.tsx and this render in the
+          same parent, so simply waiting for lastResult to clear first --
+          same "state, not a timer" gate every other queued-behind-a-
+          result-card fix in this patch already uses -- is enough; no
+          separate queue needed here since a React re-render already
+          follows dismissResult() for free. */}
+      {engine.state.guildName !== '' && engine.state.guidedOnboarding && !engine.lastResult
+        && engine.state.pendingQuestBoardIntro && (
         <QuestBoardIntroModal
           onView={() => { setTab('quests'); engine.dismissQuestBoardIntro(); }}
           onClose={() => engine.dismissQuestBoardIntro()}

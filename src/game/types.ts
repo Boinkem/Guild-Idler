@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 70;
+export const SAVE_VERSION = 71;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2794,6 +2794,27 @@ export interface GameState {
    * dismissChainDiscovery exactly.
    */
   pendingQuestBoardIntro: boolean;
+  /**
+   * Patch 0404, direct report: once the scripted tutorial quest resolves,
+   * the Quests nav tab's own pre-existing shimmer (isNavTabUnread in
+   * attention.ts, patch 0308 -- "the tutorial quest is still sitting
+   * un-sent on the board") clears itself immediately, since that
+   * condition was specifically about the tutorial offer, which is now
+   * gone. That left nothing drawing the player's eye back to the tab
+   * after closing QuestBoardIntroModal -- the modal's own "View Quest
+   * Board" button already jumps there directly, but a player who instead
+   * clicked Close (or was on a different tab entirely when the modal
+   * fired) had no remaining cue that the board was worth a look. Set true
+   * the moment QuestBoardIntroModal is dismissed (either button --
+   * GameEngine.dismissQuestBoardIntro), cleared the first time the player
+   * actually switches to the Quests tab afterward (MenuWindow's existing
+   * per-tab-switch effect, via a new engine.acknowledgeQuestsTabAfterIntro,
+   * same shape as hasVisitedEquipmentTab/hasVisitedHeroesTab just below).
+   * Read directly by isNavTabUnread, same "plain live boolean, no
+   * notification-log plumbing needed" shape its own tutorial-quest check
+   * already uses just above it in that function.
+   */
+  questBoardIntroTabShimmer: boolean;
   /**
    * Patch 0308. Set the instant the scripted tutorial quest resolves
    * (QuestManager.resolve's own isTutorialQuest branch) -- stays true

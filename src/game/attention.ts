@@ -116,6 +116,11 @@ export function isNavTabUnread(state: GameState, tab: string): boolean {
   if (tab === 'quests' && Object.values(state.questBoards).some(
     (board) => board?.some((offer) => offer.id === TUTORIAL_QUEST_ID),
   )) return true;
+  // Patch 0404: picks up right where the tutorial-quest check just above
+  // leaves off -- that one clears itself the moment the tutorial offer is
+  // sent/resolved, which is exactly when QuestBoardIntroModal fires and
+  // this flag arms. See GameState.questBoardIntroTabShimmer's own comment.
+  if (tab === 'quests' && state.questBoardIntroTabShimmer) return true;
   if (isTabUnread(state, tab)) return true;
   return (TAB_SUBTABS[tab] ?? []).some((sub) => isTabUnread(state, tab, sub));
 }
