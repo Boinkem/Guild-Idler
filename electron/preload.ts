@@ -62,6 +62,15 @@ const api = {
     ipcRenderer.invoke('steam:downloadGuildPowerEntries', scope, start, end),
   getLocalSteamId: (): Promise<string | null> => ipcRenderer.invoke('steam:getLocalSteamId'),
   /**
+   * Auction House Steam auth (patch 0405) -- see main.ts's own
+   * steam:getAuthTicketForWebApi handler for the full design and the
+   * GetAuthSessionTicket-vs-GetAuthTicketForWebApi correction. Returns a
+   * hex-encoded ticket string ready to hand to the AH backend, or `null`
+   * if Steam can't answer at all.
+   */
+  getAuthTicketForWebApi: (identity: string): Promise<string | null> =>
+    ipcRenderer.invoke('steam:getAuthTicketForWebApi', identity),
+  /**
    * The one main-to-renderer direction in this bridge -- everything else is
    * the renderer asking main to do something. This lets the tray's "Show
    * Guild Hall" item tell the already-running renderer to switch modes,

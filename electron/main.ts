@@ -1131,6 +1131,53 @@ ipcMain.handle('steam:downloadGuildPowerEntries', async (_e, scope: 'global' | '
 });
 
 /**
+ * Auction House Steam auth (patch 0405) -- see guild-idler-status.md's
+ * Auction House entry for the full design. The `auth` module wasn't
+ * added to the fork by any Guildbound patch -- it was already present
+ * in the vendored source (electron/steamworks-leaderboards/src/api/
+ * auth.rs) as part of the upstream steamworks.js fork this project
+ * already builds for achievements/DLC/leaderboards, just never called
+ * from anywhere in this codebase until now. A real release rebuild
+ * of that same fork (confirmed directly in a Linux dev environment,
+ * not assumed) produces a `.node` binary that genuinely exports
+ * `auth.getAuthTicketForWebApi` -- no new native code, no new build
+ * step beyond the rebuild this project already knows how to run.
+ *
+ * IMPORTANT, per Valve's own Steamworks docs (confirmed directly, not
+ * assumed from the original design doc, which had this wrong):
+ * `GetAuthSessionTicket` is NOT valid for `ISteamUserAuth/
+ * AuthenticateUserTicket` Web API verification -- Valve's own reference
+ * says so explicitly. `GetAuthTicketForWebApi` (used here) is the
+ * correct call for exactly this "hand a ticket to our own backend"
+ * flow.
+ *
+ * Returns the ticket as a hex-encoded string -- the exact format
+ * Valve's AuthenticateUserTicket Web API expects the ticket parameter
+ * in -- rather than passing the SDK's own Ticket object/Buffer across
+ * the IPC boundary, same "resolve it fully on this side, don't hand a
+ * native handle across the boundary" reasoning steam:
+ * downloadGuildPowerEntries's own comment already gives for the
+ * leaderboard scope enum. `identity` should be a short, stable string
+ * naming the consuming service (Valve's own best-practice
+ * recommendation) -- the Auction House backend uses 'guildbound-ah'.
+ * Returns `null` if Steam can't answer at all (not running, ticket
+ * request failed, or timed out) -- same "null means couldn't check"
+ * convention `steam:isDlcOwned` already established, never conflated
+ * with a real failure response from the backend itself.
+ */
+ipcMain.handle('steam:getAuthTicketForWebApi', async (_e, identity: string) => {
+  if (!steamClient) return null;
+  try {
+    const ticket = await steamClient.auth.getAuthTicketForWebApi(identity);
+    const hex = ticket.getBytes().toString('hex');
+    return hex;
+  } catch (err) {
+    console.log('[steam] getAuthTicketForWebApi failed:', err);
+    return null;
+  }
+});
+
+/**
  * Local player's own SteamID64, as a string (same convention every
  * leaderboard entry already uses, for the same precision reason) --
  * patch 0382, needed so the Leaderboard UI can actually tell which row

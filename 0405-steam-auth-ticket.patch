@@ -1,0 +1,444 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index 1311f41..1d5100c 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -1130,6 +1130,53 @@ ipcMain.handle('steam:downloadGuildPowerEntries', async (_e, scope: 'global' | '
+   }
+ });
+ 
++/**
++ * Auction House Steam auth (patch 0405) -- see guild-idler-status.md's
++ * Auction House entry for the full design. The `auth` module wasn't
++ * added to the fork by any Guildbound patch -- it was already present
++ * in the vendored source (electron/steamworks-leaderboards/src/api/
++ * auth.rs) as part of the upstream steamworks.js fork this project
++ * already builds for achievements/DLC/leaderboards, just never called
++ * from anywhere in this codebase until now. A real release rebuild
++ * of that same fork (confirmed directly in a Linux dev environment,
++ * not assumed) produces a `.node` binary that genuinely exports
++ * `auth.getAuthTicketForWebApi` -- no new native code, no new build
++ * step beyond the rebuild this project already knows how to run.
++ *
++ * IMPORTANT, per Valve's own Steamworks docs (confirmed directly, not
++ * assumed from the original design doc, which had this wrong):
++ * `GetAuthSessionTicket` is NOT valid for `ISteamUserAuth/
++ * AuthenticateUserTicket` Web API verification -- Valve's own reference
++ * says so explicitly. `GetAuthTicketForWebApi` (used here) is the
++ * correct call for exactly this "hand a ticket to our own backend"
++ * flow.
++ *
++ * Returns the ticket as a hex-encoded string -- the exact format
++ * Valve's AuthenticateUserTicket Web API expects the ticket parameter
++ * in -- rather than passing the SDK's own Ticket object/Buffer across
++ * the IPC boundary, same "resolve it fully on this side, don't hand a
++ * native handle across the boundary" reasoning steam:
++ * downloadGuildPowerEntries's own comment already gives for the
++ * leaderboard scope enum. `identity` should be a short, stable string
++ * naming the consuming service (Valve's own best-practice
++ * recommendation) -- the Auction House backend uses 'guildbound-ah'.
++ * Returns `null` if Steam can't answer at all (not running, ticket
++ * request failed, or timed out) -- same "null means couldn't check"
++ * convention `steam:isDlcOwned` already established, never conflated
++ * with a real failure response from the backend itself.
++ */
++ipcMain.handle('steam:getAuthTicketForWebApi', async (_e, identity: string) => {
++  if (!steamClient) return null;
++  try {
++    const ticket = await steamClient.auth.getAuthTicketForWebApi(identity);
++    const hex = ticket.getBytes().toString('hex');
++    return hex;
++  } catch (err) {
++    console.log('[steam] getAuthTicketForWebApi failed:', err);
++    return null;
++  }
++});
++
+ /**
+  * Local player's own SteamID64, as a string (same convention every
+  * leaderboard entry already uses, for the same precision reason) --
+diff --git a/electron/preload.ts b/electron/preload.ts
+index 250d7c3..f3d22c8 100644
+--- a/electron/preload.ts
++++ b/electron/preload.ts
+@@ -61,6 +61,15 @@ const api = {
+   ): Promise<{ steamId64: string; name: string; globalRank: number; score: number }[] | null> =>
+     ipcRenderer.invoke('steam:downloadGuildPowerEntries', scope, start, end),
+   getLocalSteamId: (): Promise<string | null> => ipcRenderer.invoke('steam:getLocalSteamId'),
++  /**
++   * Auction House Steam auth (patch 0405) -- see main.ts's own
++   * steam:getAuthTicketForWebApi handler for the full design and the
++   * GetAuthSessionTicket-vs-GetAuthTicketForWebApi correction. Returns a
++   * hex-encoded ticket string ready to hand to the AH backend, or `null`
++   * if Steam can't answer at all.
++   */
++  getAuthTicketForWebApi: (identity: string): Promise<string | null> =>
++    ipcRenderer.invoke('steam:getAuthTicketForWebApi', identity),
+   /**
+    * The one main-to-renderer direction in this bridge -- everything else is
+    * the renderer asking main to do something. This lets the tray's "Show
+diff --git a/electron/steamworks-leaderboards/.gitignore b/electron/steamworks-leaderboards/.gitignore
+new file mode 100644
+index 0000000..a67c1ab
+--- /dev/null
++++ b/electron/steamworks-leaderboards/.gitignore
+@@ -0,0 +1,8 @@
++# Rust build output and native binaries -- previously unprotected here
++# (no .gitignore existed in this subfolder at all before patch 0405),
++# a real gap given `target/` alone can run to gigabytes. The compiled
++# platform binaries under dist/ are already covered by the root
++# .gitignore's bare `dist` pattern; this covers the rest.
++target/
++*.node
++node_modules/
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 6c614f2..46ec50e 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7821,8 +7821,12 @@ pass (same caveat as the two entries above).
+   (TestingPanel.tsx) are how the whole claim flow, including the Gold
+   Storage Cap block, gets exercised for real before that exists.
+ 
+-  **Genuine blockers (infra, not design):** Steam session-ticket
+-  verification on the backend; the row-locked buyout transaction
++  **Genuine blockers (infra, not design) -- shrunk considerably, patch
++  0405.** Steam session-ticket verification is now built end to end
++  (client ticket fetch, backend verification route) -- what's left is a
++  real Steam Web API key and a Windows rebuild of the existing fork to
++  confirm it ships there too, not new code. See that patch's own log
++  entry. Still genuinely open: the row-locked buyout transaction
+   (approach scoped, not built); the Postgres backup routine (hardware --
+   a backup drive plus a separate external data drive -- already exists on
+   the server, the automated dump/rotation script doesn't).
+@@ -33054,3 +33058,96 @@ tutorial-quest predecessor, the new Auction House art crops sensibly
+ behind the panel's existing overlay content, and that a genuinely guided
+ new-player run no longer sees the board-intro card stacked over a result
+ card in practice.
++
++### Steam session-ticket auth: client fetch + backend verification, correcting the original design doc's wrong API call (patch 0405)
++```discord-update
++Dev Update | Patch 0405
++
++- More Auction House groundwork, entirely behind the scenes -- nothing changes for players yet
++```
++
++**Design doc correction, confirmed directly against Valve's own docs, not
++assumed.** The original design named `GetAuthSessionTicket` for the
++client-side ticket, verified server-side via `ISteamUserAuth/
++AuthenticateUserTicket`. That combination doesn't work -- Valve's own
++`GetAuthSessionTicket` reference page states outright: *"This API can not
++be used to create a ticket for use by the ISteamUserAuth/
++AuthenticateUserTicket Web API. Use the ISteamUser::GetAuthTicketForWebApi
++call instead."* Two different calls for two different purposes -- this
++patch uses the correct one throughout.
++
++**The native side turned out to already exist.** Checked
++`electron/steamworks-leaderboards/src/api/auth.rs` (the vendored fork
++already used for leaderboards/achievements/DLC) before assuming any new
++Rust work was needed -- `get_auth_ticket_for_web_api` was already fully
++implemented there, part of the upstream fork all along, just never called
++from anywhere in this codebase. Installed a Rust toolchain and ran a real
++release build against the actual vendored source (confirmed via `cargo
++check` succeeding, then a full `node build.js --release` producing a real
++`.node` binary) -- loaded that binary directly in Node and confirmed
++`auth.getAuthTicketForWebApi` is a genuine callable export, not just a
++type declaration. No new native code, no new build step beyond the
++rebuild this project already knows how to run.
++
++**Client side:**
++- `electron/main.ts` -- new `steam:getAuthTicketForWebApi` IPC handler,
++  same "no `steamClient`, return `null`, log and move on" shape every
++  other Steam call here already uses. Resolves the ticket to a
++  hex-encoded string (the exact format `AuthenticateUserTicket` expects)
++  rather than passing the SDK's own `Ticket` object across the IPC
++  boundary.
++- `preload.ts` + the `window.littleKnight` global type
++  (`SaveManager.ts`) -- bridge exposure, same pattern as
++  `isDlcOwned`/`getLocalSteamId`.
++- `auctionHouse.ts` -- new `fetchAuctionHouseAuthTicket()`. Deliberately
++  not called from anywhere yet -- there's no backend route to send it to
++  until real listings exist (core listings + buyout, still not built).
++  This is the client-side half, ready ahead of that.
++
++**Backend side (`server/`):**
++- New `steamAuth.ts` -- `verifySteamTicket()` calls Steam's real
++  `ISteamUserAuth/AuthenticateUserTicket` Web API, never throws (every
++  failure mode, including a VAC/publisher ban, comes back as
++  `{ ok: false, error }`).
++- New `POST /auth/verify` route (`index.ts`) -- takes `{ ticket }`,
++  returns the verified SteamID on success. Deliberately does NOT issue a
++  session token yet -- whether the client re-sends a fresh ticket per
++  request or the backend issues a short-lived session after one
++  verification is still an open question, not decided here.
++- `config.ts` -- new `steamWebApiKey`/`steamAppId` fields, defaulting the
++  App ID to `5143490` (the real registered App ID already on record) even
++  if unset. `.env.example` documents both, marking the Web API key as a
++  real production secret, never to be logged or sent to the client.
++- Automatically inherits the existing `AH_ENABLED` off-gate -- `/auth/
++  verify` isn't `/health`, so it correctly 503s while `AH_ENABLED=false`,
++  same as every other non-health route, with no special-casing needed.
++
++**Gap closed in passing:** `electron/steamworks-leaderboards/` had no
++`.gitignore` of its own at all -- `target/` (Rust build output, can run
++to gigabytes) and any locally-built `.node` file had no protection
++against being accidentally committed. Added one. The compiled platform
++binaries under `dist/` were already covered by the root `.gitignore`'s
++bare `dist` pattern; this covers the rest.
++
++**Verified for real, further than "it compiles":** `npx tsc --noEmit`
++clean on both the client and `server/`, a full `vite build` clean. Beyond
++that, real runtime tests against the actual compiled server: `/auth/
++verify` with no Web API key configured correctly refuses with a clear
++error; with a fake key set, the route made a genuine outbound HTTPS call
++to `api.steampowered.com` -- not mocked, not blocked by this
++environment's network policy -- and got back a real `403` from Steam's
++own servers, twice, consistently. That's real proof the entire network
++path works end to end; only a genuine key and a genuine ticket are
++missing now, neither of which this environment can produce.
++
++**Not verified, and can't be here:** no Windows rebuild of the fork was
++possible in this environment -- same limitation patch 0383's leaderboard
++work hit, resolved the same way it was resolved then (a real Windows
++build, done separately). Given it's the identical source tree already
++producing a working Windows leaderboard binary, `auth` should come along
++for free on the next rebuild, but that's an expectation, not a confirmed
++fact, until it's actually rebuilt there. No real Steam client, real
++ticket, or real Web API key exists in this environment either -- the
++`403` result above proves connectivity, not that a *valid* ticket would
++be accepted; that needs a live Steam session and a real key, both only
++available on your end.
+diff --git a/server/.env.example b/server/.env.example
+index 5be683d..71ae7f3 100644
+--- a/server/.env.example
++++ b/server/.env.example
+@@ -16,3 +16,14 @@ PORT=4000
+ # Not used yet -- wired in at the "core listings + buyout" build step,
+ # once Postgres is actually installed on the host.
+ # DATABASE_URL=postgres://user:pass@localhost:5432/guildbound_ah
++
++# Required for /auth/verify to work at all (patch 0405) -- a real Steam
++# Web API key, generated via the Steamworks partner site. NOT the same
++# thing as the App ID below. A production secret -- never commit a real
++# value here, never log it, never send it to the client.
++# STEAM_WEB_API_KEY=
++
++# GuildBound's real registered App ID. Defaults to 5143490 in code (see
++# src/config.ts's STEAM_APP_ID_DEFAULT) even if this line is missing --
++# only set it here if that ever changes.
++# STEAM_APP_ID=5143490
+diff --git a/server/src/config.ts b/server/src/config.ts
+index d93f25e..ca7906b 100644
+--- a/server/src/config.ts
++++ b/server/src/config.ts
+@@ -1,8 +1,21 @@
+ export interface AppConfig {
+   port: number;
+   ahEnabled: boolean;
++  /**
++   * Steam Web API key -- a real production secret, generated via the
++   * Steamworks partner site, never the same thing as the App ID. Needed
++   * to call ISteamUserAuth/AuthenticateUserTicket. Empty string (not
++   * undefined) when unset, so every call site can check truthiness the
++   * same simple way rather than juggling `string | undefined`.
++   */
++  steamWebApiKey: string;
++  /** GuildBound's real App ID (5143490, per guild-idler-status.md) --
++   *  required alongside the ticket on every AuthenticateUserTicket call. */
++  steamAppId: string;
+ }
+ 
++export const STEAM_APP_ID_DEFAULT = '5143490';
++
+ function parseBool(value: string | undefined, fallback: boolean): boolean {
+   if (value === undefined) return fallback;
+   return value.trim().toLowerCase() === 'true';
+@@ -22,5 +35,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+   return {
+     port: Number(env.PORT ?? 4000),
+     ahEnabled: parseBool(env.AH_ENABLED, false),
++    steamWebApiKey: env.STEAM_WEB_API_KEY?.trim() ?? '',
++    steamAppId: env.STEAM_APP_ID?.trim() || STEAM_APP_ID_DEFAULT,
+   };
+ }
+diff --git a/server/src/index.ts b/server/src/index.ts
+index be8e549..817cfba 100644
+--- a/server/src/index.ts
++++ b/server/src/index.ts
+@@ -1,5 +1,6 @@
+ import Fastify from 'fastify';
+ import { loadConfig } from './config.js';
++import { verifySteamTicket } from './steamAuth.js';
+ 
+ const config = loadConfig();
+ const app = Fastify({ logger: true });
+@@ -16,6 +17,35 @@ app.get('/health', async () => ({
+   mode: config.ahEnabled ? 'online' : 'offline',
+ }));
+ 
++/**
++ * Steam ticket verification (patch 0405) -- the one genuine remaining
++ * blocker from the Auction House build order. Takes the hex-encoded
++ * ticket the client got via GetAuthTicketForWebApi (see
++ * auctionHouse.ts's fetchAuctionHouseAuthTicket) and verifies it against
++ * Steam's real Web API. Returns a verified SteamID on success.
++ *
++ * Deliberately does NOT issue a session token yet -- what happens after
++ * verification (a short-lived signed session vs. re-verifying a fresh
++ * ticket on every request) is still an open design question, noted in
++ * guild-idler-status.md's Auction House entry rather than decided here.
++ * This route is scoped to exactly what its name says: verify a ticket,
++ * nothing more.
++ */
++app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) => {
++  const ticket = request.body?.ticket;
++  if (!ticket || typeof ticket !== 'string') {
++    reply.code(400);
++    return { ok: false, error: 'Missing "ticket" in request body.' };
++  }
++
++  const result = await verifySteamTicket(config, ticket);
++  if (!result.ok) {
++    reply.code(401);
++    return result;
++  }
++  return result;
++});
++
+ /**
+  * Off-state gate. No real AH routes exist yet (core listings/buyout is a
+  * later build step -- see guild-idler-status.md) -- this hook is here so
+@@ -33,6 +63,7 @@ app.addHook('onRequest', async (request, reply) => {
+   });
+ });
+ 
++
+ app
+   .listen({ port: config.port, host: '0.0.0.0' })
+   .then(() => {
+diff --git a/server/src/steamAuth.ts b/server/src/steamAuth.ts
+new file mode 100644
+index 0000000..f6462df
+--- /dev/null
++++ b/server/src/steamAuth.ts
+@@ -0,0 +1,66 @@
++import { AppConfig } from './config.js';
++
++export interface SteamAuthResult {
++  ok: boolean;
++  steamId?: string;
++  error?: string;
++}
++
++const STEAM_WEB_API_BASE = 'https://api.steampowered.com';
++const AUTH_TIMEOUT_MS = 8000;
++
++/**
++ * Verifies a hex-encoded ticket (from the client's
++ * GetAuthTicketForWebApi call -- see electron/main.ts's own
++ * steam:getAuthTicketForWebApi handler) against Steam's real
++ * ISteamUserAuth/AuthenticateUserTicket Web API. Returns the verified
++ * SteamID on success.
++ *
++ * IMPORTANT, per Valve's own docs: this endpoint only accepts a ticket
++ * from GetAuthTicketForWebApi, NOT GetAuthSessionTicket -- the two are
++ * not interchangeable. See the client-side handler's own comment for
++ * the full correction from the original design doc.
++ *
++ * Never throws -- every failure mode (missing key, missing ticket,
++ * network failure, a real rejection from Steam, a VAC/publisher ban)
++ * comes back as `{ ok: false, error }`, so the calling route never
++ * needs its own try/catch around this.
++ */
++export async function verifySteamTicket(config: AppConfig, ticketHex: string): Promise<SteamAuthResult> {
++  if (!config.steamWebApiKey) {
++    return { ok: false, error: 'STEAM_WEB_API_KEY is not configured on this server.' };
++  }
++  if (!ticketHex) {
++    return { ok: false, error: 'No ticket provided.' };
++  }
++
++  const url = `${STEAM_WEB_API_BASE}/ISteamUserAuth/AuthenticateUserTicket/v1/`
++    + `?key=${encodeURIComponent(config.steamWebApiKey)}`
++    + `&appid=${encodeURIComponent(config.steamAppId)}`
++    + `&ticket=${encodeURIComponent(ticketHex)}`;
++
++  const controller = new AbortController();
++  const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
++  try {
++    const res = await fetch(url, { signal: controller.signal });
++    const body: any = await res.json().catch(() => null);
++    const params = body?.response?.params;
++
++    if (!res.ok || !params) {
++      const errorDesc = body?.response?.error?.errordesc;
++      return { ok: false, error: errorDesc || `Steam returned HTTP ${res.status}` };
++    }
++    if (params.result !== 'OK') {
++      return { ok: false, error: `Steam rejected the ticket: ${params.result}` };
++    }
++    if (params.vacbanned || params.publisherbanned) {
++      return { ok: false, error: 'This Steam account is VAC or publisher banned.' };
++    }
++
++    return { ok: true, steamId: params.steamid };
++  } catch (err) {
++    return { ok: false, error: err instanceof Error ? err.message : String(err) };
++  } finally {
++    clearTimeout(timeout);
++  }
++}
+diff --git a/src/game/auctionHouse.ts b/src/game/auctionHouse.ts
+index e13a9e6..b463797 100644
+--- a/src/game/auctionHouse.ts
++++ b/src/game/auctionHouse.ts
+@@ -48,3 +48,37 @@ export async function checkAhConnection(): Promise<AhConnectionStatus> {
+     clearTimeout(timeout);
+   }
+ }
++
++/**
++ * Short, stable string naming this game as the consuming service --
++ * Valve's own best-practice recommendation for GetAuthTicketForWebApi's
++ * `identity` parameter (one per real consuming service, not per
++ * request). See electron/main.ts's own steam:getAuthTicketForWebApi
++ * handler for the full design.
++ */
++const AH_AUTH_IDENTITY = 'guildbound-ah';
++
++/**
++ * Fetches a Steam auth ticket from the main process (patch 0405) and
++ * returns it as a hex-encoded string, ready to send to the AH backend's
++ * verification route -- the client-side half of the design doc's Steam
++ * auth flow. Returns `null` whenever Steam can't answer at all (not
++ * running, request failed or timed out, or this build has no Electron
++ * bridge at all -- e.g. the plain-browser dev fallback) -- same "null
++ * means couldn't check" contract every other Steam call in this game
++ * already uses, never a thrown error the caller has to wrap in its own
++ * try/catch.
++ *
++ * Deliberately NOT called from anywhere yet -- there's no backend route
++ * to send this ticket to until the "core listings + buyout" build-order
++ * step exists (see guild-idler-status.md's Auction House entry). This
++ * is the client-side half, built and ready ahead of that.
++ */
++export async function fetchAuctionHouseAuthTicket(): Promise<string | null> {
++  if (typeof window === 'undefined' || !window.littleKnight?.getAuthTicketForWebApi) return null;
++  try {
++    return await window.littleKnight.getAuthTicketForWebApi(AH_AUTH_IDENTITY);
++  } catch {
++    return null;
++  }
++}
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 1fdb5d4..cc673f1 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -55,6 +55,9 @@ declare global {
+         end: number,
+       ): Promise<{ steamId64: string; name: string; globalRank: number; score: number }[] | null>;
+       getLocalSteamId(): Promise<string | null>;
++      /** Patch 0405. See preload.ts's own comment for the full contract
++       *  and the GetAuthSessionTicket-vs-GetAuthTicketForWebApi correction. */
++      getAuthTicketForWebApi(identity: string): Promise<string | null>;
+       /** Main-to-renderer only -- the tray's "Show Guild Hall" item. See
+        *  preload.ts's own comment on this same method for the full reasoning. */
+       onOpenGuildHall(callback: () => void): () => void;

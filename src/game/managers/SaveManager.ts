@@ -55,6 +55,9 @@ declare global {
         end: number,
       ): Promise<{ steamId64: string; name: string; globalRank: number; score: number }[] | null>;
       getLocalSteamId(): Promise<string | null>;
+      /** Patch 0405. See preload.ts's own comment for the full contract
+       *  and the GetAuthSessionTicket-vs-GetAuthTicketForWebApi correction. */
+      getAuthTicketForWebApi(identity: string): Promise<string | null>;
       /** Main-to-renderer only -- the tray's "Show Guild Hall" item. See
        *  preload.ts's own comment on this same method for the full reasoning. */
       onOpenGuildHall(callback: () => void): () => void;

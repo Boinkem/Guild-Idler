@@ -48,3 +48,37 @@ export async function checkAhConnection(): Promise<AhConnectionStatus> {
     clearTimeout(timeout);
   }
 }
+
+/**
+ * Short, stable string naming this game as the consuming service --
+ * Valve's own best-practice recommendation for GetAuthTicketForWebApi's
+ * `identity` parameter (one per real consuming service, not per
+ * request). See electron/main.ts's own steam:getAuthTicketForWebApi
+ * handler for the full design.
+ */
+const AH_AUTH_IDENTITY = 'guildbound-ah';
+
+/**
+ * Fetches a Steam auth ticket from the main process (patch 0405) and
+ * returns it as a hex-encoded string, ready to send to the AH backend's
+ * verification route -- the client-side half of the design doc's Steam
+ * auth flow. Returns `null` whenever Steam can't answer at all (not
+ * running, request failed or timed out, or this build has no Electron
+ * bridge at all -- e.g. the plain-browser dev fallback) -- same "null
+ * means couldn't check" contract every other Steam call in this game
+ * already uses, never a thrown error the caller has to wrap in its own
+ * try/catch.
+ *
+ * Deliberately NOT called from anywhere yet -- there's no backend route
+ * to send this ticket to until the "core listings + buyout" build-order
+ * step exists (see guild-idler-status.md's Auction House entry). This
+ * is the client-side half, built and ready ahead of that.
+ */
+export async function fetchAuctionHouseAuthTicket(): Promise<string | null> {
+  if (typeof window === 'undefined' || !window.littleKnight?.getAuthTicketForWebApi) return null;
+  try {
+    return await window.littleKnight.getAuthTicketForWebApi(AH_AUTH_IDENTITY);
+  } catch {
+    return null;
+  }
+}

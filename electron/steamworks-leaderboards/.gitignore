@@ -1,0 +1,8 @@
+# Rust build output and native binaries -- previously unprotected here
+# (no .gitignore existed in this subfolder at all before patch 0405),
+# a real gap given `target/` alone can run to gigabytes. The compiled
+# platform binaries under dist/ are already covered by the root
+# .gitignore's bare `dist` pattern; this covers the rest.
+target/
+*.node
+node_modules/

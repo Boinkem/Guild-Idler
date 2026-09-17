@@ -7821,8 +7821,12 @@ pass (same caveat as the two entries above).
   (TestingPanel.tsx) are how the whole claim flow, including the Gold
   Storage Cap block, gets exercised for real before that exists.
 
-  **Genuine blockers (infra, not design):** Steam session-ticket
-  verification on the backend; the row-locked buyout transaction
+  **Genuine blockers (infra, not design) -- shrunk considerably, patch
+  0405.** Steam session-ticket verification is now built end to end
+  (client ticket fetch, backend verification route) -- what's left is a
+  real Steam Web API key and a Windows rebuild of the existing fork to
+  confirm it ships there too, not new code. See that patch's own log
+  entry. Still genuinely open: the row-locked buyout transaction
   (approach scoped, not built); the Postgres backup routine (hardware --
   a backup drive plus a separate external data drive -- already exists on
   the server, the automated dump/rotation script doesn't).
@@ -33054,3 +33058,96 @@ tutorial-quest predecessor, the new Auction House art crops sensibly
 behind the panel's existing overlay content, and that a genuinely guided
 new-player run no longer sees the board-intro card stacked over a result
 card in practice.
+
+### Steam session-ticket auth: client fetch + backend verification, correcting the original design doc's wrong API call (patch 0405)
+```discord-update
+Dev Update | Patch 0405
+
+- More Auction House groundwork, entirely behind the scenes -- nothing changes for players yet
+```
+
+**Design doc correction, confirmed directly against Valve's own docs, not
+assumed.** The original design named `GetAuthSessionTicket` for the
+client-side ticket, verified server-side via `ISteamUserAuth/
+AuthenticateUserTicket`. That combination doesn't work -- Valve's own
+`GetAuthSessionTicket` reference page states outright: *"This API can not
+be used to create a ticket for use by the ISteamUserAuth/
+AuthenticateUserTicket Web API. Use the ISteamUser::GetAuthTicketForWebApi
+call instead."* Two different calls for two different purposes -- this
+patch uses the correct one throughout.
+
+**The native side turned out to already exist.** Checked
+`electron/steamworks-leaderboards/src/api/auth.rs` (the vendored fork
+already used for leaderboards/achievements/DLC) before assuming any new
+Rust work was needed -- `get_auth_ticket_for_web_api` was already fully
+implemented there, part of the upstream fork all along, just never called
+from anywhere in this codebase. Installed a Rust toolchain and ran a real
+release build against the actual vendored source (confirmed via `cargo
+check` succeeding, then a full `node build.js --release` producing a real
+`.node` binary) -- loaded that binary directly in Node and confirmed
+`auth.getAuthTicketForWebApi` is a genuine callable export, not just a
+type declaration. No new native code, no new build step beyond the
+rebuild this project already knows how to run.
+
+**Client side:**
+- `electron/main.ts` -- new `steam:getAuthTicketForWebApi` IPC handler,
+  same "no `steamClient`, return `null`, log and move on" shape every
+  other Steam call here already uses. Resolves the ticket to a
+  hex-encoded string (the exact format `AuthenticateUserTicket` expects)
+  rather than passing the SDK's own `Ticket` object across the IPC
+  boundary.
+- `preload.ts` + the `window.littleKnight` global type
+  (`SaveManager.ts`) -- bridge exposure, same pattern as
+  `isDlcOwned`/`getLocalSteamId`.
+- `auctionHouse.ts` -- new `fetchAuctionHouseAuthTicket()`. Deliberately
+  not called from anywhere yet -- there's no backend route to send it to
+  until real listings exist (core listings + buyout, still not built).
+  This is the client-side half, ready ahead of that.
+
+**Backend side (`server/`):**
+- New `steamAuth.ts` -- `verifySteamTicket()` calls Steam's real
+  `ISteamUserAuth/AuthenticateUserTicket` Web API, never throws (every
+  failure mode, including a VAC/publisher ban, comes back as
+  `{ ok: false, error }`).
+- New `POST /auth/verify` route (`index.ts`) -- takes `{ ticket }`,
+  returns the verified SteamID on success. Deliberately does NOT issue a
+  session token yet -- whether the client re-sends a fresh ticket per
+  request or the backend issues a short-lived session after one
+  verification is still an open question, not decided here.
+- `config.ts` -- new `steamWebApiKey`/`steamAppId` fields, defaulting the
+  App ID to `5143490` (the real registered App ID already on record) even
+  if unset. `.env.example` documents both, marking the Web API key as a
+  real production secret, never to be logged or sent to the client.
+- Automatically inherits the existing `AH_ENABLED` off-gate -- `/auth/
+  verify` isn't `/health`, so it correctly 503s while `AH_ENABLED=false`,
+  same as every other non-health route, with no special-casing needed.
+
+**Gap closed in passing:** `electron/steamworks-leaderboards/` had no
+`.gitignore` of its own at all -- `target/` (Rust build output, can run
+to gigabytes) and any locally-built `.node` file had no protection
+against being accidentally committed. Added one. The compiled platform
+binaries under `dist/` were already covered by the root `.gitignore`'s
+bare `dist` pattern; this covers the rest.
+
+**Verified for real, further than "it compiles":** `npx tsc --noEmit`
+clean on both the client and `server/`, a full `vite build` clean. Beyond
+that, real runtime tests against the actual compiled server: `/auth/
+verify` with no Web API key configured correctly refuses with a clear
+error; with a fake key set, the route made a genuine outbound HTTPS call
+to `api.steampowered.com` -- not mocked, not blocked by this
+environment's network policy -- and got back a real `403` from Steam's
+own servers, twice, consistently. That's real proof the entire network
+path works end to end; only a genuine key and a genuine ticket are
+missing now, neither of which this environment can produce.
+
+**Not verified, and can't be here:** no Windows rebuild of the fork was
+possible in this environment -- same limitation patch 0383's leaderboard
+work hit, resolved the same way it was resolved then (a real Windows
+build, done separately). Given it's the identical source tree already
+producing a working Windows leaderboard binary, `auth` should come along
+for free on the next rebuild, but that's an expectation, not a confirmed
+fact, until it's actually rebuilt there. No real Steam client, real
+ticket, or real Web API key exists in this environment either -- the
+`403` result above proves connectivity, not that a *valid* ticket would
+be accepted; that needs a live Steam session and a real key, both only
+available on your end.
