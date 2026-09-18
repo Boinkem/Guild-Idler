@@ -7,20 +7,19 @@ export type AhConnectionStatus = 'offline' | 'checking' | 'online' | 'unreachabl
  * UI. See guild-idler-status.md's Auction House entry for the full
  * design and build order.
  *
- * `AH_READY` is false until there's an actual domain to point at -- DNS/
- * TLS aren't live yet (see server/README.md). `AH_BACKEND_URL` is
- * deliberately left empty rather than pointing at `localhost`: a shipped
- * client hitting a player's own localhost would hang, error, or (worse)
- * hit some unrelated local service -- none of those are "needs a
- * connection", they're a bug. Checking `AH_READY` first means
- * `checkAhConnection()` never even attempts a network call until a real
- * URL exists to try.
+ * `AH_READY` -- flipped live (patch 0407) now that `ah.guildbound.dev` is
+ * confirmed genuinely working end to end (Cloudflare Tunnel, TLS, the
+ * real backend's /health route, all tested against the actual live
+ * domain, not just in dev). `checkAhConnection()` below now makes a real
+ * network attempt whenever the AH panel is unlocked, correctly
+ * reflecting `ahEnabled` off/on based on the server's current `.env`
+ * state -- see server/README.md.
  */
-export const AH_READY = false;
+export const AH_READY = true;
 
-/** Set once the real domain/subdomain from the design doc's
- *  infrastructure section is actually live -- see server/README.md. */
-export const AH_BACKEND_URL = '';
+/** Real domain, confirmed working end to end -- see this constant's own
+ *  comment above and server/README.md's deploy checklist. */
+export const AH_BACKEND_URL = 'https://ah.guildbound.dev';
 
 const HEALTH_CHECK_TIMEOUT_MS = 4000;
 
@@ -68,11 +67,6 @@ const AH_AUTH_IDENTITY = 'guildbound-ah';
  * means couldn't check" contract every other Steam call in this game
  * already uses, never a thrown error the caller has to wrap in its own
  * try/catch.
- *
- * Deliberately NOT called from anywhere yet -- there's no backend route
- * to send this ticket to until the "core listings + buyout" build-order
- * step exists (see guild-idler-status.md's Auction House entry). This
- * is the client-side half, built and ready ahead of that.
  */
 export async function fetchAuctionHouseAuthTicket(): Promise<string | null> {
   if (typeof window === 'undefined' || !window.littleKnight?.getAuthTicketForWebApi) return null;
@@ -80,5 +74,49 @@ export async function fetchAuctionHouseAuthTicket(): Promise<string | null> {
     return await window.littleKnight.getAuthTicketForWebApi(AH_AUTH_IDENTITY);
   } catch {
     return null;
+  }
+}
+
+export interface AhAuthResult {
+  ok: boolean;
+  steamId?: string;
+  error?: string;
+}
+
+/**
+ * Full round trip (patch 0407) -- fetches a real ticket, sends it to the
+ * real backend's `/auth/verify`, returns the real result. Still only
+ * called from TestingPanel.tsx right now, not any real gameplay path --
+ * there's no listing/buyout flow yet that would need to authenticate a
+ * player for real (core listings + buyout, still not built). This is
+ * what makes it possible to prove the whole chain works, end to end,
+ * ahead of that -- same "build the proof-of-life ahead of the real
+ * feature" shape every other Auction House patch has followed since the
+ * skeleton's own /health route.
+ *
+ * Every failure mode -- no ticket available, the backend unreachable,
+ * AH_ENABLED off, Steam genuinely rejecting the ticket -- comes back as
+ * `{ ok: false, error }`, never a thrown exception, so callers never
+ * need their own try/catch.
+ */
+export async function verifyAuctionHouseAuth(): Promise<AhAuthResult> {
+  const ticket = await fetchAuctionHouseAuthTicket();
+  if (!ticket) {
+    return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running, or this build has no Steamworks bridge.' };
+  }
+  if (!AH_READY || !AH_BACKEND_URL) {
+    return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
+  }
+
+  try {
+    const response = await fetch(`${AH_BACKEND_URL}/auth/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket }),
+    });
+    const body = await response.json();
+    return body as AhAuthResult;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }

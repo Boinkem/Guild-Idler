@@ -1,0 +1,216 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 3705767..f093395 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -33164,3 +33164,58 @@ Found during the first real end-to-end setup against `ah.guildbound.dev` (Cloudf
+ **One-line fix, `dotenv` package + `import 'dotenv/config'` as the literal first line of `index.ts`.** Has to be first -- `config.ts`'s `loadConfig()` reads `process.env` at call time, so anything importing it before `.env` is loaded would still see an empty environment, same class of ordering bug either way.
+ 
+ **Verified for real, matching the exact failure, not a different scenario:** wrote a genuine `.env` file, then explicitly stripped `AH_ENABLED`/`STEAM_WEB_API_KEY`/`PORT` from the shell's own environment before launching (`env -u ... -u ... -u ... node dist/index.js`) -- deliberately the same "nothing set manually, only the file" shape that failed live. Startup log now correctly reports `ahEnabled=true` and listens on the `.env`-configured port with zero shell exports, and `/auth/verify` now genuinely attempts Steam's real API using the `.env`-provided key instead of returning the "not configured" error -- confirms the fix addresses the actual reported bug, not just "the server still starts."
++
++### ah.guildbound.dev confirmed live -- AH_READY flipped, real Steam auth test wired in (patch 0407)
++```discord-update
++Dev Update | Patch 0407
++
++- More Auction House groundwork -- still nothing live for players, but the infrastructure is now confirmed genuinely working end to end
++```
++
++DNS + Cloudflare Tunnel + TLS for `ah.guildbound.dev` confirmed working for
++real this session -- `curl https://ah.guildbound.dev/health` returning the
++expected JSON, and `/auth/verify` genuinely round-tripping to Steam's own
++API with a real Web API key (correctly reporting `"Invalid parameter"`
++for a placeholder ticket -- the expected result without a genuine
++in-session ticket, not a failure). See patch 0406's own fix, required to
++get the real key loading at all.
++
++**`AH_READY` flipped to `true`, `AH_BACKEND_URL` set to the real domain**
++(`auctionHouse.ts`) -- `checkAhConnection()` now makes a real network
++attempt whenever the AH panel is unlocked, instead of the permanent
++`'offline'` short-circuit every prior patch correctly used before there
++was a real domain to check against.
++
++**New `verifyAuctionHouseAuth()`** -- the full round trip:
++`fetchAuctionHouseAuthTicket()` (patch 0405) into a real `POST
++/auth/verify` against the real backend, one function instead of the
++caller wiring both steps together. Every failure mode -- no ticket, no
++backend configured, unreachable, a real Steam rejection -- comes back as
++`{ ok: false, error }`, matching the module's existing "never throws"
++contract.
++
++**Wired to a real trigger for the first time: `engine.testVerifySteamAuth()`,
++TestingPanel.tsx.** Still testing-only, same as the mailbox test buttons
++-- there's no real gameplay path that would need to authenticate a
++player yet (core listings + buyout, still not built), so this exists
++purely to let a real human confirm the whole chain -- ticket fetch,
++network call, backend verification -- works end to end, the same
++"proof-of-life ahead of the real feature" every Auction House patch since
++the skeleton's own `/health` route has followed.
++
++**Verified for real, including the parts that have to fail correctly:**
++`npx tsc --noEmit` clean, a full `vite build` clean. Beyond that, direct
++runtime tests: `checkAhConnection()` against the actual live
++`ah.guildbound.dev` domain (not a mock) -- correctly reported
++`'unreachable'` when the backend happened to not be running at test time,
++proving the real network path works without a false-positive; and
++`fetchAuctionHouseAuthTicket()`/`verifyAuctionHouseAuth()` in a plain
++Node context with no `window`/Electron bridge at all -- both degrade to a
++clean `null`/`{ ok: false, error }` with no crash, confirming the
++dev-environment fallback still holds even now that `AH_READY` is live.
++
++**Not verified, and can't be here:** a genuine Steam ticket actually
++passing verification -- needs the real packaged game running with a real
++Steam session open, clicking the new TestingPanel button for real. Every
++piece up to that exact moment is now confirmed working; that final click
++is the one thing only possible on the real machine.
+diff --git a/src/game/auctionHouse.ts b/src/game/auctionHouse.ts
+index b463797..4f1b8e4 100644
+--- a/src/game/auctionHouse.ts
++++ b/src/game/auctionHouse.ts
+@@ -7,20 +7,19 @@ export type AhConnectionStatus = 'offline' | 'checking' | 'online' | 'unreachabl
+  * UI. See guild-idler-status.md's Auction House entry for the full
+  * design and build order.
+  *
+- * `AH_READY` is false until there's an actual domain to point at -- DNS/
+- * TLS aren't live yet (see server/README.md). `AH_BACKEND_URL` is
+- * deliberately left empty rather than pointing at `localhost`: a shipped
+- * client hitting a player's own localhost would hang, error, or (worse)
+- * hit some unrelated local service -- none of those are "needs a
+- * connection", they're a bug. Checking `AH_READY` first means
+- * `checkAhConnection()` never even attempts a network call until a real
+- * URL exists to try.
++ * `AH_READY` -- flipped live (patch 0407) now that `ah.guildbound.dev` is
++ * confirmed genuinely working end to end (Cloudflare Tunnel, TLS, the
++ * real backend's /health route, all tested against the actual live
++ * domain, not just in dev). `checkAhConnection()` below now makes a real
++ * network attempt whenever the AH panel is unlocked, correctly
++ * reflecting `ahEnabled` off/on based on the server's current `.env`
++ * state -- see server/README.md.
+  */
+-export const AH_READY = false;
++export const AH_READY = true;
+ 
+-/** Set once the real domain/subdomain from the design doc's
+- *  infrastructure section is actually live -- see server/README.md. */
+-export const AH_BACKEND_URL = '';
++/** Real domain, confirmed working end to end -- see this constant's own
++ *  comment above and server/README.md's deploy checklist. */
++export const AH_BACKEND_URL = 'https://ah.guildbound.dev';
+ 
+ const HEALTH_CHECK_TIMEOUT_MS = 4000;
+ 
+@@ -68,11 +67,6 @@ const AH_AUTH_IDENTITY = 'guildbound-ah';
+  * means couldn't check" contract every other Steam call in this game
+  * already uses, never a thrown error the caller has to wrap in its own
+  * try/catch.
+- *
+- * Deliberately NOT called from anywhere yet -- there's no backend route
+- * to send this ticket to until the "core listings + buyout" build-order
+- * step exists (see guild-idler-status.md's Auction House entry). This
+- * is the client-side half, built and ready ahead of that.
+  */
+ export async function fetchAuctionHouseAuthTicket(): Promise<string | null> {
+   if (typeof window === 'undefined' || !window.littleKnight?.getAuthTicketForWebApi) return null;
+@@ -82,3 +76,47 @@ export async function fetchAuctionHouseAuthTicket(): Promise<string | null> {
+     return null;
+   }
+ }
++
++export interface AhAuthResult {
++  ok: boolean;
++  steamId?: string;
++  error?: string;
++}
++
++/**
++ * Full round trip (patch 0407) -- fetches a real ticket, sends it to the
++ * real backend's `/auth/verify`, returns the real result. Still only
++ * called from TestingPanel.tsx right now, not any real gameplay path --
++ * there's no listing/buyout flow yet that would need to authenticate a
++ * player for real (core listings + buyout, still not built). This is
++ * what makes it possible to prove the whole chain works, end to end,
++ * ahead of that -- same "build the proof-of-life ahead of the real
++ * feature" shape every other Auction House patch has followed since the
++ * skeleton's own /health route.
++ *
++ * Every failure mode -- no ticket available, the backend unreachable,
++ * AH_ENABLED off, Steam genuinely rejecting the ticket -- comes back as
++ * `{ ok: false, error }`, never a thrown exception, so callers never
++ * need their own try/catch.
++ */
++export async function verifyAuctionHouseAuth(): Promise<AhAuthResult> {
++  const ticket = await fetchAuctionHouseAuthTicket();
++  if (!ticket) {
++    return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running, or this build has no Steamworks bridge.' };
++  }
++  if (!AH_READY || !AH_BACKEND_URL) {
++    return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
++  }
++
++  try {
++    const response = await fetch(`${AH_BACKEND_URL}/auth/verify`, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ ticket }),
++    });
++    const body = await response.json();
++    return body as AhAuthResult;
++  } catch (err) {
++    return { ok: false, error: err instanceof Error ? err.message : String(err) };
++  }
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index a232e6a..96be492 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -29,6 +29,7 @@ import { HarvestManager } from './managers/HarvestManager';
+ import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
+ import { PetManager } from './managers/PetManager';
+ import { MailboxManager } from './managers/MailboxManager';
++import { verifyAuctionHouseAuth } from './auctionHouse';
+ import { PeddlerManager } from './managers/PeddlerManager';
+ import { CraftingManager } from './managers/CraftingManager';
+ import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
+@@ -1530,6 +1531,26 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /**
++   * Testing-only, real network call, not a mock. Fetches a real Steam
++   * ticket and sends it to the real backend's /auth/verify (patch 0407)
++   * -- see auctionHouse.ts's verifyAuctionHouseAuth for the full round
++   * trip. Reports the raw result as a toast rather than anything
++   * structured, since this exists purely to let a real human confirm the
++   * whole chain works, not to feed a UI flow that doesn't exist yet.
++   */
++  testVerifySteamAuth() {
++    if (!TESTING_TOOLS_ENABLED) return;
++    this.say('Requesting a Steam ticket and verifying it against the AH backend...');
++    verifyAuctionHouseAuth().then((result) => {
++      if (result.ok) {
++        this.say(`Steam auth OK -- verified SteamID ${result.steamId}.`);
++      } else {
++        this.say(`Steam auth failed: ${result.error}`);
++      }
++    });
++  }
++
+   /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */
+   testCompleteActiveQuest(heroId: string) {
+     if (!TESTING_TOOLS_ENABLED) return;
+diff --git a/src/ui/panels/TestingPanel.tsx b/src/ui/panels/TestingPanel.tsx
+index a19ce14..6edc9e0 100644
+--- a/src/ui/panels/TestingPanel.tsx
++++ b/src/ui/panels/TestingPanel.tsx
+@@ -71,6 +71,13 @@ export function TestingPanel() {
+         <button onClick={() => engine.testAddMailboxEquipment('wooden_sword', 'Auction won: Wooden Sword')}>+ equipment entry</button>
+         <button onClick={() => engine.testAddMailboxConsumable('healing_potion', 3, 'Auction won: Healing Potion')}>+ consumable entry</button>
+       </div>
++      <p className="small muted" style={{ margin: '8px 0' }}>
++        Real network call, not a mock -- requires an actual running Steam session to get a real
++        ticket, and the AH backend's AH_ENABLED=true to get past its own off-gate.
++      </p>
++      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
++        <button onClick={() => engine.testVerifySteamAuth()}>Test Steam auth ticket (real network call)</button>
++      </div>
+ 
+       <div className="section-heading">Recipes</div>
+       <p className="small muted" style={{ marginBottom: 8 }}>

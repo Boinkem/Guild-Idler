@@ -33164,3 +33164,58 @@ Found during the first real end-to-end setup against `ah.guildbound.dev` (Cloudf
 **One-line fix, `dotenv` package + `import 'dotenv/config'` as the literal first line of `index.ts`.** Has to be first -- `config.ts`'s `loadConfig()` reads `process.env` at call time, so anything importing it before `.env` is loaded would still see an empty environment, same class of ordering bug either way.
 
 **Verified for real, matching the exact failure, not a different scenario:** wrote a genuine `.env` file, then explicitly stripped `AH_ENABLED`/`STEAM_WEB_API_KEY`/`PORT` from the shell's own environment before launching (`env -u ... -u ... -u ... node dist/index.js`) -- deliberately the same "nothing set manually, only the file" shape that failed live. Startup log now correctly reports `ahEnabled=true` and listens on the `.env`-configured port with zero shell exports, and `/auth/verify` now genuinely attempts Steam's real API using the `.env`-provided key instead of returning the "not configured" error -- confirms the fix addresses the actual reported bug, not just "the server still starts."
+
+### ah.guildbound.dev confirmed live -- AH_READY flipped, real Steam auth test wired in (patch 0407)
+```discord-update
+Dev Update | Patch 0407
+
+- More Auction House groundwork -- still nothing live for players, but the infrastructure is now confirmed genuinely working end to end
+```
+
+DNS + Cloudflare Tunnel + TLS for `ah.guildbound.dev` confirmed working for
+real this session -- `curl https://ah.guildbound.dev/health` returning the
+expected JSON, and `/auth/verify` genuinely round-tripping to Steam's own
+API with a real Web API key (correctly reporting `"Invalid parameter"`
+for a placeholder ticket -- the expected result without a genuine
+in-session ticket, not a failure). See patch 0406's own fix, required to
+get the real key loading at all.
+
+**`AH_READY` flipped to `true`, `AH_BACKEND_URL` set to the real domain**
+(`auctionHouse.ts`) -- `checkAhConnection()` now makes a real network
+attempt whenever the AH panel is unlocked, instead of the permanent
+`'offline'` short-circuit every prior patch correctly used before there
+was a real domain to check against.
+
+**New `verifyAuctionHouseAuth()`** -- the full round trip:
+`fetchAuctionHouseAuthTicket()` (patch 0405) into a real `POST
+/auth/verify` against the real backend, one function instead of the
+caller wiring both steps together. Every failure mode -- no ticket, no
+backend configured, unreachable, a real Steam rejection -- comes back as
+`{ ok: false, error }`, matching the module's existing "never throws"
+contract.
+
+**Wired to a real trigger for the first time: `engine.testVerifySteamAuth()`,
+TestingPanel.tsx.** Still testing-only, same as the mailbox test buttons
+-- there's no real gameplay path that would need to authenticate a
+player yet (core listings + buyout, still not built), so this exists
+purely to let a real human confirm the whole chain -- ticket fetch,
+network call, backend verification -- works end to end, the same
+"proof-of-life ahead of the real feature" every Auction House patch since
+the skeleton's own `/health` route has followed.
+
+**Verified for real, including the parts that have to fail correctly:**
+`npx tsc --noEmit` clean, a full `vite build` clean. Beyond that, direct
+runtime tests: `checkAhConnection()` against the actual live
+`ah.guildbound.dev` domain (not a mock) -- correctly reported
+`'unreachable'` when the backend happened to not be running at test time,
+proving the real network path works without a false-positive; and
+`fetchAuctionHouseAuthTicket()`/`verifyAuctionHouseAuth()` in a plain
+Node context with no `window`/Electron bridge at all -- both degrade to a
+clean `null`/`{ ok: false, error }` with no crash, confirming the
+dev-environment fallback still holds even now that `AH_READY` is live.
+
+**Not verified, and can't be here:** a genuine Steam ticket actually
+passing verification -- needs the real packaged game running with a real
+Steam session open, clicking the new TestingPanel button for real. Every
+piece up to that exact moment is now confirmed working; that final click
+is the one thing only possible on the real machine.

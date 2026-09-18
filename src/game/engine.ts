@@ -29,6 +29,7 @@ import { HarvestManager } from './managers/HarvestManager';
 import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
 import { PetManager } from './managers/PetManager';
 import { MailboxManager } from './managers/MailboxManager';
+import { verifyAuctionHouseAuth } from './auctionHouse';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
@@ -1528,6 +1529,26 @@ export class GameEngine {
     MailboxManager.grantTestEntry(this.state, { type: 'consumable', consumableId, amount, note });
     this.notify();
     void this.saveNow();
+  }
+
+  /**
+   * Testing-only, real network call, not a mock. Fetches a real Steam
+   * ticket and sends it to the real backend's /auth/verify (patch 0407)
+   * -- see auctionHouse.ts's verifyAuctionHouseAuth for the full round
+   * trip. Reports the raw result as a toast rather than anything
+   * structured, since this exists purely to let a real human confirm the
+   * whole chain works, not to feed a UI flow that doesn't exist yet.
+   */
+  testVerifySteamAuth() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.say('Requesting a Steam ticket and verifying it against the AH backend...');
+    verifyAuctionHouseAuth().then((result) => {
+      if (result.ok) {
+        this.say(`Steam auth OK -- verified SteamID ${result.steamId}.`);
+      } else {
+        this.say(`Steam auth failed: ${result.error}`);
+      }
+    });
   }
 
   /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */

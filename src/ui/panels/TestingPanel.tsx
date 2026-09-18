@@ -71,6 +71,13 @@ export function TestingPanel() {
         <button onClick={() => engine.testAddMailboxEquipment('wooden_sword', 'Auction won: Wooden Sword')}>+ equipment entry</button>
         <button onClick={() => engine.testAddMailboxConsumable('healing_potion', 3, 'Auction won: Healing Potion')}>+ consumable entry</button>
       </div>
+      <p className="small muted" style={{ margin: '8px 0' }}>
+        Real network call, not a mock -- requires an actual running Steam session to get a real
+        ticket, and the AH backend's AH_ENABLED=true to get past its own off-gate.
+      </p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={() => engine.testVerifySteamAuth()}>Test Steam auth ticket (real network call)</button>
+      </div>
 
       <div className="section-heading">Recipes</div>
       <p className="small muted" style={{ marginBottom: 8 }}>
