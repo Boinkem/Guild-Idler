@@ -32,6 +32,7 @@ import { MailboxManager } from './managers/MailboxManager';
 import {
   verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry,
   fetchActiveListings, createListing, buyListing as buyListingRequest, ServerListingRow,
+  setDevSessionToken,
 } from './auctionHouse';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
@@ -2587,6 +2588,21 @@ export class GameEngine {
    * the one that actually prevents a double-claim exploit, not the
    * server's `claimed_at` column alone.
    */
+  /**
+   * Testing-only (patch 0412) -- injects a real session token minted
+   * locally via `server/scripts/mint-test-session.mjs`, so Sell/Buy can
+   * be fully exercised in a local dev build without Steam running at
+   * all. See setDevSessionToken's own comment (auctionHouse.ts) for why
+   * this isn't a new server-side bypass -- the token has to be genuinely
+   * valid, signed with the real SESSION_SECRET, the server can't tell it
+   * apart from one that came from a real Steam ticket.
+   */
+  testSetDevSessionToken(token: string) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    setDevSessionToken(token.trim());
+    this.say('Dev session token set -- Sell/Buy should work now.');
+  }
+
   async syncMailboxFromServer(): Promise<{ synced: number }> {
     const rows = await fetchServerMailbox();
     if (!rows || rows.length === 0) return { synced: 0 };

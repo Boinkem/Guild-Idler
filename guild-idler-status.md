@@ -33509,3 +33509,55 @@ multiplayer scenario -- one real account listing something, a second
 real account browsing and buying it -- since that needs two real Steam
 sessions. Every piece up to that exact moment is now confirmed working
 through this patch and everything before it.
+
+### Local dev testing without Steam: a minted session token for TestingPanel (patch 0412)
+```discord-update
+Dev Update | Patch 0412
+
+- Internal tooling only -- nothing changes in the game itself
+```
+
+Direct request after patch 0411 landed -- testing Browse/Sell required
+either a real Steam session or re-uploading a build to Steam just to
+check the UI, neither practical for fast local iteration.
+
+**`server/scripts/mint-test-session.mjs`, new.** Reads `SESSION_SECRET`
+from the local `server/.env` (the same secret the real server already
+trusts) and signs a token exactly the way `sessions.ts`'s real
+`issueSessionToken()` does. Deliberately not a new bypass on the server
+side -- no new route, no network call, nothing added to the server's own
+attack surface. It's a local script standing in for "click a button and
+get a session," which is normally gated behind an actual Steam ticket;
+the server can't tell a token this produces apart from a genuine one,
+by design, since both are signed with the same real secret.
+
+**`setDevSessionToken()` (`auctionHouse.ts`), `TestingPanel`'s new
+"Auction House dev session" field.** `TESTING_TOOLS_ENABLED`-gated, same
+as every other test-only capability in this game. Pasting a minted token
+in caches it exactly where a real `verifyAuctionHouseAuth()` success
+would have, so every downstream function -- `fetchServerMailbox`,
+`createListing`, `buyListing` -- picks it up transparently with zero
+other changes needed.
+
+**Verified for real, two separate proofs, not one assumed from the
+other:**
+- **The token is genuinely accepted by the real server**, not just
+  well-formed: minted one against a real running local backend, sent it
+  as a real `Authorization` header to the real `/mailbox` route, got
+  back a real `200` with an empty array -- genuine auth acceptance, the
+  same test a real Steam-issued token would need to pass.
+- **The client mechanism actually works as designed**, checked
+  separately: with no Electron bridge (`window` undefined) and no token
+  set, `fetchServerMailbox()` correctly returns `null`. After
+  `setDevSessionToken()`, the exact same call succeeds, the captured
+  `Authorization` header matches the token exactly, and critically --
+  zero attempts to fetch a Steam ticket happened at all, confirming the
+  cached token genuinely short-circuits that step rather than merely
+  supplementing it. `createListing` confirmed using the same cached
+  token too.
+- `npx tsc --noEmit` clean, full `vite build` clean.
+
+**How to use it:** `npm run mint-test-session` from `server/` (optionally
+passing a fake SteamID), paste the printed token into TestingPanel's new
+field, then Browse/Sell/Buy all work fully against a local server with
+zero Steam dependency.

@@ -83,6 +83,15 @@ export function TestingPanel() {
         <button onClick={() => engine.testSyncMailboxFromServer()}>Sync mailbox from server (real network call)</button>
       </div>
 
+      <div className="section-heading">Auction House dev session</div>
+      <p className="small muted" style={{ marginBottom: 8 }}>
+        Run <code>npm run mint-test-session</code> from server/ on this machine, paste the
+        printed token below, then Sell/Buy work fully against a local server without Steam
+        running at all -- the token is genuinely valid, signed with the same secret the real
+        server trusts, not a fake bypass.
+      </p>
+      <DevSessionTokenField />
+
       <div className="section-heading">Recipes</div>
       <p className="small muted" style={{ marginBottom: 8 }}>
         Adds one random not-yet-learned recipe scroll to the stash -- ignores the real drop
@@ -210,5 +219,27 @@ export function TestingPanel() {
         Gold: {formatGold(state.gold)} · Renown: {state.renown}
       </p>
     </>
+  );
+}
+
+/**
+ * Small local-state field for pasting a minted dev session token --
+ * kept as its own component rather than inline state on TestingPanel
+ * so typing in it doesn't re-render the rest of that (fairly large)
+ * panel on every keystroke.
+ */
+function DevSessionTokenField() {
+  const engine = useEngine();
+  const [token, setToken] = useState('');
+
+  return (
+    <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+      <input
+        type="text" placeholder="Paste minted session token"
+        value={token} onChange={(e) => setToken(e.target.value)}
+        style={{ flex: '1 1 320px', background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '7px 8px' }}
+      />
+      <button disabled={!token.trim()} onClick={() => engine.testSetDevSessionToken(token)}>Set token</button>
+    </div>
   );
 }

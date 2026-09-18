@@ -1,3 +1,5 @@
+import { TESTING_TOOLS_ENABLED } from './testingTools';
+
 export type AhConnectionStatus = 'offline' | 'checking' | 'online' | 'unreachable';
 
 /**
@@ -91,6 +93,22 @@ export interface AhAuthResult {
  * verifyAuctionHouseAuth() call gets a new one whenever needed.
  */
 let cachedSessionToken: string | null = null;
+
+/**
+ * Testing-only (patch 0412) -- lets TestingPanel inject a real,
+ * validly-signed session token minted locally via
+ * `server/scripts/mint-test-session.mjs`, bypassing the Steam ticket
+ * fetch entirely for local UI testing. Gated by TESTING_TOOLS_ENABLED,
+ * same as every other test-only capability in this game -- this isn't a
+ * new server-side bypass (the server can't tell this token apart from a
+ * genuine one, by design, since it's signed with the same real
+ * SESSION_SECRET), it's a client-side shortcut around needing a live
+ * Steam session for local dev iteration.
+ */
+export function setDevSessionToken(token: string): void {
+  if (!TESTING_TOOLS_ENABLED) return;
+  cachedSessionToken = token;
+}
 
 /**
  * Full round trip (patch 0407) -- fetches a real ticket, sends it to the

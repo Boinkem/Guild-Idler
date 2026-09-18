@@ -1,0 +1,230 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 16e04f7..5537cc7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -33509,3 +33509,55 @@ multiplayer scenario -- one real account listing something, a second
+ real account browsing and buying it -- since that needs two real Steam
+ sessions. Every piece up to that exact moment is now confirmed working
+ through this patch and everything before it.
++
++### Local dev testing without Steam: a minted session token for TestingPanel (patch 0412)
++```discord-update
++Dev Update | Patch 0412
++
++- Internal tooling only -- nothing changes in the game itself
++```
++
++Direct request after patch 0411 landed -- testing Browse/Sell required
++either a real Steam session or re-uploading a build to Steam just to
++check the UI, neither practical for fast local iteration.
++
++**`server/scripts/mint-test-session.mjs`, new.** Reads `SESSION_SECRET`
++from the local `server/.env` (the same secret the real server already
++trusts) and signs a token exactly the way `sessions.ts`'s real
++`issueSessionToken()` does. Deliberately not a new bypass on the server
++side -- no new route, no network call, nothing added to the server's own
++attack surface. It's a local script standing in for "click a button and
++get a session," which is normally gated behind an actual Steam ticket;
++the server can't tell a token this produces apart from a genuine one,
++by design, since both are signed with the same real secret.
++
++**`setDevSessionToken()` (`auctionHouse.ts`), `TestingPanel`'s new
++"Auction House dev session" field.** `TESTING_TOOLS_ENABLED`-gated, same
++as every other test-only capability in this game. Pasting a minted token
++in caches it exactly where a real `verifyAuctionHouseAuth()` success
++would have, so every downstream function -- `fetchServerMailbox`,
++`createListing`, `buyListing` -- picks it up transparently with zero
++other changes needed.
++
++**Verified for real, two separate proofs, not one assumed from the
++other:**
++- **The token is genuinely accepted by the real server**, not just
++  well-formed: minted one against a real running local backend, sent it
++  as a real `Authorization` header to the real `/mailbox` route, got
++  back a real `200` with an empty array -- genuine auth acceptance, the
++  same test a real Steam-issued token would need to pass.
++- **The client mechanism actually works as designed**, checked
++  separately: with no Electron bridge (`window` undefined) and no token
++  set, `fetchServerMailbox()` correctly returns `null`. After
++  `setDevSessionToken()`, the exact same call succeeds, the captured
++  `Authorization` header matches the token exactly, and critically --
++  zero attempts to fetch a Steam ticket happened at all, confirming the
++  cached token genuinely short-circuits that step rather than merely
++  supplementing it. `createListing` confirmed using the same cached
++  token too.
++- `npx tsc --noEmit` clean, full `vite build` clean.
++
++**How to use it:** `npm run mint-test-session` from `server/` (optionally
++passing a fake SteamID), paste the printed token into TestingPanel's new
++field, then Browse/Sell/Buy all work fully against a local server with
++zero Steam dependency.
+diff --git a/server/package.json b/server/package.json
+index 9b815eb..ac574d0 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -8,7 +8,8 @@
+     "dev": "tsx watch src/index.ts",
+     "build": "tsc",
+     "start": "node dist/index.js",
+-    "migrate": "tsx db/migrate.ts"
++    "migrate": "tsx db/migrate.ts",
++    "mint-test-session": "node scripts/mint-test-session.mjs"
+   },
+   "dependencies": {
+     "dotenv": "^16.4.7",
+diff --git a/server/scripts/mint-test-session.mjs b/server/scripts/mint-test-session.mjs
+new file mode 100644
+index 0000000..0b9eb73
+--- /dev/null
++++ b/server/scripts/mint-test-session.mjs
+@@ -0,0 +1,37 @@
++/**
++ * Mints a real, validly-signed session token -- for local UI testing
++ * only, without needing a live Steam session at all.
++ *
++ * Why this is safe to have: it reads SESSION_SECRET from THIS machine's
++ * own server/.env (the same secret the real server already trusts) and
++ * signs a token exactly the way sessions.ts's real issueSessionToken()
++ * does. It doesn't call Steam, doesn't touch the network, and doesn't
++ * add any new server route -- there is no new attack surface here, just
++ * a local script standing in for "click a button and get a session",
++ * which is normally gated behind an actual Steam ticket. Never run this
++ * against a real production SESSION_SECRET you'd mind a test SteamID
++ * having a token for.
++ *
++ * Usage (from server/):
++ *   npm run mint-test-session
++ *   npm run mint-test-session -- 76561198000000001
++ *
++ * Paste the printed token into TestingPanel's "Auction House dev
++ * session" field (patch 0412) to fully exercise Browse/Sell/Buy in a
++ * local dev build without Steam running at all.
++ */
++import 'dotenv/config';
++import jwt from 'jsonwebtoken';
++
++const secret = process.env.SESSION_SECRET;
++if (!secret) {
++  console.error('SESSION_SECRET is not set in server/.env -- nothing to sign with.');
++  process.exit(1);
++}
++
++const steamId = process.argv[2] || '76561198000000001';
++const token = jwt.sign({ steamId }, secret, { expiresIn: '1h' });
++
++console.log(`\nTest session for SteamID ${steamId} (valid 1 hour):\n`);
++console.log(token);
++console.log('\nPaste this into TestingPanel -> Auction House dev session -> Set token.\n');
+diff --git a/src/game/auctionHouse.ts b/src/game/auctionHouse.ts
+index 74d8680..fb5bf82 100644
+--- a/src/game/auctionHouse.ts
++++ b/src/game/auctionHouse.ts
+@@ -1,3 +1,5 @@
++import { TESTING_TOOLS_ENABLED } from './testingTools';
++
+ export type AhConnectionStatus = 'offline' | 'checking' | 'online' | 'unreachable';
+ 
+ /**
+@@ -92,6 +94,22 @@ export interface AhAuthResult {
+  */
+ let cachedSessionToken: string | null = null;
+ 
++/**
++ * Testing-only (patch 0412) -- lets TestingPanel inject a real,
++ * validly-signed session token minted locally via
++ * `server/scripts/mint-test-session.mjs`, bypassing the Steam ticket
++ * fetch entirely for local UI testing. Gated by TESTING_TOOLS_ENABLED,
++ * same as every other test-only capability in this game -- this isn't a
++ * new server-side bypass (the server can't tell this token apart from a
++ * genuine one, by design, since it's signed with the same real
++ * SESSION_SECRET), it's a client-side shortcut around needing a live
++ * Steam session for local dev iteration.
++ */
++export function setDevSessionToken(token: string): void {
++  if (!TESTING_TOOLS_ENABLED) return;
++  cachedSessionToken = token;
++}
++
+ /**
+  * Full round trip (patch 0407) -- fetches a real ticket, sends it to the
+  * real backend's `/auth/verify`, returns the real result. Now also
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 6b7feb5..03be0d0 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -32,6 +32,7 @@ import { MailboxManager } from './managers/MailboxManager';
+ import {
+   verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry,
+   fetchActiveListings, createListing, buyListing as buyListingRequest, ServerListingRow,
++  setDevSessionToken,
+ } from './auctionHouse';
+ import { PeddlerManager } from './managers/PeddlerManager';
+ import { CraftingManager } from './managers/CraftingManager';
+@@ -2587,6 +2588,21 @@ export class GameEngine {
+    * the one that actually prevents a double-claim exploit, not the
+    * server's `claimed_at` column alone.
+    */
++  /**
++   * Testing-only (patch 0412) -- injects a real session token minted
++   * locally via `server/scripts/mint-test-session.mjs`, so Sell/Buy can
++   * be fully exercised in a local dev build without Steam running at
++   * all. See setDevSessionToken's own comment (auctionHouse.ts) for why
++   * this isn't a new server-side bypass -- the token has to be genuinely
++   * valid, signed with the real SESSION_SECRET, the server can't tell it
++   * apart from one that came from a real Steam ticket.
++   */
++  testSetDevSessionToken(token: string) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    setDevSessionToken(token.trim());
++    this.say('Dev session token set -- Sell/Buy should work now.');
++  }
++
+   async syncMailboxFromServer(): Promise<{ synced: number }> {
+     const rows = await fetchServerMailbox();
+     if (!rows || rows.length === 0) return { synced: 0 };
+diff --git a/src/ui/panels/TestingPanel.tsx b/src/ui/panels/TestingPanel.tsx
+index 6fa3073..8041a95 100644
+--- a/src/ui/panels/TestingPanel.tsx
++++ b/src/ui/panels/TestingPanel.tsx
+@@ -83,6 +83,15 @@ export function TestingPanel() {
+         <button onClick={() => engine.testSyncMailboxFromServer()}>Sync mailbox from server (real network call)</button>
+       </div>
+ 
++      <div className="section-heading">Auction House dev session</div>
++      <p className="small muted" style={{ marginBottom: 8 }}>
++        Run <code>npm run mint-test-session</code> from server/ on this machine, paste the
++        printed token below, then Sell/Buy work fully against a local server without Steam
++        running at all -- the token is genuinely valid, signed with the same secret the real
++        server trusts, not a fake bypass.
++      </p>
++      <DevSessionTokenField />
++
+       <div className="section-heading">Recipes</div>
+       <p className="small muted" style={{ marginBottom: 8 }}>
+         Adds one random not-yet-learned recipe scroll to the stash -- ignores the real drop
+@@ -212,3 +221,25 @@ export function TestingPanel() {
+     </>
+   );
+ }
++
++/**
++ * Small local-state field for pasting a minted dev session token --
++ * kept as its own component rather than inline state on TestingPanel
++ * so typing in it doesn't re-render the rest of that (fairly large)
++ * panel on every keystroke.
++ */
++function DevSessionTokenField() {
++  const engine = useEngine();
++  const [token, setToken] = useState('');
++
++  return (
++    <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
++      <input
++        type="text" placeholder="Paste minted session token"
++        value={token} onChange={(e) => setToken(e.target.value)}
++        style={{ flex: '1 1 320px', background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '7px 8px' }}
++      />
++      <button disabled={!token.trim()} onClick={() => engine.testSetDevSessionToken(token)}>Set token</button>
++    </div>
++  );
++}
