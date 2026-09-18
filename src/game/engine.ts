@@ -32,7 +32,7 @@ import { MailboxManager } from './managers/MailboxManager';
 import {
   verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry,
   fetchActiveListings, createListing, buyListing as buyListingRequest, ServerListingRow,
-  setDevSessionToken,
+  setDevSessionToken, fetchMyListings, cancelListing as cancelListingRequest, ListingFilters,
 } from './auctionHouse';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
@@ -2642,10 +2642,17 @@ export class GameEngine {
    * calling component (AuctionHouseTrade.tsx) tells those two states
    * apart itself rather than this method picking a toast for it, since
    * browsing is a background fetch, not a player-initiated action with
-   * a result worth announcing.
+   * a result worth announcing. `filters` (patch 0413) passes straight
+   * through to the server's own itemType/currency query params.
    */
-  async fetchAuctionListings(): Promise<ServerListingRow[] | null> {
-    return fetchActiveListings();
+  async fetchAuctionListings(filters: ListingFilters = {}): Promise<ServerListingRow[] | null> {
+    return fetchActiveListings(filters);
+  }
+
+  /** The caller's own active listings (patch 0413) -- same null-on-
+   *  failure, array-otherwise contract as fetchAuctionListings. */
+  async fetchMyAuctionListings(): Promise<ServerListingRow[] | null> {
+    return fetchMyListings();
   }
 
   /**
@@ -2657,43 +2664,61 @@ export class GameEngine {
    * untouched, until createListing() actually succeeds. Same
    * locked-item respect ShopManager.sell already enforces -- a Vault-
    * locked item can't be listed any more than it can be sold.
+   *
+   * Deposit (patch 0413) -- deducted from local gold only once the
+   * server confirms the listing and reports back the exact
+   * `deposit_amount` it computed, rather than the client recomputing its
+   * own guess at the percentage; if that math ever drifts between
+   * client and server, the server's number is the one that's actually
+   * refunded on sale (listings.ts), so it's the one the client should
+   * trust here too. `durationHours` only ever 48 if the caller actually
+   * has Charter level 2 -- checked here again, not just trusted from
+   * the UI, so a stale button state can't request 48h the player hasn't
+   * paid for.
    */
-  async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number): Promise<boolean> {
+  async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
     const item = this.state.stash.find((i) => i.uid === itemUid);
     if (!item) { this.say('That item is equipped or missing.'); return false; }
     if (item.locked) { this.say('That item is locked in the Vault.'); return false; }
     if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
+    const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
 
     this.say('Listing...');
-    const result = await createListing('equipment', item, currency, Math.floor(price));
+    const result = await createListing('equipment', item, currency, Math.floor(price), duration);
     if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
 
     // Only now, confirmed by the server -- the same item, by uid, in
     // case anything else changed the stash while this request was in
     // flight.
     this.state.stash = this.state.stash.filter((i) => i.uid !== itemUid);
-    this.say('Listed on the Auction House.');
+    if (currency === 'gold' && result.listing) this.state.gold = Math.max(0, this.state.gold - Number(result.listing.deposit_amount));
+    if (currency === 'scrap' && result.listing) this.state.scrap = Math.max(0, this.state.scrap - Number(result.listing.deposit_amount));
+    this.say(`Listed on the Auction House (${result.listing ? Number(result.listing.deposit_amount) : 0} ${currency} deposit).`);
     this.notify();
     void this.saveNow();
     return true;
   }
 
   /** Lists one unit of an owned consumable -- same "confirmed by the
-   *  server before touching local state" rule as listEquipmentForSale.
-   *  Every listing sells exactly one unit right now (no quantity field
-   *  on a listing yet) -- see server/db/migrations/001_init.sql's own
-   *  comment on what's still open. */
-  async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number): Promise<boolean> {
+   *  server before touching local state" rule and deposit handling as
+   *  listEquipmentForSale. Every listing sells exactly one unit right
+   *  now (no quantity field on a listing yet) -- see
+   *  server/db/migrations/001_init.sql's own comment on what's still
+   *  open. */
+  async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
     const owned = this.state.inventory[consumableId] ?? 0;
     if (owned < 1) { this.say("You don't have any of those."); return false; }
     if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
+    const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
 
     this.say('Listing...');
-    const result = await createListing('consumable', { defId: consumableId }, currency, Math.floor(price));
+    const result = await createListing('consumable', { defId: consumableId }, currency, Math.floor(price), duration);
     if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
 
     this.state.inventory[consumableId] = owned - 1;
-    this.say('Listed on the Auction House.');
+    if (currency === 'gold' && result.listing) this.state.gold = Math.max(0, this.state.gold - Number(result.listing.deposit_amount));
+    if (currency === 'scrap' && result.listing) this.state.scrap = Math.max(0, this.state.scrap - Number(result.listing.deposit_amount));
+    this.say(`Listed on the Auction House (${result.listing ? Number(result.listing.deposit_amount) : 0} ${currency} deposit).`);
     this.notify();
     void this.saveNow();
     return true;
@@ -2713,6 +2738,23 @@ export class GameEngine {
     if (!result.ok) { this.say(`Could not buy: ${result.error}`); return false; }
     playSound('purchase');
     this.say('Purchased! Check your mailbox.');
+    void this.syncMailboxFromServer();
+    return true;
+  }
+
+  /**
+   * Cancels the caller's own listing (patch 0413). Doesn't touch local
+   * state directly -- the item comes back through the normal mailbox
+   * sync, same as a purchase does, so this just triggers an immediate
+   * sync on success rather than applying anything itself. The deposit
+   * is forfeited server-side (listings.ts) -- nothing to undo locally
+   * either way, the deposit was already spent at listing time.
+   */
+  async cancelListing(listingId: string): Promise<boolean> {
+    this.say('Cancelling...');
+    const result = await cancelListingRequest(listingId);
+    if (!result.ok) { this.say(`Could not cancel: ${result.error}`); return false; }
+    this.say('Listing cancelled -- item back in your mailbox. Deposit is not refunded.');
     void this.syncMailboxFromServer();
     return true;
   }

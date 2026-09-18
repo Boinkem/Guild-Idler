@@ -306,8 +306,19 @@ export const UPGRADES: UpgradeDef[] = [
     // into the live array. Price cut 15000 -> 3000 same patch, direct
     // request ("easy entry") -- see guild-idler-status.md's Auction
     // House entry for the full design.
+    //
+    // Extended to maxLevel 2 (patch 0413) -- resolves the "still open"
+    // question of whether the 48h listing-duration tier is its own
+    // upgrade or folded into this one. Folded in: level 2 unlocks 48h
+    // as a choice at listing time (AuctionHouseTrade.tsx checks the
+    // level directly, same "client only offers what it's actually
+    // entitled to, server trusts what it's told" shape the whole
+    // Auction House backend already uses). costGrowth bumped 1 -> 2.5
+    // so level 2 reads as a real, priced-up follow-on purchase rather
+    // than a second copy of level 1 at the same cost -- a real number,
+    // tunable via DevTools like everything else here, not locked in.
     id: 'auction_house_charter', name: 'Auction House Charter',
-    description: 'A standing agreement with a neutral broker to run buy/sell postings between guilds -- list gear and consumables for other players to find, gold for gold. Absorbs everything Black Market Contact used to gate.',
+    description: 'A standing agreement with a neutral broker to run buy/sell postings between guilds -- list gear and consumables for other players to find, gold for gold. Absorbs everything Black Market Contact used to gate. A second level extends listings from 24h to 48h.',
     baseCost: Tuning.get('upgrade.auction_house_charter.baseCost'),
     costGrowth: Tuning.get('upgrade.auction_house_charter.costGrowth'),
     maxLevel: Tuning.get('upgrade.auction_house_charter.maxLevel'),

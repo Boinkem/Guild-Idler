@@ -2114,25 +2114,25 @@
     "category": "vendor_upgrades",
     "value": 3000,
     "default": 3000,
-    "description": "Gold cost of Auction House Charter's single level. Cut from an initial 15000 (patch 0400) to 3000 (patch 0401) -- easy entry, direct request, now that the client panel actually exists to unlock (see guild-idler-status.md's Auction House entry).",
+    "description": "Gold cost of Auction House Charter's level 1. Cut from an initial 15000 (patch 0400) to 3000 (patch 0401) -- easy entry, direct request, now that the client panel actually exists to unlock (see guild-idler-status.md's Auction House entry).",
     "min": 0
   },
   {
     "id": "upgrade.auction_house_charter.costGrowth",
     "label": "Auction House Charter: cost growth",
     "category": "vendor_upgrades",
-    "value": 1,
-    "default": 1,
-    "description": "Multiplier applied per level to Auction House Charter's cost. Irrelevant at maxLevel 1, kept only for schema consistency with every other one-time-unlock upgrade.",
+    "value": 2.5,
+    "default": 2.5,
+    "description": "Multiplier applied per level. Bumped 1 -> 2.5 (patch 0413, maxLevel extended to 2) so level 2 (7500g raw, before any early-tier discount) reads as a real follow-on purchase for the 48h listing tier, not a second copy of level 1 at the same price. A real number, tunable, not locked in.",
     "min": 1
   },
   {
     "id": "upgrade.auction_house_charter.maxLevel",
     "label": "Auction House Charter: max level",
     "category": "vendor_upgrades",
-    "value": 1,
-    "default": 1,
-    "description": "Level cap for Auction House Charter -- a single one-time unlock, same shape as Raid Charter/Training Grounds. Whether a second level ever gates the 48h listing-duration tier is still an open design question -- see guild-idler-status.md.",
+    "value": 2,
+    "default": 2,
+    "description": "Level cap for Auction House Charter. Extended 1 -> 2 (patch 0413) -- level 1 unlocks the Auction House itself, level 2 unlocks 48h listings (up from the 24h base), resolving the 'is 48h its own upgrade or folded into this one' question in guild-idler-status.md by folding it in.",
     "min": 0
   },
   {

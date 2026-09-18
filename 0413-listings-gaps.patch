@@ -1,0 +1,1009 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 5537cc7..d2350f7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7833,16 +7833,19 @@ pass (same caveat as the two entries above).
+   already exists on the server, the automated dump/rotation script
+   doesn't).
+ 
+-  **Still open, needs another pass before implementation:** exact
+-  deposit-fee/sale-cut percentages (`deposit_amount` exists in the real
+-  schema now, patch 0409, defaulted to 0 and unused -- the field was
+-  worth adding now so it doesn't mean a migration later, the actual
+-  percentage logic wasn't); whether a listing can ever ask a mixed
+-  gold+Scrap price or must pick one; system-seeded stock framing
+-  (permanent padding vs. tapering as real volume grows); whether the 48h
+-  tier is its own Guild upgrade or folded into the access-gating one
+-  (every listing gets the flat 24h base for now, patch 0409); exact
+-  listing cap (not enforced server-side yet); whether "Black Market" as a
++  **Resolved, patch 0413:** deposit fee -- 5% flat, refunded on sale,
++  forfeited on cancel (`DEPOSIT_PERCENT`, `server/src/listings.ts`); the
++  48h duration tier -- folded into Auction House Charter's level 2
++  (maxLevel extended 1 -> 2), not a separate upgrade. Both real numbers,
++  both tunable, neither locked in stone -- see that patch's own log
++  entry for the reasoning.
++
++  **Still open, needs another pass:** whether a listing can ever ask a
++  mixed gold+Scrap price or must pick one; system-seeded stock framing
++  (permanent padding vs. tapering as real volume grows); exact listing
++  cap (not enforced server-side yet); an expired-listing sweep (an
++  expired listing just stops showing up in browse, its seller doesn't
++  get it back via mailbox automatically); whether "Black Market" as a
+   label should be renamed now that it's a real player marketplace lane
+   (e.g. "Broker's Stock") -- purely thematic, not urgent.
+ 
+@@ -33561,3 +33564,79 @@ other:**
+ passing a fake SteamID), paste the printed token into TestingPanel's new
+ field, then Browse/Sell/Buy all work fully against a local server with
+ zero Steam dependency.
++
++### Closing the five real gaps: filters, my listings, cancel, deposit fees, 48h tier (patch 0413)
++```discord-update
++Dev Update | Patch 0413
++
++- Auction House: added listing filters, a My Listings tab with the ability to cancel, and a deposit fee on new listings
++- Auction House Charter now has a second level, unlocking 48h listings (up from 24h)
++```
++
++Direct request -- closes every gap patch 0411's own entry flagged and
++left flagged rather than guessed at. Two of the five were genuine
++economic-design calls, made here with real numbers rather than deferred
++again -- both cheap to retune later the same way the Charter's own price
++already got adjusted once.
++
++**Deposit fee -- 5% flat** (`DEPOSIT_PERCENT`, `server/src/listings.ts`),
++refunded to the seller on a successful sale (bundled into the same
++mailbox gold entry as the sale price, not split into two claims),
++forfeited if the listing is cancelled. The server can't charge this
++against a real balance -- no server-side gold ledger exists, same trust
++boundary the whole design has operated under from the start -- so the
++CLIENT deducts it locally, but only using the exact `deposit_amount` the
++server actually confirms in its response, never a locally-recomputed
++guess that could drift from what gets refunded later.
++
++**48h tier folded into Auction House Charter's level 2**, not a separate
++upgrade -- `maxLevel` extended 1 -> 2, `costGrowth` bumped 1 -> 2.5 so
++level 2 (7500g raw) reads as a real follow-on purchase rather than a
++second copy of level 1 at the same price. The client checks the real
++upgrade level directly before ever requesting 48h from the server, not
++just hiding the button -- confirmed directly (see Verified below): a
++character without level 2 has a 48h request silently downgraded to 24
++before it's ever sent.
++
++**Filters, browse:** `itemType`/`currency` are real server-side query
++params (real columns, cheap to filter in SQL); rarity is filtered
++client-side after fetching, since it lives inside `item_payload`'s JSONB
++rather than its own column, and adding one just for this felt like the
++wrong tradeoff for a browse endpoint that still has no pagination.
++
++**"My Listings" tab** -- new `GET /listings/mine` (auth required,
++`deposit_amount` included since only the seller should see it -- public
++browse rows don't carry it).
++
++**Cancel** -- new `POST /listings/:id/cancel`, same row-locked shape
++buyout already uses (`SELECT ... FOR UPDATE`, same table, same
++concurrency concern: a cancel racing a buyout on the same listing).
++Ownership checked inside the same locked query, not a separate one, so
++there's no window between checking and acting. Item returns via
++mailbox; deposit does not.
++
++**Verified for real against a real Postgres database, not mocked, every
++scenario checked directly:**
++- Deposit computed exactly right in both currencies (1000 gold -> 50,
++  2000 scrap -> 100).
++- 48h duration genuinely applied when requested and entitled
++  (`expires_at` confirmed ~48h out, not 24h).
++- Wrong-owner cancel attempt correctly 403s; the real owner's cancel
++  succeeds, returns the item via mailbox with NO accompanying gold entry
++  (deposit genuinely forfeited, not silently refunded); the cancelled
++  listing disappears from both browse and "my listings"; a second cancel
++  attempt on the same listing correctly 409s.
++- A real buyout's seller mailbox entry confirmed at exactly price +
++  deposit in one entry (1000 + 50 = 1050), not two separate claims.
++- Browse filters confirmed isolating results by item type correctly.
++- Client-side 48h gate: confirmed a listing attempt without Charter
++  level 2 sends `durationHours: 24` to the server regardless of what was
++  requested; after buying the Charter to level 2, the same call
++  genuinely sends 48. This was checked directly by inspecting the actual
++  request body sent, not assumed from the UI disabling a button.
++- `npx tsc --noEmit` clean, full `vite build` clean.
++
++**Not verified, and can't be here:** no real browser click-through of
++the new filter dropdowns, My Listings tab, or the 48h toggle's disabled
++state -- worth a real pass once there's a live game session to test
++against.
+diff --git a/server/src/listings.ts b/server/src/listings.ts
+index 2a90eda..34acdac 100644
+--- a/server/src/listings.ts
++++ b/server/src/listings.ts
+@@ -4,20 +4,48 @@ import { verifySessionToken } from './sessions.js';
+ import { AppConfig } from './config.js';
+ 
+ /**
+- * Core listings + buyout, patch 0409 -- see guild-idler-status.md's
+- * Auction House entry for the full design. Scoped deliberately: no
+- * filtering/pagination on browse (the client panel that would need it
+- * isn't built yet -- last item in the build order), no deposit-fee logic
+- * (percentages still genuinely undecided, see the design entry's own
+- * "Still open" list -- `deposit_amount` exists in the schema, unused,
+- * rather than guessing at a real number), no 48h duration tier (same
+- * "still open" reasoning -- every listing gets the 24h base for now), no
+- * expired-listing sweep (a background job, not built this patch -- an
+- * expired listing just stops showing up in browse results, but its
+- * seller doesn't get it back via mailbox yet).
++ * Core listings + buyout, patch 0409, extended patch 0413 to close five
++ * real gaps flagged (and left flagged, not guessed at) since patch 0411:
++ * listing filters, a "my listings" view, cancelling a listing, deposit
++ * fees, and the 48h duration tier. See guild-idler-status.md's Auction
++ * House entry for the full design and this patch's own log entry for
++ * the two genuinely economic calls made here (deposit percentage, the
++ * 48h gate) -- both are real numbers, not placeholders, but both are
++ * cheap to retune later the same way the Auction House Charter's own
++ * price already got adjusted once.
++ *
++ * Still deliberately not built: an expired-listing sweep (a background
++ * job -- an expired listing just stops showing up in browse, its seller
++ * doesn't get it back via mailbox automatically yet, same gap patch 0409
++ * already flagged and this patch doesn't close).
+  */
+ 
+ const LISTING_DURATION_HOURS = 24;
++const LISTING_DURATION_HOURS_EXTENDED = 48;
++
++/**
++ * Deposit, patch 0413 -- real number, not a placeholder, but a
++ * deliberately simple flat rate rather than anything tiered. 5% mirrors
++ * the WoW-style reference point this whole design has taken cues from
++ * (their own AH deposit sits in a similar range for a short listing
++ * duration). Refunded to the seller on a successful sale (on top of the
++ * sale price itself), forfeited on cancel -- the forfeit is what gives
++ * "list it and think it over" a real cost, discouraging spam relist-to-
++ * reprice instead of just letting a listing run its course.
++ *
++ * The server can't actually CHARGE this against a player's real gold --
++ * there's no server-side balance to charge against, only the client's
++ * own local save (see the design doc's own anti-cheat stance). The
++ * client deducts it locally immediately once a listing is confirmed
++ * created (AuctionHouseTrade.tsx / engine.ts) -- this constant exists so
++ * the amount charged and the amount later refunded always agree, computed
++ * once, not independently on both sides.
++ */
++const DEPOSIT_PERCENT = 0.05;
++
++function computeDeposit(price: number): number {
++  return Math.max(1, Math.ceil(price * DEPOSIT_PERCENT));
++}
+ 
+ /**
+  * Reads the session token from `Authorization: Bearer <token>`, attaches
+@@ -45,14 +73,50 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig)
+   /**
+    * Browse active, unexpired listings. No auth required -- browsing
+    * doesn't need to know who's asking, only buying and listing do.
++   *
++   * Filters (patch 0413): `itemType`/`currency` are real columns, cheap
++   * to filter in SQL. Rarity is deliberately NOT filtered here -- it
++   * lives inside `item_payload`'s JSONB, not its own column, and adding
++   * one just for this felt like the wrong tradeoff for a "still no
++   * pagination" v1 browse endpoint; the client filters by rarity itself
++   * after fetching (AuctionHouseTrade.tsx).
+    */
+-  app.get('/listings', async () => {
++  app.get<{ Querystring: { itemType?: string; currency?: string } }>('/listings', async (request) => {
++    const { itemType, currency } = request.query;
++    const conditions = [`status = 'active'`, `expires_at > now()`];
++    const params: string[] = [];
++
++    if (itemType === 'equipment' || itemType === 'consumable') {
++      params.push(itemType);
++      conditions.push(`item_type = $${params.length}`);
++    }
++    if (currency === 'gold' || currency === 'scrap') {
++      params.push(currency);
++      conditions.push(`currency = $${params.length}`);
++    }
++
+     const { rows } = await getPool().query(
+       `SELECT id, seller_steam_id, item_type, item_payload, currency, price, created_at, expires_at
+        FROM listings
+-       WHERE status = 'active' AND expires_at > now()
++       WHERE ${conditions.join(' AND ')}
+        ORDER BY created_at DESC
+-       LIMIT 200`
++       LIMIT 200`,
++      params
++    );
++    return { listings: rows };
++  });
++
++  /** The caller's own active listings (patch 0413) -- the "my listings"
++   *  view's data source. Auth required, unlike public browse, since this
++   *  is scoped to "mine" by definition. */
++  app.get('/listings/mine', { preHandler: auth }, async (request) => {
++    const steamId = (request as FastifyRequest & { steamId: string }).steamId;
++    const { rows } = await getPool().query(
++      `SELECT id, item_type, item_payload, currency, price, deposit_amount, created_at, expires_at
++       FROM listings
++       WHERE seller_steam_id = $1 AND status = 'active'
++       ORDER BY created_at DESC`,
++      [steamId]
+     );
+     return { listings: rows };
+   });
+@@ -63,13 +127,16 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig)
+    * truth, because there isn't one here (see the design doc's own
+    * "save-file signing/light protection only" anti-cheat stance) -- the
+    * same trust boundary the client's local save file already operates
+-   * under.
++   * under. Same trust extended to `durationHours` (patch 0413) -- the
++   * server accepts either valid value at face value; it's the CLIENT's
++   * job to only offer 48h once the player's own Charter level actually
++   * allows it (AuctionHouseTrade.tsx).
+    */
+-  app.post<{ Body: { itemType?: string; itemPayload?: unknown; currency?: string; price?: number } }>(
++  app.post<{ Body: { itemType?: string; itemPayload?: unknown; currency?: string; price?: number; durationHours?: number } }>(
+     '/listings',
+     { preHandler: auth },
+     async (request, reply) => {
+-      const { itemType, itemPayload, currency, price } = request.body ?? {};
++      const { itemType, itemPayload, currency, price, durationHours } = request.body ?? {};
+       const steamId = (request as FastifyRequest & { steamId: string }).steamId;
+ 
+       if (itemType !== 'equipment' && itemType !== 'consumable') {
+@@ -84,12 +151,16 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig)
+         reply.code(400);
+         return { error: 'itemPayload and a positive price are required.' };
+       }
++      const duration = durationHours === LISTING_DURATION_HOURS_EXTENDED
++        ? LISTING_DURATION_HOURS_EXTENDED
++        : LISTING_DURATION_HOURS;
++      const depositAmount = computeDeposit(price);
+ 
+       const { rows } = await getPool().query(
+-        `INSERT INTO listings (seller_steam_id, item_type, item_payload, currency, price, expires_at)
+-         VALUES ($1, $2, $3, $4, $5, now() + $6 * interval '1 hour')
+-         RETURNING id, created_at, expires_at`,
+-        [steamId, itemType, JSON.stringify(itemPayload), currency, price, LISTING_DURATION_HOURS]
++        `INSERT INTO listings (seller_steam_id, item_type, item_payload, currency, price, deposit_amount, expires_at)
++         VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 hour')
++         RETURNING id, created_at, expires_at, deposit_amount`,
++        [steamId, itemType, JSON.stringify(itemPayload), currency, price, depositAmount, duration]
+       );
+       return { listing: rows[0] };
+     }
+@@ -109,6 +180,9 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig)
+    * directly in the buyer's inventory the original design called for) --
+    * this route creates both mailbox rows in the same transaction as the
+    * sale itself, so a crash between them is impossible, not just unlikely.
++   * The seller's mailbox gold entry now includes their deposit refund
++   * (patch 0413) -- price + deposit_amount in one entry, not two, since
++   * there's no real reason to split them into separate claims.
+    */
+   app.post<{ Params: { id: string } }>('/listings/:id/buy', { preHandler: auth }, async (request, reply) => {
+     const buyerSteamId = (request as FastifyRequest & { steamId: string }).steamId;
+@@ -140,14 +214,16 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig)
+           [buyerSteamId, listing.item_type, listing.item_payload, 'Auction House purchase']
+         );
+ 
+-        // Seller's mailbox entry -- the sale gold/scrap. Skipped for
+-        // system-seeded listings (seller_steam_id IS NULL) -- there's no
+-        // real player to deliver it to.
++        // Seller's mailbox entry -- sale price PLUS the deposit refund
++        // (patch 0413) in one entry. Skipped for system-seeded listings
++        // (seller_steam_id IS NULL) -- there's no real player to deliver
++        // it to.
+         if (listing.seller_steam_id) {
++          const total = Number(listing.price) + Number(listing.deposit_amount ?? 0);
+           await client.query(
+             `INSERT INTO mailbox (owner_steam_id, type, amount, note)
+              VALUES ($1, $2, $3, $4)`,
+-            [listing.seller_steam_id, listing.currency, listing.price, 'Auction House sale']
++            [listing.seller_steam_id, listing.currency, total, 'Auction House sale (includes deposit refund)']
+           );
+         }
+ 
+@@ -174,8 +250,63 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig)
+     }
+   });
+ 
++  /**
++   * Cancel -- patch 0413. Same row-locked shape buyout already uses
++   * (SELECT ... FOR UPDATE, same table, same concurrency concern: a
++   * cancel racing a buyout on the same listing). Only the listing's own
++   * seller can cancel it, checked in the same locked SELECT rather than
++   * as a separate query, so there's no window between checking ownership
++   * and acting on it. The item comes back via mailbox -- the deposit
++   * does NOT (see DEPOSIT_PERCENT's own comment on why forfeiting it on
++   * cancel is deliberate, not an oversight).
++   */
++  app.post<{ Params: { id: string } }>('/listings/:id/cancel', { preHandler: auth }, async (request, reply) => {
++    const steamId = (request as FastifyRequest & { steamId: string }).steamId;
++    const { id } = request.params;
++
++    try {
++      const result = await withTransaction(async (client) => {
++        const { rows } = await client.query(
++          `SELECT * FROM listings WHERE id = $1 AND status = 'active' FOR UPDATE`,
++          [id]
++        );
++        const listing = rows[0];
++        if (!listing) {
++          throw Object.assign(new Error('Listing not found or already sold/cancelled.'), { code: 'NOT_AVAILABLE' });
++        }
++        if (listing.seller_steam_id !== steamId) {
++          throw Object.assign(new Error("That's not your listing."), { code: 'NOT_YOURS' });
++        }
++
++        await client.query(`UPDATE listings SET status = 'cancelled' WHERE id = $1`, [id]);
++
++        // Item back to the seller via mailbox -- deposit forfeited,
++        // deliberately not refunded here.
++        await client.query(
++          `INSERT INTO mailbox (owner_steam_id, type, item_payload, note)
++           VALUES ($1, $2, $3, $4)`,
++          [steamId, listing.item_type, listing.item_payload, 'Auction House listing cancelled']
++        );
++
++        return { listingId: id };
++      });
++      return result;
++    } catch (err) {
++      const code = (err as { code?: string }).code;
++      if (code === 'NOT_AVAILABLE') {
++        reply.code(409);
++        return { error: (err as Error).message };
++      }
++      if (code === 'NOT_YOURS') {
++        reply.code(403);
++        return { error: (err as Error).message };
++      }
++      throw err;
++    }
++  });
++
+   /** Lists the caller's own unclaimed mailbox entries -- the source the
+-   *  client's mailbox-sync step (not built this patch) will pull from. */
++   *  client's mailbox-sync step pulls from. */
+   app.get('/mailbox', { preHandler: auth }, async (request) => {
+     const steamId = (request as FastifyRequest & { steamId: string }).steamId;
+     const { rows } = await getPool().query(
+diff --git a/src/game/auctionHouse.ts b/src/game/auctionHouse.ts
+index fb5bf82..319812e 100644
+--- a/src/game/auctionHouse.ts
++++ b/src/game/auctionHouse.ts
+@@ -222,8 +222,11 @@ export async function claimServerMailboxEntry(entryId: string): Promise<boolean>
+ 
+ /** Raw shape of one row from the server's GET /listings (server/src/
+  *  listings.ts) -- snake_case, matching the Postgres columns directly.
+- *  `price` comes back as a string over JSON (Postgres BIGINT), same as
+- *  ServerMailboxRow's own `amount` field. */
++ *  `price`/`deposit_amount` come back as strings over JSON (Postgres
++ *  BIGINT), same as ServerMailboxRow's own `amount` field.
++ *  `deposit_amount` only present on /listings/mine rows -- public
++ *  browse rows don't include it, there's no reason for anyone but the
++ *  seller to see it. */
+ export interface ServerListingRow {
+   id: string;
+   seller_steam_id: string | null;
+@@ -231,21 +234,54 @@ export interface ServerListingRow {
+   item_payload: unknown;
+   currency: 'gold' | 'scrap';
+   price: string;
++  deposit_amount?: string;
+   created_at: string;
+   expires_at: string;
+ }
+ 
++export interface ListingFilters {
++  itemType?: 'equipment' | 'consumable';
++  currency?: 'gold' | 'scrap';
++}
++
+ /**
+  * Browse active listings -- public, no session token needed (matches
+  * the server route's own "browsing doesn't need to know who's asking"
+  * design, listings.ts). Returns `null` only on a genuine failure to
+  * reach the backend, never for "zero listings right now" -- that comes
+  * back as an empty array, a normal state, not an error one.
++ *
++ * `filters` (patch 0413) maps straight onto the server's own query
++ * params -- rarity is deliberately NOT one of them, see listings.ts's
++ * own comment on why that's filtered client-side instead
++ * (AuctionHouseTrade.tsx).
+  */
+-export async function fetchActiveListings(): Promise<ServerListingRow[] | null> {
++export async function fetchActiveListings(filters: ListingFilters = {}): Promise<ServerListingRow[] | null> {
+   if (!AH_READY || !AH_BACKEND_URL) return null;
+   try {
+-    const response = await fetch(`${AH_BACKEND_URL}/listings`);
++    const params = new URLSearchParams();
++    if (filters.itemType) params.set('itemType', filters.itemType);
++    if (filters.currency) params.set('currency', filters.currency);
++    const query = params.toString();
++    const response = await fetch(`${AH_BACKEND_URL}/listings${query ? `?${query}` : ''}`);
++    if (!response.ok) return null;
++    const body = await response.json();
++    return Array.isArray(body?.listings) ? body.listings : null;
++  } catch {
++    return null;
++  }
++}
++
++/** The caller's own active listings (patch 0413) -- the "my listings"
++ *  view's data source. `null` on failure (including no session
++ *  obtainable), same contract as fetchServerMailbox. */
++export async function fetchMyListings(): Promise<ServerListingRow[] | null> {
++  const token = await getSessionToken();
++  if (!token || !AH_READY || !AH_BACKEND_URL) return null;
++  try {
++    const response = await fetch(`${AH_BACKEND_URL}/listings/mine`, {
++      headers: { Authorization: `Bearer ${token}` },
++    });
+     if (!response.ok) return null;
+     const body = await response.json();
+     return Array.isArray(body?.listings) ? body.listings : null;
+@@ -256,7 +292,7 @@ export async function fetchActiveListings(): Promise<ServerListingRow[] | null>
+ 
+ export interface CreateListingResult {
+   ok: boolean;
+-  listing?: { id: string; created_at: string; expires_at: string };
++  listing?: { id: string; created_at: string; expires_at: string; deposit_amount: string };
+   error?: string;
+ }
+ 
+@@ -266,13 +302,17 @@ export interface CreateListingResult {
+  * (see listings.ts's own comment on this trust boundary), so this
+  * function doesn't either; the caller (AuctionHouseTrade.tsx) is
+  * responsible for passing the real item straight from the player's own
+- * stash/inventory.
++ * stash/inventory. `durationHours` (patch 0413) is trusted the same way
++ * -- it's the caller's job to only offer 48 once the player's own
++ * Charter level actually allows it; the server accepts either valid
++ * value at face value regardless.
+  */
+ export async function createListing(
+   itemType: 'equipment' | 'consumable',
+   itemPayload: unknown,
+   currency: 'gold' | 'scrap',
+-  price: number
++  price: number,
++  durationHours: 24 | 48 = 24
+ ): Promise<CreateListingResult> {
+   const token = await getSessionToken();
+   if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
+@@ -282,7 +322,7 @@ export async function createListing(
+     const response = await fetch(`${AH_BACKEND_URL}/listings`, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+-      body: JSON.stringify({ itemType, itemPayload, currency, price }),
++      body: JSON.stringify({ itemType, itemPayload, currency, price, durationHours }),
+     });
+     const body = await response.json();
+     if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
+@@ -322,3 +362,34 @@ export async function buyListing(listingId: string): Promise<BuyListingResult> {
+     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+   }
+ }
++
++export interface CancelListingResult {
++  ok: boolean;
++  error?: string;
++}
++
++/**
++ * Cancels the caller's own listing (patch 0413). On success the item
++ * routes back through mailbox server-side (listings.ts) -- the deposit
++ * is forfeited, deliberately, see that route's own comment; this
++ * function doesn't touch local gold either way, there's nothing to
++ * refund on this side.
++ */
++export async function cancelListing(listingId: string): Promise<CancelListingResult> {
++  const token = await getSessionToken();
++  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
++  if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
++
++  try {
++    const response = await fetch(`${AH_BACKEND_URL}/listings/${listingId}/cancel`, {
++      method: 'POST',
++      headers: { Authorization: `Bearer ${token}` },
++    });
++    const body = await response.json();
++    if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
++    return { ok: true };
++  } catch (err) {
++    return { ok: false, error: err instanceof Error ? err.message : String(err) };
++  }
++}
++
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index fdd76de..9d88937 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -2114,25 +2114,25 @@
+     "category": "vendor_upgrades",
+     "value": 3000,
+     "default": 3000,
+-    "description": "Gold cost of Auction House Charter's single level. Cut from an initial 15000 (patch 0400) to 3000 (patch 0401) -- easy entry, direct request, now that the client panel actually exists to unlock (see guild-idler-status.md's Auction House entry).",
++    "description": "Gold cost of Auction House Charter's level 1. Cut from an initial 15000 (patch 0400) to 3000 (patch 0401) -- easy entry, direct request, now that the client panel actually exists to unlock (see guild-idler-status.md's Auction House entry).",
+     "min": 0
+   },
+   {
+     "id": "upgrade.auction_house_charter.costGrowth",
+     "label": "Auction House Charter: cost growth",
+     "category": "vendor_upgrades",
+-    "value": 1,
+-    "default": 1,
+-    "description": "Multiplier applied per level to Auction House Charter's cost. Irrelevant at maxLevel 1, kept only for schema consistency with every other one-time-unlock upgrade.",
++    "value": 2.5,
++    "default": 2.5,
++    "description": "Multiplier applied per level. Bumped 1 -> 2.5 (patch 0413, maxLevel extended to 2) so level 2 (7500g raw, before any early-tier discount) reads as a real follow-on purchase for the 48h listing tier, not a second copy of level 1 at the same price. A real number, tunable, not locked in.",
+     "min": 1
+   },
+   {
+     "id": "upgrade.auction_house_charter.maxLevel",
+     "label": "Auction House Charter: max level",
+     "category": "vendor_upgrades",
+-    "value": 1,
+-    "default": 1,
+-    "description": "Level cap for Auction House Charter -- a single one-time unlock, same shape as Raid Charter/Training Grounds. Whether a second level ever gates the 48h listing-duration tier is still an open design question -- see guild-idler-status.md.",
++    "value": 2,
++    "default": 2,
++    "description": "Level cap for Auction House Charter. Extended 1 -> 2 (patch 0413) -- level 1 unlocks the Auction House itself, level 2 unlocks 48h listings (up from the 24h base), resolving the 'is 48h its own upgrade or folded into this one' question in guild-idler-status.md by folding it in.",
+     "min": 0
+   },
+   {
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 5a0483c..2756b6b 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -306,8 +306,19 @@ export const UPGRADES: UpgradeDef[] = [
+     // into the live array. Price cut 15000 -> 3000 same patch, direct
+     // request ("easy entry") -- see guild-idler-status.md's Auction
+     // House entry for the full design.
++    //
++    // Extended to maxLevel 2 (patch 0413) -- resolves the "still open"
++    // question of whether the 48h listing-duration tier is its own
++    // upgrade or folded into this one. Folded in: level 2 unlocks 48h
++    // as a choice at listing time (AuctionHouseTrade.tsx checks the
++    // level directly, same "client only offers what it's actually
++    // entitled to, server trusts what it's told" shape the whole
++    // Auction House backend already uses). costGrowth bumped 1 -> 2.5
++    // so level 2 reads as a real, priced-up follow-on purchase rather
++    // than a second copy of level 1 at the same cost -- a real number,
++    // tunable via DevTools like everything else here, not locked in.
+     id: 'auction_house_charter', name: 'Auction House Charter',
+-    description: 'A standing agreement with a neutral broker to run buy/sell postings between guilds -- list gear and consumables for other players to find, gold for gold. Absorbs everything Black Market Contact used to gate.',
++    description: 'A standing agreement with a neutral broker to run buy/sell postings between guilds -- list gear and consumables for other players to find, gold for gold. Absorbs everything Black Market Contact used to gate. A second level extends listings from 24h to 48h.',
+     baseCost: Tuning.get('upgrade.auction_house_charter.baseCost'),
+     costGrowth: Tuning.get('upgrade.auction_house_charter.costGrowth'),
+     maxLevel: Tuning.get('upgrade.auction_house_charter.maxLevel'),
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 03be0d0..c430b47 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -32,7 +32,7 @@ import { MailboxManager } from './managers/MailboxManager';
+ import {
+   verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry,
+   fetchActiveListings, createListing, buyListing as buyListingRequest, ServerListingRow,
+-  setDevSessionToken,
++  setDevSessionToken, fetchMyListings, cancelListing as cancelListingRequest, ListingFilters,
+ } from './auctionHouse';
+ import { PeddlerManager } from './managers/PeddlerManager';
+ import { CraftingManager } from './managers/CraftingManager';
+@@ -2642,10 +2642,17 @@ export class GameEngine {
+    * calling component (AuctionHouseTrade.tsx) tells those two states
+    * apart itself rather than this method picking a toast for it, since
+    * browsing is a background fetch, not a player-initiated action with
+-   * a result worth announcing.
++   * a result worth announcing. `filters` (patch 0413) passes straight
++   * through to the server's own itemType/currency query params.
+    */
+-  async fetchAuctionListings(): Promise<ServerListingRow[] | null> {
+-    return fetchActiveListings();
++  async fetchAuctionListings(filters: ListingFilters = {}): Promise<ServerListingRow[] | null> {
++    return fetchActiveListings(filters);
++  }
++
++  /** The caller's own active listings (patch 0413) -- same null-on-
++   *  failure, array-otherwise contract as fetchAuctionListings. */
++  async fetchMyAuctionListings(): Promise<ServerListingRow[] | null> {
++    return fetchMyListings();
+   }
+ 
+   /**
+@@ -2657,43 +2664,61 @@ export class GameEngine {
+    * untouched, until createListing() actually succeeds. Same
+    * locked-item respect ShopManager.sell already enforces -- a Vault-
+    * locked item can't be listed any more than it can be sold.
++   *
++   * Deposit (patch 0413) -- deducted from local gold only once the
++   * server confirms the listing and reports back the exact
++   * `deposit_amount` it computed, rather than the client recomputing its
++   * own guess at the percentage; if that math ever drifts between
++   * client and server, the server's number is the one that's actually
++   * refunded on sale (listings.ts), so it's the one the client should
++   * trust here too. `durationHours` only ever 48 if the caller actually
++   * has Charter level 2 -- checked here again, not just trusted from
++   * the UI, so a stale button state can't request 48h the player hasn't
++   * paid for.
+    */
+-  async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number): Promise<boolean> {
++  async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
+     const item = this.state.stash.find((i) => i.uid === itemUid);
+     if (!item) { this.say('That item is equipped or missing.'); return false; }
+     if (item.locked) { this.say('That item is locked in the Vault.'); return false; }
+     if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
++    const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
+ 
+     this.say('Listing...');
+-    const result = await createListing('equipment', item, currency, Math.floor(price));
++    const result = await createListing('equipment', item, currency, Math.floor(price), duration);
+     if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
+ 
+     // Only now, confirmed by the server -- the same item, by uid, in
+     // case anything else changed the stash while this request was in
+     // flight.
+     this.state.stash = this.state.stash.filter((i) => i.uid !== itemUid);
+-    this.say('Listed on the Auction House.');
++    if (currency === 'gold' && result.listing) this.state.gold = Math.max(0, this.state.gold - Number(result.listing.deposit_amount));
++    if (currency === 'scrap' && result.listing) this.state.scrap = Math.max(0, this.state.scrap - Number(result.listing.deposit_amount));
++    this.say(`Listed on the Auction House (${result.listing ? Number(result.listing.deposit_amount) : 0} ${currency} deposit).`);
+     this.notify();
+     void this.saveNow();
+     return true;
+   }
+ 
+   /** Lists one unit of an owned consumable -- same "confirmed by the
+-   *  server before touching local state" rule as listEquipmentForSale.
+-   *  Every listing sells exactly one unit right now (no quantity field
+-   *  on a listing yet) -- see server/db/migrations/001_init.sql's own
+-   *  comment on what's still open. */
+-  async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number): Promise<boolean> {
++   *  server before touching local state" rule and deposit handling as
++   *  listEquipmentForSale. Every listing sells exactly one unit right
++   *  now (no quantity field on a listing yet) -- see
++   *  server/db/migrations/001_init.sql's own comment on what's still
++   *  open. */
++  async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
+     const owned = this.state.inventory[consumableId] ?? 0;
+     if (owned < 1) { this.say("You don't have any of those."); return false; }
+     if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
++    const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
+ 
+     this.say('Listing...');
+-    const result = await createListing('consumable', { defId: consumableId }, currency, Math.floor(price));
++    const result = await createListing('consumable', { defId: consumableId }, currency, Math.floor(price), duration);
+     if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
+ 
+     this.state.inventory[consumableId] = owned - 1;
+-    this.say('Listed on the Auction House.');
++    if (currency === 'gold' && result.listing) this.state.gold = Math.max(0, this.state.gold - Number(result.listing.deposit_amount));
++    if (currency === 'scrap' && result.listing) this.state.scrap = Math.max(0, this.state.scrap - Number(result.listing.deposit_amount));
++    this.say(`Listed on the Auction House (${result.listing ? Number(result.listing.deposit_amount) : 0} ${currency} deposit).`);
+     this.notify();
+     void this.saveNow();
+     return true;
+@@ -2717,6 +2742,23 @@ export class GameEngine {
+     return true;
+   }
+ 
++  /**
++   * Cancels the caller's own listing (patch 0413). Doesn't touch local
++   * state directly -- the item comes back through the normal mailbox
++   * sync, same as a purchase does, so this just triggers an immediate
++   * sync on success rather than applying anything itself. The deposit
++   * is forfeited server-side (listings.ts) -- nothing to undo locally
++   * either way, the deposit was already spent at listing time.
++   */
++  async cancelListing(listingId: string): Promise<boolean> {
++    this.say('Cancelling...');
++    const result = await cancelListingRequest(listingId);
++    if (!result.ok) { this.say(`Could not cancel: ${result.error}`); return false; }
++    this.say('Listing cancelled -- item back in your mailbox. Deposit is not refunded.');
++    void this.syncMailboxFromServer();
++    return true;
++  }
++
+   /** Bulk-sells every owned curio in one action -- the Curios-section
+    *  counterpart to sellJunk above. */
+   sellAllCurios() {
+diff --git a/src/ui/AuctionHouseTrade.tsx b/src/ui/AuctionHouseTrade.tsx
+index be33281..f74da1b 100644
+--- a/src/ui/AuctionHouseTrade.tsx
++++ b/src/ui/AuctionHouseTrade.tsx
+@@ -1,55 +1,65 @@
+ import { useEffect, useState } from 'react';
+ import { useEngine } from './useEngine';
+-import { EquipmentItem } from '../game/types';
+-import { RARITY_BANNER, RARITY_COLOR, formatGold } from '../game/util';
++import { EquipmentItem, Rarity } from '../game/types';
++import { RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, formatGold } from '../game/util';
+ import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
+ import { CONSUMABLE_BY_ID } from '../game/data/items';
+ import { ItemIcon, ConsumableIcon } from './icons';
+ import { ServerListingRow } from '../game/auctionHouse';
++import { GuildManager } from '../game/managers/GuildManager';
+ 
+ /**
+- * Real Auction House browse/sell UI (patch 0411) -- the actual
+- * player-facing piece every prior Auction House patch has been building
+- * toward, since patch 0401's panel shell. Rendered by
+- * AuctionHousePanel.tsx only once `status === 'online'` (a real,
+- * confirmed connection) -- see that file's own comment for why the
+- * offline state is correct production behaviour, not a stub, whenever
+- * this can't render.
++ * Real Auction House browse/sell UI, patch 0411, extended patch 0413 to
++ * close five real gaps: listing filters, a "my listings" view,
++ * cancelling a listing, deposit fees, and the 48h duration tier. See
++ * listings.ts's own header comment (server) for the two genuinely
++ * economic calls made there (deposit percentage, the 48h gate).
+  *
+- * Two tabs, kept deliberately simple for v1: Browse (fetch + display +
+- * Buy) and Sell (pick an eligible item, set a price, list it). No
+- * filtering/pagination on Browse yet, no "my listings" view, no cancel
+- * -- all flagged as still-open in guild-idler-status.md's Auction House
+- * entry, not overlooked here.
++ * Three tabs now: Browse, Sell, My Listings.
+  */
+ export function AuctionHouseTrade() {
+-  const [tab, setTab] = useState<'browse' | 'sell'>('browse');
++  const [tab, setTab] = useState<'browse' | 'sell' | 'mine'>('browse');
+   return (
+     <div>
+       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
+         <button className={tab === 'browse' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('browse')}>Browse</button>
+         <button className={tab === 'sell' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('sell')}>Sell</button>
++        <button className={tab === 'mine' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('mine')}>My Listings</button>
+       </div>
+-      {tab === 'browse' ? <BrowseTab /> : <SellTab />}
++      {tab === 'browse' ? <BrowseTab /> : tab === 'sell' ? <SellTab /> : <MyListingsTab />}
+     </div>
+   );
+ }
+ 
++function rarityOf(row: ServerListingRow): Rarity | null {
++  if (row.item_type === 'equipment') {
++    const item = row.item_payload as EquipmentItem;
++    return EQUIPMENT_BY_ID[item.defId]?.rarity ?? null;
++  }
++  const payload = row.item_payload as { defId?: string };
++  if (!payload.defId) return null;
++  return CONSUMABLE_BY_ID[payload.defId]?.rarity ?? null;
++}
++
+ function BrowseTab() {
+   const engine = useEngine();
+   const [listings, setListings] = useState<ServerListingRow[] | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [buyingId, setBuyingId] = useState<string | null>(null);
++  const [itemTypeFilter, setItemTypeFilter] = useState<'' | 'equipment' | 'consumable'>('');
++  const [rarityFilter, setRarityFilter] = useState<'' | Rarity>('');
+ 
+   const refresh = () => {
+     setLoading(true);
+-    engine.fetchAuctionListings().then((rows) => {
++    engine.fetchAuctionListings(itemTypeFilter ? { itemType: itemTypeFilter } : {}).then((rows) => {
+       setListings(rows);
+       setLoading(false);
+     });
+   };
+ 
+-  useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
++  // Refetch from the server on itemType changes (a real query param) --
++  // rarity is filtered client-side below, no refetch needed for it.
++  useEffect(() => { refresh(); }, [itemTypeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+ 
+   const handleBuy = async (id: string) => {
+     setBuyingId(id);
+@@ -58,30 +68,43 @@ function BrowseTab() {
+     if (ok) refresh();
+   };
+ 
+-  if (loading) {
+-    return <div className="card"><p className="tiny muted" style={{ margin: 0 }}>Loading listings...</p></div>;
+-  }
+-  if (listings === null) {
+-    return <div className="card"><p className="tiny muted" style={{ margin: 0 }}>Couldn't load listings right now -- try again in a moment.</p></div>;
+-  }
+-  if (listings.length === 0) {
+-    return (
+-      <div className="card">
+-        <p className="tiny muted" style={{ margin: 0 }}>Nothing listed right now -- check back later, or list something yourself.</p>
+-      </div>
+-    );
+-  }
++  const visible = (listings ?? []).filter((row) => !rarityFilter || rarityOf(row) === rarityFilter);
+ 
+   return (
+     <>
+-      <div className="row end" style={{ marginBottom: 8 }}>
++      <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
++        <select value={itemTypeFilter} onChange={(e) => setItemTypeFilter(e.target.value as typeof itemTypeFilter)}
++          style={{ background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '6px 8px' }}>
++          <option value="">All types</option>
++          <option value="equipment">Gear</option>
++          <option value="consumable">Consumables</option>
++        </select>
++        <select value={rarityFilter} onChange={(e) => setRarityFilter(e.target.value as typeof rarityFilter)}
++          style={{ background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '6px 8px' }}>
++          <option value="">All rarities</option>
++          {RARITY_ORDER.map((r) => <option key={r} value={r}>{r}</option>)}
++        </select>
++        <div style={{ flex: 1 }} />
+         <button className="btn-ghost" onClick={refresh}>Refresh</button>
+       </div>
+-      <div className="item-card-grid">
+-        {listings.map((row) => (
+-          <ListingCard key={row.id} row={row} buying={buyingId === row.id} onBuy={() => handleBuy(row.id)} />
+-        ))}
+-      </div>
++
++      {loading ? (
++        <div className="card"><p className="tiny muted" style={{ margin: 0 }}>Loading listings...</p></div>
++      ) : listings === null ? (
++        <div className="card"><p className="tiny muted" style={{ margin: 0 }}>Couldn't load listings right now -- try again in a moment.</p></div>
++      ) : visible.length === 0 ? (
++        <div className="card">
++          <p className="tiny muted" style={{ margin: 0 }}>
++            {listings.length === 0 ? 'Nothing listed right now -- check back later, or list something yourself.' : 'Nothing matches those filters.'}
++          </p>
++        </div>
++      ) : (
++        <div className="item-card-grid">
++          {visible.map((row) => (
++            <ListingCard key={row.id} row={row} buying={buyingId === row.id} onBuy={() => handleBuy(row.id)} />
++          ))}
++        </div>
++      )}
+     </>
+   );
+ }
+@@ -150,7 +173,8 @@ function SellTab() {
+     <div>
+       <p className="tiny muted" style={{ marginBottom: 8 }}>
+         Pick something to list. It stays yours -- untouched -- until the listing is actually
+-        confirmed by the server, not before.
++        confirmed by the server, not before. A small deposit (refunded if it sells, forfeited if
++        you cancel) is charged once that confirmation comes back.
+       </p>
+ 
+       <div className="section-heading">Gear ({sellableStash.length})</div>
+@@ -215,8 +239,13 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
+   const engine = useEngine();
+   const [currency, setCurrency] = useState<'gold' | 'scrap'>('gold');
+   const [price, setPrice] = useState('');
++  const [duration, setDuration] = useState<24 | 48>(24);
+   const [submitting, setSubmitting] = useState(false);
+ 
++  const has48h = GuildManager.upgradeLevel(engine.state, 'auction_house_charter') >= 2;
++  const priceNum = Number(price) || 0;
++  const estDeposit = priceNum > 0 ? Math.max(1, Math.ceil(priceNum * 0.05)) : 0;
++
+   const name = draft.kind === 'equipment'
+     ? (() => {
+         const def = EQUIPMENT_BY_ID[draft.item.defId];
+@@ -228,8 +257,8 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
+     const value = Number(price);
+     setSubmitting(true);
+     const ok = draft.kind === 'equipment'
+-      ? await engine.listEquipmentForSale(draft.item.uid, currency, value)
+-      : await engine.listConsumableForSale(draft.consumableId, currency, value);
++      ? await engine.listEquipmentForSale(draft.item.uid, currency, value, duration)
++      : await engine.listConsumableForSale(draft.consumableId, currency, value, duration);
+     setSubmitting(false);
+     if (ok) onDone();
+   };
+@@ -246,6 +275,16 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
+         onChange={(e) => setPrice(e.target.value)}
+         style={{ width: '100%', background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '7px 8px', marginBottom: 10 }}
+       />
++      <div className="row" style={{ gap: 8, marginBottom: 10, alignItems: 'center' }}>
++        <button className={duration === 24 ? 'btn-primary' : 'btn-ghost'} onClick={() => setDuration(24)}>24h</button>
++        <button className={duration === 48 ? 'btn-primary' : 'btn-ghost'} disabled={!has48h} onClick={() => setDuration(48)}>48h</button>
++        {!has48h && <span className="tiny muted">Auction House Charter level 2 unlocks 48h listings</span>}
++      </div>
++      {priceNum > 0 && (
++        <p className="tiny muted" style={{ marginBottom: 10 }}>
++          Deposit: ~{estDeposit} {currency} (5%, refunded if it sells, forfeited if you cancel).
++        </p>
++      )}
+       <div className="row" style={{ gap: 8 }}>
+         <button className="btn-primary" disabled={submitting || !price} onClick={submit}>
+           {submitting ? 'Listing...' : 'Confirm listing'}
+@@ -255,3 +294,96 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
+     </div>
+   );
+ }
++
++function MyListingsTab() {
++  const engine = useEngine();
++  const [listings, setListings] = useState<ServerListingRow[] | null>(null);
++  const [loading, setLoading] = useState(true);
++  const [cancellingId, setCancellingId] = useState<string | null>(null);
++
++  const refresh = () => {
++    setLoading(true);
++    engine.fetchMyAuctionListings().then((rows) => {
++      setListings(rows);
++      setLoading(false);
++    });
++  };
++
++  useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
++
++  const handleCancel = async (id: string) => {
++    setCancellingId(id);
++    const ok = await engine.cancelListing(id);
++    setCancellingId(null);
++    if (ok) refresh();
++  };
++
++  if (loading) {
++    return <div className="card"><p className="tiny muted" style={{ margin: 0 }}>Loading your listings...</p></div>;
++  }
++  if (listings === null) {
++    return <div className="card"><p className="tiny muted" style={{ margin: 0 }}>Couldn't load your listings right now -- try again in a moment.</p></div>;
++  }
++  if (listings.length === 0) {
++    return <div className="card"><p className="tiny muted" style={{ margin: 0 }}>You don't have anything listed right now.</p></div>;
++  }
++
++  return (
++    <>
++      <div className="row end" style={{ marginBottom: 8 }}>
++        <button className="btn-ghost" onClick={refresh}>Refresh</button>
++      </div>
++      <div className="item-card-grid">
++        {listings.map((row) => (
++          <MyListingCard key={row.id} row={row} cancelling={cancellingId === row.id} onCancel={() => handleCancel(row.id)} />
++        ))}
++      </div>
++    </>
++  );
++}
++
++function MyListingCard({ row, cancelling, onCancel }: { row: ServerListingRow; cancelling: boolean; onCancel: () => void }) {
++  const cancelButton = (
++    <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} disabled={cancelling} onClick={onCancel}>
++      {cancelling ? 'Cancelling...' : 'Cancel listing'}
++    </button>
++  );
++
++  if (row.item_type === 'equipment') {
++    const item = row.item_payload as EquipmentItem;
++    const def = EQUIPMENT_BY_ID[item.defId];
++    if (!def) return null;
++    return (
++      <div className="item-card rarity-card">
++        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++        <div className="item-card-summary">
++          <ItemIcon slot={def.slot} icon={def.icon} size={48} />
++          <div className="item-card-body">
++            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}</div>
++            <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
++            {row.deposit_amount && <div className="tiny muted">Deposit: {row.deposit_amount} {row.currency}</div>}
++          </div>
++        </div>
++        {cancelButton}
++      </div>
++    );
++  }
++
++  const payload = row.item_payload as { defId?: string };
++  const def = payload.defId ? CONSUMABLE_BY_ID[payload.defId] : undefined;
++  if (!def) return null;
++  return (
++    <div className="item-card rarity-card">
++      <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++      <div className="item-card-summary">
++        <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
++        <div className="item-card-body">
++          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
++          <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
++          {row.deposit_amount && <div className="tiny muted">Deposit: {row.deposit_amount} {row.currency}</div>}
++        </div>
++      </div>
++      {cancelButton}
++    </div>
++  );
++}

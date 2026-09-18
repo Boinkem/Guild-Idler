@@ -222,8 +222,11 @@ export async function claimServerMailboxEntry(entryId: string): Promise<boolean>
 
 /** Raw shape of one row from the server's GET /listings (server/src/
  *  listings.ts) -- snake_case, matching the Postgres columns directly.
- *  `price` comes back as a string over JSON (Postgres BIGINT), same as
- *  ServerMailboxRow's own `amount` field. */
+ *  `price`/`deposit_amount` come back as strings over JSON (Postgres
+ *  BIGINT), same as ServerMailboxRow's own `amount` field.
+ *  `deposit_amount` only present on /listings/mine rows -- public
+ *  browse rows don't include it, there's no reason for anyone but the
+ *  seller to see it. */
 export interface ServerListingRow {
   id: string;
   seller_steam_id: string | null;
@@ -231,8 +234,14 @@ export interface ServerListingRow {
   item_payload: unknown;
   currency: 'gold' | 'scrap';
   price: string;
+  deposit_amount?: string;
   created_at: string;
   expires_at: string;
+}
+
+export interface ListingFilters {
+  itemType?: 'equipment' | 'consumable';
+  currency?: 'gold' | 'scrap';
 }
 
 /**
@@ -241,11 +250,38 @@ export interface ServerListingRow {
  * design, listings.ts). Returns `null` only on a genuine failure to
  * reach the backend, never for "zero listings right now" -- that comes
  * back as an empty array, a normal state, not an error one.
+ *
+ * `filters` (patch 0413) maps straight onto the server's own query
+ * params -- rarity is deliberately NOT one of them, see listings.ts's
+ * own comment on why that's filtered client-side instead
+ * (AuctionHouseTrade.tsx).
  */
-export async function fetchActiveListings(): Promise<ServerListingRow[] | null> {
+export async function fetchActiveListings(filters: ListingFilters = {}): Promise<ServerListingRow[] | null> {
   if (!AH_READY || !AH_BACKEND_URL) return null;
   try {
-    const response = await fetch(`${AH_BACKEND_URL}/listings`);
+    const params = new URLSearchParams();
+    if (filters.itemType) params.set('itemType', filters.itemType);
+    if (filters.currency) params.set('currency', filters.currency);
+    const query = params.toString();
+    const response = await fetch(`${AH_BACKEND_URL}/listings${query ? `?${query}` : ''}`);
+    if (!response.ok) return null;
+    const body = await response.json();
+    return Array.isArray(body?.listings) ? body.listings : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The caller's own active listings (patch 0413) -- the "my listings"
+ *  view's data source. `null` on failure (including no session
+ *  obtainable), same contract as fetchServerMailbox. */
+export async function fetchMyListings(): Promise<ServerListingRow[] | null> {
+  const token = await getSessionToken();
+  if (!token || !AH_READY || !AH_BACKEND_URL) return null;
+  try {
+    const response = await fetch(`${AH_BACKEND_URL}/listings/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!response.ok) return null;
     const body = await response.json();
     return Array.isArray(body?.listings) ? body.listings : null;
@@ -256,7 +292,7 @@ export async function fetchActiveListings(): Promise<ServerListingRow[] | null> 
 
 export interface CreateListingResult {
   ok: boolean;
-  listing?: { id: string; created_at: string; expires_at: string };
+  listing?: { id: string; created_at: string; expires_at: string; deposit_amount: string };
   error?: string;
 }
 
@@ -266,13 +302,17 @@ export interface CreateListingResult {
  * (see listings.ts's own comment on this trust boundary), so this
  * function doesn't either; the caller (AuctionHouseTrade.tsx) is
  * responsible for passing the real item straight from the player's own
- * stash/inventory.
+ * stash/inventory. `durationHours` (patch 0413) is trusted the same way
+ * -- it's the caller's job to only offer 48 once the player's own
+ * Charter level actually allows it; the server accepts either valid
+ * value at face value regardless.
  */
 export async function createListing(
   itemType: 'equipment' | 'consumable',
   itemPayload: unknown,
   currency: 'gold' | 'scrap',
-  price: number
+  price: number,
+  durationHours: 24 | 48 = 24
 ): Promise<CreateListingResult> {
   const token = await getSessionToken();
   if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
@@ -282,7 +322,7 @@ export async function createListing(
     const response = await fetch(`${AH_BACKEND_URL}/listings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ itemType, itemPayload, currency, price }),
+      body: JSON.stringify({ itemType, itemPayload, currency, price, durationHours }),
     });
     const body = await response.json();
     if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
@@ -322,3 +362,34 @@ export async function buyListing(listingId: string): Promise<BuyListingResult> {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+export interface CancelListingResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Cancels the caller's own listing (patch 0413). On success the item
+ * routes back through mailbox server-side (listings.ts) -- the deposit
+ * is forfeited, deliberately, see that route's own comment; this
+ * function doesn't touch local gold either way, there's nothing to
+ * refund on this side.
+ */
+export async function cancelListing(listingId: string): Promise<CancelListingResult> {
+  const token = await getSessionToken();
+  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
+  if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
+
+  try {
+    const response = await fetch(`${AH_BACKEND_URL}/listings/${listingId}/cancel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await response.json();
+    if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+

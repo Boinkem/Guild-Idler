@@ -7833,16 +7833,19 @@ pass (same caveat as the two entries above).
   already exists on the server, the automated dump/rotation script
   doesn't).
 
-  **Still open, needs another pass before implementation:** exact
-  deposit-fee/sale-cut percentages (`deposit_amount` exists in the real
-  schema now, patch 0409, defaulted to 0 and unused -- the field was
-  worth adding now so it doesn't mean a migration later, the actual
-  percentage logic wasn't); whether a listing can ever ask a mixed
-  gold+Scrap price or must pick one; system-seeded stock framing
-  (permanent padding vs. tapering as real volume grows); whether the 48h
-  tier is its own Guild upgrade or folded into the access-gating one
-  (every listing gets the flat 24h base for now, patch 0409); exact
-  listing cap (not enforced server-side yet); whether "Black Market" as a
+  **Resolved, patch 0413:** deposit fee -- 5% flat, refunded on sale,
+  forfeited on cancel (`DEPOSIT_PERCENT`, `server/src/listings.ts`); the
+  48h duration tier -- folded into Auction House Charter's level 2
+  (maxLevel extended 1 -> 2), not a separate upgrade. Both real numbers,
+  both tunable, neither locked in stone -- see that patch's own log
+  entry for the reasoning.
+
+  **Still open, needs another pass:** whether a listing can ever ask a
+  mixed gold+Scrap price or must pick one; system-seeded stock framing
+  (permanent padding vs. tapering as real volume grows); exact listing
+  cap (not enforced server-side yet); an expired-listing sweep (an
+  expired listing just stops showing up in browse, its seller doesn't
+  get it back via mailbox automatically); whether "Black Market" as a
   label should be renamed now that it's a real player marketplace lane
   (e.g. "Broker's Stock") -- purely thematic, not urgent.
 
@@ -33561,3 +33564,79 @@ other:**
 passing a fake SteamID), paste the printed token into TestingPanel's new
 field, then Browse/Sell/Buy all work fully against a local server with
 zero Steam dependency.
+
+### Closing the five real gaps: filters, my listings, cancel, deposit fees, 48h tier (patch 0413)
+```discord-update
+Dev Update | Patch 0413
+
+- Auction House: added listing filters, a My Listings tab with the ability to cancel, and a deposit fee on new listings
+- Auction House Charter now has a second level, unlocking 48h listings (up from 24h)
+```
+
+Direct request -- closes every gap patch 0411's own entry flagged and
+left flagged rather than guessed at. Two of the five were genuine
+economic-design calls, made here with real numbers rather than deferred
+again -- both cheap to retune later the same way the Charter's own price
+already got adjusted once.
+
+**Deposit fee -- 5% flat** (`DEPOSIT_PERCENT`, `server/src/listings.ts`),
+refunded to the seller on a successful sale (bundled into the same
+mailbox gold entry as the sale price, not split into two claims),
+forfeited if the listing is cancelled. The server can't charge this
+against a real balance -- no server-side gold ledger exists, same trust
+boundary the whole design has operated under from the start -- so the
+CLIENT deducts it locally, but only using the exact `deposit_amount` the
+server actually confirms in its response, never a locally-recomputed
+guess that could drift from what gets refunded later.
+
+**48h tier folded into Auction House Charter's level 2**, not a separate
+upgrade -- `maxLevel` extended 1 -> 2, `costGrowth` bumped 1 -> 2.5 so
+level 2 (7500g raw) reads as a real follow-on purchase rather than a
+second copy of level 1 at the same price. The client checks the real
+upgrade level directly before ever requesting 48h from the server, not
+just hiding the button -- confirmed directly (see Verified below): a
+character without level 2 has a 48h request silently downgraded to 24
+before it's ever sent.
+
+**Filters, browse:** `itemType`/`currency` are real server-side query
+params (real columns, cheap to filter in SQL); rarity is filtered
+client-side after fetching, since it lives inside `item_payload`'s JSONB
+rather than its own column, and adding one just for this felt like the
+wrong tradeoff for a browse endpoint that still has no pagination.
+
+**"My Listings" tab** -- new `GET /listings/mine` (auth required,
+`deposit_amount` included since only the seller should see it -- public
+browse rows don't carry it).
+
+**Cancel** -- new `POST /listings/:id/cancel`, same row-locked shape
+buyout already uses (`SELECT ... FOR UPDATE`, same table, same
+concurrency concern: a cancel racing a buyout on the same listing).
+Ownership checked inside the same locked query, not a separate one, so
+there's no window between checking and acting. Item returns via
+mailbox; deposit does not.
+
+**Verified for real against a real Postgres database, not mocked, every
+scenario checked directly:**
+- Deposit computed exactly right in both currencies (1000 gold -> 50,
+  2000 scrap -> 100).
+- 48h duration genuinely applied when requested and entitled
+  (`expires_at` confirmed ~48h out, not 24h).
+- Wrong-owner cancel attempt correctly 403s; the real owner's cancel
+  succeeds, returns the item via mailbox with NO accompanying gold entry
+  (deposit genuinely forfeited, not silently refunded); the cancelled
+  listing disappears from both browse and "my listings"; a second cancel
+  attempt on the same listing correctly 409s.
+- A real buyout's seller mailbox entry confirmed at exactly price +
+  deposit in one entry (1000 + 50 = 1050), not two separate claims.
+- Browse filters confirmed isolating results by item type correctly.
+- Client-side 48h gate: confirmed a listing attempt without Charter
+  level 2 sends `durationHours: 24` to the server regardless of what was
+  requested; after buying the Charter to level 2, the same call
+  genuinely sends 48. This was checked directly by inspecting the actual
+  request body sent, not assumed from the UI disabling a button.
+- `npx tsc --noEmit` clean, full `vite build` clean.
+
+**Not verified, and can't be here:** no real browser click-through of
+the new filter dropdowns, My Listings tab, or the 48h toggle's disabled
+state -- worth a real pass once there's a live game session to test
+against.
