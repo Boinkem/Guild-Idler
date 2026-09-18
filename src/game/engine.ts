@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
+import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -29,7 +29,7 @@ import { HarvestManager } from './managers/HarvestManager';
 import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
 import { PetManager } from './managers/PetManager';
 import { MailboxManager } from './managers/MailboxManager';
-import { verifyAuctionHouseAuth } from './auctionHouse';
+import { verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry } from './auctionHouse';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
@@ -1510,6 +1510,26 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Testing-only, same reasoning as testAddMailboxGold. */
+  testAddMailboxScrap(amount: number, note?: string) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    MailboxManager.grantTestEntry(this.state, { type: 'scrap', amount, note });
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Testing-only manual trigger for syncMailboxFromServer -- normally
+   *  fires automatically once AuctionHousePanel.tsx detects a real
+   *  connection; this exists to test the sync itself without needing to
+   *  actually open that panel while genuinely online. */
+  testSyncMailboxFromServer() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.say('Syncing mailbox from server...');
+    void this.syncMailboxFromServer().then(({ synced }) => {
+      this.say(synced > 0 ? `Synced ${synced} new mailbox entr${synced === 1 ? 'y' : 'ies'}.` : 'Nothing new to sync.');
+    });
+  }
+
   /** Testing-only, same reasoning as testAddMailboxGold. Reuses
    *  EquipmentManager.instantiate for a real, fully-rolled item -- not a
    *  hand-faked stub -- so the claimed card looks exactly like a real
@@ -2505,11 +2525,24 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  /** Claims one Auction House mailbox entry -- see MailboxManager.claim's
-   *  own comment, including the Gold Storage Cap block. */
+  /**
+   * Claims one Auction House mailbox entry -- see MailboxManager.claim's
+   * own comment, including the Gold Storage Cap block. If the entry came
+   * from the real server (patch 0410), also fires a fire-and-forget
+   * POST /mailbox/:id/claim acknowledgment -- not awaited, since the
+   * local claim has already succeeded and there's nothing left for the
+   * UI to wait on; a failed ack is handled safely by
+   * `claimedServerMailboxIds` (types.ts), not by blocking here.
+   */
   claimMailboxEntry(entryId: string) {
+    const entry = this.state.mailbox.find((e) => e.id === entryId);
+    const wasFromServer = entry?.fromServer;
     const error = MailboxManager.claim(this.state, entryId);
     if (error) return this.say(error);
+    if (wasFromServer) {
+      this.state.claimedServerMailboxIds.push(entryId);
+      void claimServerMailboxEntry(entryId);
+    }
     playSound('purchase');
     this.say('Claimed.');
     void this.saveNow();
@@ -2517,16 +2550,70 @@ export class GameEngine {
 
   /** Claims everything claimable in the mailbox in one action -- see
    *  MailboxManager.claimAll's own comment on why a blocked gold entry
-   *  doesn't fail the whole batch. */
+   *  doesn't fail the whole batch, and on the server ids it now also
+   *  returns (patch 0410) for acknowledgment, same fire-and-forget
+   *  reasoning claimMailboxEntry's own comment gives. */
   claimAllMailbox() {
-    const { claimed, skipped } = MailboxManager.claimAll(this.state);
+    const { claimed, skipped, claimedServerIds } = MailboxManager.claimAll(this.state);
     if (claimed === 0 && skipped === 0) return this.say('Nothing to claim.');
+    if (claimedServerIds.length > 0) {
+      this.state.claimedServerMailboxIds.push(...claimedServerIds);
+      for (const id of claimedServerIds) void claimServerMailboxEntry(id);
+    }
     if (claimed > 0) playSound('purchase');
     const parts = [];
     if (claimed > 0) parts.push(`Claimed ${claimed}`);
     if (skipped > 0) parts.push(`${skipped} left (over Gold Storage Cap)`);
     this.say(parts.join(' -- ') + '.');
     void this.saveNow();
+  }
+
+  /**
+   * Pulls unclaimed mailbox rows down from the real server (patch 0410)
+   * and merges any not already present locally into `state.mailbox`.
+   * Deliberately silent on failure (no toast) -- this runs automatically
+   * whenever the AH panel detects a real connection
+   * (AuctionHousePanel.tsx), not from a button a player consciously
+   * pressed, so a failure here should feel like "nothing new right now",
+   * not an error message interrupting whatever the player's doing.
+   *
+   * Dedup is by id against BOTH `state.mailbox` (already synced, not yet
+   * claimed) and `state.claimedServerMailboxIds` (already synced AND
+   * claimed, even if the server's own claim acknowledgment was lost) --
+   * see that field's own comment (types.ts) for why the second check is
+   * the one that actually prevents a double-claim exploit, not the
+   * server's `claimed_at` column alone.
+   */
+  async syncMailboxFromServer(): Promise<{ synced: number }> {
+    const rows = await fetchServerMailbox();
+    if (!rows || rows.length === 0) return { synced: 0 };
+
+    const existingIds = new Set(this.state.mailbox.map((e) => e.id));
+    const claimedIds = new Set(this.state.claimedServerMailboxIds);
+    const now = Date.now();
+    let synced = 0;
+
+    for (const row of rows) {
+      if (existingIds.has(row.id) || claimedIds.has(row.id)) continue;
+      const entry: MailboxEntry = {
+        id: row.id,
+        type: row.type as MailboxEntry['type'],
+        amount: row.amount !== null ? Number(row.amount) : undefined,
+        item: row.type === 'equipment' ? (row.item_payload as EquipmentItem) : undefined,
+        consumableId: row.type === 'consumable' ? (row.item_payload as { defId?: string })?.defId : undefined,
+        note: row.note ?? undefined,
+        receivedAt: now,
+        fromServer: true,
+      };
+      this.state.mailbox.push(entry);
+      synced += 1;
+    }
+
+    if (synced > 0) {
+      this.notify();
+      void this.saveNow();
+    }
+    return { synced };
   }
 
   /** Bulk-sells every owned curio in one action -- the Curios-section

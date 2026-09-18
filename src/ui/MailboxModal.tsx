@@ -23,6 +23,11 @@ const GOLD_BANNER = RARITY_BANNER.common;
  */
 const GOLD_ICON = 'gold.png';
 
+/** Same reasoning as GOLD_ICON/GOLD_BANNER above -- no dedicated Scrap
+ *  mailbox art yet, same Common-banner/glyph-fallback treatment until
+ *  real art exists. Drop the real art at public/item-icons/scrap.png. */
+const SCRAP_ICON = 'scrap.png';
+
 /**
  * Auction House mailbox -- build-order item from guild-idler-status.md's
  * Auction House entry. Same overlay/modal shape LeaderboardModal/
@@ -81,6 +86,22 @@ function MailboxCard({ entry, onClaim }: { entry: MailboxEntry; onClaim: () => v
           <ConsumableIcon icon={GOLD_ICON} glyph="💰" size={48} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR.common }}>{formatGold(entry.amount ?? 0)} gold</div>
+            {entry.note && <div className="tiny muted">{entry.note}</div>}
+          </div>
+        </div>
+        <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={onClaim}>Claim</button>
+      </div>
+    );
+  }
+
+  if (entry.type === 'scrap') {
+    return (
+      <div className="item-card rarity-card">
+        <div className="rarity-banner" style={{ backgroundImage: `url(${GOLD_BANNER})` }} />
+        <div className="item-card-summary">
+          <ConsumableIcon icon={SCRAP_ICON} glyph="🔩" size={48} />
+          <div className="item-card-body">
+            <div className="item-card-name" style={{ color: RARITY_COLOR.common }}>{(entry.amount ?? 0).toLocaleString()} scrap</div>
             {entry.note && <div className="tiny muted">{entry.note}</div>}
           </div>
         </div>

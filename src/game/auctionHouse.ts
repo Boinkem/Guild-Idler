@@ -80,19 +80,24 @@ export async function fetchAuctionHouseAuthTicket(): Promise<string | null> {
 export interface AhAuthResult {
   ok: boolean;
   steamId?: string;
+  sessionToken?: string;
   error?: string;
 }
 
 /**
+ * In-memory only -- never persisted to the save file. Session tokens
+ * expire in 1 hour (server/src/sessions.ts) and are cheap to re-obtain,
+ * so there's no reason to carry one across app restarts; a fresh
+ * verifyAuctionHouseAuth() call gets a new one whenever needed.
+ */
+let cachedSessionToken: string | null = null;
+
+/**
  * Full round trip (patch 0407) -- fetches a real ticket, sends it to the
- * real backend's `/auth/verify`, returns the real result. Still only
- * called from TestingPanel.tsx right now, not any real gameplay path --
- * there's no listing/buyout flow yet that would need to authenticate a
- * player for real (core listings + buyout, still not built). This is
- * what makes it possible to prove the whole chain works, end to end,
- * ahead of that -- same "build the proof-of-life ahead of the real
- * feature" shape every other Auction House patch has followed since the
- * skeleton's own /health route.
+ * real backend's `/auth/verify`, returns the real result. Now also
+ * caches the returned session token (patch 0410) for
+ * `getSessionToken()`/`syncMailboxFromServer` (engine.ts) to reuse,
+ * rather than every mailbox action re-fetching a fresh Steam ticket.
  *
  * Every failure mode -- no ticket available, the backend unreachable,
  * AH_ENABLED off, Steam genuinely rejecting the ticket -- comes back as
@@ -114,9 +119,85 @@ export async function verifyAuctionHouseAuth(): Promise<AhAuthResult> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ticket }),
     });
-    const body = await response.json();
-    return body as AhAuthResult;
+    const body = (await response.json()) as AhAuthResult;
+    if (body.ok && body.sessionToken) {
+      cachedSessionToken = body.sessionToken;
+    }
+    return body;
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Returns a usable session token -- the cached one if there is one,
+ * otherwise runs the full verify round trip to get a fresh one. Every
+ * mailbox function below goes through this rather than assuming
+ * `cachedSessionToken` is already set, so a first-ever call (or one
+ * after the 1-hour expiry) still works without a separate "log in"
+ * step -- there's no such step anywhere in this game, by design; the
+ * Steam ticket itself already proves identity.
+ */
+async function getSessionToken(): Promise<string | null> {
+  if (cachedSessionToken) return cachedSessionToken;
+  const result = await verifyAuctionHouseAuth();
+  return result.ok ? (result.sessionToken ?? null) : null;
+}
+
+/** Raw shape of one row from the server's GET /mailbox (server/src/
+ *  listings.ts) -- snake_case, matching the Postgres columns directly,
+ *  converted into the client's own camelCase MailboxEntry shape by
+ *  engine.ts's syncMailboxFromServer, not here -- this module stays a
+ *  thin network layer, the conversion is orchestration. */
+export interface ServerMailboxRow {
+  id: string;
+  type: string;
+  amount: string | null; // Postgres BIGINT comes back as a string over JSON
+  item_payload: unknown;
+  note: string | null;
+  created_at: string;
+}
+
+/**
+ * Fetches the caller's own unclaimed server-side mailbox rows. Returns
+ * `null` for any failure -- no session obtainable, network failure, a
+ * non-200 response -- same "null means couldn't check" contract this
+ * whole module already uses throughout.
+ */
+export async function fetchServerMailbox(): Promise<ServerMailboxRow[] | null> {
+  const token = await getSessionToken();
+  if (!token || !AH_READY || !AH_BACKEND_URL) return null;
+  try {
+    const response = await fetch(`${AH_BACKEND_URL}/mailbox`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    return Array.isArray(body?.mailbox) ? body.mailbox : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tells the server a mailbox entry has been claimed. Called AFTER the
+ * local claim already succeeded (engine.ts's claimMailboxEntry) -- this
+ * is cleanup, not a gate: the player already has their gold/item either
+ * way, this just stops the server handing the same row out again.
+ * Returns whether the server actually acknowledged it; a `false` here
+ * doesn't undo anything locally -- see `claimedServerMailboxIds`'s own
+ * comment (types.ts) for how a failed ack here is still handled safely.
+ */
+export async function claimServerMailboxEntry(entryId: string): Promise<boolean> {
+  const token = await getSessionToken();
+  if (!token || !AH_READY || !AH_BACKEND_URL) return false;
+  try {
+    const response = await fetch(`${AH_BACKEND_URL}/mailbox/${entryId}/claim`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
 }

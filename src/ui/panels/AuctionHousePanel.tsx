@@ -43,6 +43,22 @@ export function AuctionHousePanel() {
     return () => { cancelled = true; };
   }, [unlocked]);
 
+  /**
+   * Mailbox sync (patch 0410) -- fires once whenever the connection check
+   * above confirms 'online', pulling any real unclaimed server mailbox
+   * rows down into local state. This is the first time
+   * verifyAuctionHouseAuth's full Steam-auth round trip (patch 0407) runs
+   * from a real gameplay trigger rather than only TestingPanel's button --
+   * opening this panel while genuinely connected IS the natural "prove
+   * who I am" moment, no separate login step needed anywhere in this
+   * game. Silent on failure by design -- see engine.syncMailboxFromServer's
+   * own comment for why.
+   */
+  useEffect(() => {
+    if (status !== 'online') return;
+    void engine.syncMailboxFromServer();
+  }, [status, engine]);
+
   useEffect(() => {
     engine.acknowledgeTab('auction_house');
   }, [engine]);

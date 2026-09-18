@@ -61,22 +61,26 @@ export function TestingPanel() {
 
       <div className="section-heading">Auction House mailbox</div>
       <p className="small muted" style={{ marginBottom: 8 }}>
-        Nothing in real gameplay can put anything in the mailbox yet -- no live backend. These
-        buttons are the only way to exercise the claim flow (including the Gold Storage Cap
-        block) before that exists. Currently holding {state.mailbox.length} entr{state.mailbox.length === 1 ? 'y' : 'ies'}.
+        These buttons grant local-only test entries (no server-side counterpart) -- the only way
+        to exercise the claim flow, including the Gold Storage Cap block, without a real sale.
+        Currently holding {state.mailbox.length} entr{state.mailbox.length === 1 ? 'y' : 'ies'}.
       </p>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <button onClick={() => engine.testAddMailboxGold(200, 'Sold: Test Item')}>+200 gold entry</button>
         <button onClick={() => engine.testAddMailboxGold(50000, 'Sold: Test Item')}>+50,000 gold entry (test the cap block)</button>
+        <button onClick={() => engine.testAddMailboxScrap(500, 'Sold: Test Item')}>+500 scrap entry</button>
         <button onClick={() => engine.testAddMailboxEquipment('wooden_sword', 'Auction won: Wooden Sword')}>+ equipment entry</button>
         <button onClick={() => engine.testAddMailboxConsumable('healing_potion', 3, 'Auction won: Healing Potion')}>+ consumable entry</button>
       </div>
       <p className="small muted" style={{ margin: '8px 0' }}>
-        Real network call, not a mock -- requires an actual running Steam session to get a real
-        ticket, and the AH backend's AH_ENABLED=true to get past its own off-gate.
+        Real network calls, not mocks -- both require an actual running Steam session, and the AH
+        backend's AH_ENABLED=true to get past its own off-gate. The sync button pulls real
+        unclaimed rows from the server (patch 0410) -- normally fires automatically when the AH
+        panel detects a real connection.
       </p>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <button onClick={() => engine.testVerifySteamAuth()}>Test Steam auth ticket (real network call)</button>
+        <button onClick={() => engine.testSyncMailboxFromServer()}>Sync mailbox from server (real network call)</button>
       </div>
 
       <div className="section-heading">Recipes</div>

@@ -33367,3 +33367,79 @@ reused from any test value that appeared in this session.
 sync -- nothing pulls the server's `/mailbox` down into the client's own
 local `state.mailbox` array yet, so a real sale's proceeds have nowhere
 to land in the actual game client. That's the natural next patch.
+
+### Client-side mailbox sync: the last piece connecting a real sale to the actual game (patch 0410)
+```discord-update
+Dev Update | Patch 0410
+
+- The Auction House's server-side sale proceeds now actually reach the game client -- still nothing player-visible yet, but the full loop (list, buy, sync, claim) is genuinely connected end to end for the first time
+```
+
+Closes the gap patch 0409's own entry flagged as the natural next step --
+nothing previously pulled the server's `/mailbox` down into the client's
+local `state.mailbox`, so a real sale had nowhere to land in the actual
+game.
+
+**Session tokens now actually used, not just issued.** `AhAuthResult`
+gained `sessionToken` (patch 0409's own server change already returned
+one; the client's type just didn't declare it). Cached in-memory only in
+`auctionHouse.ts` -- never persisted to the save file, since tokens
+expire in an hour and are cheap to re-obtain. A new `getSessionToken()`
+reuses the cached one or runs the full Steam-ticket round trip for a
+fresh one -- every mailbox function goes through this rather than
+assuming a token already exists, so there's no separate "log in" step
+anywhere in this game; opening the AH panel while genuinely connected
+*is* the identity check.
+
+**First real (non-testing) use of the Steam auth flow.**
+`AuctionHousePanel.tsx` now fires `engine.syncMailboxFromServer()`
+automatically the moment the connection check confirms `'online'` --
+patch 0407's `verifyAuctionHouseAuth()` has been sitting there since
+that patch specifically waiting for a genuine gameplay trigger, not just
+TestingPanel's button. Silent on failure, by design -- this runs in the
+background, not from a button the player consciously pressed, so a
+failure should feel like "nothing new right now," not an interruption.
+
+**The real duplication risk, and how it's actually closed:** a naive
+sync would re-add a server mailbox row every time it's fetched until the
+server's own `claimed_at` gets set -- and the acknowledgment POST is
+fire-and-forget, so a lost ack (a network hiccup right after a
+successful local claim) could let the same entry sync and get claimed
+twice. New `state.claimedServerMailboxIds` -- an append-only log checked
+*in addition to* the server's own claimed state, not instead of it --
+closes this even when the ack genuinely never arrives. `MailboxManager
+.claimAll` now also reports which claimed entries were `fromServer`, so
+`engine.claimAllMailbox` can acknowledge each one without re-scanning an
+array that's already had those entries spliced out of it.
+
+**Filled in two gaps the new sync path immediately exposed:** `'scrap'`
+was missing entirely from `MailboxEntry.type` and `MailboxManager.claim`
+-- a real scrap-priced sale (patch 0400's currency revision) would have
+silently vanished a claimed entry with no error and no scrap added.
+Added the type, the claim branch (uncapped -- checked directly, no Scrap
+Storage Cap exists the way Gold has one), and a matching card in
+`MailboxModal.tsx` (same Common-banner/glyph-fallback treatment gold's
+card already established, pending real scrap art).
+
+**Verified for real, not against a live Steam session (still can't be,
+in this environment) but against the actual code paths, not simulated
+ones:** no real ticket obtainable here, so `fetch` and the Electron
+bridge were mocked -- but mocked with the *exact* response shapes patch
+0409's own real `curl` tests already proved the genuine server produces,
+not invented ones. A full scripted run: synced two real-shaped rows,
+confirmed a second sync correctly added zero (already-local dedup),
+claimed the gold entry and confirmed both the local gold delta (+500,
+exact) and that the server-claim POST actually fired for the right id,
+then re-ran sync with the mock server still (deliberately) returning the
+already-claimed row and confirmed it did NOT get re-added -- the lost-ack
+guard, proven working, not just written. Finished with `claimAllMailbox`
+on the remainder, confirming the item landed in `stash` and both ids
+ended up correctly acknowledged. `npx tsc --noEmit` clean, full `vite
+build` clean.
+
+**Not verified, and can't be here:** a genuine end-to-end pass with a
+real Steam session actually opening the AH panel and watching a real
+sale's proceeds appear -- needs the real packaged game, Steam running,
+and a second real account to sell to/buy from. Every piece up to that
+exact moment is now confirmed working through this patch and 0409
+together.

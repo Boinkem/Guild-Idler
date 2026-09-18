@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 71;
+export const SAVE_VERSION = 72;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -558,8 +558,8 @@ export interface BuybackEntry {
  */
 export interface MailboxEntry {
   id: string;
-  type: 'gold' | 'equipment' | 'consumable';
-  /** Gold amount (type: 'gold') or consumable quantity (type: 'consumable'). Unused for 'equipment'. */
+  type: 'gold' | 'scrap' | 'equipment' | 'consumable';
+  /** Gold/Scrap amount (type: 'gold'/'scrap') or consumable quantity (type: 'consumable'). Unused for 'equipment'. */
   amount?: number;
   /** type: 'equipment' only -- the exact item, full roll intact. */
   item?: EquipmentItem;
@@ -568,6 +568,17 @@ export interface MailboxEntry {
   receivedAt: number;
   /** Optional flavour label shown on the card, e.g. "Sold: Iron Sword" -- not required. */
   note?: string;
+  /**
+   * True only for entries pulled down from the real server (patch 0410's
+   * mailbox sync) -- false/absent for TestingPanel-granted entries, which
+   * have no server-side counterpart to acknowledge. Claiming a
+   * `fromServer` entry also fires a POST /mailbox/:id/claim to the
+   * backend (engine.ts) and records the id in
+   * `state.claimedServerMailboxIds`, so a failed acknowledgment can't
+   * cause the same entry to be re-synced and claimed twice -- see that
+   * field's own comment.
+   */
+  fromServer?: boolean;
 }
 
 export interface ItemSet {
@@ -2166,6 +2177,17 @@ export interface GameState {
   /** Claimable Auction House mailbox entries -- see MailboxEntry's own
    *  comment and guild-idler-status.md's Auction House entry. */
   mailbox: MailboxEntry[];
+  /**
+   * Append-only log of server mailbox entry ids already claimed (patch
+   * 0410) -- checked during sync so a server entry never gets re-added
+   * to `mailbox` above once claimed, even if the POST /mailbox/:id/claim
+   * acknowledgment to the server itself failed (a network hiccup after
+   * the local claim already succeeded). Without this, a failed ack could
+   * let the same server entry be synced and claimed a second time --
+   * this list is what actually prevents that, not just the server's own
+   * `claimed_at` column, which a lost ack would leave unset.
+   */
+  claimedServerMailboxIds: string[];
 
   /**
    * Contract offers, one pool per hero (keyed by hero id) -- each hero

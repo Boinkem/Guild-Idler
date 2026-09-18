@@ -43,6 +43,10 @@ export const MailboxManager = {
         return "Claiming this would put you over your Gold Storage Cap -- spend some gold first, then come back.";
       }
       state.gold += amount;
+    } else if (entry.type === 'scrap') {
+      // No Scrap Storage Cap exists (checked directly, not assumed) --
+      // unlike gold, this is a plain uncapped add.
+      state.scrap += entry.amount ?? 0;
     } else if (entry.type === 'equipment') {
       if (!entry.item) return 'That mailbox entry is malformed -- nothing to claim.';
       state.stash.push(entry.item);
@@ -61,19 +65,31 @@ export const MailboxManager = {
    * per-entry rule `claim` enforces, rather than failing the whole
    * batch over one blocked entry. Returns how many were actually
    * claimed and how many were skipped, so the UI can say something more
-   * useful than a bare "done".
+   * useful than a bare "done" -- plus the ids of any claimed entries
+   * that came from the real server (patch 0410), so the caller
+   * (engine.ts's claimAllMailbox) knows which ones need a server-side
+   * acknowledgment, without engine.ts having to re-scan `state.mailbox`
+   * itself after every entry's already been spliced out of it.
    */
-  claimAll(state: GameState): { claimed: number; skipped: number } {
+  claimAll(state: GameState): { claimed: number; skipped: number; claimedServerIds: string[] } {
     let claimed = 0;
     let skipped = 0;
-    // Iterate a snapshot of ids, not the live array -- claim() mutates
-    // state.mailbox in place (splice), which would desync a live index
-    // walk.
-    for (const id of state.mailbox.map((e) => e.id)) {
+    const claimedServerIds: string[] = [];
+    // Snapshot both id AND fromServer up front, not just id -- claim()
+    // mutates state.mailbox in place (splice), so by the time an entry
+    // is claimed it's already gone from the array and its fromServer
+    // flag would be unrecoverable otherwise.
+    const snapshot = state.mailbox.map((e) => ({ id: e.id, fromServer: e.fromServer }));
+    for (const { id, fromServer } of snapshot) {
       const err = MailboxManager.claim(state, id);
-      if (err) skipped += 1; else claimed += 1;
+      if (err) {
+        skipped += 1;
+      } else {
+        claimed += 1;
+        if (fromServer) claimedServerIds.push(id);
+      }
     }
-    return { claimed, skipped };
+    return { claimed, skipped, claimedServerIds };
   },
 
   /** Testing-only entry point -- see this module's own header comment.

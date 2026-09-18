@@ -1,0 +1,597 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 2217194..777dedd 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -33367,3 +33367,79 @@ reused from any test value that appeared in this session.
+ sync -- nothing pulls the server's `/mailbox` down into the client's own
+ local `state.mailbox` array yet, so a real sale's proceeds have nowhere
+ to land in the actual game client. That's the natural next patch.
++
++### Client-side mailbox sync: the last piece connecting a real sale to the actual game (patch 0410)
++```discord-update
++Dev Update | Patch 0410
++
++- The Auction House's server-side sale proceeds now actually reach the game client -- still nothing player-visible yet, but the full loop (list, buy, sync, claim) is genuinely connected end to end for the first time
++```
++
++Closes the gap patch 0409's own entry flagged as the natural next step --
++nothing previously pulled the server's `/mailbox` down into the client's
++local `state.mailbox`, so a real sale had nowhere to land in the actual
++game.
++
++**Session tokens now actually used, not just issued.** `AhAuthResult`
++gained `sessionToken` (patch 0409's own server change already returned
++one; the client's type just didn't declare it). Cached in-memory only in
++`auctionHouse.ts` -- never persisted to the save file, since tokens
++expire in an hour and are cheap to re-obtain. A new `getSessionToken()`
++reuses the cached one or runs the full Steam-ticket round trip for a
++fresh one -- every mailbox function goes through this rather than
++assuming a token already exists, so there's no separate "log in" step
++anywhere in this game; opening the AH panel while genuinely connected
++*is* the identity check.
++
++**First real (non-testing) use of the Steam auth flow.**
++`AuctionHousePanel.tsx` now fires `engine.syncMailboxFromServer()`
++automatically the moment the connection check confirms `'online'` --
++patch 0407's `verifyAuctionHouseAuth()` has been sitting there since
++that patch specifically waiting for a genuine gameplay trigger, not just
++TestingPanel's button. Silent on failure, by design -- this runs in the
++background, not from a button the player consciously pressed, so a
++failure should feel like "nothing new right now," not an interruption.
++
++**The real duplication risk, and how it's actually closed:** a naive
++sync would re-add a server mailbox row every time it's fetched until the
++server's own `claimed_at` gets set -- and the acknowledgment POST is
++fire-and-forget, so a lost ack (a network hiccup right after a
++successful local claim) could let the same entry sync and get claimed
++twice. New `state.claimedServerMailboxIds` -- an append-only log checked
++*in addition to* the server's own claimed state, not instead of it --
++closes this even when the ack genuinely never arrives. `MailboxManager
++.claimAll` now also reports which claimed entries were `fromServer`, so
++`engine.claimAllMailbox` can acknowledge each one without re-scanning an
++array that's already had those entries spliced out of it.
++
++**Filled in two gaps the new sync path immediately exposed:** `'scrap'`
++was missing entirely from `MailboxEntry.type` and `MailboxManager.claim`
++-- a real scrap-priced sale (patch 0400's currency revision) would have
++silently vanished a claimed entry with no error and no scrap added.
++Added the type, the claim branch (uncapped -- checked directly, no Scrap
++Storage Cap exists the way Gold has one), and a matching card in
++`MailboxModal.tsx` (same Common-banner/glyph-fallback treatment gold's
++card already established, pending real scrap art).
++
++**Verified for real, not against a live Steam session (still can't be,
++in this environment) but against the actual code paths, not simulated
++ones:** no real ticket obtainable here, so `fetch` and the Electron
++bridge were mocked -- but mocked with the *exact* response shapes patch
++0409's own real `curl` tests already proved the genuine server produces,
++not invented ones. A full scripted run: synced two real-shaped rows,
++confirmed a second sync correctly added zero (already-local dedup),
++claimed the gold entry and confirmed both the local gold delta (+500,
++exact) and that the server-claim POST actually fired for the right id,
++then re-ran sync with the mock server still (deliberately) returning the
++already-claimed row and confirmed it did NOT get re-added -- the lost-ack
++guard, proven working, not just written. Finished with `claimAllMailbox`
++on the remainder, confirming the item landed in `stash` and both ids
++ended up correctly acknowledged. `npx tsc --noEmit` clean, full `vite
++build` clean.
++
++**Not verified, and can't be here:** a genuine end-to-end pass with a
++real Steam session actually opening the AH panel and watching a real
++sale's proceeds appear -- needs the real packaged game, Steam running,
++and a second real account to sell to/buy from. Every piece up to that
++exact moment is now confirmed working through this patch and 0409
++together.
+diff --git a/src/game/auctionHouse.ts b/src/game/auctionHouse.ts
+index 4f1b8e4..16f88e2 100644
+--- a/src/game/auctionHouse.ts
++++ b/src/game/auctionHouse.ts
+@@ -80,19 +80,24 @@ export async function fetchAuctionHouseAuthTicket(): Promise<string | null> {
+ export interface AhAuthResult {
+   ok: boolean;
+   steamId?: string;
++  sessionToken?: string;
+   error?: string;
+ }
+ 
++/**
++ * In-memory only -- never persisted to the save file. Session tokens
++ * expire in 1 hour (server/src/sessions.ts) and are cheap to re-obtain,
++ * so there's no reason to carry one across app restarts; a fresh
++ * verifyAuctionHouseAuth() call gets a new one whenever needed.
++ */
++let cachedSessionToken: string | null = null;
++
+ /**
+  * Full round trip (patch 0407) -- fetches a real ticket, sends it to the
+- * real backend's `/auth/verify`, returns the real result. Still only
+- * called from TestingPanel.tsx right now, not any real gameplay path --
+- * there's no listing/buyout flow yet that would need to authenticate a
+- * player for real (core listings + buyout, still not built). This is
+- * what makes it possible to prove the whole chain works, end to end,
+- * ahead of that -- same "build the proof-of-life ahead of the real
+- * feature" shape every other Auction House patch has followed since the
+- * skeleton's own /health route.
++ * real backend's `/auth/verify`, returns the real result. Now also
++ * caches the returned session token (patch 0410) for
++ * `getSessionToken()`/`syncMailboxFromServer` (engine.ts) to reuse,
++ * rather than every mailbox action re-fetching a fresh Steam ticket.
+  *
+  * Every failure mode -- no ticket available, the backend unreachable,
+  * AH_ENABLED off, Steam genuinely rejecting the ticket -- comes back as
+@@ -114,9 +119,85 @@ export async function verifyAuctionHouseAuth(): Promise<AhAuthResult> {
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ ticket }),
+     });
+-    const body = await response.json();
+-    return body as AhAuthResult;
++    const body = (await response.json()) as AhAuthResult;
++    if (body.ok && body.sessionToken) {
++      cachedSessionToken = body.sessionToken;
++    }
++    return body;
+   } catch (err) {
+     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+   }
+ }
++
++/**
++ * Returns a usable session token -- the cached one if there is one,
++ * otherwise runs the full verify round trip to get a fresh one. Every
++ * mailbox function below goes through this rather than assuming
++ * `cachedSessionToken` is already set, so a first-ever call (or one
++ * after the 1-hour expiry) still works without a separate "log in"
++ * step -- there's no such step anywhere in this game, by design; the
++ * Steam ticket itself already proves identity.
++ */
++async function getSessionToken(): Promise<string | null> {
++  if (cachedSessionToken) return cachedSessionToken;
++  const result = await verifyAuctionHouseAuth();
++  return result.ok ? (result.sessionToken ?? null) : null;
++}
++
++/** Raw shape of one row from the server's GET /mailbox (server/src/
++ *  listings.ts) -- snake_case, matching the Postgres columns directly,
++ *  converted into the client's own camelCase MailboxEntry shape by
++ *  engine.ts's syncMailboxFromServer, not here -- this module stays a
++ *  thin network layer, the conversion is orchestration. */
++export interface ServerMailboxRow {
++  id: string;
++  type: string;
++  amount: string | null; // Postgres BIGINT comes back as a string over JSON
++  item_payload: unknown;
++  note: string | null;
++  created_at: string;
++}
++
++/**
++ * Fetches the caller's own unclaimed server-side mailbox rows. Returns
++ * `null` for any failure -- no session obtainable, network failure, a
++ * non-200 response -- same "null means couldn't check" contract this
++ * whole module already uses throughout.
++ */
++export async function fetchServerMailbox(): Promise<ServerMailboxRow[] | null> {
++  const token = await getSessionToken();
++  if (!token || !AH_READY || !AH_BACKEND_URL) return null;
++  try {
++    const response = await fetch(`${AH_BACKEND_URL}/mailbox`, {
++      headers: { Authorization: `Bearer ${token}` },
++    });
++    if (!response.ok) return null;
++    const body = await response.json();
++    return Array.isArray(body?.mailbox) ? body.mailbox : null;
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * Tells the server a mailbox entry has been claimed. Called AFTER the
++ * local claim already succeeded (engine.ts's claimMailboxEntry) -- this
++ * is cleanup, not a gate: the player already has their gold/item either
++ * way, this just stops the server handing the same row out again.
++ * Returns whether the server actually acknowledged it; a `false` here
++ * doesn't undo anything locally -- see `claimedServerMailboxIds`'s own
++ * comment (types.ts) for how a failed ack here is still handled safely.
++ */
++export async function claimServerMailboxEntry(entryId: string): Promise<boolean> {
++  const token = await getSessionToken();
++  if (!token || !AH_READY || !AH_BACKEND_URL) return false;
++  try {
++    const response = await fetch(`${AH_BACKEND_URL}/mailbox/${entryId}/claim`, {
++      method: 'POST',
++      headers: { Authorization: `Bearer ${token}` },
++    });
++    return response.ok;
++  } catch {
++    return false;
++  }
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 96be492..a53dced 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1,4 +1,4 @@
+-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
++import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+@@ -29,7 +29,7 @@ import { HarvestManager } from './managers/HarvestManager';
+ import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
+ import { PetManager } from './managers/PetManager';
+ import { MailboxManager } from './managers/MailboxManager';
+-import { verifyAuctionHouseAuth } from './auctionHouse';
++import { verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry } from './auctionHouse';
+ import { PeddlerManager } from './managers/PeddlerManager';
+ import { CraftingManager } from './managers/CraftingManager';
+ import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
+@@ -1510,6 +1510,26 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Testing-only, same reasoning as testAddMailboxGold. */
++  testAddMailboxScrap(amount: number, note?: string) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    MailboxManager.grantTestEntry(this.state, { type: 'scrap', amount, note });
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Testing-only manual trigger for syncMailboxFromServer -- normally
++   *  fires automatically once AuctionHousePanel.tsx detects a real
++   *  connection; this exists to test the sync itself without needing to
++   *  actually open that panel while genuinely online. */
++  testSyncMailboxFromServer() {
++    if (!TESTING_TOOLS_ENABLED) return;
++    this.say('Syncing mailbox from server...');
++    void this.syncMailboxFromServer().then(({ synced }) => {
++      this.say(synced > 0 ? `Synced ${synced} new mailbox entr${synced === 1 ? 'y' : 'ies'}.` : 'Nothing new to sync.');
++    });
++  }
++
+   /** Testing-only, same reasoning as testAddMailboxGold. Reuses
+    *  EquipmentManager.instantiate for a real, fully-rolled item -- not a
+    *  hand-faked stub -- so the claimed card looks exactly like a real
+@@ -2505,11 +2525,24 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
+-  /** Claims one Auction House mailbox entry -- see MailboxManager.claim's
+-   *  own comment, including the Gold Storage Cap block. */
++  /**
++   * Claims one Auction House mailbox entry -- see MailboxManager.claim's
++   * own comment, including the Gold Storage Cap block. If the entry came
++   * from the real server (patch 0410), also fires a fire-and-forget
++   * POST /mailbox/:id/claim acknowledgment -- not awaited, since the
++   * local claim has already succeeded and there's nothing left for the
++   * UI to wait on; a failed ack is handled safely by
++   * `claimedServerMailboxIds` (types.ts), not by blocking here.
++   */
+   claimMailboxEntry(entryId: string) {
++    const entry = this.state.mailbox.find((e) => e.id === entryId);
++    const wasFromServer = entry?.fromServer;
+     const error = MailboxManager.claim(this.state, entryId);
+     if (error) return this.say(error);
++    if (wasFromServer) {
++      this.state.claimedServerMailboxIds.push(entryId);
++      void claimServerMailboxEntry(entryId);
++    }
+     playSound('purchase');
+     this.say('Claimed.');
+     void this.saveNow();
+@@ -2517,10 +2550,16 @@ export class GameEngine {
+ 
+   /** Claims everything claimable in the mailbox in one action -- see
+    *  MailboxManager.claimAll's own comment on why a blocked gold entry
+-   *  doesn't fail the whole batch. */
++   *  doesn't fail the whole batch, and on the server ids it now also
++   *  returns (patch 0410) for acknowledgment, same fire-and-forget
++   *  reasoning claimMailboxEntry's own comment gives. */
+   claimAllMailbox() {
+-    const { claimed, skipped } = MailboxManager.claimAll(this.state);
++    const { claimed, skipped, claimedServerIds } = MailboxManager.claimAll(this.state);
+     if (claimed === 0 && skipped === 0) return this.say('Nothing to claim.');
++    if (claimedServerIds.length > 0) {
++      this.state.claimedServerMailboxIds.push(...claimedServerIds);
++      for (const id of claimedServerIds) void claimServerMailboxEntry(id);
++    }
+     if (claimed > 0) playSound('purchase');
+     const parts = [];
+     if (claimed > 0) parts.push(`Claimed ${claimed}`);
+@@ -2529,6 +2568,54 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /**
++   * Pulls unclaimed mailbox rows down from the real server (patch 0410)
++   * and merges any not already present locally into `state.mailbox`.
++   * Deliberately silent on failure (no toast) -- this runs automatically
++   * whenever the AH panel detects a real connection
++   * (AuctionHousePanel.tsx), not from a button a player consciously
++   * pressed, so a failure here should feel like "nothing new right now",
++   * not an error message interrupting whatever the player's doing.
++   *
++   * Dedup is by id against BOTH `state.mailbox` (already synced, not yet
++   * claimed) and `state.claimedServerMailboxIds` (already synced AND
++   * claimed, even if the server's own claim acknowledgment was lost) --
++   * see that field's own comment (types.ts) for why the second check is
++   * the one that actually prevents a double-claim exploit, not the
++   * server's `claimed_at` column alone.
++   */
++  async syncMailboxFromServer(): Promise<{ synced: number }> {
++    const rows = await fetchServerMailbox();
++    if (!rows || rows.length === 0) return { synced: 0 };
++
++    const existingIds = new Set(this.state.mailbox.map((e) => e.id));
++    const claimedIds = new Set(this.state.claimedServerMailboxIds);
++    const now = Date.now();
++    let synced = 0;
++
++    for (const row of rows) {
++      if (existingIds.has(row.id) || claimedIds.has(row.id)) continue;
++      const entry: MailboxEntry = {
++        id: row.id,
++        type: row.type as MailboxEntry['type'],
++        amount: row.amount !== null ? Number(row.amount) : undefined,
++        item: row.type === 'equipment' ? (row.item_payload as EquipmentItem) : undefined,
++        consumableId: row.type === 'consumable' ? (row.item_payload as { defId?: string })?.defId : undefined,
++        note: row.note ?? undefined,
++        receivedAt: now,
++        fromServer: true,
++      };
++      this.state.mailbox.push(entry);
++      synced += 1;
++    }
++
++    if (synced > 0) {
++      this.notify();
++      void this.saveNow();
++    }
++    return { synced };
++  }
++
+   /** Bulk-sells every owned curio in one action -- the Curios-section
+    *  counterpart to sellJunk above. */
+   sellAllCurios() {
+diff --git a/src/game/managers/MailboxManager.ts b/src/game/managers/MailboxManager.ts
+index 3941ede..7fa5c9b 100644
+--- a/src/game/managers/MailboxManager.ts
++++ b/src/game/managers/MailboxManager.ts
+@@ -43,6 +43,10 @@ export const MailboxManager = {
+         return "Claiming this would put you over your Gold Storage Cap -- spend some gold first, then come back.";
+       }
+       state.gold += amount;
++    } else if (entry.type === 'scrap') {
++      // No Scrap Storage Cap exists (checked directly, not assumed) --
++      // unlike gold, this is a plain uncapped add.
++      state.scrap += entry.amount ?? 0;
+     } else if (entry.type === 'equipment') {
+       if (!entry.item) return 'That mailbox entry is malformed -- nothing to claim.';
+       state.stash.push(entry.item);
+@@ -61,19 +65,31 @@ export const MailboxManager = {
+    * per-entry rule `claim` enforces, rather than failing the whole
+    * batch over one blocked entry. Returns how many were actually
+    * claimed and how many were skipped, so the UI can say something more
+-   * useful than a bare "done".
++   * useful than a bare "done" -- plus the ids of any claimed entries
++   * that came from the real server (patch 0410), so the caller
++   * (engine.ts's claimAllMailbox) knows which ones need a server-side
++   * acknowledgment, without engine.ts having to re-scan `state.mailbox`
++   * itself after every entry's already been spliced out of it.
+    */
+-  claimAll(state: GameState): { claimed: number; skipped: number } {
++  claimAll(state: GameState): { claimed: number; skipped: number; claimedServerIds: string[] } {
+     let claimed = 0;
+     let skipped = 0;
+-    // Iterate a snapshot of ids, not the live array -- claim() mutates
+-    // state.mailbox in place (splice), which would desync a live index
+-    // walk.
+-    for (const id of state.mailbox.map((e) => e.id)) {
++    const claimedServerIds: string[] = [];
++    // Snapshot both id AND fromServer up front, not just id -- claim()
++    // mutates state.mailbox in place (splice), so by the time an entry
++    // is claimed it's already gone from the array and its fromServer
++    // flag would be unrecoverable otherwise.
++    const snapshot = state.mailbox.map((e) => ({ id: e.id, fromServer: e.fromServer }));
++    for (const { id, fromServer } of snapshot) {
+       const err = MailboxManager.claim(state, id);
+-      if (err) skipped += 1; else claimed += 1;
++      if (err) {
++        skipped += 1;
++      } else {
++        claimed += 1;
++        if (fromServer) claimedServerIds.push(id);
++      }
+     }
+-    return { claimed, skipped };
++    return { claimed, skipped, claimedServerIds };
+   },
+ 
+   /** Testing-only entry point -- see this module's own header comment.
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index cc673f1..564760a 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -133,6 +133,7 @@ export function createInitialState(now = Date.now()): GameState {
+     stash: [],
+     buyback: [],
+     mailbox: [],
++    claimedServerMailboxIds: [],
+     // The starter hero's board isn't left empty for the normal
+     // procedural generator to fill -- it's seeded directly with the
+     // scripted tutorial quest (see quests.ts's own tutorialQuestOffer
+@@ -1542,6 +1543,11 @@ const MIGRATIONS: Record<number, Migration> = {
+    * as a bug, not a helpful nudge.
+    */
+   70: (save) => ({ ...save, version: 71, questBoardIntroTabShimmer: false }),
++  /** New server-mailbox-claim dedup log (patch 0410) -- no existing save
++   *  could have anything in it, the mechanism didn't exist before this
++   *  patch, same `?? []` reasoning migration 69 already used for the
++   *  mailbox array itself. */
++  71: (save) => ({ ...save, version: 72, claimedServerMailboxIds: save.claimedServerMailboxIds ?? [] }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 2d7706b..860f514 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 71;
++export const SAVE_VERSION = 72;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -558,8 +558,8 @@ export interface BuybackEntry {
+  */
+ export interface MailboxEntry {
+   id: string;
+-  type: 'gold' | 'equipment' | 'consumable';
+-  /** Gold amount (type: 'gold') or consumable quantity (type: 'consumable'). Unused for 'equipment'. */
++  type: 'gold' | 'scrap' | 'equipment' | 'consumable';
++  /** Gold/Scrap amount (type: 'gold'/'scrap') or consumable quantity (type: 'consumable'). Unused for 'equipment'. */
+   amount?: number;
+   /** type: 'equipment' only -- the exact item, full roll intact. */
+   item?: EquipmentItem;
+@@ -568,6 +568,17 @@ export interface MailboxEntry {
+   receivedAt: number;
+   /** Optional flavour label shown on the card, e.g. "Sold: Iron Sword" -- not required. */
+   note?: string;
++  /**
++   * True only for entries pulled down from the real server (patch 0410's
++   * mailbox sync) -- false/absent for TestingPanel-granted entries, which
++   * have no server-side counterpart to acknowledge. Claiming a
++   * `fromServer` entry also fires a POST /mailbox/:id/claim to the
++   * backend (engine.ts) and records the id in
++   * `state.claimedServerMailboxIds`, so a failed acknowledgment can't
++   * cause the same entry to be re-synced and claimed twice -- see that
++   * field's own comment.
++   */
++  fromServer?: boolean;
+ }
+ 
+ export interface ItemSet {
+@@ -2166,6 +2177,17 @@ export interface GameState {
+   /** Claimable Auction House mailbox entries -- see MailboxEntry's own
+    *  comment and guild-idler-status.md's Auction House entry. */
+   mailbox: MailboxEntry[];
++  /**
++   * Append-only log of server mailbox entry ids already claimed (patch
++   * 0410) -- checked during sync so a server entry never gets re-added
++   * to `mailbox` above once claimed, even if the POST /mailbox/:id/claim
++   * acknowledgment to the server itself failed (a network hiccup after
++   * the local claim already succeeded). Without this, a failed ack could
++   * let the same server entry be synced and claimed a second time --
++   * this list is what actually prevents that, not just the server's own
++   * `claimed_at` column, which a lost ack would leave unset.
++   */
++  claimedServerMailboxIds: string[];
+ 
+   /**
+    * Contract offers, one pool per hero (keyed by hero id) -- each hero
+diff --git a/src/ui/MailboxModal.tsx b/src/ui/MailboxModal.tsx
+index 1e1fc45..a26bdcb 100644
+--- a/src/ui/MailboxModal.tsx
++++ b/src/ui/MailboxModal.tsx
+@@ -23,6 +23,11 @@ const GOLD_BANNER = RARITY_BANNER.common;
+  */
+ const GOLD_ICON = 'gold.png';
+ 
++/** Same reasoning as GOLD_ICON/GOLD_BANNER above -- no dedicated Scrap
++ *  mailbox art yet, same Common-banner/glyph-fallback treatment until
++ *  real art exists. Drop the real art at public/item-icons/scrap.png. */
++const SCRAP_ICON = 'scrap.png';
++
+ /**
+  * Auction House mailbox -- build-order item from guild-idler-status.md's
+  * Auction House entry. Same overlay/modal shape LeaderboardModal/
+@@ -89,6 +94,22 @@ function MailboxCard({ entry, onClaim }: { entry: MailboxEntry; onClaim: () => v
+     );
+   }
+ 
++  if (entry.type === 'scrap') {
++    return (
++      <div className="item-card rarity-card">
++        <div className="rarity-banner" style={{ backgroundImage: `url(${GOLD_BANNER})` }} />
++        <div className="item-card-summary">
++          <ConsumableIcon icon={SCRAP_ICON} glyph="🔩" size={48} />
++          <div className="item-card-body">
++            <div className="item-card-name" style={{ color: RARITY_COLOR.common }}>{(entry.amount ?? 0).toLocaleString()} scrap</div>
++            {entry.note && <div className="tiny muted">{entry.note}</div>}
++          </div>
++        </div>
++        <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={onClaim}>Claim</button>
++      </div>
++    );
++  }
++
+   if (entry.type === 'equipment' && entry.item) {
+     const def = EQUIPMENT_BY_ID[entry.item.defId];
+     if (!def) return null;
+diff --git a/src/ui/panels/AuctionHousePanel.tsx b/src/ui/panels/AuctionHousePanel.tsx
+index 4ea87b7..e0b657d 100644
+--- a/src/ui/panels/AuctionHousePanel.tsx
++++ b/src/ui/panels/AuctionHousePanel.tsx
+@@ -43,6 +43,22 @@ export function AuctionHousePanel() {
+     return () => { cancelled = true; };
+   }, [unlocked]);
+ 
++  /**
++   * Mailbox sync (patch 0410) -- fires once whenever the connection check
++   * above confirms 'online', pulling any real unclaimed server mailbox
++   * rows down into local state. This is the first time
++   * verifyAuctionHouseAuth's full Steam-auth round trip (patch 0407) runs
++   * from a real gameplay trigger rather than only TestingPanel's button --
++   * opening this panel while genuinely connected IS the natural "prove
++   * who I am" moment, no separate login step needed anywhere in this
++   * game. Silent on failure by design -- see engine.syncMailboxFromServer's
++   * own comment for why.
++   */
++  useEffect(() => {
++    if (status !== 'online') return;
++    void engine.syncMailboxFromServer();
++  }, [status, engine]);
++
+   useEffect(() => {
+     engine.acknowledgeTab('auction_house');
+   }, [engine]);
+diff --git a/src/ui/panels/TestingPanel.tsx b/src/ui/panels/TestingPanel.tsx
+index 6edc9e0..6fa3073 100644
+--- a/src/ui/panels/TestingPanel.tsx
++++ b/src/ui/panels/TestingPanel.tsx
+@@ -61,22 +61,26 @@ export function TestingPanel() {
+ 
+       <div className="section-heading">Auction House mailbox</div>
+       <p className="small muted" style={{ marginBottom: 8 }}>
+-        Nothing in real gameplay can put anything in the mailbox yet -- no live backend. These
+-        buttons are the only way to exercise the claim flow (including the Gold Storage Cap
+-        block) before that exists. Currently holding {state.mailbox.length} entr{state.mailbox.length === 1 ? 'y' : 'ies'}.
++        These buttons grant local-only test entries (no server-side counterpart) -- the only way
++        to exercise the claim flow, including the Gold Storage Cap block, without a real sale.
++        Currently holding {state.mailbox.length} entr{state.mailbox.length === 1 ? 'y' : 'ies'}.
+       </p>
+       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+         <button onClick={() => engine.testAddMailboxGold(200, 'Sold: Test Item')}>+200 gold entry</button>
+         <button onClick={() => engine.testAddMailboxGold(50000, 'Sold: Test Item')}>+50,000 gold entry (test the cap block)</button>
++        <button onClick={() => engine.testAddMailboxScrap(500, 'Sold: Test Item')}>+500 scrap entry</button>
+         <button onClick={() => engine.testAddMailboxEquipment('wooden_sword', 'Auction won: Wooden Sword')}>+ equipment entry</button>
+         <button onClick={() => engine.testAddMailboxConsumable('healing_potion', 3, 'Auction won: Healing Potion')}>+ consumable entry</button>
+       </div>
+       <p className="small muted" style={{ margin: '8px 0' }}>
+-        Real network call, not a mock -- requires an actual running Steam session to get a real
+-        ticket, and the AH backend's AH_ENABLED=true to get past its own off-gate.
++        Real network calls, not mocks -- both require an actual running Steam session, and the AH
++        backend's AH_ENABLED=true to get past its own off-gate. The sync button pulls real
++        unclaimed rows from the server (patch 0410) -- normally fires automatically when the AH
++        panel detects a real connection.
+       </p>
+       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+         <button onClick={() => engine.testVerifySteamAuth()}>Test Steam auth ticket (real network call)</button>
++        <button onClick={() => engine.testSyncMailboxFromServer()}>Sync mailbox from server (real network call)</button>
+       </div>
+ 
+       <div className="section-heading">Recipes</div>

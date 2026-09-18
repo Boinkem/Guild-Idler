@@ -133,6 +133,7 @@ export function createInitialState(now = Date.now()): GameState {
     stash: [],
     buyback: [],
     mailbox: [],
+    claimedServerMailboxIds: [],
     // The starter hero's board isn't left empty for the normal
     // procedural generator to fill -- it's seeded directly with the
     // scripted tutorial quest (see quests.ts's own tutorialQuestOffer
@@ -1542,6 +1543,11 @@ const MIGRATIONS: Record<number, Migration> = {
    * as a bug, not a helpful nudge.
    */
   70: (save) => ({ ...save, version: 71, questBoardIntroTabShimmer: false }),
+  /** New server-mailbox-claim dedup log (patch 0410) -- no existing save
+   *  could have anything in it, the mechanism didn't exist before this
+   *  patch, same `?? []` reasoning migration 69 already used for the
+   *  mailbox array itself. */
+  71: (save) => ({ ...save, version: 72, claimedServerMailboxIds: save.claimedServerMailboxIds ?? [] }),
 };
 
 export const SaveManager = {
