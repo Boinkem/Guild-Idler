@@ -2438,9 +2438,11 @@ const sandboxState = {
 
 const ahState = {
   url: '',
-  status: null, // { reachable, ahEnabled, mode, error, checkedAt } | null before the first check
+  status: null, // { checkedAt, local: {...}, public: {...} } | null before the first check
   checking: false,
   saving: false,
+  authTest: null, // { target, reachable, status, body, checkedAt } | null
+  testingAuth: false,
 };
 
 
@@ -4110,29 +4112,68 @@ async function checkAhNow() {
   try {
     ahState.status = await api('/api/auction-house/status');
   } catch (err) {
-    ahState.status = { reachable: false, error: err.message || String(err), checkedAt: Date.now() };
+    const now = Date.now();
+    ahState.status = {
+      checkedAt: now,
+      local: { reachable: false, error: err.message || String(err) },
+      public: { reachable: false, error: err.message || String(err) },
+    };
   }
   ahState.checking = false;
   renderAuctionHouse();
 }
 
-/** Colour/label for the status card -- three states, same "reachable/
- *  unreachable/checking" shape the client's own auctionHouse.ts checks
- *  against, just from this DevTool's own point of view (always attempts
- *  the real request, no AH_READY short-circuit -- see that module's own
- *  comment for why the shipped client is different). */
-function ahStatusLine() {
-  if (ahState.checking) return { text: 'Checking…', cls: '' };
-  if (!ahState.status) return { text: 'Not checked yet.', cls: '' };
-  if (!ahState.status.reachable) {
-    return { text: `Unreachable — ${escapeHtml(ahState.status.error || 'unknown error')}`, cls: 'bad' };
+async function testAhAuthNow() {
+  ahState.testingAuth = true;
+  renderAuctionHouse();
+  try {
+    ahState.authTest = await api('/api/auction-house/test-auth', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+  } catch (err) {
+    ahState.authTest = { reachable: false, error: err.message || String(err), checkedAt: Date.now() };
   }
-  const mode = ahState.status.ahEnabled ? 'online (AH_ENABLED=true)' : 'reachable, but off (AH_ENABLED=false)';
-  return { text: `Connected — ${mode}`, cls: ahState.status.ahEnabled ? 'good' : '' };
+  ahState.testingAuth = false;
+  renderAuctionHouse();
+}
+
+/** Colour/label for one target's status card -- three states, same
+ *  "reachable/unreachable/checking" shape the client's own auctionHouse.ts
+ *  checks against, just from this DevTool's own point of view (always
+ *  attempts the real request, no AH_READY short-circuit -- see that
+ *  module's own comment for why the shipped client is different). */
+function ahStatusLine(target) {
+  if (ahState.checking) return { text: 'Checking…', cls: '' };
+  if (!target) return { text: 'Not checked yet.', cls: '' };
+  if (!target.reachable) {
+    return { text: `Unreachable — ${escapeHtml(target.error || 'unknown error')}`, cls: 'bad' };
+  }
+  const keyNote = target.steamKeyConfigured === false ? ', Steam key NOT configured' : '';
+  const mode = target.ahEnabled ? `online (AH_ENABLED=true${keyNote})` : `reachable, but off (AH_ENABLED=false${keyNote})`;
+  return { text: `Connected — ${mode}`, cls: target.ahEnabled && target.steamKeyConfigured !== false ? 'good' : '' };
+}
+
+/** Summary line for the auth-test result -- a real Steam-level rejection
+ *  (or a clear "not configured" error) both count as SUCCESS here: this
+ *  is testing that the wiring reaches Steam at all, not trying to
+ *  actually authenticate anyone with a placeholder ticket. */
+function ahAuthTestLine() {
+  if (ahState.testingAuth) return { text: 'Testing…', cls: '' };
+  if (!ahState.authTest) return { text: 'Not tested yet.', cls: '' };
+  if (!ahState.authTest.reachable) {
+    return { text: `Could not reach /auth/verify — ${escapeHtml(ahState.authTest.error || 'unknown error')}`, cls: 'bad' };
+  }
+  const body = ahState.authTest.body;
+  if (body?.error) {
+    return { text: `Reached Steam auth — Steam/server said: "${escapeHtml(body.error)}"`, cls: 'good' };
+  }
+  return { text: `Reached Steam auth — HTTP ${ahState.authTest.status}`, cls: 'good' };
 }
 
 function renderAuctionHouse() {
-  const line = ahStatusLine();
+  const localLine = ahStatusLine(ahState.status?.local);
+  const publicLine = ahStatusLine(ahState.status?.public);
+  const authLine = ahAuthTestLine();
   const checkedAt = ahState.status?.checkedAt ? new Date(ahState.status.checkedAt).toLocaleTimeString() : null;
 
   appEl.innerHTML = `
@@ -4144,11 +4185,10 @@ function renderAuctionHouse() {
       <code>/admin/*</code> routes the backend doesn't have yet.
     </p>
 
-    <div class="section-heading">Backend URL</div>
+    <div class="section-heading">Local backend URL</div>
     <div class="devtool-note">
       Saved locally (<code>tools/devtool/ah.config.json</code>, gitignored). Defaults to
-      <code>http://localhost:4000</code> -- server/'s own dev default -- until there's a real
-      domain to point at (see server/README.md).
+      <code>http://localhost:4000</code> -- server/'s own dev default.
     </div>
     <div class="row" style="gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
       <input type="text" id="ahUrlInput" placeholder="http://localhost:4000"
@@ -4158,10 +4198,33 @@ function renderAuctionHouse() {
       <button id="ahCheckBtn" ${ahState.checking ? 'disabled' : ''}>${ahState.checking ? 'Checking…' : 'Check now'}</button>
     </div>
 
-    <div class="section-heading">Status</div>
-    <div class="patch-result ${line.cls}">
-      <div class="patch-result-label">${line.text}</div>
+    <div class="section-heading">Status -- local (is the process up?)</div>
+    <div class="patch-result ${localLine.cls}">
+      <div class="patch-result-label">${localLine.text}</div>
+    </div>
+
+    <div class="section-heading">Status -- public, ah.guildbound.dev (is the whole hosting chain up?)</div>
+    <p class="tiny muted" style="margin: 0 0 6px;">
+      DNS, TLS, and the Cloudflare Tunnel all have to work for this one to succeed --
+      local can be healthy while this is broken, or the other way around. Both are checked
+      together above, not sequentially.
+    </p>
+    <div class="patch-result ${publicLine.cls}">
+      <div class="patch-result-label">${publicLine.text}</div>
       ${checkedAt ? `<div class="tiny muted">Last checked ${checkedAt}.</div>` : ''}
+    </div>
+
+    <div class="section-heading">Steam auth wiring</div>
+    <p class="tiny muted" style="margin: 0 0 6px;">
+      Sends a placeholder ticket to the public URL's real <code>/auth/verify</code> --
+      a genuine Steam rejection (or a clear "not configured" error) both count as success
+      here. This is the same check a person would otherwise run by hand with curl.
+    </p>
+    <div class="row" style="margin-bottom: 8px;">
+      <button id="ahAuthTestBtn" ${ahState.testingAuth ? 'disabled' : ''}>${ahState.testingAuth ? 'Testing…' : 'Test Steam auth wiring'}</button>
+    </div>
+    <div class="patch-result ${authLine.cls}">
+      <div class="patch-result-label">${authLine.text}</div>
     </div>
   `;
 
@@ -4185,4 +4248,7 @@ function renderAuctionHouse() {
 
   const ahCheckBtn = document.getElementById('ahCheckBtn');
   if (ahCheckBtn) ahCheckBtn.onclick = () => checkAhNow();
+
+  const ahAuthTestBtn = document.getElementById('ahAuthTestBtn');
+  if (ahAuthTestBtn) ahAuthTestBtn.onclick = () => testAhAuthNow();
 }

@@ -26,11 +26,21 @@ const app = Fastify({ logger: true });
  * "host prep + backend skeleton" build step exists to prove reachable over
  * HTTPS through the real domain -- DNS, TLS, the Windows Service, and the
  * firewall chain, before any real Auction House logic exists behind it.
+ *
+ * `steamKeyConfigured` added (patch 0408) after a real live-deploy
+ * session where `STEAM_WEB_API_KEY` silently stayed unset (patch 0406's
+ * own bug) and the only way to notice was a failed `/auth/verify` call --
+ * a boolean here means DevTools (or anyone else) can see that at a
+ * glance, no auth attempt needed. Deliberately just a boolean, never the
+ * key's actual value -- same "never send the secret anywhere, not even
+ * to a trusted internal tool" rule steamAuth.ts's own comments already
+ * establish for this key.
  */
 app.get('/health', async () => ({
   status: 'ok',
   ahEnabled: config.ahEnabled,
   mode: config.ahEnabled ? 'online' : 'offline',
+  steamKeyConfigured: !!config.steamWebApiKey,
 }));
 
 /**

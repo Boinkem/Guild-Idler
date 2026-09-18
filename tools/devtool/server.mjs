@@ -2673,13 +2673,27 @@ async function writeSteamConfig(cfg) {
 
 /* -------------------------------------------------------- auction house --- */
 // Build-order item 3 from guild-idler-status.md's Auction House entry --
-// connection/health monitor only. No force-rotation, transaction search,
-// trade reversal, or suspension yet: those all need real /admin/* routes
-// on the backend, which don't exist yet (server/ only has /health so
-// far). This talks to exactly the one route that does exist.
+// connection/health monitor. Extended (patch 0408) after a real live-deploy
+// session found two real gaps: this only ever checked localhost, never the
+// actual public domain (so it could say "healthy" while the tunnel/DNS/TLS
+// chain was actually broken -- the exact thing that took real debugging to
+// catch by hand); and there was no way to see whether STEAM_WEB_API_KEY was
+// even configured without a failed auth attempt. Still no force-rotation,
+// transaction search, trade reversal, or suspension -- those need real
+// /admin/* routes the backend doesn't have yet.
 
 const AH_DEFAULT_URL = 'http://localhost:4000';
+/** The real, confirmed-working public domain (see guild-idler-status.md's
+ *  patch 0407) -- checked in addition to the configurable local URL, not
+ *  instead of it, since "is the process up" and "is the public path
+ *  working" are genuinely different failure modes worth telling apart. */
+const AH_PUBLIC_URL = 'https://ah.guildbound.dev';
 const AH_CHECK_TIMEOUT_MS = 4000;
+/** Never a real ticket -- this exists purely to prove the network path to
+ *  Steam's API works, same "Invalid parameter" result a genuine curl test
+ *  already produces against a real key. Mirrors what a person would
+ *  otherwise have to type by hand. */
+const AH_PLACEHOLDER_TICKET = 'deadbeef';
 
 async function readAhConfig() {
   try {
@@ -2696,7 +2710,7 @@ async function writeAhConfig(cfg) {
 }
 
 /**
- * Hits the configured backend's /health directly -- the same route
+ * Hits the given backend's /health directly -- the same route
  * server/src/index.ts always answers on regardless of AH_ENABLED (see
  * that file's own comment). Never throws: a refused connection, a DNS
  * failure, a timeout, and a non-JSON response are all just different
@@ -2710,7 +2724,34 @@ async function checkAhBackend(url) {
       return { reachable: false, error: `HTTP ${res.status}` };
     }
     const body = await res.json();
-    return { reachable: true, ahEnabled: !!body.ahEnabled, mode: body.mode ?? null };
+    return {
+      reachable: true,
+      ahEnabled: !!body.ahEnabled,
+      mode: body.mode ?? null,
+      steamKeyConfigured: !!body.steamKeyConfigured,
+    };
+  } catch (err) {
+    return { reachable: false, error: err.message || String(err) };
+  }
+}
+
+/**
+ * Sends a placeholder ticket to the given backend's real /auth/verify --
+ * exactly what a person would otherwise type as a curl command by hand.
+ * A real rejection from Steam (or a "not configured" error if the key's
+ * missing) is success for this check -- it's testing the wiring, not
+ * trying to actually authenticate anyone.
+ */
+async function testAhAuth(url) {
+  try {
+    const res = await fetch(`${url}/auth/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(AH_CHECK_TIMEOUT_MS),
+      body: JSON.stringify({ ticket: AH_PLACEHOLDER_TICKET }),
+    });
+    const body = await res.json().catch(() => null);
+    return { reachable: true, status: res.status, body };
   } catch (err) {
     return { reachable: false, error: err.message || String(err) };
   }
@@ -3090,8 +3131,36 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/auction-house/status' && req.method === 'GET') {
     const cfg = await readAhConfig();
-    const result = await checkAhBackend(cfg.url);
-    return json(res, 200, { url: cfg.url, checkedAt: Date.now(), ...result });
+    // Checked together, not sequentially -- neither result depends on the
+    // other, and a person watching the DevTool UI shouldn't wait twice as
+    // long just because both checks happen to share this one route.
+    const [local, publicResult] = await Promise.all([
+      checkAhBackend(cfg.url),
+      checkAhBackend(AH_PUBLIC_URL),
+    ]);
+    return json(res, 200, {
+      checkedAt: Date.now(),
+      local: { url: cfg.url, ...local },
+      public: { url: AH_PUBLIC_URL, ...publicResult },
+    });
+  }
+
+  if (url.pathname === '/api/auction-house/test-auth' && req.method === 'POST') {
+    const cfg = await readAhConfig();
+    let body = {};
+    try {
+      const raw = await readBody(req);
+      if (raw) body = JSON.parse(raw);
+    } catch {
+      // No body, or not valid JSON -- falls through to the public-URL
+      // default below rather than failing the request over an optional field.
+    }
+    // Defaults to the public URL, not local -- /auth/verify's whole point
+    // is proving the real, internet-facing path to Steam works, the same
+    // thing a real player's client would actually hit.
+    const target = body.target === 'local' ? cfg.url : AH_PUBLIC_URL;
+    const result = await testAhAuth(target);
+    return json(res, 200, { target, checkedAt: Date.now(), ...result });
   }
 
   if (url.pathname === '/api/steam/generate-scripts' && req.method === 'POST') {

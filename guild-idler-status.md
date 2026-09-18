@@ -33219,3 +33219,64 @@ passing verification -- needs the real packaged game running with a real
 Steam session open, clicking the new TestingPanel button for real. Every
 piece up to that exact moment is now confirmed working; that final click
 is the one thing only possible on the real machine.
+
+### DevTool monitoring audit: dual local/public health checks, Steam key visibility, auth-wiring test (patch 0408)
+```discord-update
+Dev Update | Patch 0408
+
+- Internal tooling only -- nothing changes in the game itself
+```
+
+Direct audit request after the real `ah.guildbound.dev` setup session --
+"does DevTools support as much of this hosting as possible" -- found
+three real gaps, not hypothetical ones, each traced back to something
+that actually caused friction that same session.
+
+**Gap 1: DevTools only ever checked `localhost:4000`, never the public
+domain.** That distinguishes nothing -- the local process being healthy
+and the public hosting chain (DNS/TLS/Tunnel) being healthy are genuinely
+different failure modes, and the entire debugging session that found
+patches 0406 and this one happened *because* there was no way to see
+that distinction at a glance. `checkAhBackend()` now runs against both
+`ah.guildbound.dev` (hardcoded, the real confirmed domain) and the
+configurable local URL, in parallel (`Promise.all`, not sequential --
+no reason to double the wait for two independent checks), and the UI
+shows them as two separate cards.
+
+**Gap 2: no way to see whether `STEAM_WEB_API_KEY` was configured
+without a failed auth attempt.** Exactly patch 0406's own bug -- caught
+live via a failed curl, not a dashboard. `/health` now includes
+`steamKeyConfigured` (`server/src/index.ts`) -- a boolean only, never
+the key's actual value, same secrecy rule `steamAuth.ts` already
+enforces. DevTools surfaces it inline in the status line rather than a
+separate field, since it's only actionable in combination with whether
+the backend's even reachable at all.
+
+**Gap 3: no way to test `/auth/verify` from DevTools -- only by typing
+a curl command by hand.** New `testAhAuth()`/`/api/auction-house/test-auth`
+sends the same placeholder ticket a person would type manually, targeting
+the public URL by default (proving the path a real player's client would
+actually use, not just the local shortcut). A real Steam-level rejection
+or a clear "not configured" error both count as success here -- this
+tests the wiring, not whether a fake ticket happens to authenticate
+anyone.
+
+**Verified for real, against real running backends, not mocked:** built
+and ran the actual server (`AH_ENABLED=true`, a fake Steam key) alongside
+the real DevTool server, then hit the new endpoints directly. The dual
+status check correctly showed local as healthy (`reachable: true,
+ahEnabled: true, steamKeyConfigured: true`) while the public check
+independently and correctly reported the real `ah.guildbound.dev`
+unreachable at that exact moment (`HTTP 403` -- the real production
+backend genuinely wasn't running on the host machine at the time) --
+proof the two checks are actually independent, not proof of a bug. The
+auth-test route against local correctly reached the real `/auth/verify`
+and got back `{"error":"Steam returned HTTP 403"}` (fake key, real
+rejection, exactly the shape a genuine deploy issue would produce);
+against the (at that moment unreachable) public URL it degraded cleanly
+to a reported HTTP status with a `null` body rather than crashing on a
+non-JSON response.
+
+**Not verified:** no real browser click-through of the new two-card
+layout or the auth-test button in this environment -- worth a real pass
+confirming the UI reads clearly once both cards are visible together.
