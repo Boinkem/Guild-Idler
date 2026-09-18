@@ -5,6 +5,7 @@ import { backgroundSrc } from '../../game/settings';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { AH_READY, AhConnectionStatus, checkAhConnection } from '../../game/auctionHouse';
 import { MailboxModal } from '../MailboxModal';
+import { AuctionHouseTrade } from '../AuctionHouseTrade';
 
 /**
  * Auction House panel shell -- build-order item 2 from the ranked list
@@ -100,17 +101,13 @@ export function AuctionHousePanel() {
         </div>
 
         {status === 'online' ? (
-          // Real listings/browse/buy UI -- not built yet, later build-
-          // order steps. Reaching this branch means the backend is
-          // genuinely live and enabled, which isn't possible yet -- see
-          // AH_READY's own comment in auctionHouse.ts. The mailbox above
-          // doesn't wait on this -- see this file's own header comment.
-          <div className="card">
-            <p className="small muted" style={{ margin: 0 }}>
-              Connected -- but there's nothing to show yet. Listings and browsing are still
-              being built.
-            </p>
-          </div>
+          // Real listings/browse/buy/sell UI (patch 0411) -- see
+          // AuctionHouseTrade.tsx for the full implementation. Reaching
+          // this branch means the backend is genuinely live and enabled --
+          // see AH_READY's own comment in auctionHouse.ts. The mailbox
+          // above doesn't wait on this -- see this file's own header
+          // comment.
+          <AuctionHouseTrade />
         ) : (
           <div className="card">
             <p className="small muted" style={{ margin: 0 }}>

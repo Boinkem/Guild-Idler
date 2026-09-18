@@ -1,0 +1,590 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 777dedd..16e04f7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -33443,3 +33443,69 @@ sale's proceeds appear -- needs the real packaged game, Steam running,
+ and a second real account to sell to/buy from. Every piece up to that
+ exact moment is now confirmed working through this patch and 0409
+ together.
++
++### Real browse/sell UI -- the Auction House is now player-visible for the first time (patch 0411)
++```discord-update
++Dev Update | Patch 0411
++
++- The Auction House now has real Browse and Sell tabs -- list gear or consumables, browse and buy what others have listed
++- Still gated behind the Auction House Charter, and the backend isn't live for players yet -- but this is the first patch where there's actually something to click
++```
++
++Closes the last piece flagged as deferred since patch 0401's own panel
++shell. Deliberately scoped for v1, matching the same discipline every
++prior Auction House patch has kept: no filtering/pagination on Browse,
++no "my listings" view, no cancel-a-listing action -- all real gaps, all
++already on record in the "Still open" list above, not overlooked here.
++
++**`AuctionHouseTrade.tsx`, new file.** Two tabs. Browse fetches active
++listings (`engine.fetchAuctionListings`, wrapping patch 0409's public
++`GET /listings`) and renders each as an `.item-card.rarity-card`, same
++shape `MailboxModal.tsx`'s cards already established, with a Buy button.
++Sell lists the player's own unlocked stash gear and owned consumables,
++each opening a small price-entry form (currency toggle, price field) on
++"List for sale."
++
++**The design doc's own stated rule, actually implemented, not just
++described:** *"List flow pulls the item from local inventory only after
++the server confirms the listing was created -- no optimistic strip."*
++That sentence has been sitting in this entry since the very first design
++pass (patch 0400-ish). `engine.listEquipmentForSale`/
++`listConsumableForSale` call `createListing()` first and only touch
++`state.stash`/`state.inventory` on a genuine success response --
++confirmed directly (see Verified below), not assumed from reading the
++code. Locked (Vault) items are blocked the same way `ShopManager.sell`
++already blocks them, before any network call at all.
++
++**Buying doesn't touch local state directly** -- per patch 0403's design
++revision, the purchased item and the seller's proceeds both route
++through mailbox server-side, so `engine.buyListing` triggers an
++immediate `syncMailboxFromServer()` call on success rather than applying
++anything itself, surfacing the purchase right away instead of waiting
++for the next natural sync trigger.
++
++**Verified for real against mocked network calls, exact scenarios that
++matter most, not just the happy path:**
++- A rejected listing (server returns an error) leaves the item
++  completely untouched in the stash -- confirmed directly, not assumed:
++  stash count unchanged, the exact item still present by uid.
++- An accepted listing removes the item only after that success --
++  confirmed the item is gone from the stash and the create-listing
++  endpoint was actually called the expected number of times across both
++  the failing and succeeding attempts.
++- A Vault-locked item is refused before any network request fires at
++  all -- confirmed the mocked endpoint's call count didn't increase.
++- A consumable listing reduces owned quantity by exactly 1, not below
++  zero, not the whole stack.
++- Browse correctly parses a real-shaped server response (Postgres BIGINT
++  price arriving as a JSON string, same as every other server row this
++  build has handled).
++- Buying correctly reaches the real buy endpoint and returns success.
++- `npx tsc --noEmit` clean, full `vite build` clean.
++
++**Not verified, and can't be here:** no real browser click-through of
++the actual tabs/forms/cards in this environment, and no genuine
++multiplayer scenario -- one real account listing something, a second
++real account browsing and buying it -- since that needs two real Steam
++sessions. Every piece up to that exact moment is now confirmed working
++through this patch and everything before it.
+diff --git a/src/game/auctionHouse.ts b/src/game/auctionHouse.ts
+index 16f88e2..74d8680 100644
+--- a/src/game/auctionHouse.ts
++++ b/src/game/auctionHouse.ts
+@@ -201,3 +201,106 @@ export async function claimServerMailboxEntry(entryId: string): Promise<boolean>
+     return false;
+   }
+ }
++
++/** Raw shape of one row from the server's GET /listings (server/src/
++ *  listings.ts) -- snake_case, matching the Postgres columns directly.
++ *  `price` comes back as a string over JSON (Postgres BIGINT), same as
++ *  ServerMailboxRow's own `amount` field. */
++export interface ServerListingRow {
++  id: string;
++  seller_steam_id: string | null;
++  item_type: 'equipment' | 'consumable';
++  item_payload: unknown;
++  currency: 'gold' | 'scrap';
++  price: string;
++  created_at: string;
++  expires_at: string;
++}
++
++/**
++ * Browse active listings -- public, no session token needed (matches
++ * the server route's own "browsing doesn't need to know who's asking"
++ * design, listings.ts). Returns `null` only on a genuine failure to
++ * reach the backend, never for "zero listings right now" -- that comes
++ * back as an empty array, a normal state, not an error one.
++ */
++export async function fetchActiveListings(): Promise<ServerListingRow[] | null> {
++  if (!AH_READY || !AH_BACKEND_URL) return null;
++  try {
++    const response = await fetch(`${AH_BACKEND_URL}/listings`);
++    if (!response.ok) return null;
++    const body = await response.json();
++    return Array.isArray(body?.listings) ? body.listings : null;
++  } catch {
++    return null;
++  }
++}
++
++export interface CreateListingResult {
++  ok: boolean;
++  listing?: { id: string; created_at: string; expires_at: string };
++  error?: string;
++}
++
++/**
++ * Creates a listing for the given item. `itemPayload` is sent exactly
++ * as-is -- the server doesn't re-derive or validate it against anything
++ * (see listings.ts's own comment on this trust boundary), so this
++ * function doesn't either; the caller (AuctionHouseTrade.tsx) is
++ * responsible for passing the real item straight from the player's own
++ * stash/inventory.
++ */
++export async function createListing(
++  itemType: 'equipment' | 'consumable',
++  itemPayload: unknown,
++  currency: 'gold' | 'scrap',
++  price: number
++): Promise<CreateListingResult> {
++  const token = await getSessionToken();
++  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
++  if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
++
++  try {
++    const response = await fetch(`${AH_BACKEND_URL}/listings`, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
++      body: JSON.stringify({ itemType, itemPayload, currency, price }),
++    });
++    const body = await response.json();
++    if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
++    return { ok: true, listing: body.listing };
++  } catch (err) {
++    return { ok: false, error: err instanceof Error ? err.message : String(err) };
++  }
++}
++
++export interface BuyListingResult {
++  ok: boolean;
++  error?: string;
++}
++
++/**
++ * Buys a listing. On success, the item and gold/scrap route through
++ * mailbox server-side (listings.ts's buyout transaction) -- this
++ * function doesn't touch local inventory/stash/gold at all, and
++ * deliberately doesn't trigger a mailbox sync itself either; the next
++ * automatic sync (AuctionHousePanel.tsx's own effect) picks up the
++ * purchase, same as any other server-side mailbox change would.
++ */
++export async function buyListing(listingId: string): Promise<BuyListingResult> {
++  const token = await getSessionToken();
++  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
++  if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
++
++  try {
++    const response = await fetch(`${AH_BACKEND_URL}/listings/${listingId}/buy`, {
++      method: 'POST',
++      headers: { Authorization: `Bearer ${token}` },
++    });
++    const body = await response.json();
++    if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
++    return { ok: true };
++  } catch (err) {
++    return { ok: false, error: err instanceof Error ? err.message : String(err) };
++  }
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index a53dced..6b7feb5 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -29,7 +29,10 @@ import { HarvestManager } from './managers/HarvestManager';
+ import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
+ import { PetManager } from './managers/PetManager';
+ import { MailboxManager } from './managers/MailboxManager';
+-import { verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry } from './auctionHouse';
++import {
++  verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry,
++  fetchActiveListings, createListing, buyListing as buyListingRequest, ServerListingRow,
++} from './auctionHouse';
+ import { PeddlerManager } from './managers/PeddlerManager';
+ import { CraftingManager } from './managers/CraftingManager';
+ import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
+@@ -2616,6 +2619,88 @@ export class GameEngine {
+     return { synced };
+   }
+ 
++  /**
++   * Browse active listings -- public, no auth needed (mirrors the
++   * server route's own design). Returns `null` on a genuine failure to
++   * reach the backend, an array (possibly empty) otherwise -- the
++   * calling component (AuctionHouseTrade.tsx) tells those two states
++   * apart itself rather than this method picking a toast for it, since
++   * browsing is a background fetch, not a player-initiated action with
++   * a result worth announcing.
++   */
++  async fetchAuctionListings(): Promise<ServerListingRow[] | null> {
++    return fetchActiveListings();
++  }
++
++  /**
++   * Lists an equipment item from the stash for sale. "List flow pulls
++   * the item from local inventory only after the server confirms the
++   * listing was created -- no optimistic strip" -- the design doc's own
++   * stated rule (guild-idler-status.md's Auction House entry),
++   * implemented here for real: the item stays in the stash, completely
++   * untouched, until createListing() actually succeeds. Same
++   * locked-item respect ShopManager.sell already enforces -- a Vault-
++   * locked item can't be listed any more than it can be sold.
++   */
++  async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number): Promise<boolean> {
++    const item = this.state.stash.find((i) => i.uid === itemUid);
++    if (!item) { this.say('That item is equipped or missing.'); return false; }
++    if (item.locked) { this.say('That item is locked in the Vault.'); return false; }
++    if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
++
++    this.say('Listing...');
++    const result = await createListing('equipment', item, currency, Math.floor(price));
++    if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
++
++    // Only now, confirmed by the server -- the same item, by uid, in
++    // case anything else changed the stash while this request was in
++    // flight.
++    this.state.stash = this.state.stash.filter((i) => i.uid !== itemUid);
++    this.say('Listed on the Auction House.');
++    this.notify();
++    void this.saveNow();
++    return true;
++  }
++
++  /** Lists one unit of an owned consumable -- same "confirmed by the
++   *  server before touching local state" rule as listEquipmentForSale.
++   *  Every listing sells exactly one unit right now (no quantity field
++   *  on a listing yet) -- see server/db/migrations/001_init.sql's own
++   *  comment on what's still open. */
++  async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number): Promise<boolean> {
++    const owned = this.state.inventory[consumableId] ?? 0;
++    if (owned < 1) { this.say("You don't have any of those."); return false; }
++    if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
++
++    this.say('Listing...');
++    const result = await createListing('consumable', { defId: consumableId }, currency, Math.floor(price));
++    if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
++
++    this.state.inventory[consumableId] = owned - 1;
++    this.say('Listed on the Auction House.');
++    this.notify();
++    void this.saveNow();
++    return true;
++  }
++
++  /**
++   * Buys a listing. Doesn't touch local stash/inventory/gold at all --
++   * per the design revision (patch 0403), the purchased item and the
++   * seller's gold both route through mailbox server-side, so there's
++   * nothing to apply locally here beyond triggering an immediate sync
++   * (rather than waiting for the next natural one) so the purchase shows
++   * up right away instead of on some later trigger.
++   */
++  async buyListing(listingId: string): Promise<boolean> {
++    this.say('Buying...');
++    const result = await buyListingRequest(listingId);
++    if (!result.ok) { this.say(`Could not buy: ${result.error}`); return false; }
++    playSound('purchase');
++    this.say('Purchased! Check your mailbox.');
++    void this.syncMailboxFromServer();
++    return true;
++  }
++
+   /** Bulk-sells every owned curio in one action -- the Curios-section
+    *  counterpart to sellJunk above. */
+   sellAllCurios() {
+diff --git a/src/ui/AuctionHouseTrade.tsx b/src/ui/AuctionHouseTrade.tsx
+new file mode 100644
+index 0000000..be33281
+--- /dev/null
++++ b/src/ui/AuctionHouseTrade.tsx
+@@ -0,0 +1,257 @@
++import { useEffect, useState } from 'react';
++import { useEngine } from './useEngine';
++import { EquipmentItem } from '../game/types';
++import { RARITY_BANNER, RARITY_COLOR, formatGold } from '../game/util';
++import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
++import { CONSUMABLE_BY_ID } from '../game/data/items';
++import { ItemIcon, ConsumableIcon } from './icons';
++import { ServerListingRow } from '../game/auctionHouse';
++
++/**
++ * Real Auction House browse/sell UI (patch 0411) -- the actual
++ * player-facing piece every prior Auction House patch has been building
++ * toward, since patch 0401's panel shell. Rendered by
++ * AuctionHousePanel.tsx only once `status === 'online'` (a real,
++ * confirmed connection) -- see that file's own comment for why the
++ * offline state is correct production behaviour, not a stub, whenever
++ * this can't render.
++ *
++ * Two tabs, kept deliberately simple for v1: Browse (fetch + display +
++ * Buy) and Sell (pick an eligible item, set a price, list it). No
++ * filtering/pagination on Browse yet, no "my listings" view, no cancel
++ * -- all flagged as still-open in guild-idler-status.md's Auction House
++ * entry, not overlooked here.
++ */
++export function AuctionHouseTrade() {
++  const [tab, setTab] = useState<'browse' | 'sell'>('browse');
++  return (
++    <div>
++      <div className="row" style={{ gap: 8, marginBottom: 10 }}>
++        <button className={tab === 'browse' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('browse')}>Browse</button>
++        <button className={tab === 'sell' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('sell')}>Sell</button>
++      </div>
++      {tab === 'browse' ? <BrowseTab /> : <SellTab />}
++    </div>
++  );
++}
++
++function BrowseTab() {
++  const engine = useEngine();
++  const [listings, setListings] = useState<ServerListingRow[] | null>(null);
++  const [loading, setLoading] = useState(true);
++  const [buyingId, setBuyingId] = useState<string | null>(null);
++
++  const refresh = () => {
++    setLoading(true);
++    engine.fetchAuctionListings().then((rows) => {
++      setListings(rows);
++      setLoading(false);
++    });
++  };
++
++  useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
++
++  const handleBuy = async (id: string) => {
++    setBuyingId(id);
++    const ok = await engine.buyListing(id);
++    setBuyingId(null);
++    if (ok) refresh();
++  };
++
++  if (loading) {
++    return <div className="card"><p className="tiny muted" style={{ margin: 0 }}>Loading listings...</p></div>;
++  }
++  if (listings === null) {
++    return <div className="card"><p className="tiny muted" style={{ margin: 0 }}>Couldn't load listings right now -- try again in a moment.</p></div>;
++  }
++  if (listings.length === 0) {
++    return (
++      <div className="card">
++        <p className="tiny muted" style={{ margin: 0 }}>Nothing listed right now -- check back later, or list something yourself.</p>
++      </div>
++    );
++  }
++
++  return (
++    <>
++      <div className="row end" style={{ marginBottom: 8 }}>
++        <button className="btn-ghost" onClick={refresh}>Refresh</button>
++      </div>
++      <div className="item-card-grid">
++        {listings.map((row) => (
++          <ListingCard key={row.id} row={row} buying={buyingId === row.id} onBuy={() => handleBuy(row.id)} />
++        ))}
++      </div>
++    </>
++  );
++}
++
++function ListingCard({ row, buying, onBuy }: { row: ServerListingRow; buying: boolean; onBuy: () => void }) {
++  if (row.item_type === 'equipment') {
++    const item = row.item_payload as EquipmentItem;
++    const def = EQUIPMENT_BY_ID[item.defId];
++    if (!def) return null;
++    return (
++      <div className="item-card rarity-card">
++        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++        <div className="item-card-summary">
++          <ItemIcon slot={def.slot} icon={def.icon} size={48} />
++          <div className="item-card-body">
++            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>
++              {itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}
++            </div>
++            <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
++          </div>
++        </div>
++        <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} disabled={buying} onClick={onBuy}>
++          {buying ? 'Buying...' : 'Buy'}
++        </button>
++      </div>
++    );
++  }
++
++  const payload = row.item_payload as { defId?: string };
++  const def = payload.defId ? CONSUMABLE_BY_ID[payload.defId] : undefined;
++  if (!def) return null;
++  return (
++    <div className="item-card rarity-card">
++      <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++      <div className="item-card-summary">
++        <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
++        <div className="item-card-body">
++          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
++          <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
++        </div>
++      </div>
++      <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} disabled={buying} onClick={onBuy}>
++        {buying ? 'Buying...' : 'Buy'}
++      </button>
++    </div>
++  );
++}
++
++type SellDraft =
++  | { kind: 'equipment'; item: EquipmentItem }
++  | { kind: 'consumable'; consumableId: string };
++
++function SellTab() {
++  const engine = useEngine();
++  const state = engine.state;
++  const [draft, setDraft] = useState<SellDraft | null>(null);
++
++  if (draft) {
++    return <SellForm draft={draft} onDone={() => setDraft(null)} />;
++  }
++
++  const sellableStash = state.stash.filter((i) => !i.locked);
++  const ownedConsumables = Object.entries(state.inventory).filter(([, qty]) => qty > 0);
++
++  return (
++    <div>
++      <p className="tiny muted" style={{ marginBottom: 8 }}>
++        Pick something to list. It stays yours -- untouched -- until the listing is actually
++        confirmed by the server, not before.
++      </p>
++
++      <div className="section-heading">Gear ({sellableStash.length})</div>
++      {sellableStash.length === 0 ? (
++        <p className="tiny muted">Nothing sellable in your stash (Vault-locked items can't be listed).</p>
++      ) : (
++        <div className="item-card-grid">
++          {sellableStash.map((item) => {
++            const def = EQUIPMENT_BY_ID[item.defId];
++            if (!def) return null;
++            return (
++              <div key={item.uid} className="item-card rarity-card">
++                <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++                <div className="item-card-summary">
++                  <ItemIcon slot={def.slot} icon={def.icon} size={48} />
++                  <div className="item-card-body">
++                    <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>
++                      {itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}
++                    </div>
++                  </div>
++                </div>
++                <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={() => setDraft({ kind: 'equipment', item })}>
++                  List for sale →
++                </button>
++              </div>
++            );
++          })}
++        </div>
++      )}
++
++      <div className="section-heading" style={{ marginTop: 14 }}>Consumables</div>
++      {ownedConsumables.length === 0 ? (
++        <p className="tiny muted">Nothing to list.</p>
++      ) : (
++        <div className="item-card-grid">
++          {ownedConsumables.map(([consumableId, qty]) => {
++            const def = CONSUMABLE_BY_ID[consumableId];
++            if (!def) return null;
++            return (
++              <div key={consumableId} className="item-card rarity-card">
++                <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++                <div className="item-card-summary">
++                  <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
++                  <div className="item-card-body">
++                    <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name} ×{qty}</div>
++                    <div className="tiny muted">Lists 1 at a time</div>
++                  </div>
++                </div>
++                <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={() => setDraft({ kind: 'consumable', consumableId })}>
++                  List for sale →
++                </button>
++              </div>
++            );
++          })}
++        </div>
++      )}
++    </div>
++  );
++}
++
++function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
++  const engine = useEngine();
++  const [currency, setCurrency] = useState<'gold' | 'scrap'>('gold');
++  const [price, setPrice] = useState('');
++  const [submitting, setSubmitting] = useState(false);
++
++  const name = draft.kind === 'equipment'
++    ? (() => {
++        const def = EQUIPMENT_BY_ID[draft.item.defId];
++        return def ? itemDisplayName(draft.item, def) : draft.item.defId;
++      })()
++    : CONSUMABLE_BY_ID[draft.consumableId]?.name ?? draft.consumableId;
++
++  const submit = async () => {
++    const value = Number(price);
++    setSubmitting(true);
++    const ok = draft.kind === 'equipment'
++      ? await engine.listEquipmentForSale(draft.item.uid, currency, value)
++      : await engine.listConsumableForSale(draft.consumableId, currency, value);
++    setSubmitting(false);
++    if (ok) onDone();
++  };
++
++  return (
++    <div className="card">
++      <div className="card-title">List: {name}</div>
++      <div className="row" style={{ gap: 8, margin: '10px 0' }}>
++        <button className={currency === 'gold' ? 'btn-primary' : 'btn-ghost'} onClick={() => setCurrency('gold')}>Gold</button>
++        <button className={currency === 'scrap' ? 'btn-primary' : 'btn-ghost'} onClick={() => setCurrency('scrap')}>Scrap</button>
++      </div>
++      <input
++        type="number" min="1" placeholder="Price" value={price}
++        onChange={(e) => setPrice(e.target.value)}
++        style={{ width: '100%', background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '7px 8px', marginBottom: 10 }}
++      />
++      <div className="row" style={{ gap: 8 }}>
++        <button className="btn-primary" disabled={submitting || !price} onClick={submit}>
++          {submitting ? 'Listing...' : 'Confirm listing'}
++        </button>
++        <button onClick={onDone} disabled={submitting}>Cancel</button>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/panels/AuctionHousePanel.tsx b/src/ui/panels/AuctionHousePanel.tsx
+index e0b657d..0ecea73 100644
+--- a/src/ui/panels/AuctionHousePanel.tsx
++++ b/src/ui/panels/AuctionHousePanel.tsx
+@@ -5,6 +5,7 @@ import { backgroundSrc } from '../../game/settings';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { AH_READY, AhConnectionStatus, checkAhConnection } from '../../game/auctionHouse';
+ import { MailboxModal } from '../MailboxModal';
++import { AuctionHouseTrade } from '../AuctionHouseTrade';
+ 
+ /**
+  * Auction House panel shell -- build-order item 2 from the ranked list
+@@ -100,17 +101,13 @@ export function AuctionHousePanel() {
+         </div>
+ 
+         {status === 'online' ? (
+-          // Real listings/browse/buy UI -- not built yet, later build-
+-          // order steps. Reaching this branch means the backend is
+-          // genuinely live and enabled, which isn't possible yet -- see
+-          // AH_READY's own comment in auctionHouse.ts. The mailbox above
+-          // doesn't wait on this -- see this file's own header comment.
+-          <div className="card">
+-            <p className="small muted" style={{ margin: 0 }}>
+-              Connected -- but there's nothing to show yet. Listings and browsing are still
+-              being built.
+-            </p>
+-          </div>
++          // Real listings/browse/buy/sell UI (patch 0411) -- see
++          // AuctionHouseTrade.tsx for the full implementation. Reaching
++          // this branch means the backend is genuinely live and enabled --
++          // see AH_READY's own comment in auctionHouse.ts. The mailbox
++          // above doesn't wait on this -- see this file's own header
++          // comment.
++          <AuctionHouseTrade />
+         ) : (
+           <div className="card">
+             <p className="small muted" style={{ margin: 0 }}>

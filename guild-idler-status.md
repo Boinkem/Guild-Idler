@@ -33443,3 +33443,69 @@ sale's proceeds appear -- needs the real packaged game, Steam running,
 and a second real account to sell to/buy from. Every piece up to that
 exact moment is now confirmed working through this patch and 0409
 together.
+
+### Real browse/sell UI -- the Auction House is now player-visible for the first time (patch 0411)
+```discord-update
+Dev Update | Patch 0411
+
+- The Auction House now has real Browse and Sell tabs -- list gear or consumables, browse and buy what others have listed
+- Still gated behind the Auction House Charter, and the backend isn't live for players yet -- but this is the first patch where there's actually something to click
+```
+
+Closes the last piece flagged as deferred since patch 0401's own panel
+shell. Deliberately scoped for v1, matching the same discipline every
+prior Auction House patch has kept: no filtering/pagination on Browse,
+no "my listings" view, no cancel-a-listing action -- all real gaps, all
+already on record in the "Still open" list above, not overlooked here.
+
+**`AuctionHouseTrade.tsx`, new file.** Two tabs. Browse fetches active
+listings (`engine.fetchAuctionListings`, wrapping patch 0409's public
+`GET /listings`) and renders each as an `.item-card.rarity-card`, same
+shape `MailboxModal.tsx`'s cards already established, with a Buy button.
+Sell lists the player's own unlocked stash gear and owned consumables,
+each opening a small price-entry form (currency toggle, price field) on
+"List for sale."
+
+**The design doc's own stated rule, actually implemented, not just
+described:** *"List flow pulls the item from local inventory only after
+the server confirms the listing was created -- no optimistic strip."*
+That sentence has been sitting in this entry since the very first design
+pass (patch 0400-ish). `engine.listEquipmentForSale`/
+`listConsumableForSale` call `createListing()` first and only touch
+`state.stash`/`state.inventory` on a genuine success response --
+confirmed directly (see Verified below), not assumed from reading the
+code. Locked (Vault) items are blocked the same way `ShopManager.sell`
+already blocks them, before any network call at all.
+
+**Buying doesn't touch local state directly** -- per patch 0403's design
+revision, the purchased item and the seller's proceeds both route
+through mailbox server-side, so `engine.buyListing` triggers an
+immediate `syncMailboxFromServer()` call on success rather than applying
+anything itself, surfacing the purchase right away instead of waiting
+for the next natural sync trigger.
+
+**Verified for real against mocked network calls, exact scenarios that
+matter most, not just the happy path:**
+- A rejected listing (server returns an error) leaves the item
+  completely untouched in the stash -- confirmed directly, not assumed:
+  stash count unchanged, the exact item still present by uid.
+- An accepted listing removes the item only after that success --
+  confirmed the item is gone from the stash and the create-listing
+  endpoint was actually called the expected number of times across both
+  the failing and succeeding attempts.
+- A Vault-locked item is refused before any network request fires at
+  all -- confirmed the mocked endpoint's call count didn't increase.
+- A consumable listing reduces owned quantity by exactly 1, not below
+  zero, not the whole stack.
+- Browse correctly parses a real-shaped server response (Postgres BIGINT
+  price arriving as a JSON string, same as every other server row this
+  build has handled).
+- Buying correctly reaches the real buy endpoint and returns success.
+- `npx tsc --noEmit` clean, full `vite build` clean.
+
+**Not verified, and can't be here:** no real browser click-through of
+the actual tabs/forms/cards in this environment, and no genuine
+multiplayer scenario -- one real account listing something, a second
+real account browsing and buying it -- since that needs two real Steam
+sessions. Every piece up to that exact moment is now confirmed working
+through this patch and everything before it.

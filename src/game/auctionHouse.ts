@@ -201,3 +201,106 @@ export async function claimServerMailboxEntry(entryId: string): Promise<boolean>
     return false;
   }
 }
+
+/** Raw shape of one row from the server's GET /listings (server/src/
+ *  listings.ts) -- snake_case, matching the Postgres columns directly.
+ *  `price` comes back as a string over JSON (Postgres BIGINT), same as
+ *  ServerMailboxRow's own `amount` field. */
+export interface ServerListingRow {
+  id: string;
+  seller_steam_id: string | null;
+  item_type: 'equipment' | 'consumable';
+  item_payload: unknown;
+  currency: 'gold' | 'scrap';
+  price: string;
+  created_at: string;
+  expires_at: string;
+}
+
+/**
+ * Browse active listings -- public, no session token needed (matches
+ * the server route's own "browsing doesn't need to know who's asking"
+ * design, listings.ts). Returns `null` only on a genuine failure to
+ * reach the backend, never for "zero listings right now" -- that comes
+ * back as an empty array, a normal state, not an error one.
+ */
+export async function fetchActiveListings(): Promise<ServerListingRow[] | null> {
+  if (!AH_READY || !AH_BACKEND_URL) return null;
+  try {
+    const response = await fetch(`${AH_BACKEND_URL}/listings`);
+    if (!response.ok) return null;
+    const body = await response.json();
+    return Array.isArray(body?.listings) ? body.listings : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface CreateListingResult {
+  ok: boolean;
+  listing?: { id: string; created_at: string; expires_at: string };
+  error?: string;
+}
+
+/**
+ * Creates a listing for the given item. `itemPayload` is sent exactly
+ * as-is -- the server doesn't re-derive or validate it against anything
+ * (see listings.ts's own comment on this trust boundary), so this
+ * function doesn't either; the caller (AuctionHouseTrade.tsx) is
+ * responsible for passing the real item straight from the player's own
+ * stash/inventory.
+ */
+export async function createListing(
+  itemType: 'equipment' | 'consumable',
+  itemPayload: unknown,
+  currency: 'gold' | 'scrap',
+  price: number
+): Promise<CreateListingResult> {
+  const token = await getSessionToken();
+  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
+  if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
+
+  try {
+    const response = await fetch(`${AH_BACKEND_URL}/listings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ itemType, itemPayload, currency, price }),
+    });
+    const body = await response.json();
+    if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
+    return { ok: true, listing: body.listing };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export interface BuyListingResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Buys a listing. On success, the item and gold/scrap route through
+ * mailbox server-side (listings.ts's buyout transaction) -- this
+ * function doesn't touch local inventory/stash/gold at all, and
+ * deliberately doesn't trigger a mailbox sync itself either; the next
+ * automatic sync (AuctionHousePanel.tsx's own effect) picks up the
+ * purchase, same as any other server-side mailbox change would.
+ */
+export async function buyListing(listingId: string): Promise<BuyListingResult> {
+  const token = await getSessionToken();
+  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
+  if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
+
+  try {
+    const response = await fetch(`${AH_BACKEND_URL}/listings/${listingId}/buy`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await response.json();
+    if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

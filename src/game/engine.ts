@@ -29,7 +29,10 @@ import { HarvestManager } from './managers/HarvestManager';
 import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
 import { PetManager } from './managers/PetManager';
 import { MailboxManager } from './managers/MailboxManager';
-import { verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry } from './auctionHouse';
+import {
+  verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry,
+  fetchActiveListings, createListing, buyListing as buyListingRequest, ServerListingRow,
+} from './auctionHouse';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
@@ -2614,6 +2617,88 @@ export class GameEngine {
       void this.saveNow();
     }
     return { synced };
+  }
+
+  /**
+   * Browse active listings -- public, no auth needed (mirrors the
+   * server route's own design). Returns `null` on a genuine failure to
+   * reach the backend, an array (possibly empty) otherwise -- the
+   * calling component (AuctionHouseTrade.tsx) tells those two states
+   * apart itself rather than this method picking a toast for it, since
+   * browsing is a background fetch, not a player-initiated action with
+   * a result worth announcing.
+   */
+  async fetchAuctionListings(): Promise<ServerListingRow[] | null> {
+    return fetchActiveListings();
+  }
+
+  /**
+   * Lists an equipment item from the stash for sale. "List flow pulls
+   * the item from local inventory only after the server confirms the
+   * listing was created -- no optimistic strip" -- the design doc's own
+   * stated rule (guild-idler-status.md's Auction House entry),
+   * implemented here for real: the item stays in the stash, completely
+   * untouched, until createListing() actually succeeds. Same
+   * locked-item respect ShopManager.sell already enforces -- a Vault-
+   * locked item can't be listed any more than it can be sold.
+   */
+  async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number): Promise<boolean> {
+    const item = this.state.stash.find((i) => i.uid === itemUid);
+    if (!item) { this.say('That item is equipped or missing.'); return false; }
+    if (item.locked) { this.say('That item is locked in the Vault.'); return false; }
+    if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
+
+    this.say('Listing...');
+    const result = await createListing('equipment', item, currency, Math.floor(price));
+    if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
+
+    // Only now, confirmed by the server -- the same item, by uid, in
+    // case anything else changed the stash while this request was in
+    // flight.
+    this.state.stash = this.state.stash.filter((i) => i.uid !== itemUid);
+    this.say('Listed on the Auction House.');
+    this.notify();
+    void this.saveNow();
+    return true;
+  }
+
+  /** Lists one unit of an owned consumable -- same "confirmed by the
+   *  server before touching local state" rule as listEquipmentForSale.
+   *  Every listing sells exactly one unit right now (no quantity field
+   *  on a listing yet) -- see server/db/migrations/001_init.sql's own
+   *  comment on what's still open. */
+  async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number): Promise<boolean> {
+    const owned = this.state.inventory[consumableId] ?? 0;
+    if (owned < 1) { this.say("You don't have any of those."); return false; }
+    if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
+
+    this.say('Listing...');
+    const result = await createListing('consumable', { defId: consumableId }, currency, Math.floor(price));
+    if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
+
+    this.state.inventory[consumableId] = owned - 1;
+    this.say('Listed on the Auction House.');
+    this.notify();
+    void this.saveNow();
+    return true;
+  }
+
+  /**
+   * Buys a listing. Doesn't touch local stash/inventory/gold at all --
+   * per the design revision (patch 0403), the purchased item and the
+   * seller's gold both route through mailbox server-side, so there's
+   * nothing to apply locally here beyond triggering an immediate sync
+   * (rather than waiting for the next natural one) so the purchase shows
+   * up right away instead of on some later trigger.
+   */
+  async buyListing(listingId: string): Promise<boolean> {
+    this.say('Buying...');
+    const result = await buyListingRequest(listingId);
+    if (!result.ok) { this.say(`Could not buy: ${result.error}`); return false; }
+    playSound('purchase');
+    this.say('Purchased! Check your mailbox.');
+    void this.syncMailboxFromServer();
+    return true;
   }
 
   /** Bulk-sells every owned curio in one action -- the Curios-section
