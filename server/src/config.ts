@@ -12,6 +12,15 @@ export interface AppConfig {
   /** GuildBound's real App ID (5143490, per guild-idler-status.md) --
    *  required alongside the ticket on every AuthenticateUserTicket call. */
   steamAppId: string;
+  /** Postgres connection string (patch 0409) -- empty until Postgres is
+   *  actually installed on the host. Empty string, not undefined, same
+   *  "every call site checks truthiness the same simple way" reasoning
+   *  steamWebApiKey already uses. */
+  databaseUrl: string;
+  /** Signs/verifies session tokens (patch 0409, sessions.ts) -- a real
+   *  production secret, generated once and never rotated casually (every
+   *  existing session token becomes invalid the moment this changes). */
+  sessionSecret: string;
 }
 
 export const STEAM_APP_ID_DEFAULT = '5143490';
@@ -37,5 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ahEnabled: parseBool(env.AH_ENABLED, false),
     steamWebApiKey: env.STEAM_WEB_API_KEY?.trim() ?? '',
     steamAppId: env.STEAM_APP_ID?.trim() || STEAM_APP_ID_DEFAULT,
+    databaseUrl: env.DATABASE_URL?.trim() ?? '',
+    sessionSecret: env.SESSION_SECRET?.trim() ?? '',
   };
 }

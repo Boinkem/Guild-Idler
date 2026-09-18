@@ -7821,24 +7821,30 @@ pass (same caveat as the two entries above).
   (TestingPanel.tsx) are how the whole claim flow, including the Gold
   Storage Cap block, gets exercised for real before that exists.
 
-  **Genuine blockers (infra, not design) -- shrunk considerably, patch
-  0405.** Steam session-ticket verification is now built end to end
-  (client ticket fetch, backend verification route) -- what's left is a
-  real Steam Web API key and a Windows rebuild of the existing fork to
-  confirm it ships there too, not new code. See that patch's own log
-  entry. Still genuinely open: the row-locked buyout transaction
-  (approach scoped, not built); the Postgres backup routine (hardware --
-  a backup drive plus a separate external data drive -- already exists on
-  the server, the automated dump/rotation script doesn't).
+  **Genuine blockers (infra, not design) -- shrunk further, patch 0409.**
+  Steam session-ticket verification (patch 0405): built end to end, still
+  needs a real Web API key and a Windows rebuild confirming the fork
+  ships `auth` there too. The row-locked buyout transaction: **built and
+  verified against a real Postgres database, patch 0409** -- see that
+  patch's own log entry, including a genuine concurrency test (two
+  simultaneous buyout requests, one succeeds, one correctly rejected, no
+  double-sell). Still genuinely open: the Postgres backup routine
+  (hardware -- a backup drive plus a separate external data drive --
+  already exists on the server, the automated dump/rotation script
+  doesn't).
 
   **Still open, needs another pass before implementation:** exact
-  deposit-fee/sale-cut percentages; whether a listing can ever ask a
-  mixed gold+Scrap price or must pick one; system-seeded stock framing
+  deposit-fee/sale-cut percentages (`deposit_amount` exists in the real
+  schema now, patch 0409, defaulted to 0 and unused -- the field was
+  worth adding now so it doesn't mean a migration later, the actual
+  percentage logic wasn't); whether a listing can ever ask a mixed
+  gold+Scrap price or must pick one; system-seeded stock framing
   (permanent padding vs. tapering as real volume grows); whether the 48h
-  tier is its own Guild upgrade or folded into the access-gating one;
-  exact listing cap; whether "Black Market" as a label should be renamed
-  now that it's a real player marketplace lane (e.g. "Broker's Stock") --
-  purely thematic, not urgent.
+  tier is its own Guild upgrade or folded into the access-gating one
+  (every listing gets the flat 24h base for now, patch 0409); exact
+  listing cap (not enforced server-side yet); whether "Black Market" as a
+  label should be renamed now that it's a real player marketplace lane
+  (e.g. "Broker's Stock") -- purely thematic, not urgent.
 
   **Repo structure -- decided.** Backend lives in this same repo, a new
   top-level `server/` folder, rather than a separate repository. Reason:
@@ -33280,3 +33286,84 @@ non-JSON response.
 **Not verified:** no real browser click-through of the new two-card
 layout or the auth-test button in this environment -- worth a real pass
 confirming the UI reads clearly once both cards are visible together.
+
+### Core listings + buyout: the real row-locked transaction, session tokens, server-side mailbox (patch 0409)
+```discord-update
+Dev Update | Patch 0409
+
+- The Auction House's actual backend logic exists now -- still nothing live for players, but this is the piece the whole build order was leading up to
+```
+
+Biggest single piece of the Auction House build so far. Scoped
+deliberately: no filtering/pagination on browse (the client panel that
+needs it isn't built -- last build-order item), no deposit-fee logic
+(percentages still undecided, see the "Still open" list above --
+`deposit_amount` exists in the schema, unused), no 48h duration tier
+(same reasoning, flat 24h base for every listing), no expired-listing
+sweep (a background job, not built this patch -- an expired listing just
+stops showing up in browse, its seller doesn't get it back via mailbox
+yet). Postgres genuinely installed and used for all of this -- in this
+dev environment, not assumed working from documentation.
+
+**Session tokens, resolving patch 0405's own open question.** Direct
+decision: session token over re-verifying every request, since bugging
+Steam's API on every single button click doesn't scale. `sessions.ts` --
+a plain signed JWT (`jsonwebtoken`), 1-hour expiry, no server-side
+session table at all. `/auth/verify` now issues one on success
+(`index.ts`) alongside the SteamID it already returned.
+
+**Real schema, three tables** (`db/migrations/001_init.sql`, a tiny
+hand-rolled migration runner in `db/migrate.ts` -- no ORM, matching this
+project's existing "hand-rolled over framework" convention the DevTool's
+own schema-driven editor and `server.mjs`'s routing already set):
+`listings`, `mailbox` (server-side now -- separate from the client's own
+local `MailboxManager.ts`, which is what a player actually claims from;
+this table is what the server hands out, still needs a client-side sync
+step, noted below), `transactions` (audit trail, never mutated after
+insert). `item_payload` carries the full rolled-stat JSON per the design
+doc's own data model, not just an id.
+
+**Three real routes:** `GET /listings` (public, browse), `POST
+/listings` (creates one, auth required), `POST /listings/:id/buy` -- the
+actual row-locked transaction (`SELECT ... FOR UPDATE` inside
+`withTransaction`, `db.ts`) that's been "scoped, not built" in this
+entry since the very first design pass. Per patch 0403's mailbox
+revision, buyout writes BOTH the buyer's item and the seller's gold to
+mailbox in the same transaction as the sale -- a crash between them is
+impossible, not just unlikely. Plus `GET /mailbox` and `POST
+/mailbox/:id/claim` for the server side of mailbox delivery.
+
+**Verified for real against a real database, not mocked, every claim
+checked directly rather than assumed:**
+- Real Postgres 16 installed in this dev environment, real schema
+  migrated, confirmed idempotent (ran twice, second run no-ops).
+- Full happy path with real signed session tokens for three distinct
+  test accounts: create a listing, browse it, a seller blocked from
+  buying their own listing, a real buyout, the listing disappearing from
+  browse afterward, the buyer's mailbox holding the exact item, the
+  seller's mailbox holding the exact gold amount, a third party's buy
+  attempt on the now-sold listing correctly rejected (409).
+- **The actual concurrency test the whole design has been building
+  toward:** two genuinely simultaneous buyout requests fired at the same
+  listing. One came back `200`, the other `409` ("already sold"), and a
+  direct database query confirmed exactly one row in `transactions` for
+  that listing -- not zero, not two. The row lock works, confirmed, not
+  assumed from reading the SQL.
+- Mailbox claim flow: claiming removes the entry, claiming the same
+  entry again correctly 404s instead of double-applying it.
+- `npx tsc --noEmit` clean on the server, `db/migrate.ts` type-checked
+  separately (it isn't part of the main build's `tsconfig.json` include,
+  since it's run via `tsx` directly, never compiled to `dist/`).
+
+**Not verified, and can't be here:** no real Windows Postgres install to
+test the actual deploy path against, only this Linux dev environment's
+own instance -- the schema and queries are standard Postgres, no
+platform-specific behaviour expected, but worth a real pass once
+Postgres is confirmed installed on the actual host. `SESSION_SECRET` also
+needs a genuinely random production value generated on that host, not
+reused from any test value that appeared in this session.
+
+**What's explicitly NOT done yet, next up:** the client-side mailbox
+sync -- nothing pulls the server's `/mailbox` down into the client's own
+local `state.mailbox` array yet, so a real sale's proceeds have nowhere
+to land in the actual game client. That's the natural next patch.

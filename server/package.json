@@ -7,14 +7,19 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "migrate": "tsx db/migrate.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
-    "fastify": "^5.1.0"
+    "fastify": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   },

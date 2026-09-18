@@ -1,0 +1,1178 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f0c8f01..2217194 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7821,24 +7821,30 @@ pass (same caveat as the two entries above).
+   (TestingPanel.tsx) are how the whole claim flow, including the Gold
+   Storage Cap block, gets exercised for real before that exists.
+ 
+-  **Genuine blockers (infra, not design) -- shrunk considerably, patch
+-  0405.** Steam session-ticket verification is now built end to end
+-  (client ticket fetch, backend verification route) -- what's left is a
+-  real Steam Web API key and a Windows rebuild of the existing fork to
+-  confirm it ships there too, not new code. See that patch's own log
+-  entry. Still genuinely open: the row-locked buyout transaction
+-  (approach scoped, not built); the Postgres backup routine (hardware --
+-  a backup drive plus a separate external data drive -- already exists on
+-  the server, the automated dump/rotation script doesn't).
++  **Genuine blockers (infra, not design) -- shrunk further, patch 0409.**
++  Steam session-ticket verification (patch 0405): built end to end, still
++  needs a real Web API key and a Windows rebuild confirming the fork
++  ships `auth` there too. The row-locked buyout transaction: **built and
++  verified against a real Postgres database, patch 0409** -- see that
++  patch's own log entry, including a genuine concurrency test (two
++  simultaneous buyout requests, one succeeds, one correctly rejected, no
++  double-sell). Still genuinely open: the Postgres backup routine
++  (hardware -- a backup drive plus a separate external data drive --
++  already exists on the server, the automated dump/rotation script
++  doesn't).
+ 
+   **Still open, needs another pass before implementation:** exact
+-  deposit-fee/sale-cut percentages; whether a listing can ever ask a
+-  mixed gold+Scrap price or must pick one; system-seeded stock framing
++  deposit-fee/sale-cut percentages (`deposit_amount` exists in the real
++  schema now, patch 0409, defaulted to 0 and unused -- the field was
++  worth adding now so it doesn't mean a migration later, the actual
++  percentage logic wasn't); whether a listing can ever ask a mixed
++  gold+Scrap price or must pick one; system-seeded stock framing
+   (permanent padding vs. tapering as real volume grows); whether the 48h
+-  tier is its own Guild upgrade or folded into the access-gating one;
+-  exact listing cap; whether "Black Market" as a label should be renamed
+-  now that it's a real player marketplace lane (e.g. "Broker's Stock") --
+-  purely thematic, not urgent.
++  tier is its own Guild upgrade or folded into the access-gating one
++  (every listing gets the flat 24h base for now, patch 0409); exact
++  listing cap (not enforced server-side yet); whether "Black Market" as a
++  label should be renamed now that it's a real player marketplace lane
++  (e.g. "Broker's Stock") -- purely thematic, not urgent.
+ 
+   **Repo structure -- decided.** Backend lives in this same repo, a new
+   top-level `server/` folder, rather than a separate repository. Reason:
+@@ -33280,3 +33286,84 @@ non-JSON response.
+ **Not verified:** no real browser click-through of the new two-card
+ layout or the auth-test button in this environment -- worth a real pass
+ confirming the UI reads clearly once both cards are visible together.
++
++### Core listings + buyout: the real row-locked transaction, session tokens, server-side mailbox (patch 0409)
++```discord-update
++Dev Update | Patch 0409
++
++- The Auction House's actual backend logic exists now -- still nothing live for players, but this is the piece the whole build order was leading up to
++```
++
++Biggest single piece of the Auction House build so far. Scoped
++deliberately: no filtering/pagination on browse (the client panel that
++needs it isn't built -- last build-order item), no deposit-fee logic
++(percentages still undecided, see the "Still open" list above --
++`deposit_amount` exists in the schema, unused), no 48h duration tier
++(same reasoning, flat 24h base for every listing), no expired-listing
++sweep (a background job, not built this patch -- an expired listing just
++stops showing up in browse, its seller doesn't get it back via mailbox
++yet). Postgres genuinely installed and used for all of this -- in this
++dev environment, not assumed working from documentation.
++
++**Session tokens, resolving patch 0405's own open question.** Direct
++decision: session token over re-verifying every request, since bugging
++Steam's API on every single button click doesn't scale. `sessions.ts` --
++a plain signed JWT (`jsonwebtoken`), 1-hour expiry, no server-side
++session table at all. `/auth/verify` now issues one on success
++(`index.ts`) alongside the SteamID it already returned.
++
++**Real schema, three tables** (`db/migrations/001_init.sql`, a tiny
++hand-rolled migration runner in `db/migrate.ts` -- no ORM, matching this
++project's existing "hand-rolled over framework" convention the DevTool's
++own schema-driven editor and `server.mjs`'s routing already set):
++`listings`, `mailbox` (server-side now -- separate from the client's own
++local `MailboxManager.ts`, which is what a player actually claims from;
++this table is what the server hands out, still needs a client-side sync
++step, noted below), `transactions` (audit trail, never mutated after
++insert). `item_payload` carries the full rolled-stat JSON per the design
++doc's own data model, not just an id.
++
++**Three real routes:** `GET /listings` (public, browse), `POST
++/listings` (creates one, auth required), `POST /listings/:id/buy` -- the
++actual row-locked transaction (`SELECT ... FOR UPDATE` inside
++`withTransaction`, `db.ts`) that's been "scoped, not built" in this
++entry since the very first design pass. Per patch 0403's mailbox
++revision, buyout writes BOTH the buyer's item and the seller's gold to
++mailbox in the same transaction as the sale -- a crash between them is
++impossible, not just unlikely. Plus `GET /mailbox` and `POST
++/mailbox/:id/claim` for the server side of mailbox delivery.
++
++**Verified for real against a real database, not mocked, every claim
++checked directly rather than assumed:**
++- Real Postgres 16 installed in this dev environment, real schema
++  migrated, confirmed idempotent (ran twice, second run no-ops).
++- Full happy path with real signed session tokens for three distinct
++  test accounts: create a listing, browse it, a seller blocked from
++  buying their own listing, a real buyout, the listing disappearing from
++  browse afterward, the buyer's mailbox holding the exact item, the
++  seller's mailbox holding the exact gold amount, a third party's buy
++  attempt on the now-sold listing correctly rejected (409).
++- **The actual concurrency test the whole design has been building
++  toward:** two genuinely simultaneous buyout requests fired at the same
++  listing. One came back `200`, the other `409` ("already sold"), and a
++  direct database query confirmed exactly one row in `transactions` for
++  that listing -- not zero, not two. The row lock works, confirmed, not
++  assumed from reading the SQL.
++- Mailbox claim flow: claiming removes the entry, claiming the same
++  entry again correctly 404s instead of double-applying it.
++- `npx tsc --noEmit` clean on the server, `db/migrate.ts` type-checked
++  separately (it isn't part of the main build's `tsconfig.json` include,
++  since it's run via `tsx` directly, never compiled to `dist/`).
++
++**Not verified, and can't be here:** no real Windows Postgres install to
++test the actual deploy path against, only this Linux dev environment's
++own instance -- the schema and queries are standard Postgres, no
++platform-specific behaviour expected, but worth a real pass once
++Postgres is confirmed installed on the actual host. `SESSION_SECRET` also
++needs a genuinely random production value generated on that host, not
++reused from any test value that appeared in this session.
++
++**What's explicitly NOT done yet, next up:** the client-side mailbox
++sync -- nothing pulls the server's `/mailbox` down into the client's own
++local `state.mailbox` array yet, so a real sale's proceeds have nowhere
++to land in the actual game client. That's the natural next patch.
+diff --git a/server/.env.example b/server/.env.example
+index 6d3be0c..fe21fd3 100644
+--- a/server/.env.example
++++ b/server/.env.example
+@@ -13,8 +13,9 @@ AH_ENABLED=true
+ # design doc) is expected to forward to this.
+ PORT=4000
+ 
+-# Not used yet -- wired in at the "core listings + buyout" build step,
+-# once Postgres is actually installed on the host.
++# Required for the listings/mailbox/buyout routes to register at all
++# (patch 0409) -- once Postgres is actually installed on the host, run
++# `npm run migrate` first (creates the schema), then set this.
+ # DATABASE_URL=postgres://user:pass@localhost:5432/guildbound_ah
+ 
+ # Required for /auth/verify to work at all (patch 0405) -- a real Steam
+@@ -27,3 +28,11 @@ PORT=4000
+ # src/config.ts's STEAM_APP_ID_DEFAULT) even if this line is missing --
+ # only set it here if that ever changes.
+ # STEAM_APP_ID=5143490
++
++# Signs/verifies session tokens (patch 0409, src/sessions.ts) -- required
++# for /auth/verify to issue a usable session, and for every listings/
++# mailbox/buyout route to accept one. A real production secret, generate
++# with e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
++# -- never commit a real value here. Changing this invalidates every
++# session token already issued.
++# SESSION_SECRET=
+diff --git a/server/db/migrate.ts b/server/db/migrate.ts
+new file mode 100644
+index 0000000..a4969ac
+--- /dev/null
++++ b/server/db/migrate.ts
+@@ -0,0 +1,78 @@
++/**
++ * Tiny migration runner -- no ORM, deliberately. This project's own
++ * conventions favour hand-rolled, inspectable machinery over frameworks
++ * (the DevTool's own schema-driven editor, server.mjs's hand-rolled
++ * routing) -- a migration runner is a much smaller surface than an ORM,
++ * so it gets the same treatment rather than pulling in a heavier
++ * dependency for something this simple.
++ *
++ * Run with: npm run migrate (see package.json). Applies every .sql file
++ * in db/migrations/, in filename order, that isn't already recorded in
++ * the `_migrations` table -- safe to run repeatedly, every time the
++ * server starts if you want, since already-applied files are skipped.
++ */
++import 'dotenv/config';
++import { readFileSync, readdirSync } from 'node:fs';
++import { join, dirname } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import pg from 'pg';
++
++const __dirname = dirname(fileURLToPath(import.meta.url));
++const MIGRATIONS_DIR = join(__dirname, 'migrations');
++
++async function main() {
++  const databaseUrl = process.env.DATABASE_URL;
++  if (!databaseUrl) {
++    console.error('DATABASE_URL is not set -- see server/.env.example.');
++    process.exit(1);
++  }
++
++  const client = new pg.Client({ connectionString: databaseUrl });
++  await client.connect();
++
++  try {
++    await client.query(`
++      CREATE TABLE IF NOT EXISTS _migrations (
++        filename TEXT PRIMARY KEY,
++        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
++      );
++    `);
++
++    const applied = new Set(
++      (await client.query('SELECT filename FROM _migrations')).rows.map((r) => r.filename)
++    );
++
++    const files = readdirSync(MIGRATIONS_DIR)
++      .filter((f) => f.endsWith('.sql'))
++      .sort();
++
++    let ranAny = false;
++    for (const file of files) {
++      if (applied.has(file)) continue;
++      const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
++      console.log(`Applying ${file}...`);
++      // Each migration runs in its own transaction -- a failure partway
++      // through one file rolls back cleanly rather than leaving the
++      // schema half-applied.
++      await client.query('BEGIN');
++      try {
++        await client.query(sql);
++        await client.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
++        await client.query('COMMIT');
++        ranAny = true;
++      } catch (err) {
++        await client.query('ROLLBACK');
++        throw err;
++      }
++    }
++
++    console.log(ranAny ? 'Migrations applied.' : 'Already up to date, nothing to do.');
++  } finally {
++    await client.end();
++  }
++}
++
++main().catch((err) => {
++  console.error('Migration failed:', err);
++  process.exit(1);
++});
+diff --git a/server/db/migrations/001_init.sql b/server/db/migrations/001_init.sql
+new file mode 100644
+index 0000000..14bda47
+--- /dev/null
++++ b/server/db/migrations/001_init.sql
+@@ -0,0 +1,77 @@
++-- Core listings + buyout, patch 0409. See guild-idler-status.md's
++-- Auction House entry for the full design.
++--
++-- Currency scope: 'gold' or 'scrap', per the design revision recorded in
++-- patch 0400's status.md entry (originally gold-only, revised once Scrap
++-- became a real second currency).
++--
++-- Deposit fee / sale cut: still genuinely undecided (see the Auction
++-- House entry's own "Still open" list) -- deposit_amount defaults to 0
++-- and is unused for now rather than guessing at a real percentage. Add
++-- the real logic once actual numbers are picked, not before.
++--
++-- item_payload carries the FULL rolled-stat JSON, not just an id -- see
++-- the design doc's own reasoning: equipment carries randomized stats and
++-- crafted mods, so a listing has to capture the actual roll.
++
++CREATE TABLE IF NOT EXISTS listings (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  -- NULL = system-seeded stock (padding supply during low real-listing
++  -- periods -- see the design doc). Real player listings always have one.
++  seller_steam_id TEXT,
++  item_type TEXT NOT NULL CHECK (item_type IN ('equipment', 'consumable')),
++  item_payload JSONB NOT NULL,
++  currency TEXT NOT NULL CHECK (currency IN ('gold', 'scrap')),
++  price BIGINT NOT NULL CHECK (price > 0),
++  deposit_amount BIGINT NOT NULL DEFAULT 0,
++  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'sold', 'expired', 'cancelled')),
++  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
++  expires_at TIMESTAMPTZ NOT NULL,
++  sold_at TIMESTAMPTZ,
++  buyer_steam_id TEXT
++);
++
++CREATE INDEX IF NOT EXISTS idx_listings_status_expires ON listings(status, expires_at);
++CREATE INDEX IF NOT EXISTS idx_listings_seller ON listings(seller_steam_id);
++
++-- Server-side mailbox -- the delivery mechanism for BOTH purchased items
++-- and sale gold now (patch 0403's design revision from the original
++-- seller-gold-only decision). This is a separate table from the client's
++-- own local `state.mailbox` array (MailboxManager.ts) -- the client's
++-- copy is what a player actually claims from; this table is what the
++-- server hands out, synced down to the client (see the mailbox-sync
++-- client-side work, still to come, noted in this patch's own status.md
++-- entry).
++CREATE TABLE IF NOT EXISTS mailbox (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  owner_steam_id TEXT NOT NULL,
++  type TEXT NOT NULL CHECK (type IN ('gold', 'scrap', 'equipment', 'consumable')),
++  amount BIGINT,
++  item_payload JSONB,
++  note TEXT,
++  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
++  -- Set once the OWNING CLIENT confirms it applied the entry locally
++  -- (gold added, item pushed to stash) -- see listings.ts's /mailbox
++  -- claim route. A row existing with claimed_at set is kept, not
++  -- deleted, as the audit trail transactions alone wouldn't fully cover
++  -- (a mailbox entry can exist without ever being tied to a sale, e.g. a
++  -- future compensation grant).
++  claimed_at TIMESTAMPTZ
++);
++
++CREATE INDEX IF NOT EXISTS idx_mailbox_owner_unclaimed ON mailbox(owner_steam_id) WHERE claimed_at IS NULL;
++
++-- Audit trail for support/dispute lookups -- per the design doc's own
++-- data model. Never mutated after insert.
++CREATE TABLE IF NOT EXISTS transactions (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  listing_id UUID NOT NULL REFERENCES listings(id),
++  buyer_steam_id TEXT NOT NULL,
++  seller_steam_id TEXT,
++  price BIGINT NOT NULL,
++  currency TEXT NOT NULL,
++  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
++);
++
++CREATE INDEX IF NOT EXISTS idx_transactions_buyer ON transactions(buyer_steam_id);
++CREATE INDEX IF NOT EXISTS idx_transactions_seller ON transactions(seller_steam_id);
+diff --git a/server/package-lock.json b/server/package-lock.json
+index 55b3ce6..e57ed0b 100644
+--- a/server/package-lock.json
++++ b/server/package-lock.json
+@@ -8,10 +8,15 @@
+       "name": "guildbound-ah-server",
+       "version": "0.1.0",
+       "dependencies": {
+-        "fastify": "^5.1.0"
++        "dotenv": "^16.4.7",
++        "fastify": "^5.1.0",
++        "jsonwebtoken": "^9.0.3",
++        "pg": "^8.23.0"
+       },
+       "devDependencies": {
++        "@types/jsonwebtoken": "^9.0.10",
+         "@types/node": "^22.10.2",
++        "@types/pg": "^8.23.1",
+         "tsx": "^4.19.2",
+         "typescript": "^5.6.3"
+       },
+@@ -578,6 +583,24 @@
+       "integrity": "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==",
+       "license": "MIT"
+     },
++    "node_modules/@types/jsonwebtoken": {
++      "version": "9.0.10",
++      "resolved": "https://registry.npmjs.org/@types/jsonwebtoken/-/jsonwebtoken-9.0.10.tgz",
++      "integrity": "sha512-asx5hIG9Qmf/1oStypjanR7iKTv0gXQ1Ov/jfrX6kS/EO0OFni8orbmGCn0672NHR3kXHwpAwR+B368ZGN/2rA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/ms": "*",
++        "@types/node": "*"
++      }
++    },
++    "node_modules/@types/ms": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/@types/ms/-/ms-2.1.0.tgz",
++      "integrity": "sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/@types/node": {
+       "version": "22.20.3",
+       "resolved": "https://registry.npmjs.org/@types/node/-/node-22.20.3.tgz",
+@@ -588,6 +611,18 @@
+         "undici-types": "~6.21.0"
+       }
+     },
++    "node_modules/@types/pg": {
++      "version": "8.23.1",
++      "resolved": "https://registry.npmjs.org/@types/pg/-/pg-8.23.1.tgz",
++      "integrity": "sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/node": "*",
++        "pg-protocol": "*",
++        "pg-types": "^2.2.0"
++      }
++    },
+     "node_modules/abstract-logging": {
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/abstract-logging/-/abstract-logging-2.0.1.tgz",
+@@ -672,6 +707,12 @@
+         "fastq": "^1.17.1"
+       }
+     },
++    "node_modules/buffer-equal-constant-time": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/buffer-equal-constant-time/-/buffer-equal-constant-time-1.0.1.tgz",
++      "integrity": "sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA==",
++      "license": "BSD-3-Clause"
++    },
+     "node_modules/cookie": {
+       "version": "1.1.1",
+       "resolved": "https://registry.npmjs.org/cookie/-/cookie-1.1.1.tgz",
+@@ -694,6 +735,27 @@
+         "node": ">=6"
+       }
+     },
++    "node_modules/dotenv": {
++      "version": "16.6.1",
++      "resolved": "https://registry.npmjs.org/dotenv/-/dotenv-16.6.1.tgz",
++      "integrity": "sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==",
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://dotenvx.com"
++      }
++    },
++    "node_modules/ecdsa-sig-formatter": {
++      "version": "1.0.11",
++      "resolved": "https://registry.npmjs.org/ecdsa-sig-formatter/-/ecdsa-sig-formatter-1.0.11.tgz",
++      "integrity": "sha512-nagl3RYrbNv6kQkeJIpt6NJZy8twLB/2vtz6yN9Z4vRKHN4/QZJIEbqohALSgwKdnksuY3k5Addp5lg8sVoVcQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "safe-buffer": "^5.0.1"
++      }
++    },
+     "node_modules/esbuild": {
+       "version": "0.28.2",
+       "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.28.2.tgz",
+@@ -902,6 +964,49 @@
+       "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==",
+       "license": "MIT"
+     },
++    "node_modules/jsonwebtoken": {
++      "version": "9.0.3",
++      "resolved": "https://registry.npmjs.org/jsonwebtoken/-/jsonwebtoken-9.0.3.tgz",
++      "integrity": "sha512-MT/xP0CrubFRNLNKvxJ2BYfy53Zkm++5bX9dtuPbqAeQpTVe0MQTFhao8+Cp//EmJp244xt6Drw/GVEGCUj40g==",
++      "license": "MIT",
++      "dependencies": {
++        "jws": "^4.0.1",
++        "lodash.includes": "^4.3.0",
++        "lodash.isboolean": "^3.0.3",
++        "lodash.isinteger": "^4.0.4",
++        "lodash.isnumber": "^3.0.3",
++        "lodash.isplainobject": "^4.0.6",
++        "lodash.isstring": "^4.0.1",
++        "lodash.once": "^4.0.0",
++        "ms": "^2.1.1",
++        "semver": "^7.5.4"
++      },
++      "engines": {
++        "node": ">=12",
++        "npm": ">=6"
++      }
++    },
++    "node_modules/jwa": {
++      "version": "2.0.1",
++      "resolved": "https://registry.npmjs.org/jwa/-/jwa-2.0.1.tgz",
++      "integrity": "sha512-hRF04fqJIP8Abbkq5NKGN0Bbr3JxlQ+qhZufXVr0DvujKy93ZCbXZMHDL4EOtodSbCWxOqR8MS1tXA5hwqCXDg==",
++      "license": "MIT",
++      "dependencies": {
++        "buffer-equal-constant-time": "^1.0.1",
++        "ecdsa-sig-formatter": "1.0.11",
++        "safe-buffer": "^5.0.1"
++      }
++    },
++    "node_modules/jws": {
++      "version": "4.0.1",
++      "resolved": "https://registry.npmjs.org/jws/-/jws-4.0.1.tgz",
++      "integrity": "sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==",
++      "license": "MIT",
++      "dependencies": {
++        "jwa": "^2.0.1",
++        "safe-buffer": "^5.0.1"
++      }
++    },
+     "node_modules/light-my-request": {
+       "version": "6.6.0",
+       "resolved": "https://registry.npmjs.org/light-my-request/-/light-my-request-6.6.0.tgz",
+@@ -939,6 +1044,54 @@
+       ],
+       "license": "MIT"
+     },
++    "node_modules/lodash.includes": {
++      "version": "4.3.0",
++      "resolved": "https://registry.npmjs.org/lodash.includes/-/lodash.includes-4.3.0.tgz",
++      "integrity": "sha512-W3Bx6mdkRTGtlJISOvVD/lbqjTlPPUDTMnlXZFnVwi9NKJ6tiAk6LVdlhZMm17VZisqhKcgzpO5Wz91PCt5b0w==",
++      "license": "MIT"
++    },
++    "node_modules/lodash.isboolean": {
++      "version": "3.0.3",
++      "resolved": "https://registry.npmjs.org/lodash.isboolean/-/lodash.isboolean-3.0.3.tgz",
++      "integrity": "sha512-Bz5mupy2SVbPHURB98VAcw+aHh4vRV5IPNhILUCsOzRmsTmSQ17jIuqopAentWoehktxGd9e/hbIXq980/1QJg==",
++      "license": "MIT"
++    },
++    "node_modules/lodash.isinteger": {
++      "version": "4.0.4",
++      "resolved": "https://registry.npmjs.org/lodash.isinteger/-/lodash.isinteger-4.0.4.tgz",
++      "integrity": "sha512-DBwtEWN2caHQ9/imiNeEA5ys1JoRtRfY3d7V9wkqtbycnAmTvRRmbHKDV4a0EYc678/dia0jrte4tjYwVBaZUA==",
++      "license": "MIT"
++    },
++    "node_modules/lodash.isnumber": {
++      "version": "3.0.3",
++      "resolved": "https://registry.npmjs.org/lodash.isnumber/-/lodash.isnumber-3.0.3.tgz",
++      "integrity": "sha512-QYqzpfwO3/CWf3XP+Z+tkQsfaLL/EnUlXWVkIk5FUPc4sBdTehEqZONuyRt2P67PXAk+NXmTBcc97zw9t1FQrw==",
++      "license": "MIT"
++    },
++    "node_modules/lodash.isplainobject": {
++      "version": "4.0.6",
++      "resolved": "https://registry.npmjs.org/lodash.isplainobject/-/lodash.isplainobject-4.0.6.tgz",
++      "integrity": "sha512-oSXzaWypCMHkPC3NvBEaPHf0KsA5mvPrOPgQWDsbg8n7orZ290M0BmC/jgRZ4vcJ6DTAhjrsSYgdsW/F+MFOBA==",
++      "license": "MIT"
++    },
++    "node_modules/lodash.isstring": {
++      "version": "4.0.1",
++      "resolved": "https://registry.npmjs.org/lodash.isstring/-/lodash.isstring-4.0.1.tgz",
++      "integrity": "sha512-0wJxfxH1wgO3GrbuP+dTTk7op+6L41QCXbGINEmD+ny/G/eCqGzxyCsh7159S+mgDDcoarnBw6PC1PS5+wUGgw==",
++      "license": "MIT"
++    },
++    "node_modules/lodash.once": {
++      "version": "4.1.1",
++      "resolved": "https://registry.npmjs.org/lodash.once/-/lodash.once-4.1.1.tgz",
++      "integrity": "sha512-Sb487aTOCr9drQVL8pIxOzVhafOjZN9UU54hiN8PU3uAiSV7lx1yYNpbNmex2PK6dSJoNTSJUUswT651yww3Mg==",
++      "license": "MIT"
++    },
++    "node_modules/ms": {
++      "version": "2.1.3",
++      "resolved": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz",
++      "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
++      "license": "MIT"
++    },
+     "node_modules/on-exit-leak-free": {
+       "version": "2.1.2",
+       "resolved": "https://registry.npmjs.org/on-exit-leak-free/-/on-exit-leak-free-2.1.2.tgz",
+@@ -948,6 +1101,95 @@
+         "node": ">=14.0.0"
+       }
+     },
++    "node_modules/pg": {
++      "version": "8.23.0",
++      "resolved": "https://registry.npmjs.org/pg/-/pg-8.23.0.tgz",
++      "integrity": "sha512-Ip2EQCngowJLGOfCwkFhPXU7/ljlhn6Rxlmy4XYfL2Y+vyRM59+8uR2xqRWKdYmbXmxCFOAmKxBuSUCdF34qLg==",
++      "license": "MIT",
++      "dependencies": {
++        "pg-connection-string": "^2.14.0",
++        "pg-pool": "^3.14.0",
++        "pg-protocol": "^1.16.0",
++        "pg-types": "2.2.0",
++        "pgpass": "1.0.5"
++      },
++      "engines": {
++        "node": ">= 16.0.0"
++      },
++      "optionalDependencies": {
++        "pg-cloudflare": "^1.4.0"
++      },
++      "peerDependencies": {
++        "pg-native": ">=3.0.1"
++      },
++      "peerDependenciesMeta": {
++        "pg-native": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/pg-cloudflare": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/pg-cloudflare/-/pg-cloudflare-1.4.0.tgz",
++      "integrity": "sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==",
++      "license": "MIT",
++      "optional": true
++    },
++    "node_modules/pg-connection-string": {
++      "version": "2.14.0",
++      "resolved": "https://registry.npmjs.org/pg-connection-string/-/pg-connection-string-2.14.0.tgz",
++      "integrity": "sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==",
++      "license": "MIT"
++    },
++    "node_modules/pg-int8": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/pg-int8/-/pg-int8-1.0.1.tgz",
++      "integrity": "sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==",
++      "license": "ISC",
++      "engines": {
++        "node": ">=4.0.0"
++      }
++    },
++    "node_modules/pg-pool": {
++      "version": "3.14.0",
++      "resolved": "https://registry.npmjs.org/pg-pool/-/pg-pool-3.14.0.tgz",
++      "integrity": "sha512-gKtPkFdQPU3DksooVLi9LsjZxrsBUZIpa+7aVx+LV5pNh0KzP4Zleud2po+ConrxbuXGBJ6Hfer6hdgpIBpBaw==",
++      "license": "MIT",
++      "peerDependencies": {
++        "pg": ">=8.0"
++      }
++    },
++    "node_modules/pg-protocol": {
++      "version": "1.16.0",
++      "resolved": "https://registry.npmjs.org/pg-protocol/-/pg-protocol-1.16.0.tgz",
++      "integrity": "sha512-sILXutLVjCLjcDuOmvhX5e2Z4cS5qG/6Bu3VkpFwdf/633ElGLpEh9bgmuI5I4sqKqkifQiGyiCcx1HdtrK7tg==",
++      "license": "MIT"
++    },
++    "node_modules/pg-types": {
++      "version": "2.2.0",
++      "resolved": "https://registry.npmjs.org/pg-types/-/pg-types-2.2.0.tgz",
++      "integrity": "sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==",
++      "license": "MIT",
++      "dependencies": {
++        "pg-int8": "1.0.1",
++        "postgres-array": "~2.0.0",
++        "postgres-bytea": "~1.0.0",
++        "postgres-date": "~1.0.4",
++        "postgres-interval": "^1.1.0"
++      },
++      "engines": {
++        "node": ">=4"
++      }
++    },
++    "node_modules/pgpass": {
++      "version": "1.0.5",
++      "resolved": "https://registry.npmjs.org/pgpass/-/pgpass-1.0.5.tgz",
++      "integrity": "sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==",
++      "license": "MIT",
++      "dependencies": {
++        "split2": "^4.1.0"
++      }
++    },
+     "node_modules/pino": {
+       "version": "10.3.1",
+       "resolved": "https://registry.npmjs.org/pino/-/pino-10.3.1.tgz",
+@@ -985,6 +1227,45 @@
+       "integrity": "sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw==",
+       "license": "MIT"
+     },
++    "node_modules/postgres-array": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/postgres-array/-/postgres-array-2.0.0.tgz",
++      "integrity": "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=4"
++      }
++    },
++    "node_modules/postgres-bytea": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/postgres-bytea/-/postgres-bytea-1.0.1.tgz",
++      "integrity": "sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/postgres-date": {
++      "version": "1.0.7",
++      "resolved": "https://registry.npmjs.org/postgres-date/-/postgres-date-1.0.7.tgz",
++      "integrity": "sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/postgres-interval": {
++      "version": "1.2.0",
++      "resolved": "https://registry.npmjs.org/postgres-interval/-/postgres-interval-1.2.0.tgz",
++      "integrity": "sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==",
++      "license": "MIT",
++      "dependencies": {
++        "xtend": "^4.0.0"
++      },
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
+     "node_modules/process-warning": {
+       "version": "5.1.0",
+       "resolved": "https://registry.npmjs.org/process-warning/-/process-warning-5.1.0.tgz",
+@@ -1050,6 +1331,26 @@
+       "integrity": "sha512-q1b3N5QkRUWUl7iyylaaj3kOpIT0N2i9MqIEQXP73GVsN9cw3fdx8X63cEmWhJGi2PPCF23Ijp7ktmd39rawIA==",
+       "license": "MIT"
+     },
++    "node_modules/safe-buffer": {
++      "version": "5.2.1",
++      "resolved": "https://registry.npmjs.org/safe-buffer/-/safe-buffer-5.2.1.tgz",
++      "integrity": "sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ==",
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/feross"
++        },
++        {
++          "type": "patreon",
++          "url": "https://www.patreon.com/feross"
++        },
++        {
++          "type": "consulting",
++          "url": "https://feross.org/support"
++        }
++      ],
++      "license": "MIT"
++    },
+     "node_modules/safe-regex2": {
+       "version": "5.1.1",
+       "resolved": "https://registry.npmjs.org/safe-regex2/-/safe-regex2-5.1.1.tgz",
+@@ -1199,6 +1500,15 @@
+       "integrity": "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==",
+       "dev": true,
+       "license": "MIT"
++    },
++    "node_modules/xtend": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz",
++      "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.4"
++      }
+     }
+   }
+ }
+diff --git a/server/package.json b/server/package.json
+index ecfd05c..9b815eb 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -7,14 +7,19 @@
+   "scripts": {
+     "dev": "tsx watch src/index.ts",
+     "build": "tsc",
+-    "start": "node dist/index.js"
++    "start": "node dist/index.js",
++    "migrate": "tsx db/migrate.ts"
+   },
+   "dependencies": {
+     "dotenv": "^16.4.7",
+-    "fastify": "^5.1.0"
++    "fastify": "^5.1.0",
++    "jsonwebtoken": "^9.0.3",
++    "pg": "^8.23.0"
+   },
+   "devDependencies": {
++    "@types/jsonwebtoken": "^9.0.10",
+     "@types/node": "^22.10.2",
++    "@types/pg": "^8.23.1",
+     "tsx": "^4.19.2",
+     "typescript": "^5.6.3"
+   },
+diff --git a/server/src/config.ts b/server/src/config.ts
+index ca7906b..6390b66 100644
+--- a/server/src/config.ts
++++ b/server/src/config.ts
+@@ -12,6 +12,15 @@ export interface AppConfig {
+   /** GuildBound's real App ID (5143490, per guild-idler-status.md) --
+    *  required alongside the ticket on every AuthenticateUserTicket call. */
+   steamAppId: string;
++  /** Postgres connection string (patch 0409) -- empty until Postgres is
++   *  actually installed on the host. Empty string, not undefined, same
++   *  "every call site checks truthiness the same simple way" reasoning
++   *  steamWebApiKey already uses. */
++  databaseUrl: string;
++  /** Signs/verifies session tokens (patch 0409, sessions.ts) -- a real
++   *  production secret, generated once and never rotated casually (every
++   *  existing session token becomes invalid the moment this changes). */
++  sessionSecret: string;
+ }
+ 
+ export const STEAM_APP_ID_DEFAULT = '5143490';
+@@ -37,5 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+     ahEnabled: parseBool(env.AH_ENABLED, false),
+     steamWebApiKey: env.STEAM_WEB_API_KEY?.trim() ?? '',
+     steamAppId: env.STEAM_APP_ID?.trim() || STEAM_APP_ID_DEFAULT,
++    databaseUrl: env.DATABASE_URL?.trim() ?? '',
++    sessionSecret: env.SESSION_SECRET?.trim() ?? '',
+   };
+ }
+diff --git a/server/src/db.ts b/server/src/db.ts
+new file mode 100644
+index 0000000..89b0791
+--- /dev/null
++++ b/server/src/db.ts
+@@ -0,0 +1,46 @@
++import pg from 'pg';
++
++let pool: pg.Pool | null = null;
++
++/**
++ * Lazily creates one shared connection pool for the whole process --
++ * created on first real use, not at import time, so importing this
++ * module never requires DATABASE_URL to be set (matters for routes/tests
++ * that don't touch the database at all, and for keeping `server/`'s own
++ * "no database client wired in" skeleton-stage behaviour intact until
++ * something actually needs one).
++ */
++export function getPool(): pg.Pool {
++  if (!pool) {
++    const databaseUrl = process.env.DATABASE_URL;
++    if (!databaseUrl) {
++      throw new Error('DATABASE_URL is not set -- see server/.env.example.');
++    }
++    pool = new pg.Pool({ connectionString: databaseUrl });
++  }
++  return pool;
++}
++
++/**
++ * Runs `fn` with a single checked-out client already inside a
++ * transaction -- BEGIN before, COMMIT on success, ROLLBACK on any thrown
++ * error, the client always released back to the pool either way. This is
++ * what the buyout route's row-locked check/mark-sold/mailbox-insert
++ * sequence runs inside (listings.ts) -- the one genuine concurrency risk
++ * the whole Auction House design flagged from the start: two buyout
++ * clicks on the same listing landing at the same moment.
++ */
++export async function withTransaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
++  const client = await getPool().connect();
++  try {
++    await client.query('BEGIN');
++    const result = await fn(client);
++    await client.query('COMMIT');
++    return result;
++  } catch (err) {
++    await client.query('ROLLBACK');
++    throw err;
++  } finally {
++    client.release();
++  }
++}
+diff --git a/server/src/index.ts b/server/src/index.ts
+index e615bf1..30b13b7 100644
+--- a/server/src/index.ts
++++ b/server/src/index.ts
+@@ -17,6 +17,8 @@ import 'dotenv/config';
+ import Fastify from 'fastify';
+ import { loadConfig } from './config.js';
+ import { verifySteamTicket } from './steamAuth.js';
++import { issueSessionToken } from './sessions.js';
++import { registerListingsRoutes } from './listings.js';
+ 
+ const config = loadConfig();
+ const app = Fastify({ logger: true });
+@@ -44,18 +46,13 @@ app.get('/health', async () => ({
+ }));
+ 
+ /**
+- * Steam ticket verification (patch 0405) -- the one genuine remaining
+- * blocker from the Auction House build order. Takes the hex-encoded
+- * ticket the client got via GetAuthTicketForWebApi (see
+- * auctionHouse.ts's fetchAuctionHouseAuthTicket) and verifies it against
+- * Steam's real Web API. Returns a verified SteamID on success.
+- *
+- * Deliberately does NOT issue a session token yet -- what happens after
+- * verification (a short-lived signed session vs. re-verifying a fresh
+- * ticket on every request) is still an open design question, noted in
+- * guild-idler-status.md's Auction House entry rather than decided here.
+- * This route is scoped to exactly what its name says: verify a ticket,
+- * nothing more.
++ * Steam ticket verification (patch 0405), now issuing a session token on
++ * success (patch 0409) -- resolves the open question this route's own
++ * comment used to flag. Session token per direct decision: re-verifying
++ * with a fresh Steam ticket on every single AH action would mean bugging
++ * Steam's API on every button press, not just once per session. See
++ * sessions.ts for the token itself -- a plain signed JWT, no server-side
++ * session table, expires in 1 hour.
+  */
+ app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) => {
+   const ticket = request.body?.ticket;
+@@ -69,9 +66,30 @@ app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) =
+     reply.code(401);
+     return result;
+   }
+-  return result;
++  if (!config.sessionSecret) {
++    reply.code(500);
++    return { ok: false, error: 'SESSION_SECRET is not configured on this server.' };
++  }
++
++  // verifySteamTicket's own contract: result.ok === true always pairs
++  // with a real steamId -- see steamAuth.ts's SteamAuthResult.
++  const sessionToken = issueSessionToken(result.steamId!, config.sessionSecret);
++  return { ...result, sessionToken };
+ });
+ 
++/**
++ * Core listings + buyout routes (patch 0409) -- only registered when a
++ * database is actually configured. Same "fail safe, not fail loud" shape
++ * AH_ENABLED's own default already establishes: a host that hasn't set up
++ * Postgres yet gets a plain 404 on these routes instead of every request
++ * crashing on an undefined connection pool.
++ */
++if (config.databaseUrl) {
++  registerListingsRoutes(app, config);
++} else {
++  app.log.warn('DATABASE_URL not set -- listings/mailbox/buyout routes are not registered.');
++}
++
+ /**
+  * Off-state gate. No real AH routes exist yet (core listings/buyout is a
+  * later build step -- see guild-idler-status.md) -- this hook is here so
+diff --git a/server/src/listings.ts b/server/src/listings.ts
+new file mode 100644
+index 0000000..2a90eda
+--- /dev/null
++++ b/server/src/listings.ts
+@@ -0,0 +1,210 @@
++import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
++import { getPool, withTransaction } from './db.js';
++import { verifySessionToken } from './sessions.js';
++import { AppConfig } from './config.js';
++
++/**
++ * Core listings + buyout, patch 0409 -- see guild-idler-status.md's
++ * Auction House entry for the full design. Scoped deliberately: no
++ * filtering/pagination on browse (the client panel that would need it
++ * isn't built yet -- last item in the build order), no deposit-fee logic
++ * (percentages still genuinely undecided, see the design entry's own
++ * "Still open" list -- `deposit_amount` exists in the schema, unused,
++ * rather than guessing at a real number), no 48h duration tier (same
++ * "still open" reasoning -- every listing gets the 24h base for now), no
++ * expired-listing sweep (a background job, not built this patch -- an
++ * expired listing just stops showing up in browse results, but its
++ * seller doesn't get it back via mailbox yet).
++ */
++
++const LISTING_DURATION_HOURS = 24;
++
++/**
++ * Reads the session token from `Authorization: Bearer <token>`, attaches
++ * the verified SteamID to the request, or replies 401 and stops the
++ * request going any further. Every route that needs to know "who is
++ * asking" uses this as a preHandler rather than duplicating the header
++ * parsing per route.
++ */
++function requireAuth(config: AppConfig) {
++  return async (request: FastifyRequest, reply: FastifyReply) => {
++    const header = request.headers.authorization;
++    const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
++    const steamId = token ? verifySessionToken(token, config.sessionSecret) : null;
++    if (!steamId) {
++      reply.code(401);
++      throw new Error('Missing or invalid session token.');
++    }
++    (request as FastifyRequest & { steamId: string }).steamId = steamId;
++  };
++}
++
++export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) {
++  const auth = requireAuth(config);
++
++  /**
++   * Browse active, unexpired listings. No auth required -- browsing
++   * doesn't need to know who's asking, only buying and listing do.
++   */
++  app.get('/listings', async () => {
++    const { rows } = await getPool().query(
++      `SELECT id, seller_steam_id, item_type, item_payload, currency, price, created_at, expires_at
++       FROM listings
++       WHERE status = 'active' AND expires_at > now()
++       ORDER BY created_at DESC
++       LIMIT 200`
++    );
++    return { listings: rows };
++  });
++
++  /**
++   * Create a listing. `item_payload` carries the full rolled-stat item --
++   * the server never re-derives or validates it against any source of
++   * truth, because there isn't one here (see the design doc's own
++   * "save-file signing/light protection only" anti-cheat stance) -- the
++   * same trust boundary the client's local save file already operates
++   * under.
++   */
++  app.post<{ Body: { itemType?: string; itemPayload?: unknown; currency?: string; price?: number } }>(
++    '/listings',
++    { preHandler: auth },
++    async (request, reply) => {
++      const { itemType, itemPayload, currency, price } = request.body ?? {};
++      const steamId = (request as FastifyRequest & { steamId: string }).steamId;
++
++      if (itemType !== 'equipment' && itemType !== 'consumable') {
++        reply.code(400);
++        return { error: 'itemType must be "equipment" or "consumable".' };
++      }
++      if (currency !== 'gold' && currency !== 'scrap') {
++        reply.code(400);
++        return { error: 'currency must be "gold" or "scrap".' };
++      }
++      if (!itemPayload || typeof price !== 'number' || price <= 0) {
++        reply.code(400);
++        return { error: 'itemPayload and a positive price are required.' };
++      }
++
++      const { rows } = await getPool().query(
++        `INSERT INTO listings (seller_steam_id, item_type, item_payload, currency, price, expires_at)
++         VALUES ($1, $2, $3, $4, $5, now() + $6 * interval '1 hour')
++         RETURNING id, created_at, expires_at`,
++        [steamId, itemType, JSON.stringify(itemPayload), currency, price, LISTING_DURATION_HOURS]
++      );
++      return { listing: rows[0] };
++    }
++  );
++
++  /**
++   * Buyout -- the one genuine concurrency risk the whole Auction House
++   * design flagged from the start: two buyout clicks on the same listing
++   * landing at the same moment. `SELECT ... FOR UPDATE` inside a
++   * transaction (withTransaction, db.ts) makes the second request block
++   * until the first commits, then correctly see `status != 'active'` and
++   * fail -- no double-sell possible, confirmed directly below, not just
++   * assumed from the SQL.
++   *
++   * Per patch 0403's design revision: BOTH the purchased item and the
++   * sale gold route through the mailbox now (not the item landing
++   * directly in the buyer's inventory the original design called for) --
++   * this route creates both mailbox rows in the same transaction as the
++   * sale itself, so a crash between them is impossible, not just unlikely.
++   */
++  app.post<{ Params: { id: string } }>('/listings/:id/buy', { preHandler: auth }, async (request, reply) => {
++    const buyerSteamId = (request as FastifyRequest & { steamId: string }).steamId;
++    const { id } = request.params;
++
++    try {
++      const result = await withTransaction(async (client) => {
++        const { rows } = await client.query(
++          `SELECT * FROM listings WHERE id = $1 AND status = 'active' AND expires_at > now() FOR UPDATE`,
++          [id]
++        );
++        const listing = rows[0];
++        if (!listing) {
++          throw Object.assign(new Error('Listing not found, already sold, or expired.'), { code: 'NOT_AVAILABLE' });
++        }
++        if (listing.seller_steam_id === buyerSteamId) {
++          throw Object.assign(new Error("Can't buy your own listing."), { code: 'OWN_LISTING' });
++        }
++
++        await client.query(
++          `UPDATE listings SET status = 'sold', sold_at = now(), buyer_steam_id = $1 WHERE id = $2`,
++          [buyerSteamId, id]
++        );
++
++        // Buyer's mailbox entry -- the purchased item.
++        await client.query(
++          `INSERT INTO mailbox (owner_steam_id, type, item_payload, note)
++           VALUES ($1, $2, $3, $4)`,
++          [buyerSteamId, listing.item_type, listing.item_payload, 'Auction House purchase']
++        );
++
++        // Seller's mailbox entry -- the sale gold/scrap. Skipped for
++        // system-seeded listings (seller_steam_id IS NULL) -- there's no
++        // real player to deliver it to.
++        if (listing.seller_steam_id) {
++          await client.query(
++            `INSERT INTO mailbox (owner_steam_id, type, amount, note)
++             VALUES ($1, $2, $3, $4)`,
++            [listing.seller_steam_id, listing.currency, listing.price, 'Auction House sale']
++          );
++        }
++
++        await client.query(
++          `INSERT INTO transactions (listing_id, buyer_steam_id, seller_steam_id, price, currency)
++           VALUES ($1, $2, $3, $4, $5)`,
++          [id, buyerSteamId, listing.seller_steam_id, listing.price, listing.currency]
++        );
++
++        return { listingId: id };
++      });
++      return result;
++    } catch (err) {
++      const code = (err as { code?: string }).code;
++      if (code === 'NOT_AVAILABLE') {
++        reply.code(409);
++        return { error: (err as Error).message };
++      }
++      if (code === 'OWN_LISTING') {
++        reply.code(400);
++        return { error: (err as Error).message };
++      }
++      throw err;
++    }
++  });
++
++  /** Lists the caller's own unclaimed mailbox entries -- the source the
++   *  client's mailbox-sync step (not built this patch) will pull from. */
++  app.get('/mailbox', { preHandler: auth }, async (request) => {
++    const steamId = (request as FastifyRequest & { steamId: string }).steamId;
++    const { rows } = await getPool().query(
++      `SELECT id, type, amount, item_payload, note, created_at
++       FROM mailbox
++       WHERE owner_steam_id = $1 AND claimed_at IS NULL
++       ORDER BY created_at ASC`,
++      [steamId]
++    );
++    return { mailbox: rows };
++  });
++
++  /** Marks a mailbox entry claimed -- called once the CLIENT has already
++   *  applied it locally (gold added, item pushed to stash), same
++   *  "server records what already happened, doesn't decide it" shape the
++   *  Gold Storage Cap block already keeps entirely client-side
++   *  (MailboxManager.ts). */
++  app.post<{ Params: { id: string } }>('/mailbox/:id/claim', { preHandler: auth }, async (request, reply) => {
++    const steamId = (request as FastifyRequest & { steamId: string }).steamId;
++    const { rows } = await getPool().query(
++      `UPDATE mailbox SET claimed_at = now()
++       WHERE id = $1 AND owner_steam_id = $2 AND claimed_at IS NULL
++       RETURNING id`,
++      [request.params.id, steamId]
++    );
++    if (rows.length === 0) {
++      reply.code(404);
++      return { error: 'Mailbox entry not found, not yours, or already claimed.' };
++    }
++    return { ok: true };
++  });
++}
+diff --git a/server/src/sessions.ts b/server/src/sessions.ts
+new file mode 100644
+index 0000000..892b188
+--- /dev/null
++++ b/server/src/sessions.ts
+@@ -0,0 +1,53 @@
++import jwt from 'jsonwebtoken';
++
++/**
++ * Session tokens, patch 0409 -- resolves the open question left in patch
++ * 0405's own /auth/verify route ("re-verify every request" vs "issue a
++ * short-lived session after one verification"). Session token, per
++ * direct decision: re-verifying with a fresh Steam ticket on every single
++ * AH action (list, buy, claim) would mean bugging Steam's API on every
++ * button press, not just once per play session.
++ *
++ * Deliberately a plain signed JWT, not a database-backed session table --
++ * no server-side state to store or clean up, verification is just
++ * checking the signature and expiry, and revocation isn't a real
++ * requirement yet (nothing here is sensitive enough to need
++ * force-logout-everyone -- see the design doc's own "save-file signing/
++ * light protection only" anti-cheat stance, the same low-stakes
++ * reasoning applies here).
++ */
++
++const SESSION_TOKEN_EXPIRY = '1h';
++
++export interface SessionPayload {
++  steamId: string;
++}
++
++/**
++ * Signs a new session token for a verified SteamID. Throws if
++ * SESSION_SECRET isn't configured -- callers (the /auth/verify route)
++ * are expected to check `config.sessionSecret` before reaching this, same
++ * "fail loud in code, fail safe in behaviour" shape steamAuth.ts's own
++ * missing-key check already uses.
++ */
++export function issueSessionToken(steamId: string, secret: string): string {
++  const payload: SessionPayload = { steamId };
++  return jwt.sign(payload, secret, { expiresIn: SESSION_TOKEN_EXPIRY });
++}
++
++/**
++ * Verifies a session token, returning the SteamID it was issued for, or
++ * `null` for anything wrong with it -- expired, tampered, wrong secret,
++ * malformed. Never throws: an invalid session is a normal, expected
++ * outcome (tokens expire after an hour by design), not an exceptional
++ * one, so callers check for `null` rather than wrapping this in
++ * try/catch.
++ */
++export function verifySessionToken(token: string, secret: string): string | null {
++  try {
++    const decoded = jwt.verify(token, secret) as SessionPayload;
++    return decoded.steamId ?? null;
++  } catch {
++    return null;
++  }
++}

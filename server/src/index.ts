@@ -17,6 +17,8 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import { loadConfig } from './config.js';
 import { verifySteamTicket } from './steamAuth.js';
+import { issueSessionToken } from './sessions.js';
+import { registerListingsRoutes } from './listings.js';
 
 const config = loadConfig();
 const app = Fastify({ logger: true });
@@ -44,18 +46,13 @@ app.get('/health', async () => ({
 }));
 
 /**
- * Steam ticket verification (patch 0405) -- the one genuine remaining
- * blocker from the Auction House build order. Takes the hex-encoded
- * ticket the client got via GetAuthTicketForWebApi (see
- * auctionHouse.ts's fetchAuctionHouseAuthTicket) and verifies it against
- * Steam's real Web API. Returns a verified SteamID on success.
- *
- * Deliberately does NOT issue a session token yet -- what happens after
- * verification (a short-lived signed session vs. re-verifying a fresh
- * ticket on every request) is still an open design question, noted in
- * guild-idler-status.md's Auction House entry rather than decided here.
- * This route is scoped to exactly what its name says: verify a ticket,
- * nothing more.
+ * Steam ticket verification (patch 0405), now issuing a session token on
+ * success (patch 0409) -- resolves the open question this route's own
+ * comment used to flag. Session token per direct decision: re-verifying
+ * with a fresh Steam ticket on every single AH action would mean bugging
+ * Steam's API on every button press, not just once per session. See
+ * sessions.ts for the token itself -- a plain signed JWT, no server-side
+ * session table, expires in 1 hour.
  */
 app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) => {
   const ticket = request.body?.ticket;
@@ -69,8 +66,29 @@ app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) =
     reply.code(401);
     return result;
   }
-  return result;
+  if (!config.sessionSecret) {
+    reply.code(500);
+    return { ok: false, error: 'SESSION_SECRET is not configured on this server.' };
+  }
+
+  // verifySteamTicket's own contract: result.ok === true always pairs
+  // with a real steamId -- see steamAuth.ts's SteamAuthResult.
+  const sessionToken = issueSessionToken(result.steamId!, config.sessionSecret);
+  return { ...result, sessionToken };
 });
+
+/**
+ * Core listings + buyout routes (patch 0409) -- only registered when a
+ * database is actually configured. Same "fail safe, not fail loud" shape
+ * AH_ENABLED's own default already establishes: a host that hasn't set up
+ * Postgres yet gets a plain 404 on these routes instead of every request
+ * crashing on an undefined connection pool.
+ */
+if (config.databaseUrl) {
+  registerListingsRoutes(app, config);
+} else {
+  app.log.warn('DATABASE_URL not set -- listings/mailbox/buyout routes are not registered.');
+}
 
 /**
  * Off-state gate. No real AH routes exist yet (core listings/buyout is a
