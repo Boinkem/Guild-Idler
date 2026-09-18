@@ -33151,3 +33151,16 @@ ticket, or real Web API key exists in this environment either -- the
 `403` result above proves connectivity, not that a *valid* ticket would
 be accepted; that needs a live Steam session and a real key, both only
 available on your end.
+
+### Bug fix: server/.env was never actually loaded, caught live during real host setup (patch 0406)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the AH backend silently ignoring its own .env file -- config now actually loads the way it always looked like it should
+```
+
+Found during the first real end-to-end setup against `ah.guildbound.dev` (Cloudflare Tunnel + Steam Web API key), not in this dev environment -- `AH_ENABLED` appeared to work (because it happened to also be set manually in the PowerShell session at the time), but `STEAM_WEB_API_KEY` silently stayed unset, only ever written to `.env`, because nothing in `server/` ever actually read that file. `.env.example`'s own header comment ("Copy this file to .env ... and fill in real values") implied a working `.env` loader that was never built -- copying and filling out the file looked complete, silently wasn't.
+
+**One-line fix, `dotenv` package + `import 'dotenv/config'` as the literal first line of `index.ts`.** Has to be first -- `config.ts`'s `loadConfig()` reads `process.env` at call time, so anything importing it before `.env` is loaded would still see an empty environment, same class of ordering bug either way.
+
+**Verified for real, matching the exact failure, not a different scenario:** wrote a genuine `.env` file, then explicitly stripped `AH_ENABLED`/`STEAM_WEB_API_KEY`/`PORT` from the shell's own environment before launching (`env -u ... -u ... -u ... node dist/index.js`) -- deliberately the same "nothing set manually, only the file" shape that failed live. Startup log now correctly reports `ahEnabled=true` and listens on the `.env`-configured port with zero shell exports, and `/auth/verify` now genuinely attempts Steam's real API using the `.env`-provided key instead of returning the "not configured" error -- confirms the fix addresses the actual reported bug, not just "the server still starts."

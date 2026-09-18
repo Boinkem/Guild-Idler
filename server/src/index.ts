@@ -1,3 +1,19 @@
+/**
+ * Loads server/.env into process.env before anything else runs -- a real
+ * gap until now, not a hypothetical one. `.env.example` always implied
+ * "copy this to .env and it'll work" (its own header comment says exactly
+ * that), but nothing in this file ever actually read the file -- only
+ * variables already present in the shell's own environment (e.g. a manual
+ * $env:AH_ENABLED="true" in PowerShell) ever reached loadConfig(). Caught
+ * live: a real deploy attempt where AH_ENABLED flipped correctly (set
+ * manually in-session) but STEAM_WEB_API_KEY silently stayed unset (only
+ * ever written to .env, never actually loaded) -- production config
+ * silently ignored, not a startup crash, the worse kind of bug to carry.
+ * Must be the first import in the file -- config.ts's loadConfig() reads
+ * process.env at call time, so anything importing config.ts before this
+ * line runs would still see an empty environment.
+ */
+import 'dotenv/config';
 import Fastify from 'fastify';
 import { loadConfig } from './config.js';
 import { verifySteamTicket } from './steamAuth.js';
