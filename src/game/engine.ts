@@ -59,6 +59,17 @@ export interface OfflineReport {
   materialsGained: Partial<Record<MaterialId, number>>;
 }
 
+/** One hero's Level-Up card (patch 0414). Several level-ups by the same
+ *  hero before the card is seen merge into one entry -- fromLevel stays
+ *  where the hero started, toLevel follows them up -- so an offline
+ *  catch-up that lands a hero three levels higher shows one "Lv 24 -> 27"
+ *  card, not three. Transient like lastResult, not part of the save. */
+export interface LevelUpEvent {
+  heroId: string;
+  fromLevel: number;
+  toLevel: number;
+}
+
 /** Data for the "Story Chain Complete" overlay -- transient like lastResult
  *  and offlineReport, not part of GameState/the save. */
 export interface ChainCelebration {
@@ -191,6 +202,21 @@ export class GameEngine {
    */
   completedChainCelebration: ChainCelebration | null = null;
   /**
+   * Hero Level-Up cards waiting to be shown (patch 0414), oldest first.
+   * Filled by detectLevelUps, which diffs every hero's level against the
+   * last level it saw on each notify() -- so it catches a level gained
+   * from ANY source (quests, raids, chains, offline catch-up, the testing
+   * tools) without each of those paths needing its own hook. Shown by
+   * LevelUpModal, but only once levelUpBlocked is false: the card is
+   * meant to land last, after the quest/raid/chain results that caused it.
+   */
+  levelUpQueue: LevelUpEvent[] = [];
+  /** How many cards of the current run of level-ups have already been
+   *  dismissed -- drives the "2 of 3 heroes" dots. Resets once the queue
+   *  empties. */
+  levelUpShownInBatch = 0;
+  private knownHeroLevels = new Map<string, number>();
+  /**
    * Transient (unsaved) request to open the menu on a specific tab -- e.g.
    * "View in Lore" on a chain-completion result. Not part of GameState since
    * it's a one-shot UI intent, not save data. Consumed once by MenuWindow on
@@ -219,6 +245,9 @@ export class GameEngine {
   constructor(state: GameState, adapter: SaveAdapter = defaultAdapter()) {
     this.state = state;
     this.adapter = adapter;
+    // Seed from the loaded save so boot itself never reads as a level-up;
+    // anything catchUpOffline gains right after this still does.
+    this.seedKnownHeroLevels();
   }
 
   static async boot(adapter: SaveAdapter = defaultAdapter()): Promise<GameEngine> {
@@ -291,7 +320,79 @@ export class GameEngine {
   }
 
   private notify() {
+    this.detectLevelUps();
     for (const listener of this.listeners) listener();
+  }
+
+  /* --------------------------- hero level-ups --------------------------- */
+
+  private seedKnownHeroLevels() {
+    this.knownHeroLevels.clear();
+    for (const hero of this.state.heroes) this.knownHeroLevels.set(hero.id, hero.level);
+  }
+
+  /** See levelUpQueue. A hero seen for the first time (a fresh recruit,
+   *  arriving at their starting level) is recorded, never announced; a
+   *  hero who has left the roster is forgotten. */
+  private detectLevelUps() {
+    const present = new Set<string>();
+    for (const hero of this.state.heroes) {
+      present.add(hero.id);
+      const known = this.knownHeroLevels.get(hero.id);
+      if (known !== undefined && hero.level > known) {
+        const queued = this.levelUpQueue.find((e) => e.heroId === hero.id);
+        if (queued) queued.toLevel = hero.level;
+        else this.levelUpQueue.push({ heroId: hero.id, fromLevel: known, toLevel: hero.level });
+      }
+      this.knownHeroLevels.set(hero.id, hero.level);
+    }
+    for (const id of [...this.knownHeroLevels.keys()]) {
+      if (!present.has(id)) this.knownHeroLevels.delete(id);
+    }
+    if (this.levelUpQueue.length > 0) {
+      this.levelUpQueue = this.levelUpQueue.filter((e) => present.has(e.heroId));
+    }
+  }
+
+  /** The card currently due, or null -- null too while anything that
+   *  should come before it is still on screen (see levelUpBlocked). */
+  get currentLevelUp(): LevelUpEvent | null {
+    if (this.levelUpQueue.length === 0 || this.levelUpBlocked) return null;
+    return this.levelUpQueue[0];
+  }
+
+  /**
+   * True while any popup that belongs BEFORE a Level-Up card is pending:
+   * quest/raid results (and anything still queued behind them), a chain
+   * completion, the offline report, hatching, a Hero Tier-Up, chain
+   * discovery, the quest-board intro, or the guild still being unnamed.
+   * Achievements are corner toasts, not blockers, so they can overlap.
+   */
+  get levelUpBlocked(): boolean {
+    const s = this.state;
+    return this.lastResult !== null
+      || this.queuedResults.length > 0
+      || this.lastRaidResult !== null
+      || this.completedChainCelebration !== null
+      || this.offlineReport !== null
+      || this.lastHatchedPet !== null
+      || !!s.pendingHatchReadyNotice
+      || !!s.pendingHeroTierUpId
+      || !!s.pendingChainDiscovery
+      || !!s.pendingQuestBoardIntro
+      || s.guildName === '';
+  }
+
+  /** Total cards in the current run, for the "2 of 3" dots. */
+  get levelUpBatchSize(): number {
+    return this.levelUpShownInBatch + this.levelUpQueue.length;
+  }
+
+  dismissLevelUp() {
+    if (this.levelUpQueue.length === 0) return;
+    this.levelUpQueue.shift();
+    this.levelUpShownInBatch = this.levelUpQueue.length === 0 ? 0 : this.levelUpShownInBatch + 1;
+    this.notify();
   }
 
   /** Archives every message into the persistent notification log, capped
@@ -4082,6 +4183,9 @@ export class GameEngine {
     this.offlineReport = null;
     this.lastResult = null;
     this.queuedResults = [];
+    this.levelUpQueue = [];
+    this.levelUpShownInBatch = 0;
+    this.seedKnownHeroLevels();
     this.refreshWorld(Date.now());
     this.say('A new guild opens its doors.');
     void this.saveNow();

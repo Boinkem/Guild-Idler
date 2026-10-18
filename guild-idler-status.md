@@ -33640,3 +33640,89 @@ scenario checked directly:**
 the new filter dropdowns, My Listings tab, or the 48h toggle's disabled
 state -- worth a real pass once there's a live game session to test
 against.
+
+### Hero Level-Up card (patch 0414)
+```discord-update
+Dev Update | Hero Level-Up
+
+- Added an animated Level Up card that plays whenever a hero gains a level, showing their new level, stat gains and training points
+- Added a "1 of 3 heroes" queue when several heroes level at once, and one combined card when a hero gains several levels (e.g. Lv 24 → 26)
+- Added a compact Level Up card for the desktop companion window, with a button to open the guild
+- Level Up cards always wait until quest, raid and other results are dismissed, so they come last
+```
+
+Direct request, from an approved design canvas ("Hero Level-Up Card":
+single level-up, multi-level + queue, idle companion). The card is
+meant to be the LAST thing in any result sequence.
+
+**Detection -- one diff, not a hook per XP source.** `GameEngine` keeps
+`knownHeroLevels` (heroId -> last level seen), seeded in the constructor
+from the loaded save and re-seeded in `hardReset`. `notify()` now calls
+`detectLevelUps()` first, which compares every hero's level against that
+map and pushes/extends a `LevelUpEvent { heroId, fromLevel, toLevel }` in
+`levelUpQueue`. That catches levels from quests, raids, chains, offline
+catch-up and the testing tools without touching any of those paths, and
+seeding before `catchUpOffline` means levels earned while away DO get a
+card while boot itself never does. A fresh recruit is recorded on first
+sight, never announced; a hero who leaves the roster is dropped from
+both the map and the queue. Several level-ups by one hero before the
+card is seen merge into one entry (fromLevel kept, toLevel extended),
+so a long offline gap shows "Lv 24 -> 27" once, not three cards.
+
+**Ordering -- `levelUpBlocked`.** `currentLevelUp` returns null while any
+earlier popup is pending: `lastResult` or anything still in
+`queuedResults`, `lastRaidResult`, `completedChainCelebration`,
+`offlineReport`, `lastHatchedPet`, `pendingHatchReadyNotice`,
+`pendingHeroTierUpId`, `pendingChainDiscovery`, `pendingQuestBoardIntro`,
+or an unnamed guild. Achievement popups are corner toasts and may
+overlap. `dismissLevelUp()` shifts the queue; `levelUpShownInBatch` /
+`levelUpBatchSize` drive the "2 of 3 heroes" dots and reset when the
+queue empties. None of this is saved -- same transient treatment as
+lastResult.
+
+**UI -- `src/ui/LevelUpModal.tsx`**, mounted last in App.tsx's modal
+block. Menu mode: full card over a dimmed, ray-lit backdrop -- letters
+drop in, hero sprite rises (real `HeroSprite`, hero's own skin), XP bar
+fills/flashes/resets to the real remaining XP, old level slides out and
+the new one slams in (a brief middle level and a "+N" badge when more
+than one level was gained), stat rows tick in, training-point pill, then
+"Spend point(s)" (dismisses and opens Heroes > roster, where points are
+spent in HeroBlock) and "Continue" / "Next hero". Clicking the backdrop
+continues. Idle mode: a compact card filling the 260x340 companion;
+"Open guild" switches to the menu, where the same queued card replays at
+full size; "Dismiss" consumes it. Plays the existing `level_up` sound
+once per card.
+
+Stat gains shown are recomputed from class growth x
+`heroTierUpStatMultiplier(tierUpLevel).growth` x levels gained -- exactly
+what `HeroManager.grantXp` adds per level -- rather than diffing stats,
+so training points spent (or a stat reset) while the card waited never
+show up as "gains".
+
+**Animation timing -- app.css `.lu-*`.** One unit, `--lu-t =
+1ms / max(var(--anim-speed), 0.001)`, so Settings > Animation speed
+scales the whole card like every other animation. Reduce motion: the
+global `:root[data-motion='off']` rule already collapses durations, and a
+new rule zeroes `animation-delay` inside the card -- without it the
+staggered delays would stretch ~1000x at anim-speed 0 and leave the card
+invisible. The card's buttons use doubled class selectors on hover so
+the global `button:hover:not(:disabled)` gradient doesn't override the
+gold primary button.
+
+**Verified** (web build, real engine, `npx tsc --noEmit` clean): a single
+level via `testSetHeroLevel` plays the full card and Continue clears it;
+with the offline report up, the card waits behind it; a quest completion
+that levels a hero shows the quest result first and the card only after
+"Good work"; three heroes levelling at once (one by two levels) show
+"1 of 3" / "2 of 3" dots, the "+2" badge and "2 Training Points"; the
+idle-size window shows the compact card and "Open guild" replays it full
+size; "Spend point" lands on the Heroes roster with the next queued card
+following; Reduce motion shows the final frame immediately.
+
+**Known, not changed here:** the Dwarf's sprite sits left of centre in
+the card -- that's `HeroSprite`'s own per-class alignment offset, same as
+everywhere else that sprite appears. Separately noticed while testing:
+`music.ts`'s volume fade can step a hair below 0 at the end of a fade-out
+(`audio.volume = start + (target - start) * t` with no clamp), which
+throws "volume outside the range [0, 1]" in the console -- pre-existing,
+untouched by this patch, worth a one-line clamp later.

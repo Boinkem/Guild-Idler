@@ -5981,3 +5981,222 @@ button.harvest-item:hover {
 }
 .modal-banner-scrim .card-title { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
 .modal-banner-scrim .rarity-pill { background: rgba(0, 0, 0, 0.4); }
+
+/* ---------------------------- hero level-up card ---------------------------- */
+/*
+ * Patch 0414 -- see LevelUpModal.tsx. One timing unit, --lu-t, is 1ms at
+ * normal speed and stretches/shrinks with Settings > Animation speed the
+ * same way every other animation here divides by --anim-speed; Reduce
+ * motion is handled by the global :root[data-motion='off'] rule above,
+ * which snaps every one of these to its final frame. Timeline (1x):
+ *   0 dim · 150 rays + burst · 200 card pops · 350 letters drop
+ *   420 hero rises · 650 XP fills/flashes · 900 old level out, new slams in
+ *   1250 stat gains tick in · 1750 point pill · 1950 buttons
+ * .lu-multi shifts the back half ~250ms later to fit the extra level tick.
+ */
+.lu-overlay, .lu-compact {
+  --lu-t: calc(1ms / max(var(--anim-speed, 1), 0.001));
+  --lu-gold: oklch(84% 0.14 80);
+  --lu-gold-hi: oklch(90% 0.13 85);
+  --lu-green: oklch(78% 0.15 142);
+}
+.lu-overlay {
+  z-index: 45;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 42%, rgba(20, 14, 10, 0.55), rgba(6, 4, 8, 0.92) 70%);
+  animation: lu-fade calc(var(--lu-t) * 260) ease-out both;
+}
+@keyframes lu-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.lu-backdrop { position: absolute; left: 50%; top: 46%; width: 0; height: 0; pointer-events: none; }
+.lu-rays {
+  position: absolute; left: -430px; top: -430px; width: 860px; height: 860px; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, oklch(80% 0.14 78 / 0.2) 0deg 8deg, transparent 8deg 22deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%);
+  mask: radial-gradient(circle, #000 18%, transparent 68%);
+  animation: lu-rays-in calc(var(--lu-t) * 600) calc(var(--lu-t) * 150) ease-out both,
+             lu-spin calc(var(--lu-t) * 22000) linear infinite;
+}
+@keyframes lu-rays-in { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: scale(1); } }
+@keyframes lu-spin { to { rotate: 360deg; } }
+.lu-burst {
+  position: absolute; left: -260px; top: -300px; width: 520px; height: 520px; border-radius: 50%;
+  background: radial-gradient(circle, oklch(92% 0.12 85 / 0.85) 0%, oklch(78% 0.15 72 / 0.35) 35%, transparent 70%);
+  animation: lu-burst calc(var(--lu-t) * 900) calc(var(--lu-t) * 150) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes lu-burst { 0% { opacity: 0; transform: scale(0.2); } 35% { opacity: 1; transform: scale(1.25); } 100% { opacity: 0.55; transform: scale(1); } }
+
+.lu-card {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 16px 26px 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  color: var(--parchment);
+  background: linear-gradient(180deg, oklch(25% 0.026 50), oklch(18% 0.02 52));
+  border: 3px solid var(--brass);
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px var(--edge), inset 0 0 0 2px var(--brass-dim), inset 0 2px 0 oklch(95% 0.06 90 / 0.25), 0 24px 70px rgba(0, 0, 0, 0.65);
+  animation: lu-pop calc(var(--lu-t) * 520) calc(var(--lu-t) * 200) cubic-bezier(0.18, 1.4, 0.4, 1) both;
+}
+@keyframes lu-pop { from { opacity: 0; transform: translateY(24px) scale(0.72); } to { opacity: 1; transform: none; } }
+
+.lu-queue { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.lu-queue > span:not(.lu-queue-label) { width: 8px; height: 8px; border-radius: 2px; background: oklch(30% 0.03 50); box-shadow: inset 0 0 0 1px var(--brass-dim); }
+.lu-queue > span.done { background: var(--brass-dim); box-shadow: none; }
+.lu-queue > span.on { width: 10px; height: 10px; background: var(--lu-gold); box-shadow: 0 0 8px oklch(80% 0.15 78); animation: lu-gain calc(var(--lu-t) * 500) calc(var(--lu-t) * 300) cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.lu-queue-label { margin-left: 4px; }
+
+.lu-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 52px; line-height: 1; letter-spacing: 3px;
+  color: var(--lu-gold);
+  text-shadow: 0 3px 0 oklch(30% 0.06 60), 0 0 22px oklch(80% 0.15 78 / 0.55);
+  animation: lu-title-glow calc(var(--lu-t) * 2400) calc(var(--lu-t) * 1200) ease-in-out infinite;
+}
+@keyframes lu-title-glow { 50% { text-shadow: 0 3px 0 oklch(30% 0.06 60), 0 0 34px oklch(85% 0.16 80 / 0.9); } }
+.lu-letter { display: inline-block; animation: lu-drop calc(var(--lu-t) * 420) calc(var(--lu-t) * (350 + var(--i) * 45)) cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+@keyframes lu-drop { from { opacity: 0; transform: translateY(-40px) scale(1.6); } to { opacity: 1; transform: none; } }
+
+.lu-stage { position: relative; width: 100%; height: 160px; display: flex; justify-content: center; align-items: flex-end; }
+.lu-shadow { position: absolute; left: calc(50% - 68px); width: 136px; bottom: 2px; height: 14px; border-radius: 50%; background: rgba(0, 0, 0, 0.45); }
+.lu-hero { position: relative; animation: lu-rise calc(var(--lu-t) * 600) calc(var(--lu-t) * 420) cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+@keyframes lu-rise { from { opacity: 0; transform: translateY(26px); filter: brightness(3); } 60% { filter: brightness(1.8); } to { opacity: 1; transform: none; filter: none; } }
+.lu-spark {
+  position: absolute; bottom: calc(8px + var(--i) * 6px); left: calc(50% - 102px + var(--i) * 40px);
+  width: 6px; height: 6px; background: var(--lu-gold-hi); box-shadow: 0 0 8px oklch(85% 0.15 80);
+  animation: lu-spark calc(var(--lu-t) * 2600) calc(var(--lu-t) * (600 + var(--i) * 230)) ease-out infinite both;
+}
+.lu-spark:nth-child(odd) { width: 4px; height: 4px; }
+@keyframes lu-spark { 0% { opacity: 0; transform: translateY(0) scale(0.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-160px) scale(1); } }
+
+.lu-name { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.lu-hero-name { font-family: var(--font-display); font-weight: 700; font-size: 26px; }
+.lu-class { font-size: 13px; color: var(--muted); letter-spacing: 0.4px; }
+
+.lu-level { display: flex; align-items: center; gap: 14px; font-family: var(--font-display); font-weight: 700; }
+.lu-lv { font-size: 18px; color: var(--muted); }
+.lu-num { position: relative; width: 74px; height: 56px; }
+.lu-num > span:not(.lu-ring):not(.lu-plus) { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.lu-old { font-size: 44px; color: var(--muted); animation: lu-old-out calc(var(--lu-t) * 380) calc(var(--lu-t) * 900) ease-in both; }
+@keyframes lu-old-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-26px); filter: blur(2px); } }
+.lu-mid { font-size: 44px; color: oklch(80% 0.06 72); opacity: 0; animation: lu-tick calc(var(--lu-t) * 300) calc(var(--lu-t) * 980) linear both; }
+@keyframes lu-tick { 0% { opacity: 0; transform: translateY(10px); } 30%, 70% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-14px); } }
+.lu-new {
+  font-size: 52px; color: var(--lu-gold);
+  text-shadow: 0 3px 0 oklch(30% 0.06 60), 0 0 18px oklch(80% 0.15 78 / 0.7);
+  animation: lu-slam calc(var(--lu-t) * 520) calc(var(--lu-t) * 1000) cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+@keyframes lu-slam { 0% { opacity: 0; transform: scale(2.4); } 60% { opacity: 1; transform: scale(0.92); } 100% { opacity: 1; transform: none; } }
+.lu-ring { position: absolute; left: 7px; top: -2px; width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--lu-gold-hi); animation: lu-ring calc(var(--lu-t) * 700) calc(var(--lu-t) * 1080) ease-out both; }
+@keyframes lu-ring { from { opacity: 0.95; transform: scale(0.3); } to { opacity: 0; transform: scale(2.2); } }
+.lu-plus { position: absolute; right: -44px; top: -6px; font-size: 18px; color: var(--lu-green); animation: lu-gain calc(var(--lu-t) * 600) calc(var(--lu-t) * 1350) cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+
+.lu-xp { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.lu-xp-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.lu-xp-track { height: 10px; border-radius: 3px; background: oklch(12% 0.014 52); box-shadow: inset 0 0 0 1px oklch(40% 0.06 60); overflow: hidden; }
+.lu-xp-fill { height: 100%; width: var(--xp); background: var(--brass); animation: lu-xp calc(var(--lu-t) * 900) calc(var(--lu-t) * 650) cubic-bezier(0.5, 0, 0.3, 1) both; }
+@keyframes lu-xp { 0% { width: 78%; } 45% { width: 100%; background: var(--lu-gold-hi); } 55% { width: 100%; background: #fff; } 56% { width: 0%; } 100% { width: var(--xp); } }
+.lu-multi .lu-xp-fill { animation-name: lu-xp-multi; animation-duration: calc(var(--lu-t) * 1100); animation-delay: calc(var(--lu-t) * 600); }
+@keyframes lu-xp-multi { 0% { width: 70%; } 22% { width: 100%; background: #fff; } 23% { width: 0%; } 55% { width: 100%; background: #fff; } 56% { width: 0%; } 100% { width: var(--xp); } }
+
+.lu-stats { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.lu-stat {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px;
+  background: oklch(15% 0.018 55 / 0.8); box-shadow: inset 0 0 0 1px oklch(35% 0.05 58);
+  animation: lu-stat calc(var(--lu-t) * 380) calc(var(--lu-t) * (1250 + var(--i) * 90)) cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+@keyframes lu-stat { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+.lu-stat-key { width: 34px; font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+.lu-stat-val { flex-grow: 1; font-size: 15px; font-weight: 600; }
+.lu-gain { font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--lu-green); animation: lu-gain calc(var(--lu-t) * 600) calc(var(--lu-t) * (1400 + var(--i) * 90)) cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+@keyframes lu-gain { 0% { opacity: 0; transform: scale(0.4); } 60% { opacity: 1; transform: scale(1.25); } 100% { opacity: 1; transform: none; } }
+
+.lu-point {
+  display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
+  background: oklch(28% 0.06 142 / 0.55); box-shadow: 0 0 0 2px oklch(50% 0.1 142);
+  font-family: var(--font-display); font-weight: 700; font-size: 16px; color: oklch(88% 0.1 142);
+  animation: lu-gain calc(var(--lu-t) * 560) calc(var(--lu-t) * 1750) cubic-bezier(0.2, 1.6, 0.4, 1) both,
+             lu-shine calc(var(--lu-t) * 2200) calc(var(--lu-t) * 2400) ease-in-out infinite;
+}
+@keyframes lu-shine { 50% { box-shadow: 0 0 0 2px oklch(60% 0.11 142), 0 0 18px oklch(60% 0.11 142 / 0.7); } }
+
+.lu-actions { display: flex; gap: 10px; margin-top: 4px; animation: lu-fade-up calc(var(--lu-t) * 420) calc(var(--lu-t) * 1950) ease-out both; }
+@keyframes lu-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.lu-btn { font: 700 16px/1 var(--font-display); letter-spacing: 0.5px; min-height: 44px; padding: 0 20px; border-radius: 6px; cursor: pointer; }
+.lu-btn-primary {
+  background: linear-gradient(180deg, oklch(84% 0.13 82), oklch(68% 0.13 70)); color: var(--ink);
+  border: 2px solid oklch(40% 0.08 60); box-shadow: inset 0 1px 0 oklch(95% 0.06 90), 0 3px 0 oklch(30% 0.06 55);
+}
+.lu-btn.lu-btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, oklch(88% 0.13 84), oklch(72% 0.13 72)); }
+.lu-btn-ghost { background: var(--panel-2); color: var(--parchment); border: 2px solid var(--brass-dim); }
+.lu-btn.lu-btn-ghost:hover:not(:disabled) { background: var(--panel-3); }
+
+/* The multi-level card runs ~250ms later from the level tick on, so the
+   extra "Lv 25" flash has room before the new level slams in. */
+.lu-multi .lu-old { animation-duration: calc(var(--lu-t) * 300); animation-delay: calc(var(--lu-t) * 700); }
+.lu-multi .lu-new { animation-delay: calc(var(--lu-t) * 1260); }
+.lu-multi .lu-ring { animation-delay: calc(var(--lu-t) * 1340); }
+.lu-multi .lu-stat { animation-delay: calc(var(--lu-t) * (1450 + var(--i) * 90)); }
+.lu-multi .lu-gain { animation-delay: calc(var(--lu-t) * (1600 + var(--i) * 90)); }
+.lu-multi .lu-point { animation-delay: calc(var(--lu-t) * 1900), calc(var(--lu-t) * 2550); }
+.lu-multi .lu-actions { animation-delay: calc(var(--lu-t) * 2150); }
+
+/* Compact version for the 260x340 idle companion window. */
+.lu-compact {
+  position: fixed; inset: 0; z-index: 45; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  color: var(--parchment);
+  background: linear-gradient(160deg, oklch(22% 0.03 50 / 0.96), oklch(14% 0.02 52 / 0.97));
+  animation: lu-fade calc(var(--lu-t) * 220) ease-out both;
+}
+.lu-c-rays {
+  position: absolute; left: calc(50% - 150px); top: 0; width: 300px; height: 300px; border-radius: 50%;
+  background: repeating-conic-gradient(oklch(80% 0.14 78 / 0.22) 0deg 9deg, transparent 9deg 24deg);
+  -webkit-mask: radial-gradient(circle, #000 15%, transparent 66%); mask: radial-gradient(circle, #000 15%, transparent 66%);
+  animation: lu-fade calc(var(--lu-t) * 500) ease-out both, lu-spin calc(var(--lu-t) * 18000) linear infinite;
+}
+.lu-c-burst {
+  position: absolute; left: calc(50% - 90px); top: 50px; width: 180px; height: 180px; border-radius: 50%;
+  background: radial-gradient(circle, oklch(92% 0.12 85 / 0.8) 0%, oklch(78% 0.15 72 / 0.3) 38%, transparent 70%);
+  animation: lu-burst calc(var(--lu-t) * 800) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.lu-c-banner {
+  position: relative; margin-top: 12px;
+  font-family: var(--font-display); font-weight: 700; font-size: 32px; letter-spacing: 2px; color: var(--lu-gold);
+  text-shadow: 0 2px 0 oklch(30% 0.06 60), 0 0 14px oklch(80% 0.15 78 / 0.7);
+  animation: lu-drop calc(var(--lu-t) * 480) calc(var(--lu-t) * 300) cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.lu-c-hero { position: relative; margin-top: 6px; animation: lu-jump calc(var(--lu-t) * 700) calc(var(--lu-t) * 150) cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+@keyframes lu-jump { 0% { transform: translateY(0); filter: brightness(1); } 40% { transform: translateY(-26px); filter: brightness(2.6); } 100% { transform: none; filter: none; } }
+.lu-c-info { position: relative; margin-top: auto; margin-bottom: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.lu-c-chip {
+  display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 4px; font-size: 14px;
+  background: oklch(15% 0.018 55 / 0.85); box-shadow: inset 0 0 0 1px var(--brass-dim);
+}
+.lu-c-name { font-weight: 600; }
+.lu-c-from { color: var(--muted); }
+.lu-c-to { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--lu-gold); }
+.lu-c-points { font-size: 12px; color: oklch(88% 0.1 142); background: oklch(28% 0.06 142 / 0.6); box-shadow: inset 0 0 0 1px oklch(50% 0.1 142); }
+.lu-c-actions { display: flex; gap: 6px; margin-top: 4px; }
+.lu-c-btn { font: 600 12px/1 var(--font-body); min-height: 28px; padding: 0 12px; border-radius: 6px; cursor: pointer; background: var(--panel-2); color: var(--parchment); border: 1px solid var(--brass-dim); }
+.lu-c-btn:hover:not(:disabled) { background: var(--panel-3); }
+.lu-c-btn.lu-c-btn-gold:hover:not(:disabled) { background: linear-gradient(180deg, oklch(88% 0.13 84), oklch(72% 0.13 72)); }
+.lu-c-btn-gold { background: linear-gradient(180deg, oklch(84% 0.13 82), oklch(68% 0.13 70)); color: var(--ink); border-color: oklch(40% 0.08 60); }
+.lu-c-d0, .lu-c-d1, .lu-c-d2 { animation: lu-fade-up calc(var(--lu-t) * 380) ease-out both; }
+.lu-c-d0 { animation-delay: calc(var(--lu-t) * 550); }
+.lu-c-d1 { animation-delay: calc(var(--lu-t) * 750); }
+.lu-c-d2 { animation-delay: calc(var(--lu-t) * 950); }
+/* Reduce motion: the global data-motion='off' rule shortens durations but
+   leaves delays alone -- and with --anim-speed at 0, --lu-t (and so every
+   delay above) would stretch ~1000x. Zero them so the card simply appears
+   in its final state. */
+:root[data-motion='off'] .lu-overlay,
+:root[data-motion='off'] .lu-overlay *,
+:root[data-motion='off'] .lu-compact,
+:root[data-motion='off'] .lu-compact * {
+  animation-delay: 0ms !important;
+}

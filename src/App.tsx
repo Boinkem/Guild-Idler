@@ -14,6 +14,7 @@ import { HatchReadyModal } from './ui/HatchReadyModal';
 import { HatchRevealModal } from './ui/HatchRevealModal';
 import { AchievementPopup } from './ui/AchievementPopup';
 import { HeroTierUpModal } from './ui/HeroTierUpModal';
+import { LevelUpModal } from './ui/LevelUpModal';
 import { Toast } from './ui/Toast';
 import { NotificationBanner } from './ui/NotificationBanner';
 
@@ -179,6 +180,12 @@ export function App() {
               means the menu is already open. No idle-view path to guard
               against. */}
           <HeroTierUpModal />
+          {/* Hero Level-Up (patch 0414) -- mounted last and self-gating:
+              engine.currentLevelUp stays null until every popup above it
+              has been dismissed, so the card always lands after the
+              rewards that caused it. Compact layout in the idle window;
+              "Open guild" there plays the full card in the menu. */}
+          <LevelUpModal compact={mode === 'idle'} onOpenMenu={() => changeMode('menu')} />
         </>
       )}
       <Toast />
