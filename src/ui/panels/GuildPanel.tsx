@@ -9,7 +9,9 @@ import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
 import { CHAIN_REPLAY_TIER_BY_ID } from '../../game/data/chainReplay';
 import { describeMods, formatGold, formatNumber, pct } from '../../game/util';
 import { GuildHallCategory } from '../../game/types';
-import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+import { usePulsesOnChange } from '../maxFlash';
+import { buyWithFx, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
+import type { Beat } from '../purchaseFx';
 import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
 import { FundGuildModal } from '../FundGuildModal';
 import waxSealComplete from '../../assets/wax-seal-complete.png';
@@ -31,7 +33,7 @@ function GuildUpgradeDetailModal({
   name, description, level, maxLevel, statLines, buyLabel, buyDisabled, onBuy, onClose,
 }: {
   name: string; description: string; level: number; maxLevel: number; statLines: ReactNode[];
-  buyLabel: string; buyDisabled: boolean; onBuy: () => void; onClose: () => void;
+  buyLabel: string; buyDisabled: boolean; onBuy: (btn?: HTMLElement | null) => void; onClose: () => void;
 }) {
   return (
     <div className="overlay" onClick={onClose}>
@@ -48,7 +50,7 @@ function GuildUpgradeDetailModal({
               to read the flavour text first, then decides to buy (maybe
               more than once in a row), shouldn't have the modal vanish
               out from under them after the first click. */}
-          <button className="btn-yellow" disabled={buyDisabled} onClick={onBuy}>{buyLabel}</button>
+          <button className="btn-yellow" disabled={buyDisabled} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
         </div>
       </div>
     </div>
@@ -94,7 +96,8 @@ interface RowData {
   statLines: ReactNode[];
   buyLabel: string;
   buyDisabled: boolean;
-  onBuy: () => void;
+  /** Gets the clicked button so the spend can fly into it (patch 0420). */
+  onBuy: (btn?: HTMLElement | null) => void;
 }
 
 /** describeMods's own per-line text, plus every field describeMods can't
@@ -156,14 +159,22 @@ function upgradeEntries(
  * first, unchanged from before.
  */
 function GuildUpgradeRow({
-  row, flash, onDismissFlash, pulsing, highlighted, onDismissHighlight,
+  row, beat, highlighted, onDismissHighlight,
 }: {
   row: RowData;
-  flash?: { key: number; name: string }; onDismissFlash: () => void; pulsing?: boolean;
+  /** Patch 0420 -- this row's purchase beat, if one is playing (see
+   *  usePurchaseBeats in purchaseFx.tsx). Replaces the old level-number
+   *  pulse and MaxFlash star burst. */
+  beat?: Beat;
   highlighted?: boolean; onDismissHighlight?: () => void;
 }) {
   const [showDetail, setShowDetail] = useState(false);
-  const pct2 = Math.min(100, (row.level / row.maxLevel) * 100);
+  // While the coins are still in the air the row keeps showing the level
+  // it had before the purchase, so the rule fill and the "Lv" roll land
+  // together with the coins rather than a beat ahead of them.
+  const shownLevel = shownValue(beat, row.level);
+  const shownMaxed = shownLevel >= row.maxLevel;
+  const pct2 = Math.min(100, (shownLevel / row.maxLevel) * 100);
   const rowRef = useRef<HTMLDivElement>(null);
   // Landed here via a "jump to the requirement" link -- scroll the exact
   // row into view rather than relying on the player to spot the glow
@@ -171,10 +182,13 @@ function GuildUpgradeRow({
   useEffect(() => {
     if (highlighted) rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [highlighted]);
+  const beatClass = beat?.phase === 'levelup' ? 'fx-levelup'
+    : beat?.phase === 'stamp' ? 'fx-stamped'
+    : beat?.phase === 'file' ? 'fx-stamped fx-filing' : '';
   return (
     <div
       ref={rowRef}
-      className={`guild-upgrade-row ${highlighted ? 'card requirement-highlight' : ''}`}
+      className={`guild-upgrade-row ${beatClass} ${highlighted ? 'card requirement-highlight' : ''}`}
       onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
       role="button"
       tabIndex={0}
@@ -184,21 +198,25 @@ function GuildUpgradeRow({
         <span className="guild-row-head">
           <span className="guild-row-name">{row.name}</span>
           <span className="guild-row-cat" style={{ color: CATEGORY_FG[row.category] }}>{row.category}</span>
-          <span className={`guild-row-level ${pulsing ? 'purchase-pulse' : ''}`}>Lv {row.level}/{row.maxLevel}</span>
+          <span className="guild-row-level">
+            <LevelRoll beat={beat} value={row.level} render={(v) => `Lv ${v}/${row.maxLevel}`} />
+          </span>
         </span>
         <span className="guild-row-effect">{row.effectText}</span>
         <span className="guild-row-rule">
-          <span style={{ width: `${pct2}%`, background: row.maxed ? 'var(--moss)' : 'var(--brass)' }} />
+          <span style={{ width: `${pct2}%`, background: shownMaxed ? 'var(--moss)' : 'var(--brass)' }} />
         </span>
       </span>
       <button
         className={`guild-buy-btn ${!row.buyDisabled ? 'affordable' : ''}`}
         disabled={row.buyDisabled}
-        onClick={(e) => { e.stopPropagation(); row.onBuy(); }}
+        onClick={(e) => { e.stopPropagation(); row.onBuy(e.currentTarget); }}
       >
         {row.buyLabel}
       </button>
-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
+      {(beat?.phase === 'stamp' || beat?.phase === 'file') && (
+        <SealStamp label={row.buyLabel} className="guild-row-stamp" />
+      )}
       {showDetail && (
         <GuildUpgradeDetailModal
           name={row.name}
@@ -278,35 +296,17 @@ export function GuildPanel() {
   const raidUpgradeDefs = GuildManager.raidUpgrades();
   const questFastUpgradeDefs = GuildManager.questFastUpgrades();
   const replayMasterTier = CHAIN_REPLAY_TIER_BY_ID['master'];
-  const { flashes, dismiss } = useMaxFlash([
-    ...facilities.map((def) => ({
-      id: def.id, name: def.name,
-      level: GuildManager.facilityLevel(state, def.id), maxLevel: def.maxLevel,
-    })),
-    ...generalUpgrades.map((def) => ({
-      id: def.id, name: def.name,
-      level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
-    })),
-    ...raidUpgradeDefs.map((def) => ({
-      id: def.id, name: def.name,
-      level: GuildManager.raidUpgradeLevel(state, def.id), maxLevel: def.maxLevel,
-    })),
-    ...questFastUpgradeDefs.map((def) => ({
-      id: def.id, name: def.name,
-      level: GuildManager.questFastUpgradeLevel(state, def.id), maxLevel: def.maxLevel,
-    })),
-    ...(replayMasterTier ? [{
-      id: replayMasterTier.id, name: replayMasterTier.sagaName,
-      level: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0, maxLevel: 1,
-    }] : []),
-  ]);
-  const levelPulses = usePulsesOnChange([
-    ...facilities.map((def) => ({ id: def.id, value: GuildManager.facilityLevel(state, def.id) })),
-    ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
-    ...raidUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.raidUpgradeLevel(state, def.id) })),
-    ...questFastUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.questFastUpgradeLevel(state, def.id) })),
+  // Patch 0420 -- one purchase beat per row (coin flight, level roll,
+  // and on the final level the wax-seal stamp and file-away into the
+  // Fully built strip). Replaces the separate useMaxFlash star burst and
+  // usePulsesOnChange level pulse this list used to run side by side.
+  const beats = usePurchaseBeats([
+    ...facilities.map((def) => ({ id: def.id, value: GuildManager.facilityLevel(state, def.id), max: def.maxLevel })),
+    ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id), max: def.maxLevel })),
+    ...raidUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.raidUpgradeLevel(state, def.id), max: def.maxLevel })),
+    ...questFastUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.questFastUpgradeLevel(state, def.id), max: def.maxLevel })),
     ...(replayMasterTier
-      ? [{ id: replayMasterTier.id, value: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0 }]
+      ? [{ id: replayMasterTier.id, value: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0, max: 1 }]
       : []),
   ]);
 
@@ -323,7 +323,7 @@ export function GuildPanel() {
       statLines: entries.map((e) => <span key={e.text} className={e.gold ? 'gold-text' : undefined}>{e.text}</span>),
       buyLabel: maxed ? 'Fully built' : `Build · ${formatGold(cost ?? 0)}`,
       buyDisabled: maxed || state.gold < (cost ?? 0),
-      onBuy: () => engine.upgradeFacility(def.id),
+      onBuy: (btn) => buyWithFx(engine, btn, () => engine.upgradeFacility(def.id)),
     };
   }
 
@@ -340,7 +340,7 @@ export function GuildPanel() {
       statLines: entries.map((e) => <span key={e.text} className={e.gold ? 'gold-text' : undefined}>{e.text}</span>),
       buyLabel: maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`,
       buyDisabled: maxed || cost === null || state.gold < cost,
-      onBuy: () => engine.buyUpgrade(def.id),
+      onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id)),
     };
   }
 
@@ -371,7 +371,7 @@ export function GuildPanel() {
         ? 'Fully upgraded'
         : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
       buyDisabled: maxed || !affordable,
-      onBuy: () => engine.buyRaidUpgrade(def.id),
+      onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyRaidUpgrade(def.id)),
     };
   }
 
@@ -396,7 +396,7 @@ export function GuildPanel() {
         ? 'Fully upgraded'
         : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
       buyDisabled: maxed || !affordable,
-      onBuy: () => engine.buyQuestFastUpgrade(def.id),
+      onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyQuestFastUpgrade(def.id)),
     };
   }
 
@@ -417,7 +417,7 @@ export function GuildPanel() {
       statLines: [<span key={effectText} className="gold-text">{effectText}</span>],
       buyLabel: owned ? 'Unlocked' : `Buy · ${formatGold(tier.goldCost)}`,
       buyDisabled: owned || !affordable,
-      onBuy: () => engine.buyChainReplayTier(tier.id),
+      onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyChainReplayTier(tier.id)),
     };
   }
 
@@ -434,11 +434,13 @@ export function GuildPanel() {
   ];
 
   // A row that just hit max stays in the main list for as long as its
-  // MaxFlash is still playing (fires the flash "before it moves", per
-  // the design handoff), then drops into Built on the render right
-  // after MaxFlash's onDone calls dismiss(id).
-  const active = rows.filter((r) => (!r.maxed || flashes[r.id]) && (filter === 'All' || r.category === filter));
-  const built = rows.filter((r) => r.maxed && !flashes[r.id]);
+  // purchase beat is still playing (stamp, then file-away), then drops
+  // into Built on the render right after the beat ends.
+  const active = rows.filter((r) => (!r.maxed || beats[r.id]) && (filter === 'All' || r.category === filter));
+  const built = rows.filter((r) => r.maxed && !beats[r.id]);
+  // The strip's own "one more filed" pop -- only on a real increase, never
+  // on mount (same rule usePulsesOnChange always follows).
+  const builtPulse = usePulsesOnChange([{ id: 'built', value: built.length }]).built;
   const builtHasHighlight = built.some((r) => r.id === highlightId);
   const builtExpanded = showBuilt || builtHasHighlight;
 
@@ -519,16 +521,14 @@ export function GuildPanel() {
           <GuildUpgradeRow
             key={row.id}
             row={row}
-            flash={flashes[row.id]}
-            onDismissFlash={() => dismiss(row.id)}
-            pulsing={levelPulses[row.id]}
+            beat={beats[row.id]}
             highlighted={row.id === highlightId}
             onDismissHighlight={() => setHighlightId(null)}
           />
         ))}
       </div>
 
-      <div className="guild-built-strip">
+      <div className={`guild-built-strip ${builtPulse ? 'fx-built-pulse' : ''}`}>
         <img className="guild-built-seal" src={waxSealComplete} alt="Complete" />
         <span className="guild-built-count">Fully built · {built.length}</span>
         <span className="guild-built-names">{built.map((r) => r.name).join(' · ')}</span>

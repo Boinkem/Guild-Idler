@@ -1,0 +1,1417 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 26d9992..cb6c304 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -34043,3 +34043,107 @@ matching markup over `auction-house.jpg` in headless Chromium -- card
+ buttons now solid brass and inset, ghost buttons solid dark. Not checked
+ in the live Electron app. Client-side change, so it needs a new Steam
+ build to reach the Steam version.
++
++### Purchase animations: Guild Hall, vendor level-up, recruiting (patch 0420)
++```discord-update
++Dev Update | Purchase Animations
++
++- Added coins that fly from your gold (and Scrap) into whatever you just bought
++- Added a level roll-up, light sweep and "+1" to every Guild Hall upgrade you buy
++- Added a wax-seal stamp when a Guild Hall upgrade hits its last level, before it files away into Fully built
++- Added a vendor level-up moment: the vendor hops, says a line, and the upgrade they just taught unlocks its padlock in front of you
++- Added a MASTERED stamp to a fully levelled vendor
++- Added a recruit moment: a guild card flies to an open roster slot and flips over to reveal your new hero
++- Added "Open slot" placeholders to the Heroes roster so you can see your spare room
++```
++
++Direct request: the Guild Hall's purchase feedback was a small level
++pulse plus (at max) a star burst, which read as static. Mocked up first
++on a Claude Design canvas (Guild Hall row, vendor level-up, recruiting),
++signed off, then built as one shared system.
++
++**`src/ui/purchaseFx.tsx` (new).** Three opt-in pieces every surface
++shares:
++- `buyWithFx(engine, btn, action)` -- runs the engine purchase, diffs
++  `state.gold`/`state.scrap` before and after, and *only if something was
++  actually spent* flies 6 coins from the header's existing `'gold'` fly
++  target (4 silver Scrap shards from `'scrap'`) into the clicked button,
++  floats a red "-cost" off each counter, and squashes the button. A
++  refused purchase spends nothing, so nothing plays. Imperative WAAPI on
++  a body-level `.fx-layer`, so it survives the button unmounting (the
++  recruit modal closes on purchase) and never touches React state.
++- `usePurchaseBeats(items, timing)` -- per-id timeline. The engine still
++  applies the purchase instantly; the hook holds the *displayed* value at
++  the old level for the coin flight (`press`, 450ms), then `levelup`,
++  then on a final level `stamp` and optionally `file`. Same "only on a
++  real change, never on mount" rule `usePulsesOnChange` follows, so tab
++  switches never replay anything. `useLayoutEffect`, so the new level
++  can't flash for a frame before the old one is put back.
++- `LevelRoll` (odometer roll + "+N" ember) and `SealStamp` (wax seal,
++  ring, wax specks, ink label) render helpers.
++
++Timing follows Settings > Animation speed through `fxMs` in JS and a new
++`--fx-t` unit in CSS (1ms at 1x, same convention as the level-up card's
++`--lu-t`). With Reduce motion on, beats and particles are skipped
++entirely -- rows behave exactly as before this patch -- and a
++`data-motion='off'` block zeroes `.fx-*` animation delays for anything
++still mounted (same reasoning as the level-up card's own block).
++
++**Guild Hall (`GuildPanel.tsx`).** Every row (facilities, general
++upgrades, raid and quest-fast upgrades, Replay Memories' master tier)
++now buys through `buyWithFx`, including the detail modal's Buy. One
++`usePurchaseBeats` replaces the separate `useMaxFlash` star burst and
++`usePulsesOnChange` level pulse this list ran side by side. Normal buy:
++coins in, light sweep, level roll, effect line flash, spark riding the
++rule. Final level: the rule turns green, the wax seal slams down with
++the row's own maxed label ("Fully built" / "Fully upgraded" /
++"Unlocked") as its ink, the row shakes on impact, then files away; the
++Fully built strip's count pops and its seal bobs. A maxed row stays in
++the active list for exactly as long as its beat runs (was: as long as
++its MaxFlash ran).
++
++**Vendor level-up (`VendorsPanel.tsx`).** The vendor's own level gets a
++full beat (`VENDOR_BEATS`): gold + Scrap fly in, the sprite does a
++squash-and-hop with a halo, a speech bubble pops up with a line per
++vendor per level (`VENDOR_LEVEL_LINES` -- placeholder copy, worth a pass
++in your own voice), the level rolls, and the upgrade just taught plays a
++padlock reveal over itself: the "???" face's padlock rattles, pops open
++and flies off, the dashed veil dissolves, and the row picks up a light
++sweep and a NEW tag (view state only, cleared on leaving the page). At
++the cap a MASTERED seal stamps onto the card and then stays there as a
++settled mark on later visits. Locked rows now carry a small padlock
++icon. The vendor upgrade rows themselves keep their existing MaxFlash /
++pulse -- not part of this pass. `.vendor-card` no longer clips its
++children (nothing relied on it) so the bubble and the seal's drop can
++reach past the card edge.
++
++**Recruiting (`HeroesPanel.tsx`).** Recruit buys through `buyWithFx`;
++the chip's rect is captured as the flight origin before the modal
++closes. When the new hero appears, its `HeroBlock` (now wrapped in
++`.hero-recruit-wrap`) starts hidden while a face-down guild-crest card
++flies from the chip and grows into the card's box (`flyCard`), then
++flips face-up with a light spill, drifting embers and a SIGNED ON stamp
++that fades after ~2s. The class chip's badge flips over to "Recruited"
++and "N of M slots filled" rolls up. Only a recruit made from this view
++animates (the origin is consumed once, and dropped if the engine refused
++the recruit), so a hard reset's fresh roster never plays it. New
++dashed "Open slot" placeholders fill the roster up to the hero-slot cap
++(card view only, not the status-bar view).
++
++Verified: `npm run build` (tsc + vite + electron) clean. Drove the real
++web build in headless Chromium with a seeded save and checked frames of
++all three: the level is held during the coin flight then rolls, a final
++Guild Hall level stamps and files into the strip, a vendor's taught
++upgrade unlocks with its NEW tag, the Blacksmith's MASTERED stamp clears
++the buttons, and a recruit's card lands on its slot and flips. Two
++placement fixes came out of that pass: the MASTERED ink now sits right
++of the seal (left of it covered the buttons), and the recruit wrapper
++caps at the card's 720px so the stamp sits on the card. Not checked in
++the Electron app itself, and the vendor sprites aren't in the repo, so
++the hop was seen on the empty sprite box rather than the real art.
++
++**Follow-ups (same system, not done here):** vendor upgrade rows, Harvest
++tools/Warehouse/Overseer, Renown perks and the Training tab can reuse
++`buyWithFx` + `usePurchaseBeats` directly; skins/tombstones, revive,
++crafting, pet feeding, one-time unlocks (a shared padlock-open) and the
++quest board reroll still need their own moments.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 97ab3eb..ae04f77 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -58,6 +58,9 @@
+   --card-pad: 10px 12px;
+   --density-scale: 1;
+   --anim-speed: 1;
++  /* Patch 0420 -- one timing unit for the purchase fx (see purchaseFx.tsx):
++     1ms at normal speed, stretched/shrunk by Settings > Animation speed. */
++  --fx-t: calc(1ms / max(var(--anim-speed, 1), 0.001));
+ 
+   /* Purely additive helpers for the refresh -- no prior rule reads these,
+      so nothing that already depended on the tokens above changes shape. */
+@@ -3907,6 +3910,391 @@ input[type='range'] {
+   100% { transform: scale(1); opacity: 1; }
+ }
+ 
++/* ---------------------------- purchase fx (0420) ---------------------------- */
++/*
++ * Patch 0420 -- see purchaseFx.tsx. Shared by the Guild Hall rows, the
++ * vendor level-up and recruiting. Every duration and delay is a multiple
++ * of --fx-t (1ms at 1x, stretched by Settings > Animation speed), the
++ * same convention the hero level-up card's --lu-t uses. Reduce motion
++ * never reaches most of this (the beats are skipped in JS), and the
++ * data-motion='off' block at the end snaps anything that does.
++ */
++.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9000; overflow: hidden; }
++.fx-coin, .fx-shard { position: fixed; pointer-events: none; }
++.fx-coin {
++  width: 10px; height: 10px; border-radius: 50%;
++  background: var(--brass);
++  border: 1px solid var(--brass-dim);
++  box-shadow: 0 0 6px color-mix(in srgb, var(--brass) 70%, transparent),
++    inset -2px -2px 0 color-mix(in srgb, var(--brass-dim) 70%, var(--brass)),
++    inset 2px 2px 0 color-mix(in srgb, var(--brass) 55%, white);
++}
++.fx-shard {
++  width: 7px; height: 7px;
++  background: var(--silver);
++  border: 1px solid color-mix(in srgb, var(--silver) 55%, black);
++  box-shadow: 0 0 5px color-mix(in srgb, var(--silver) 60%, transparent);
++  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
++}
++.fx-floater {
++  position: fixed;
++  font-size: 0.6875rem;
++  font-weight: 700;
++  color: var(--blood);
++  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
++  white-space: nowrap;
++}
++.fx-card-back {
++  position: fixed;
++  display: flex; align-items: center; justify-content: center;
++  border-radius: var(--radius);
++  border: 2px solid var(--brass-dim);
++  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--panel-3) 80%, var(--brass-dim)), var(--panel));
++  color: var(--brass);
++  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
++}
++
++/* Odometer level roll + "+1" ember (LevelRoll). */
++.fx-roll-wrap { position: relative; display: inline-block; }
++.fx-roll { display: inline-grid; overflow: hidden; line-height: 1.3; vertical-align: bottom; }
++.fx-roll > span { grid-area: 1 / 1; }
++.fx-roll-old { visibility: hidden; }
++.fx-roll-wrap.rolling .fx-roll-old {
++  visibility: visible;
++  animation: fx-roll-out calc(var(--fx-t) * 320) cubic-bezier(.5, 0, .8, .4) forwards;
++}
++.fx-roll-wrap.rolling .fx-roll-new {
++  animation: fx-roll-in calc(var(--fx-t) * 420) cubic-bezier(.2, 1.5, .4, 1), fx-roll-glow calc(var(--fx-t) * 900) ease-out;
++}
++@keyframes fx-roll-out { to { transform: translateY(-110%); opacity: 0; } }
++@keyframes fx-roll-in { from { transform: translateY(110%); } to { transform: none; } }
++@keyframes fx-roll-glow {
++  0%, 30% { color: color-mix(in srgb, var(--brass) 70%, white); text-shadow: 0 0 8px color-mix(in srgb, var(--brass) 80%, transparent); }
++  100% { text-shadow: none; }
++}
++.fx-ember {
++  position: absolute; right: 0; top: -4px;
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  color: color-mix(in srgb, var(--brass) 70%, white);
++  text-shadow: 0 0 6px var(--brass);
++  pointer-events: none;
++  animation: fx-ember calc(var(--fx-t) * 900) ease-out forwards;
++}
++@keyframes fx-ember {
++  0% { opacity: 0; transform: translateY(4px) scale(.6); }
++  20% { opacity: 1; transform: translateY(-6px) scale(1.15); }
++  100% { opacity: 0; transform: translateY(-22px); }
++}
++
++/* Guild Hall row: candle-light sweep, effect flash and a spark riding the rule. */
++.guild-upgrade-row.fx-levelup { animation: fx-row-glow calc(var(--fx-t) * 800) ease-out; }
++.guild-upgrade-row.fx-levelup::after,
++.upgrade-row.fx-unveiling::after {
++  content: '';
++  position: absolute; inset: 0;
++  pointer-events: none;
++  background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--brass) 28%, transparent) 50%, transparent 65%);
++  background-size: 260% 100%;
++  background-position: 110% 0;
++  animation: fx-sweep calc(var(--fx-t) * 700) ease-out forwards;
++}
++@keyframes fx-sweep { to { background-position: -10% 0; } }
++@keyframes fx-row-glow {
++  0% { box-shadow: inset 0 0 0 1px var(--brass); }
++  100% { box-shadow: inset 0 0 0 1px transparent; }
++}
++.guild-upgrade-row.fx-levelup .guild-row-effect { animation: fx-text-flash calc(var(--fx-t) * 900) ease-out; }
++@keyframes fx-text-flash { 0%, 35% { color: color-mix(in srgb, var(--brass) 75%, white); } }
++.guild-row-rule > span { position: relative; }
++.guild-upgrade-row.fx-levelup .guild-row-rule > span::after {
++  content: '';
++  position: absolute; right: -3px; top: -3px;
++  width: 8px; height: 8px; border-radius: 50%;
++  background: color-mix(in srgb, var(--brass) 60%, white);
++  box-shadow: 0 0 8px 2px color-mix(in srgb, var(--brass) 80%, transparent);
++  animation: fx-spark calc(var(--fx-t) * 700) ease-out forwards;
++}
++@keyframes fx-spark { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; transform: scale(.4); } }
++
++/* Wax-seal stamp (SealStamp). The anchor is a zero-size point the caller
++   positions; the seal, ring and specks centre on it and the ink label
++   sits to its left. */
++.fx-seal-anchor { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 4; }
++.fx-seal-img {
++  position: absolute; left: -27px; top: -27px;
++  width: 54px; height: 54px;
++  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
++  animation: fx-seal-drop calc(var(--fx-t) * 520) cubic-bezier(.45, 0, .75, .4) forwards;
++}
++@keyframes fx-seal-drop {
++  0% { opacity: 0; transform: translateY(-70px) scale(2.6) rotate(-30deg); }
++  30% { opacity: 1; }
++  60% { transform: translateY(0) scale(.9) rotate(-9deg); }
++  78% { transform: scale(1.07) rotate(-9deg); }
++  100% { opacity: 1; transform: scale(1) rotate(-9deg); }
++}
++.fx-seal-ring {
++  position: absolute; left: -26px; top: -26px;
++  width: 52px; height: 52px; border-radius: 50%;
++  border: 2px solid color-mix(in srgb, var(--moss) 70%, white);
++  opacity: 0;
++  animation: fx-seal-ring calc(var(--fx-t) * 600) ease-out calc(var(--fx-t) * 310) forwards;
++}
++@keyframes fx-seal-ring { 0% { opacity: .9; transform: scale(.7); } 100% { opacity: 0; transform: scale(2.3); } }
++.fx-speck { position: absolute; left: 0; top: 0; width: 0; height: 0; }
++.fx-speck > i {
++  position: absolute; left: -2px; top: -2px;
++  width: 5px; height: 5px; border-radius: 50%;
++  background: color-mix(in srgb, var(--blood) 75%, black);
++  opacity: 0;
++  animation: fx-speck calc(var(--fx-t) * 480) cubic-bezier(.1, .7, .3, 1) calc(var(--fx-t) * 310) forwards;
++}
++.fx-speck:nth-child(odd) > i { width: 3px; height: 3px; left: -1px; top: -1px; }
++@keyframes fx-speck { 0% { opacity: 1; transform: translateX(20px); } 100% { opacity: 0; transform: translateX(42px); } }
++.fx-seal-ink {
++  position: absolute; right: 36px; top: -11px;
++  white-space: nowrap;
++  font-family: var(--font-display);
++  font-size: 0.6875rem;
++  letter-spacing: 0.18em;
++  text-transform: uppercase;
++  color: color-mix(in srgb, var(--moss) 70%, white);
++  border: 2px solid currentColor;
++  border-radius: 4px;
++  padding: 2px 7px;
++  background: color-mix(in srgb, var(--panel) 70%, transparent);
++  opacity: 0;
++  animation: fx-ink calc(var(--fx-t) * 360) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 340) forwards;
++}
++@keyframes fx-ink {
++  0% { opacity: 0; transform: rotate(-6deg) scale(1.5); }
++  100% { opacity: .95; transform: rotate(-6deg) scale(1); }
++}
++/* Already-stamped and simply revisited: the end frame, no motion. */
++.fx-seal-anchor.fx-settled .fx-seal-ring,
++.fx-seal-anchor.fx-settled .fx-speck { display: none; }
++.fx-seal-anchor.fx-settled .fx-seal-img { animation: none; transform: rotate(-9deg); }
++.fx-seal-anchor.fx-settled .fx-seal-ink { animation: none; opacity: .9; transform: rotate(-6deg); }
++.fx-stamped { animation: fx-stamp-shake calc(var(--fx-t) * 260) linear calc(var(--fx-t) * 310); }
++@keyframes fx-stamp-shake {
++  20% { transform: translate(-2px, 1px); } 40% { transform: translate(2px, -1px); }
++  60% { transform: translate(-1px, 1px); } 80% { transform: translate(1px, 0); }
++}
++.guild-row-stamp { right: 128px; top: 50%; }
++.guild-upgrade-row.fx-stamped .guild-row-name,
++.guild-upgrade-row.fx-stamped .guild-row-effect { opacity: .72; transition: opacity calc(var(--fx-t) * 400) calc(var(--fx-t) * 320); }
++/* File-away into the Fully built strip. */
++.guild-upgrade-row.fx-filing {
++  overflow: hidden;
++  animation: fx-file-away calc(var(--fx-t) * 560) cubic-bezier(.5, 0, .9, .5) forwards;
++}
++@keyframes fx-file-away {
++  0% { opacity: 1; transform: none; }
++  25% { transform: translateY(-3px); }
++  100% { opacity: 0; transform: translateY(30px) scale(.96); }
++}
++.guild-built-strip.fx-built-pulse { animation: fx-strip-glow calc(var(--fx-t) * 500) ease-out; }
++.guild-built-strip.fx-built-pulse .guild-built-count { display: inline-block; animation: fx-count-pop calc(var(--fx-t) * 450) cubic-bezier(.3, 1.6, .5, 1); }
++.guild-built-strip.fx-built-pulse .guild-built-seal { animation: fx-seal-bob calc(var(--fx-t) * 500) cubic-bezier(.3, 1.6, .5, 1); }
++@keyframes fx-strip-glow {
++  0% { box-shadow: 0 0 0 1px var(--moss), 0 0 18px color-mix(in srgb, var(--moss) 50%, transparent); }
++  100% { box-shadow: none; }
++}
++@keyframes fx-count-pop { 0% { transform: scale(1.6); } 100% { transform: scale(1); } }
++@keyframes fx-seal-bob {
++  0% { transform: translateY(-50%) rotate(-9deg); }
++  40% { transform: translateY(-58%) rotate(-2deg) scale(1.18); }
++  100% { transform: translateY(-50%) rotate(-9deg); }
++}
++
++/* Vendor level-up: sprite hop + halo, speech bubble, card glow, stamp. */
++.vendor-sprite-wrap { position: relative; display: inline-block; flex: none; }
++.vendor-sprite-wrap.fx-hop > :not(.vendor-bubble) { animation: fx-hop calc(var(--fx-t) * 560) cubic-bezier(.3, 1.4, .5, 1); transform-origin: 50% 100%; }
++.vendor-sprite-wrap.fx-hop::before {
++  content: '';
++  position: absolute; inset: -6px;
++  border-radius: 12px;
++  border: 2px solid color-mix(in srgb, var(--brass) 70%, white);
++  opacity: 0;
++  pointer-events: none;
++  animation: fx-halo calc(var(--fx-t) * 700) ease-out;
++}
++@keyframes fx-hop {
++  0% { transform: none; } 25% { transform: translateY(3px) scale(1.08, .9); }
++  55% { transform: translateY(-9px) scale(.95, 1.06); } 100% { transform: none; }
++}
++@keyframes fx-halo { 0% { opacity: .9; transform: scale(.9); } 100% { opacity: 0; transform: scale(1.25); } }
++.vendor-bubble {
++  /* Anchored by its bottom so a two-line remark grows upward, away from
++     the vendor's name rather than over it. */
++  position: absolute; left: 58px; bottom: calc(100% - 6px); z-index: 6;
++  width: max-content;
++  max-width: 240px;
++  font-size: 0.65625rem;
++  line-height: 1.35;
++  color: var(--ink);
++  background: var(--parchment);
++  border-radius: var(--radius);
++  padding: 6px 9px;
++  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
++  transform-origin: 12px 100%;
++  animation: fx-bubble calc(var(--fx-t) * 1900) ease-out forwards;
++}
++.vendor-bubble::after {
++  content: '';
++  position: absolute; left: 10px; bottom: -5px;
++  width: 9px; height: 9px;
++  background: var(--parchment);
++  transform: rotate(45deg);
++}
++@keyframes fx-bubble {
++  0% { opacity: 0; transform: scale(.4); } 10% { opacity: 1; transform: scale(1.06); }
++  16% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; }
++}
++.vendor-card.fx-vendor-lit { animation: fx-card-glow calc(var(--fx-t) * 900) ease-out; }
++@keyframes fx-card-glow {
++  0% { box-shadow: 0 0 0 1px var(--brass), 0 0 22px color-mix(in srgb, var(--brass) 45%, transparent); }
++  100% { box-shadow: 0 0 0 1px transparent; }
++}
++.vendor-card-stamp { right: 150px; top: 50%; }
++/* Ink to the seal's right here -- to its left it would sit on the
++   Crafting/Enhance/Scrap buttons. */
++.vendor-card-stamp .fx-seal-ink { right: auto; left: 36px; }
++/* .card clips its children; the vendor card has nothing that relies on
++   that, and the speech bubble and the seal's drop both need to reach
++   past its edge. */
++.vendor-card { overflow: visible; }
++
++/* Padlock on locked upgrade rows, and the reveal when one gets taught. */
++.fx-lock { position: relative; display: inline-block; flex: none; width: 13px; height: 14px; color: var(--brass-dim); align-self: center; }
++.fx-lock-shackle {
++  position: absolute; left: 3px; top: 0;
++  width: 7px; height: 7px; box-sizing: border-box;
++  border: 2px solid currentColor; border-bottom: none;
++  border-radius: 4px 4px 0 0;
++  transform-origin: 6px 7px;
++}
++.fx-lock-body { position: absolute; left: 1px; top: 6px; width: 11px; height: 8px; border-radius: 2px; background: currentColor; }
++.upgrade-unveil {
++  position: absolute; inset: 0; z-index: 3;
++  display: flex; align-items: center; gap: 7px;
++  padding: 0 8px;
++  background: var(--panel);
++  border: 1px dashed var(--panel-3);
++  pointer-events: none;
++  animation: fx-veil-out calc(var(--fx-t) * 520) ease-in calc(var(--fx-t) * 580) forwards;
++}
++.upgrade-unveil .fx-lock {
++  animation: fx-lock-shake calc(var(--fx-t) * 260) linear calc(var(--fx-t) * 300),
++    fx-lock-fly calc(var(--fx-t) * 520) cubic-bezier(.3, 0, .6, 1) calc(var(--fx-t) * 580) forwards;
++}
++.upgrade-unveil .fx-lock-shackle { animation: fx-shackle calc(var(--fx-t) * 200) ease-out calc(var(--fx-t) * 580) forwards; }
++@keyframes fx-lock-shake { 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(5deg); } }
++@keyframes fx-shackle { to { transform: translateY(-3px) rotate(-35deg); } }
++@keyframes fx-lock-fly {
++  0% { transform: none; color: var(--brass); }
++  30% { transform: translateY(-6px) scale(1.2); color: color-mix(in srgb, var(--brass) 60%, white); }
++  100% { transform: translate(18px, -34px) rotate(25deg) scale(.6); opacity: 0; }
++}
++@keyframes fx-veil-out {
++  0%, 30% { border-color: var(--brass); }
++  100% { opacity: 0; background: transparent; border-color: transparent; }
++}
++.upgrade-row.fx-unveiling::after { animation-delay: calc(var(--fx-t) * 1100); animation-duration: calc(var(--fx-t) * 800); }
++.fx-new-tag {
++  font-family: var(--font-display);
++  font-size: 0.5625rem;
++  letter-spacing: 0.1em;
++  color: var(--ink);
++  background: color-mix(in srgb, var(--brass) 70%, white);
++  border-radius: 4px;
++  padding: 1px 5px;
++  animation: fx-new-pop calc(var(--fx-t) * 500) cubic-bezier(.3, 1.8, .5, 1);
++}
++@keyframes fx-new-pop { from { transform: scale(0) rotate(-20deg); } to { transform: none; } }
++
++/* Recruit arrival: card hidden while the face-down card flies in, then a
++   flip with a light spill behind it and a SIGNED ON stamp. */
++.hero-recruit-wrap { position: relative; isolation: isolate; max-width: 720px; } /* same cap as .card, so the stamp and light spill sit on the card itself */
++.hero-recruit-wrap.fx-incoming { visibility: hidden; }
++.hero-recruit-wrap.fx-reveal { animation: fx-recruit-flip calc(var(--fx-t) * 650) cubic-bezier(.3, 1.25, .5, 1) both; }
++@keyframes fx-recruit-flip {
++  0% { transform: perspective(1200px) rotateY(90deg); }
++  100% { transform: perspective(1200px) rotateY(0); }
++}
++.fx-recruit-glow { position: absolute; inset: -24px -12px; z-index: -1; pointer-events: none; }
++.fx-rays {
++  position: absolute; inset: 0;
++  opacity: 0;
++  background: repeating-conic-gradient(from 0deg at 50% 50%, color-mix(in srgb, var(--brass) 38%, transparent) 0deg 8deg, transparent 8deg 22deg);
++  -webkit-mask: radial-gradient(ellipse at center, #000 25%, transparent 70%);
++  mask: radial-gradient(ellipse at center, #000 25%, transparent 70%);
++  animation: fx-rays calc(var(--fx-t) * 1500) ease-out forwards;
++}
++@keyframes fx-rays {
++  0% { opacity: 0; transform: rotate(0) scale(.7); }
++  25% { opacity: 1; }
++  100% { opacity: 0; transform: rotate(25deg) scale(1.1); }
++}
++.fx-mote {
++  position: absolute; bottom: 18px;
++  width: 4px; height: 4px; border-radius: 50%;
++  background: color-mix(in srgb, var(--brass) 60%, white);
++  opacity: 0;
++  animation: fx-mote calc(var(--fx-t) * 1100) ease-out calc(var(--fx-t) * 300) forwards;
++}
++.fx-mote-0 { left: 14%; } .fx-mote-1 { left: 34%; animation-delay: calc(var(--fx-t) * 380); }
++.fx-mote-2 { left: 52%; } .fx-mote-3 { left: 71%; animation-delay: calc(var(--fx-t) * 450); }
++.fx-mote-4 { left: 88%; animation-delay: calc(var(--fx-t) * 340); }
++@keyframes fx-mote { 0% { opacity: 0; transform: none; } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-70px); } }
++.fx-signed-on {
++  /* Centred in the open space between the hero's name and status. */
++  position: absolute; left: 50%; top: 50%; margin: -12px 0 0 -48px; z-index: 3;
++  font-family: var(--font-display);
++  font-size: 0.6875rem;
++  letter-spacing: 0.16em;
++  color: color-mix(in srgb, var(--moss) 70%, white);
++  border: 2px solid currentColor;
++  border-radius: 4px;
++  padding: 2px 7px;
++  background: color-mix(in srgb, var(--panel) 75%, transparent);
++  opacity: 0;
++  pointer-events: none;
++  animation: fx-signed calc(var(--fx-t) * 2400) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 560) forwards;
++}
++@keyframes fx-signed {
++  0% { opacity: 0; transform: rotate(-8deg) scale(1.6); }
++  12% { opacity: 1; transform: rotate(-8deg) scale(1); }
++  80% { opacity: 1; transform: rotate(-8deg); }
++  100% { opacity: 0; transform: rotate(-8deg); }
++}
++.hero-open-slot {
++  display: flex; align-items: center; justify-content: center;
++  min-height: 56px;
++  margin-bottom: 10px;
++  border: 1px dashed var(--panel-3);
++  border-radius: var(--radius);
++  background: color-mix(in srgb, var(--panel) 45%, transparent);
++  color: var(--muted);
++  font-size: 0.625rem;
++  letter-spacing: 0.08em;
++  text-transform: uppercase;
++}
++.recruit-chip.fx-just .chip-badge { animation: fx-badge-flip calc(var(--fx-t) * 480) ease-in-out; }
++@keyframes fx-badge-flip { 0% { transform: rotateX(90deg); } 100% { transform: none; } }
++
++/* Reduce motion: the beats are skipped in JS, but anything still mounted
++   (the settled seal) or caught mid-switch shows its final frame, delays
++   included -- with --anim-speed at 0, --fx-t would stretch every delay
++   ~1000x (same reasoning as the hero level-up card's block). */
++:root[data-motion='off'] [class*='fx-'],
++:root[data-motion='off'] [class*='fx-'] *,
++:root[data-motion='off'] [class*='fx-']::before,
++:root[data-motion='off'] [class*='fx-']::after {
++  animation-delay: 0ms !important;
++}
++
+ /* --------------------------- purchase pulse --------------------------- */
+ 
+ .purchase-pulse {
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 28dfe71..7e5da72 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -9,7 +9,9 @@ import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
+ import { CHAIN_REPLAY_TIER_BY_ID } from '../../game/data/chainReplay';
+ import { describeMods, formatGold, formatNumber, pct } from '../../game/util';
+ import { GuildHallCategory } from '../../game/types';
+-import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
++import { usePulsesOnChange } from '../maxFlash';
++import { buyWithFx, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
++import type { Beat } from '../purchaseFx';
+ import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
+ import { FundGuildModal } from '../FundGuildModal';
+ import waxSealComplete from '../../assets/wax-seal-complete.png';
+@@ -31,7 +33,7 @@ function GuildUpgradeDetailModal({
+   name, description, level, maxLevel, statLines, buyLabel, buyDisabled, onBuy, onClose,
+ }: {
+   name: string; description: string; level: number; maxLevel: number; statLines: ReactNode[];
+-  buyLabel: string; buyDisabled: boolean; onBuy: () => void; onClose: () => void;
++  buyLabel: string; buyDisabled: boolean; onBuy: (btn?: HTMLElement | null) => void; onClose: () => void;
+ }) {
+   return (
+     <div className="overlay" onClick={onClose}>
+@@ -48,7 +50,7 @@ function GuildUpgradeDetailModal({
+               to read the flavour text first, then decides to buy (maybe
+               more than once in a row), shouldn't have the modal vanish
+               out from under them after the first click. */}
+-          <button className="btn-yellow" disabled={buyDisabled} onClick={onBuy}>{buyLabel}</button>
++          <button className="btn-yellow" disabled={buyDisabled} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
+         </div>
+       </div>
+     </div>
+@@ -94,7 +96,8 @@ interface RowData {
+   statLines: ReactNode[];
+   buyLabel: string;
+   buyDisabled: boolean;
+-  onBuy: () => void;
++  /** Gets the clicked button so the spend can fly into it (patch 0420). */
++  onBuy: (btn?: HTMLElement | null) => void;
+ }
+ 
+ /** describeMods's own per-line text, plus every field describeMods can't
+@@ -156,14 +159,22 @@ function upgradeEntries(
+  * first, unchanged from before.
+  */
+ function GuildUpgradeRow({
+-  row, flash, onDismissFlash, pulsing, highlighted, onDismissHighlight,
++  row, beat, highlighted, onDismissHighlight,
+ }: {
+   row: RowData;
+-  flash?: { key: number; name: string }; onDismissFlash: () => void; pulsing?: boolean;
++  /** Patch 0420 -- this row's purchase beat, if one is playing (see
++   *  usePurchaseBeats in purchaseFx.tsx). Replaces the old level-number
++   *  pulse and MaxFlash star burst. */
++  beat?: Beat;
+   highlighted?: boolean; onDismissHighlight?: () => void;
+ }) {
+   const [showDetail, setShowDetail] = useState(false);
+-  const pct2 = Math.min(100, (row.level / row.maxLevel) * 100);
++  // While the coins are still in the air the row keeps showing the level
++  // it had before the purchase, so the rule fill and the "Lv" roll land
++  // together with the coins rather than a beat ahead of them.
++  const shownLevel = shownValue(beat, row.level);
++  const shownMaxed = shownLevel >= row.maxLevel;
++  const pct2 = Math.min(100, (shownLevel / row.maxLevel) * 100);
+   const rowRef = useRef<HTMLDivElement>(null);
+   // Landed here via a "jump to the requirement" link -- scroll the exact
+   // row into view rather than relying on the player to spot the glow
+@@ -171,10 +182,13 @@ function GuildUpgradeRow({
+   useEffect(() => {
+     if (highlighted) rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+   }, [highlighted]);
++  const beatClass = beat?.phase === 'levelup' ? 'fx-levelup'
++    : beat?.phase === 'stamp' ? 'fx-stamped'
++    : beat?.phase === 'file' ? 'fx-stamped fx-filing' : '';
+   return (
+     <div
+       ref={rowRef}
+-      className={`guild-upgrade-row ${highlighted ? 'card requirement-highlight' : ''}`}
++      className={`guild-upgrade-row ${beatClass} ${highlighted ? 'card requirement-highlight' : ''}`}
+       onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
+       role="button"
+       tabIndex={0}
+@@ -184,21 +198,25 @@ function GuildUpgradeRow({
+         <span className="guild-row-head">
+           <span className="guild-row-name">{row.name}</span>
+           <span className="guild-row-cat" style={{ color: CATEGORY_FG[row.category] }}>{row.category}</span>
+-          <span className={`guild-row-level ${pulsing ? 'purchase-pulse' : ''}`}>Lv {row.level}/{row.maxLevel}</span>
++          <span className="guild-row-level">
++            <LevelRoll beat={beat} value={row.level} render={(v) => `Lv ${v}/${row.maxLevel}`} />
++          </span>
+         </span>
+         <span className="guild-row-effect">{row.effectText}</span>
+         <span className="guild-row-rule">
+-          <span style={{ width: `${pct2}%`, background: row.maxed ? 'var(--moss)' : 'var(--brass)' }} />
++          <span style={{ width: `${pct2}%`, background: shownMaxed ? 'var(--moss)' : 'var(--brass)' }} />
+         </span>
+       </span>
+       <button
+         className={`guild-buy-btn ${!row.buyDisabled ? 'affordable' : ''}`}
+         disabled={row.buyDisabled}
+-        onClick={(e) => { e.stopPropagation(); row.onBuy(); }}
++        onClick={(e) => { e.stopPropagation(); row.onBuy(e.currentTarget); }}
+       >
+         {row.buyLabel}
+       </button>
+-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
++      {(beat?.phase === 'stamp' || beat?.phase === 'file') && (
++        <SealStamp label={row.buyLabel} className="guild-row-stamp" />
++      )}
+       {showDetail && (
+         <GuildUpgradeDetailModal
+           name={row.name}
+@@ -278,35 +296,17 @@ export function GuildPanel() {
+   const raidUpgradeDefs = GuildManager.raidUpgrades();
+   const questFastUpgradeDefs = GuildManager.questFastUpgrades();
+   const replayMasterTier = CHAIN_REPLAY_TIER_BY_ID['master'];
+-  const { flashes, dismiss } = useMaxFlash([
+-    ...facilities.map((def) => ({
+-      id: def.id, name: def.name,
+-      level: GuildManager.facilityLevel(state, def.id), maxLevel: def.maxLevel,
+-    })),
+-    ...generalUpgrades.map((def) => ({
+-      id: def.id, name: def.name,
+-      level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
+-    })),
+-    ...raidUpgradeDefs.map((def) => ({
+-      id: def.id, name: def.name,
+-      level: GuildManager.raidUpgradeLevel(state, def.id), maxLevel: def.maxLevel,
+-    })),
+-    ...questFastUpgradeDefs.map((def) => ({
+-      id: def.id, name: def.name,
+-      level: GuildManager.questFastUpgradeLevel(state, def.id), maxLevel: def.maxLevel,
+-    })),
+-    ...(replayMasterTier ? [{
+-      id: replayMasterTier.id, name: replayMasterTier.sagaName,
+-      level: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0, maxLevel: 1,
+-    }] : []),
+-  ]);
+-  const levelPulses = usePulsesOnChange([
+-    ...facilities.map((def) => ({ id: def.id, value: GuildManager.facilityLevel(state, def.id) })),
+-    ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
+-    ...raidUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.raidUpgradeLevel(state, def.id) })),
+-    ...questFastUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.questFastUpgradeLevel(state, def.id) })),
++  // Patch 0420 -- one purchase beat per row (coin flight, level roll,
++  // and on the final level the wax-seal stamp and file-away into the
++  // Fully built strip). Replaces the separate useMaxFlash star burst and
++  // usePulsesOnChange level pulse this list used to run side by side.
++  const beats = usePurchaseBeats([
++    ...facilities.map((def) => ({ id: def.id, value: GuildManager.facilityLevel(state, def.id), max: def.maxLevel })),
++    ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id), max: def.maxLevel })),
++    ...raidUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.raidUpgradeLevel(state, def.id), max: def.maxLevel })),
++    ...questFastUpgradeDefs.map((def) => ({ id: def.id, value: GuildManager.questFastUpgradeLevel(state, def.id), max: def.maxLevel })),
+     ...(replayMasterTier
+-      ? [{ id: replayMasterTier.id, value: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0 }]
++      ? [{ id: replayMasterTier.id, value: GuildManager.hasChainReplayTier(state, replayMasterTier.id) ? 1 : 0, max: 1 }]
+       : []),
+   ]);
+ 
+@@ -323,7 +323,7 @@ export function GuildPanel() {
+       statLines: entries.map((e) => <span key={e.text} className={e.gold ? 'gold-text' : undefined}>{e.text}</span>),
+       buyLabel: maxed ? 'Fully built' : `Build · ${formatGold(cost ?? 0)}`,
+       buyDisabled: maxed || state.gold < (cost ?? 0),
+-      onBuy: () => engine.upgradeFacility(def.id),
++      onBuy: (btn) => buyWithFx(engine, btn, () => engine.upgradeFacility(def.id)),
+     };
+   }
+ 
+@@ -340,7 +340,7 @@ export function GuildPanel() {
+       statLines: entries.map((e) => <span key={e.text} className={e.gold ? 'gold-text' : undefined}>{e.text}</span>),
+       buyLabel: maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`,
+       buyDisabled: maxed || cost === null || state.gold < cost,
+-      onBuy: () => engine.buyUpgrade(def.id),
++      onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id)),
+     };
+   }
+ 
+@@ -371,7 +371,7 @@ export function GuildPanel() {
+         ? 'Fully upgraded'
+         : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
+       buyDisabled: maxed || !affordable,
+-      onBuy: () => engine.buyRaidUpgrade(def.id),
++      onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyRaidUpgrade(def.id)),
+     };
+   }
+ 
+@@ -396,7 +396,7 @@ export function GuildPanel() {
+         ? 'Fully upgraded'
+         : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
+       buyDisabled: maxed || !affordable,
+-      onBuy: () => engine.buyQuestFastUpgrade(def.id),
++      onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyQuestFastUpgrade(def.id)),
+     };
+   }
+ 
+@@ -417,7 +417,7 @@ export function GuildPanel() {
+       statLines: [<span key={effectText} className="gold-text">{effectText}</span>],
+       buyLabel: owned ? 'Unlocked' : `Buy · ${formatGold(tier.goldCost)}`,
+       buyDisabled: owned || !affordable,
+-      onBuy: () => engine.buyChainReplayTier(tier.id),
++      onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyChainReplayTier(tier.id)),
+     };
+   }
+ 
+@@ -434,11 +434,13 @@ export function GuildPanel() {
+   ];
+ 
+   // A row that just hit max stays in the main list for as long as its
+-  // MaxFlash is still playing (fires the flash "before it moves", per
+-  // the design handoff), then drops into Built on the render right
+-  // after MaxFlash's onDone calls dismiss(id).
+-  const active = rows.filter((r) => (!r.maxed || flashes[r.id]) && (filter === 'All' || r.category === filter));
+-  const built = rows.filter((r) => r.maxed && !flashes[r.id]);
++  // purchase beat is still playing (stamp, then file-away), then drops
++  // into Built on the render right after the beat ends.
++  const active = rows.filter((r) => (!r.maxed || beats[r.id]) && (filter === 'All' || r.category === filter));
++  const built = rows.filter((r) => r.maxed && !beats[r.id]);
++  // The strip's own "one more filed" pop -- only on a real increase, never
++  // on mount (same rule usePulsesOnChange always follows).
++  const builtPulse = usePulsesOnChange([{ id: 'built', value: built.length }]).built;
+   const builtHasHighlight = built.some((r) => r.id === highlightId);
+   const builtExpanded = showBuilt || builtHasHighlight;
+ 
+@@ -519,16 +521,14 @@ export function GuildPanel() {
+           <GuildUpgradeRow
+             key={row.id}
+             row={row}
+-            flash={flashes[row.id]}
+-            onDismissFlash={() => dismiss(row.id)}
+-            pulsing={levelPulses[row.id]}
++            beat={beats[row.id]}
+             highlighted={row.id === highlightId}
+             onDismissHighlight={() => setHighlightId(null)}
+           />
+         ))}
+       </div>
+ 
+-      <div className="guild-built-strip">
++      <div className={`guild-built-strip ${builtPulse ? 'fx-built-pulse' : ''}`}>
+         <img className="guild-built-seal" src={waxSealComplete} alt="Complete" />
+         <span className="guild-built-count">Fully built · {built.length}</span>
+         <span className="guild-built-names">{built.map((r) => r.name).join(' · ')}</span>
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index b3b50aa..a8dab9d 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useState } from 'react';
++import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+ import type { CSSProperties } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+@@ -22,6 +22,8 @@ import { GearScoreBadge } from '../GearScoreBadge';
+ import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
+ import { useReviveFlash, ReviveFlash } from '../reviveFlash';
+ import { HeroBlock } from '../HeroBlock';
++import { usePulsesOnChange } from '../maxFlash';
++import { buyWithFx, flyCard, fxMs, fxSpeed, LevelRoll, usePurchaseBeats } from '../purchaseFx';
+ 
+ /**
+  * Patch 0296. Recruit-card portrait for a hero class -- mirrors
+@@ -289,6 +291,49 @@ function HeroesRosterView() {
+   // everything the old inline card used to show up front.
+   const [selectedRecruitId, setSelectedRecruitId] = useState<HeroClass | null>(null);
+ 
++  // Patch 0420 -- recruit arrival. The engine adds the hero instantly; the
++  // new HeroBlock starts hidden ('incoming') while a face-down guild card
++  // flies to it from the class's chip, then flips face-up ('reveal') with
++  // a light spill and a SIGNED ON stamp. Only a hero recruited from this
++  // view animates (recruitOriginRef is set by the Recruit button and
++  // consumed once), so a hard reset's fresh roster never plays it.
++  const chipRefs = useRef<Partial<Record<HeroClass, HTMLButtonElement | null>>>({});
++  const heroWrapRefs = useRef<Record<string, HTMLDivElement | null>>({});
++  const recruitOriginRef = useRef<DOMRect | null>(null);
++  const knownHeroIdsRef = useRef<Set<string> | null>(null);
++  const [arrivals, setArrivals] = useState<Record<string, 'incoming' | 'reveal'>>({});
++  const heroIdSignature = state.heroes.map((h) => h.id).join('|');
++  useLayoutEffect(() => {
++    const ids = state.heroes.map((h) => h.id);
++    const known = knownHeroIdsRef.current;
++    knownHeroIdsRef.current = new Set(ids);
++    const origin = recruitOriginRef.current;
++    if (!known || !origin || fxSpeed() <= 0) return;
++    const fresh = ids.filter((id) => !known.has(id));
++    if (fresh.length === 0) return;
++    recruitOriginRef.current = null;
++    const id = fresh[fresh.length - 1];
++    setArrivals((cur) => ({ ...cur, [id]: 'incoming' }));
++    // Measure the hidden card's real box after it has laid out, then fly.
++    window.requestAnimationFrame(() => {
++      flyCard(origin, heroWrapRefs.current[id] ?? null).then(() => {
++        setArrivals((cur) => ({ ...cur, [id]: 'reveal' }));
++        window.setTimeout(() => setArrivals((cur) => {
++          const next = { ...cur };
++          delete next[id];
++          return next;
++        }), fxMs(2600));
++      });
++    });
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [heroIdSignature]);
++  // "N of M slots filled" rolls up with the recruit, and the class chip's
++  // badge flips over to "Recruited".
++  const rosterBeat = usePurchaseBeats([{ id: 'roster', value: state.heroes.length, max: Infinity }]).roster;
++  const recruitedFlips = usePulsesOnChange((Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => ({
++    id, value: recruitStatusFor(engine, id, recruitable, slots).alreadyRecruited ? 1 : 0,
++  })));
++
+   const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
+     state.heroes.map((h) => ({ id: h.id, level: h.level })),
+   );
+@@ -311,7 +356,7 @@ function HeroesRosterView() {
+       <h2>Heroes</h2>
+       <div className="card">
+         <p className="small muted" style={{ margin: 0 }}>
+-          {state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.
++          <LevelRoll beat={rosterBeat} value={state.heroes.length} render={(v) => v} /> of {slots} slots filled. Every hero shares the guild's gold and bonuses.
+         </p>
+       </div>
+ 
+@@ -347,9 +392,20 @@ function HeroesRosterView() {
+         // body itself swaps.
+         <HeroStatusList engine={engine} now={now} />
+       ) : (
+-      state.heroes.map((hero) => (
+-        <HeroBlock
++      <>
++      {state.heroes.map((hero) => (
++        <div
+           key={hero.id}
++          ref={(el) => { heroWrapRefs.current[hero.id] = el; }}
++          className={`hero-recruit-wrap ${arrivals[hero.id] ? `fx-${arrivals[hero.id]}` : ''}`}
++        >
++        {arrivals[hero.id] === 'reveal' && (
++          <span className="fx-recruit-glow" aria-hidden="true">
++            <span className="fx-rays" />
++            {[0, 1, 2, 3, 4].map((i) => <span key={i} className={`fx-mote fx-mote-${i}`} />)}
++          </span>
++        )}
++        <HeroBlock
+           hero={hero}
+           engine={engine}
+           now={now}
+@@ -372,7 +428,16 @@ function HeroesRosterView() {
+             />
+           )}
+         </HeroBlock>
+-      ))
++        {arrivals[hero.id] === 'reveal' && <span className="fx-signed-on" aria-hidden="true">SIGNED ON</span>}
++        </div>
++      ))}
++      {/* Patch 0420 -- empty slots shown as dashed placeholders, so a
++          recruit visibly lands somewhere and the roster's spare capacity
++          reads at a glance. */}
++      {Array.from({ length: Math.max(0, slots - state.heroes.length) }, (_, i) => (
++        <div key={`open-${i}`} className="hero-open-slot">Open slot</div>
++      ))}
++      </>
+       )}
+ 
+       <div className="section-heading">Recruit</div>
+@@ -434,7 +499,8 @@ function HeroesRosterView() {
+                   <button
+                     key={id}
+                     type="button"
+-                    className={`recruit-chip ${alreadyRecruited ? 'recruited' : ''}`}
++                    ref={(el) => { chipRefs.current[id] = el; }}
++                    className={`recruit-chip ${alreadyRecruited ? 'recruited' : ''} ${recruitedFlips[id] ? 'fx-just' : ''}`}
+                     onClick={() => setSelectedRecruitId(id)}
+                   >
+                     <span
+@@ -496,7 +562,15 @@ function HeroesRosterView() {
+                 <button
+                   className="btn-primary"
+                   disabled={!unlocked || state.gold < cost || slotsFull || alreadyRecruited}
+-                  onClick={() => { engine.recruit(id); setSelectedRecruitId(null); }}
++                  onClick={(e) => {
++                    const before = engine.state.heroes.length;
++                    recruitOriginRef.current = chipRefs.current[id]?.getBoundingClientRect() ?? null;
++                    buyWithFx(engine, e.currentTarget, () => engine.recruit(id));
++                    // Refused recruit: drop the origin so a later, unrelated
++                    // roster change can't pick it up and animate.
++                    if (engine.state.heroes.length === before) recruitOriginRef.current = null;
++                    setSelectedRecruitId(null);
++                  }}
+                 >
+                   {alreadyRecruited
+                     ? 'Already Recruited'
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index f402842..6f9631a 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -21,6 +21,8 @@ import { isTabUnread } from '../../game/attention';
+ import { ItemIcon, ConsumableIcon } from '../icons';
+ import { VendorSprite } from '../sprites/VendorSprite';
+ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
++import { buyWithFx, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
++import type { BeatTiming } from '../purchaseFx';
+ import { CraftingStation } from '../CraftingStation';
+ import { EnhanceStation } from '../EnhanceStation';
+ import { WeaponEnchantStation } from '../WeaponEnchantStation';
+@@ -141,10 +143,15 @@ export function VendorsPanel() {
+  * that entirely, each instance owning its own hook call.
+  */
+ function VendorUpgradeRow({
+-  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy,
++  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy, unveiling, isNew,
+ }: {
+   def: UpgradeDef; level: number; cost: number | null; scrapCost: number; maxed: boolean; affordable: boolean;
+   flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void; onBuy: () => void;
++  /** Patch 0420 -- this row was just taught by a vendor level-up: the
++   *  locked "???" face plays its padlock-opening reveal over it. */
++  unveiling?: boolean;
++  /** Patch 0420 -- learned this visit; shows a NEW tag until the page is left. */
++  isNew?: boolean;
+ }) {
+   const [showDetail, setShowDetail] = useState(false);
+   const entries = [
+@@ -157,7 +164,7 @@ function VendorUpgradeRow({
+   const buyLabel = maxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
+   return (
+     <div
+-      className="upgrade-row"
++      className={`upgrade-row ${unveiling ? 'fx-unveiling' : ''}`}
+       onClick={() => setShowDetail(true)}
+       role="button"
+       tabIndex={0}
+@@ -166,6 +173,7 @@ function VendorUpgradeRow({
+       <span style={{ minWidth: 0 }}>
+         <span className="upgrade-row-head">
+           <span className="upgrade-row-name">{def.name}</span>
++          {isNew && <span className="fx-new-tag">NEW</span>}
+           <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+         </span>
+         <span className="upgrade-row-effect">{effectText}</span>
+@@ -181,6 +189,12 @@ function VendorUpgradeRow({
+         {buyLabel}
+       </button>
+       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
++      {unveiling && (
++        <span className="upgrade-unveil" aria-hidden="true">
++          <PadlockIcon />
++          <span className="upgrade-row-name muted">???</span>
++        </span>
++      )}
+       {showDetail && (
+         <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
+@@ -205,6 +219,35 @@ function VendorUpgradeRow({
+   );
+ }
+ 
++/** Small CSS-drawn padlock (patch 0420) -- on every locked upgrade row,
++ *  and the piece that rattles, pops open and flies off when a vendor
++ *  level-up teaches that upgrade. */
++function PadlockIcon() {
++  return (
++    <span className="fx-lock" aria-hidden="true">
++      <span className="fx-lock-shackle" />
++      <span className="fx-lock-body" />
++    </span>
++  );
++}
++
++/**
++ * Patch 0420 -- what each vendor says as they level up, indexed by the
++ * level just reached (1 = first upgrade taught). Shown in a speech bubble
++ * beside the sprite during the level-up beat. A level with no line here
++ * (a vendor later given more upgrades than lines) simply shows no bubble.
++ */
++const VENDOR_LEVEL_LINES: Record<VendorId, string[]> = {
++  blacksmith: ['', 'Fine. Mind the sparks.', "Now you're paying attention.", 'Steady hands. I can work with that.', "That's everything I know. Don't tell the others."],
++  alchemist: ['', "Don't drink anything on the left shelf.", 'A quick study. Rarer than mandrake.', "You've emptied my notes. Go on, then."],
++  enchanter: ['', 'Ooh, a patron. How theatrical.', 'Another favour owed. I do so love those.', 'Every trick I have, darling. Take a bow.'],
++};
++
++/** Vendor level-up timeline at 1x: the taught upgrade's padlock reveal
++ *  runs inside the long `levelup` phase (CSS delays in app.css), and on
++ *  the final level the MASTERED stamp lands on the card and stays. */
++const VENDOR_BEATS: BeatTiming = { press: 450, levelup: 1950, maxLevelup: 1500, stamp: 1000, file: 0 };
++
+ /** Row version of the old `lockedCard()` "???" placeholder -- no hooks
+  *  needed here, so this stays a plain component rather than needing
+  *  the same rules-of-hooks fix VendorUpgradeRow above needed. */
+@@ -213,6 +256,7 @@ function VendorLockedRow({ requiredLevel, vendorName }: { requiredLevel: number;
+     <div className="upgrade-row locked">
+       <span style={{ minWidth: 0 }}>
+         <span className="upgrade-row-head">
++          <PadlockIcon />
+           <span className="upgrade-row-name muted">???</span>
+         </span>
+         <span className="upgrade-row-effect">Level up {vendorName} to level {requiredLevel} to see this.</span>
+@@ -241,42 +285,67 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+   const scrapCost = GuildManager.nextVendorLevelScrapCost(state, vendorId) ?? 0;
+   const maxed = cost === null;
+ 
++  // Patch 0420 -- the vendor's own level gets a full purchase beat
++  // (coins + Scrap in, sprite hop, speech bubble, level roll, the newly
++  // taught upgrade unlocking, MASTERED stamp at the cap) instead of the
++  // MaxFlash star burst / level pulse it used to share with the upgrade
++  // rows below. Those rows keep their existing MaxFlash/pulse.
++  const vendorBeat = usePurchaseBeats(
++    [{ id: 'vendor', value: level, max: upgradeList.length }], VENDOR_BEATS,
++  ).vendor;
++  const shownVendorLevel = shownValue(vendorBeat, level);
++  // Upgrades taught while this page has been open -- NEW tag until the
++  // player leaves the page (view state only, never saved).
++  const [newlyTaught, setNewlyTaught] = useState<Set<string>>(() => new Set());
++  const taughtId = vendorBeat && vendorBeat.phase !== 'press' && level > vendorBeat.prev
++    ? upgradeList[level - 1]?.id : undefined;
++  useEffect(() => {
++    if (taughtId) setNewlyTaught((cur) => (cur.has(taughtId) ? cur : new Set(cur).add(taughtId)));
++  }, [taughtId]);
++  const bubbleLine = vendorBeat && (vendorBeat.phase === 'levelup' || vendorBeat.phase === 'stamp')
++    ? VENDOR_LEVEL_LINES[vendorId][level] : undefined;
++
+   const { flashes, dismiss } = useMaxFlash([
+-    { id: `vendor:${vendorId}`, name: `${vendorDef.name}, fully trained`, level, maxLevel: upgradeList.length },
+     ...upgradeList.map((def) => ({
+       id: def.id, name: def.name, level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
+     })),
+   ]);
+-  const vendorFlash = flashes[`vendor:${vendorId}`];
+   // Same combined vendor-level+upgrades list useMaxFlash above already
+   // builds, tracking every change for the "Level N/M" pulse -- see
+   // usePulsesOnChange's own doc comment (maxFlash.tsx) for why a plain
+   // key={level} remount trick isn't enough: it replays on every ordinary
+   // tab switch, not just an actual purchase.
+   const levelPulses = usePulsesOnChange([
+-    { id: `vendor:${vendorId}`, value: level },
+     ...upgradeList.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
+   ]);
+ 
+   return (
+     <>
+-      <div className="card vendor-card" style={{ marginBottom: 12 }}>
++      <div
++        className={`card vendor-card ${vendorBeat?.phase === 'levelup' ? 'fx-vendor-lit' : ''} ${vendorBeat?.phase === 'stamp' ? 'fx-stamped' : ''}`}
++        style={{ marginBottom: 12, position: 'relative' }}
++      >
+         <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+-          <VendorSprite vendor={vendorId} height={72} animate />
++          <span className={`vendor-sprite-wrap ${vendorBeat?.phase === 'levelup' ? 'fx-hop' : ''}`}>
++            <VendorSprite vendor={vendorId} height={72} animate />
++            {bubbleLine && <span className="vendor-bubble" role="status">{bubbleLine}</span>}
++          </span>
+           <div style={{ flex: 1 }}>
+             <div className="spread">
+               <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
+                 {vendorDef.name}
+                 <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
+               </span>
+-              <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
++              <span className="small muted">
++                <LevelRoll beat={vendorBeat} value={level} render={(v) => `Level ${v}/${upgradeList.length}`} />
++              </span>
+             </div>
+             <p className="card-flavour">{vendorDef.blurb}</p>
+             <div className="row" style={{ gap: 8 }}>
+               <button
+                 className="btn-yellow"
+                 disabled={maxed || cost === null || state.gold < cost || state.scrap < scrapCost}
+-                onClick={() => engine.levelUpVendor(vendorId)}
++                onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.levelUpVendor(vendorId))}
+               >
+                 {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`}
+               </button>
+@@ -344,13 +413,20 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+             </div>
+           </div>
+         </div>
+-        {vendorFlash && <MaxFlash key={vendorFlash.key} label={vendorFlash.name} onDone={() => dismiss(`vendor:${vendorId}`)} />}
++        {/* MASTERED stamp -- slams down on the final level-up, then stays
++            on the card as a quiet "fully taught" mark (no animation on a
++            plain revisit, since only the beat's stamp phase animates). */}
++        {vendorBeat?.phase === 'stamp'
++          ? <SealStamp label="MASTERED" className="vendor-card-stamp" />
++          : maxed && !vendorBeat && <SealStamp label="MASTERED" className="vendor-card-stamp fx-settled" />}
+       </div>
+ 
+       <div className="section-heading">Upgrades</div>
+       <div className="upgrade-row-list">
+         {upgradeList.map((def, index) => {
+-          if (level < index + 1) {
++          // shownVendorLevel, not level: while the coins are still in the
++          // air the about-to-be-taught upgrade stays locked, then reveals.
++          if (shownVendorLevel < index + 1) {
+             return <VendorLockedRow key={`locked-${index}`} requiredLevel={index + 1} vendorName={vendorDef.name} />;
+           }
+           const upLevel = GuildManager.upgradeLevel(state, def.id);
+@@ -371,6 +447,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+               pulsing={levelPulses[def.id]}
+               onDismissFlash={() => dismiss(def.id)}
+               onBuy={() => engine.buyUpgrade(def.id)}
++              unveiling={vendorBeat?.phase === 'levelup' && def.id === taughtId}
++              isNew={newlyTaught.has(def.id)}
+             />
+           );
+         })}
+diff --git a/src/ui/purchaseFx.tsx b/src/ui/purchaseFx.tsx
+new file mode 100644
+index 0000000..002023d
+--- /dev/null
++++ b/src/ui/purchaseFx.tsx
+@@ -0,0 +1,293 @@
++import { useEffect, useLayoutEffect, useRef, useState } from 'react';
++import type { ReactNode } from 'react';
++import type { GameEngine } from '../game/engine';
++import { formatGold } from '../game/util';
++import { getFlyTargetCenter } from './flyTarget';
++import waxSealComplete from '../assets/wax-seal-complete.png';
++
++/**
++ * Patch 0420 -- shared purchase feedback for the Guild Hall rows, the
++ * vendor level-up and recruiting (mocked up and signed off on the Design
++ * canvas first). Three pieces, all opt-in per call site:
++ *
++ *  1. `buyWithFx` -- wraps an engine purchase, diffs gold/scrap before and
++ *     after, and only if something was actually spent flies coins (and
++ *     silver Scrap shards) from the header's 'gold'/'scrap' fly targets
++ *     into the button that was clicked, with a red "-cost" drifting off
++ *     the counter. Imperative, on a body-level fixed layer, so it survives
++ *     the button unmounting (a modal closing on purchase) and never
++ *     touches React state.
++ *  2. `usePurchaseBeats` -- the per-row timeline. The engine applies a
++ *     purchase instantly; this holds the *displayed* value at the old
++ *     level for the coin flight (`press`), then plays the level-up
++ *     (`levelup`), and on a final level the wax-seal stamp (`stamp`) and
++ *     optionally the file-away (`file`). Same "not on mount, only on a
++ *     real change" rule usePulsesOnChange already follows, so a tab switch
++ *     never replays anything.
++ *  3. Small render helpers (`LevelRoll`, `SealStamp`) so each surface
++ *     shares the exact same markup the CSS (.fx-* in app.css) expects.
++ *
++ * Timing follows Settings > Animation speed through `fxMs`, the JS twin
++ * of the `--fx-t` CSS unit. With Reduce motion on (speed 0) nothing here
++ * runs at all: no particles, and beats are skipped, so rows simply show
++ * their new state exactly as they did before this patch.
++ */
++
++/** Current Settings > Animation speed (0 when Reduce motion is on), read
++ *  from the same --anim-speed custom property Settings.apply writes. */
++export function fxSpeed(): number {
++  if (typeof document === 'undefined') return 1;
++  const raw = getComputedStyle(document.documentElement).getPropertyValue('--anim-speed').trim();
++  const n = Number(raw);
++  return raw === '' || !Number.isFinite(n) ? 1 : n;
++}
++
++/** A 1x-speed duration scaled by the current animation speed; 0 when motion is off. */
++export function fxMs(ms: number): number {
++  const s = fxSpeed();
++  return s <= 0 ? 0 : ms / s;
++}
++
++let layer: HTMLDivElement | null = null;
++function fxLayer(): HTMLDivElement | null {
++  if (typeof document === 'undefined') return null;
++  if (!layer || !layer.isConnected) {
++    layer = document.createElement('div');
++    layer.className = 'fx-layer';
++    layer.setAttribute('aria-hidden', 'true');
++    document.body.appendChild(layer);
++  }
++  return layer;
++}
++
++function centerOf(el: Element): { x: number; y: number } {
++  const r = el.getBoundingClientRect();
++  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
++}
++
++/** Coins (or Scrap shards) arcing from a registered fly target into `toEl`. */
++function flyParticles(fromKey: string, toEl: Element, kind: 'coin' | 'shard', count: number, startDelay: number) {
++  const dur = fxMs(420);
++  const host = fxLayer();
++  const from = getFlyTargetCenter(fromKey);
++  if (!dur || !host || !from || typeof Element.prototype.animate !== 'function') return;
++  const to = centerOf(toEl);
++  for (let i = 0; i < count; i++) {
++    const p = document.createElement('span');
++    p.className = kind === 'coin' ? 'fx-coin' : 'fx-shard';
++    const sx = from.x + ((i % 3) - 1) * 7;
++    const sy = from.y + (i % 2 ? 4 : -3);
++    const dx = to.x + ((i % 3) - 1) * 7 - sx;
++    const dy = to.y + ((i * 7) % 5) - 2 - sy;
++    p.style.left = `${sx}px`;
++    p.style.top = `${sy}px`;
++    host.appendChild(p);
++    const lift = Math.min(60, 24 + Math.abs(dy) * 0.2);
++    const anim = p.animate([
++      { transform: 'translate(-50%, -50%) scale(0.3)', opacity: 0.2 },
++      { transform: `translate(calc(-50% + ${dx * 0.3}px), calc(-50% + ${dy * 0.2 - lift}px)) scale(1)`, opacity: 1, offset: 0.4 },
++      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.85)`, opacity: 1 },
++    ], { duration: dur, delay: startDelay + fxMs(i * 45), easing: 'cubic-bezier(.3,0,.7,1)', fill: 'backwards' });
++    anim.onfinish = () => p.remove();
++    anim.oncancel = () => p.remove();
++  }
++}
++
++/** A red "-amount" drifting down off a header counter. */
++function floatOff(fromKey: string, text: string) {
++  const dur = fxMs(900);
++  const host = fxLayer();
++  const from = getFlyTargetCenter(fromKey);
++  if (!dur || !host || !from || typeof Element.prototype.animate !== 'function') return;
++  const f = document.createElement('span');
++  f.className = 'fx-floater';
++  f.textContent = text;
++  f.style.left = `${from.x}px`;
++  f.style.top = `${from.y + 8}px`;
++  host.appendChild(f);
++  const anim = f.animate([
++    { transform: 'translate(-50%, -4px)', opacity: 0 },
++    { transform: 'translate(-50%, 0)', opacity: 1, offset: 0.15 },
++    { transform: 'translate(-50%, 16px)', opacity: 0 },
++  ], { duration: dur, easing: 'ease-out' });
++  anim.onfinish = () => f.remove();
++  anim.oncancel = () => f.remove();
++}
++
++/**
++ * Runs `action` (an engine purchase) and, only if it actually spent gold
++ * and/or scrap, plays the spend: coins/shards into `btn`, a floater off
++ * each header counter, and a squash on the button itself. A purchase the
++ * engine refused (not enough gold, already maxed) spends nothing, so
++ * nothing plays.
++ */
++export function buyWithFx(engine: GameEngine, btn: HTMLElement | null | undefined, action: () => void) {
++  const gold0 = engine.state.gold;
++  const scrap0 = engine.state.scrap;
++  action();
++  const goldSpent = gold0 - engine.state.gold;
++  const scrapSpent = scrap0 - engine.state.scrap;
++  if (!btn || (goldSpent <= 0 && scrapSpent <= 0) || fxSpeed() <= 0) return;
++  if (goldSpent > 0) {
++    flyParticles('gold', btn, 'coin', 6, 0);
++    floatOff('gold', `−${formatGold(goldSpent)}`);
++  }
++  if (scrapSpent > 0) {
++    flyParticles('scrap', btn, 'shard', 4, fxMs(90));
++    floatOff('scrap', `−${formatGold(scrapSpent)}`);
++  }
++  if (typeof btn.animate === 'function') {
++    btn.animate([
++      { transform: 'scale(1)' }, { transform: 'scale(0.88)', offset: 0.35 }, { transform: 'scale(1)' },
++    ], { duration: fxMs(260), easing: 'ease-out' });
++  }
++}
++
++/** Crest SVG shared by the recruit card's face-down back. */
++const CREST_SVG =
++  '<svg width="34" height="40" viewBox="0 0 44 50" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">'
++  + '<path d="M22 3l17 6v14c0 12-8 20-17 24C13 43 5 35 5 23V9z"/><path d="M14 16l16 16M30 16L14 32"/></svg>';
++
++/**
++ * A face-down guild card lifting off `from` (a rect captured before the
++ * source unmounted) and growing into `toEl`'s box. Resolves when it lands
++ * (immediately if motion is off or there's nothing to fly between).
++ */
++export function flyCard(from: DOMRect | null, toEl: HTMLElement | null): Promise<void> {
++  const dur = fxMs(560);
++  const host = fxLayer();
++  if (!dur || !host || !from || !toEl || typeof Element.prototype.animate !== 'function') return Promise.resolve();
++  const to = toEl.getBoundingClientRect();
++  const card = document.createElement('div');
++  card.className = 'fx-card-back';
++  card.innerHTML = CREST_SVG;
++  host.appendChild(card);
++  const startW = 64, startH = 86;
++  const sx = from.left + from.width / 2 - startW / 2;
++  const sy = from.top - startH / 2;
++  const anim = card.animate([
++    { left: `${sx}px`, top: `${sy}px`, width: `${startW}px`, height: `${startH}px`, transform: 'rotate(-6deg) scale(0.8)', opacity: 0.6 },
++    { left: `${(sx + to.left) / 2}px`, top: `${Math.min(sy, to.top) - 40}px`, width: `${(startW + to.width) / 2}px`, height: `${(startH + to.height) / 2}px`, transform: 'rotate(-2deg) scale(1)', opacity: 1, offset: 0.5 },
++    { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px`, transform: 'rotate(0) scale(1)', opacity: 1 },
++  ], { duration: dur, easing: 'cubic-bezier(.35,0,.25,1)', fill: 'forwards' });
++  return new Promise((resolve) => {
++    const done = () => { card.remove(); resolve(); };
++    anim.onfinish = done;
++    anim.oncancel = done;
++  });
++}
++
++export type BeatPhase = 'press' | 'levelup' | 'stamp' | 'file';
++export interface Beat { phase: BeatPhase; prev: number }
++
++/** Phase lengths at 1x speed, in ms. `file: 0` ends the beat after the
++ *  stamp instead of filing the row away (the vendor card stays put). */
++export interface BeatTiming { press: number; levelup: number; maxLevelup: number; stamp: number; file: number }
++export const ROW_BEATS: BeatTiming = { press: 450, levelup: 950, maxLevelup: 520, stamp: 1400, file: 580 };
++
++/**
++ * Per-id purchase timeline -- see this file's header. `max` is the cap a
++ * value can reach (Infinity for counters with no stamp, like the roster
++ * count). Only increases start a beat; a decrease (hard reset) just
++ * clears any beat in flight.
++ */
++export function usePurchaseBeats(
++  items: { id: string; value: number; max: number }[],
++  timing: BeatTiming = ROW_BEATS,
++): Record<string, Beat> {
++  const prevRef = useRef<Record<string, number> | null>(null);
++  const timersRef = useRef<Record<string, number[]>>({});
++  const [beats, setBeats] = useState<Record<string, Beat>>({});
++
++  const set = (id: string, beat: Beat | null) => setBeats((cur) => {
++    const next = { ...cur };
++    if (beat) next[id] = beat; else delete next[id];
++    return next;
++  });
++  const clearTimers = (id: string) => {
++    for (const t of timersRef.current[id] ?? []) window.clearTimeout(t);
++    timersRef.current[id] = [];
++  };
++
++  const signature = items.map((i) => `${i.id}:${i.value}`).join('|');
++  // Layout effect, not a plain effect: the engine has already applied the
++  // purchase by this render, so the old level has to be put back on screen
++  // before the browser paints, or the new number flashes for a frame.
++  useLayoutEffect(() => {
++    const prev = prevRef.current;
++    const next: Record<string, number> = {};
++    for (const item of items) {
++      next[item.id] = item.value;
++      const before = prev?.[item.id];
++      if (!prev || before === undefined || before === item.value) continue;
++      clearTimers(item.id);
++      if (item.value < before || fxSpeed() <= 0) { set(item.id, null); continue; }
++      const id = item.id;
++      const toMax = item.value >= item.max;
++      const at: number[] = [];
++      const later = (ms: number, fn: () => void) => at.push(window.setTimeout(fn, fxMs(ms)));
++      set(id, { phase: 'press', prev: before });
++      let t = timing.press;
++      later(t, () => set(id, { phase: 'levelup', prev: before }));
++      if (toMax) {
++        t += timing.maxLevelup;
++        later(t, () => set(id, { phase: 'stamp', prev: before }));
++        t += timing.stamp;
++        if (timing.file > 0) {
++          later(t, () => set(id, { phase: 'file', prev: before }));
++          t += timing.file;
++        }
++      } else {
++        t += timing.levelup;
++      }
++      later(t, () => set(id, null));
++      timersRef.current[id] = at;
++    }
++    prevRef.current = next;
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [signature]);
++
++  useEffect(() => () => {
++    for (const id of Object.keys(timersRef.current)) clearTimers(id);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
++  return beats;
++}
++
++/** The value a beat-aware display should show right now -- the old one
++ *  while the coins are still in the air. */
++export function shownValue(beat: Beat | undefined, value: number): number {
++  return beat?.phase === 'press' ? beat.prev : value;
++}
++
++/** Odometer roll from the old value to the new one, with a "+N" ember. */
++export function LevelRoll({ beat, value, render }: { beat?: Beat; value: number; render: (v: number) => ReactNode }) {
++  const rolling = beat?.phase === 'levelup';
++  const shown = shownValue(beat, value);
++  return (
++    <span className={`fx-roll-wrap ${rolling ? 'rolling' : ''}`}>
++      <span className="fx-roll">
++        <span className="fx-roll-old" aria-hidden="true">{render(beat?.prev ?? value)}</span>
++        <span className="fx-roll-new">{render(shown)}</span>
++      </span>
++      {rolling && beat && <span className="fx-ember" aria-hidden="true">+{value - beat.prev}</span>}
++    </span>
++  );
++}
++
++/** The wax seal slamming down, with its ring, wax specks and ink label.
++ *  Positioned by the caller through `className` (an anchor point; the
++ *  pieces are centred on it). */
++export function SealStamp({ label, className }: { label: string; className?: string }) {
++  return (
++    <span className={`fx-seal-anchor ${className ?? ''}`} aria-hidden="true">
++      <span className="fx-seal-ring" />
++      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
++        <span key={i} className="fx-speck" style={{ transform: `rotate(${-80 + i * 46}deg)` }}><i /></span>
++      ))}
++      <span className="fx-seal-ink">{label}</span>
++      <img className="fx-seal-img" src={waxSealComplete} alt="" />
++    </span>
++  );
++}

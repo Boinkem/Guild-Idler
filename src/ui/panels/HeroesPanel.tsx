@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
@@ -22,6 +22,8 @@ import { GearScoreBadge } from '../GearScoreBadge';
 import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
 import { useReviveFlash, ReviveFlash } from '../reviveFlash';
 import { HeroBlock } from '../HeroBlock';
+import { usePulsesOnChange } from '../maxFlash';
+import { buyWithFx, flyCard, fxMs, fxSpeed, LevelRoll, usePurchaseBeats } from '../purchaseFx';
 
 /**
  * Patch 0296. Recruit-card portrait for a hero class -- mirrors
@@ -289,6 +291,49 @@ function HeroesRosterView() {
   // everything the old inline card used to show up front.
   const [selectedRecruitId, setSelectedRecruitId] = useState<HeroClass | null>(null);
 
+  // Patch 0420 -- recruit arrival. The engine adds the hero instantly; the
+  // new HeroBlock starts hidden ('incoming') while a face-down guild card
+  // flies to it from the class's chip, then flips face-up ('reveal') with
+  // a light spill and a SIGNED ON stamp. Only a hero recruited from this
+  // view animates (recruitOriginRef is set by the Recruit button and
+  // consumed once), so a hard reset's fresh roster never plays it.
+  const chipRefs = useRef<Partial<Record<HeroClass, HTMLButtonElement | null>>>({});
+  const heroWrapRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const recruitOriginRef = useRef<DOMRect | null>(null);
+  const knownHeroIdsRef = useRef<Set<string> | null>(null);
+  const [arrivals, setArrivals] = useState<Record<string, 'incoming' | 'reveal'>>({});
+  const heroIdSignature = state.heroes.map((h) => h.id).join('|');
+  useLayoutEffect(() => {
+    const ids = state.heroes.map((h) => h.id);
+    const known = knownHeroIdsRef.current;
+    knownHeroIdsRef.current = new Set(ids);
+    const origin = recruitOriginRef.current;
+    if (!known || !origin || fxSpeed() <= 0) return;
+    const fresh = ids.filter((id) => !known.has(id));
+    if (fresh.length === 0) return;
+    recruitOriginRef.current = null;
+    const id = fresh[fresh.length - 1];
+    setArrivals((cur) => ({ ...cur, [id]: 'incoming' }));
+    // Measure the hidden card's real box after it has laid out, then fly.
+    window.requestAnimationFrame(() => {
+      flyCard(origin, heroWrapRefs.current[id] ?? null).then(() => {
+        setArrivals((cur) => ({ ...cur, [id]: 'reveal' }));
+        window.setTimeout(() => setArrivals((cur) => {
+          const next = { ...cur };
+          delete next[id];
+          return next;
+        }), fxMs(2600));
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heroIdSignature]);
+  // "N of M slots filled" rolls up with the recruit, and the class chip's
+  // badge flips over to "Recruited".
+  const rosterBeat = usePurchaseBeats([{ id: 'roster', value: state.heroes.length, max: Infinity }]).roster;
+  const recruitedFlips = usePulsesOnChange((Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => ({
+    id, value: recruitStatusFor(engine, id, recruitable, slots).alreadyRecruited ? 1 : 0,
+  })));
+
   const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
     state.heroes.map((h) => ({ id: h.id, level: h.level })),
   );
@@ -311,7 +356,7 @@ function HeroesRosterView() {
       <h2>Heroes</h2>
       <div className="card">
         <p className="small muted" style={{ margin: 0 }}>
-          {state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.
+          <LevelRoll beat={rosterBeat} value={state.heroes.length} render={(v) => v} /> of {slots} slots filled. Every hero shares the guild's gold and bonuses.
         </p>
       </div>
 
@@ -347,9 +392,20 @@ function HeroesRosterView() {
         // body itself swaps.
         <HeroStatusList engine={engine} now={now} />
       ) : (
-      state.heroes.map((hero) => (
-        <HeroBlock
+      <>
+      {state.heroes.map((hero) => (
+        <div
           key={hero.id}
+          ref={(el) => { heroWrapRefs.current[hero.id] = el; }}
+          className={`hero-recruit-wrap ${arrivals[hero.id] ? `fx-${arrivals[hero.id]}` : ''}`}
+        >
+        {arrivals[hero.id] === 'reveal' && (
+          <span className="fx-recruit-glow" aria-hidden="true">
+            <span className="fx-rays" />
+            {[0, 1, 2, 3, 4].map((i) => <span key={i} className={`fx-mote fx-mote-${i}`} />)}
+          </span>
+        )}
+        <HeroBlock
           hero={hero}
           engine={engine}
           now={now}
@@ -372,7 +428,16 @@ function HeroesRosterView() {
             />
           )}
         </HeroBlock>
-      ))
+        {arrivals[hero.id] === 'reveal' && <span className="fx-signed-on" aria-hidden="true">SIGNED ON</span>}
+        </div>
+      ))}
+      {/* Patch 0420 -- empty slots shown as dashed placeholders, so a
+          recruit visibly lands somewhere and the roster's spare capacity
+          reads at a glance. */}
+      {Array.from({ length: Math.max(0, slots - state.heroes.length) }, (_, i) => (
+        <div key={`open-${i}`} className="hero-open-slot">Open slot</div>
+      ))}
+      </>
       )}
 
       <div className="section-heading">Recruit</div>
@@ -434,7 +499,8 @@ function HeroesRosterView() {
                   <button
                     key={id}
                     type="button"
-                    className={`recruit-chip ${alreadyRecruited ? 'recruited' : ''}`}
+                    ref={(el) => { chipRefs.current[id] = el; }}
+                    className={`recruit-chip ${alreadyRecruited ? 'recruited' : ''} ${recruitedFlips[id] ? 'fx-just' : ''}`}
                     onClick={() => setSelectedRecruitId(id)}
                   >
                     <span
@@ -496,7 +562,15 @@ function HeroesRosterView() {
                 <button
                   className="btn-primary"
                   disabled={!unlocked || state.gold < cost || slotsFull || alreadyRecruited}
-                  onClick={() => { engine.recruit(id); setSelectedRecruitId(null); }}
+                  onClick={(e) => {
+                    const before = engine.state.heroes.length;
+                    recruitOriginRef.current = chipRefs.current[id]?.getBoundingClientRect() ?? null;
+                    buyWithFx(engine, e.currentTarget, () => engine.recruit(id));
+                    // Refused recruit: drop the origin so a later, unrelated
+                    // roster change can't pick it up and animate.
+                    if (engine.state.heroes.length === before) recruitOriginRef.current = null;
+                    setSelectedRecruitId(null);
+                  }}
                 >
                   {alreadyRecruited
                     ? 'Already Recruited'

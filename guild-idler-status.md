@@ -34043,3 +34043,107 @@ matching markup over `auction-house.jpg` in headless Chromium -- card
 buttons now solid brass and inset, ghost buttons solid dark. Not checked
 in the live Electron app. Client-side change, so it needs a new Steam
 build to reach the Steam version.
+
+### Purchase animations: Guild Hall, vendor level-up, recruiting (patch 0420)
+```discord-update
+Dev Update | Purchase Animations
+
+- Added coins that fly from your gold (and Scrap) into whatever you just bought
+- Added a level roll-up, light sweep and "+1" to every Guild Hall upgrade you buy
+- Added a wax-seal stamp when a Guild Hall upgrade hits its last level, before it files away into Fully built
+- Added a vendor level-up moment: the vendor hops, says a line, and the upgrade they just taught unlocks its padlock in front of you
+- Added a MASTERED stamp to a fully levelled vendor
+- Added a recruit moment: a guild card flies to an open roster slot and flips over to reveal your new hero
+- Added "Open slot" placeholders to the Heroes roster so you can see your spare room
+```
+
+Direct request: the Guild Hall's purchase feedback was a small level
+pulse plus (at max) a star burst, which read as static. Mocked up first
+on a Claude Design canvas (Guild Hall row, vendor level-up, recruiting),
+signed off, then built as one shared system.
+
+**`src/ui/purchaseFx.tsx` (new).** Three opt-in pieces every surface
+shares:
+- `buyWithFx(engine, btn, action)` -- runs the engine purchase, diffs
+  `state.gold`/`state.scrap` before and after, and *only if something was
+  actually spent* flies 6 coins from the header's existing `'gold'` fly
+  target (4 silver Scrap shards from `'scrap'`) into the clicked button,
+  floats a red "-cost" off each counter, and squashes the button. A
+  refused purchase spends nothing, so nothing plays. Imperative WAAPI on
+  a body-level `.fx-layer`, so it survives the button unmounting (the
+  recruit modal closes on purchase) and never touches React state.
+- `usePurchaseBeats(items, timing)` -- per-id timeline. The engine still
+  applies the purchase instantly; the hook holds the *displayed* value at
+  the old level for the coin flight (`press`, 450ms), then `levelup`,
+  then on a final level `stamp` and optionally `file`. Same "only on a
+  real change, never on mount" rule `usePulsesOnChange` follows, so tab
+  switches never replay anything. `useLayoutEffect`, so the new level
+  can't flash for a frame before the old one is put back.
+- `LevelRoll` (odometer roll + "+N" ember) and `SealStamp` (wax seal,
+  ring, wax specks, ink label) render helpers.
+
+Timing follows Settings > Animation speed through `fxMs` in JS and a new
+`--fx-t` unit in CSS (1ms at 1x, same convention as the level-up card's
+`--lu-t`). With Reduce motion on, beats and particles are skipped
+entirely -- rows behave exactly as before this patch -- and a
+`data-motion='off'` block zeroes `.fx-*` animation delays for anything
+still mounted (same reasoning as the level-up card's own block).
+
+**Guild Hall (`GuildPanel.tsx`).** Every row (facilities, general
+upgrades, raid and quest-fast upgrades, Replay Memories' master tier)
+now buys through `buyWithFx`, including the detail modal's Buy. One
+`usePurchaseBeats` replaces the separate `useMaxFlash` star burst and
+`usePulsesOnChange` level pulse this list ran side by side. Normal buy:
+coins in, light sweep, level roll, effect line flash, spark riding the
+rule. Final level: the rule turns green, the wax seal slams down with
+the row's own maxed label ("Fully built" / "Fully upgraded" /
+"Unlocked") as its ink, the row shakes on impact, then files away; the
+Fully built strip's count pops and its seal bobs. A maxed row stays in
+the active list for exactly as long as its beat runs (was: as long as
+its MaxFlash ran).
+
+**Vendor level-up (`VendorsPanel.tsx`).** The vendor's own level gets a
+full beat (`VENDOR_BEATS`): gold + Scrap fly in, the sprite does a
+squash-and-hop with a halo, a speech bubble pops up with a line per
+vendor per level (`VENDOR_LEVEL_LINES` -- placeholder copy, worth a pass
+in your own voice), the level rolls, and the upgrade just taught plays a
+padlock reveal over itself: the "???" face's padlock rattles, pops open
+and flies off, the dashed veil dissolves, and the row picks up a light
+sweep and a NEW tag (view state only, cleared on leaving the page). At
+the cap a MASTERED seal stamps onto the card and then stays there as a
+settled mark on later visits. Locked rows now carry a small padlock
+icon. The vendor upgrade rows themselves keep their existing MaxFlash /
+pulse -- not part of this pass. `.vendor-card` no longer clips its
+children (nothing relied on it) so the bubble and the seal's drop can
+reach past the card edge.
+
+**Recruiting (`HeroesPanel.tsx`).** Recruit buys through `buyWithFx`;
+the chip's rect is captured as the flight origin before the modal
+closes. When the new hero appears, its `HeroBlock` (now wrapped in
+`.hero-recruit-wrap`) starts hidden while a face-down guild-crest card
+flies from the chip and grows into the card's box (`flyCard`), then
+flips face-up with a light spill, drifting embers and a SIGNED ON stamp
+that fades after ~2s. The class chip's badge flips over to "Recruited"
+and "N of M slots filled" rolls up. Only a recruit made from this view
+animates (the origin is consumed once, and dropped if the engine refused
+the recruit), so a hard reset's fresh roster never plays it. New
+dashed "Open slot" placeholders fill the roster up to the hero-slot cap
+(card view only, not the status-bar view).
+
+Verified: `npm run build` (tsc + vite + electron) clean. Drove the real
+web build in headless Chromium with a seeded save and checked frames of
+all three: the level is held during the coin flight then rolls, a final
+Guild Hall level stamps and files into the strip, a vendor's taught
+upgrade unlocks with its NEW tag, the Blacksmith's MASTERED stamp clears
+the buttons, and a recruit's card lands on its slot and flips. Two
+placement fixes came out of that pass: the MASTERED ink now sits right
+of the seal (left of it covered the buttons), and the recruit wrapper
+caps at the card's 720px so the stamp sits on the card. Not checked in
+the Electron app itself, and the vendor sprites aren't in the repo, so
+the hop was seen on the empty sprite box rather than the real art.
+
+**Follow-ups (same system, not done here):** vendor upgrade rows, Harvest
+tools/Warehouse/Overseer, Renown perks and the Training tab can reuse
+`buyWithFx` + `usePurchaseBeats` directly; skins/tombstones, revive,
+crafting, pet feeding, one-time unlocks (a shared padlock-open) and the
+quest board reroll still need their own moments.

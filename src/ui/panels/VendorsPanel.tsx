@@ -21,6 +21,8 @@ import { isTabUnread } from '../../game/attention';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+import { buyWithFx, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
+import type { BeatTiming } from '../purchaseFx';
 import { CraftingStation } from '../CraftingStation';
 import { EnhanceStation } from '../EnhanceStation';
 import { WeaponEnchantStation } from '../WeaponEnchantStation';
@@ -141,10 +143,15 @@ export function VendorsPanel() {
  * that entirely, each instance owning its own hook call.
  */
 function VendorUpgradeRow({
-  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy,
+  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy, unveiling, isNew,
 }: {
   def: UpgradeDef; level: number; cost: number | null; scrapCost: number; maxed: boolean; affordable: boolean;
   flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void; onBuy: () => void;
+  /** Patch 0420 -- this row was just taught by a vendor level-up: the
+   *  locked "???" face plays its padlock-opening reveal over it. */
+  unveiling?: boolean;
+  /** Patch 0420 -- learned this visit; shows a NEW tag until the page is left. */
+  isNew?: boolean;
 }) {
   const [showDetail, setShowDetail] = useState(false);
   const entries = [
@@ -157,7 +164,7 @@ function VendorUpgradeRow({
   const buyLabel = maxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
   return (
     <div
-      className="upgrade-row"
+      className={`upgrade-row ${unveiling ? 'fx-unveiling' : ''}`}
       onClick={() => setShowDetail(true)}
       role="button"
       tabIndex={0}
@@ -166,6 +173,7 @@ function VendorUpgradeRow({
       <span style={{ minWidth: 0 }}>
         <span className="upgrade-row-head">
           <span className="upgrade-row-name">{def.name}</span>
+          {isNew && <span className="fx-new-tag">NEW</span>}
           <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
         </span>
         <span className="upgrade-row-effect">{effectText}</span>
@@ -181,6 +189,12 @@ function VendorUpgradeRow({
         {buyLabel}
       </button>
       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
+      {unveiling && (
+        <span className="upgrade-unveil" aria-hidden="true">
+          <PadlockIcon />
+          <span className="upgrade-row-name muted">???</span>
+        </span>
+      )}
       {showDetail && (
         <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -205,6 +219,35 @@ function VendorUpgradeRow({
   );
 }
 
+/** Small CSS-drawn padlock (patch 0420) -- on every locked upgrade row,
+ *  and the piece that rattles, pops open and flies off when a vendor
+ *  level-up teaches that upgrade. */
+function PadlockIcon() {
+  return (
+    <span className="fx-lock" aria-hidden="true">
+      <span className="fx-lock-shackle" />
+      <span className="fx-lock-body" />
+    </span>
+  );
+}
+
+/**
+ * Patch 0420 -- what each vendor says as they level up, indexed by the
+ * level just reached (1 = first upgrade taught). Shown in a speech bubble
+ * beside the sprite during the level-up beat. A level with no line here
+ * (a vendor later given more upgrades than lines) simply shows no bubble.
+ */
+const VENDOR_LEVEL_LINES: Record<VendorId, string[]> = {
+  blacksmith: ['', 'Fine. Mind the sparks.', "Now you're paying attention.", 'Steady hands. I can work with that.', "That's everything I know. Don't tell the others."],
+  alchemist: ['', "Don't drink anything on the left shelf.", 'A quick study. Rarer than mandrake.', "You've emptied my notes. Go on, then."],
+  enchanter: ['', 'Ooh, a patron. How theatrical.', 'Another favour owed. I do so love those.', 'Every trick I have, darling. Take a bow.'],
+};
+
+/** Vendor level-up timeline at 1x: the taught upgrade's padlock reveal
+ *  runs inside the long `levelup` phase (CSS delays in app.css), and on
+ *  the final level the MASTERED stamp lands on the card and stays. */
+const VENDOR_BEATS: BeatTiming = { press: 450, levelup: 1950, maxLevelup: 1500, stamp: 1000, file: 0 };
+
 /** Row version of the old `lockedCard()` "???" placeholder -- no hooks
  *  needed here, so this stays a plain component rather than needing
  *  the same rules-of-hooks fix VendorUpgradeRow above needed. */
@@ -213,6 +256,7 @@ function VendorLockedRow({ requiredLevel, vendorName }: { requiredLevel: number;
     <div className="upgrade-row locked">
       <span style={{ minWidth: 0 }}>
         <span className="upgrade-row-head">
+          <PadlockIcon />
           <span className="upgrade-row-name muted">???</span>
         </span>
         <span className="upgrade-row-effect">Level up {vendorName} to level {requiredLevel} to see this.</span>
@@ -241,42 +285,67 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const scrapCost = GuildManager.nextVendorLevelScrapCost(state, vendorId) ?? 0;
   const maxed = cost === null;
 
+  // Patch 0420 -- the vendor's own level gets a full purchase beat
+  // (coins + Scrap in, sprite hop, speech bubble, level roll, the newly
+  // taught upgrade unlocking, MASTERED stamp at the cap) instead of the
+  // MaxFlash star burst / level pulse it used to share with the upgrade
+  // rows below. Those rows keep their existing MaxFlash/pulse.
+  const vendorBeat = usePurchaseBeats(
+    [{ id: 'vendor', value: level, max: upgradeList.length }], VENDOR_BEATS,
+  ).vendor;
+  const shownVendorLevel = shownValue(vendorBeat, level);
+  // Upgrades taught while this page has been open -- NEW tag until the
+  // player leaves the page (view state only, never saved).
+  const [newlyTaught, setNewlyTaught] = useState<Set<string>>(() => new Set());
+  const taughtId = vendorBeat && vendorBeat.phase !== 'press' && level > vendorBeat.prev
+    ? upgradeList[level - 1]?.id : undefined;
+  useEffect(() => {
+    if (taughtId) setNewlyTaught((cur) => (cur.has(taughtId) ? cur : new Set(cur).add(taughtId)));
+  }, [taughtId]);
+  const bubbleLine = vendorBeat && (vendorBeat.phase === 'levelup' || vendorBeat.phase === 'stamp')
+    ? VENDOR_LEVEL_LINES[vendorId][level] : undefined;
+
   const { flashes, dismiss } = useMaxFlash([
-    { id: `vendor:${vendorId}`, name: `${vendorDef.name}, fully trained`, level, maxLevel: upgradeList.length },
     ...upgradeList.map((def) => ({
       id: def.id, name: def.name, level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
     })),
   ]);
-  const vendorFlash = flashes[`vendor:${vendorId}`];
   // Same combined vendor-level+upgrades list useMaxFlash above already
   // builds, tracking every change for the "Level N/M" pulse -- see
   // usePulsesOnChange's own doc comment (maxFlash.tsx) for why a plain
   // key={level} remount trick isn't enough: it replays on every ordinary
   // tab switch, not just an actual purchase.
   const levelPulses = usePulsesOnChange([
-    { id: `vendor:${vendorId}`, value: level },
     ...upgradeList.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
   ]);
 
   return (
     <>
-      <div className="card vendor-card" style={{ marginBottom: 12 }}>
+      <div
+        className={`card vendor-card ${vendorBeat?.phase === 'levelup' ? 'fx-vendor-lit' : ''} ${vendorBeat?.phase === 'stamp' ? 'fx-stamped' : ''}`}
+        style={{ marginBottom: 12, position: 'relative' }}
+      >
         <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
-          <VendorSprite vendor={vendorId} height={72} animate />
+          <span className={`vendor-sprite-wrap ${vendorBeat?.phase === 'levelup' ? 'fx-hop' : ''}`}>
+            <VendorSprite vendor={vendorId} height={72} animate />
+            {bubbleLine && <span className="vendor-bubble" role="status">{bubbleLine}</span>}
+          </span>
           <div style={{ flex: 1 }}>
             <div className="spread">
               <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
                 {vendorDef.name}
                 <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
               </span>
-              <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
+              <span className="small muted">
+                <LevelRoll beat={vendorBeat} value={level} render={(v) => `Level ${v}/${upgradeList.length}`} />
+              </span>
             </div>
             <p className="card-flavour">{vendorDef.blurb}</p>
             <div className="row" style={{ gap: 8 }}>
               <button
                 className="btn-yellow"
                 disabled={maxed || cost === null || state.gold < cost || state.scrap < scrapCost}
-                onClick={() => engine.levelUpVendor(vendorId)}
+                onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.levelUpVendor(vendorId))}
               >
                 {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`}
               </button>
@@ -344,13 +413,20 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
             </div>
           </div>
         </div>
-        {vendorFlash && <MaxFlash key={vendorFlash.key} label={vendorFlash.name} onDone={() => dismiss(`vendor:${vendorId}`)} />}
+        {/* MASTERED stamp -- slams down on the final level-up, then stays
+            on the card as a quiet "fully taught" mark (no animation on a
+            plain revisit, since only the beat's stamp phase animates). */}
+        {vendorBeat?.phase === 'stamp'
+          ? <SealStamp label="MASTERED" className="vendor-card-stamp" />
+          : maxed && !vendorBeat && <SealStamp label="MASTERED" className="vendor-card-stamp fx-settled" />}
       </div>
 
       <div className="section-heading">Upgrades</div>
       <div className="upgrade-row-list">
         {upgradeList.map((def, index) => {
-          if (level < index + 1) {
+          // shownVendorLevel, not level: while the coins are still in the
+          // air the about-to-be-taught upgrade stays locked, then reveals.
+          if (shownVendorLevel < index + 1) {
             return <VendorLockedRow key={`locked-${index}`} requiredLevel={index + 1} vendorName={vendorDef.name} />;
           }
           const upLevel = GuildManager.upgradeLevel(state, def.id);
@@ -371,6 +447,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               pulsing={levelPulses[def.id]}
               onDismissFlash={() => dismiss(def.id)}
               onBuy={() => engine.buyUpgrade(def.id)}
+              unveiling={vendorBeat?.phase === 'levelup' && def.id === taughtId}
+              isNew={newlyTaught.has(def.id)}
             />
           );
         })}

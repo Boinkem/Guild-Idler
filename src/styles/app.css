@@ -58,6 +58,9 @@
   --card-pad: 10px 12px;
   --density-scale: 1;
   --anim-speed: 1;
+  /* Patch 0420 -- one timing unit for the purchase fx (see purchaseFx.tsx):
+     1ms at normal speed, stretched/shrunk by Settings > Animation speed. */
+  --fx-t: calc(1ms / max(var(--anim-speed, 1), 0.001));
 
   /* Purely additive helpers for the refresh -- no prior rule reads these,
      so nothing that already depended on the tokens above changes shape. */
@@ -3905,6 +3908,391 @@ input[type='range'] {
   0% { transform: scale(0.4); opacity: 0; }
   60% { transform: scale(1.15); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+/* ---------------------------- purchase fx (0420) ---------------------------- */
+/*
+ * Patch 0420 -- see purchaseFx.tsx. Shared by the Guild Hall rows, the
+ * vendor level-up and recruiting. Every duration and delay is a multiple
+ * of --fx-t (1ms at 1x, stretched by Settings > Animation speed), the
+ * same convention the hero level-up card's --lu-t uses. Reduce motion
+ * never reaches most of this (the beats are skipped in JS), and the
+ * data-motion='off' block at the end snaps anything that does.
+ */
+.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9000; overflow: hidden; }
+.fx-coin, .fx-shard { position: fixed; pointer-events: none; }
+.fx-coin {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--brass);
+  border: 1px solid var(--brass-dim);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--brass) 70%, transparent),
+    inset -2px -2px 0 color-mix(in srgb, var(--brass-dim) 70%, var(--brass)),
+    inset 2px 2px 0 color-mix(in srgb, var(--brass) 55%, white);
+}
+.fx-shard {
+  width: 7px; height: 7px;
+  background: var(--silver);
+  border: 1px solid color-mix(in srgb, var(--silver) 55%, black);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--silver) 60%, transparent);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.fx-floater {
+  position: fixed;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--blood);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+.fx-card-back {
+  position: fixed;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  border: 2px solid var(--brass-dim);
+  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--panel-3) 80%, var(--brass-dim)), var(--panel));
+  color: var(--brass);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+}
+
+/* Odometer level roll + "+1" ember (LevelRoll). */
+.fx-roll-wrap { position: relative; display: inline-block; }
+.fx-roll { display: inline-grid; overflow: hidden; line-height: 1.3; vertical-align: bottom; }
+.fx-roll > span { grid-area: 1 / 1; }
+.fx-roll-old { visibility: hidden; }
+.fx-roll-wrap.rolling .fx-roll-old {
+  visibility: visible;
+  animation: fx-roll-out calc(var(--fx-t) * 320) cubic-bezier(.5, 0, .8, .4) forwards;
+}
+.fx-roll-wrap.rolling .fx-roll-new {
+  animation: fx-roll-in calc(var(--fx-t) * 420) cubic-bezier(.2, 1.5, .4, 1), fx-roll-glow calc(var(--fx-t) * 900) ease-out;
+}
+@keyframes fx-roll-out { to { transform: translateY(-110%); opacity: 0; } }
+@keyframes fx-roll-in { from { transform: translateY(110%); } to { transform: none; } }
+@keyframes fx-roll-glow {
+  0%, 30% { color: color-mix(in srgb, var(--brass) 70%, white); text-shadow: 0 0 8px color-mix(in srgb, var(--brass) 80%, transparent); }
+  100% { text-shadow: none; }
+}
+.fx-ember {
+  position: absolute; right: 0; top: -4px;
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--brass) 70%, white);
+  text-shadow: 0 0 6px var(--brass);
+  pointer-events: none;
+  animation: fx-ember calc(var(--fx-t) * 900) ease-out forwards;
+}
+@keyframes fx-ember {
+  0% { opacity: 0; transform: translateY(4px) scale(.6); }
+  20% { opacity: 1; transform: translateY(-6px) scale(1.15); }
+  100% { opacity: 0; transform: translateY(-22px); }
+}
+
+/* Guild Hall row: candle-light sweep, effect flash and a spark riding the rule. */
+.guild-upgrade-row.fx-levelup { animation: fx-row-glow calc(var(--fx-t) * 800) ease-out; }
+.guild-upgrade-row.fx-levelup::after,
+.upgrade-row.fx-unveiling::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--brass) 28%, transparent) 50%, transparent 65%);
+  background-size: 260% 100%;
+  background-position: 110% 0;
+  animation: fx-sweep calc(var(--fx-t) * 700) ease-out forwards;
+}
+@keyframes fx-sweep { to { background-position: -10% 0; } }
+@keyframes fx-row-glow {
+  0% { box-shadow: inset 0 0 0 1px var(--brass); }
+  100% { box-shadow: inset 0 0 0 1px transparent; }
+}
+.guild-upgrade-row.fx-levelup .guild-row-effect { animation: fx-text-flash calc(var(--fx-t) * 900) ease-out; }
+@keyframes fx-text-flash { 0%, 35% { color: color-mix(in srgb, var(--brass) 75%, white); } }
+.guild-row-rule > span { position: relative; }
+.guild-upgrade-row.fx-levelup .guild-row-rule > span::after {
+  content: '';
+  position: absolute; right: -3px; top: -3px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: color-mix(in srgb, var(--brass) 60%, white);
+  box-shadow: 0 0 8px 2px color-mix(in srgb, var(--brass) 80%, transparent);
+  animation: fx-spark calc(var(--fx-t) * 700) ease-out forwards;
+}
+@keyframes fx-spark { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; transform: scale(.4); } }
+
+/* Wax-seal stamp (SealStamp). The anchor is a zero-size point the caller
+   positions; the seal, ring and specks centre on it and the ink label
+   sits to its left. */
+.fx-seal-anchor { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 4; }
+.fx-seal-img {
+  position: absolute; left: -27px; top: -27px;
+  width: 54px; height: 54px;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
+  animation: fx-seal-drop calc(var(--fx-t) * 520) cubic-bezier(.45, 0, .75, .4) forwards;
+}
+@keyframes fx-seal-drop {
+  0% { opacity: 0; transform: translateY(-70px) scale(2.6) rotate(-30deg); }
+  30% { opacity: 1; }
+  60% { transform: translateY(0) scale(.9) rotate(-9deg); }
+  78% { transform: scale(1.07) rotate(-9deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-9deg); }
+}
+.fx-seal-ring {
+  position: absolute; left: -26px; top: -26px;
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--moss) 70%, white);
+  opacity: 0;
+  animation: fx-seal-ring calc(var(--fx-t) * 600) ease-out calc(var(--fx-t) * 310) forwards;
+}
+@keyframes fx-seal-ring { 0% { opacity: .9; transform: scale(.7); } 100% { opacity: 0; transform: scale(2.3); } }
+.fx-speck { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.fx-speck > i {
+  position: absolute; left: -2px; top: -2px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: color-mix(in srgb, var(--blood) 75%, black);
+  opacity: 0;
+  animation: fx-speck calc(var(--fx-t) * 480) cubic-bezier(.1, .7, .3, 1) calc(var(--fx-t) * 310) forwards;
+}
+.fx-speck:nth-child(odd) > i { width: 3px; height: 3px; left: -1px; top: -1px; }
+@keyframes fx-speck { 0% { opacity: 1; transform: translateX(20px); } 100% { opacity: 0; transform: translateX(42px); } }
+.fx-seal-ink {
+  position: absolute; right: 36px; top: -11px;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--moss) 70%, white);
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 7px;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  opacity: 0;
+  animation: fx-ink calc(var(--fx-t) * 360) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 340) forwards;
+}
+@keyframes fx-ink {
+  0% { opacity: 0; transform: rotate(-6deg) scale(1.5); }
+  100% { opacity: .95; transform: rotate(-6deg) scale(1); }
+}
+/* Already-stamped and simply revisited: the end frame, no motion. */
+.fx-seal-anchor.fx-settled .fx-seal-ring,
+.fx-seal-anchor.fx-settled .fx-speck { display: none; }
+.fx-seal-anchor.fx-settled .fx-seal-img { animation: none; transform: rotate(-9deg); }
+.fx-seal-anchor.fx-settled .fx-seal-ink { animation: none; opacity: .9; transform: rotate(-6deg); }
+.fx-stamped { animation: fx-stamp-shake calc(var(--fx-t) * 260) linear calc(var(--fx-t) * 310); }
+@keyframes fx-stamp-shake {
+  20% { transform: translate(-2px, 1px); } 40% { transform: translate(2px, -1px); }
+  60% { transform: translate(-1px, 1px); } 80% { transform: translate(1px, 0); }
+}
+.guild-row-stamp { right: 128px; top: 50%; }
+.guild-upgrade-row.fx-stamped .guild-row-name,
+.guild-upgrade-row.fx-stamped .guild-row-effect { opacity: .72; transition: opacity calc(var(--fx-t) * 400) calc(var(--fx-t) * 320); }
+/* File-away into the Fully built strip. */
+.guild-upgrade-row.fx-filing {
+  overflow: hidden;
+  animation: fx-file-away calc(var(--fx-t) * 560) cubic-bezier(.5, 0, .9, .5) forwards;
+}
+@keyframes fx-file-away {
+  0% { opacity: 1; transform: none; }
+  25% { transform: translateY(-3px); }
+  100% { opacity: 0; transform: translateY(30px) scale(.96); }
+}
+.guild-built-strip.fx-built-pulse { animation: fx-strip-glow calc(var(--fx-t) * 500) ease-out; }
+.guild-built-strip.fx-built-pulse .guild-built-count { display: inline-block; animation: fx-count-pop calc(var(--fx-t) * 450) cubic-bezier(.3, 1.6, .5, 1); }
+.guild-built-strip.fx-built-pulse .guild-built-seal { animation: fx-seal-bob calc(var(--fx-t) * 500) cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes fx-strip-glow {
+  0% { box-shadow: 0 0 0 1px var(--moss), 0 0 18px color-mix(in srgb, var(--moss) 50%, transparent); }
+  100% { box-shadow: none; }
+}
+@keyframes fx-count-pop { 0% { transform: scale(1.6); } 100% { transform: scale(1); } }
+@keyframes fx-seal-bob {
+  0% { transform: translateY(-50%) rotate(-9deg); }
+  40% { transform: translateY(-58%) rotate(-2deg) scale(1.18); }
+  100% { transform: translateY(-50%) rotate(-9deg); }
+}
+
+/* Vendor level-up: sprite hop + halo, speech bubble, card glow, stamp. */
+.vendor-sprite-wrap { position: relative; display: inline-block; flex: none; }
+.vendor-sprite-wrap.fx-hop > :not(.vendor-bubble) { animation: fx-hop calc(var(--fx-t) * 560) cubic-bezier(.3, 1.4, .5, 1); transform-origin: 50% 100%; }
+.vendor-sprite-wrap.fx-hop::before {
+  content: '';
+  position: absolute; inset: -6px;
+  border-radius: 12px;
+  border: 2px solid color-mix(in srgb, var(--brass) 70%, white);
+  opacity: 0;
+  pointer-events: none;
+  animation: fx-halo calc(var(--fx-t) * 700) ease-out;
+}
+@keyframes fx-hop {
+  0% { transform: none; } 25% { transform: translateY(3px) scale(1.08, .9); }
+  55% { transform: translateY(-9px) scale(.95, 1.06); } 100% { transform: none; }
+}
+@keyframes fx-halo { 0% { opacity: .9; transform: scale(.9); } 100% { opacity: 0; transform: scale(1.25); } }
+.vendor-bubble {
+  /* Anchored by its bottom so a two-line remark grows upward, away from
+     the vendor's name rather than over it. */
+  position: absolute; left: 58px; bottom: calc(100% - 6px); z-index: 6;
+  width: max-content;
+  max-width: 240px;
+  font-size: 0.65625rem;
+  line-height: 1.35;
+  color: var(--ink);
+  background: var(--parchment);
+  border-radius: var(--radius);
+  padding: 6px 9px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+  transform-origin: 12px 100%;
+  animation: fx-bubble calc(var(--fx-t) * 1900) ease-out forwards;
+}
+.vendor-bubble::after {
+  content: '';
+  position: absolute; left: 10px; bottom: -5px;
+  width: 9px; height: 9px;
+  background: var(--parchment);
+  transform: rotate(45deg);
+}
+@keyframes fx-bubble {
+  0% { opacity: 0; transform: scale(.4); } 10% { opacity: 1; transform: scale(1.06); }
+  16% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; }
+}
+.vendor-card.fx-vendor-lit { animation: fx-card-glow calc(var(--fx-t) * 900) ease-out; }
+@keyframes fx-card-glow {
+  0% { box-shadow: 0 0 0 1px var(--brass), 0 0 22px color-mix(in srgb, var(--brass) 45%, transparent); }
+  100% { box-shadow: 0 0 0 1px transparent; }
+}
+.vendor-card-stamp { right: 150px; top: 50%; }
+/* Ink to the seal's right here -- to its left it would sit on the
+   Crafting/Enhance/Scrap buttons. */
+.vendor-card-stamp .fx-seal-ink { right: auto; left: 36px; }
+/* .card clips its children; the vendor card has nothing that relies on
+   that, and the speech bubble and the seal's drop both need to reach
+   past its edge. */
+.vendor-card { overflow: visible; }
+
+/* Padlock on locked upgrade rows, and the reveal when one gets taught. */
+.fx-lock { position: relative; display: inline-block; flex: none; width: 13px; height: 14px; color: var(--brass-dim); align-self: center; }
+.fx-lock-shackle {
+  position: absolute; left: 3px; top: 0;
+  width: 7px; height: 7px; box-sizing: border-box;
+  border: 2px solid currentColor; border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  transform-origin: 6px 7px;
+}
+.fx-lock-body { position: absolute; left: 1px; top: 6px; width: 11px; height: 8px; border-radius: 2px; background: currentColor; }
+.upgrade-unveil {
+  position: absolute; inset: 0; z-index: 3;
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 8px;
+  background: var(--panel);
+  border: 1px dashed var(--panel-3);
+  pointer-events: none;
+  animation: fx-veil-out calc(var(--fx-t) * 520) ease-in calc(var(--fx-t) * 580) forwards;
+}
+.upgrade-unveil .fx-lock {
+  animation: fx-lock-shake calc(var(--fx-t) * 260) linear calc(var(--fx-t) * 300),
+    fx-lock-fly calc(var(--fx-t) * 520) cubic-bezier(.3, 0, .6, 1) calc(var(--fx-t) * 580) forwards;
+}
+.upgrade-unveil .fx-lock-shackle { animation: fx-shackle calc(var(--fx-t) * 200) ease-out calc(var(--fx-t) * 580) forwards; }
+@keyframes fx-lock-shake { 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(5deg); } }
+@keyframes fx-shackle { to { transform: translateY(-3px) rotate(-35deg); } }
+@keyframes fx-lock-fly {
+  0% { transform: none; color: var(--brass); }
+  30% { transform: translateY(-6px) scale(1.2); color: color-mix(in srgb, var(--brass) 60%, white); }
+  100% { transform: translate(18px, -34px) rotate(25deg) scale(.6); opacity: 0; }
+}
+@keyframes fx-veil-out {
+  0%, 30% { border-color: var(--brass); }
+  100% { opacity: 0; background: transparent; border-color: transparent; }
+}
+.upgrade-row.fx-unveiling::after { animation-delay: calc(var(--fx-t) * 1100); animation-duration: calc(var(--fx-t) * 800); }
+.fx-new-tag {
+  font-family: var(--font-display);
+  font-size: 0.5625rem;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--brass) 70%, white);
+  border-radius: 4px;
+  padding: 1px 5px;
+  animation: fx-new-pop calc(var(--fx-t) * 500) cubic-bezier(.3, 1.8, .5, 1);
+}
+@keyframes fx-new-pop { from { transform: scale(0) rotate(-20deg); } to { transform: none; } }
+
+/* Recruit arrival: card hidden while the face-down card flies in, then a
+   flip with a light spill behind it and a SIGNED ON stamp. */
+.hero-recruit-wrap { position: relative; isolation: isolate; max-width: 720px; } /* same cap as .card, so the stamp and light spill sit on the card itself */
+.hero-recruit-wrap.fx-incoming { visibility: hidden; }
+.hero-recruit-wrap.fx-reveal { animation: fx-recruit-flip calc(var(--fx-t) * 650) cubic-bezier(.3, 1.25, .5, 1) both; }
+@keyframes fx-recruit-flip {
+  0% { transform: perspective(1200px) rotateY(90deg); }
+  100% { transform: perspective(1200px) rotateY(0); }
+}
+.fx-recruit-glow { position: absolute; inset: -24px -12px; z-index: -1; pointer-events: none; }
+.fx-rays {
+  position: absolute; inset: 0;
+  opacity: 0;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, color-mix(in srgb, var(--brass) 38%, transparent) 0deg 8deg, transparent 8deg 22deg);
+  -webkit-mask: radial-gradient(ellipse at center, #000 25%, transparent 70%);
+  mask: radial-gradient(ellipse at center, #000 25%, transparent 70%);
+  animation: fx-rays calc(var(--fx-t) * 1500) ease-out forwards;
+}
+@keyframes fx-rays {
+  0% { opacity: 0; transform: rotate(0) scale(.7); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(25deg) scale(1.1); }
+}
+.fx-mote {
+  position: absolute; bottom: 18px;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: color-mix(in srgb, var(--brass) 60%, white);
+  opacity: 0;
+  animation: fx-mote calc(var(--fx-t) * 1100) ease-out calc(var(--fx-t) * 300) forwards;
+}
+.fx-mote-0 { left: 14%; } .fx-mote-1 { left: 34%; animation-delay: calc(var(--fx-t) * 380); }
+.fx-mote-2 { left: 52%; } .fx-mote-3 { left: 71%; animation-delay: calc(var(--fx-t) * 450); }
+.fx-mote-4 { left: 88%; animation-delay: calc(var(--fx-t) * 340); }
+@keyframes fx-mote { 0% { opacity: 0; transform: none; } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-70px); } }
+.fx-signed-on {
+  /* Centred in the open space between the hero's name and status. */
+  position: absolute; left: 50%; top: 50%; margin: -12px 0 0 -48px; z-index: 3;
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  color: color-mix(in srgb, var(--moss) 70%, white);
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 7px;
+  background: color-mix(in srgb, var(--panel) 75%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  animation: fx-signed calc(var(--fx-t) * 2400) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 560) forwards;
+}
+@keyframes fx-signed {
+  0% { opacity: 0; transform: rotate(-8deg) scale(1.6); }
+  12% { opacity: 1; transform: rotate(-8deg) scale(1); }
+  80% { opacity: 1; transform: rotate(-8deg); }
+  100% { opacity: 0; transform: rotate(-8deg); }
+}
+.hero-open-slot {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 56px;
+  margin-bottom: 10px;
+  border: 1px dashed var(--panel-3);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 45%, transparent);
+  color: var(--muted);
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.recruit-chip.fx-just .chip-badge { animation: fx-badge-flip calc(var(--fx-t) * 480) ease-in-out; }
+@keyframes fx-badge-flip { 0% { transform: rotateX(90deg); } 100% { transform: none; } }
+
+/* Reduce motion: the beats are skipped in JS, but anything still mounted
+   (the settled seal) or caught mid-switch shows its final frame, delays
+   included -- with --anim-speed at 0, --fx-t would stretch every delay
+   ~1000x (same reasoning as the hero level-up card's block). */
+:root[data-motion='off'] [class*='fx-'],
+:root[data-motion='off'] [class*='fx-'] *,
+:root[data-motion='off'] [class*='fx-']::before,
+:root[data-motion='off'] [class*='fx-']::after {
+  animation-delay: 0ms !important;
 }
 
 /* --------------------------- purchase pulse --------------------------- */
