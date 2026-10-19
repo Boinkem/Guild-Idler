@@ -37,7 +37,10 @@ export async function verifySteamTicket(config: AppConfig, ticketHex: string): P
   const url = `${STEAM_WEB_API_BASE}/ISteamUserAuth/AuthenticateUserTicket/v1/`
     + `?key=${encodeURIComponent(config.steamWebApiKey)}`
     + `&appid=${encodeURIComponent(config.steamAppId)}`
-    + `&ticket=${encodeURIComponent(ticketHex)}`;
+    + `&ticket=${encodeURIComponent(ticketHex)}`
+    // Patch 0418 -- required: the client's ticket is issued for this
+    // identity, and Steam only accepts it when the same one is quoted back.
+    + `&identity=${encodeURIComponent(config.steamTicketIdentity)}`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);

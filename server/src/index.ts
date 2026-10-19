@@ -43,6 +43,12 @@ app.get('/health', async () => ({
   ahEnabled: config.ahEnabled,
   mode: config.ahEnabled ? 'online' : 'offline',
   steamKeyConfigured: !!config.steamWebApiKey,
+  // Patch 0418 -- booleans only, same rule as steamKeyConfigured. Without
+  // DATABASE_URL the listings/mailbox/buyout routes never register, and
+  // without SESSION_SECRET no session can be issued, yet /health still
+  // said "online" -- the DevTool now shows both.
+  dbConfigured: !!config.databaseUrl,
+  sessionSecretConfigured: !!config.sessionSecret,
 }));
 
 /**

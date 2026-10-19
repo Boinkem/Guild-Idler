@@ -1,0 +1,247 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index bdd735a..1ffc576 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -33950,3 +33950,57 @@ sections show in Heroes > Skins; a Heroic Bonewrought Vault full clear
+ with a 6-hero party earned `bound_wraith:` for all six classes and no
+ Frost Sovereign entries; unlocking the Knight version took 7,500 gold
+ and added `bound_wraith:knight` to classSkinsOwned; no console errors.
++
++### Auction House: Steam sign-in identity fix, database status in health check, DevTool launcher log fix (patch 0418)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed Auction House sign-in through Steam, which would have been rejected for every player
++```
++
++Raised while asking "should the Auction House work for the app right now?"
++after 0416's launcher showed the live backend online. Three fixes:
++
++**1. Steam ticket identity (the real blocker).** The client has always
++requested its ticket with `GetAuthTicketForWebApi('guildbound-ah')`
++(`src/game/auctionHouse.ts` `AH_AUTH_IDENTITY`), but
++`server/src/steamAuth.ts` called `ISteamUserAuth/AuthenticateUserTicket`
++without an `identity` parameter. Steam only accepts an identity-stamped
++ticket when the same identity is quoted back, so every real sign-in
++would have been rejected. This was never caught: the DevTool's auth-wiring
++test sends a placeholder ticket (rejected regardless), and 0412's local
++testing used a minted session token that skips Steam entirely. Now
++`config.steamTicketIdentity` (default `guildbound-ah`, exported as
++`STEAM_TICKET_IDENTITY_DEFAULT`, optional `STEAM_TICKET_IDENTITY` env
++override, documented in `.env.example`) is sent as `&identity=`.
++Comments on both constants point at each other. Verified with a stubbed
++`fetch`: the request URL now ends `&identity=guildbound-ah`. **Still
++not verified against real Steam** -- the first real in-game sign-in
++after this patch is the real test (needs the game launched through
++Steam, the Auction House Charter bought, and a real `SESSION_SECRET`).
++
++**2. `/health` now reports `dbConfigured` and `sessionSecretConfigured`**
++(booleans only, never values -- same rule as `steamKeyConfigured`).
++Previously a server with no `DATABASE_URL` still reported "online"
++while the listings/mailbox/buyout routes weren't registered at all.
++DevTool's status lines now list anything missing ("NOT configured:
++DATABASE_URL -- listings/mailbox/buyout are OFF", "SESSION_SECRET -- no
++sign-ins", "Steam key") and only go green when nothing is; a pre-0418
++server that doesn't report the fields just doesn't mention them.
++
++**3. DevTool launcher log was 0 bytes on Windows.** 0416 started
++`npm run dev` via `shell: true`; on the real host the output never made
++it through the npm.cmd -> cmd.exe -> npm -> `tsx watch` chain into
++`server/ah-devtool.log`. Now spawns `server/node_modules/tsx/dist/cli.mjs
++src/index.ts` directly under the DevTool's own node (no shell), with the
++log file as stdout/stderr -- Node's documented detached-logging
++pattern. Trade-off: no watch mode, so after applying a patch that
++touches `server/`, Stop then Start. Missing-tsx check replaces the old
++node_modules check. Verified on Linux: start -> health answered, log
++862 bytes with the Fastify boot lines, stop -> down.
++
++**Applying this one:** click **Stop AH server** in the DevTool *before*
++applying (the DevTool tracks the process it started in memory, so after
++a DevTool restart it can no longer stop a copy the old one launched),
++then restart the DevTool and **Start AH server** again. If you forget, end
++the stray `node.exe` in Task Manager.
+diff --git a/server/.env.example b/server/.env.example
+index fe21fd3..c763b36 100644
+--- a/server/.env.example
++++ b/server/.env.example
+@@ -29,6 +29,12 @@ PORT=4000
+ # only set it here if that ever changes.
+ # STEAM_APP_ID=5143490
+ 
++# Identity string the game stamps onto its Steam auth ticket (patch 0418).
++# Defaults to guildbound-ah in code, matching the client's AH_AUTH_IDENTITY
++# -- only set it if that client constant ever changes; a mismatch makes
++# Steam reject every real sign-in.
++# STEAM_TICKET_IDENTITY=guildbound-ah
++
+ # Signs/verifies session tokens (patch 0409, src/sessions.ts) -- required
+ # for /auth/verify to issue a usable session, and for every listings/
+ # mailbox/buyout route to accept one. A real production secret, generate
+diff --git a/server/src/config.ts b/server/src/config.ts
+index 6390b66..9ee1f63 100644
+--- a/server/src/config.ts
++++ b/server/src/config.ts
+@@ -21,9 +21,19 @@ export interface AppConfig {
+    *  production secret, generated once and never rotated casually (every
+    *  existing session token becomes invalid the moment this changes). */
+   sessionSecret: string;
++  /** Patch 0418 -- the identity string the client stamps onto its
++   *  GetAuthTicketForWebApi ticket (src/game/auctionHouse.ts's
++   *  AH_AUTH_IDENTITY). Steam requires AuthenticateUserTicket to be
++   *  called with the SAME identity, or it rejects the ticket -- the
++   *  server never sent one before this patch, so every real Steam
++   *  sign-in would have failed. Only override if the client's constant
++   *  ever changes. */
++  steamTicketIdentity: string;
+ }
+ 
+ export const STEAM_APP_ID_DEFAULT = '5143490';
++/** Must match AH_AUTH_IDENTITY in src/game/auctionHouse.ts. */
++export const STEAM_TICKET_IDENTITY_DEFAULT = 'guildbound-ah';
+ 
+ function parseBool(value: string | undefined, fallback: boolean): boolean {
+   if (value === undefined) return fallback;
+@@ -48,5 +58,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+     steamAppId: env.STEAM_APP_ID?.trim() || STEAM_APP_ID_DEFAULT,
+     databaseUrl: env.DATABASE_URL?.trim() ?? '',
+     sessionSecret: env.SESSION_SECRET?.trim() ?? '',
++    steamTicketIdentity: env.STEAM_TICKET_IDENTITY?.trim() || STEAM_TICKET_IDENTITY_DEFAULT,
+   };
+ }
+diff --git a/server/src/index.ts b/server/src/index.ts
+index 30b13b7..7eb6864 100644
+--- a/server/src/index.ts
++++ b/server/src/index.ts
+@@ -43,6 +43,12 @@ app.get('/health', async () => ({
+   ahEnabled: config.ahEnabled,
+   mode: config.ahEnabled ? 'online' : 'offline',
+   steamKeyConfigured: !!config.steamWebApiKey,
++  // Patch 0418 -- booleans only, same rule as steamKeyConfigured. Without
++  // DATABASE_URL the listings/mailbox/buyout routes never register, and
++  // without SESSION_SECRET no session can be issued, yet /health still
++  // said "online" -- the DevTool now shows both.
++  dbConfigured: !!config.databaseUrl,
++  sessionSecretConfigured: !!config.sessionSecret,
+ }));
+ 
+ /**
+diff --git a/server/src/steamAuth.ts b/server/src/steamAuth.ts
+index f6462df..3ed5385 100644
+--- a/server/src/steamAuth.ts
++++ b/server/src/steamAuth.ts
+@@ -37,7 +37,10 @@ export async function verifySteamTicket(config: AppConfig, ticketHex: string): P
+   const url = `${STEAM_WEB_API_BASE}/ISteamUserAuth/AuthenticateUserTicket/v1/`
+     + `?key=${encodeURIComponent(config.steamWebApiKey)}`
+     + `&appid=${encodeURIComponent(config.steamAppId)}`
+-    + `&ticket=${encodeURIComponent(ticketHex)}`;
++    + `&ticket=${encodeURIComponent(ticketHex)}`
++    // Patch 0418 -- required: the client's ticket is issued for this
++    // identity, and Steam only accepts it when the same one is quoted back.
++    + `&identity=${encodeURIComponent(config.steamTicketIdentity)}`;
+ 
+   const controller = new AbortController();
+   const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
+diff --git a/src/game/auctionHouse.ts b/src/game/auctionHouse.ts
+index 319812e..b9af69f 100644
+--- a/src/game/auctionHouse.ts
++++ b/src/game/auctionHouse.ts
+@@ -57,6 +57,8 @@ export async function checkAhConnection(): Promise<AhConnectionStatus> {
+  * request). See electron/main.ts's own steam:getAuthTicketForWebApi
+  * handler for the full design.
+  */
++// Must match server/src/config.ts's STEAM_TICKET_IDENTITY_DEFAULT -- the
++// server quotes it back to Steam when verifying the ticket (patch 0418).
+ const AH_AUTH_IDENTITY = 'guildbound-ah';
+ 
+ /**
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 9fc7037..12a03ba 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -4282,9 +4282,16 @@ function ahStatusLine(target) {
+   if (!target.reachable) {
+     return { text: `Unreachable — ${escapeHtml(target.error || 'unknown error')}`, cls: 'bad' };
+   }
+-  const keyNote = target.steamKeyConfigured === false ? ', Steam key NOT configured' : '';
+-  const mode = target.ahEnabled ? `online (AH_ENABLED=true${keyNote})` : `reachable, but off (AH_ENABLED=false${keyNote})`;
+-  return { text: `Connected — ${mode}`, cls: target.ahEnabled && target.steamKeyConfigured !== false ? 'good' : '' };
++  // Patch 0418 -- database/session-secret flags (absent from a pre-0418
++  // server, in which case they're simply not mentioned).
++  const missing = [];
++  if (target.steamKeyConfigured === false) missing.push('Steam key');
++  if (target.dbConfigured === false) missing.push('DATABASE_URL -- listings/mailbox/buyout are OFF');
++  if (target.sessionSecretConfigured === false) missing.push('SESSION_SECRET -- no sign-ins');
++  const keyNote = missing.length ? `, NOT configured: ${missing.join('; ')}` : '';
++  const dbNote = target.dbConfigured === true ? ', database configured' : '';
++  const mode = target.ahEnabled ? `online (AH_ENABLED=true${dbNote}${keyNote})` : `reachable, but off (AH_ENABLED=false${keyNote})`;
++  return { text: `Connected — ${escapeHtml(mode)}`, cls: target.ahEnabled && missing.length === 0 ? 'good' : '' };
+ }
+ 
+ /** Summary line for the auth-test result -- a real Steam-level rejection
+@@ -4335,8 +4342,9 @@ function renderAuctionHouse() {
+ 
+     <div class="section-heading">AH server process</div>
+     <p class="tiny muted" style="margin: 0 0 6px;">
+-      Runs <code>npm run dev</code> inside <code>server/</code> in the background (no extra window),
+-      logging to <code>server/ah-devtool.log</code>. Won't start a second copy if the local URL above
++      Runs <code>server/src/index.ts</code> (via server/'s own tsx) in the background (no extra window),
++      logging to <code>server/ah-devtool.log</code>. No auto-reload -- after applying a patch that touches
++      <code>server/</code>, Stop then Start. Won't start a second copy if the local URL above
+       already answers -- including one started by hand or as the GuildboundAH Windows Service.
+       Closing the DevTool leaves it running; use Stop first if you want it gone.
+     </p>
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 588456c..0f64d8f 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -2739,6 +2739,10 @@ async function checkAhBackend(url) {
+       ahEnabled: !!body.ahEnabled,
+       mode: body.mode ?? null,
+       steamKeyConfigured: !!body.steamKeyConfigured,
++      // Patch 0418 -- undefined (not false) from a server older than 0418,
++      // so the UI can tell "not reported" apart from "not configured".
++      dbConfigured: body.dbConfigured,
++      sessionSecretConfigured: body.sessionSecretConfigured,
+     };
+   } catch (err) {
+     return { reachable: false, error: err.message || String(err) };
+@@ -2815,10 +2819,18 @@ async function startAhServer() {
+   if (ahProcess && ahProcess.exitCode === undefined && isPidAlive(ahProcess.pid)) {
+     return { ok: false, error: `Already started by the DevTool (PID ${ahProcess.pid}) -- still booting? Check again in a few seconds.` };
+   }
++  // Patch 0418 -- runs tsx's own CLI directly under this DevTool's node,
++  // not `npm run dev` through cmd.exe. On Windows the npm.cmd -> cmd.exe ->
++  // npm -> tsx-watch chain left server/ah-devtool.log at 0 bytes (the
++  // output never made it through the detached shell layers); a single
++  // direct node child with the log file as its stdout is Node's own
++  // documented detached-logging pattern. No watch mode: after applying a
++  // patch that touches server/, Stop then Start.
++  const tsxCli = path.join(AH_SERVER_DIR, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+   try {
+-    await fs.access(path.join(AH_SERVER_DIR, 'node_modules'));
++    await fs.access(tsxCli);
+   } catch {
+-    return { ok: false, error: 'server/node_modules is missing -- run `cd server; npm install` once first.' };
++    return { ok: false, error: 'server/node_modules (tsx) is missing -- run `cd server; npm install` once first.' };
+   }
+   let logFd;
+   try {
+@@ -2828,16 +2840,15 @@ async function startAhServer() {
+   }
+   let child;
+   try {
+-    child = spawn(NPM_BIN, ['run', 'dev'], {
++    child = spawn(process.execPath, [tsxCli, 'src/index.ts'], {
+       cwd: AH_SERVER_DIR,
+       detached: true,
+       windowsHide: true,
+       stdio: ['ignore', logFd, logFd],
+-      shell: process.platform === 'win32',
+     });
+   } catch (err) {
+     closeSync(logFd);
+-    return { ok: false, error: `Could not start npm: ${err.message}` };
++    return { ok: false, error: `Could not start the AH server: ${err.message}` };
+   }
+   closeSync(logFd); // the child holds its own copy of the handle
+   const entry = { pid: child.pid, startedAt: Date.now(), exitCode: undefined, exitedAt: null };

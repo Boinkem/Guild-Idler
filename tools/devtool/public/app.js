@@ -4282,9 +4282,16 @@ function ahStatusLine(target) {
   if (!target.reachable) {
     return { text: `Unreachable — ${escapeHtml(target.error || 'unknown error')}`, cls: 'bad' };
   }
-  const keyNote = target.steamKeyConfigured === false ? ', Steam key NOT configured' : '';
-  const mode = target.ahEnabled ? `online (AH_ENABLED=true${keyNote})` : `reachable, but off (AH_ENABLED=false${keyNote})`;
-  return { text: `Connected — ${mode}`, cls: target.ahEnabled && target.steamKeyConfigured !== false ? 'good' : '' };
+  // Patch 0418 -- database/session-secret flags (absent from a pre-0418
+  // server, in which case they're simply not mentioned).
+  const missing = [];
+  if (target.steamKeyConfigured === false) missing.push('Steam key');
+  if (target.dbConfigured === false) missing.push('DATABASE_URL -- listings/mailbox/buyout are OFF');
+  if (target.sessionSecretConfigured === false) missing.push('SESSION_SECRET -- no sign-ins');
+  const keyNote = missing.length ? `, NOT configured: ${missing.join('; ')}` : '';
+  const dbNote = target.dbConfigured === true ? ', database configured' : '';
+  const mode = target.ahEnabled ? `online (AH_ENABLED=true${dbNote}${keyNote})` : `reachable, but off (AH_ENABLED=false${keyNote})`;
+  return { text: `Connected — ${escapeHtml(mode)}`, cls: target.ahEnabled && missing.length === 0 ? 'good' : '' };
 }
 
 /** Summary line for the auth-test result -- a real Steam-level rejection
@@ -4335,8 +4342,9 @@ function renderAuctionHouse() {
 
     <div class="section-heading">AH server process</div>
     <p class="tiny muted" style="margin: 0 0 6px;">
-      Runs <code>npm run dev</code> inside <code>server/</code> in the background (no extra window),
-      logging to <code>server/ah-devtool.log</code>. Won't start a second copy if the local URL above
+      Runs <code>server/src/index.ts</code> (via server/'s own tsx) in the background (no extra window),
+      logging to <code>server/ah-devtool.log</code>. No auto-reload -- after applying a patch that touches
+      <code>server/</code>, Stop then Start. Won't start a second copy if the local URL above
       already answers -- including one started by hand or as the GuildboundAH Windows Service.
       Closing the DevTool leaves it running; use Stop first if you want it gone.
     </p>

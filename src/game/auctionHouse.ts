@@ -57,6 +57,8 @@ export async function checkAhConnection(): Promise<AhConnectionStatus> {
  * request). See electron/main.ts's own steam:getAuthTicketForWebApi
  * handler for the full design.
  */
+// Must match server/src/config.ts's STEAM_TICKET_IDENTITY_DEFAULT -- the
+// server quotes it back to Steam when verifying the ticket (patch 0418).
 const AH_AUTH_IDENTITY = 'guildbound-ah';
 
 /**

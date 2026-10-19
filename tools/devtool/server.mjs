@@ -2739,6 +2739,10 @@ async function checkAhBackend(url) {
       ahEnabled: !!body.ahEnabled,
       mode: body.mode ?? null,
       steamKeyConfigured: !!body.steamKeyConfigured,
+      // Patch 0418 -- undefined (not false) from a server older than 0418,
+      // so the UI can tell "not reported" apart from "not configured".
+      dbConfigured: body.dbConfigured,
+      sessionSecretConfigured: body.sessionSecretConfigured,
     };
   } catch (err) {
     return { reachable: false, error: err.message || String(err) };
@@ -2815,10 +2819,18 @@ async function startAhServer() {
   if (ahProcess && ahProcess.exitCode === undefined && isPidAlive(ahProcess.pid)) {
     return { ok: false, error: `Already started by the DevTool (PID ${ahProcess.pid}) -- still booting? Check again in a few seconds.` };
   }
+  // Patch 0418 -- runs tsx's own CLI directly under this DevTool's node,
+  // not `npm run dev` through cmd.exe. On Windows the npm.cmd -> cmd.exe ->
+  // npm -> tsx-watch chain left server/ah-devtool.log at 0 bytes (the
+  // output never made it through the detached shell layers); a single
+  // direct node child with the log file as its stdout is Node's own
+  // documented detached-logging pattern. No watch mode: after applying a
+  // patch that touches server/, Stop then Start.
+  const tsxCli = path.join(AH_SERVER_DIR, 'node_modules', 'tsx', 'dist', 'cli.mjs');
   try {
-    await fs.access(path.join(AH_SERVER_DIR, 'node_modules'));
+    await fs.access(tsxCli);
   } catch {
-    return { ok: false, error: 'server/node_modules is missing -- run `cd server; npm install` once first.' };
+    return { ok: false, error: 'server/node_modules (tsx) is missing -- run `cd server; npm install` once first.' };
   }
   let logFd;
   try {
@@ -2828,16 +2840,15 @@ async function startAhServer() {
   }
   let child;
   try {
-    child = spawn(NPM_BIN, ['run', 'dev'], {
+    child = spawn(process.execPath, [tsxCli, 'src/index.ts'], {
       cwd: AH_SERVER_DIR,
       detached: true,
       windowsHide: true,
       stdio: ['ignore', logFd, logFd],
-      shell: process.platform === 'win32',
     });
   } catch (err) {
     closeSync(logFd);
-    return { ok: false, error: `Could not start npm: ${err.message}` };
+    return { ok: false, error: `Could not start the AH server: ${err.message}` };
   }
   closeSync(logFd); // the child holds its own copy of the handle
   const entry = { pid: child.pid, startedAt: Date.now(), exitCode: undefined, exitedAt: null };

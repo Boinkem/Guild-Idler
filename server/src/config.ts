@@ -21,9 +21,19 @@ export interface AppConfig {
    *  production secret, generated once and never rotated casually (every
    *  existing session token becomes invalid the moment this changes). */
   sessionSecret: string;
+  /** Patch 0418 -- the identity string the client stamps onto its
+   *  GetAuthTicketForWebApi ticket (src/game/auctionHouse.ts's
+   *  AH_AUTH_IDENTITY). Steam requires AuthenticateUserTicket to be
+   *  called with the SAME identity, or it rejects the ticket -- the
+   *  server never sent one before this patch, so every real Steam
+   *  sign-in would have failed. Only override if the client's constant
+   *  ever changes. */
+  steamTicketIdentity: string;
 }
 
 export const STEAM_APP_ID_DEFAULT = '5143490';
+/** Must match AH_AUTH_IDENTITY in src/game/auctionHouse.ts. */
+export const STEAM_TICKET_IDENTITY_DEFAULT = 'guildbound-ah';
 
 function parseBool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback;
@@ -48,5 +58,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     steamAppId: env.STEAM_APP_ID?.trim() || STEAM_APP_ID_DEFAULT,
     databaseUrl: env.DATABASE_URL?.trim() ?? '',
     sessionSecret: env.SESSION_SECRET?.trim() ?? '',
+    steamTicketIdentity: env.STEAM_TICKET_IDENTITY?.trim() || STEAM_TICKET_IDENTITY_DEFAULT,
   };
 }

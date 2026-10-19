@@ -33950,3 +33950,57 @@ sections show in Heroes > Skins; a Heroic Bonewrought Vault full clear
 with a 6-hero party earned `bound_wraith:` for all six classes and no
 Frost Sovereign entries; unlocking the Knight version took 7,500 gold
 and added `bound_wraith:knight` to classSkinsOwned; no console errors.
+
+### Auction House: Steam sign-in identity fix, database status in health check, DevTool launcher log fix (patch 0418)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed Auction House sign-in through Steam, which would have been rejected for every player
+```
+
+Raised while asking "should the Auction House work for the app right now?"
+after 0416's launcher showed the live backend online. Three fixes:
+
+**1. Steam ticket identity (the real blocker).** The client has always
+requested its ticket with `GetAuthTicketForWebApi('guildbound-ah')`
+(`src/game/auctionHouse.ts` `AH_AUTH_IDENTITY`), but
+`server/src/steamAuth.ts` called `ISteamUserAuth/AuthenticateUserTicket`
+without an `identity` parameter. Steam only accepts an identity-stamped
+ticket when the same identity is quoted back, so every real sign-in
+would have been rejected. This was never caught: the DevTool's auth-wiring
+test sends a placeholder ticket (rejected regardless), and 0412's local
+testing used a minted session token that skips Steam entirely. Now
+`config.steamTicketIdentity` (default `guildbound-ah`, exported as
+`STEAM_TICKET_IDENTITY_DEFAULT`, optional `STEAM_TICKET_IDENTITY` env
+override, documented in `.env.example`) is sent as `&identity=`.
+Comments on both constants point at each other. Verified with a stubbed
+`fetch`: the request URL now ends `&identity=guildbound-ah`. **Still
+not verified against real Steam** -- the first real in-game sign-in
+after this patch is the real test (needs the game launched through
+Steam, the Auction House Charter bought, and a real `SESSION_SECRET`).
+
+**2. `/health` now reports `dbConfigured` and `sessionSecretConfigured`**
+(booleans only, never values -- same rule as `steamKeyConfigured`).
+Previously a server with no `DATABASE_URL` still reported "online"
+while the listings/mailbox/buyout routes weren't registered at all.
+DevTool's status lines now list anything missing ("NOT configured:
+DATABASE_URL -- listings/mailbox/buyout are OFF", "SESSION_SECRET -- no
+sign-ins", "Steam key") and only go green when nothing is; a pre-0418
+server that doesn't report the fields just doesn't mention them.
+
+**3. DevTool launcher log was 0 bytes on Windows.** 0416 started
+`npm run dev` via `shell: true`; on the real host the output never made
+it through the npm.cmd -> cmd.exe -> npm -> `tsx watch` chain into
+`server/ah-devtool.log`. Now spawns `server/node_modules/tsx/dist/cli.mjs
+src/index.ts` directly under the DevTool's own node (no shell), with the
+log file as stdout/stderr -- Node's documented detached-logging
+pattern. Trade-off: no watch mode, so after applying a patch that
+touches `server/`, Stop then Start. Missing-tsx check replaces the old
+node_modules check. Verified on Linux: start -> health answered, log
+862 bytes with the Fastify boot lines, stop -> down.
+
+**Applying this one:** click **Stop AH server** in the DevTool *before*
+applying (the DevTool tracks the process it started in memory, so after
+a DevTool restart it can no longer stop a copy the old one launched),
+then restart the DevTool and **Start AH server** again. If you forget, end
+the stray `node.exe` in Task Manager.
