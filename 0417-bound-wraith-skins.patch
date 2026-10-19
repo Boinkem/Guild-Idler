@@ -1,0 +1,83 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 6432ab1..bdd735a 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -33899,3 +33899,54 @@ mummified_bat (9g), mystery_key (12g), glass_eye (16g), polite_skull
+ whole list (`QuestManager`), so the existing 10 now drop proportionally
+ less often -- no tuning change; sell values stay in the same 1-150 band.
+ No save migration needed (`GameState.curios` is a free-form id->count map).
++
++### Bound Wraith: per-class Bound Wraith skins (patch 0417)
++```discord-update
++Dev Update | Bound Wraith
++
++- Added Bound Wraith, a second skin set for every hero class: bone-and-gunmetal plate, spirit-fire crests, glowing eyes and blades that burn spectral teal
++- Added Bound Wraith unlocks: clear The Bonewrought Vault on Heroic or harder with a hero in the party to earn that class's Bound Wraith
++- Added a Bound Wraith section to Heroes > Skins, with a 7,500 gold unlock per class once earned
++- Clears from before this update count too, if they're still in your raid history
++```
++
++Direct request: a full "Bound Wraith" set across all 14 classes, built
++from a ChatGPT knight mockup whose look was good but whose animation was
++not, so the theme was rebuilt on the working sprite frames instead.
++Decisions locked in conversation: same conditions as the Frost Court
++(patch 0415), tied to **The Bonewrought Vault on Heroic or harder** with
++that class in the party; priced higher at **7,500 gold per class**; no
++Steam achievement.
++
++**Data-only on top of the 0415 per-class system.** One new skins.json
++entry, `bound_wraith` (cost 7500, swatch `#2fd3a8`/`#3a2f5c`,
++`perClass: true`, `unlockRaidId: "bonewrought_vault"`,
++`unlockMinDifficulty: "heroic"`). Nothing in code changed:
++`earnFromRaidClear` already loops every perClass SkinDef, so a Heroic+
++Vault clear earns `bound_wraith:<class>` for the party (and a Wyrmkeep
++clear still earns only Frost Sovereign). `backfillFromRaidLog` picks up
++qualifying Vault clears already in raidLog on next load. HeroesPanel
++renders one `.class-skin-set` section per perClass skin, so Bound Wraith
++appears under Frost Sovereign automatically. COMPLETE_WARDROBE already
++excludes perClass skins.
++
++**Art (not in git -- `public/heroes` is gitignored, licensed pack):**
++`public/heroes/<class>/bound_wraith/*.png`, all 84 sheets across the 14
++classes (every animation each class has, for the same IdleView attack-
++flash reason as 0415). Knight is hand-tuned (`wraith.py`): bone helmet
++over gunmetal body, red plume -> teal spirit flame with animated tongues,
++skull face with glowing eyes, bone crest, slate shield with grey rim and
++cross, teal glowing blade, chest rune, ragged indigo cape hem, trailing
++wisps. Other 13 classes (`wraithpack.py`, reusing themepack's per-class
++head tracking): palette ramps metal / ash / indigo / spirit-teal / iron
++(blue-grey steel maps to metal so plate stays gunmetal rather than
++going violet), animated spirit-flame crest off the head or headgear top,
++near-white weapon pixels turned glowing teal with a halo, glowing eyes,
++faint teal aura and looping wisps. Generator scripts live outside the
++repo with the Frost Court ones.
++
++**Verified** in the web build with a mid-game save: two per-class
++sections show in Heroes > Skins; a Heroic Bonewrought Vault full clear
++with a 6-hero party earned `bound_wraith:` for all six classes and no
++Frost Sovereign entries; unlocking the Knight version took 7,500 gold
++and added `bound_wraith:knight` to classSkinsOwned; no console errors.
+diff --git a/src/game/data/json/skins.json b/src/game/data/json/skins.json
+index c3ca094..18978f7 100644
+--- a/src/game/data/json/skins.json
++++ b/src/game/data/json/skins.json
+@@ -61,5 +61,18 @@
+     "perClass": true,
+     "unlockRaidId": "frozen_wyrmkeep",
+     "unlockMinDifficulty": "heroic"
++  },
++  {
++    "id": "bound_wraith",
++    "name": "Bound Wraith",
++    "description": "Spirit-fire crests, bone-and-gunmetal plate and blades that burn spectral teal. Earned one class at a time.",
++    "cost": 7500,
++    "swatch": [
++      "#2fd3a8",
++      "#3a2f5c"
++    ],
++    "perClass": true,
++    "unlockRaidId": "bonewrought_vault",
++    "unlockMinDifficulty": "heroic"
+   }
+ ]
+\ No newline at end of file

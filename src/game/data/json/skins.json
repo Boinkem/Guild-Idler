@@ -61,5 +61,18 @@
     "perClass": true,
     "unlockRaidId": "frozen_wyrmkeep",
     "unlockMinDifficulty": "heroic"
+  },
+  {
+    "id": "bound_wraith",
+    "name": "Bound Wraith",
+    "description": "Spirit-fire crests, bone-and-gunmetal plate and blades that burn spectral teal. Earned one class at a time.",
+    "cost": 7500,
+    "swatch": [
+      "#2fd3a8",
+      "#3a2f5c"
+    ],
+    "perClass": true,
+    "unlockRaidId": "bonewrought_vault",
+    "unlockMinDifficulty": "heroic"
   }
 ]
