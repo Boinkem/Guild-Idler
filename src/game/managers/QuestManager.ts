@@ -1682,6 +1682,7 @@ export const QuestManager = {
       heroId: quest.heroId,
       heroName,
       questName: quest.offer.name,
+      tag: quest.offer.tag,
       difficulty: quest.offer.difficulty,
       success,
       resolvedAt,

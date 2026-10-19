@@ -83,7 +83,7 @@ const RAID_SET_ID: Partial<Record<string, string>> = {
   requiem_last_god: 'requiem',
 };
 
-function raidBannerSrc(raidId: string, banner?: RaidDef['banner']) {
+export function raidBannerSrc(raidId: string, banner?: RaidDef['banner']) {
   return banner?.path ? `./lore/${banner.path}` : `./lore/raids/${raidId}.jpg`;
 }
 

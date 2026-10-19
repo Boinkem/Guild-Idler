@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { GameEngine } from '../game/engine';
 import { RaidResult } from '../game/types';
-import { RAID_DIFFICULTY_LABEL } from '../game/data/raids';
+import { RAID_BY_ID, RAID_DIFFICULTY_LABEL, RAID_ENCOUNTER_BY_ID, raidDifficultyIconSrc } from '../game/data/raids';
+import { EQUIPMENT_BY_ID } from '../game/data/equipment';
+import { ItemIcon } from './icons';
+import { raidBannerSrc } from './panels/RaidsPanel';
+import { at, useDelayedCount } from './resultFx';
 import { useEngine } from './useEngine';
 import { playSound } from '../game/sound';
 import { RarityPill } from './RarityPill';
 import { formatGold, RARITY_COLOR } from '../game/util';
-import { useCountUp } from './useCountUp';
 import { measureFlyOffset } from './flyTarget';
 import { RECIPE_SCROLL_BY_ID } from '../game/data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from '../game/data/craftingRecipes';
@@ -65,22 +68,89 @@ export function RaidResultModal({ active, onViewLore }: { active: boolean; onVie
   );
 }
 
+const DIFF_COLOR: Record<RaidResult['difficulty'], string> = {
+  normal: '#79a86b', heroic: '#a874d6', mythic: '#e07a2a', legendary: '#d9a441',
+};
+const CONFETTI_COLORS = ['#d9a441', '#79a86b', '#5b8fd6', '#a874d6', '#f2e6cf'];
+
+/** Skull glyph for one encounter row; the cross is drawn on when it falls. */
+function EncounterSkull() {
+  return (
+    <svg className="rfx-skull" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3c-4.4 0-8 3.1-8 7.3 0 2.4 1.2 4.3 3 5.5V19h10v-3.2c1.8-1.2 3-3.1 3-5.5C20 6.1 16.4 3 12 3z" />
+      <circle cx="9" cy="11" r="1.6" fill="currentColor" />
+      <circle cx="15" cy="11" r="1.6" fill="currentColor" />
+      <path className="rfx-x" d="M3 3 L21 21 M21 3 L3 21" strokeWidth="2.2" />
+    </svg>
+  );
+}
+
+/**
+ * Patch 0422 -- the animated raid card. The card drops in on the raid's
+ * banner and the difficulty crest slams onto the corner, then the
+ * encounter ladder resolves in order: each win gets a slash, a green
+ * flash, its skull crossed out and a DEFEATED stamp; the encounter that
+ * stopped the party shakes, cracks and is stamped FELL BACK, and the rest
+ * grey out. A full clear sweeps a RAID CLEARED banner across the art with
+ * confetti, the chest opens and the loot flies out of it (a legendary gets
+ * a light beam), and the title ribbon names who earned it. A partial run
+ * or wipe skips the banner and slides the damage report in instead.
+ */
 function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; engine: GameEngine; onViewLore: () => void }) {
   const [dismissing, setDismissing] = useState(false);
   const rewardBurstRef = useRef<HTMLDivElement>(null);
   const [goldFlight, setGoldFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
   const timeoutRef = useRef<number | null>(null);
   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
-  // Same one-shot 0 -> final-value count-up as QuestResultModal's own,
-  // for the same reason -- a raid's payoff deserves at least the same
-  // treatment an ordinary quest's does, arguably more given the time
-  // investment.
-  const displayGold = useCountUp(result.gold, { from: 0, durationMs: 700 });
-  // Gold-only (no XP flight, unlike QuestResultModal's own version) --
-  // a raid's reward XP goes to the whole party (result.heroIds), not
-  // one specific hero, so there's no single obvious XP bar to aim at
-  // the way a solo quest result has.
-  const displayXp = useCountUp(result.xp, { from: 0, durationMs: 700 });
+
+  const raid = RAID_BY_ID[result.raidId];
+  const total = Math.max(1, result.totalEncounters);
+  const cleared = Math.min(result.encountersCleared, total);
+  const encounterNames = Array.from({ length: total }, (_, i) => {
+    const id = raid?.encounterIds[i];
+    return (id && RAID_ENCOUNTER_BY_ID[id]?.name) || `Encounter ${i + 1}`;
+  });
+
+  // ---- 1x timeline (ms) ----
+  const encAt: number[] = [];
+  let t = 950;
+  for (let i = 0; i < total; i++) {
+    if (i > cleared) break;
+    encAt[i] = t;
+    t += i < cleared ? 520 : 650;
+  }
+  const T_LOST = encAt[cleared] ?? t;
+  const T_BANNER = result.fullClear ? t : -1;
+  if (result.fullClear) t += 600;
+  const T_SUM = t;
+  const hasLoot = result.loot.length > 0;
+  const T_CHEST = t + 300;
+  const T_LOOT = t + 500;
+  if (hasLoot) t += 500 + Math.min(result.loot.length, 6) * 220 + 300;
+  const T_TITLE = t;
+  if (result.titleGranted) t += 350;
+  const T_PAY = t;
+  t += 400;
+  const T_DMG = t;
+  const dmgCount = (result.heroesFallen?.length ?? 0) + (result.petsFallen?.length ?? 0) + result.injuries.length;
+  if (dmgCount > 0 || result.eggsFound?.length || result.recipeScrollGained) t += 160 * Math.min(dmgCount, 4) + 240;
+  const T_DONE = t + 300;
+
+  const displayGold = useDelayedCount(result.gold, T_PAY, 800);
+  // Gold-only flight (no XP flight, unlike QuestResultModal's own version)
+  // -- a raid's reward XP goes to the whole party (result.heroIds), not
+  // one specific hero, so there's no single obvious XP bar to aim at.
+  const displayXp = useDelayedCount(result.xp, T_PAY, 800);
+  const confetti = useMemo(
+    () => (result.fullClear
+      ? Array.from({ length: 40 }, (_, k) => ({
+        x: (k * 41) % 98, c: CONFETTI_COLORS[k % 5],
+        delay: T_BANNER + 200 + ((k * 97) % 1400), dur: 1600 + ((k * 131) % 1200),
+      }))
+      : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   useEffect(() => () => {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
@@ -104,57 +174,111 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
     handleDismiss();
   };
 
+  const outcome = result.fullClear ? 'clear' : cleared > 0 ? 'partial' : 'wiped';
+  let dmgIndex = 0;
+  const dmgStyle = () => at(T_DMG + Math.min(dmgIndex++, 4) * 160);
+
   return (
-    <div className="overlay" onClick={handleDismiss}>
+    <div className="overlay rfx-overlay" onClick={handleDismiss}>
+      {confetti.map((c, i) => (
+        <span
+          key={i}
+          className="rfx-confetti"
+          aria-hidden="true"
+          style={at(c.delay, { left: `${c.x}%`, background: c.c, animationDuration: `calc(var(--fx-t) * ${c.dur})` })}
+        />
+      ))}
       <div
-        className={`modal raid-result-modal ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
+        className={`modal raid-result-modal rfx-card rfx-${outcome} ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
+        style={{ '--sum-at': `calc(var(--fx-t) * ${T_SUM})` } as CSSProperties}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3>{result.raidName}, {RAID_DIFFICULTY_LABEL[result.difficulty]}</h3>
-        <p className={`small ${result.fullClear ? 'good' : result.encountersCleared > 0 ? '' : 'bad'}`} style={{ marginTop: 0 }}>
+        <div className="rfx-banner" style={{ backgroundImage: `url(${raidBannerSrc(result.raidId, raid?.banner)})` }}>
+          <div className="rfx-rname">
+            {result.raidName}
+            <span className="rfx-rdiff" style={{ color: DIFF_COLOR[result.difficulty] }}>{RAID_DIFFICULTY_LABEL[result.difficulty]}</span>
+          </div>
+          <img className="rfx-crest" src={raidDifficultyIconSrc(result.difficulty)} alt={RAID_DIFFICULTY_LABEL[result.difficulty]} style={at(350)} />
+          {result.fullClear && <div className="rfx-cleared" style={at(T_BANNER)}>Raid Cleared</div>}
+        </div>
+
+        <div className="rfx-ladder">
+          {encounterNames.map((name, i) => {
+            const state = i < cleared ? 'won' : i === cleared ? 'lost' : 'skipped';
+            const when = state === 'skipped' ? T_LOST : encAt[i];
+            return (
+              <div key={i} className={`rfx-enc ${state}`} style={at(when)}>
+                <EncounterSkull />
+                <span className="rfx-en">Encounter {i + 1}</span>
+                <span className="rfx-bn">{name}</span>
+                {state !== 'skipped' && <span className="rfx-stamp">{state === 'won' ? 'Defeated' : 'Fell back'}</span>}
+                {state === 'won' && <span className="rfx-slash" />}
+                {state === 'lost' && (
+                  <svg className="rfx-crack" viewBox="0 0 560 40" preserveAspectRatio="none" aria-hidden="true">
+                    <path d="M380 0 L370 14 L388 22 L375 40" /><path d="M370 14 L350 20" />
+                  </svg>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <p className={`small rfx-summary ${result.fullClear ? 'good' : cleared > 0 ? '' : 'bad'}`} style={at(T_SUM)}>
           {result.fullClear
             ? 'Full clear.'
-            : result.encountersCleared > 0
-              ? `Cleared ${result.encountersCleared} of ${result.totalEncounters} encounters before the party had to fall back.`
+            : cleared > 0
+              ? `Cleared ${cleared} of ${result.totalEncounters} encounters before the party had to fall back.`
               : 'The party was turned back at the first encounter.'}
         </p>
 
-        <div ref={rewardBurstRef} className="reward-burst">
-          {result.xp > 0 && <span className="burst-xp">+{displayXp} XP</span>}
-          {result.gold > 0 && <span className="burst-gold">+{formatGold(displayGold)} gold</span>}
-        </div>
-        {hasLegendary && <p className="legendary-drop-label">★ Legendary find!</p>}
-
-        {result.loot.length > 0 && (
-          <>
-            <div className="section-heading">Loot</div>
-            <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
-              {result.loot.map((item, i) => (
-                <span key={`${item.defId}-${i}`} className="row" style={{ gap: 4, alignItems: 'center' }}>
-                  <span
-                    className={`tiny ${item.rarity === 'legendary' ? 'legendary-loot-name' : ''}`}
-                    style={{ color: RARITY_COLOR[item.rarity] }}
+        {hasLoot && (
+          <div className="rfx-lootrow">
+            <span className="rfx-chest" style={at(T_CHEST)} aria-hidden="true">
+              <span className="rfx-rays" />
+              <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round">
+                <path d="M8 30h48v26H8z" fill="oklch(30% 0.05 60)" /><path d="M8 40h48M28 36h8v8h-8z" />
+                <g className="rfx-lid"><path d="M8 30c0-10 6-16 24-16s24 6 24 16z" fill="oklch(34% 0.06 60)" /></g>
+              </svg>
+            </span>
+            <div className="rfx-loot">
+              {result.loot.map((item, i) => {
+                const def = EQUIPMENT_BY_ID[item.defId];
+                const color = RARITY_COLOR[item.rarity];
+                return (
+                  <div
+                    key={`${item.defId}-${i}`}
+                    className={`rfx-drop ${item.rarity === 'legendary' ? 'legend' : ''}`}
+                    style={at(T_LOOT + Math.min(i, 6) * 220, { borderColor: color })}
                   >
-                    {item.name}
-                  </span>
-                  <RarityPill rarity={item.rarity} />
-                </span>
-              ))}
+                    {def && <ItemIcon slot={def.slot} icon={def.icon} size={28} />}
+                    <span className={`tiny ${item.rarity === 'legendary' ? 'legendary-loot-name' : ''}`} style={{ fontWeight: 700, color }}>
+                      {item.name}
+                    </span>
+                    <RarityPill rarity={item.rarity} />
+                  </div>
+                );
+              })}
             </div>
-          </>
+          </div>
+        )}
+        {hasLegendary && <p className="legendary-drop-label" style={at(T_LOOT + 350)}>★ Legendary find!</p>}
+
+        {result.titleGranted && (
+          <div className="rfx-ribbon" style={at(T_TITLE)}>
+            Title earned: <b>{result.titleGranted}</b>
+            {result.titledHeroNames?.length ? ` · ${result.titledHeroNames.join(', ')}` : ''}
+          </div>
         )}
 
+        <div ref={rewardBurstRef} className="reward-burst rfx-cur" style={at(T_PAY)}>
+          {result.xp > 0 && <span className="burst-xp" style={at(T_PAY)}>+{displayXp} XP</span>}
+          {result.gold > 0 && <span className="burst-gold" style={at(T_PAY + 80)}>+{formatGold(displayGold)} gold</span>}
+        </div>
+
         {/* Also-found extras -- same shape QuestResultModal's own
-            "Also found" section already uses. eggsFound (existed before
-            this patch) had never actually been wired into this modal
-            either, same "purely informational, silently unread" gap
-            QuestResultModal's own comment already found and fixed on
-            the quest side -- fixed here alongside recipeScrollGained
-            (patch 0357, WoW-style recipe drop/learn system) rather than
-            leaving eggsFound the one field in this raid result still
-            silently broken right next to the one that's now wired up. */}
+            "Also found" section already uses. */}
         {(result.eggsFound?.length || result.recipeScrollGained) && (
-          <>
+          <div className="rfx-late" style={at(T_DMG)}>
             <div className="section-heading">Also found</div>
             {result.eggsFound?.map((egg, i) => (
               <div key={i} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
@@ -174,33 +298,32 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
                 </div>
               );
             })()}
-          </>
+          </div>
         )}
 
-        {(result.injuries.length > 0 || result.heroesFallen?.length || result.petsFallen?.length) && (
+        {dmgCount > 0 && (
           <>
-            <div className="section-heading">Damage report</div>
-            {/* Same "Fallen earns its own bolded line above the ordinary
-                injury list" treatment as QuestResultModal -- see that
-                file's own comment for the full reasoning. */}
+            <div className="section-heading rfx-late" style={at(T_DMG)}>Damage report</div>
+            {/* Fallen earns its own bolded line above the ordinary injury
+                list, same as QuestResultModal. */}
             {result.heroesFallen?.map((h) => (
-              <div key={`fallen-${h.heroId}`} className="small bad" style={{ fontWeight: 700 }}>
-                {h.heroName} has fallen. Revive them from the Heroes tab before sending them out again.
+              <div key={`fallen-${h.heroId}`} className="small bad rfx-dmg" style={dmgStyle()}>
+                <b>{h.heroName} has fallen. Revive them from the Heroes tab before sending them out again.</b>
               </div>
             ))}
             {result.petsFallen?.map((p, i) => (
-              <div key={`pet-fallen-${i}`} className="small bad" style={{ fontWeight: 700 }}>
-                {p.petName} has fallen. Revive them from the Heroes tab.
+              <div key={`pet-fallen-${i}`} className="small bad rfx-dmg" style={dmgStyle()}>
+                <b>{p.petName} has fallen. Revive them from the Heroes tab.</b>
               </div>
             ))}
             {result.injuries.map((i) => (
-              <div key={i.heroId} className="small bad">{i.heroName}: {i.injury.name}</div>
+              <div key={i.heroId} className="small bad rfx-dmg" style={dmgStyle()}>{i.heroName}: {i.injury.name}</div>
             ))}
           </>
         )}
 
-        <div className="row end" style={{ marginTop: 12, gap: 8 }}>
-          <button className="btn-primary" onClick={handleDismiss} disabled={dismissing}>Close</button>
+        <div className="row end rfx-actions" style={at(T_DONE, { marginTop: 12, gap: 8 })}>
+          <button className="btn-ghost" onClick={handleDismiss} disabled={dismissing}>Close</button>
           <button className="btn-primary" onClick={viewLore} disabled={dismissing}>View in Lore</button>
         </div>
 

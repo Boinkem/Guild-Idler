@@ -939,6 +939,7 @@ export class GameEngine {
       const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
       if (chainHero) {
         const chainResult = this.tryContinueAutoChain(chainHero, now, result.success);
+        this.noteStreakResult(chainHero, result, chainResult);
         if (chainResult) {
           if (chainResult.continued) {
             playSound('depart');
@@ -1281,7 +1282,7 @@ export class GameEngine {
       }
 
       const hero = this.state.heroes.find((h) => h.id === quest.heroId);
-      if (hero) this.tryContinueAutoChain(hero, quest.endsAt, result.success);
+      if (hero) this.noteStreakResult(hero, result, this.tryContinueAutoChain(hero, quest.endsAt, result.success));
     }
     for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
 
@@ -2174,6 +2175,37 @@ export class GameEngine {
     hero.autoChainTarget = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
     hero.autoChainCount = 1;
     hero.autoChainMinutesRemaining = null;
+    hero.autoChainGold = 0;
+    hero.autoChainXp = 0;
+  }
+
+  /**
+   * Patch 0422 -- records where a just-resolved quest sat in its hero's
+   * Auto-Chain bounty streak (see QuestResult.autoChainStreak), and keeps
+   * the streak's running gold/XP totals. Called with whatever
+   * tryContinueAutoChain returned; does nothing for a quest outside a
+   * streak, or for story-chain stepping (that has its own chainAdvanced).
+   */
+  private noteStreakResult(
+    hero: Hero, result: QuestResult,
+    chainResult: { continued: boolean; completedCount: number; target: number; via: 'chain' | 'streak'; stoppedByFailure?: boolean } | null,
+  ) {
+    if (!chainResult || chainResult.via !== 'streak' || chainResult.target <= 0) return;
+    hero.autoChainGold = (hero.autoChainGold ?? 0) + result.gold;
+    hero.autoChainXp = (hero.autoChainXp ?? 0) + result.xp;
+    // completedCount is the streak number of the quest just STARTED when it
+    // continues, and of the quest just finished when it doesn't.
+    if (chainResult.continued) {
+      result.autoChainStreak = { finished: chainResult.completedCount - 1, target: chainResult.target, outcome: 'continues' };
+      return;
+    }
+    result.autoChainStreak = chainResult.stoppedByFailure
+      ? { finished: Math.max(0, chainResult.completedCount - 1), target: chainResult.target, outcome: 'stopped' }
+      : { finished: chainResult.completedCount, target: chainResult.target, outcome: 'complete' };
+    result.autoChainStreak.totalGold = hero.autoChainGold;
+    result.autoChainStreak.totalXp = hero.autoChainXp;
+    hero.autoChainGold = 0;
+    hero.autoChainXp = 0;
   }
 
   sendAllIdle(): number {

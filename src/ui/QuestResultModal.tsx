@@ -7,7 +7,12 @@ import { useSettings } from './useSettings';
 import { playSound } from '../game/sound';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { RarityPill } from './RarityPill';
-import { useCountUp } from './useCountUp';
+import { ItemIcon } from './icons';
+import { at, useDelayedCount, TickMark } from './resultFx';
+import { CHAIN_BY_ID } from '../game/managers/QuestManager';
+import { EQUIPMENT_BY_ID } from '../game/data/equipment';
+import { chainBannerSrc, chainIconSrc, questTagBannerSrc, questTagIconSrc } from './panels/QuestPanel';
+import waxSealComplete from '../assets/wax-seal-complete.png';
 import { measureFlyOffset } from './flyTarget';
 import { MATERIAL_BY_ID } from '../game/data/materials';
 import { CURIO_BY_ID } from '../game/data/curios';
@@ -93,13 +98,8 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
   const [goldFlight, setGoldFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
   const [xpFlight, setXpFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
-  // One-shot count-up from 0 -- this card mounts once per result with the
-  // final reward already known, so it should count up to it on arrival
-  // rather than appearing pre-finished. Slightly longer than the default
-  // duration so it doesn't finish before the card's own pop-in animation
-  // does.
-  const displayGold = useCountUp(result.gold, { from: 0, durationMs: 700 });
-  const displayXp = useCountUp(result.xp, { from: 0, durationMs: 700 });
+  // Gold/XP count-ups now live with the card timeline below (patch 0422),
+  // so they start on the beat the reward row appears rather than at mount.
 
   // This card renders full detail regardless of whether the idle
   // companion window (260x340, see IDLE_SIZE in electron/main.ts) or the
@@ -157,46 +157,102 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
     handleDismiss();
   };
 
+  // ---- Patch 0422 card timeline (1x ms; see resultFx.tsx) ----
+  // Card slides up, the tag icon pops onto the banner edge, the verdict
+  // stamp lands, then (on an Auto-Chain streak) the pip track resolves,
+  // then gold/XP count up, then level-up / loot / everything else.
+  const streak = result.autoChainStreak;
+  const T_STAMP = 450;
+  let t = 900;
+  let sealAt = 0;
+  if (streak) {
+    if (streak.outcome === 'complete') {
+      sealAt = t + streak.target * 260 + 150;
+      t = sealAt + 900;
+    } else {
+      t += 650;
+    }
+  }
+  const T_PAY = t;
+  const T_AFTER = T_PAY + 600;
+  const T_LOOT = T_AFTER + (result.levelsGained > 0 ? 300 : 0);
+  const T_DONE = T_LOOT + Math.min(result.loot.length, 4) * 120 + 350;
+  const displayGold = useDelayedCount(result.gold, T_PAY);
+  const displayXp = useDelayedCount(result.xp, T_PAY);
+  const streakGold = useDelayedCount(streak?.totalGold ?? 0, sealAt + 500, 800);
+  const streakXp = useDelayedCount(streak?.totalXp ?? 0, sealAt + 500, 800);
+
+  const chain = result.chainAdvanced ? CHAIN_BY_ID[result.chainAdvanced.chainId] : undefined;
+  const bannerSrc = chain
+    ? chainBannerSrc(chain.id, chain.banner)
+    : result.tag ? questTagBannerSrc(result.tag) : undefined;
+  const iconSrc = chain
+    ? chainIconSrc(chain.id, chain.icon, chain.banner)
+    : result.tag ? questTagIconSrc(result.tag) : undefined;
+  const coinCount = result.gold > 0 && result.success ? (result.critBonus ? 10 : 5) : 0;
+
   return (
     <div className="overlay" onClick={handleDismiss}>
-      <div className={`modal ${dismissing ? 'dismissing' : ''}`} onClick={(e) => e.stopPropagation()}>
-        <h3>{result.heroName} is back</h3>
+      <div
+        className={`modal qfx-card ${result.success ? 'qfx-win' : 'qfx-lose'} ${result.critBonus ? 'qfx-crit' : ''} ${dismissing ? 'dismissing' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {result.critBonus && <span className="qfx-bolt" style={at(T_PAY)} aria-hidden="true" />}
+        <div className="qfx-banner">
+          <span className="qfx-art" style={bannerSrc ? { backgroundImage: `url(${bannerSrc})` } : undefined} aria-hidden="true" />
+          {iconSrc && <span className="qfx-tagicon" style={at(250, { backgroundImage: `url(${iconSrc})` })} aria-hidden="true" />}
+          <span className="qfx-stamp" style={at(T_STAMP)}>{result.success ? 'Fulfilled' : 'Failed'}</span>
+        </div>
+
+        <h3 className="qfx-who">{result.heroName} is back</h3>
         <p className="small muted" style={{ marginTop: 0 }}>{result.questName}</p>
 
-        <p className={result.success ? 'good' : 'bad'} style={{ fontSize: 12 }}>
-          {result.success ? 'The contract is fulfilled.' : 'The contract failed.'}
-        </p>
+        {streak && <StreakTrack streak={streak} heroName={result.heroName} sealAt={sealAt} gold={streakGold} xp={streakXp} />}
 
-        <div ref={rewardBurstRef} className={`reward-burst ${result.critBonus ? 'crit' : ''}`}>
-          {result.xp > 0 && <span className={`burst-xp ${result.critBonus ? 'crit' : ''}`}>+{displayXp} XP</span>}
-          {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(displayGold)} gold</span>}
+        <div ref={rewardBurstRef} className={`reward-burst qfx-rewards ${result.critBonus ? 'crit' : ''}`} style={at(T_PAY)}>
+          {result.xp > 0 && <span className={`burst-xp ${result.critBonus ? 'crit' : ''}`} style={at(T_PAY)}>+{displayXp} XP</span>}
+          {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`} style={at(T_PAY + 80)}>+{formatGold(displayGold)} gold</span>}
+          {Array.from({ length: coinCount }, (_, i) => (
+            <span key={i} className="qfx-coin" style={at(T_PAY + i * 60, { left: `calc(50% + ${(i - (coinCount - 1) / 2) * 14}px)` })} aria-hidden="true" />
+          ))}
         </div>
-        {result.critBonus && <p className="crit-burst-label">⚡ Critical Burst!</p>}
-        {hasLegendary && <p className="legendary-drop-label">★ Legendary find!</p>}
-        {result.levelsGained > 0 && <p className="good burst-levelup">Level up ×{result.levelsGained}!</p>}
+        {result.critBonus && <p className="crit-burst-label qfx-critlbl" style={at(T_PAY + 120)}>⚡ Critical Burst!</p>}
+        {hasLegendary && <p className="legendary-drop-label" style={at(T_LOOT)}>★ Legendary find!</p>}
+        {result.levelsGained > 0 && <p className="good burst-levelup qfx-lvl" style={at(T_AFTER)}>Level up ×{result.levelsGained}!</p>}
         {result.dailyBurstBonus && (
-          <p className="good" style={{ fontSize: '0.75rem' }}>
+          <p className="good qfx-late" style={at(T_AFTER, { fontSize: '0.75rem' })}>
             ✨ First burst of the day -- reward boosted!
           </p>
         )}
 
         {result.loot.length > 0 && (
-          <>
+          <div className="qfx-late" style={at(T_LOOT)}>
             <div className="section-heading">Loot</div>
-            {result.loot.map((item) => (
-              <div key={item.defId} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
-                <span
-                  className={item.rarity === 'legendary' ? 'legendary-loot-name' : undefined}
-                  style={{ fontSize: 11, color: RARITY_COLOR[item.rarity] }}
-                >
-                  {item.name}
-                </span>
-                <RarityPill rarity={item.rarity} />
-              </div>
-            ))}
-          </>
+            <div className="qfx-loot">
+              {result.loot.map((item, i) => {
+                const def = EQUIPMENT_BY_ID[item.defId];
+                return (
+                  <div
+                    key={`${item.defId}-${i}`}
+                    className="qfx-drop"
+                    style={at(T_LOOT + Math.min(i, 4) * 120, { borderColor: RARITY_COLOR[item.rarity] })}
+                  >
+                    {def && <ItemIcon slot={def.slot} icon={def.icon} size={26} />}
+                    <span
+                      className={item.rarity === 'legendary' ? 'legendary-loot-name' : undefined}
+                      style={{ fontSize: 11, fontWeight: 700, color: RARITY_COLOR[item.rarity] }}
+                    >
+                      {item.name}
+                    </span>
+                    <RarityPill rarity={item.rarity} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
 
+        <div className="qfx-late" style={at(T_AFTER)}>
         {/* Gathering Bounty materials, an ordinary egg drop, and an
             ordinary curio drop -- all three were computed by QuestManager
             and sitting on `result` already, but none were actually read
@@ -291,6 +347,7 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
               : `Expedition progress: stage ${result.chainAdvanced.stage + 1} of ${result.chainAdvanced.totalStages}.`}
           </p>
         )}
+        </div>
 
         {result.chainAdvanced?.completed && onViewLore && (
           <button className="btn-ghost" onClick={viewLore} style={{ marginBottom: 8 }}>
@@ -298,7 +355,7 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
           </button>
         )}
 
-        <div className="row end" style={{ marginTop: 12 }}>
+        <div className="row end qfx-actions" style={at(T_DONE, { marginTop: 12 })}>
           <button className="btn-primary" onClick={handleDismiss} disabled={dismissing}>
             {result.success ? 'Good work' : 'Understood'}
           </button>
@@ -397,6 +454,79 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+type Streak = NonNullable<QuestResult['autoChainStreak']>;
+
+/**
+ * Patch 0422 -- the Auto-Chain streak track: one pip per contract in the
+ * streak, joined by a rail.
+ *  - continues: earlier contracts already ticked, this one pops and
+ *    ticks, the next one pulses while the hero sets off.
+ *  - complete: every pip ticks in turn (same rhythm as a story chain's
+ *    stage list), then a small wax seal and the streak's running totals.
+ *  - stopped: this contract's pip shakes into a red cross and the rest
+ *    of the streak goes dashed -- the run ends on a failure.
+ */
+function StreakTrack({ streak, heroName, sealAt, gold, xp }: { streak: Streak; heroName: string; sealAt: number; gold: number; xp: number }) {
+  const n = Math.max(1, streak.target);
+  const T0 = 900;
+  // Index of the contract this card is about.
+  const here = streak.outcome === 'continues' ? streak.finished - 1 : streak.outcome === 'stopped' ? streak.finished : n - 1;
+  const span = Math.max(1, n - 1);
+  const pct = (i: number) => `${(Math.max(0, Math.min(i, n - 1)) / span) * 100}%`;
+  const trail = streak.outcome === 'complete'
+    ? { from: '0%', to: '100%', delay: T0, dur: n * 260 }
+    : streak.outcome === 'continues'
+      ? { from: pct(here - 1), to: pct(here), delay: T0, dur: 300 }
+      : { from: pct(here - 1), to: pct(here - 1), delay: T0, dur: 1 };
+  const label = streak.outcome === 'stopped'
+    ? `Stopped at ${streak.finished + 1} / ${n}`
+    : `${Math.min(streak.outcome === 'complete' ? n : streak.finished, n)} / ${n}`;
+  const noteAt = streak.outcome === 'complete' ? sealAt : T0 + 450;
+  return (
+    <div className={`qfx-streak qfx-streak-${streak.outcome}`}>
+      <div className="qfx-slabel">Auto-Chain streak <b>{label}</b></div>
+      <div className="qfx-track">
+        <span className="qfx-trail">
+          <span style={at(trail.delay, { '--from': trail.from, '--to': trail.to, animationDuration: `calc(var(--fx-t) * ${trail.dur})` } as CSSProperties)} />
+        </span>
+        {Array.from({ length: n }, (_, i) => {
+          let cls = '';
+          let delay = T0;
+          if (streak.outcome === 'complete') { cls = 'now'; delay = T0 + i * 260; }
+          else if (i < here) cls = 'done';
+          else if (i === here) cls = streak.outcome === 'stopped' ? 'fail' : 'now';
+          else if (streak.outcome === 'stopped') cls = 'dead';
+          else if (i === here + 1) { cls = 'next'; delay = T0 + 450; }
+          return (
+            <span key={i} className={`qfx-pip ${cls}`} style={at(delay)}>
+              <TickMark className="qfx-tk" />
+              {cls === 'fail' && (
+                <svg className="qfx-xx" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3 L9 9 M9 3 L3 9" /></svg>
+              )}
+              <span className="qfx-n">{i + 1}</span>
+            </span>
+          );
+        })}
+      </div>
+      <div className="qfx-snote" style={at(noteAt)}>
+        {streak.outcome === 'continues' && <>{heroName} sets off on the next contract<span className="qfx-dots" aria-hidden="true"><i /><i /><i /></span></>}
+        {streak.outcome === 'stopped' && <>Run stops after a failed quest. {heroName} waits for new orders.</>}
+        {streak.outcome === 'complete' && (
+          <>
+            Streak complete. {heroName} is waiting for new orders.
+            <span className="qfx-sseal" aria-hidden="true"><img src={waxSealComplete} alt="" style={at(sealAt)} /></span>
+          </>
+        )}
+      </div>
+      {streak.outcome === 'complete' && (streak.totalGold || streak.totalXp) ? (
+        <div className="qfx-total" style={at(sealAt + 300)}>
+          Streak total: <b>+{formatGold(gold)} gold</b> · <i>+{xp} XP</i>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -768,6 +768,15 @@ export interface Hero {
    */
   autoChainMinutesRemaining: number | null;
   /**
+   * Patch 0422 -- running gold/XP totals for the current Auto-Chain bounty
+   * streak, shown on the streak's final quest result card. Reset to 0
+   * whenever a fresh streak is rolled (rollAutoChainStreak). Optional with
+   * a `?? 0` read everywhere, so old saves need no migration -- a save
+   * loaded mid-streak just shows the totals from that point on.
+   */
+  autoChainGold?: number;
+  autoChainXp?: number;
+  /**
    * Consumable defIds currently slotted on this hero -- persistent, not a
    * per-send pick. A quest automatically uses whatever's equipped here
    * rather than needing a loadout chosen at send time (see the Quest Board
@@ -1066,6 +1075,21 @@ export interface QuestResult {
   brokenItems: string[];
   levelsGained: number;
   chainAdvanced?: { chainId: string; stage: number; totalStages: number; completed: boolean };
+  /**
+   * Patch 0422 -- where this quest sat in an Auto-Chain bounty streak, if
+   * it was part of one. Filled in by the engine right after resolve, once
+   * tryContinueAutoChain has decided what happens next; drives the streak
+   * track on the result card. `finished` counts this quest when it
+   * succeeded; on 'stopped' this quest is number `finished + 1`, the one
+   * that failed. Totals are only set on the streak's last card. Transient
+   * (result cards aren't saved).
+   */
+  /** Quest tag — drives the result card's banner art. Optional for older saves. */
+  tag?: QuestTag;
+  autoChainStreak?: {
+    finished: number; target: number; outcome: 'continues' | 'complete' | 'stopped';
+    totalGold?: number; totalXp?: number;
+  };
   /**
    * The replay counterpart to chainAdvanced above -- deliberately a
    * separate field, not an overload of it, since existing UI code reads

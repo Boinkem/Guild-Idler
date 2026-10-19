@@ -146,7 +146,9 @@ function VendorUpgradeRow({
   def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy, unveiling, isNew,
 }: {
   def: UpgradeDef; level: number; cost: number | null; scrapCost: number; maxed: boolean; affordable: boolean;
-  flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void; onBuy: () => void;
+  flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void;
+  /** Gets the clicked button so the gold + Scrap can fly into it (patch 0422). */
+  onBuy: (btn: HTMLElement) => void;
   /** Patch 0420 -- this row was just taught by a vendor level-up: the
    *  locked "???" face plays its padlock-opening reveal over it. */
   unveiling?: boolean;
@@ -184,7 +186,7 @@ function VendorUpgradeRow({
       <button
         className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
         disabled={maxed || !affordable}
-        onClick={(e) => { e.stopPropagation(); onBuy(); }}
+        onClick={(e) => { e.stopPropagation(); onBuy(e.currentTarget); }}
       >
         {buyLabel}
       </button>
@@ -210,7 +212,7 @@ function VendorUpgradeRow({
             )}
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || !affordable} onClick={onBuy}>{buyLabel}</button>
+              <button className="btn-yellow" disabled={maxed || !affordable} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
             </div>
           </div>
         </div>
@@ -446,7 +448,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               flash={flashes[def.id]}
               pulsing={levelPulses[def.id]}
               onDismissFlash={() => dismiss(def.id)}
-              onBuy={() => engine.buyUpgrade(def.id)}
+              onBuy={(btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id))}
               unveiling={vendorBeat?.phase === 'levelup' && def.id === taughtId}
               isNew={newlyTaught.has(def.id)}
             />

@@ -34259,3 +34259,87 @@ test, only the shared code they use.
 
 **Follow-ups:** vendor upgrade rows, Harvest tools/Warehouse/Overseer,
 Renown perks and the Training tab can still adopt 0420's row beats.
+
+### Quest, story chain and raid result cards animated; vendor upgrade coin flight (patch 0422)
+```discord-update
+Dev Update | Result Cards
+
+- Added an animated quest result card: the quest's banner slides up, a FULFILLED or FAILED stamp lands on it, gold and XP count up with coins rising, and loot flips in
+- Added an Auto-Chain streak track to the quest card: one pip per contract, ticking off as your hero works through the streak, a wax seal and streak totals when it finishes, and a red cross when a failed quest ends the run
+- Added a bigger Critical Burst moment on the quest card, with a lightning flash and twice the coins
+- Added an animated Story Chain Complete card: it unrolls, every stage ticks off one by one in the chain's rank colour, a wax seal slams down with sparks and embers, the title ribbon unfurls and your rewards flip in
+- Added an animated raid result card: the difficulty crest slams on, each encounter resolves in turn as DEFEATED or FELL BACK, and a full clear unfurls a RAID CLEARED banner with confetti while the loot bursts out of an opening chest
+- Fixed buying vendor upgrades not flying your coins off the button like other purchases
+```
+
+The three result modals were mocked up on the Claude Design canvas
+(StoryComplete / RaidComplete / QuestComplete boards) and signed off
+before building. Same rules as 0420/0421: timing follows Settings >
+Animation speed, and Reduce motion shows each card's final frame
+straight away.
+
+**How the cards animate.** Each card is a single CSS timeline rather
+than JS state: every beat is a keyframe animation with `both` fill and
+an inline start delay in `--fx-t` units, built with `at(ms)` from the
+new `src/ui/resultFx.tsx`. Each card's root class contains `fx-`
+(`qfx-card`, `sfx-card`, `rfx-card`), so the existing
+`:root[data-motion='off'] [class*='fx-'] *` rule zeroes every delay
+inside it. Child beats that hang off a parent's delay use
+`animation-delay: inherit` and a held lead-in in the keyframes instead
+of a second offset. Numbers use `useDelayedCount(target, delayMs)`,
+which waits `fxMs(delay)` and then hands off to `useCountUp`, so they
+climb while their row is on screen (instant with motion off).
+`TickMark` is the shared drawn tick.
+
+**Auto-Chain streak data.** `QuestResult.autoChainStreak`
+(`{finished, target, outcome: 'continues' | 'complete' | 'stopped',
+totalGold?, totalXp?}`) is filled by `GameEngine.noteStreakResult`
+straight after `tryContinueAutoChain`, in both the live tick and the
+offline catch-up. It mutates the result object already queued by
+`pushResult` (same reference). Running totals live on two optional
+hero fields, `autoChainGold` / `autoChainXp`, reset by
+`rollAutoChainStreak` and cleared when a streak ends, so no migration is
+needed. Only `via: 'streak'` counts; story-chain auto-continue isn't a
+streak. `finished` is the number of contracts completed so far: for
+`continues` the pip for this quest is `finished - 1`, for `stopped`
+the failed pip is `finished`. `QuestResult.tag` (set in
+`QuestManager.resolve`) picks the banner art: `questTagBannerSrc` /
+`questTagIconSrc`, or the chain's own art via `chainBannerSrc` /
+`chainIconSrc` for a chain stage. Older queued results without a tag
+just show a plain banner.
+
+**Quest card (QuestResultModal).** Everything that was on the card
+stays: Also found, On the road, Damage report, chain progress, View in
+Lore, and the dismiss burst plus gold/XP flights. The later sections
+fade up together after the rewards. The FAILED greyscale goes on
+`.qfx-art` only, so the stamp and tag icon keep their colour.
+
+**Story card (ChainCompleteModal).** Now a keyed inner
+`ChainCompleteCard`. `--tier` (the chain's `rankTierForLevel` colour,
+falling back to violet) is set on the overlay and drives every accent.
+The card's shake and glow read `--seal-at` / `--glow-at` from its own
+style. The old six-star arrival burst is replaced by the seal's sparks.
+Stage names come from `CHAIN_BY_ID[chainId].stages`. Reward items now
+show their icon.
+
+**Raid card (RaidResultModal).** Encounter names come from
+`RAID_BY_ID[raidId].encounterIds` -> `RAID_ENCOUNTER_BY_ID` (falling
+back to "Encounter N"). The crest is `raidDifficultyIconSrc`, and the
+banner uses `raidBannerSrc`, now exported from RaidsPanel. Encounters
+after the losing one grey out on the same beat it falls. Confetti is
+deterministic per card (no `Math.random`). The chest only appears when
+there's loot, and a wipe's card edge turns red on the summary beat.
+
+**Vendor upgrades.** `VendorUpgradeRow.onBuy` now receives the clicked
+button, so the call goes through `buyWithFx` like the other purchases.
+
+**Tested:** `npm run build` passes. All three cards were rendered
+headless through a throwaway harness:
+- quest: success, fail, crit, and streak continue / complete / stop;
+- story: two tiers;
+- raid: full clear, partial and wipe.
+
+Frames were checked mid-timeline and at the end, and with Reduce
+motion forced on. The streak capture in the engine wasn't driven
+through a real Auto-Chain run in-game, so it's worth watching on the
+first streak.
