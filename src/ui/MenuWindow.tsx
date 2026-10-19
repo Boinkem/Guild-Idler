@@ -5,6 +5,7 @@ import { resolveBackgroundMood } from '../game/settings';
 import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { QuestBoardIntroModal } from './QuestBoardIntroModal';
+import { TUTORIAL_QUEST_ID } from '../game/data/quests';
 import { formatGold, formatNumber } from '../game/util';
 import { attentionCounts, isNavTabUnread } from '../game/attention';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
@@ -379,6 +380,9 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const displayGold = useCountUp(engine.state.gold);
   const goldRef = useFlyTargetRef<HTMLSpanElement>('gold');
   const displayRenown = useCountUp(engine.state.renown);
+  // Patch 0424 -- renown is a fly target too (Renown perks, the
+  // Gold-for-Renown exchange, mailbox letters).
+  const renownRef = useFlyTargetRef<HTMLSpanElement>('renown');
   /**
    * Patch 0323, direct request -- Scrap moved up here next to Gold/
    * Renown for easier at-a-glance viewing, always visible regardless of
@@ -392,6 +396,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
    */
   const scrapRef = useFlyTargetRef<HTMLSpanElement>('scrap');
   const unreadCount = engine.unreadNotificationCount;
+  // Patch 0424 -- the nav tab a story chain just unlocked, while its
+  // one-step spotlight is still pending (see the unlock reveal below).
+  const unlockingTab = engine.state.guildName === '' ? null
+    : engine.state.pendingHarvestSpotlight ? 'harvest'
+      : engine.state.pendingHatcherySpotlight ? 'hatchery'
+        : engine.state.pendingPeddlerSpotlight ? 'peddler' : null;
 
   // The default (non-Raids/Hatchery/Peddler) menu backdrop is the same
   // Guild Hall art the Customize scene renders, resolved through the same
@@ -471,7 +481,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <div className="resources">
           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>
-          <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
+          <span ref={renownRef} className="renown">✦ {formatNumber(displayRenown)} renown</span>
           <button
             className={`header-notif-icon ${unreadCount > 0 ? 'header-notif-unread' : ''}`}
             onClick={() => engine.requestTab('guide')}
@@ -642,8 +652,22 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     // all most of the time -- same "absent unless needed"
                     // shape as before, just evaluated per-tab now instead
                     // of hardcoded to one id.
-                    className={isNavTabUnread(engine.state, t.id) ? 'nav-tab-unread' : undefined}
+                    className={[
+                      isNavTabUnread(engine.state, t.id) ? 'nav-tab-unread' : '',
+                      t.id === unlockingTab ? 'navfx-unlock' : '',
+                    ].filter(Boolean).join(' ') || undefined}
                   >
+                    {t.id === unlockingTab && (
+                      // Patch 0424 -- the same padlock moment as the 0421
+                      // one-time unlocks, played on the nav tab a story
+                      // chain just opened; the one-step spotlight follows.
+                      <span className="navfx-lock" aria-hidden="true">
+                        <span className="navfx-chain a"><i /><i /></span>
+                        <span className="navfx-chain b"><i /><i /></span>
+                        <span className="navfx-pad"><span className="navfx-shackle" /><span className="navfx-body" /></span>
+                        <span className="navfx-sweep" />
+                      </span>
+                    )}
                     {t.label}
                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
                     {t.id === 'hatchery' && eggsReady > 0 ? <span className="tab-badge">{eggsReady}</span> : null}
@@ -733,14 +757,20 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <OnboardingTour
           steps={(manualTourOpen ? ALL_TABS : ALL_TABS.filter((t) => FIRST_RUN_TOUR_TAB_IDS.includes(t.id)))
             .filter((t) => isTabVisible(t.id))
-            .map((t) => ({
+            .map((t): { id: string; label: string; description?: string; target?: string; pulse?: boolean } => ({
               id: t.id,
               label: t.label,
               // Only the automatic short tour gets the tailored copy --
               // see FIRST_RUN_TOUR_DESCRIPTIONS' own comment for why a
               // manual replay later shouldn't reuse this same wording.
               description: manualTourOpen ? undefined : FIRST_RUN_TOUR_DESCRIPTIONS[t.id],
-            }))}
+            }))
+            // Patch 0424 -- the automatic tour's last stop lands on the
+            // tutorial quest itself (pulsing) rather than ending on the
+            // Quests tab: the tour finishes on the one thing to do next.
+            .concat(!manualTourOpen && engine.state.guidedOnboarding && Object.values(engine.state.questBoards).some((b) => b.some((o) => o.id === TUTORIAL_QUEST_ID))
+              ? [{ id: 'quests', label: 'Send your hero out', description: 'Open this job and hit Send to start your first quest. Your hero is back in a few minutes, and the guild keeps working while you are away.', target: 'tutorial-quest', pulse: true }]
+              : [])}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => { engine.dismissOnboarding(); setManualTourOpen(false); }}
         />
@@ -770,7 +800,10 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           result-card fix in this patch already uses -- is enough; no
           separate queue needed here since a React re-render already
           follows dismissResult() for free. */}
+      {/* Patch 0424: also waits for any level-up card to be seen first
+          (result card -> level-up card -> this explainer). */}
       {engine.state.guildName !== '' && engine.state.guidedOnboarding && !engine.lastResult
+        && engine.levelUpQueue.length === 0
         && engine.state.pendingQuestBoardIntro && (
         <QuestBoardIntroModal
           onView={() => { setTab('quests'); engine.dismissQuestBoardIntro(); }}
@@ -785,6 +818,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
       {engine.state.guildName !== '' && engine.state.pendingHatcherySpotlight && (
         <OnboardingTour
           steps={[{ id: 'hatchery', label: 'Hatchery' }]}
+          kicker="New tab unlocked"
+          delayMs={1500}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => engine.dismissHatcherySpotlight()}
         />
@@ -796,6 +831,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
       {engine.state.guildName !== '' && engine.state.pendingPeddlerSpotlight && (
         <OnboardingTour
           steps={[{ id: 'peddler', label: 'Grimsby' }]}
+          kicker="New tab unlocked"
+          delayMs={1500}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => engine.dismissPeddlerSpotlight()}
         />
@@ -808,6 +845,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
       {engine.state.guildName !== '' && engine.state.pendingHarvestSpotlight && (
         <OnboardingTour
           steps={[{ id: 'harvest', label: 'Harvest' }]}
+          kicker="New tab unlocked"
+          delayMs={1500}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => engine.dismissHarvestSpotlight()}
         />

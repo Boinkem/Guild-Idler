@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { fxMs, fxSpeed, SealStamp } from './purchaseFx';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { backgroundSrc, BackgroundMoodId } from '../game/settings';
@@ -56,6 +57,14 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
   // pressed, in confirmVibe below. Backing out via Back after previewing
   // a mood without confirming leaves the real setting untouched.
   const [previewMood, setPreviewMood] = useState<BackgroundMoodId>(settings.backgroundMood);
+  // Patch 0424 -- the "guild founded" finale: once Guide me / I've got
+  // this is picked, a charter unrolls with the guild's name and a wax seal
+  // stamps it before the card closes (setGuildName is what closes it, so
+  // the engine calls wait for the moment to play; instant with motion off).
+  const [founding, setFounding] = useState<null | 'charter' | 'leave'>(null);
+  // The art that was showing before a mood change, faded out over the new
+  // one so picking a vibe cross-fades instead of swapping instantly.
+  const [prevBg, setPrevBg] = useState<{ src: string; key: number } | null>(null);
 
   // Forces full menu size before this modal has to render at all -- lives
   // here rather than in App.tsx specifically because this component
@@ -138,20 +147,51 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
   // guided is false. setGuildName is what closes this modal, so it has
   // to run second either way.
   const confirmGuide = (guided: boolean) => {
-    engine.setGuidedOnboarding(guided);
-    engine.setGuildName(trimmed);
+    if (founding) return;
+    const finish = () => {
+      engine.setGuidedOnboarding(guided);
+      engine.setGuildName(trimmed);
+    };
+    if (fxSpeed() <= 0) { finish(); return; }
+    setFounding('charter');
+    window.setTimeout(() => setFounding('leave'), fxMs(2600));
+    window.setTimeout(finish, fxMs(3150));
   };
 
   const bgSrc = backgroundSrc('./lore/panels/guildhall.jpg', previewMood);
+  const pickMood = (mood: BackgroundMoodId) => {
+    if (mood === previewMood) return;
+    setPrevBg({ src: bgSrc, key: Date.now() });
+    setPreviewMood(mood);
+  };
+  const today = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div className="overlay">
       <div
-        className="guild-naming-card"
+        className={`guild-naming-card gnfx-card ${founding ? `gnfx-st-${founding}` : ''}`}
         style={{ backgroundImage: `url(${bgSrc})` }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="guild-naming-content">
+        {prevBg && <span key={prevBg.key} className="gnfx-bgout" style={{ backgroundImage: `url(${prevBg.src})` }} aria-hidden="true" />}
+        {founding && (
+          <div className="gnfx-charter" aria-live="polite">
+            <div className="gnfx-rod" />
+            <div className="gnfx-sheet">
+              <div className="gnfx-inner">
+                <div className="gnfx-k">Charter of the guild</div>
+                <div className="gnfx-gn">{trimmed}</div>
+                <div className="gnfx-tx">Sworn this day to take up contracts across the realm, to keep its heroes fed, armed and paid, and to make its name known.</div>
+                <div className="gnfx-line" />
+                <div className="gnfx-sig">Founded {today}</div>
+                <SealStamp label="Founded" className="gnfx-seal" />
+              </div>
+            </div>
+            <div className="gnfx-rod" />
+            <div className="gnfx-founded">The guild is founded</div>
+          </div>
+        )}
+        <div className="guild-naming-content" key={step}>
           {step === 'name' ? (
             <>
               <div className="guild-naming-textbox guild-naming-textbox-title">
@@ -178,7 +218,10 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
                 />
               </div>
 
-              <div className="row end" style={{ marginTop: 4 }}>
+              <div className="row" style={{ marginTop: 4, justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <span className={`gnfx-pennant ${trimmed ? '' : 'empty'}`} aria-hidden="true">
+                  Guild {[...trimmed].map((c, i) => <i key={i}>{c === ' ' ? '\u00a0' : c}</i>)}
+                </span>
                 <button className="btn-primary" onClick={confirmName} disabled={!trimmed}>
                   Next
                 </button>
@@ -199,14 +242,14 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
               <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 4 }}>
                 <button
                   className={`btn-primary guild-naming-mood-btn ${previewMood === 'dim' ? 'selected' : ''}`}
-                  onClick={() => setPreviewMood('dim')}
+                  onClick={() => pickMood('dim')}
                   title="Candlelit halls, torchlit chambers -- the classic look"
                 >
                   🕯️<br />Moody
                 </button>
                 <button
                   className={`btn-primary guild-naming-mood-btn ${previewMood === 'bright' ? 'selected' : ''}`}
-                  onClick={() => setPreviewMood('bright')}
+                  onClick={() => pickMood('bright')}
                   title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
                 >
                   ☀️<br />Bright
@@ -220,7 +263,7 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
                  *  uses) rather than a special-cased third preview path. */}
                 <button
                   className={`btn-primary guild-naming-mood-btn ${previewMood === 'system' ? 'selected' : ''}`}
-                  onClick={() => setPreviewMood('system')}
+                  onClick={() => pickMood('system')}
                   title="Switches automatically -- bright by day, moody by night, off your own clock"
                 >
                   🕐<br />System

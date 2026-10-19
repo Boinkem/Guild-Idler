@@ -65,20 +65,36 @@ function centerOf(el: Element): { x: number; y: number } {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
-/** Coins (or Scrap shards) arcing from a registered fly target into `toEl`. */
-function flyParticles(fromKey: string, toEl: Element, kind: 'coin' | 'shard', count: number, startDelay: number) {
+export type FlyKind = 'coin' | 'shard' | 'gem' | 'spark';
+const FLY_CLASS: Record<FlyKind, string> = { coin: 'fx-coin', shard: 'fx-shard', gem: 'fx-gem', spark: 'fx-spark' };
+
+type FlyPoint = Element | string | { x: number; y: number };
+function pointOf(target: FlyPoint): { x: number; y: number } | null {
+  if (typeof target === 'string') return getFlyTargetCenter(target);
+  if (target instanceof Element) return centerOf(target);
+  return target;
+}
+
+/**
+ * Patch 0424 -- tokens arcing between any two points: an element, or a
+ * flyTarget.ts key ('gold', 'scrap', 'renown', 'inventory'...). Coins for
+ * gold, shards for scrap, violet gems for renown, blue sparks for Guild
+ * Power. Generalised from 0420's counter-to-button flight so rewards can
+ * fly the other way (a mailbox letter to its counter).
+ */
+export function flyTokens(from: FlyPoint, to: FlyPoint, kind: FlyKind, count: number, startDelay = 0) {
   const dur = fxMs(420);
   const host = fxLayer();
-  const from = getFlyTargetCenter(fromKey);
-  if (!dur || !host || !from || typeof Element.prototype.animate !== 'function') return;
-  const to = centerOf(toEl);
+  const a = pointOf(from);
+  const b = pointOf(to);
+  if (!dur || !host || !a || !b || typeof Element.prototype.animate !== 'function') return;
   for (let i = 0; i < count; i++) {
     const p = document.createElement('span');
-    p.className = kind === 'coin' ? 'fx-coin' : 'fx-shard';
-    const sx = from.x + ((i % 3) - 1) * 7;
-    const sy = from.y + (i % 2 ? 4 : -3);
-    const dx = to.x + ((i % 3) - 1) * 7 - sx;
-    const dy = to.y + ((i * 7) % 5) - 2 - sy;
+    p.className = FLY_CLASS[kind];
+    const sx = a.x + ((i % 3) - 1) * 7;
+    const sy = a.y + (i % 2 ? 4 : -3);
+    const dx = b.x + ((i % 3) - 1) * 7 - sx;
+    const dy = b.y + ((i * 7) % 5) - 2 - sy;
     p.style.left = `${sx}px`;
     p.style.top = `${sy}px`;
     host.appendChild(p);
@@ -91,6 +107,11 @@ function flyParticles(fromKey: string, toEl: Element, kind: 'coin' | 'shard', co
     anim.onfinish = () => p.remove();
     anim.oncancel = () => p.remove();
   }
+}
+
+/** Coins (or Scrap shards) arcing from a registered fly target into `toEl`. */
+function flyParticles(fromKey: string, toEl: Element, kind: FlyKind, count: number, startDelay: number) {
+  flyTokens(fromKey, toEl, kind, count, startDelay);
 }
 
 /** A red "-amount" drifting down off a header counter. */
@@ -124,10 +145,17 @@ function floatOff(fromKey: string, text: string) {
 export function buyWithFx(engine: GameEngine, btn: HTMLElement | null | undefined, action: () => void) {
   const gold0 = engine.state.gold;
   const scrap0 = engine.state.scrap;
+  const renown0 = engine.state.renown;
   action();
   const goldSpent = gold0 - engine.state.gold;
   const scrapSpent = scrap0 - engine.state.scrap;
-  if (!btn || (goldSpent <= 0 && scrapSpent <= 0) || fxSpeed() <= 0) return;
+  const renownSpent = renown0 - engine.state.renown;
+  if (!btn || (goldSpent <= 0 && scrapSpent <= 0 && renownSpent <= 0) || fxSpeed() <= 0) return;
+  // Patch 0424 -- Renown perks pay in renown: violet gems instead of coins.
+  if (renownSpent > 0) {
+    flyParticles('renown', btn, 'gem', 4, 0);
+    floatOff('renown', `−${formatGold(renownSpent)}`);
+  }
   if (goldSpent > 0) {
     flyParticles('gold', btn, 'coin', 6, 0);
     floatOff('gold', `−${formatGold(goldSpent)}`);
@@ -371,3 +399,51 @@ export function flyIcon(
     anim.oncancel = done;
   });
 }
+
+/**
+ * Patch 0424 -- lets an element that's about to unmount (a claimed
+ * mailbox letter) leave on screen: a static copy is laid over it in the
+ * fx layer and slides out while fading, and its wax seal (any
+ * `.mfx-seal` inside) pops off. Call it before the state change that
+ * removes the real element; no-op with motion off.
+ */
+export function ghostOut(el: HTMLElement | null, delay = 0) {
+  const dur = fxMs(420);
+  const host = fxLayer();
+  if (!dur || !host || !el || typeof Element.prototype.animate !== 'function') return;
+  const r = el.getBoundingClientRect();
+  const ghost = el.cloneNode(true) as HTMLElement;
+  ghost.classList.add('fx-ghost');
+  ghost.style.position = 'fixed';
+  ghost.style.left = `${r.left}px`;
+  ghost.style.top = `${r.top}px`;
+  ghost.style.width = `${r.width}px`;
+  ghost.style.height = `${r.height}px`;
+  ghost.style.margin = '0';
+  host.appendChild(ghost);
+  const seal = ghost.querySelector<HTMLElement>('.mfx-seal');
+  seal?.animate([
+    { transform: 'none', opacity: 1 },
+    { transform: 'translate(18px, -30px) rotate(140deg)', opacity: 0 },
+  ], { duration: fxMs(320), delay: fxMs(delay), easing: 'cubic-bezier(.4,0,.7,1)', fill: 'both' });
+  const anim = ghost.animate([
+    { transform: 'none', opacity: 1 },
+    { transform: 'scale(1.03)', opacity: 1, offset: 0.35 },
+    { transform: 'translateX(48px) scale(.96)', opacity: 0 },
+  ], { duration: dur, delay: fxMs(delay + 180), easing: 'cubic-bezier(.4,0,.8,.6)', fill: 'both' });
+  anim.onfinish = () => ghost.remove();
+  anim.oncancel = () => ghost.remove();
+}
+
+/** Patch 0424 -- the row class for a purchase beat, shared by every
+ *  `.upgrade-row` that adopted the 0420 beats (Harvest tools, Overseer,
+ *  Renown perks...): glow + shine on the level-up, shake on the stamp. */
+export function rowBeatClass(beat: Beat | undefined): string {
+  if (!beat) return '';
+  if (beat.phase === 'levelup') return 'fx-levelup';
+  if (beat.phase === 'stamp' || beat.phase === 'file') return 'fx-stamped';
+  return '';
+}
+
+/** Same row beats with no file-away: these rows stay where they are once maxed. */
+export const STAY_BEATS: BeatTiming = { ...ROW_BEATS, file: 0 };

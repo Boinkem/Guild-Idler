@@ -10,7 +10,7 @@ import { CHAIN_REPLAY_TIER_BY_ID } from '../../game/data/chainReplay';
 import { describeMods, formatGold, formatNumber, pct } from '../../game/util';
 import { GuildHallCategory } from '../../game/types';
 import { usePulsesOnChange } from '../maxFlash';
-import { buyWithFx, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
+import { buyWithFx, flyTokens, fxMs, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
 import type { Beat } from '../purchaseFx';
 import { UnlockFx, useJustUnlocked } from '../unlockFx';
 import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
@@ -609,7 +609,16 @@ function RenownExchangeCard({ justUnlocked }: { justUnlocked: boolean }) {
         <button
           className="btn-primary"
           disabled={!canExchange}
-          onClick={() => { engine.exchangeGoldForRenown(offer); setOfferText(''); }}
+          onClick={(e) => {
+            // Patch 0424 -- coins fly into the button, then the renown it
+            // bought flies back up to the header's renown counter.
+            const btn = e.currentTarget;
+            const renown0 = engine.state.renown;
+            buyWithFx(engine, btn, () => engine.exchangeGoldForRenown(offer));
+            const gained = engine.state.renown - renown0;
+            if (gained > 0) flyTokens(btn, 'renown', 'gem', Math.min(6, 2 + gained), fxMs(380));
+            setOfferText('');
+          }}
           title={renownPreview >= 1 ? `Get ${renownPreview} Renown for ${formatGold(renownPreview * rate)} gold` : `Offer at least ${formatGold(rate)} gold`}
         >
           Exchange{renownPreview >= 1 ? ` -- ${renownPreview} Renown` : ''}

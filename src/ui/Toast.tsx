@@ -30,9 +30,17 @@ const TOAST_DURATION_LONG_MS = 9000;
  * they only need to survive across the pause/resume boundary, never
  * need to trigger a re-render on their own.
  */
-export function Toast() {
+export function Toast({ skipBanners = false }: { skipBanners?: boolean } = {}) {
   const engine = useEngine();
   const toast = engine.toast;
+  // Patch 0424 -- banner-worthy messages (guidance and milestones) go to
+  // the top NotificationBanner's own queue when the menu is open, so they
+  // no longer also play as a 9s bottom toast. The idle companion has no
+  // banner, so there they still show here.
+  const skip = !!toast?.long && skipBanners;
+  useEffect(() => {
+    if (skip) engine.clearToast();
+  }, [skip, toast?.seq, engine]);
   const remaining = useRef(0);
   const startedAt = useRef(0);
   const timerId = useRef<number | null>(null);
@@ -49,14 +57,14 @@ export function Toast() {
   };
 
   useEffect(() => {
-    if (!toast) return undefined;
+    if (!toast || skip) return undefined;
     remaining.current = toast.long ? TOAST_DURATION_LONG_MS : TOAST_DURATION_MS;
     arm(remaining.current);
     return clear;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast?.seq, engine]);
 
-  if (!toast) return null;
+  if (!toast || skip) return null;
 
   const pause = () => {
     if (timerId.current === null) return;

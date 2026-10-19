@@ -3,6 +3,7 @@ import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CraftingManager } from '../game/managers/CraftingManager';
+import { InfuseFx, useInfuseBeat } from './infuseFx';
 import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
 import { ElementType, GemTier } from '../game/types';
 import { formatGold, RARITY_COLOR } from '../game/util';
@@ -58,6 +59,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
   const [targetUid, setTargetUid] = useState('');
   const [element, setElement] = useState<ElementType | null>(null);
   const [tier, setTier] = useState<GemTier | null>(null);
+  const [infuseBeat, playInfuse] = useInfuseBeat();
   const [openItemPicker, setOpenItemPicker] = useState(false);
   const [openEnchantPicker, setOpenEnchantPicker] = useState(false);
   // Shown once, right after a pick -- same reasoning ItemPreviewModal's
@@ -132,7 +134,9 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
 
   function handleInfuse() {
     if (!item || !element || !tier) return;
-    engine.infuseItem(item.uid, element, tier);
+    if (engine.infuseItem(item.uid, element, tier)) {
+      playInfuse({ element, tier, text: `${GEM_TIER_LABEL[tier]} ${ELEMENT_LABEL[element]} damage infused` });
+    }
     setElement(null);
     setTier(null);
   }
@@ -167,6 +171,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
             label="Choose an enchant"
             onOpen={() => setOpenEnchantPicker(true)}
           />
+          <InfuseFx beat={infuseBeat} item={ITEM_SLOT} gem={ENCHANT_SLOT} />
         </div>
 
         {item && def ? (

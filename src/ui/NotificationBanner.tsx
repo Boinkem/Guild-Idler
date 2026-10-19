@@ -11,6 +11,9 @@ import { TAB_LABELS } from './tabLabels';
  *  Doubled from 5000 -- the original window read as too quick to
  *  reliably catch and read before it auto-dismissed. */
 const DISPLAY_MS = 10000;
+/** Patch 0424 -- breathing room between queued banners. */
+const BANNER_GAP_MS = 900;
+const STALE_MS = 5 * 60_000;
 
 /**
  * Pops up near the header the moment a genuinely new, banner-worthy entry
@@ -47,26 +50,44 @@ const DISPLAY_MS = 10000;
 export function NotificationBanner() {
   const engine = useEngine();
   const state = engine.state;
-  // Newest entry that's actually banner-worthy -- not necessarily
-  // notifications[0] itself, since a routine (non-banner) message could
-  // have landed more recently without displacing this from being the
-  // thing that still deserves the top banner.
-  const latestBanner = state.notifications.find((n) => n.banner) ?? null;
+
+  // Patch 0424 -- banners now play as a queue, one at a time with a short
+  // gap, instead of only ever showing the newest (which used to drop the
+  // others when several guidance topics fired together). Pending = every
+  // banner-worthy entry newer than the last one shown, oldest first.
+  const markerIx = state.notifications.findIndex((n) => n.id === state.lastBannerShownId);
+  const newer = markerIx >= 0 ? state.notifications.slice(0, markerIx) : state.notifications;
+  const pending = [...newer].reverse().filter((n) => n.banner);
+  // Anything older than a few minutes (left over from time in the idle
+  // companion, where it already showed as a toast) is skipped, not replayed.
+  const fresh = pending.filter((n) => Date.now() - n.timestamp <= STALE_MS);
+  const lastStale = fresh.length < pending.length ? pending[pending.length - fresh.length - 1] : null;
+  const next = fresh[0] ?? null;
+  // Hold the queue while a card that should come first is on screen
+  // (results, level-up, the Quest Board explainer, discovery...).
+  const held = engine.levelUpBlocked || engine.levelUpQueue.length > 0 || !!state.pendingQuestBoardIntro;
 
   const [shown, setShown] = useState<NotificationEntry | null>(null);
+  const [cooling, setCooling] = useState(false);
 
   useEffect(() => {
-    if (!latestBanner) return;
-    if (latestBanner.id === state.lastBannerShownId) return;
-    setShown(latestBanner);
-    engine.markBannerShown(latestBanner.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestBanner?.id]);
+    if (lastStale && !fresh.length) engine.markBannerShown(lastStale.id);
+    if (shown || cooling || held || !next) return;
+    setShown(next);
+    engine.markBannerShown(next.id);
+  }, [next?.id, shown, cooling, held]);
+
+  const finish = () => {
+    setShown(null);
+    setCooling(true);
+    window.setTimeout(() => setCooling(false), BANNER_GAP_MS);
+  };
 
   useEffect(() => {
     if (!shown) return undefined;
-    const id = window.setTimeout(() => setShown(null), DISPLAY_MS);
+    const id = window.setTimeout(finish, DISPLAY_MS);
     return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown]);
 
   if (!shown) return null;
@@ -79,7 +100,7 @@ export function NotificationBanner() {
   // nothing at all. Reordered so the banner always closes first, with the
   // acknowledge side-effect now wrapped so it can never block that again.
   const acknowledge = () => {
-    setShown(null);
+    finish();
     try {
       engine.markNotificationsSeen();
     } catch (err) {

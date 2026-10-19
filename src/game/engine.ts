@@ -203,6 +203,11 @@ export class GameEngine {
    * rather than being folded into the regular per-quest result card.
    */
   completedChainCelebration: ChainCelebration | null = null;
+  /** Patch 0424 -- the tiered-up hero's stats from just before the tier
+   *  applied, so HeroTierUpModal can grow each stat bar by what the tier
+   *  added. Transient (not saved): after a reload the card simply shows
+   *  the new values without the growth beat. */
+  lastTierUpStats: { heroId: string; before: Stats } | null = null;
   /**
    * Hero Level-Up cards waiting to be shown (patch 0414), oldest first.
    * Filled by detectLevelUps, which diffs every hero's level against the
@@ -370,7 +375,7 @@ export class GameEngine {
    * True while any popup that belongs BEFORE a Level-Up card is pending:
    * quest/raid results (and anything still queued behind them), a chain
    * completion, the offline report, hatching, a Hero Tier-Up, chain
-   * discovery, the quest-board intro, or the guild still being unnamed.
+   * discovery, or the guild still being unnamed.
    * Achievements are corner toasts, not blockers, so they can overlap.
    */
   get levelUpBlocked(): boolean {
@@ -384,7 +389,10 @@ export class GameEngine {
       || !!s.pendingHatchReadyNotice
       || !!s.pendingHeroTierUpId
       || !!s.pendingChainDiscovery
-      || !!s.pendingQuestBoardIntro
+      // Patch 0424: no longer waits on pendingQuestBoardIntro -- the
+      // first-quest order is result card -> level-up card -> Quest Board
+      // explainer, so the explainer now waits on the level-up instead
+      // (see MenuWindow's QuestBoardIntroModal gate).
       || s.guildName === '';
   }
 
@@ -467,6 +475,33 @@ export class GameEngine {
         for (const message of topic.messages) this.archive(message, topic.targetTab);
         this.state.pendingChainDiscovery = true;
         this.notify();
+        continue;
+      }
+      // Patch 0424 -- the first-quest debrief. These are still logged in
+      // Notifications, but not raised as banners when something else on
+      // screen already says them:
+      //  - "Level up!" duplicates the level-up card (the stat-point line
+      //    after it still shows);
+      //  - the potion and vendor tips are rows in the Quest Board
+      //    explainer's "Next steps" whenever that explainer is pending;
+      //  - the Guild Hall nudge always fires on the same tick as the
+      //    second-hero one, so the two merge into a single banner.
+      const ids = new Set(topics.map((t) => t.id));
+      const quiet = (message: string) => this.archive(message, topic.targetTab);
+      if (topic.id === 'first_level_up') {
+        topic.messages.forEach((m, i) => (i === 0 ? quiet(m) : this.say(m, topic.targetTab, true)));
+        continue;
+      }
+      if ((topic.id === 'first_consumable_obtained' || topic.id === 'first_quest_complete_vendor_nudge') && this.state.pendingQuestBoardIntro) {
+        topic.messages.forEach(quiet);
+        continue;
+      }
+      if (topic.id === 'guild_hall_intro' && ids.has('second_hero_affordable')) {
+        topic.messages.forEach(quiet);
+        continue;
+      }
+      if (topic.id === 'second_hero_affordable' && ids.has('guild_hall_intro')) {
+        this.say("You've got enough gold to recruit a second hero -- and the Guild Hall has upgrades that help every hero at once, worth a look as gold piles up.", topic.targetTab, true);
         continue;
       }
       for (const message of topic.messages) this.say(message, topic.targetTab, true);
@@ -745,6 +780,22 @@ export class GameEngine {
 
   dismissAchievement() {
     this.achievementQueue.shift();
+    this.notify();
+  }
+
+  /** Patch 0424 -- achievements stack down the corner a beat apart
+   *  instead of waiting 4.5s each: up to three show at once, each with
+   *  its own timer, and the rest wait their turn. */
+  get visibleAchievements() {
+    const all = AchievementManager.list();
+    return this.achievementQueue.slice(0, 3)
+      .map((id) => all.find((a) => a.id === id))
+      .filter((a): a is NonNullable<typeof a> => !!a);
+  }
+  dismissAchievementId(id: string) {
+    const i = this.achievementQueue.indexOf(id);
+    if (i < 0) return;
+    this.achievementQueue.splice(i, 1);
     this.notify();
   }
 
@@ -3606,12 +3657,15 @@ export class GameEngine {
    *  see CraftingManager.craftAndInfuse for the combined craft-then-apply
    *  flow, which uses an already-owned gem if one exists or crafts one
    *  fresh otherwise. */
-  infuseItem(itemUid: string, element: ElementType, tier: GemTier) {
+  /** Returns true when the infusion took (patch 0424: the stations only
+   *  play their infuse moment on success). */
+  infuseItem(itemUid: string, element: ElementType, tier: GemTier): boolean {
     const error = CraftingManager.craftAndInfuse(this.state, itemUid, element, tier);
-    if (error) return this.say(error);
+    if (error) { this.say(error); return false; }
     playSound('infuse');
     this.say('The infusion takes.', 'equipment');
     void this.saveNow();
+    return true;
   }
 
   recruit(heroClass: HeroClass) {
@@ -3752,9 +3806,11 @@ export class GameEngine {
   tierUpHero(heroId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
+    const before = { ...hero.stats };
     const error = HeroManager.tierUp(this.state, hero);
     if (error) return this.say(error);
     playSound('level_up');
+    this.lastTierUpStats = { heroId: hero.id, before };
     this.state.pendingHeroTierUpId = hero.id;
     this.archive(`${hero.name} tiered up to Tier ${HeroManager.effectiveTier(hero)}!`, 'heroes');
     this.notify();

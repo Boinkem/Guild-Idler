@@ -3,6 +3,7 @@ import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CraftingManager } from '../game/managers/CraftingManager';
+import { InfuseFx, useInfuseBeat } from './infuseFx';
 import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
 import { ElementType, GemTier } from '../game/types';
 import { formatGold, RARITY_COLOR } from '../game/util';
@@ -41,6 +42,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
   const [targetUid, setTargetUid] = useState('');
   const [element, setElement] = useState<ElementType | null>(null);
   const [tier, setTier] = useState<GemTier | null>(null);
+  const [infuseBeat, playInfuse] = useInfuseBeat();
   const [openItemPicker, setOpenItemPicker] = useState(false);
   const [openGemPicker, setOpenGemPicker] = useState(false);
   // Same reasoning as WeaponEnchantStation's own previewUid -- see
@@ -109,7 +111,9 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
 
   function handleInfuse() {
     if (!item || !element || !tier) return;
-    engine.infuseItem(item.uid, element, tier);
+    if (engine.infuseItem(item.uid, element, tier)) {
+      playInfuse({ element, tier, text: `${GEM_TIER_LABEL[tier]} ${ELEMENT_LABEL[element]} resistance infused` });
+    }
     setElement(null);
     setTier(null);
   }
@@ -144,6 +148,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
             label="Choose a resistance gem"
             onOpen={() => setOpenGemPicker(true)}
           />
+          <InfuseFx beat={infuseBeat} item={ITEM_SLOT} gem={ENCHANT_SLOT} />
         </div>
 
         {item && def ? (

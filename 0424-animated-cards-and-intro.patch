@@ -1,0 +1,2770 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 869e2b7..4ff6cb7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -34400,3 +34400,114 @@ a chain, a raid, the Overseer, every badge), the 1-day report from the
+ bug screenshot, and a nothing-finished report. Frames were checked mid
+ and end. The engine change is a straight extraction (tsc-clean), and
+ the buttons weren't clicked through in-game here.
++
++### Animated hatch, tier-up, chain scroll, infuse, mailbox and achievements; purchase beats everywhere; reworked intro (patch 0424)
++```discord-update
++Dev Update | Patch 0424
++
++- Added a proper hatching moment: the egg wobbles in its nest, shakes harder the rarer it is, cracks open in a burst of shell and light, and your new pet pops out. Eggs now use real egg art, too
++- Added a new Tier Up card: your hero rises on a pillar of light, the tier badge flips over, and each stat bar grows to its new value (with a seal when they hit max tier)
++- Added a sealed scroll for your first quest chain: the wax seal cracks, the scroll unrolls and a trail draws out to every stage
++- Added an infusing moment to Weapon Enchanting and Armour Infusion: the gem charges, a stream of element-coloured sparks pours into the item and it flares
++- Changed Mailbox claims so each letter gets stamped and slides away while its rewards fly to your counters
++- Changed achievement pop-ups to a medal card that stacks when several unlock at once, showing every reward (bard tracks and titles included)
++- Added the same buy animations and currency fly-ins to Harvest tools, Overseers, the Warehouse, Renown perks, Hero perks, Training and the Renown exchange
++- Changed Fund the Guild into a coffer: gold pours in, the lid gulps and your Guild Power ticks up
++- Added a founding charter that stamps your new guild's name when you start a game
++- Changed the first-run tour to glide between stops and finish by pointing at your first job on the Quest Board
++- Added a reveal when a new tab unlocks: the lock breaks open before the tip appears
++- Changed the first-quest flow: result, then level-up, then a new Quest Board explainer (difficulties, speed vs reward) with clear next steps
++- Fixed tips piling up: they now show one at a time in the top banner, wait until cards are closed, and no longer double up as toasts at the bottom
++- Changed the Guild Hall and second-hero tips into one combined tip
++```
++
++Mocked up on the Claude Design canvas (Hatch, TierUp, ChainScroll,
++Infuse, Mailbox, Achievements, PurchaseRows, FundGuild, GuildFounding,
++Tour, TabUnlock and FirstQuest boards) and signed off before building.
++Retirement was dropped from the list (the feature is shelved). All new
++timelines follow 0422's result-card pattern: `at(ms)` delays in `--fx-t`
++units, `both` fill, a root class containing `fx-` so Reduce motion shows
++the final frame, and `fxMs`/`fxSpeed` for anything timed in JS.
++
++**Hatching.** `HatchReadyModal` gains a nest stage (halo, sparks behind
++the egg, the waiting egg wobbling). `HatchRevealModal` plays drop, shake,
++crack and burst. Shake length grows with rarity
++(`1300 + max(0, rarityIndex - 1) * 250` ms, exposed as `--hfx-shake`),
++then shards, rays, flash and the `PetSprite` pop, with the title, rarity
++pill and name field following. Egg art: `tools/import_eggs.py` was
++rewritten to cut `public/pets/egg/<rarity>/icon.png` (column 2) and
++`open.png` (column 9) from `public/pets/Eggs/Eggs_48x48.png`, rows
++common 3 / uncommon 4 / rare 5 / epic 9 / legendary 6. `public/pets` is
++gitignored (licensed art), so the PNGs are not in this patch -- run the
++script to regenerate them. `EggIcon` still falls back to the emoji.
++
++**Tier Up.** `engine.lastTierUpStats` (`{ heroId, before }`) is set in
++`tierUpHero` so the card can grow STR/END/LCK/WIS bars from the old
++values. Max tier is `HeroManager.nextTierUpStep(hero) === null`.
++
++**Chain discovery.** `ChainDiscoveryModal` reads the rolled chain from
++`state.chainBoard` and shows its banner, icon, name and up to 5 stage
++nodes (stage 1 live, the rest "???", "+N more" past five). It falls back
++to generic copy if no chain resolves.
++
++**Infuse.** New `src/ui/infuseFx.tsx` (`ELEMENT_FX_COLOR`,
++`useInfuseBeat`, `InfuseFx`), drawn in the infuse scene's % space over
++the item and gem slots. Mote and flare counts scale with gem tier.
++`engine.infuseItem` now returns a boolean so the stations only play on
++success. Skipped entirely with motion off.
++
++**Mailbox.** Claims run in the engine first; only the ids that actually
++left animate (`ghostOut` clones the card into the fx layer, stamps its
++seal and slides it out), with `flyTokens` coins/shards and `flyIcon` to
++inventory.
++
++**Achievements.** `engine.visibleAchievements` (first 3 of the queue)
++and `dismissAchievementId(id)`. `AchievementPopup` renders a stack; each
++toast holds 4.5s real time, then leaves over `fxMs(380)`.
++
++**Purchase rows.** `purchaseFx` gains `FlyKind` (`coin | shard | gem |
++spark`), `flyTokens(from, to, kind, count, delay)` (which `flyParticles`
++now wraps), renown handling in `buyWithFx`, `ghostOut`, `rowBeatClass`
++and `STAY_BEATS`. Harvest tool and Overseer rows use the 0420
++`usePurchaseBeats`/`LevelRoll`/`SealStamp` beats ("Mastered", "Fully
++staffed") instead of `maxFlash`. The Warehouse gets a crate row and a
++cap bump. Renown/Hero perks, Training (train, tier up, grounds, plus a
++`rfx-trained` reveal on newly trained roles) and the Guild exchange go
++through `buyWithFx`. Fund the Guild flies gold into a coffer, then
++sparks to Guild Power, with a count-up ledger.
++
++**Intro sequencing.**
++- `GuildNamingModal`: after "Guide me" the charter stamps the name with
++  a seal, then the card leaves. The guided flag and name are committed
++  after `fxMs(3150)` (immediately with motion off). Backgrounds
++  crossfade between vibe steps.
++- `OnboardingTour`: steps can target any `[data-tour=...]` element and
++  pulse it. The spotlight glides between stops, with dots and a kicker.
++  The guided tour adds a 4th stop on the tutorial quest
++  (`data-tour="tutorial-quest"` in `QuestPanel`) when it's on a board.
++  Tab-unlock spotlights wait 1.5s for the new `unlockingTab` lock-break
++  reveal in `MenuWindow`.
++- Order after the first quest: result card, then level-up, then the
++  Quest Board explainer. `levelUpBlocked` no longer includes
++  `pendingQuestBoardIntro`, and the explainer waits for an empty
++  `levelUpQueue`. `QuestBoardIntroModal` is rebuilt (difficulty ladder,
++  speed vs reward sample card, Next steps).
++- Guidance: `first_level_up`'s first line goes to the archive only.
++  `first_consumable_obtained` and `first_quest_complete_vendor_nudge` are
++  archive-only while the explainer is pending, since it covers them.
++  `guild_hall_intro` and `second_hero_affordable` merge into one `say()`.
++- `NotificationBanner` is now a queue: every banner entry newer than
++  `lastBannerShownId`, oldest first, one at a time with a 900 ms gap.
++  It's held while a level-up or the explainer is up. Entries older than
++  5 minutes are skipped. `Toast` drops banner-length toasts in menu mode
++  (`skipBanners`), so tips no longer double up at the bottom.
++
++**Tested:** `npx tsc --noEmit` and `npm run build` pass. The full intro
++was played headless in the web build: naming, vibe, Guide me, charter,
++the tour ending on the tutorial quest, Send, Complete now, the result
++card with stacked achievements, level-up, the explainer, then the top
++banner tips showing one at a time with no bottom toasts. Hatch reveal
++(common and legendary, mid and end frames), Tier Up, the chain scroll
++and the achievement stack were rendered through a throwaway harness.
++Mailbox, infuse and the purchase rows were type-checked and built but
++not clicked through in-game here.
+diff --git a/src/App.tsx b/src/App.tsx
+index 3b397e2..1ff7270 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -188,7 +188,7 @@ export function App() {
+           <LevelUpModal compact={mode === 'idle'} onOpenMenu={() => changeMode('menu')} />
+         </>
+       )}
+-      <Toast />
++      <Toast skipBanners={mode === 'menu'} />
+       {/* Menu-only -- the notification banner is meant to be a prominent,
+           clickable "go check this out" moment, which only makes sense
+           once the full menu (with somewhere for it to actually navigate
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index fd93ca0..98bc084 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -203,6 +203,11 @@ export class GameEngine {
+    * rather than being folded into the regular per-quest result card.
+    */
+   completedChainCelebration: ChainCelebration | null = null;
++  /** Patch 0424 -- the tiered-up hero's stats from just before the tier
++   *  applied, so HeroTierUpModal can grow each stat bar by what the tier
++   *  added. Transient (not saved): after a reload the card simply shows
++   *  the new values without the growth beat. */
++  lastTierUpStats: { heroId: string; before: Stats } | null = null;
+   /**
+    * Hero Level-Up cards waiting to be shown (patch 0414), oldest first.
+    * Filled by detectLevelUps, which diffs every hero's level against the
+@@ -370,7 +375,7 @@ export class GameEngine {
+    * True while any popup that belongs BEFORE a Level-Up card is pending:
+    * quest/raid results (and anything still queued behind them), a chain
+    * completion, the offline report, hatching, a Hero Tier-Up, chain
+-   * discovery, the quest-board intro, or the guild still being unnamed.
++   * discovery, or the guild still being unnamed.
+    * Achievements are corner toasts, not blockers, so they can overlap.
+    */
+   get levelUpBlocked(): boolean {
+@@ -384,7 +389,10 @@ export class GameEngine {
+       || !!s.pendingHatchReadyNotice
+       || !!s.pendingHeroTierUpId
+       || !!s.pendingChainDiscovery
+-      || !!s.pendingQuestBoardIntro
++      // Patch 0424: no longer waits on pendingQuestBoardIntro -- the
++      // first-quest order is result card -> level-up card -> Quest Board
++      // explainer, so the explainer now waits on the level-up instead
++      // (see MenuWindow's QuestBoardIntroModal gate).
+       || s.guildName === '';
+   }
+ 
+@@ -469,6 +477,33 @@ export class GameEngine {
+         this.notify();
+         continue;
+       }
++      // Patch 0424 -- the first-quest debrief. These are still logged in
++      // Notifications, but not raised as banners when something else on
++      // screen already says them:
++      //  - "Level up!" duplicates the level-up card (the stat-point line
++      //    after it still shows);
++      //  - the potion and vendor tips are rows in the Quest Board
++      //    explainer's "Next steps" whenever that explainer is pending;
++      //  - the Guild Hall nudge always fires on the same tick as the
++      //    second-hero one, so the two merge into a single banner.
++      const ids = new Set(topics.map((t) => t.id));
++      const quiet = (message: string) => this.archive(message, topic.targetTab);
++      if (topic.id === 'first_level_up') {
++        topic.messages.forEach((m, i) => (i === 0 ? quiet(m) : this.say(m, topic.targetTab, true)));
++        continue;
++      }
++      if ((topic.id === 'first_consumable_obtained' || topic.id === 'first_quest_complete_vendor_nudge') && this.state.pendingQuestBoardIntro) {
++        topic.messages.forEach(quiet);
++        continue;
++      }
++      if (topic.id === 'guild_hall_intro' && ids.has('second_hero_affordable')) {
++        topic.messages.forEach(quiet);
++        continue;
++      }
++      if (topic.id === 'second_hero_affordable' && ids.has('guild_hall_intro')) {
++        this.say("You've got enough gold to recruit a second hero -- and the Guild Hall has upgrades that help every hero at once, worth a look as gold piles up.", topic.targetTab, true);
++        continue;
++      }
+       for (const message of topic.messages) this.say(message, topic.targetTab, true);
+     }
+   }
+@@ -748,6 +783,22 @@ export class GameEngine {
+     this.notify();
+   }
+ 
++  /** Patch 0424 -- achievements stack down the corner a beat apart
++   *  instead of waiting 4.5s each: up to three show at once, each with
++   *  its own timer, and the rest wait their turn. */
++  get visibleAchievements() {
++    const all = AchievementManager.list();
++    return this.achievementQueue.slice(0, 3)
++      .map((id) => all.find((a) => a.id === id))
++      .filter((a): a is NonNullable<typeof a> => !!a);
++  }
++  dismissAchievementId(id: string) {
++    const i = this.achievementQueue.indexOf(id);
++    if (i < 0) return;
++    this.achievementQueue.splice(i, 1);
++    this.notify();
++  }
++
+   /**
+    * Public entry point for a UI-triggered informational toast that isn't
+    * tied to a specific game action -- everything else reaches the queue
+@@ -3606,12 +3657,15 @@ export class GameEngine {
+    *  see CraftingManager.craftAndInfuse for the combined craft-then-apply
+    *  flow, which uses an already-owned gem if one exists or crafts one
+    *  fresh otherwise. */
+-  infuseItem(itemUid: string, element: ElementType, tier: GemTier) {
++  /** Returns true when the infusion took (patch 0424: the stations only
++   *  play their infuse moment on success). */
++  infuseItem(itemUid: string, element: ElementType, tier: GemTier): boolean {
+     const error = CraftingManager.craftAndInfuse(this.state, itemUid, element, tier);
+-    if (error) return this.say(error);
++    if (error) { this.say(error); return false; }
+     playSound('infuse');
+     this.say('The infusion takes.', 'equipment');
+     void this.saveNow();
++    return true;
+   }
+ 
+   recruit(heroClass: HeroClass) {
+@@ -3752,9 +3806,11 @@ export class GameEngine {
+   tierUpHero(heroId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
++    const before = { ...hero.stats };
+     const error = HeroManager.tierUp(this.state, hero);
+     if (error) return this.say(error);
+     playSound('level_up');
++    this.lastTierUpStats = { heroId: hero.id, before };
+     this.state.pendingHeroTierUpId = hero.id;
+     this.archive(`${hero.name} tiered up to Tier ${HeroManager.effectiveTier(hero)}!`, 'heroes');
+     this.notify();
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 1cd0db6..e23b747 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -7849,3 +7849,508 @@ button.harvest-item:hover {
+ .ofx-chip.hurt { color: color-mix(in srgb, var(--blood) 80%, white); font-weight: 400; padding-left: 8px; }
+ .ofx-chip.more { color: var(--muted); font-weight: 400; padding-left: 8px; }
+ .ofx-actions { animation: qfx-rise calc(var(--fx-t) * 300) ease-out both; }
++
++/* ============================ patch 0424 ============================ */
++/*
++ * Patch 0424 -- the second animation pass from the Claude Design canvas
++ * (Hatch, TierUp, ChainDiscovery, Enchant, Mailbox, Achievement,
++ * Purchases, FundGuild, GuildFounded, TourSpotlight, FirstQuest,
++ * TabUnlock boards). Same rules as 0422/0423: beats are `both`-filled
++ * animations with --fx-t delays (resultFx.tsx `at()`), and every root
++ * class contains "fx-" so Reduce motion shows the final frame.
++ */
++
++/* ---- egg ready + hatch ---- */
++.hfx-nest-stage { position: relative; height: 120px; margin: -4px 0 6px; }
++.hfx-halo {
++  position: absolute; left: 50%; bottom: 26px; width: 110px; height: 110px; margin-left: -55px; border-radius: 50%;
++  background: radial-gradient(circle, currentColor, transparent 65%); opacity: .3;
++  animation: hfx-halo calc(var(--fx-t) * 1800) ease-in-out infinite;
++}
++@keyframes hfx-halo { 0%, 100% { opacity: .2; transform: scale(.9); } 60% { opacity: .5; transform: scale(1.05); } }
++.hfx-spark {
++  position: absolute; z-index: 1; width: 6px; height: 6px; margin: -3px; background: currentColor;
++  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
++  animation: hfx-twinkle calc(var(--fx-t) * 1600) ease-in-out infinite;
++}
++.hfx-spark.s1 { left: 30%; top: 34%; }
++.hfx-spark.s2 { left: 71%; top: 46%; animation-delay: calc(var(--fx-t) * 500); }
++.hfx-spark.s3 { left: 66%; top: 14%; animation-delay: calc(var(--fx-t) * 1000); }
++@keyframes hfx-twinkle { 0%, 100% { opacity: 0; transform: scale(.4); } 50% { opacity: 1; transform: scale(1.2); } }
++.hfx-wobble {
++  position: absolute; z-index: 2; left: 50%; bottom: 20px; width: 72px; height: 72px; margin-left: -36px;
++  display: flex; align-items: center; justify-content: center; font-size: 2.6rem;
++  transform-origin: 50% 90%; animation: hfx-wob calc(var(--fx-t) * 1800) ease-in-out infinite;
++}
++@keyframes hfx-wob { 0%, 55%, 100% { transform: none; } 62% { transform: rotate(-9deg); } 70% { transform: rotate(8deg); } 78% { transform: rotate(-5deg); } 86% { transform: rotate(3deg); } }
++.hfx-nest {
++  position: absolute; z-index: 3; left: 50%; bottom: 4px; width: 130px; height: 34px; margin-left: -65px;
++  border-radius: 0 0 65px 65px / 0 0 34px 34px;
++  background: repeating-linear-gradient(115deg, oklch(42% 0.06 70) 0 4px, oklch(34% 0.05 65) 4px 7px, oklch(48% 0.07 75) 7px 9px);
++  box-shadow: inset 0 6px 8px rgba(0, 0, 0, .45);
++}
++.modal.hfx-reveal { padding-top: 0; border-width: 2px; border-color: currentColor; }
++.modal.hfx-reveal:not(.dismissing) { animation: rfx-card-in calc(var(--fx-t) * 450) cubic-bezier(.3, 1.3, .5, 1) both; }
++.modal.hfx-reveal h3, .modal.hfx-reveal .hfx-title { color: var(--parchment); }
++.hfx-stage {
++  position: relative; height: 210px; margin: 0 -16px 10px; overflow: hidden;
++  background: radial-gradient(ellipse at 50% 70%, oklch(27% 0.04 60), var(--panel) 70%);
++}
++.hfx-stage .hfx-nest { bottom: 16px; width: 150px; height: 38px; margin-left: -75px; }
++.hfx-rays {
++  position: absolute; left: 50%; top: 58%; width: 520px; height: 520px; margin: -260px 0 0 -260px; border-radius: 50%;
++  background: repeating-conic-gradient(currentColor 0 7deg, transparent 7deg 22deg);
++  -webkit-mask: radial-gradient(circle, #000 8%, transparent 58%); mask: radial-gradient(circle, #000 8%, transparent 58%);
++  animation: hfx-rays calc(var(--fx-t) * 3200) linear both;
++}
++@keyframes hfx-rays { 0% { opacity: 0; transform: scale(.2) rotate(0); } 10% { opacity: .55; } 70% { opacity: .35; } 100% { opacity: .25; transform: scale(1) rotate(60deg); } }
++.hfx-shadow { position: absolute; left: 50%; bottom: 28px; width: 90px; height: 10px; margin-left: -45px; border-radius: 50%; background: rgba(0, 0, 0, .45); animation: qfx-fade calc(var(--fx-t) * 400) both; }
++.hfx-egg { position: absolute; z-index: 2; left: 50%; bottom: 34px; width: 96px; height: 96px; margin-left: -48px; animation: hfx-eggdrop calc(var(--fx-t) * 420) cubic-bezier(.3, 1.5, .5, 1) both; }
++@keyframes hfx-eggdrop { 0% { opacity: 0; transform: translateY(-120px); } 100% { opacity: 1; transform: none; } }
++.hfx-egg-shake { display: block; width: 100%; height: 100%; transform-origin: 50% 90%; animation: hfx-shake var(--hfx-shake, calc(var(--fx-t) * 1300)) linear both; }
++@keyframes hfx-shake {
++  0%, 8% { transform: none; } 12% { transform: rotate(-7deg); } 16% { transform: rotate(6deg); } 20%, 38% { transform: none; }
++  42% { transform: rotate(-10deg); } 46% { transform: rotate(9deg); } 50% { transform: rotate(-4deg); } 54%, 70% { transform: none; }
++  73% { transform: rotate(-13deg) scale(1.04); } 76% { transform: rotate(12deg) scale(1.06); } 79% { transform: rotate(-12deg) scale(1.08); }
++  82% { transform: rotate(10deg) scale(1.1); } 86%, 100% { transform: scale(1.12); }
++}
++.hfx-egg-pop { position: relative; display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 3.4rem; animation: hfx-eggpop calc(var(--fx-t) * 160) ease-in both; }
++@keyframes hfx-eggpop { 0% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.35); } }
++.hfx-cracks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
++.hfx-cracks path { fill: none; stroke: oklch(15% 0.02 50); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 60; animation: hfx-crack calc(var(--fx-t) * 160) ease-out both; }
++@keyframes hfx-crack { from { stroke-dashoffset: 60; } to { stroke-dashoffset: 0; } }
++.hfx-shard {
++  position: absolute; left: 50%; bottom: 80px; width: 14px; height: 12px; margin-left: -7px; background: currentColor;
++  clip-path: polygon(0 30%, 60% 0, 100% 55%, 40% 100%);
++  animation-duration: calc(var(--fx-t) * 700); animation-timing-function: cubic-bezier(.15, .6, .4, 1); animation-fill-mode: both;
++}
++@keyframes hfx-shard-0 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(33px, -85px) rotate(0deg); } }
++.hfx-shard.h0 { animation-name: hfx-shard-0; }
++@keyframes hfx-shard-1 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(105px, -56px) rotate(97deg); } }
++.hfx-shard.h1 { animation-name: hfx-shard-1; }
++@keyframes hfx-shard-2 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(130px, 20px) rotate(194deg); } }
++.hfx-shard.h2 { animation-name: hfx-shard-2; }
++@keyframes hfx-shard-3 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(36px, 44px) rotate(291deg); } }
++.hfx-shard.h3 { animation-name: hfx-shard-3; }
++@keyframes hfx-shard-4 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-42px, 64px) rotate(28deg); } }
++.hfx-shard.h4 { animation-name: hfx-shard-4; }
++@keyframes hfx-shard-5 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-128px, 24px) rotate(125deg); } }
++.hfx-shard.h5 { animation-name: hfx-shard-5; }
++@keyframes hfx-shard-6 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-84px, -45px) rotate(222deg); } }
++.hfx-shard.h6 { animation-name: hfx-shard-6; }
++@keyframes hfx-shard-7 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-46px, -102px) rotate(319deg); } }
++.hfx-shard.h7 { animation-name: hfx-shard-7; }
++.hfx-pet { position: absolute; z-index: 3; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; transform-origin: 50% 100%; animation: hfx-petup calc(var(--fx-t) * 600) cubic-bezier(.3, 1.7, .5, 1) both; }
++@keyframes hfx-petup { 0% { opacity: 0; transform: translateY(40px) scale(.3); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
++.hfx-glint {
++  position: absolute; z-index: 4; width: 8px; height: 8px; margin: -4px; background: currentColor;
++  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
++  animation: hfx-glint calc(var(--fx-t) * 900) ease-out both;
++}
++@keyframes hfx-glint { 0% { opacity: 0; transform: scale(.2) rotate(0); } 30% { opacity: 1; transform: scale(1.4) rotate(45deg); } 100% { opacity: 0; transform: scale(.6) rotate(90deg); } }
++.hfx-flash { position: absolute; inset: 0; z-index: 5; background: #fff; pointer-events: none; animation: hfx-flash calc(var(--fx-t) * 420) ease-out both; }
++@keyframes hfx-flash { 0% { opacity: 0; } 15% { opacity: .85; } 100% { opacity: 0; } }
++.hfx-title { animation: qfx-critlbl calc(var(--fx-t) * 420) cubic-bezier(.3, 1.7, .5, 1) both; }
++.hfx-late { animation: qfx-rise calc(var(--fx-t) * 350) ease-out both; }
++.hfx-pill { display: inline-block; animation: qfx-critlbl calc(var(--fx-t) * 360) cubic-bezier(.3, 1.7, .5, 1) both; animation-delay: inherit; }
++
++/* ---- hero tier-up ---- */
++.modal.tfx-card { max-width: 420px; padding-top: 0; text-align: center; border-width: 2px; }
++.modal.tfx-card:not(.dismissing) { animation: rfx-card-in calc(var(--fx-t) * 450) cubic-bezier(.3, 1.3, .5, 1) both; }
++.modal.tfx-card.tfx-maxed { border-color: var(--brass); }
++.tfx-stage { position: relative; height: 200px; margin: 0 -16px 8px; overflow: hidden; background: radial-gradient(ellipse at 50% 85%, oklch(28% 0.05 65), var(--panel) 70%); }
++.tfx-pillar {
++  position: absolute; left: 50%; bottom: 0; width: 150px; height: 100%; margin-left: -75px;
++  background: linear-gradient(0deg, color-mix(in srgb, var(--brass) 55%, transparent), color-mix(in srgb, var(--brass) 15%, transparent) 60%, transparent);
++  filter: blur(6px); transform-origin: 50% 100%;
++  animation: tfx-pillar calc(var(--fx-t) * 1600) cubic-bezier(.2, .8, .3, 1) both;
++}
++@keyframes tfx-pillar { 0% { opacity: 0; transform: scaleY(0); } 25% { opacity: 1; transform: scaleY(1.05); } 100% { opacity: .35; transform: scaleY(1); } }
++.tfx-ember { position: absolute; bottom: 30px; width: 4px; height: 4px; border-radius: 50%; background: color-mix(in srgb, var(--brass) 60%, white); box-shadow: 0 0 6px var(--brass); animation: tfx-ember calc(var(--fx-t) * 1600) ease-out both; }
++@keyframes tfx-ember { 0% { opacity: 0; transform: none; } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(10px, -150px); } }
++.tfx-frame {
++  position: absolute; left: 50%; bottom: 20px; width: 128px; height: 128px; margin-left: -64px; border-radius: 50%;
++  border: 3px solid var(--brass-dim); background: var(--panel-2);
++  display: flex; align-items: flex-end; justify-content: center; overflow: hidden;
++  animation: tfx-frame calc(var(--fx-t) * 700) ease-out both;
++}
++@keyframes tfx-frame {
++  0% { border-color: var(--brass-dim); }
++  30% { border-color: color-mix(in srgb, var(--brass) 60%, white); box-shadow: 0 0 0 6px color-mix(in srgb, var(--brass) 30%, transparent), 0 0 40px var(--brass); }
++  100% { border-color: var(--brass); box-shadow: 0 0 18px color-mix(in srgb, var(--brass) 40%, transparent); }
++}
++.tfx-ring { position: absolute; left: 50%; bottom: 20px; width: 128px; height: 128px; margin-left: -64px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--brass) 60%, white); animation: sfx-ring calc(var(--fx-t) * 800) ease-out both; }
++.tfx-chev { position: absolute; left: 50%; bottom: 20px; width: 46px; height: 20px; margin-left: -23px; color: color-mix(in srgb, var(--brass) 60%, white); animation: tfx-chev calc(var(--fx-t) * 900) cubic-bezier(.3, .6, .4, 1) both; }
++.tfx-chev svg { width: 100%; height: 100%; }
++@keyframes tfx-chev { 0% { opacity: 0; transform: scale(.7); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-170px) scale(1.1); } }
++.tfx-badge { position: absolute; left: 50%; bottom: 6px; margin-left: 30px; width: 44px; height: 44px; z-index: 2; perspective: 200px; }
++.tfx-shield { position: absolute; inset: 0; background: var(--brass); clip-path: polygon(50% 0, 100% 16%, 94% 66%, 50% 100%, 6% 66%, 0 16%); }
++.tfx-shield::after { content: ''; position: absolute; inset: 3px; background: oklch(26% 0.05 62); clip-path: polygon(50% 0, 100% 16%, 94% 66%, 50% 100%, 6% 66%, 0 16%); }
++.tfx-dg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 1.125rem; color: color-mix(in srgb, var(--brass) 60%, white); backface-visibility: hidden; }
++.tfx-dg.old { animation: tfx-flipout calc(var(--fx-t) * 300) ease-in both; }
++.tfx-dg.new { animation: tfx-flipin calc(var(--fx-t) * 380) cubic-bezier(.3, 1.6, .5, 1) both; }
++@keyframes tfx-flipout { 0% { opacity: 1; transform: none; } 100% { opacity: 0; transform: rotateX(90deg); } }
++@keyframes tfx-flipin { 0% { opacity: 0; transform: rotateX(-90deg); } 100% { opacity: 1; transform: none; } }
++.tfx-kick { font-size: 10px; letter-spacing: .24em; text-transform: uppercase; color: var(--brass); animation: qfx-rise calc(var(--fx-t) * 350) ease-out both; }
++.modal h3.tfx-title { margin-top: 2px; animation: qfx-critlbl calc(var(--fx-t) * 420) cubic-bezier(.3, 1.7, .5, 1) both; }
++.tfx-track { display: flex; justify-content: center; gap: 6px; margin: 8px 0 4px; }
++.tfx-tp { width: 26px; height: 8px; border-radius: 4px; background: var(--panel-3); }
++.tfx-tp.had { background: var(--brass-dim); }
++.tfx-tp.new { animation: tfx-tpfill calc(var(--fx-t) * 400) cubic-bezier(.3, 1.7, .5, 1) both; }
++@keyframes tfx-tpfill { 0% { background: var(--panel-3); } 40% { transform: scaleY(1.8); } 100% { background: var(--brass); box-shadow: 0 0 10px var(--brass); transform: none; } }
++.tfx-stats { margin: 12px auto 0; max-width: 300px; display: flex; flex-direction: column; gap: 6px; text-align: left; }
++.tfx-st { display: grid; grid-template-columns: 40px 1fr 72px; align-items: center; gap: 8px; font-size: 11px; animation: qfx-rise calc(var(--fx-t) * 300) ease-out both; }
++.tfx-k { color: var(--muted); letter-spacing: .08em; }
++.tfx-bar { position: relative; height: 8px; border-radius: 4px; background: var(--panel-3); overflow: hidden; }
++.tfx-old { position: absolute; left: 0; top: 0; bottom: 0; background: oklch(55% 0.03 65); }
++.tfx-gain { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--moss) 75%, white); transform-origin: 0 50%; animation: tfx-grow calc(var(--fx-t) * 500) cubic-bezier(.3, 1.2, .5, 1) both; }
++@keyframes tfx-grow { from { transform: scaleX(0); } to { transform: none; } }
++.tfx-v { text-align: right; font-variant-numeric: tabular-nums; }
++.tfx-v i { font-style: normal; color: color-mix(in srgb, var(--moss) 75%, white); margin-left: 4px; }
++.tfx-seal { display: inline-block; margin-top: 10px; padding: 3px 12px; font-family: var(--font-display); font-size: 12px; letter-spacing: .14em; color: var(--brass); border: 2px solid currentColor; border-radius: 5px; animation: qfx-stamp calc(var(--fx-t) * 380) cubic-bezier(.3, 1.7, .5, 1) both; }
++.tfx-note { margin: 10px 0 0; animation: qfx-rise calc(var(--fx-t) * 350) ease-out both; }
++.tfx-acts { animation: qfx-fade calc(var(--fx-t) * 300) both; }
++
++/* ---- quest chain discovered (sealed scroll) ---- */
++.cfx-scroll { position: relative; width: 460px; max-width: 92vw; max-height: 100%; animation: cfx-drop calc(var(--fx-t) * 500) cubic-bezier(.3, 1.4, .5, 1) both; }
++@keyframes cfx-drop { 0% { opacity: 0; transform: translateY(-60px) rotate(-3deg); } 100% { opacity: 1; transform: none; } }
++.cfx-rod { position: relative; z-index: 3; height: 22px; margin: 0 -14px; border-radius: 11px; background: linear-gradient(180deg, oklch(52% 0.07 60), oklch(34% 0.05 55) 70%, oklch(28% 0.04 55)); box-shadow: 0 4px 10px rgba(0, 0, 0, .5); }
++.cfx-rod::before, .cfx-rod::after { content: ''; position: absolute; top: -3px; width: 14px; height: 28px; border-radius: 5px; background: var(--brass-dim); border: 1px solid var(--brass); }
++.cfx-rod::before { left: -6px; } .cfx-rod::after { right: -6px; }
++.cfx-sheet {
++  position: relative; z-index: 1; margin: 0 4px; overflow: hidden;
++  background: linear-gradient(90deg, oklch(78% 0.05 74), oklch(86% 0.045 78) 8%, oklch(86% 0.045 78) 92%, oklch(78% 0.05 74));
++  color: var(--ink); animation: cfx-unroll calc(var(--fx-t) * 900) cubic-bezier(.3, .9, .4, 1) both;
++}
++@keyframes cfx-unroll { from { max-height: 0; } to { max-height: 640px; } }
++.cfx-seal { position: absolute; left: 50%; top: -6px; z-index: 4; width: 56px; height: 56px; margin-left: -28px; animation: cfx-wiggle calc(var(--fx-t) * 300) linear both; }
++@keyframes cfx-wiggle { 20% { transform: rotate(-8deg); } 40% { transform: rotate(8deg); } 60% { transform: rotate(-5deg); } 80% { transform: rotate(3deg); } }
++.cfx-half {
++  position: absolute; inset: 0; border-radius: 50%;
++  background: radial-gradient(circle at 35% 30%, oklch(60% 0.18 25), oklch(48% 0.17 25) 60%, oklch(32% 0.12 25));
++  box-shadow: 0 3px 8px rgba(0, 0, 0, .5); display: flex; align-items: center; justify-content: center;
++  font-family: var(--font-display); font-size: 20px; color: oklch(30% 0.1 25);
++}
++.cfx-half.l { clip-path: polygon(0 0, 52% 0, 44% 40%, 56% 60%, 46% 100%, 0 100%); animation: cfx-brkL calc(var(--fx-t) * 600) cubic-bezier(.4, 0, .7, 1) both; }
++.cfx-half.r { clip-path: polygon(52% 0, 100% 0, 100% 100%, 46% 100%, 56% 60%, 44% 40%); animation: cfx-brkR calc(var(--fx-t) * 600) cubic-bezier(.4, 0, .7, 1) both; }
++@keyframes cfx-brkL { 0%, 20% { transform: none; opacity: 1; } 100% { transform: translate(-60px, 90px) rotate(-70deg); opacity: 0; } }
++@keyframes cfx-brkR { 0%, 20% { transform: none; opacity: 1; } 100% { transform: translate(60px, 100px) rotate(80deg); opacity: 0; } }
++.cfx-crumb { position: absolute; left: 50%; top: 20px; width: 6px; height: 6px; border-radius: 2px; background: oklch(48% 0.17 25); animation-duration: calc(var(--fx-t) * 600); animation-timing-function: cubic-bezier(.2, .7, .4, 1); animation-fill-mode: both; }
++.cfx-crumb.c0 { animation-name: cfx-cr0; } .cfx-crumb.c1 { animation-name: cfx-cr1; } .cfx-crumb.c2 { animation-name: cfx-cr2; } .cfx-crumb.c3 { animation-name: cfx-cr3; } .cfx-crumb.c4 { animation-name: cfx-cr4; }
++@keyframes cfx-cr0 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(-40px, -30px) rotate(90deg); } }
++@keyframes cfx-cr1 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(38px, -34px) rotate(-120deg); } }
++@keyframes cfx-cr2 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(-26px, 40px) rotate(60deg); } }
++@keyframes cfx-cr3 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(30px, 44px) rotate(-80deg); } }
++@keyframes cfx-cr4 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(0, -46px) rotate(140deg); } }
++.cfx-inner { padding: 22px 24px 18px; }
++.cfx-banner { position: relative; height: 96px; border-radius: 6px; background: oklch(70% 0.04 70) center 45% / cover no-repeat; box-shadow: inset 0 0 0 2px oklch(60% 0.06 70); margin-bottom: 26px; animation: cfx-ink calc(var(--fx-t) * 700) ease-out both; }
++@keyframes cfx-ink { 0% { opacity: 0; filter: sepia(1) blur(3px) brightness(1.6); } 100% { opacity: 1; filter: sepia(.35); } }
++.cfx-icon { position: absolute; left: 14px; bottom: -20px; width: 50px; height: 50px; border-radius: 50%; border: 3px solid oklch(86% 0.045 78); background: var(--panel-2) center / cover; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); animation: qfx-pop calc(var(--fx-t) * 420) cubic-bezier(.3, 1.8, .5, 1) both; }
++.cfx-kick { font-size: 10px; letter-spacing: .24em; text-transform: uppercase; color: oklch(45% 0.1 40); animation: cfx-write calc(var(--fx-t) * 400) ease-out both; }
++.cfx-name { font-family: var(--font-display); font-size: 1.5rem; margin-top: 2px; animation: cfx-write calc(var(--fx-t) * 600) steps(18) both; }
++@keyframes cfx-write { from { opacity: 0; clip-path: inset(0 100% 0 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
++.cfx-desc { font-size: 11px; line-height: 1.55; margin: 6px 0 0; color: oklch(34% 0.03 55); animation: qfx-fade calc(var(--fx-t) * 500) ease-out both; }
++.cfx-path { position: relative; display: flex; justify-content: space-between; align-items: flex-start; margin: 18px 6px 4px; }
++.cfx-trail { position: absolute; left: 18px; right: 18px; top: 15px; border-top: 2px dashed oklch(55% 0.05 60); animation: cfx-trail calc(var(--fx-t) * 900) linear both; }
++@keyframes cfx-trail { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
++.cfx-node { position: relative; z-index: 1; width: 76px; text-align: center; font-size: 9.5px; line-height: 1.3; animation: cfx-nodein calc(var(--fx-t) * 380) cubic-bezier(.3, 1.6, .5, 1) both; }
++@keyframes cfx-nodein { 0% { opacity: 0; transform: scale(.4); } 100% { opacity: 1; transform: none; } }
++.cfx-dot { width: 30px; height: 30px; margin: 0 auto 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: oklch(86% 0.045 78); border: 2px solid oklch(55% 0.05 60); color: oklch(45% 0.04 55); }
++.cfx-dot svg { width: 14px; height: 14px; }
++.cfx-node.live { font-weight: 700; }
++.cfx-node.live .cfx-dot { background: var(--brass); border-color: oklch(48% 0.1 60); color: var(--ink); animation: cfx-live calc(var(--fx-t) * 1400) ease-in-out infinite; }
++@keyframes cfx-live { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--brass) 35%, transparent); } }
++.cfx-q { color: oklch(45% 0.04 55); }
++.cfx-hint { margin-top: 14px; font-size: 10px; color: oklch(40% 0.03 55); animation: qfx-fade calc(var(--fx-t) * 400) ease-out both; }
++.cfx-acts { animation: qfx-fade calc(var(--fx-t) * 300) both; }
++.cfx-close { color: var(--ink); border-color: oklch(70% 0.06 70); }
++
++/* ---- enchanting / armour infusion ---- */
++.ifx-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
++.ifx-runes { position: absolute; width: 30%; aspect-ratio: 1; transform: translate(-50%, -50%); animation: ifx-runes calc(var(--fx-t) * 2200) ease-out both; }
++.ifx-runes svg { width: 100%; height: 100%; }
++.ifx-runes circle { fill: none; stroke: currentColor; }
++@keyframes ifx-runes { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.6) rotate(0); } 20% { opacity: .95; transform: translate(-50%, -50%) scale(1) rotate(40deg); } 80% { opacity: .8; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15) rotate(160deg); } }
++.ifx-glow { position: absolute; border-radius: 8px; animation: ifx-glow calc(var(--fx-t) * 1200) ease-out both; }
++@keyframes ifx-glow { 0% { box-shadow: none; } 25% { box-shadow: 0 0 0 4px currentColor, 0 0 50px currentColor; } 100% { box-shadow: 0 0 0 2px currentColor, 0 0 18px currentColor; } }
++.ifx-orb {
++  position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%;
++  display: flex; align-items: center; justify-content: center; font-size: 20px;
++  background: radial-gradient(circle at 35% 30%, #fff, currentColor 45%, oklch(20% 0.04 280) 100%); box-shadow: 0 0 14px currentColor;
++  animation: ifx-charge calc(var(--fx-t) * 900) ease-in both;
++}
++@keyframes ifx-charge { 0% { transform: none; opacity: 1; } 70% { transform: scale(1.25); box-shadow: 0 0 34px currentColor; } 100% { transform: scale(.7); opacity: 0; } }
++.ifx-cring { position: absolute; width: 150px; height: 150px; margin: -75px 0 0 -75px; border-radius: 50%; border: 2px solid currentColor; animation: ifx-converge calc(var(--fx-t) * 700) ease-in both; }
++@keyframes ifx-converge { 0% { opacity: 0; transform: scale(1.4); } 30% { opacity: .8; } 100% { opacity: 0; transform: scale(.3); } }
++.ifx-stream { position: absolute; width: 0; }
++.ifx-stream > i { position: absolute; left: 0; top: 100%; width: 7px; height: 7px; margin: -3px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; animation: ifx-mote calc(var(--fx-t) * 650) cubic-bezier(.5, 0, .6, 1) both; }
++@keyframes ifx-mote { 0% { opacity: 0; top: 100%; transform: scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; top: 0%; transform: scale(1.2); } }
++.ifx-flare { position: absolute; width: 6px; height: 6px; margin: -3px; background: currentColor; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation-duration: calc(var(--fx-t) * 700); animation-timing-function: cubic-bezier(.2, .7, .4, 1); animation-fill-mode: both; }
++.ifx-flare.f0 { animation-name: ifx-f0; } .ifx-flare.f1 { animation-name: ifx-f1; } .ifx-flare.f2 { animation-name: ifx-f2; } .ifx-flare.f3 { animation-name: ifx-f3; } .ifx-flare.f4 { animation-name: ifx-f4; } .ifx-flare.f5 { animation-name: ifx-f5; } .ifx-flare.f6 { animation-name: ifx-f6; }
++@keyframes ifx-f0 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(-70px, -40px) scale(1.6); } }
++@keyframes ifx-f1 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(70px, -36px) scale(1.6); } }
++@keyframes ifx-f2 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(-56px, 46px) scale(1.4); } }
++@keyframes ifx-f3 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(60px, 44px) scale(1.4); } }
++@keyframes ifx-f4 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(0, -70px) scale(1.8); } }
++@keyframes ifx-f5 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(-80px, 4px) scale(1.2); } }
++@keyframes ifx-f6 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(82px, 6px) scale(1.2); } }
++.ifx-result {
++  position: absolute; white-space: nowrap; padding: 4px 11px; border-radius: 999px; font-size: 11px; font-weight: 700;
++  background: oklch(16% 0.02 50 / .9); border: 1px solid currentColor;
++  animation: ifx-result calc(var(--fx-t) * 950) cubic-bezier(.3, 1.7, .5, 1) both;
++}
++@keyframes ifx-result { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.6); } 45% { opacity: 1; transform: translate(-50%, 0); } 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -8px); } }
++
++/* ---- 0424 extra fly tokens (purchaseFx flyTokens) ---- */
++.fx-gem, .fx-spark { position: fixed; pointer-events: none; }
++.fx-gem {
++  width: 10px; height: 12px; background: var(--violet);
++  clip-path: polygon(50% 0, 100% 35%, 50% 100%, 0 35%);
++  filter: drop-shadow(0 0 4px var(--violet));
++}
++.fx-spark { width: 8px; height: 8px; border-radius: 50%; background: var(--sky); box-shadow: 0 0 8px var(--sky); }
++
++/* ---- mailbox letters ---- */
++.mfx-card { position: relative; display: flex; }
++.mfx-card > .item-card { flex: 1; }
++.mfx-seal {
++  position: absolute; right: 8px; top: 8px; width: 14px; height: 14px; border-radius: 50%;
++  background: radial-gradient(circle at 35% 30%, oklch(60% 0.18 25), oklch(48% 0.17 25));
++  box-shadow: 0 1px 3px rgba(0, 0, 0, .5); pointer-events: none;
++}
++.fx-ghost { pointer-events: none; z-index: 1; }
++
++/* ---- achievement toasts (stacked) ---- */
++.achievement-stack { position: fixed; top: 14px; right: 14px; z-index: 51; display: flex; flex-direction: column; gap: 8px; width: min(300px, 90vw); pointer-events: none; }
++.achievement-stack .achievement-popup.afx-toast {
++  position: relative; top: auto; right: auto; max-width: none; pointer-events: auto;
++  align-items: center; overflow: hidden; border-radius: 10px; padding: 10px 12px 12px 8px;
++  background: linear-gradient(135deg, color-mix(in srgb, var(--brass) 14%, var(--panel)), var(--panel) 55%);
++  border-color: var(--brass-dim);
++  animation: afx-in calc(var(--fx-t) * 520) cubic-bezier(.3, 1.4, .5, 1) both;
++}
++.achievement-stack .afx-toast.afx-leaving { animation: afx-out calc(var(--fx-t) * 380) cubic-bezier(.5, 0, .8, .4) both; }
++@keyframes afx-in { 0% { opacity: 0; transform: translateX(120%); } 100% { opacity: 1; transform: none; } }
++@keyframes afx-out { 0% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateX(120%); } }
++.afx-toast::after {
++  content: ''; position: absolute; inset: 0; pointer-events: none;
++  background: linear-gradient(100deg, transparent 35%, rgba(255, 236, 190, .28) 50%, transparent 65%) 130% 0 / 260% 100% no-repeat;
++  animation: afx-sweep calc(var(--fx-t) * 900) ease-out calc(var(--fx-t) * 700) both;
++}
++@keyframes afx-sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
++.afx-medal { position: relative; flex: none; width: 52px; height: 60px; perspective: 220px; }
++.afx-ribbons { position: absolute; left: 50%; top: 0; width: 28px; height: 22px; margin-left: -14px; }
++.afx-ribbons::before, .afx-ribbons::after { content: ''; position: absolute; top: 0; width: 12px; height: 22px; background: oklch(48% 0.14 250); }
++.afx-ribbons::before { left: 0; transform: skewX(14deg); } .afx-ribbons::after { right: 0; transform: skewX(-14deg); }
++.afx-coin {
++  position: absolute; left: 50%; top: 14px; width: 42px; height: 42px; margin-left: -21px; border-radius: 50%;
++  display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 18px; color: oklch(32% 0.07 60);
++  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--brass) 55%, white), var(--brass) 55%, oklch(45% 0.1 65));
++  border: 2px solid oklch(50% 0.1 65); box-shadow: 0 3px 8px rgba(0, 0, 0, .5), inset 0 0 0 4px oklch(62% 0.12 70);
++  animation: afx-spin calc(var(--fx-t) * 900) cubic-bezier(.2, .7, .3, 1) calc(var(--fx-t) * 250) both;
++}
++@keyframes afx-spin { 0% { opacity: 0; transform: translateY(-40px) rotateY(0); } 30% { opacity: 1; } 100% { opacity: 1; transform: none; } }
++.afx-star {
++  position: absolute; left: 50%; top: 35px; width: 8px; height: 8px; margin: -4px; background: color-mix(in srgb, var(--brass) 60%, white);
++  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
++  animation-duration: calc(var(--fx-t) * 600); animation-delay: calc(var(--fx-t) * 1050); animation-fill-mode: both; animation-timing-function: cubic-bezier(.2, .7, .4, 1);
++}
++.afx-star.s0 { animation-name: afx-s0; } .afx-star.s1 { animation-name: afx-s1; } .afx-star.s2 { animation-name: afx-s2; } .afx-star.s3 { animation-name: afx-s3; } .afx-star.s4 { animation-name: afx-s4; }
++@keyframes afx-s0 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(-30px, -26px) rotate(90deg); } }
++@keyframes afx-s1 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(30px, -24px) rotate(-90deg); } }
++@keyframes afx-s2 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(-34px, 14px) rotate(60deg); } }
++@keyframes afx-s3 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(34px, 16px) rotate(-60deg); } }
++@keyframes afx-s4 { 0% { opacity: 0; } 1% { opacity: 1; } 100% { opacity: 0; transform: translate(0, 34px) rotate(120deg); } }
++.afx-kick {
++  display: inline-block; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink); background: var(--brass);
++  padding: 2px 8px; transform-origin: 0 50%; animation: afx-unfurl calc(var(--fx-t) * 380) cubic-bezier(.3, 1.4, .5, 1) calc(var(--fx-t) * 300) both;
++}
++@keyframes afx-unfurl { from { transform: scaleX(0); } to { transform: none; } }
++.afx-name { margin-top: 5px; font-family: var(--font-display); animation: qfx-rise calc(var(--fx-t) * 350) ease-out calc(var(--fx-t) * 500) both; }
++.afx-desc { animation: qfx-rise calc(var(--fx-t) * 350) ease-out calc(var(--fx-t) * 600) both; }
++.afx-reward {
++  display: flex; align-items: center; gap: 6px; margin-top: 7px; padding: 4px 8px; border-radius: 6px; font-size: 10px;
++  border: 1px solid currentColor; background: rgba(0, 0, 0, .2);
++  animation: qfx-critlbl calc(var(--fx-t) * 380) cubic-bezier(.3, 1.7, .5, 1) calc(var(--fx-t) * 1200) both;
++}
++.afx-reward.track { color: var(--teal); } .afx-reward.title { color: var(--violet); }
++.afx-reward span { color: var(--parchment); }
++.afx-note { position: absolute; left: 30px; bottom: 18px; font-size: 13px; color: var(--teal); animation: afx-note calc(var(--fx-t) * 1400) ease-out calc(var(--fx-t) * 1300) both; }
++.afx-note.n2 { left: 44px; bottom: 10px; animation-delay: calc(var(--fx-t) * 1600); }
++@keyframes afx-note { 0% { opacity: 0; transform: none; } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -34px); } }
++.afx-timer { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--brass); transform-origin: 0 50%; animation: afx-drain linear both; }
++@keyframes afx-drain { from { transform: none; } to { transform: scaleX(0); } }
++
++/* ---- dense upgrade rows adopting the 0420 beats (Harvest, Renown...) ---- */
++.upgrade-row.fx-levelup, .wfx-card.fx-levelup { animation: fx-row-glow calc(var(--fx-t) * 800) ease-out; }
++.upgrade-row.fx-levelup::after, .wfx-card.fx-levelup::after {
++  content: ''; position: absolute; inset: 0; pointer-events: none;
++  background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--brass) 28%, transparent) 50%, transparent 65%) 110% 0 / 260% 100% no-repeat;
++  animation: fx-sweep calc(var(--fx-t) * 700) ease-out forwards;
++}
++.upgrade-row.renown-tier2.fx-levelup, .upgrade-row.fx-renown.fx-levelup { animation-name: fx-row-glow-violet; }
++@keyframes fx-row-glow-violet { 0% { box-shadow: inset 0 0 0 1px var(--violet); } 100% { box-shadow: inset 0 0 0 1px transparent; } }
++.upgrade-row.fx-levelup .upgrade-row-effect { animation: fx-text-flash calc(var(--fx-t) * 900) ease-out; }
++.upgrade-row.fx-stamped .upgrade-row-name, .upgrade-row.fx-stamped .upgrade-row-effect { opacity: .72; transition: opacity calc(var(--fx-t) * 400) calc(var(--fx-t) * 320); }
++.upgrade-row-stamp { right: 150px; top: 50%; }
++.wfx-card { position: relative; }
++.wfx-card .upgrade-row-stamp { right: 60px; top: 40px; }
++.wfx-crates { display: flex; align-items: flex-end; gap: 3px; height: 16px; margin: 2px 0 8px; }
++.wfx-crate { width: 14px; height: 12px; border-radius: 2px; background: oklch(46% 0.07 60); border: 1px solid oklch(60% 0.08 65); box-shadow: inset 0 -3px 0 oklch(38% 0.06 58); }
++.wfx-crate.new { animation: wfx-cratedrop calc(var(--fx-t) * 520) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 150) both; }
++@keyframes wfx-cratedrop { 0% { opacity: 0; transform: translateY(-30px) rotate(-20deg); } 100% { opacity: 1; transform: none; } }
++.wfx-cap { margin-left: 6px; font-variant-numeric: tabular-nums; display: inline-block; }
++.fx-bump { animation: fx-bump calc(var(--fx-t) * 420) cubic-bezier(.3, 1.8, .5, 1); }
++@keyframes fx-bump { 40% { transform: scale(1.25); color: color-mix(in srgb, var(--brass) 70%, white); } }
++
++/* ---- Fund the Guild coffer ---- */
++.gfx-coffer { position: relative; display: block; width: 110px; height: 88px; margin: 0 auto 6px; color: var(--brass); }
++.gfx-coffer svg { position: absolute; inset: 0; width: 100%; height: 100%; }
++.gfx-lid { transform-origin: 20px 34px; }
++.gfx-coffer.gfx-gulp { animation: gfx-gulp calc(var(--fx-t) * 420) ease-out; }
++.gfx-coffer.gfx-gulp .gfx-lid { animation: gfx-lid calc(var(--fx-t) * 420) cubic-bezier(.3, 1.8, .5, 1); }
++@keyframes gfx-gulp { 40% { transform: scale(1.08, .94); } 100% { transform: none; } }
++@keyframes gfx-lid { 40% { transform: rotate(-24deg) translateY(-4px); } 100% { transform: none; } }
++.gfx-pile { position: absolute; left: 50%; bottom: 28px; width: 60px; margin-left: -30px; display: flex; flex-wrap: wrap-reverse; justify-content: center; gap: 1px; }
++.gfx-pile i { width: 9px; height: 5px; border-radius: 50%; background: var(--brass); border: 1px solid var(--brass-dim); }
++.gfx-gain {
++  position: absolute; left: 50%; top: -6px; white-space: nowrap; font-family: var(--font-display); font-size: 1rem; color: var(--sky);
++  text-shadow: 0 0 10px color-mix(in srgb, var(--sky) 80%, transparent); pointer-events: none;
++  animation: gfx-gainup calc(var(--fx-t) * 1100) ease-out both;
++}
++@keyframes gfx-gainup { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.7); } 20% { opacity: 1; transform: translate(-50%, -4px) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -34px); } }
++.gfx-ledger { display: flex; justify-content: space-around; gap: 10px; margin-top: 12px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--panel-2) 85%, transparent); border: 1px solid var(--panel-3); font-size: 10px; color: var(--muted); }
++.gfx-ledger b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 15px; color: var(--parchment); font-variant-numeric: tabular-nums; }
++.gfx-ledger b.p { color: var(--sky); }
++
++/* ---- role trained ---- */
++.rfx-roleicon { display: inline-block; }
++.card.rfx-trained { animation: rfx-trained-glow calc(var(--fx-t) * 1200) ease-out; }
++@keyframes rfx-trained-glow { 0% { box-shadow: 0 0 0 2px var(--moss), 0 0 24px var(--moss); } 100% { box-shadow: none; } }
++.card.rfx-trained .rfx-roleicon { animation: rfx-role-stamp calc(var(--fx-t) * 420) cubic-bezier(.3, 1.7, .5, 1); }
++@keyframes rfx-role-stamp { 0% { transform: scale(2) rotate(-20deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
++
++/* ---- guild founded (GuildNamingModal) ---- */
++.gnfx-card { overflow: hidden; }
++.gnfx-card > .guild-naming-content > * { animation: gnfx-inkin calc(var(--fx-t) * 420) cubic-bezier(.3, 1.3, .5, 1) both; }
++.gnfx-card > .guild-naming-content > *:nth-child(2) { animation-delay: calc(var(--fx-t) * 90); }
++.gnfx-card > .guild-naming-content > *:nth-child(3) { animation-delay: calc(var(--fx-t) * 180); }
++.gnfx-card > .guild-naming-content > *:nth-child(4) { animation-delay: calc(var(--fx-t) * 270); }
++@keyframes gnfx-inkin { 0% { opacity: 0; transform: translateX(40px); } 100% { opacity: 1; transform: none; } }
++.gnfx-bgout { position: absolute; inset: 0; border-radius: inherit; background: center / cover no-repeat; pointer-events: none; animation: gnfx-bgout calc(var(--fx-t) * 700) ease both; }
++@keyframes gnfx-bgout { from { opacity: 1; } to { opacity: 0; } }
++.gnfx-pennant {
++  position: relative; display: inline-block; min-width: 110px; padding: 6px 24px 10px; text-align: center;
++  background: oklch(42% 0.14 25); color: oklch(86% 0.045 78); font-family: var(--font-display); font-size: 15px; letter-spacing: .06em;
++  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); box-shadow: 0 4px 0 rgba(0, 0, 0, .3);
++  transform-origin: 50% 0; animation: gnfx-flutter calc(var(--fx-t) * 2400) ease-in-out infinite;
++}
++.gnfx-pennant.empty { opacity: .55; }
++.gnfx-pennant i { font-style: normal; display: inline-block; animation: gnfx-letter calc(var(--fx-t) * 220) cubic-bezier(.3, 1.7, .5, 1) both; }
++@keyframes gnfx-flutter { 0%, 100% { transform: skewY(0); } 50% { transform: skewY(1.5deg); } }
++@keyframes gnfx-letter { from { opacity: 0; transform: translateY(-8px) scale(1.6); } to { opacity: 1; transform: none; } }
++.gnfx-card.gnfx-st-charter > .guild-naming-content, .gnfx-card.gnfx-st-leave > .guild-naming-content { animation: gnfx-pageout calc(var(--fx-t) * 320) cubic-bezier(.5, 0, .8, .4) both; }
++@keyframes gnfx-pageout { to { opacity: 0; transform: translateX(-40px); } }
++.gnfx-card::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: rgba(6, 4, 2, 0); transition: background calc(var(--fx-t) * 500); }
++.gnfx-card.gnfx-st-charter::after, .gnfx-card.gnfx-st-leave::after { background: rgba(6, 4, 2, .6); }
++.gnfx-card.gnfx-st-leave { animation: gnfx-leave calc(var(--fx-t) * 550) cubic-bezier(.5, 0, .8, .4) both; }
++@keyframes gnfx-leave { to { opacity: 0; transform: scale(.9) translateY(30px); } }
++.gnfx-charter { position: absolute; z-index: 3; left: 50%; top: 50%; width: min(360px, 80%); transform: translate(-50%, -50%); }
++.gnfx-rod { position: relative; z-index: 2; height: 16px; margin: 0 -10px; border-radius: 8px; background: linear-gradient(180deg, oklch(52% 0.07 60), oklch(30% 0.05 55)); box-shadow: 0 3px 8px rgba(0, 0, 0, .5); }
++.gnfx-sheet {
++  overflow: hidden; margin: 0 4px; text-align: center; color: var(--ink);
++  background: linear-gradient(90deg, oklch(78% 0.05 74), oklch(86% 0.045 78) 8%, oklch(86% 0.045 78) 92%, oklch(78% 0.05 74));
++  animation: gnfx-unroll calc(var(--fx-t) * 700) cubic-bezier(.3, .9, .4, 1) calc(var(--fx-t) * 300) both;
++}
++@keyframes gnfx-unroll { from { max-height: 0; } to { max-height: 320px; } }
++.gnfx-inner { position: relative; padding: 16px 22px 24px; }
++.gnfx-k { font-size: 9px; letter-spacing: .3em; text-transform: uppercase; color: oklch(42% 0.09 40); }
++.gnfx-gn { font-family: var(--font-display); font-size: 1.75rem; margin: 4px 0 2px; letter-spacing: .04em; }
++.gnfx-line { height: 1px; margin: 8px 30px; background: oklch(60% 0.05 60); }
++.gnfx-tx { font-size: 10px; line-height: 1.6; color: oklch(35% 0.03 55); }
++.gnfx-sig { margin-top: 10px; font-size: 9px; letter-spacing: .08em; color: oklch(45% 0.04 55); }
++
++.gnfx-seal .fx-seal-img, .gnfx-seal .fx-seal-ring, .gnfx-seal .fx-speck > i, .gnfx-seal .fx-seal-ink { animation-delay: calc(var(--fx-t) * 1100); }
++.gnfx-seal .fx-seal-ring, .gnfx-seal .fx-speck > i { animation-delay: calc(var(--fx-t) * 1410); }
++.gnfx-seal .fx-seal-ink { animation-delay: calc(var(--fx-t) * 1440); color: oklch(42% 0.14 25); }
++.gnfx-seal .fx-seal-img { animation-fill-mode: both; }
++.gnfx-founded { margin-top: 14px; text-align: center; font-family: var(--font-display); font-size: 14px; letter-spacing: .2em; text-transform: uppercase; color: color-mix(in srgb, var(--brass) 60%, white); animation: qfx-rise calc(var(--fx-t) * 400) ease-out calc(var(--fx-t) * 1700) both; }
++
++/* ---- first-run tour glide (OnboardingTour) ---- */
++.onboarding-spotlight {
++  border-radius: 8px;
++  transition: top calc(var(--fx-t) * 520) cubic-bezier(.5, 0, .2, 1), left calc(var(--fx-t) * 520) cubic-bezier(.5, 0, .2, 1),
++    width calc(var(--fx-t) * 520) cubic-bezier(.5, 0, .2, 1), height calc(var(--fx-t) * 520) cubic-bezier(.5, 0, .2, 1);
++}
++.onboarding-spotlight.tour-pulse::after {
++  content: ''; position: absolute; inset: -5px; border-radius: 10px; border: 2px solid color-mix(in srgb, var(--brass) 60%, white);
++  animation: tour-pulse calc(var(--fx-t) * 1200) ease-out infinite;
++}
++@keyframes tour-pulse { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.12); } }
++.onboarding-card {
++  border-radius: 10px;
++  transition: top calc(var(--fx-t) * 520) cubic-bezier(.5, 0, .2, 1), left calc(var(--fx-t) * 520) cubic-bezier(.5, 0, .2, 1);
++}
++.tour-dots { display: flex; gap: 4px; margin-bottom: 8px; }
++.tour-dots i { width: 16px; height: 4px; border-radius: 2px; background: var(--panel-3); transition: background calc(var(--fx-t) * 300); }
++.tour-dots i.on { background: var(--brass); }
++.tour-body { animation: tour-swap calc(var(--fx-t) * 360) ease-out both; }
++@keyframes tour-swap { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
++:root[data-motion='off'] .onboarding-spotlight, :root[data-motion='off'] .onboarding-card { transition-delay: 0ms !important; }
++
++/* ---- new tab unlocked (nav reveal) ---- */
++.tabs button.navfx-unlock { position: relative; overflow: hidden; animation: navfx-open calc(var(--fx-t) * 420) cubic-bezier(.3, 1.3, .5, 1) both, navfx-glow calc(var(--fx-t) * 1200) ease-out calc(var(--fx-t) * 1050) both; }
++@keyframes navfx-open { from { max-height: 0; opacity: 0; } to { max-height: 60px; opacity: 1; } }
++@keyframes navfx-glow { 0% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brass) 60%, white), 0 0 18px var(--brass); } 100% { box-shadow: none; } }
++.navfx-lock { position: absolute; inset: 0; pointer-events: none; z-index: 2; background: rgba(8, 6, 4, .55); animation: navfx-veil calc(var(--fx-t) * 400) ease-out calc(var(--fx-t) * 1050) both; }
++@keyframes navfx-veil { from { background: rgba(8, 6, 4, .55); } to { background: rgba(8, 6, 4, 0); } }
++.navfx-chain { position: absolute; left: -6px; right: -6px; top: 50%; height: 8px; margin-top: -4px; display: flex; }
++.navfx-chain > i { flex: 1; height: 100%; background: repeating-linear-gradient(90deg, transparent 0 2px, oklch(58% 0.02 60) 2px 9px, transparent 9px 11px); }
++.navfx-chain.a { transform: rotate(-8deg); } .navfx-chain.b { transform: rotate(8deg); }
++.navfx-chain > i:first-child { animation: navfx-chainL calc(var(--fx-t) * 500) cubic-bezier(.4, 0, .8, .6) calc(var(--fx-t) * 900) both; }
++.navfx-chain > i:last-child { animation: navfx-chainR calc(var(--fx-t) * 500) cubic-bezier(.4, 0, .8, .6) calc(var(--fx-t) * 900) both; }
++@keyframes navfx-chainL { to { transform: translate(-40px, 24px) rotate(-12deg); opacity: 0; } }
++@keyframes navfx-chainR { to { transform: translate(40px, 24px) rotate(12deg); opacity: 0; } }
++.navfx-pad { position: absolute; right: 10px; top: 50%; width: 20px; height: 22px; margin-top: -11px; color: oklch(64% 0.1 70);
++  animation: navfx-rattle calc(var(--fx-t) * 360) linear calc(var(--fx-t) * 450) both, navfx-drop calc(var(--fx-t) * 650) cubic-bezier(.5, 0, .9, .5) calc(var(--fx-t) * 1000) both; }
++.navfx-shackle { position: absolute; left: 4px; top: 0; width: 12px; height: 12px; box-sizing: border-box; border: 3px solid currentColor; border-bottom: none; border-radius: 6px 6px 0 0; transform-origin: 10px 11px; animation: navfx-shackle calc(var(--fx-t) * 220) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 820) both; }
++.navfx-body { position: absolute; left: 1px; top: 9px; width: 18px; height: 13px; border-radius: 3px; background: currentColor; }
++@keyframes navfx-rattle { 15% { transform: rotate(-14deg); } 35% { transform: rotate(12deg); } 55% { transform: rotate(-9deg); } 75% { transform: rotate(5deg); } }
++@keyframes navfx-shackle { to { transform: translateY(-4px) rotate(-38deg); } }
++@keyframes navfx-drop { 0% { transform: none; color: color-mix(in srgb, var(--brass) 60%, white); } 25% { transform: translateY(-6px) scale(1.2); } 100% { transform: translateY(60px) rotate(70deg) scale(.7); opacity: 0; } }
++.navfx-sweep { position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--brass) 35%, transparent) 50%, transparent 65%) 120% 0 / 260% 100% no-repeat; animation: navfx-sweep calc(var(--fx-t) * 800) ease-out calc(var(--fx-t) * 1200) both; }
++@keyframes navfx-sweep { from { background-position: 120% 0; } to { background-position: -20% 0; } }
++.tour-kicker { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--brass); margin-bottom: 2px; }
++
++/* ---- Quest Board explainer (first-quest debrief) ---- */
++.modal.qbx-card { max-width: 560px; border-width: 2px; border-color: var(--brass); }
++.modal.qbx-card:not(.dismissing) { animation: rfx-card-in calc(var(--fx-t) * 450) cubic-bezier(.3, 1.3, .5, 1) both; }
++.qbx-kick { font-size: 9.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--brass); }
++.qbx-cols { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; margin-top: 4px; }
++@media (max-width: 520px) { .qbx-cols { grid-template-columns: 1fr; } }
++.qbx-ladder { display: flex; align-items: flex-end; gap: 6px; height: 104px; padding: 0 4px; border-bottom: 1px solid var(--panel-3); }
++.qbx-rung { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
++.qbx-bar { width: 100%; border-radius: 4px 4px 0 0; transform-origin: 50% 100%; animation: qbx-barup calc(var(--fx-t) * 500) cubic-bezier(.3, 1.3, .5, 1) both; }
++@keyframes qbx-barup { from { transform: scaleY(0); } to { transform: none; } }
++.qbx-nm { font-size: 8.5px; color: var(--muted); margin-top: 4px; animation: qfx-fade calc(var(--fx-t) * 300) both; }
++.qbx-axes { display: flex; justify-content: space-between; margin-top: 6px; font-size: 9.5px; animation: qfx-fade calc(var(--fx-t) * 400) both; }
++.qbx-axes .up { color: color-mix(in srgb, var(--moss) 75%, white); }
++.qbx-axes .dn { color: color-mix(in srgb, var(--blood) 80%, white); }
++.qbx-sample { position: relative; align-self: start; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--panel-3); font-size: 10px; }
++.qbx-sample b { font-size: 11px; }
++.qbx-row { display: flex; gap: 10px; margin-top: 5px; color: var(--muted); font-variant-numeric: tabular-nums; }
++.qbx-sample.fast { border-color: var(--brass); animation: qbx-zap calc(var(--fx-t) * 500) ease-out; }
++@keyframes qbx-zap { 30% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brass) 60%, white), 0 0 24px var(--brass); } 100% { box-shadow: none; } }
++.qbx-tag { position: absolute; right: 8px; top: -9px; font-size: 9.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--brass); color: var(--ink); opacity: 0; }
++.qbx-sample.fast .qbx-tag { animation: qfx-stamp calc(var(--fx-t) * 380) cubic-bezier(.3, 1.7, .5, 1) both; }
++.qbx-sample.fast .t { color: color-mix(in srgb, var(--moss) 75%, white); }
++.qbx-sample.fast .o { color: color-mix(in srgb, var(--blood) 80%, white); }
++.qbx-why { font-size: 9.5px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
++.qbx-steps { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--panel-3); }
++.qbx-h { font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
++.qbx-todo { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; padding: 5px 0; font-size: 11px; animation: rfx-slidein calc(var(--fx-t) * 350) ease-out both; }
++.qbx-todo small { display: block; font-size: 9.5px; color: var(--muted); }
++.qbx-box { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--brass); }
++.qbx-acts { animation: qfx-fade calc(var(--fx-t) * 300) both; }
++.gnfx-seal { right: 34px; bottom: 30px; }
++.gnfx-seal .fx-seal-ink { display: none; }
+diff --git a/src/ui/AchievementPopup.tsx b/src/ui/AchievementPopup.tsx
+index a3eb973..a2bcbe2 100644
+--- a/src/ui/AchievementPopup.tsx
++++ b/src/ui/AchievementPopup.tsx
+@@ -1,22 +1,11 @@
+-import { useEffect } from 'react';
+-import type { CSSProperties } from 'react';
++import { useEffect, useState } from 'react';
+ import { useEngine } from './useEngine';
++import { BARD_TRACK_BY_ID } from '../game/data/bard';
++import { AchievementDef } from '../game/data/achievements';
++import { fxMs } from './purchaseFx';
+ 
+ const AUTO_DISMISS_MS = 4500;
+ 
+-/** Small, compact spread -- this popup is a fixed corner card (max 280px),
+- *  not a full-screen modal, so the burst is scaled down to match rather
+- *  than reusing one of the wider result-modal bursts. Anchored on the
+- *  glyph specifically (see achievement-popup-glyph-wrap below), not the
+- *  whole card, so it reads as "the star icon is doing something" rather
+- *  than particles flying out from an arbitrary corner. */
+-const ACHIEVEMENT_BURST: { dx: number; dy: number; rot: number }[] = [
+-  { dx: -18, dy: -22, rot: -20 },
+-  { dx: 14, dy: -26, rot: 18 },
+-  { dx: 24, dy: -2, rot: -14 },
+-  { dx: -22, dy: 4, rot: 12 },
+-  { dx: -4, dy: 22, rot: -8 },
+-];
+ 
+ /**
+  * A dedicated visual moment for achievement unlocks -- these are
+@@ -29,38 +18,58 @@ const ACHIEVEMENT_BURST: { dx: number; dy: number; rot: number }[] = [
+  *
+  * Sits in the opposite corner from Toast (top-right vs. bottom-center) so
+  * the two can never visually collide if both fire close together.
++ *
++ * Patch 0424 -- rebuilt from the Claude Design board: the toast slides in
++ * from the corner, a medal drops and spins twice before settling with a
++ * star burst, the "Achievement unlocked" ribbon unfurls with a shine,
++ * and a reward line pops in when the achievement grants a bard track
++ * (notes float up) or a guild title. A thin bar drains for its 4.5s.
++ * Several unlocking together now stack down the corner a beat apart
++ * (engine.visibleAchievements, up to three) instead of queueing 4.5s each.
+  */
++
+ export function AchievementPopup() {
+   const engine = useEngine();
+-  const achievement = engine.currentAchievement;
++  const list = engine.visibleAchievements;
++  if (list.length === 0) return null;
++  return (
++    <div className="achievement-stack">
++      {list.map((a) => <AchievementToast key={a.id} achievement={a} onDone={() => engine.dismissAchievementId(a.id)} />)}
++    </div>
++  );
++}
+ 
++function AchievementToast({ achievement, onDone }: { achievement: AchievementDef; onDone: () => void }) {
++  const [leaving, setLeaving] = useState(false);
+   useEffect(() => {
+-    if (!achievement) return;
+-    const id = window.setTimeout(() => engine.dismissAchievement(), AUTO_DISMISS_MS);
+-    return () => window.clearTimeout(id);
+-  }, [achievement, engine]);
+-
+-  if (!achievement) return null;
+-
++    // Real time, not fxMs: reading time shouldn't shrink at a fast
++    // animation speed. The exit slide is short and does scale.
++    let done: number | undefined;
++    const out = window.setTimeout(() => {
++      setLeaving(true);
++      done = window.setTimeout(onDone, fxMs(380));
++    }, AUTO_DISMISS_MS);
++    return () => { window.clearTimeout(out); if (done !== undefined) window.clearTimeout(done); };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++  const track = achievement.unlocksTrackId ? BARD_TRACK_BY_ID[achievement.unlocksTrackId] : undefined;
++  const title = achievement.grantsGuildTitle;
+   return (
+-    <div key={achievement.id} className="achievement-popup achievement-popup-pop" role="status">
+-      <span className="achievement-popup-glyph-wrap" aria-hidden="true">
+-        <span className="achievement-popup-glyph">✦</span>
+-        {ACHIEVEMENT_BURST.map((s, i) => (
+-          <span
+-            key={i}
+-            className="achievement-popup-star"
+-            style={{ '--dx': `${s.dx}px`, '--dy': `${s.dy}px`, '--rot': `${s.rot}deg`, animationDelay: `${120 + i * 40}ms` } as CSSProperties}
+-          >
+-            ★
+-          </span>
+-        ))}
++    <div className={`achievement-popup afx-toast ${leaving ? 'afx-leaving' : ''}`} role="status">
++      <span className="afx-medal" aria-hidden="true">
++        <span className="afx-ribbons" />
++        <span className="afx-coin">✦</span>
++        {[0, 1, 2, 3, 4].map((i) => <span key={i} className={`afx-star s${i}`} />)}
+       </span>
+       <div className="achievement-popup-body">
+-        <div className="achievement-popup-kicker">Achievement Unlocked</div>
+-        <div className="achievement-popup-name">{achievement.name}</div>
+-        <div className="achievement-popup-desc">{achievement.description}</div>
++        <span className="afx-kick">Achievement unlocked</span>
++        <div className="achievement-popup-name afx-name">{achievement.name}</div>
++        <div className="achievement-popup-desc afx-desc">{achievement.description}</div>
++        {track && <div className="afx-reward track">♪ <span>New bard track: "{track.name}"</span></div>}
++        {title && <div className="afx-reward title">⚑ <span>The guild is now known as {title}</span></div>}
+       </div>
++      {track && <><span className="afx-note n1" aria-hidden="true">♪</span><span className="afx-note n2" aria-hidden="true">♫</span></>}
++      <span className="afx-timer" style={{ animationDuration: `${AUTO_DISMISS_MS}ms` }} aria-hidden="true" />
+     </div>
+   );
+ }
+diff --git a/src/ui/ArmourInfusionStation.tsx b/src/ui/ArmourInfusionStation.tsx
+index 9c7471e..977ee43 100644
+--- a/src/ui/ArmourInfusionStation.tsx
++++ b/src/ui/ArmourInfusionStation.tsx
+@@ -3,6 +3,7 @@ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+ import { EquipmentManager } from '../game/managers/EquipmentManager';
+ import { CraftingManager } from '../game/managers/CraftingManager';
++import { InfuseFx, useInfuseBeat } from './infuseFx';
+ import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
+ import { ElementType, GemTier } from '../game/types';
+ import { formatGold, RARITY_COLOR } from '../game/util';
+@@ -41,6 +42,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+   const [targetUid, setTargetUid] = useState('');
+   const [element, setElement] = useState<ElementType | null>(null);
+   const [tier, setTier] = useState<GemTier | null>(null);
++  const [infuseBeat, playInfuse] = useInfuseBeat();
+   const [openItemPicker, setOpenItemPicker] = useState(false);
+   const [openGemPicker, setOpenGemPicker] = useState(false);
+   // Same reasoning as WeaponEnchantStation's own previewUid -- see
+@@ -109,7 +111,9 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+ 
+   function handleInfuse() {
+     if (!item || !element || !tier) return;
+-    engine.infuseItem(item.uid, element, tier);
++    if (engine.infuseItem(item.uid, element, tier)) {
++      playInfuse({ element, tier, text: `${GEM_TIER_LABEL[tier]} ${ELEMENT_LABEL[element]} resistance infused` });
++    }
+     setElement(null);
+     setTier(null);
+   }
+@@ -144,6 +148,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+             label="Choose a resistance gem"
+             onOpen={() => setOpenGemPicker(true)}
+           />
++          <InfuseFx beat={infuseBeat} item={ITEM_SLOT} gem={ENCHANT_SLOT} />
+         </div>
+ 
+         {item && def ? (
+diff --git a/src/ui/ChainDiscoveryModal.tsx b/src/ui/ChainDiscoveryModal.tsx
+index bb30bea..157c5a4 100644
+--- a/src/ui/ChainDiscoveryModal.tsx
++++ b/src/ui/ChainDiscoveryModal.tsx
+@@ -1,3 +1,11 @@
++import { useEngine } from './useEngine';
++import { CHAIN_BY_ID } from '../game/managers/QuestManager';
++import { chainBannerSrc, chainIconSrc } from './panels/QuestPanel';
++import { at } from './resultFx';
++
++/** Stage nodes drawn on the trail before the rest fold into "+N". */
++const MAX_NODES = 5;
++
+ /**
+  * The scripted tour's actual finale, even though it isn't one of its fixed
+  * steps -- this fires whenever the board first rolls a quest chain, which
+@@ -6,20 +14,72 @@
+  * spotlight step: the target (a specific quest-board card) is dynamic and
+  * might not even be rendered if the player isn't currently on the Quests
+  * tab, unlike the tour's fixed nav-tab targets.
++ *
++ * Patch 0424 -- rebuilt as a sealed scroll: it drops in, the wax seal
++ * cracks apart, and the scroll unrolls to show the chain the board just
++ * rolled (its banner, icon and name, read from state.chainBoard), then a
++ * dashed trail draws out to every stage. Stage 1 is live and pulses; the
++ * rest stay "???" until reached. Falls back to generic copy if the chain
++ * can't be resolved.
+  */
+ export function ChainDiscoveryModal({ onView, onClose }: { onView: () => void; onClose: () => void }) {
++  const engine = useEngine();
++  const chainId = engine.state.chainBoard.find((o) => o.chain)?.chain?.chainId;
++  const chain = chainId ? CHAIN_BY_ID[chainId] : undefined;
++  const stages = chain?.stages ?? [];
++  const shown = stages.slice(0, MAX_NODES);
++  const T_NODES = 2900;
++  const T_HINT = T_NODES + shown.length * 220 + 100;
++
+   return (
+     <div className="overlay" onClick={onClose}>
+-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+-        <h3>A Quest Chain Awaits</h3>
+-        <p className="small" style={{ marginTop: 0 }}>
+-          You've discovered a quest chain -- a story that unfolds across several stages, shown right on
+-          the Quest Board alongside everything else. Complete one stage, and the next becomes available.
+-        </p>
+-        <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+-          <button className="btn-primary" onClick={onClose}>Close</button>
+-          <button className="btn-primary" onClick={onView}>View on Quest Board</button>
++      <div className="cfx-scroll" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="A quest chain awaits">
++        <div className="cfx-rod" />
++        <span className="cfx-seal" style={at(450)} aria-hidden="true">
++          <span className="cfx-half l" style={at(450)}>✦</span>
++          <span className="cfx-half r" style={at(450)}>✦</span>
++          {[0, 1, 2, 3, 4].map((i) => <span key={i} className={`cfx-crumb c${i}`} style={at(560)} />)}
++        </span>
++        <div className="cfx-sheet" style={at(700)}>
++          <div className="cfx-inner">
++            {chain && (
++              <div className="cfx-banner" style={at(1100, { backgroundImage: `url(${chainBannerSrc(chain.id, chain.banner)})` })}>
++                <span className="cfx-icon" style={at(1500, { backgroundImage: `url(${chainIconSrc(chain.id, chain.icon, chain.banner)})` })} />
++              </div>
++            )}
++            <div className="cfx-kick" style={at(1500)}>A quest chain awaits</div>
++            <div className="cfx-name" style={at(1750)}>{chain?.name ?? 'A Quest Chain'}</div>
++            <p className="cfx-desc" style={at(2300)}>
++              {stages.length > 0
++                ? `A story that unfolds across ${stages.length} stages, right on the Quest Board. Complete one stage and the next appears.`
++                : 'A story that unfolds across several stages, right on the Quest Board. Complete one stage and the next becomes available.'}
++            </p>
++            {shown.length > 0 && (
++              <div className="cfx-path">
++                <span className="cfx-trail" style={at(2700)} />
++                {shown.map((st, i) => (
++                  <div key={i} className={`cfx-node ${i === 0 ? 'live' : ''}`} style={at(T_NODES + i * 220)}>
++                    <div className="cfx-dot">
++                      {i === 0 ? (
++                        <svg viewBox="0 0 14 14" fill="currentColor"><path d="M3 2 L12 7 L3 12z" /></svg>
++                      ) : (
++                        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="6.5" width="8" height="6" rx="1" /><path d="M5 6.5V4.5a2 2 0 0 1 4 0v2" /></svg>
++                      )}
++                    </div>
++                    <div>Stage {i + 1}</div>
++                    <div className="cfx-q">{i === 0 ? st.name : i === shown.length - 1 && stages.length > shown.length ? `+${stages.length - shown.length} more` : '???'}</div>
++                  </div>
++                ))}
++              </div>
++            )}
++            <div className="cfx-hint" style={at(T_HINT)}>Stage 1 is waiting on the Quest Board now.</div>
++            <div className="row end cfx-acts" style={at(T_HINT + 250, { marginTop: 14, gap: 8 })}>
++              <button className="btn-ghost cfx-close" onClick={onClose}>Close</button>
++              <button className="btn-primary" onClick={onView}>View on Quest Board</button>
++            </div>
++          </div>
+         </div>
++        <div className="cfx-rod" />
+       </div>
+     </div>
+   );
+diff --git a/src/ui/FundGuildModal.tsx b/src/ui/FundGuildModal.tsx
+index 8e1e9ac..307993b 100644
+--- a/src/ui/FundGuildModal.tsx
++++ b/src/ui/FundGuildModal.tsx
+@@ -1,7 +1,9 @@
+-import { useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { formatGold, formatNumber } from './../game/util';
+ import { Tuning } from '../game/data/tuning';
++import { useCountUp } from './useCountUp';
++import { flyTokens, fxMs, fxSpeed } from './purchaseFx';
+ 
+ /**
+  * "Fund the Guild" -- patch 0220, direct request. An open-ended, uncapped
+@@ -47,12 +49,35 @@ export function FundGuildModal({ onClose }: { onClose: () => void }) {
+ 
+   const setMax = () => setAmountText(String(state.gold));
+ 
++  // Patch 0424 -- coins stream from the header gold into the coffer, its
++  // lid gulps, "+N Power" rises out of it, blue sparks fly to the Power
++  // figure below and the lifetime totals count up.
++  const cofferRef = useRef<HTMLSpanElement>(null);
++  const powerRef = useRef<HTMLElement>(null);
++  const [gulp, setGulp] = useState<{ key: number; gain: number } | null>(null);
++  const shownTotal = useCountUp(state.guildDonationsTotal, { durationMs: Math.max(1, fxMs(700)) });
++  const shownPower = powerFor(shownTotal);
++  useEffect(() => {
++    if (!gulp) return undefined;
++    const id = window.setTimeout(() => setGulp(null), fxMs(1300));
++    return () => window.clearTimeout(id);
++  }, [gulp]);
++
+   const handleFund = () => {
+     if (!canAfford) return;
++    const gain = previewGain;
+     const donated = engine.donateToGuild(amount);
+     if (donated) {
+       setJustDonated(donated);
+       setAmountText('');
++      if (fxSpeed() > 0 && cofferRef.current) {
++        const n = Math.min(12, 4 + Math.round(Math.log10(donated) * 2));
++        flyTokens('gold', cofferRef.current, 'coin', n);
++        window.setTimeout(() => {
++          setGulp({ key: Date.now(), gain });
++          if (cofferRef.current && powerRef.current) flyTokens(cofferRef.current, powerRef.current, 'spark', 3, fxMs(250));
++        }, fxMs(420 + n * 45));
++      }
+     }
+   };
+ 
+@@ -69,6 +94,17 @@ export function FundGuildModal({ onClose }: { onClose: () => void }) {
+               Every gold given adds to the guild's standing -- a small, permanent sliver of Guild Power, forever.
+             </p>
+ 
++            <span ref={cofferRef} className={`gfx-coffer ${gulp ? 'gfx-gulp' : ''}`} key={gulp?.key ?? 'idle'} aria-hidden="true">
++              <span className="gfx-pile">
++                {Array.from({ length: Math.min(24, 4 + Math.floor(Math.sqrt(state.guildDonationsTotal) / 20)) }, (_, i) => <i key={i} />)}
++              </span>
++              <svg viewBox="0 0 120 96" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round">
++                <path d="M14 40h92v46H14z" fill="oklch(30% 0.05 60)" /><path d="M14 56h92M52 50h16v14H52z" />
++                <g className="gfx-lid"><path d="M14 40c0-16 12-24 46-24s46 8 46 24z" fill="oklch(34% 0.06 60)" /><path d="M30 22v16M90 22v16" /></g>
++              </svg>
++              {gulp && gulp.gain > 0 && <span className="gfx-gain">+{gulp.gain} Power</span>}
++            </span>
++
+             <div className="row wrap" style={{ gap: 6, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+               <input
+                 type="number"
+@@ -99,10 +135,13 @@ export function FundGuildModal({ onClose }: { onClose: () => void }) {
+               Fund Power{validAmount ? ` -- +${previewGain} Power` : ''}
+             </button>
+ 
++            <div className="gfx-ledger">
++              <span>Lifetime given<b>{formatNumber(shownTotal)}</b></span>
++              <span>Power from donations<b ref={powerRef} className="p">{shownPower}</b></span>
++            </div>
+             {justDonated !== null && (
+-              <p className="tiny" style={{ marginTop: 10, color: 'var(--brass)' }}>
+-                Donated {formatGold(justDonated)} gold. Lifetime total: {formatNumber(state.guildDonationsTotal)} gold
+-                {' '}-- {currentPower} Power from Donations.
++              <p className="tiny" style={{ marginTop: 8, color: 'var(--brass)' }}>
++                Donated {formatGold(justDonated)} gold.
+               </p>
+             )}
+           </div>
+diff --git a/src/ui/GuildNamingModal.tsx b/src/ui/GuildNamingModal.tsx
+index 0e238b3..36182e3 100644
+--- a/src/ui/GuildNamingModal.tsx
++++ b/src/ui/GuildNamingModal.tsx
+@@ -1,4 +1,5 @@
+ import { useEffect, useRef, useState } from 'react';
++import { fxMs, fxSpeed, SealStamp } from './purchaseFx';
+ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+ import { backgroundSrc, BackgroundMoodId } from '../game/settings';
+@@ -56,6 +57,14 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+   // pressed, in confirmVibe below. Backing out via Back after previewing
+   // a mood without confirming leaves the real setting untouched.
+   const [previewMood, setPreviewMood] = useState<BackgroundMoodId>(settings.backgroundMood);
++  // Patch 0424 -- the "guild founded" finale: once Guide me / I've got
++  // this is picked, a charter unrolls with the guild's name and a wax seal
++  // stamps it before the card closes (setGuildName is what closes it, so
++  // the engine calls wait for the moment to play; instant with motion off).
++  const [founding, setFounding] = useState<null | 'charter' | 'leave'>(null);
++  // The art that was showing before a mood change, faded out over the new
++  // one so picking a vibe cross-fades instead of swapping instantly.
++  const [prevBg, setPrevBg] = useState<{ src: string; key: number } | null>(null);
+ 
+   // Forces full menu size before this modal has to render at all -- lives
+   // here rather than in App.tsx specifically because this component
+@@ -138,20 +147,51 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+   // guided is false. setGuildName is what closes this modal, so it has
+   // to run second either way.
+   const confirmGuide = (guided: boolean) => {
+-    engine.setGuidedOnboarding(guided);
+-    engine.setGuildName(trimmed);
++    if (founding) return;
++    const finish = () => {
++      engine.setGuidedOnboarding(guided);
++      engine.setGuildName(trimmed);
++    };
++    if (fxSpeed() <= 0) { finish(); return; }
++    setFounding('charter');
++    window.setTimeout(() => setFounding('leave'), fxMs(2600));
++    window.setTimeout(finish, fxMs(3150));
+   };
+ 
+   const bgSrc = backgroundSrc('./lore/panels/guildhall.jpg', previewMood);
++  const pickMood = (mood: BackgroundMoodId) => {
++    if (mood === previewMood) return;
++    setPrevBg({ src: bgSrc, key: Date.now() });
++    setPreviewMood(mood);
++  };
++  const today = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+ 
+   return (
+     <div className="overlay">
+       <div
+-        className="guild-naming-card"
++        className={`guild-naming-card gnfx-card ${founding ? `gnfx-st-${founding}` : ''}`}
+         style={{ backgroundImage: `url(${bgSrc})` }}
+         onClick={(e) => e.stopPropagation()}
+       >
+-        <div className="guild-naming-content">
++        {prevBg && <span key={prevBg.key} className="gnfx-bgout" style={{ backgroundImage: `url(${prevBg.src})` }} aria-hidden="true" />}
++        {founding && (
++          <div className="gnfx-charter" aria-live="polite">
++            <div className="gnfx-rod" />
++            <div className="gnfx-sheet">
++              <div className="gnfx-inner">
++                <div className="gnfx-k">Charter of the guild</div>
++                <div className="gnfx-gn">{trimmed}</div>
++                <div className="gnfx-tx">Sworn this day to take up contracts across the realm, to keep its heroes fed, armed and paid, and to make its name known.</div>
++                <div className="gnfx-line" />
++                <div className="gnfx-sig">Founded {today}</div>
++                <SealStamp label="Founded" className="gnfx-seal" />
++              </div>
++            </div>
++            <div className="gnfx-rod" />
++            <div className="gnfx-founded">The guild is founded</div>
++          </div>
++        )}
++        <div className="guild-naming-content" key={step}>
+           {step === 'name' ? (
+             <>
+               <div className="guild-naming-textbox guild-naming-textbox-title">
+@@ -178,7 +218,10 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+                 />
+               </div>
+ 
+-              <div className="row end" style={{ marginTop: 4 }}>
++              <div className="row" style={{ marginTop: 4, justifyContent: 'space-between', alignItems: 'flex-start' }}>
++                <span className={`gnfx-pennant ${trimmed ? '' : 'empty'}`} aria-hidden="true">
++                  Guild {[...trimmed].map((c, i) => <i key={i}>{c === ' ' ? '\u00a0' : c}</i>)}
++                </span>
+                 <button className="btn-primary" onClick={confirmName} disabled={!trimmed}>
+                   Next
+                 </button>
+@@ -199,14 +242,14 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+               <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 4 }}>
+                 <button
+                   className={`btn-primary guild-naming-mood-btn ${previewMood === 'dim' ? 'selected' : ''}`}
+-                  onClick={() => setPreviewMood('dim')}
++                  onClick={() => pickMood('dim')}
+                   title="Candlelit halls, torchlit chambers -- the classic look"
+                 >
+                   🕯️<br />Moody
+                 </button>
+                 <button
+                   className={`btn-primary guild-naming-mood-btn ${previewMood === 'bright' ? 'selected' : ''}`}
+-                  onClick={() => setPreviewMood('bright')}
++                  onClick={() => pickMood('bright')}
+                   title="Sunlit halls, daylight chambers -- a brighter take on the same guild"
+                 >
+                   ☀️<br />Bright
+@@ -220,7 +263,7 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
+                  *  uses) rather than a special-cased third preview path. */}
+                 <button
+                   className={`btn-primary guild-naming-mood-btn ${previewMood === 'system' ? 'selected' : ''}`}
+-                  onClick={() => setPreviewMood('system')}
++                  onClick={() => pickMood('system')}
+                   title="Switches automatically -- bright by day, moody by night, off your own clock"
+                 >
+                   🕐<br />System
+diff --git a/src/ui/HatchReadyModal.tsx b/src/ui/HatchReadyModal.tsx
+index 28e54e4..4a30164 100644
+--- a/src/ui/HatchReadyModal.tsx
++++ b/src/ui/HatchReadyModal.tsx
+@@ -1,4 +1,7 @@
+ import { useEngine } from './useEngine';
++import { PetManager } from '../game/managers/PetManager';
++import { RARITY_COLOR } from '../game/util';
++import { EggIcon } from './EggIcon';
+ 
+ /**
+  * Shown whenever state.pendingHatchReadyNotice is true -- same "gated on
+@@ -8,10 +11,15 @@ import { useEngine } from './useEngine';
+  * sitting in either view. Doesn't say which egg or how many -- see the
+  * flag's own doc comment on GameState; the Nests tab marks each ready card
+  * individually once they get there.
++ *
++ * Patch 0424 -- the first ready egg now sits in a nest on the card,
++ * wobbling and glowing its rarity colour, so it reads as "something is
++ * about to happen" before the player has clicked anything.
+  */
+ export function HatchReadyModal({ active, onView }: { active: boolean; onView: () => void }) {
+   const engine = useEngine();
+   if (!active || !engine.state.pendingHatchReadyNotice) return null;
++  const readyEgg = engine.state.incubatingEggs.find((e) => PetManager.isReady(e));
+ 
+   const goToHatchery = () => {
+     engine.requestTab('hatchery');
+@@ -21,7 +29,13 @@ export function HatchReadyModal({ active, onView }: { active: boolean; onView: (
+ 
+   return (
+     <div className="overlay" onClick={() => engine.dismissHatchReadyNotice()}>
+-      <div className="modal" onClick={(e) => e.stopPropagation()}>
++      <div className="modal hfx-ready" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
++        <div className="hfx-nest-stage" style={{ color: RARITY_COLOR[readyEgg?.rarity ?? 'common'] }} aria-hidden="true">
++          <span className="hfx-halo" />
++          <span className="hfx-spark s1" /><span className="hfx-spark s2" /><span className="hfx-spark s3" />
++          <span className="hfx-wobble"><EggIcon rarity={readyEgg?.rarity ?? 'common'} size={72} /></span>
++          <span className="hfx-nest" />
++        </div>
+         <h3>An Egg is Ready!</h3>
+         <p className="small" style={{ marginTop: 0 }}>
+           One of your incubating eggs has grown enough to hatch. Head to the Hatchery's Nests
+diff --git a/src/ui/HatchRevealModal.tsx b/src/ui/HatchRevealModal.tsx
+index a74b1f0..634733a 100644
+--- a/src/ui/HatchRevealModal.tsx
++++ b/src/ui/HatchRevealModal.tsx
+@@ -1,8 +1,15 @@
+ import { useState } from 'react';
++import type { CSSProperties } from 'react';
+ import { useEngine } from './useEngine';
+ import { DlcManager } from '../game/managers/DlcManager';
+ import { PetSprite } from './sprites/PetSprite';
+ import { RarityPill } from './RarityPill';
++import { EggIcon } from './EggIcon';
++import { at } from './resultFx';
++import { RARITY_COLOR, RARITY_ORDER } from '../game/util';
++
++/** Crack paths drawn across the egg as it wobbles (96px box). */
++const CRACKS = ['M48 20 L44 34 L52 42 L46 54', 'M30 46 L40 50 L36 62 L44 70', 'M66 40 L58 50 L64 60 L56 72', 'M22 62 L34 64 L30 76', 'M74 58 L62 66 L70 78'];
+ 
+ /**
+  * Reads engine.lastHatchedPet directly and renders nothing if null -- same
+@@ -32,6 +39,10 @@ export function HatchRevealModal() {
+   if (!pet) return null;
+ 
+   const def = DlcManager.petDef(pet.defId);
++  // 0 for common/uncommon up to 3 for legendary: longer shake, rays, glints.
++  const extra = Math.max(0, RARITY_ORDER.indexOf(pet.rarity) - 1);
++  const shake = 1300 + extra * 250;
++  const T = { shake, burst: 450 + shake };
+ 
+   // Commits whatever's in the draft field (if it actually differs from
+   // the pet's current name) before running the given follow-up action --
+@@ -53,28 +64,63 @@ export function HatchRevealModal() {
+ 
+   return (
+     <div className="overlay" onClick={close}>
+-      <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+-        <h3 style={{ marginBottom: 4 }}>It Hatched!</h3>
+-        <p className="small muted" style={{ marginTop: 0 }}>
++      <div
++        className="modal hfx-reveal"
++        style={{ textAlign: 'center', color: RARITY_COLOR[pet.rarity], ...({ '--hfx-shake': `calc(var(--fx-t) * ${T.shake})` } as CSSProperties) }}
++        onClick={(e) => e.stopPropagation()}
++      >
++        {/* Patch 0424 -- the hatch moment. The egg drops into its nest and
++            wobbles three times, harder each time as cracks spread, then
++            bursts in a flash with shell shards and the pet pops up already
++            playing its idle animation. Higher rarities shake longer and get
++            light rays and glints. One CSS timeline (resultFx.tsx); with
++            Reduce motion it lands straight on the final frame. */}
++        <div className="hfx-stage" aria-hidden="true">
++          {extra > 0 && <span className="hfx-rays" style={at(T.burst)} />}
++          <span className="hfx-nest" />
++          <span className="hfx-shadow" style={at(T.burst)} />
++          <span className="hfx-egg" style={at(150)}>
++            <span className="hfx-egg-shake" style={at(450)}>
++              <span className="hfx-egg-pop" style={at(T.burst)}>
++                <EggIcon rarity={pet.rarity} size={96} />
++                <svg className="hfx-cracks" viewBox="0 0 96 96">
++                  {CRACKS.slice(0, 3 + Math.min(2, extra)).map((d, i, arr) => (
++                    <path key={i} d={d} style={at(450 + T.shake * (0.1 + (i * 0.8) / arr.length))} />
++                  ))}
++                </svg>
++              </span>
++            </span>
++          </span>
++          {Array.from({ length: 8 + extra * 3 }, (_, i) => (
++            <span key={i} className={`hfx-shard h${i % 8}`} style={at(T.burst)} />
++          ))}
++          <span className="hfx-pet" style={at(T.burst + 120)}>
++            <PetSprite
++              species={def?.spriteFolder ?? pet.defId}
++              rarity={pet.rarity}
++              animation="idle"
++              height={84}
++              title={draft || pet.name}
++              fallback={<span style={{ fontSize: '2.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
++            />
++          </span>
++          {extra >= 2 && Array.from({ length: 4 + extra * 2 }, (_, i) => (
++            <span key={i} className="hfx-glint" style={at(T.burst + 320 + i * 140, { left: `${22 + ((i * 37) % 56)}%`, top: `${14 + ((i * 23) % 50)}%` })} />
++          ))}
++          <span className="hfx-flash" style={at(T.burst)} />
++        </div>
++
++        <h3 className="hfx-title" style={at(T.burst + 450, { marginBottom: 4 })}>It Hatched!</h3>
++        <p className="small muted hfx-late" style={at(T.burst + 650, { marginTop: 0 })}>
+           A new {def?.name ?? 'creature'} joins your guild.
+         </p>
+ 
+-        <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
+-          <PetSprite
+-            species={def?.spriteFolder ?? pet.defId}
+-            rarity={pet.rarity}
+-            animation="idle"
+-            height={72}
+-            title={draft || pet.name}
+-            fallback={<span style={{ fontSize: '2.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
+-          />
+-        </div>
+-
+-        <div className="row" style={{ justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+-          <span className="small">{def?.name ?? 'Unknown species'}</span>
+-          <RarityPill rarity={pet.rarity} />
++        <div className="row hfx-late" style={at(T.burst + 850, { justifyContent: 'center', gap: 6, marginBottom: 4 })}>
++          <span className="small" style={{ color: 'var(--parchment)' }}>{def?.name ?? 'Unknown species'}</span>
++          <span className="hfx-pill"><RarityPill rarity={pet.rarity} /></span>
+         </div>
+ 
++        <div className="hfx-late" style={at(T.burst + 1100)}>
+         <div className="row" style={{ justifyContent: 'center', gap: 6, marginTop: 10 }}>
+           <label className="tiny muted" htmlFor="hatch-name-input">Name this pet</label>
+         </div>
+@@ -93,7 +139,9 @@ export function HatchRevealModal() {
+           />
+         </div>
+ 
+-        <div className="row end" style={{ marginTop: 14, gap: 8, justifyContent: 'center' }}>
++        </div>
++
++        <div className="row end hfx-late" style={at(T.burst + 1400, { marginTop: 14, gap: 8, justifyContent: 'center' })}>
+           <button className="btn-primary" onClick={close}>Close</button>
+           <button className="btn-primary" onClick={goToPets}>Go to Pets</button>
+         </div>
+diff --git a/src/ui/HeroTierUpModal.tsx b/src/ui/HeroTierUpModal.tsx
+index badcdb2..2acd88b 100644
+--- a/src/ui/HeroTierUpModal.tsx
++++ b/src/ui/HeroTierUpModal.tsx
+@@ -2,6 +2,7 @@ import { useEngine } from './useEngine';
+ import { HeroManager } from '../game/managers/HeroManager';
+ import { HERO_CLASSES } from '../game/data/progression';
+ import { HeroSprite } from './sprites/HeroSprite';
++import { at } from './resultFx';
+ 
+ /**
+  * Hero Tier-Up's own dedicated celebration -- direct request: "Milestone
+@@ -35,21 +36,71 @@ export function HeroTierUpModal() {
+   const newTier = HeroManager.effectiveTier(hero);
+   const oldTier = newTier - 1;
+ 
++  const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
++  const maxed = HeroManager.nextTierUpStep(hero) === null;
++  const snap = engine.lastTierUpStats?.heroId === hero.id ? engine.lastTierUpStats.before : null;
++  const STAT_ROWS: { key: keyof typeof hero.stats; label: string }[] = [
++    { key: 'strength', label: 'STR' }, { key: 'endurance', label: 'END' }, { key: 'luck', label: 'LCK' }, { key: 'wisdom', label: 'WIS' },
++  ];
++  const scale = Math.max(1, ...STAT_ROWS.map((r) => hero.stats[r.key])) * 1.25;
++
++  // Patch 0424 -- one CSS timeline (resultFx.tsx): a pillar of light rises
++  // behind the hero, chevrons climb through it and the tier badge flips to
++  // the new numeral; then the tier track fills its next pip and each stat
++  // bar grows by what the tier added. Tier 5 stamps MAX TIER.
+   return (
+     <div className="overlay" onClick={() => engine.dismissHeroTierUp()}>
+-      <div className="modal" style={{ textAlign: 'center', maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
+-        <div className="row" style={{ justifyContent: 'center', marginBottom: 4 }}>
+-          <HeroSprite heroClass={hero.heroClass} skin={hero.skin} height={72} />
++      <div className={`modal tfx-card ${maxed ? 'tfx-maxed' : ''}`} onClick={(e) => e.stopPropagation()}>
++        <div className="tfx-stage" aria-hidden="true">
++          <span className="tfx-pillar" style={at(300)} />
++          {Array.from({ length: 10 }, (_, i) => (
++            <span key={i} className="tfx-ember" style={at(500 + i * 110, { left: `${38 + ((i * 7) % 24)}%` })} />
++          ))}
++          <span className="tfx-frame" style={at(700)}>
++            <HeroSprite heroClass={hero.heroClass} skin={hero.skin} height={88} />
++          </span>
++          <span className="tfx-ring" style={at(700)} />
++          {[0, 1, 2].map((i) => (
++            <span key={i} className="tfx-chev" style={at(450 + i * 160)}>
++              <svg viewBox="0 0 46 20" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 17 L23 4 L42 17" /></svg>
++            </span>
++          ))}
++          <span className="tfx-badge">
++            <span className="tfx-shield" />
++            <span className="tfx-dg old" style={at(700)}>{ROMAN[oldTier] ?? oldTier}</span>
++            <span className="tfx-dg new" style={at(950)}>{ROMAN[newTier] ?? newTier}</span>
++          </span>
+         </div>
+-        <h3 style={{ marginBottom: 2 }}>{def?.name ?? hero.heroClass} Tiered Up!</h3>
++        <div className="tfx-kick" style={at(1000)}>Tier up</div>
++        <h3 className="tfx-title" style={at(1100, { marginBottom: 2 })}>{def?.name ?? hero.heroClass} Tiered Up!</h3>
+         <p className="small muted" style={{ marginTop: 0 }}>{hero.name}</p>
+-        <p className="card-title" style={{ color: 'var(--brass)', fontSize: '1.1rem', margin: '8px 0' }}>
+-          Tier {oldTier} <span aria-hidden="true">→</span> Tier {newTier}
+-        </p>
+-        <p className="small" style={{ marginTop: 4 }}>
+-          {hero.name}'s stats now match a Tier {newTier} hero -- same class, same look, permanently stronger.
++        <div className="tfx-track">
++          {[1, 2, 3, 4, 5].map((n) => (
++            <span key={n} className={`tfx-tp ${n < newTier ? 'had' : n === newTier ? 'new' : ''}`} style={at(1250)} />
++          ))}
++        </div>
++        <div className="tiny muted">Tier {oldTier} → Tier {newTier}</div>
++        <div className="tfx-stats">
++          {STAT_ROWS.map((r, i) => {
++            const now = hero.stats[r.key];
++            const was = snap ? snap[r.key] : now;
++            return (
++              <div key={r.key} className="tfx-st" style={at(1500 + i * 140)}>
++                <span className="tfx-k">{r.label}</span>
++                <span className="tfx-bar">
++                  <span className="tfx-old" style={{ width: `${(was / scale) * 100}%` }} />
++                  <span className="tfx-gain" style={at(1650 + i * 140, { left: `${(was / scale) * 100}%`, width: `${(Math.max(0, now - was) / scale) * 100}%` })} />
++                </span>
++                <span className="tfx-v">{now}{now > was && <i>+{now - was}</i>}</span>
++              </div>
++            );
++          })}
++        </div>
++        {maxed && <div className="tfx-seal" style={at(2300)}>MAX TIER</div>}
++        <p className="small tfx-note" style={at(2300)}>
++          {hero.name}'s stats now match a Tier {newTier} hero. Same class, same look, permanently stronger.
+         </p>
+-        <div className="row end" style={{ marginTop: 14 }}>
++        <div className="row end tfx-acts" style={at(2600, { marginTop: 14 })}>
+           <button className="btn-primary" onClick={() => engine.dismissHeroTierUp()}>Close</button>
+         </div>
+       </div>
+diff --git a/src/ui/MailboxModal.tsx b/src/ui/MailboxModal.tsx
+index a26bdcb..e0c5e45 100644
+--- a/src/ui/MailboxModal.tsx
++++ b/src/ui/MailboxModal.tsx
+@@ -1,4 +1,6 @@
++import { useRef } from 'react';
+ import { useEngine } from './useEngine';
++import { flyIcon, flyTokens, ghostOut } from './purchaseFx';
+ import { MailboxEntry } from '../game/types';
+ import { RARITY_BANNER, RARITY_COLOR, formatGold } from '../game/util';
+ import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
+@@ -41,6 +43,44 @@ export function MailboxModal({ onClose }: { onClose: () => void }) {
+   const engine = useEngine();
+   const state = engine.state;
+   const entries = state.mailbox;
++  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
++
++  // Patch 0424 -- claiming plays the letter leaving: its wax seal pops,
++  // the card slides out, and what was inside flies to its own counter
++  // (coins to gold, shards to scrap, the item to the Inventory tab). The
++  // engine claim runs first and only entries that actually left the
++  // mailbox animate, so a gold letter held back by the storage cap stays.
++  const playClaimed = (ids: string[], before: MailboxEntry[]) => {
++    ids.forEach((id, i) => {
++      const el = cardRefs.current[id];
++      const entry = before.find((e) => e.id === id);
++      if (!el || !entry) return;
++      const r = el.getBoundingClientRect();
++      const from = { x: r.left + r.width / 2, y: r.top + r.height * 0.35 };
++      const delay = i * 120;
++      ghostOut(el, delay);
++      if (entry.type === 'gold') flyTokens(from, 'gold', 'coin', 6, delay + 260);
++      else if (entry.type === 'scrap') flyTokens(from, 'scrap', 'shard', 5, delay + 260);
++      else if (entry.type === 'equipment' && entry.item) {
++        const def = EQUIPMENT_BY_ID[entry.item.defId];
++        void flyIcon(el, 'inventory', { icon: def?.icon, glyph: '✦' }, { delay: delay + 260 });
++      } else if (entry.type === 'consumable' && entry.consumableId) {
++        const def = CONSUMABLE_BY_ID[entry.consumableId];
++        void flyIcon(el, 'inventory', { icon: def?.icon, glyph: def?.glyph }, { delay: delay + 260 });
++      }
++    });
++  };
++  const claimOne = (id: string) => {
++    const before = [...entries];
++    engine.claimMailboxEntry(id);
++    if (!engine.state.mailbox.some((e) => e.id === id)) playClaimed([id], before);
++  };
++  const claimAll = () => {
++    const before = [...entries];
++    engine.claimAllMailbox();
++    const left = new Set(engine.state.mailbox.map((e) => e.id));
++    playClaimed(before.filter((e) => !left.has(e.id)).map((e) => e.id), before);
++  };
+ 
+   return (
+     <div className="overlay" onClick={onClose}>
+@@ -57,13 +97,16 @@ export function MailboxModal({ onClose }: { onClose: () => void }) {
+         ) : (
+           <>
+             <div className="row end" style={{ marginBottom: 8 }}>
+-              <button className="btn-ghost" onClick={() => engine.claimAllMailbox()}>
++              <button className="btn-ghost" onClick={claimAll}>
+                 Claim all ({entries.length})
+               </button>
+             </div>
+             <div className="item-card-grid">
+               {entries.map((entry) => (
+-                <MailboxCard key={entry.id} entry={entry} onClaim={() => engine.claimMailboxEntry(entry.id)} />
++                <div key={entry.id} ref={(el) => { cardRefs.current[entry.id] = el; }} className="mfx-card">
++                  <MailboxCard entry={entry} onClaim={() => claimOne(entry.id)} />
++                  <span className="mfx-seal" aria-hidden="true" />
++                </div>
+               ))}
+             </div>
+           </>
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 7f4a0a3..f96c8e2 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -5,6 +5,7 @@ import { resolveBackgroundMood } from '../game/settings';
+ import { OnboardingTour } from './OnboardingTour';
+ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+ import { QuestBoardIntroModal } from './QuestBoardIntroModal';
++import { TUTORIAL_QUEST_ID } from '../game/data/quests';
+ import { formatGold, formatNumber } from '../game/util';
+ import { attentionCounts, isNavTabUnread } from '../game/attention';
+ import { PeddlerManager } from '../game/managers/PeddlerManager';
+@@ -379,6 +380,9 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+   const displayGold = useCountUp(engine.state.gold);
+   const goldRef = useFlyTargetRef<HTMLSpanElement>('gold');
+   const displayRenown = useCountUp(engine.state.renown);
++  // Patch 0424 -- renown is a fly target too (Renown perks, the
++  // Gold-for-Renown exchange, mailbox letters).
++  const renownRef = useFlyTargetRef<HTMLSpanElement>('renown');
+   /**
+    * Patch 0323, direct request -- Scrap moved up here next to Gold/
+    * Renown for easier at-a-glance viewing, always visible regardless of
+@@ -392,6 +396,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+    */
+   const scrapRef = useFlyTargetRef<HTMLSpanElement>('scrap');
+   const unreadCount = engine.unreadNotificationCount;
++  // Patch 0424 -- the nav tab a story chain just unlocked, while its
++  // one-step spotlight is still pending (see the unlock reveal below).
++  const unlockingTab = engine.state.guildName === '' ? null
++    : engine.state.pendingHarvestSpotlight ? 'harvest'
++      : engine.state.pendingHatcherySpotlight ? 'hatchery'
++        : engine.state.pendingPeddlerSpotlight ? 'peddler' : null;
+ 
+   // The default (non-Raids/Hatchery/Peddler) menu backdrop is the same
+   // Guild Hall art the Customize scene renders, resolved through the same
+@@ -471,7 +481,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+         <div className="resources">
+           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>
+-          <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
++          <span ref={renownRef} className="renown">✦ {formatNumber(displayRenown)} renown</span>
+           <button
+             className={`header-notif-icon ${unreadCount > 0 ? 'header-notif-unread' : ''}`}
+             onClick={() => engine.requestTab('guide')}
+@@ -642,8 +652,22 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+                     // all most of the time -- same "absent unless needed"
+                     // shape as before, just evaluated per-tab now instead
+                     // of hardcoded to one id.
+-                    className={isNavTabUnread(engine.state, t.id) ? 'nav-tab-unread' : undefined}
++                    className={[
++                      isNavTabUnread(engine.state, t.id) ? 'nav-tab-unread' : '',
++                      t.id === unlockingTab ? 'navfx-unlock' : '',
++                    ].filter(Boolean).join(' ') || undefined}
+                   >
++                    {t.id === unlockingTab && (
++                      // Patch 0424 -- the same padlock moment as the 0421
++                      // one-time unlocks, played on the nav tab a story
++                      // chain just opened; the one-step spotlight follows.
++                      <span className="navfx-lock" aria-hidden="true">
++                        <span className="navfx-chain a"><i /><i /></span>
++                        <span className="navfx-chain b"><i /><i /></span>
++                        <span className="navfx-pad"><span className="navfx-shackle" /><span className="navfx-body" /></span>
++                        <span className="navfx-sweep" />
++                      </span>
++                    )}
+                     {t.label}
+                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
+                     {t.id === 'hatchery' && eggsReady > 0 ? <span className="tab-badge">{eggsReady}</span> : null}
+@@ -733,14 +757,20 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+         <OnboardingTour
+           steps={(manualTourOpen ? ALL_TABS : ALL_TABS.filter((t) => FIRST_RUN_TOUR_TAB_IDS.includes(t.id)))
+             .filter((t) => isTabVisible(t.id))
+-            .map((t) => ({
++            .map((t): { id: string; label: string; description?: string; target?: string; pulse?: boolean } => ({
+               id: t.id,
+               label: t.label,
+               // Only the automatic short tour gets the tailored copy --
+               // see FIRST_RUN_TOUR_DESCRIPTIONS' own comment for why a
+               // manual replay later shouldn't reuse this same wording.
+               description: manualTourOpen ? undefined : FIRST_RUN_TOUR_DESCRIPTIONS[t.id],
+-            }))}
++            }))
++            // Patch 0424 -- the automatic tour's last stop lands on the
++            // tutorial quest itself (pulsing) rather than ending on the
++            // Quests tab: the tour finishes on the one thing to do next.
++            .concat(!manualTourOpen && engine.state.guidedOnboarding && Object.values(engine.state.questBoards).some((b) => b.some((o) => o.id === TUTORIAL_QUEST_ID))
++              ? [{ id: 'quests', label: 'Send your hero out', description: 'Open this job and hit Send to start your first quest. Your hero is back in a few minutes, and the guild keeps working while you are away.', target: 'tutorial-quest', pulse: true }]
++              : [])}
+           onTabChange={(id) => setTab(id as TabId)}
+           onDone={() => { engine.dismissOnboarding(); setManualTourOpen(false); }}
+         />
+@@ -770,7 +800,10 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+           result-card fix in this patch already uses -- is enough; no
+           separate queue needed here since a React re-render already
+           follows dismissResult() for free. */}
++      {/* Patch 0424: also waits for any level-up card to be seen first
++          (result card -> level-up card -> this explainer). */}
+       {engine.state.guildName !== '' && engine.state.guidedOnboarding && !engine.lastResult
++        && engine.levelUpQueue.length === 0
+         && engine.state.pendingQuestBoardIntro && (
+         <QuestBoardIntroModal
+           onView={() => { setTab('quests'); engine.dismissQuestBoardIntro(); }}
+@@ -785,6 +818,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+       {engine.state.guildName !== '' && engine.state.pendingHatcherySpotlight && (
+         <OnboardingTour
+           steps={[{ id: 'hatchery', label: 'Hatchery' }]}
++          kicker="New tab unlocked"
++          delayMs={1500}
+           onTabChange={(id) => setTab(id as TabId)}
+           onDone={() => engine.dismissHatcherySpotlight()}
+         />
+@@ -796,6 +831,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+       {engine.state.guildName !== '' && engine.state.pendingPeddlerSpotlight && (
+         <OnboardingTour
+           steps={[{ id: 'peddler', label: 'Grimsby' }]}
++          kicker="New tab unlocked"
++          delayMs={1500}
+           onTabChange={(id) => setTab(id as TabId)}
+           onDone={() => engine.dismissPeddlerSpotlight()}
+         />
+@@ -808,6 +845,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+       {engine.state.guildName !== '' && engine.state.pendingHarvestSpotlight && (
+         <OnboardingTour
+           steps={[{ id: 'harvest', label: 'Harvest' }]}
++          kicker="New tab unlocked"
++          delayMs={1500}
+           onTabChange={(id) => setTab(id as TabId)}
+           onDone={() => engine.dismissHarvestSpotlight()}
+         />
+diff --git a/src/ui/NotificationBanner.tsx b/src/ui/NotificationBanner.tsx
+index d29d95a..45b5a88 100644
+--- a/src/ui/NotificationBanner.tsx
++++ b/src/ui/NotificationBanner.tsx
+@@ -11,6 +11,9 @@ import { TAB_LABELS } from './tabLabels';
+  *  Doubled from 5000 -- the original window read as too quick to
+  *  reliably catch and read before it auto-dismissed. */
+ const DISPLAY_MS = 10000;
++/** Patch 0424 -- breathing room between queued banners. */
++const BANNER_GAP_MS = 900;
++const STALE_MS = 5 * 60_000;
+ 
+ /**
+  * Pops up near the header the moment a genuinely new, banner-worthy entry
+@@ -47,26 +50,44 @@ const DISPLAY_MS = 10000;
+ export function NotificationBanner() {
+   const engine = useEngine();
+   const state = engine.state;
+-  // Newest entry that's actually banner-worthy -- not necessarily
+-  // notifications[0] itself, since a routine (non-banner) message could
+-  // have landed more recently without displacing this from being the
+-  // thing that still deserves the top banner.
+-  const latestBanner = state.notifications.find((n) => n.banner) ?? null;
++
++  // Patch 0424 -- banners now play as a queue, one at a time with a short
++  // gap, instead of only ever showing the newest (which used to drop the
++  // others when several guidance topics fired together). Pending = every
++  // banner-worthy entry newer than the last one shown, oldest first.
++  const markerIx = state.notifications.findIndex((n) => n.id === state.lastBannerShownId);
++  const newer = markerIx >= 0 ? state.notifications.slice(0, markerIx) : state.notifications;
++  const pending = [...newer].reverse().filter((n) => n.banner);
++  // Anything older than a few minutes (left over from time in the idle
++  // companion, where it already showed as a toast) is skipped, not replayed.
++  const fresh = pending.filter((n) => Date.now() - n.timestamp <= STALE_MS);
++  const lastStale = fresh.length < pending.length ? pending[pending.length - fresh.length - 1] : null;
++  const next = fresh[0] ?? null;
++  // Hold the queue while a card that should come first is on screen
++  // (results, level-up, the Quest Board explainer, discovery...).
++  const held = engine.levelUpBlocked || engine.levelUpQueue.length > 0 || !!state.pendingQuestBoardIntro;
+ 
+   const [shown, setShown] = useState<NotificationEntry | null>(null);
++  const [cooling, setCooling] = useState(false);
+ 
+   useEffect(() => {
+-    if (!latestBanner) return;
+-    if (latestBanner.id === state.lastBannerShownId) return;
+-    setShown(latestBanner);
+-    engine.markBannerShown(latestBanner.id);
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [latestBanner?.id]);
++    if (lastStale && !fresh.length) engine.markBannerShown(lastStale.id);
++    if (shown || cooling || held || !next) return;
++    setShown(next);
++    engine.markBannerShown(next.id);
++  }, [next?.id, shown, cooling, held]);
++
++  const finish = () => {
++    setShown(null);
++    setCooling(true);
++    window.setTimeout(() => setCooling(false), BANNER_GAP_MS);
++  };
+ 
+   useEffect(() => {
+     if (!shown) return undefined;
+-    const id = window.setTimeout(() => setShown(null), DISPLAY_MS);
++    const id = window.setTimeout(finish, DISPLAY_MS);
+     return () => window.clearTimeout(id);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [shown]);
+ 
+   if (!shown) return null;
+@@ -79,7 +100,7 @@ export function NotificationBanner() {
+   // nothing at all. Reordered so the banner always closes first, with the
+   // acknowledge side-effect now wrapped so it can never block that again.
+   const acknowledge = () => {
+-    setShown(null);
++    finish();
+     try {
+       engine.markNotificationsSeen();
+     } catch (err) {
+diff --git a/src/ui/OnboardingTour.tsx b/src/ui/OnboardingTour.tsx
+index f0674af..a076493 100644
+--- a/src/ui/OnboardingTour.tsx
++++ b/src/ui/OnboardingTour.tsx
+@@ -1,4 +1,5 @@
+ import { useEffect, useLayoutEffect, useState } from 'react';
++import { fxMs } from './purchaseFx';
+ 
+ interface Step {
+   id: string;
+@@ -11,6 +12,12 @@ interface Step {
+    *  reuses this same component with the plain shared descriptions
+    *  instead. Falls back to STEP_DESCRIPTIONS[id] when omitted. */
+   description?: string;
++  /** Patch 0424 -- spotlight this element (a `data-tour` value) instead
++   *  of the nav tab; the tab named by `id` is still switched to first.
++   *  Used by the first-run tour's last stop, the tutorial quest itself. */
++  target?: string;
++  /** Patch 0424 -- pulse a ring on this stop's spotlight (the last stop). */
++  pulse?: boolean;
+ }
+ 
+ interface Rect {
+@@ -38,11 +45,12 @@ const STEP_DESCRIPTIONS: Record<string, string> = {
+   guide: "A running log of what's happened, plus a quick reference for how things work.",
+   prestige: 'Retire a hero for Renown, spent on permanent guild-wide perks.',
+   stats: 'Lifetime stats and achievements, if you like keeping score.',
++  peddler: 'Grimsby, a travelling peddler with a cart full of maybes. Pay for a card and see what you get.',
+   settings: 'Appearance, sound, and other preferences.',
+ };
+ 
+-function measure(tabId: string): Rect | null {
+-  const el = document.querySelector(`[data-tab-id="${tabId}"]`);
++function measure(tabId: string, target?: string): Rect | null {
++  const el = (target && document.querySelector(`[data-tour="${target}"]`)) || document.querySelector(`[data-tab-id="${tabId}"]`);
+   if (!el) return null;
+   const r = el.getBoundingClientRect();
+   return { top: r.top, left: r.left, width: r.width, height: r.height };
+@@ -60,10 +68,23 @@ function measure(tabId: string): Rect | null {
+  * that this is simpler than persisting resume state and not a real cost.
+  */
+ export function OnboardingTour({
+-  steps, onTabChange, onDone,
+-}: { steps: Step[]; onTabChange: (id: string) => void; onDone: () => void }) {
++  steps, onTabChange, onDone, kicker, delayMs = 0,
++}: {
++  steps: Step[]; onTabChange: (id: string) => void; onDone: () => void;
++  /** Patch 0424 -- small heading above the step title ("New tab unlocked"). */
++  kicker?: string;
++  /** Patch 0424 -- wait this long (1x ms) before appearing, so a tab's
++   *  unlock reveal in the nav can play first. */
++  delayMs?: number;
++}) {
+   const [index, setIndex] = useState(0);
+   const [rect, setRect] = useState<Rect | null>(null);
++  const [ready, setReady] = useState(() => fxMs(delayMs) <= 0);
++  useEffect(() => {
++    if (ready) return undefined;
++    const id = window.setTimeout(() => setReady(true), fxMs(delayMs));
++    return () => window.clearTimeout(id);
++  }, [ready, delayMs]);
+   const step = steps[index];
+ 
+   useLayoutEffect(() => {
+@@ -71,7 +92,11 @@ export function OnboardingTour({
+     onTabChange(step.id);
+     // One frame's delay so the measurement reflects whatever the panel
+     // switch itself settles into, not a stale layout from the prior step.
+-    const raf = requestAnimationFrame(() => setRect(measure(step.id)));
++    // Two frames: the tab switch above has to render before a target
++    // inside it (the tutorial quest card) exists to be measured.
++    let raf2 = 0;
++    const raf = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setRect(measure(step.id, step.target))); });
++    return () => { cancelAnimationFrame(raf); cancelAnimationFrame(raf2); };
+     return () => cancelAnimationFrame(raf);
+     // Deliberately keyed on index alone -- onTabChange/step are stable in
+     // spirit (same steps array, same callback) even if their references
+@@ -80,13 +105,13 @@ export function OnboardingTour({
+   }, [index]);
+ 
+   useEffect(() => {
+-    const recompute = () => setRect(step ? measure(step.id) : null);
++    const recompute = () => setRect(step ? measure(step.id, step.target) : null);
+     window.addEventListener('resize', recompute);
+     return () => window.removeEventListener('resize', recompute);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [index]);
+ 
+-  if (!step) return null;
++  if (!step || !ready) return null;
+ 
+   const isLast = index === steps.length - 1;
+   const next = () => { if (isLast) onDone(); else setIndex((i) => i + 1); };
+@@ -104,14 +129,21 @@ export function OnboardingTour({
+     <>
+       {rect && (
+         <div
+-          className="onboarding-spotlight"
++          className={`onboarding-spotlight ${step.pulse ? 'tour-pulse' : ''}`}
+           style={{ top: rect.top - 4, left: rect.left - 4, width: rect.width + 8, height: rect.height + 8 }}
+         />
+       )}
+       <div className="onboarding-card" style={{ top: cardTop, left: cardLeft }}>
+-        <div className="tiny muted" style={{ marginBottom: 4 }}>Step {index + 1} of {steps.length}</div>
+-        <div className="card-title" style={{ marginBottom: 6 }}>{step.label}</div>
+-        <p className="small" style={{ margin: '0 0 12px' }}>{step.description ?? STEP_DESCRIPTIONS[step.id] ?? ''}</p>
++        {/* Patch 0424 -- step dots fill as you go, and the text swaps in
++            while the card glides to its next stop (see app.css). */}
++        <div className="tour-dots" aria-label={`Step ${index + 1} of ${steps.length}`}>
++          {steps.map((s, i) => <i key={s.id + i} className={i <= index ? 'on' : ''} />)}
++        </div>
++        {kicker && <div className="tour-kicker">{kicker}</div>}
++        <div key={index} className="tour-body">
++          <div className="card-title" style={{ marginBottom: 6 }}>{step.label}</div>
++          <p className="small" style={{ margin: '0 0 12px' }}>{step.description ?? STEP_DESCRIPTIONS[step.id] ?? ''}</p>
++        </div>
+         <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
+           <button className="btn-ghost" onClick={onDone}>Skip</button>
+           <div className="row" style={{ gap: 6 }}>
+diff --git a/src/ui/QuestBoardIntroModal.tsx b/src/ui/QuestBoardIntroModal.tsx
+index 7e9f831..cb694fe 100644
+--- a/src/ui/QuestBoardIntroModal.tsx
++++ b/src/ui/QuestBoardIntroModal.tsx
+@@ -1,3 +1,9 @@
++import { useEffect, useState } from 'react';
++import { useEngine } from './useEngine';
++import { DIFFICULTIES, DIFFICULTY_ORDER } from '../game/data/quests';
++import { at } from './resultFx';
++import { fxMs } from './purchaseFx';
++
+ /**
+  * Patch 0332. Fires the moment the scripted tutorial quest resolves and
+  * the board becomes a real, ordinary multi-offer one for the first time
+@@ -10,24 +16,81 @@
+  * second quest, that was my mistake"). Only ever shown when
+  * guidedOnboarding is true (set by QuestManager.resolve before this ever
+  * arms), so an experienced player who opted out never sees it.
++ *
++ * Patch 0424 -- rebuilt as an animated explainer, and moved after the
++ * level-up card (result card -> level-up card -> this). The difficulty
++ * ladder rises with "reward and loot up, odds down, time up", a sample
++ * contract rolls a ⚡ Fast tag so its timer visibly shrinks and its odds
++ * dip, and a "Next steps" checklist absorbs the potion and vendor tips
++ * (engine.fireGuidance keeps those out of the banner queue while this is
++ * pending), each with its own Go button.
+  */
++
+ export function QuestBoardIntroModal({ onView, onClose }: { onView: () => void; onClose: () => void }) {
++  const engine = useEngine();
++  const heroName = engine.state.heroes[0]?.name ?? 'your hero';
++  // The sample contract rolls Fast a beat after the ladder settles.
++  const [fast, setFast] = useState(() => fxMs(1700) <= 0);
++  useEffect(() => {
++    if (fast) return undefined;
++    const id = window.setTimeout(() => setFast(true), fxMs(1700));
++    return () => window.clearTimeout(id);
++  }, [fast]);
++
++  const go = (tab: string) => {
++    engine.requestTab(tab);
++    onClose();
++  };
++  const steps = [
++    ...(engine.state.hasObtainedConsumable
++      ? [{ key: 'potion', a: 'Equip your Strength Potion', b: `From ${heroName}'s card in Heroes, before the next send`, label: 'Heroes', run: () => go('heroes') }]
++      : []),
++    { key: 'vendors', a: 'Have a look at the Vendors', b: 'Gear and supplies, if you want to kit out first', label: 'Vendors', run: () => go('vendors') },
++    { key: 'send', a: `Send ${heroName} out again`, b: 'Several contracts are waiting on the board now', label: 'Quests', run: onView },
++  ];
++
+   return (
+     <div className="overlay" onClick={onClose}>
+-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+-        <h3>Reading the Quest Board</h3>
+-        <p className="small" style={{ marginTop: 0 }}>
+-          From here on your board fills with several contracts at once, across five difficulties -- Easy through
+-          Legendary. Harder difficulties pay more and drop better loot, but run longer and succeed less often.
+-          Tap any card to see its full odds, time, and reward before sending anyone.
+-        </p>
+-        <p className="small">
+-          Watch for the <b>⚡ Fast</b> tag -- a rare roll on any difficulty that finishes in a fraction of the
+-          normal time, still worth a real reward. It comes with a real tradeoff too -- lower success odds than
+-          the same quest would normally have -- so it's a genuine gamble, not a free bonus.
+-        </p>
+-        <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+-          <button className="btn-primary" onClick={onClose}>Close</button>
++      <div className="modal qbx-card" onClick={(e) => e.stopPropagation()}>
++        <div className="qbx-kick">Your first job is done</div>
++        <h3 style={{ marginTop: 2 }}>Reading the Quest Board</h3>
++        <div className="qbx-cols">
++          <div>
++            <div className="qbx-ladder" aria-hidden="true">
++              {DIFFICULTY_ORDER.map((d, i) => (
++                <div key={d} className="qbx-rung">
++                  <span className="qbx-bar" style={at(350 + i * 130, { height: `${22 + i * 19}%`, background: DIFFICULTIES[d].color })} />
++                  <span className="qbx-nm" style={at(350 + i * 130)}>{DIFFICULTIES[d].label}</span>
++                </div>
++              ))}
++            </div>
++            <div className="qbx-axes" style={at(1050)}>
++              <span className="up">▲ reward and loot</span><span className="dn">▼ odds, ▲ time</span>
++            </div>
++          </div>
++          <div className={`qbx-sample ${fast ? 'fast' : ''}`}>
++            <span className="qbx-tag">⚡ Fast</span>
++            <b>A sample contract</b>
++            <div className="qbx-row"><span>Normal</span><span className="t">⏱ {fast ? '18m' : '1h 30m'}</span><span className="o">{fast ? 61 : 78}% odds</span></div>
++            <div className="qbx-why">
++              {fast
++                ? 'Fast is a rare roll on any difficulty: done in a fraction of the time, but the odds dip. A gamble, not a free bonus.'
++                : 'Tap any contract to see its full odds, time and reward before you send anyone.'}
++            </div>
++          </div>
++        </div>
++        <div className="qbx-steps">
++          <div className="qbx-h">Next steps</div>
++          {steps.map((st, i) => (
++            <div key={st.key} className="qbx-todo" style={at(2300 + i * 150)}>
++              <span className="qbx-box" aria-hidden="true" />
++              <span>{st.a}<small>{st.b}</small></span>
++              <button className="btn-ghost" onClick={st.run}>{st.label}</button>
++            </div>
++          ))}
++        </div>
++        <div className="row end qbx-acts" style={at(2300 + steps.length * 150 + 200, { marginTop: 12, gap: 8 })}>
++          <button className="btn-ghost" onClick={onClose}>Close</button>
+           <button className="btn-primary" onClick={onView}>View Quest Board</button>
+         </div>
+       </div>
+diff --git a/src/ui/Toast.tsx b/src/ui/Toast.tsx
+index 799b2c6..a04bae9 100644
+--- a/src/ui/Toast.tsx
++++ b/src/ui/Toast.tsx
+@@ -30,9 +30,17 @@ const TOAST_DURATION_LONG_MS = 9000;
+  * they only need to survive across the pause/resume boundary, never
+  * need to trigger a re-render on their own.
+  */
+-export function Toast() {
++export function Toast({ skipBanners = false }: { skipBanners?: boolean } = {}) {
+   const engine = useEngine();
+   const toast = engine.toast;
++  // Patch 0424 -- banner-worthy messages (guidance and milestones) go to
++  // the top NotificationBanner's own queue when the menu is open, so they
++  // no longer also play as a 9s bottom toast. The idle companion has no
++  // banner, so there they still show here.
++  const skip = !!toast?.long && skipBanners;
++  useEffect(() => {
++    if (skip) engine.clearToast();
++  }, [skip, toast?.seq, engine]);
+   const remaining = useRef(0);
+   const startedAt = useRef(0);
+   const timerId = useRef<number | null>(null);
+@@ -49,14 +57,14 @@ export function Toast() {
+   };
+ 
+   useEffect(() => {
+-    if (!toast) return undefined;
++    if (!toast || skip) return undefined;
+     remaining.current = toast.long ? TOAST_DURATION_LONG_MS : TOAST_DURATION_MS;
+     arm(remaining.current);
+     return clear;
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [toast?.seq, engine]);
+ 
+-  if (!toast) return null;
++  if (!toast || skip) return null;
+ 
+   const pause = () => {
+     if (timerId.current === null) return;
+diff --git a/src/ui/WeaponEnchantStation.tsx b/src/ui/WeaponEnchantStation.tsx
+index 2b4c14b..a3ec90d 100644
+--- a/src/ui/WeaponEnchantStation.tsx
++++ b/src/ui/WeaponEnchantStation.tsx
+@@ -3,6 +3,7 @@ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+ import { EquipmentManager } from '../game/managers/EquipmentManager';
+ import { CraftingManager } from '../game/managers/CraftingManager';
++import { InfuseFx, useInfuseBeat } from './infuseFx';
+ import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
+ import { ElementType, GemTier } from '../game/types';
+ import { formatGold, RARITY_COLOR } from '../game/util';
+@@ -58,6 +59,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+   const [targetUid, setTargetUid] = useState('');
+   const [element, setElement] = useState<ElementType | null>(null);
+   const [tier, setTier] = useState<GemTier | null>(null);
++  const [infuseBeat, playInfuse] = useInfuseBeat();
+   const [openItemPicker, setOpenItemPicker] = useState(false);
+   const [openEnchantPicker, setOpenEnchantPicker] = useState(false);
+   // Shown once, right after a pick -- same reasoning ItemPreviewModal's
+@@ -132,7 +134,9 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+ 
+   function handleInfuse() {
+     if (!item || !element || !tier) return;
+-    engine.infuseItem(item.uid, element, tier);
++    if (engine.infuseItem(item.uid, element, tier)) {
++      playInfuse({ element, tier, text: `${GEM_TIER_LABEL[tier]} ${ELEMENT_LABEL[element]} damage infused` });
++    }
+     setElement(null);
+     setTier(null);
+   }
+@@ -167,6 +171,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+             label="Choose an enchant"
+             onOpen={() => setOpenEnchantPicker(true)}
+           />
++          <InfuseFx beat={infuseBeat} item={ITEM_SLOT} gem={ENCHANT_SLOT} />
+         </div>
+ 
+         {item && def ? (
+diff --git a/src/ui/infuseFx.tsx b/src/ui/infuseFx.tsx
+new file mode 100644
+index 0000000..e7e6839
+--- /dev/null
++++ b/src/ui/infuseFx.tsx
+@@ -0,0 +1,74 @@
++import { useEffect, useState } from 'react';
++import { ElementType, GemTier } from '../game/types';
++import { ELEMENT_GLYPH } from '../game/data/elements';
++import { RARITY_ORDER } from '../game/util';
++import type { Rect } from './CraftingStation';
++import { at } from './resultFx';
++import { fxMs, fxSpeed } from './purchaseFx';
++
++/** Patch 0424 -- one colour per element for the infuse moment's motes,
++ *  rune circle and lingering glow. */
++export const ELEMENT_FX_COLOR: Record<ElementType, string> = {
++  fire: '#e8743a', frost: '#7cc8e8', lightning: '#e8d25a', poison: '#79c35a',
++};
++
++export interface InfuseBeat { key: number; element: ElementType; tier: GemTier; text: string }
++
++/** Holds the current infuse beat for ~2.6s (1x), then clears it. Never
++ *  starts one with motion off -- the result already shows on the item. */
++export function useInfuseBeat(): [InfuseBeat | null, (b: Omit<InfuseBeat, 'key'>) => void] {
++  const [beat, setBeat] = useState<InfuseBeat | null>(null);
++  useEffect(() => {
++    if (!beat) return undefined;
++    const id = window.setTimeout(() => setBeat(null), fxMs(2600));
++    return () => window.clearTimeout(id);
++  }, [beat]);
++  const play = (b: Omit<InfuseBeat, 'key'>) => {
++    if (fxSpeed() <= 0) return;
++    setBeat({ ...b, key: Date.now() });
++  };
++  return [beat, play];
++}
++
++const center = (r: Rect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
++
++/**
++ * Patch 0424 -- the Weapon Enchanting / Armour Infusion moment, drawn over
++ * the shared infuse scene in the same % space as its slots: the gem
++ * charges as a ring closes in, a stream of element-coloured motes climbs
++ * into the item while a rune circle turns around it, then the item flares
++ * and the result line pops above it. Higher gem tiers send more motes and
++ * a bigger flare.
++ */
++export function InfuseFx({ beat, item, gem }: { beat: InfuseBeat | null; item: Rect; gem: Rect }) {
++  if (!beat) return null;
++  const color = ELEMENT_FX_COLOR[beat.element];
++  const tierIx = Math.max(0, RARITY_ORDER.indexOf(beat.tier));
++  const ic = center(item);
++  const gc = center(gem);
++  const motes = 8 + tierIx * 4;
++  const flares = 3 + tierIx;
++  return (
++    <div key={beat.key} className="ifx-layer" style={{ color }} aria-hidden="true">
++      <span className="ifx-runes" style={at(500, { left: `${ic.x}%`, top: `${ic.y}%` })}>
++        <svg viewBox="0 0 170 170">
++          <circle cx="85" cy="85" r="78" strokeWidth="1.5" strokeDasharray="4 7" />
++          <circle cx="85" cy="85" r="64" strokeWidth="1" strokeDasharray="18 6 2 6" />
++          <circle cx="85" cy="85" r="54" strokeWidth="1.5" strokeDasharray="1 9" />
++        </svg>
++      </span>
++      <span className="ifx-glow" style={at(1400, { left: `${item.left}%`, top: `${item.top}%`, width: `${item.width}%`, height: `${item.height}%` })} />
++      <span className="ifx-orb" style={at(0, { left: `${gc.x}%`, top: `${gc.y}%` })}>{ELEMENT_GLYPH[beat.element]}</span>
++      <span className="ifx-cring" style={at(0, { left: `${gc.x}%`, top: `${gc.y}%` })} />
++      <span className="ifx-stream" style={{ left: `${ic.x}%`, top: `${ic.y}%`, height: `${gc.y - ic.y}%` }}>
++        {Array.from({ length: motes }, (_, i) => (
++          <i key={i} style={at(700 + i * (650 / motes), { marginLeft: ((i * 13) % 21) - 10 })} />
++        ))}
++      </span>
++      {Array.from({ length: flares }, (_, i) => (
++        <span key={i} className={`ifx-flare f${i % 7}`} style={at(1450, { left: `${ic.x}%`, top: `${ic.y}%` })} />
++      ))}
++      <span className="ifx-result" style={at(1650, { left: `${ic.x}%`, top: `${Math.max(2, item.top - 8)}%` })}>{beat.text}</span>
++    </div>
++  );
++}
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 7d6f90f..e6fa499 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -10,7 +10,7 @@ import { CHAIN_REPLAY_TIER_BY_ID } from '../../game/data/chainReplay';
+ import { describeMods, formatGold, formatNumber, pct } from '../../game/util';
+ import { GuildHallCategory } from '../../game/types';
+ import { usePulsesOnChange } from '../maxFlash';
+-import { buyWithFx, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
++import { buyWithFx, flyTokens, fxMs, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
+ import type { Beat } from '../purchaseFx';
+ import { UnlockFx, useJustUnlocked } from '../unlockFx';
+ import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
+@@ -609,7 +609,16 @@ function RenownExchangeCard({ justUnlocked }: { justUnlocked: boolean }) {
+         <button
+           className="btn-primary"
+           disabled={!canExchange}
+-          onClick={() => { engine.exchangeGoldForRenown(offer); setOfferText(''); }}
++          onClick={(e) => {
++            // Patch 0424 -- coins fly into the button, then the renown it
++            // bought flies back up to the header's renown counter.
++            const btn = e.currentTarget;
++            const renown0 = engine.state.renown;
++            buyWithFx(engine, btn, () => engine.exchangeGoldForRenown(offer));
++            const gained = engine.state.renown - renown0;
++            if (gained > 0) flyTokens(btn, 'renown', 'gem', Math.min(6, 2 + gained), fxMs(380));
++            setOfferText('');
++          }}
+           title={renownPreview >= 1 ? `Get ${renownPreview} Renown for ${formatGold(renownPreview * rate)} gold` : `Offer at least ${formatGold(rate)} gold`}
+         >
+           Exchange{renownPreview >= 1 ? ` -- ${renownPreview} Renown` : ''}
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index 5ac08ba..275e1ac 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -13,11 +13,10 @@ import { MaterialId } from '../../game/types';
+ import { formatDuration, formatGold, formatMaterial } from '../../game/util';
+ import { isTabUnread } from '../../game/attention';
+ import { Ring } from './DashboardPanel';
+-import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+ import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
+ import { backgroundSrc } from '../../game/settings';
+ import { UnlockFx, useJustUnlocked } from '../unlockFx';
+-import { buyWithFx } from '../purchaseFx';
++import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
+ 
+ type SubTab = 'warehouse' | 'fields';
+ 
+@@ -488,15 +487,15 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
+   const level = state.harvestTools[nodeId] ?? 0;
+   const cost = harvestToolCost(nodeId, level);
+   const maxed = cost === null;
+-  const { flashes, dismiss } = useMaxFlash([{ id: nodeId, name: tool.name, level, maxLevel: tool.maxLevel }]);
+-  const flash = flashes[nodeId];
+-  const levelPulses = usePulsesOnChange([{ id: nodeId, value: level }]);
++  // Patch 0424 -- the 0420 row beats (coins into the button, level roll,
++  // shine; a wax seal on the last level) instead of the old pulse/max flash.
++  const beat = usePurchaseBeats([{ id: nodeId, value: level, max: tool.maxLevel }], STAY_BEATS)[nodeId];
+   const effectText = `+${tool.yieldBonusPerLevel} yield and a faster respawn per level`;
+   const pctFill = Math.min(100, (level / tool.maxLevel) * 100);
+   const buyLabel = maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`;
+   return (
+     <div
+-      className="upgrade-row"
++      className={`upgrade-row ${rowBeatClass(beat)}`}
+       onClick={() => setShowDetail(true)}
+       role="button"
+       tabIndex={0}
+@@ -505,7 +504,7 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
+       <span style={{ minWidth: 0 }}>
+         <span className="upgrade-row-head">
+           <span className="upgrade-row-name">{tool.name}</span>
+-          <span className={`upgrade-row-level ${levelPulses[nodeId] ? 'purchase-pulse' : ''}`}>Lv {level}/{tool.maxLevel}</span>
++          <span className="upgrade-row-level"><LevelRoll beat={beat} value={level} render={(v) => `Lv ${v}/${tool.maxLevel}`} /></span>
+         </span>
+         <span className="upgrade-row-effect">{effectText}</span>
+         <span className="upgrade-row-rule">
+@@ -515,11 +514,11 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
+       <button
+         className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
+         disabled={maxed || state.gold < (cost ?? 0)}
+-        onClick={(e) => { e.stopPropagation(); engine.upgradeHarvestTool(nodeId); }}
++        onClick={(e) => { e.stopPropagation(); buyWithFx(engine, e.currentTarget, () => engine.upgradeHarvestTool(nodeId)); }}
+       >
+         {buyLabel}
+       </button>
+-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(nodeId)} />}
++      {beat?.phase === 'stamp' && <SealStamp label="Mastered" className="upgrade-row-stamp" />}
+       {showDetail && (
+         <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
+@@ -532,7 +531,7 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
+             </p>
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setShowDetail(false)}>Close</button>
+-              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>{buyLabel}</button>
++              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeHarvestTool(nodeId))}>{buyLabel}</button>
+             </div>
+           </div>
+         </div>
+@@ -547,10 +546,14 @@ function WarehouseTab() {
+   const cap = HarvestManager.capacity(state);
+   const warehouseCost = warehouseUpgradeCost(state.warehouseLevel);
+   const warehouseMaxed = warehouseCost === null;
++  // Patch 0424 -- the Warehouse gets the row beats too, plus a crate per
++  // level that stacks onto the pile when it expands.
++  const whBeat = usePurchaseBeats([{ id: 'warehouse', value: state.warehouseLevel, max: WAREHOUSE_UPGRADE.maxLevel }], STAY_BEATS).warehouse;
++  const crates = Math.min(12, state.warehouseLevel + 1);
+ 
+   return (
+     <>
+-      <div className="card" style={{ marginBottom: 12 }}>
++      <div className={`card wfx-card ${rowBeatClass(whBeat)}`} style={{ marginBottom: 12 }}>
+         <div className="spread">
+           <div className="card-title">Warehouse</div>
+           <Ring
+@@ -565,6 +568,12 @@ function WarehouseTab() {
+         <p className="card-flavour">
+           One shared storage cap, applied to every material. {WAREHOUSE_UPGRADE.capacityPerLevel} more per level.
+         </p>
++        <div className="wfx-crates" aria-hidden="true">
++          {Array.from({ length: crates }, (_, i) => (
++            <span key={i} className={`wfx-crate ${i === crates - 1 && whBeat?.phase === 'levelup' ? 'new' : ''}`} />
++          ))}
++          <span className={`tiny muted wfx-cap ${whBeat?.phase === 'levelup' ? 'fx-bump' : ''}`}>{cap} cap</span>
++        </div>
+         {MATERIALS.map((m) => (
+           <div key={m.id} className="harvest-stock-row" style={{ marginBottom: 4 }}>
+             <span className="tiny muted" style={{ width: 70 }}>{m.name}</span>
+@@ -580,10 +589,11 @@ function WarehouseTab() {
+           className="btn-yellow"
+           style={{ marginTop: 8 }}
+           disabled={warehouseMaxed || state.gold < (warehouseCost ?? 0)}
+-          onClick={() => engine.upgradeWarehouse()}
++          onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeWarehouse())}
+         >
+           {warehouseMaxed ? 'Fully built' : `Expand · ${formatGold(warehouseCost ?? 0)}`}
+         </button>
++        {whBeat?.phase === 'stamp' && <SealStamp label="Fully built" className="upgrade-row-stamp" />}
+       </div>
+ 
+       <TradeRouteCard />
+@@ -617,9 +627,7 @@ function OverseerRow() {
+   const maxed = cost === null;
+   const chance = overseerRescueChancePercent(level);
+   const nextChance = overseerRescueChancePercent(level + 1);
+-  const { flashes, dismiss } = useMaxFlash([{ id: 'overseer', name: OVERSEER_UPGRADE.name, level, maxLevel: OVERSEER_UPGRADE.maxLevel }]);
+-  const flash = flashes.overseer;
+-  const levelPulses = usePulsesOnChange([{ id: 'overseer', value: level }]);
++  const beat = usePurchaseBeats([{ id: 'overseer', value: level, max: OVERSEER_UPGRADE.maxLevel }], STAY_BEATS).overseer;
+   const description = level === 0
+     ? 'Hire someone to keep an eye on the Fields. A spawn that would otherwise despawn unclicked gets a chance to be caught anyway -- never the bonus glint, and never as reliable as watching yourself, but nothing goes to waste while you\u2019re elsewhere.'
+     : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`;
+@@ -628,7 +636,7 @@ function OverseerRow() {
+   const buyLabel = maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
+   return (
+     <div
+-      className="upgrade-row"
++      className={`upgrade-row ${rowBeatClass(beat)}`}
+       onClick={() => setShowDetail(true)}
+       role="button"
+       tabIndex={0}
+@@ -637,7 +645,7 @@ function OverseerRow() {
+       <span style={{ minWidth: 0 }}>
+         <span className="upgrade-row-head">
+           <span className="upgrade-row-name">Overseer</span>
+-          <span className={`upgrade-row-level ${levelPulses.overseer ? 'purchase-pulse' : ''}`}>Lv {level}/{OVERSEER_UPGRADE.maxLevel}</span>
++          <span className="upgrade-row-level"><LevelRoll beat={beat} value={level} render={(v) => `Lv ${v}/${OVERSEER_UPGRADE.maxLevel}`} /></span>
+         </span>
+         <span className="upgrade-row-effect">{effectText}</span>
+         <span className="upgrade-row-rule">
+@@ -647,11 +655,11 @@ function OverseerRow() {
+       <button
+         className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
+         disabled={maxed || state.gold < (cost ?? 0)}
+-        onClick={(e) => { e.stopPropagation(); engine.upgradeOverseer(); }}
++        onClick={(e) => { e.stopPropagation(); buyWithFx(engine, e.currentTarget, () => engine.upgradeOverseer()); }}
+       >
+         {buyLabel}
+       </button>
+-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss('overseer')} />}
++      {beat?.phase === 'stamp' && <SealStamp label="Fully staffed" className="upgrade-row-stamp" />}
+       {showDetail && (
+         <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
+@@ -662,7 +670,7 @@ function OverseerRow() {
+             <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setShowDetail(false)}>Close</button>
+-              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeOverseer()}>{buyLabel}</button>
++              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeOverseer())}>{buyLabel}</button>
+             </div>
+           </div>
+         </div>
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index e48d2c1..2e69758 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -5,7 +5,8 @@ import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
+ import { describeMods, formatNumber } from '../../game/util';
+-import { usePulsesOnChange } from '../maxFlash';
++import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
++import type { Beat } from '../purchaseFx';
+ import { Hero } from '../../game/types';
+ import { backgroundSrc } from '../../game/settings';
+ 
+@@ -112,11 +113,13 @@ function HeroRetireCard({
+  * as before.
+  */
+ function RenownPerkRow({
+-  def, level, cost, maxed, affordable, cap, inTier2, justUnlocked, pulsing, onBuy, highlighted, onDismissHighlight,
++  def, level, cost, maxed, affordable, cap, inTier2, justUnlocked, beat, onBuy, highlighted, onDismissHighlight,
+ }: {
+   def: ReturnType<typeof PrestigeManager.perks>[number];
+   level: number; cost: number | null; maxed: boolean; affordable: boolean; cap: number; inTier2: boolean; justUnlocked: boolean;
+-  pulsing?: boolean; onBuy: () => void; highlighted?: boolean; onDismissHighlight?: () => void;
++  /** Patch 0424 -- this row's purchase beat (renown gems into the button,
++   *  level roll, seal on the last level); replaces the old pulse. */
++  beat?: Beat; onBuy: (btn: HTMLElement) => void; highlighted?: boolean; onDismissHighlight?: () => void;
+ }) {
+   const [showDetail, setShowDetail] = useState(false);
+   const rowRef = useRef<HTMLDivElement>(null);
+@@ -134,7 +137,7 @@ function RenownPerkRow({
+   return (
+     <div
+       ref={rowRef}
+-      className={`upgrade-row ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'card requirement-highlight' : ''}`}
++      className={`upgrade-row fx-renown ${rowBeatClass(beat)} ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'card requirement-highlight' : ''}`}
+       onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
+       role="button"
+       tabIndex={0}
+@@ -146,7 +149,7 @@ function RenownPerkRow({
+             {def.name}
+             {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
+           </span>
+-          <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
++          <span className="upgrade-row-level"><LevelRoll beat={beat} value={level} render={(v) => `${v}/${cap}`} /></span>
+         </span>
+         <span className="upgrade-row-effect">{effectText}</span>
+         <span className="upgrade-row-rule">
+@@ -156,10 +159,11 @@ function RenownPerkRow({
+       <button
+         className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
+         disabled={maxed || !affordable}
+-        onClick={(e) => { e.stopPropagation(); onBuy(); }}
++        onClick={(e) => { e.stopPropagation(); onBuy(e.currentTarget); }}
+       >
+         {buyLabel}
+       </button>
++      {beat?.phase === 'stamp' && <SealStamp label="Mastered" className="upgrade-row-stamp" />}
+       {showDetail && (
+         <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
+@@ -178,7 +182,7 @@ function RenownPerkRow({
+             )}
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setShowDetail(false)}>Close</button>
+-              <button className="btn-yellow" disabled={maxed || !affordable} onClick={onBuy}>{buyLabel}</button>
++              <button className="btn-yellow" disabled={maxed || !affordable} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
+             </div>
+           </div>
+         </div>
+@@ -234,7 +238,7 @@ function HeroPerkRow({ hero, onBuy }: { hero: Hero; onBuy: (heroId: string, perk
+                 <button
+                   className="btn-yellow"
+                   disabled={maxed || !affordable || !roleEligible}
+-                  onClick={() => onBuy(hero.id, def.id)}
++                  onClick={(e) => { const btn = e.currentTarget; buyWithFx(engine, btn, () => onBuy(hero.id, def.id)); }}
+                 >
+                   {!roleEligible ? 'Locked' : maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
+                 </button>
+@@ -266,11 +270,11 @@ export function PrestigePanel() {
+     return () => window.clearTimeout(timer);
+   }, [highlightId]);
+ 
+-  // Same "only pulse on a real change, not on every tab-switch remount"
+-  // fix Guild Hall/Vendors/Harvest already got -- see usePulsesOnChange's
+-  // own doc comment in maxFlash.tsx.
+-  const perkLevelPulses = usePulsesOnChange(
+-    PrestigeManager.perks().map((def) => ({ id: def.id, value: PrestigeManager.perkLevel(state, def.id) })),
++  // Patch 0424 -- one purchase beat per perk row (see purchaseFx.tsx);
++  // only a real change you watched plays, never a tab-switch remount.
++  const perkBeats = usePurchaseBeats(
++    PrestigeManager.perks().map((def) => ({ id: def.id, value: PrestigeManager.perkLevel(state, def.id), max: renownEffectiveMaxLevel(def) })),
++    STAY_BEATS,
+   );
+ 
+   return (
+@@ -333,8 +337,8 @@ export function PrestigePanel() {
+               cap={cap}
+               inTier2={inTier2}
+               justUnlocked={justUnlocked}
+-              pulsing={perkLevelPulses[def.id]}
+-              onBuy={() => engine.buyPerk(def.id)}
++              beat={perkBeats[def.id]}
++              onBuy={(btn) => buyWithFx(engine, btn, () => engine.buyPerk(def.id))}
+               highlighted={def.id === highlightId}
+               onDismissHighlight={() => setHighlightId(null)}
+             />
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index a408b26..bf8d48d 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -145,6 +145,7 @@ export function QuestRow({
+   return (
+     <div
+       className={`card raid-card${isSpotlighted ? ' quest-card-spotlight' : ''}`}
++      data-tour={isSpotlighted ? 'tutorial-quest' : undefined}
+       onClick={onOpen}
+       role="button"
+       tabIndex={0}
+diff --git a/src/ui/panels/TrainingPanel.tsx b/src/ui/panels/TrainingPanel.tsx
+index d97da0c..393f322 100644
+--- a/src/ui/panels/TrainingPanel.tsx
++++ b/src/ui/panels/TrainingPanel.tsx
+@@ -10,6 +10,8 @@ import { Hero, Role } from '../../game/types';
+ import { formatGold, formatNumber } from '../../game/util';
+ import { HeroSprite } from '../sprites/HeroSprite';
+ import { RoleIcon } from '../RoleIcon';
++import { buyWithFx } from '../purchaseFx';
++import { useJustUnlocked } from '../unlockFx';
+ 
+ /**
+  * One role card per Role inside the training modal -- the "richer, card
+@@ -36,16 +38,19 @@ function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: bool
+   // required -- but a malformed DLC class def is the same defensive
+   // case roleDisplayName's own fallback already guards against).
+   const description = classDef?.roleDescriptions[role] ?? ROLE_DESCRIPTION[role];
++  // Patch 0424 -- a role the hero just trained into stamps its icon and
++  // glows the card (only for a change watched happen, not on open).
++  const fresh = useJustUnlocked(`role:${hero.id}:${role}`, active);
+ 
+   return (
+     <div
+-      className="card"
++      className={`card ${fresh ? 'rfx-trained' : ''}`}
+       style={{
+         flex: '1 1 170px', minWidth: 170, marginBottom: 0, textAlign: 'center',
+         borderColor: active ? 'var(--moss)' : undefined,
+       }}
+     >
+-      <RoleIcon role={role} size={56} />
++      <span className="rfx-roleicon"><RoleIcon role={role} size={56} /></span>
+       <div className="card-title" style={{ marginTop: 6 }}>{flavorName}</div>
+       <p className="tiny muted" style={{ margin: '2px 0 0' }}>{ROLE_LABEL[role]}</p>
+       <p className="tiny" style={{ marginTop: 6, minHeight: '2.4em' }}>
+@@ -58,7 +63,7 @@ function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: bool
+           className="btn-primary"
+           style={{ marginTop: 10, width: '100%' }}
+           disabled={state.gold < cost}
+-          onClick={() => engine.trainRole(hero.id, role)}
++          onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.trainRole(hero.id, role))}
+         >
+           {unlocked ? 'Swap' : 'Unlock'} · {formatGold(cost)}
+         </button>
+@@ -120,7 +125,7 @@ function TierUpSection({ hero }: { hero: Hero }) {
+         style={{ marginTop: 8, width: '100%' }}
+         disabled={!canBuy}
+         title={!questsMet ? `Needs ${step.questsRequired} quests completed first` : !afforded ? `Not enough ${step.currency === 'gold' ? 'gold' : 'Renown'}` : undefined}
+-        onClick={() => engine.tierUpHero(hero.id)}
++        onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.tierUpHero(hero.id))}
+       >
+         Tier Up · {costLabel}
+       </button>
+@@ -207,7 +212,7 @@ export function TrainingPanel() {
+             className="btn-primary"
+             style={{ marginTop: 10 }}
+             disabled={cost === null || state.gold < cost}
+-            onClick={() => engine.buyUpgrade('training_grounds')}
++            onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.buyUpgrade('training_grounds'))}
+           >
+             Fund Training · {cost !== null ? formatGold(cost) : 'unavailable'}
+           </button>
+diff --git a/src/ui/purchaseFx.tsx b/src/ui/purchaseFx.tsx
+index 3bdf07d..cba811e 100644
+--- a/src/ui/purchaseFx.tsx
++++ b/src/ui/purchaseFx.tsx
+@@ -65,20 +65,36 @@ function centerOf(el: Element): { x: number; y: number } {
+   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+ }
+ 
+-/** Coins (or Scrap shards) arcing from a registered fly target into `toEl`. */
+-function flyParticles(fromKey: string, toEl: Element, kind: 'coin' | 'shard', count: number, startDelay: number) {
++export type FlyKind = 'coin' | 'shard' | 'gem' | 'spark';
++const FLY_CLASS: Record<FlyKind, string> = { coin: 'fx-coin', shard: 'fx-shard', gem: 'fx-gem', spark: 'fx-spark' };
++
++type FlyPoint = Element | string | { x: number; y: number };
++function pointOf(target: FlyPoint): { x: number; y: number } | null {
++  if (typeof target === 'string') return getFlyTargetCenter(target);
++  if (target instanceof Element) return centerOf(target);
++  return target;
++}
++
++/**
++ * Patch 0424 -- tokens arcing between any two points: an element, or a
++ * flyTarget.ts key ('gold', 'scrap', 'renown', 'inventory'...). Coins for
++ * gold, shards for scrap, violet gems for renown, blue sparks for Guild
++ * Power. Generalised from 0420's counter-to-button flight so rewards can
++ * fly the other way (a mailbox letter to its counter).
++ */
++export function flyTokens(from: FlyPoint, to: FlyPoint, kind: FlyKind, count: number, startDelay = 0) {
+   const dur = fxMs(420);
+   const host = fxLayer();
+-  const from = getFlyTargetCenter(fromKey);
+-  if (!dur || !host || !from || typeof Element.prototype.animate !== 'function') return;
+-  const to = centerOf(toEl);
++  const a = pointOf(from);
++  const b = pointOf(to);
++  if (!dur || !host || !a || !b || typeof Element.prototype.animate !== 'function') return;
+   for (let i = 0; i < count; i++) {
+     const p = document.createElement('span');
+-    p.className = kind === 'coin' ? 'fx-coin' : 'fx-shard';
+-    const sx = from.x + ((i % 3) - 1) * 7;
+-    const sy = from.y + (i % 2 ? 4 : -3);
+-    const dx = to.x + ((i % 3) - 1) * 7 - sx;
+-    const dy = to.y + ((i * 7) % 5) - 2 - sy;
++    p.className = FLY_CLASS[kind];
++    const sx = a.x + ((i % 3) - 1) * 7;
++    const sy = a.y + (i % 2 ? 4 : -3);
++    const dx = b.x + ((i % 3) - 1) * 7 - sx;
++    const dy = b.y + ((i * 7) % 5) - 2 - sy;
+     p.style.left = `${sx}px`;
+     p.style.top = `${sy}px`;
+     host.appendChild(p);
+@@ -93,6 +109,11 @@ function flyParticles(fromKey: string, toEl: Element, kind: 'coin' | 'shard', co
+   }
+ }
+ 
++/** Coins (or Scrap shards) arcing from a registered fly target into `toEl`. */
++function flyParticles(fromKey: string, toEl: Element, kind: FlyKind, count: number, startDelay: number) {
++  flyTokens(fromKey, toEl, kind, count, startDelay);
++}
++
+ /** A red "-amount" drifting down off a header counter. */
+ function floatOff(fromKey: string, text: string) {
+   const dur = fxMs(900);
+@@ -124,10 +145,17 @@ function floatOff(fromKey: string, text: string) {
+ export function buyWithFx(engine: GameEngine, btn: HTMLElement | null | undefined, action: () => void) {
+   const gold0 = engine.state.gold;
+   const scrap0 = engine.state.scrap;
++  const renown0 = engine.state.renown;
+   action();
+   const goldSpent = gold0 - engine.state.gold;
+   const scrapSpent = scrap0 - engine.state.scrap;
+-  if (!btn || (goldSpent <= 0 && scrapSpent <= 0) || fxSpeed() <= 0) return;
++  const renownSpent = renown0 - engine.state.renown;
++  if (!btn || (goldSpent <= 0 && scrapSpent <= 0 && renownSpent <= 0) || fxSpeed() <= 0) return;
++  // Patch 0424 -- Renown perks pay in renown: violet gems instead of coins.
++  if (renownSpent > 0) {
++    flyParticles('renown', btn, 'gem', 4, 0);
++    floatOff('renown', `−${formatGold(renownSpent)}`);
++  }
+   if (goldSpent > 0) {
+     flyParticles('gold', btn, 'coin', 6, 0);
+     floatOff('gold', `−${formatGold(goldSpent)}`);
+@@ -371,3 +399,51 @@ export function flyIcon(
+     anim.oncancel = done;
+   });
+ }
++
++/**
++ * Patch 0424 -- lets an element that's about to unmount (a claimed
++ * mailbox letter) leave on screen: a static copy is laid over it in the
++ * fx layer and slides out while fading, and its wax seal (any
++ * `.mfx-seal` inside) pops off. Call it before the state change that
++ * removes the real element; no-op with motion off.
++ */
++export function ghostOut(el: HTMLElement | null, delay = 0) {
++  const dur = fxMs(420);
++  const host = fxLayer();
++  if (!dur || !host || !el || typeof Element.prototype.animate !== 'function') return;
++  const r = el.getBoundingClientRect();
++  const ghost = el.cloneNode(true) as HTMLElement;
++  ghost.classList.add('fx-ghost');
++  ghost.style.position = 'fixed';
++  ghost.style.left = `${r.left}px`;
++  ghost.style.top = `${r.top}px`;
++  ghost.style.width = `${r.width}px`;
++  ghost.style.height = `${r.height}px`;
++  ghost.style.margin = '0';
++  host.appendChild(ghost);
++  const seal = ghost.querySelector<HTMLElement>('.mfx-seal');
++  seal?.animate([
++    { transform: 'none', opacity: 1 },
++    { transform: 'translate(18px, -30px) rotate(140deg)', opacity: 0 },
++  ], { duration: fxMs(320), delay: fxMs(delay), easing: 'cubic-bezier(.4,0,.7,1)', fill: 'both' });
++  const anim = ghost.animate([
++    { transform: 'none', opacity: 1 },
++    { transform: 'scale(1.03)', opacity: 1, offset: 0.35 },
++    { transform: 'translateX(48px) scale(.96)', opacity: 0 },
++  ], { duration: dur, delay: fxMs(delay + 180), easing: 'cubic-bezier(.4,0,.8,.6)', fill: 'both' });
++  anim.onfinish = () => ghost.remove();
++  anim.oncancel = () => ghost.remove();
++}
++
++/** Patch 0424 -- the row class for a purchase beat, shared by every
++ *  `.upgrade-row` that adopted the 0420 beats (Harvest tools, Overseer,
++ *  Renown perks...): glow + shine on the level-up, shake on the stamp. */
++export function rowBeatClass(beat: Beat | undefined): string {
++  if (!beat) return '';
++  if (beat.phase === 'levelup') return 'fx-levelup';
++  if (beat.phase === 'stamp' || beat.phase === 'file') return 'fx-stamped';
++  return '';
++}
++
++/** Same row beats with no file-away: these rows stay where they are once maxed. */
++export const STAY_BEATS: BeatTiming = { ...ROW_BEATS, file: 0 };
+diff --git a/tools/import_eggs.py b/tools/import_eggs.py
+index 3d574d7..59ee787 100644
+--- a/tools/import_eggs.py
++++ b/tools/import_eggs.py
+@@ -1,73 +1,32 @@
+-#!/usr/bin/env python3
+-"""
+-Crops the 5 rarity-tier static egg icons out of the source Eggs_32x32.png
+-sheet -- a 10-column x 16-row grid of egg DESIGNS x COLORS, not an
+-animation strip (confirmed by inspection: each row is one solid egg colour
+-rendered in 10 different surface-pattern variants, plus a "cracking open"
+-pose in the last column; rows 10-15 are a separate, more ornate jewelled
+-set, unused by this script).
++"""Cut the egg icons the game uses out of the licensed egg sheet.
+ 
+-Row -> rarity and column -> design were both picked by matching, not
+-guessed: row colours were averaged and compared against the game's own
+-RARITY_COLOR hex values (src/game/util.ts) to find the closest fit for
+-each tier; column 7 (a smooth single-tone gradient egg, no speckle/spot/
+-stripe pattern) was picked as the one design that stays readable at small
+-icon sizes across every row, and column 9 (the only genuinely different
+-silhouette -- shell visibly cracked open) was deliberately excluded since
+-these are meant to depict a WHOLE, unhatched egg sitting in storage.
++Patch 0424. EggIcon (src/ui/EggIcon.tsx) loads public/pets/egg/<rarity>/icon.png
++and falls back to an emoji when it's missing; the hatch animation also uses
++open.png (the cracked-shell frame). public/pets is gitignored (licensed art),
++so this script regenerates the files locally from the sheet that ships in the
++same pack:
+ 
+-Only crops -- no recolouring needed, unlike tools/import_pets.py's pet
+-species, since this sheet already ships each rarity as a genuinely
+-different colour rather than one design needing a palette swap.
++    python3 tools/import_eggs.py            # reads public/pets/Eggs/Eggs_48x48.png
+ 
+-Usage:
+-    python3 tools/import_eggs.py --src <folder with Eggs_32x32.png> --out public/pets/egg
++Row/column choices match the Claude Design hatch mock-up: one colour per
++rarity, column 2 (swirl pattern) for the whole egg, column 9 for the cracked one.
+ """
+-from __future__ import annotations
+-
+-import argparse
+ import os
+-
+-try:
+-    from PIL import Image
+-except ImportError:
+-    raise SystemExit('Pillow is required:  pip install pillow')
+-
+-FRAME = 32
+-DESIGN_COL = 7  # smooth solid-gradient egg -- reads cleanly at icon size, every row
+-
+-# rarity -> source row, picked by nearest-match against RARITY_COLOR (see module docstring)
+-RARITY_ROW = {
+-    'common': 0,
+-    'uncommon': 4,
+-    'rare': 5,
+-    'epic': 9,
+-    'legendary': 6,
+-}
+-
+-
+-def main() -> None:
+-    ap = argparse.ArgumentParser()
+-    ap.add_argument('--src', required=True, help='folder holding Eggs_32x32.png')
+-    ap.add_argument('--out', required=True, help='output folder, e.g. public/pets/egg')
+-    ap.add_argument('--sheet', default='Eggs_32x32.png')
+-    args = ap.parse_args()
+-
+-    src_path = os.path.join(args.src, args.sheet)
+-    if not os.path.exists(src_path):
+-        raise SystemExit(f'{args.sheet} not found in {args.src}')
+-
+-    sheet = Image.open(src_path).convert('RGBA')
+-    for rarity, row in RARITY_ROW.items():
+-        box = (DESIGN_COL * FRAME, row * FRAME, (DESIGN_COL + 1) * FRAME, (row + 1) * FRAME)
+-        icon = sheet.crop(box)
+-        dest_dir = os.path.join(args.out, rarity)
+-        os.makedirs(dest_dir, exist_ok=True)
+-        icon.save(os.path.join(dest_dir, 'icon.png'), optimize=True)
+-        print(f'{rarity}: row {row}, col {DESIGN_COL} -> {dest_dir}/icon.png')
+-
+-    print('done')
+-
+-
+-if __name__ == '__main__':
+-    main()
++import sys
++
++from PIL import Image
++
++SHEET = sys.argv[1] if len(sys.argv) > 1 else os.path.join('public', 'pets', 'Eggs', 'Eggs_48x48.png')
++OUT = os.path.join('public', 'pets', 'egg')
++CELL = 48
++ROWS = {'common': 3, 'uncommon': 4, 'rare': 5, 'epic': 9, 'legendary': 6}
++WHOLE_COL, OPEN_COL = 2, 9
++
++sheet = Image.open(SHEET).convert('RGBA')
++for rarity, row in ROWS.items():
++    folder = os.path.join(OUT, rarity)
++    os.makedirs(folder, exist_ok=True)
++    for name, col in (('icon.png', WHOLE_COL), ('open.png', OPEN_COL)):
++        box = (col * CELL, row * CELL, (col + 1) * CELL, (row + 1) * CELL)
++        sheet.crop(box).save(os.path.join(folder, name))
++    print('wrote', folder)

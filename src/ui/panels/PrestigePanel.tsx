@@ -5,7 +5,8 @@ import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
 import { describeMods, formatNumber } from '../../game/util';
-import { usePulsesOnChange } from '../maxFlash';
+import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
+import type { Beat } from '../purchaseFx';
 import { Hero } from '../../game/types';
 import { backgroundSrc } from '../../game/settings';
 
@@ -112,11 +113,13 @@ function HeroRetireCard({
  * as before.
  */
 function RenownPerkRow({
-  def, level, cost, maxed, affordable, cap, inTier2, justUnlocked, pulsing, onBuy, highlighted, onDismissHighlight,
+  def, level, cost, maxed, affordable, cap, inTier2, justUnlocked, beat, onBuy, highlighted, onDismissHighlight,
 }: {
   def: ReturnType<typeof PrestigeManager.perks>[number];
   level: number; cost: number | null; maxed: boolean; affordable: boolean; cap: number; inTier2: boolean; justUnlocked: boolean;
-  pulsing?: boolean; onBuy: () => void; highlighted?: boolean; onDismissHighlight?: () => void;
+  /** Patch 0424 -- this row's purchase beat (renown gems into the button,
+   *  level roll, seal on the last level); replaces the old pulse. */
+  beat?: Beat; onBuy: (btn: HTMLElement) => void; highlighted?: boolean; onDismissHighlight?: () => void;
 }) {
   const [showDetail, setShowDetail] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -134,7 +137,7 @@ function RenownPerkRow({
   return (
     <div
       ref={rowRef}
-      className={`upgrade-row ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'card requirement-highlight' : ''}`}
+      className={`upgrade-row fx-renown ${rowBeatClass(beat)} ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'card requirement-highlight' : ''}`}
       onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
       role="button"
       tabIndex={0}
@@ -146,7 +149,7 @@ function RenownPerkRow({
             {def.name}
             {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
           </span>
-          <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
+          <span className="upgrade-row-level"><LevelRoll beat={beat} value={level} render={(v) => `${v}/${cap}`} /></span>
         </span>
         <span className="upgrade-row-effect">{effectText}</span>
         <span className="upgrade-row-rule">
@@ -156,10 +159,11 @@ function RenownPerkRow({
       <button
         className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
         disabled={maxed || !affordable}
-        onClick={(e) => { e.stopPropagation(); onBuy(); }}
+        onClick={(e) => { e.stopPropagation(); onBuy(e.currentTarget); }}
       >
         {buyLabel}
       </button>
+      {beat?.phase === 'stamp' && <SealStamp label="Mastered" className="upgrade-row-stamp" />}
       {showDetail && (
         <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -178,7 +182,7 @@ function RenownPerkRow({
             )}
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || !affordable} onClick={onBuy}>{buyLabel}</button>
+              <button className="btn-yellow" disabled={maxed || !affordable} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
             </div>
           </div>
         </div>
@@ -234,7 +238,7 @@ function HeroPerkRow({ hero, onBuy }: { hero: Hero; onBuy: (heroId: string, perk
                 <button
                   className="btn-yellow"
                   disabled={maxed || !affordable || !roleEligible}
-                  onClick={() => onBuy(hero.id, def.id)}
+                  onClick={(e) => { const btn = e.currentTarget; buyWithFx(engine, btn, () => onBuy(hero.id, def.id)); }}
                 >
                   {!roleEligible ? 'Locked' : maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
                 </button>
@@ -266,11 +270,11 @@ export function PrestigePanel() {
     return () => window.clearTimeout(timer);
   }, [highlightId]);
 
-  // Same "only pulse on a real change, not on every tab-switch remount"
-  // fix Guild Hall/Vendors/Harvest already got -- see usePulsesOnChange's
-  // own doc comment in maxFlash.tsx.
-  const perkLevelPulses = usePulsesOnChange(
-    PrestigeManager.perks().map((def) => ({ id: def.id, value: PrestigeManager.perkLevel(state, def.id) })),
+  // Patch 0424 -- one purchase beat per perk row (see purchaseFx.tsx);
+  // only a real change you watched plays, never a tab-switch remount.
+  const perkBeats = usePurchaseBeats(
+    PrestigeManager.perks().map((def) => ({ id: def.id, value: PrestigeManager.perkLevel(state, def.id), max: renownEffectiveMaxLevel(def) })),
+    STAY_BEATS,
   );
 
   return (
@@ -333,8 +337,8 @@ export function PrestigePanel() {
               cap={cap}
               inTier2={inTier2}
               justUnlocked={justUnlocked}
-              pulsing={perkLevelPulses[def.id]}
-              onBuy={() => engine.buyPerk(def.id)}
+              beat={perkBeats[def.id]}
+              onBuy={(btn) => buyWithFx(engine, btn, () => engine.buyPerk(def.id))}
               highlighted={def.id === highlightId}
               onDismissHighlight={() => setHighlightId(null)}
             />

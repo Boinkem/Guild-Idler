@@ -13,11 +13,10 @@ import { MaterialId } from '../../game/types';
 import { formatDuration, formatGold, formatMaterial } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
 import { Ring } from './DashboardPanel';
-import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
 import { backgroundSrc } from '../../game/settings';
 import { UnlockFx, useJustUnlocked } from '../unlockFx';
-import { buyWithFx } from '../purchaseFx';
+import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
 
 type SubTab = 'warehouse' | 'fields';
 
@@ -488,15 +487,15 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
   const level = state.harvestTools[nodeId] ?? 0;
   const cost = harvestToolCost(nodeId, level);
   const maxed = cost === null;
-  const { flashes, dismiss } = useMaxFlash([{ id: nodeId, name: tool.name, level, maxLevel: tool.maxLevel }]);
-  const flash = flashes[nodeId];
-  const levelPulses = usePulsesOnChange([{ id: nodeId, value: level }]);
+  // Patch 0424 -- the 0420 row beats (coins into the button, level roll,
+  // shine; a wax seal on the last level) instead of the old pulse/max flash.
+  const beat = usePurchaseBeats([{ id: nodeId, value: level, max: tool.maxLevel }], STAY_BEATS)[nodeId];
   const effectText = `+${tool.yieldBonusPerLevel} yield and a faster respawn per level`;
   const pctFill = Math.min(100, (level / tool.maxLevel) * 100);
   const buyLabel = maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`;
   return (
     <div
-      className="upgrade-row"
+      className={`upgrade-row ${rowBeatClass(beat)}`}
       onClick={() => setShowDetail(true)}
       role="button"
       tabIndex={0}
@@ -505,7 +504,7 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
       <span style={{ minWidth: 0 }}>
         <span className="upgrade-row-head">
           <span className="upgrade-row-name">{tool.name}</span>
-          <span className={`upgrade-row-level ${levelPulses[nodeId] ? 'purchase-pulse' : ''}`}>Lv {level}/{tool.maxLevel}</span>
+          <span className="upgrade-row-level"><LevelRoll beat={beat} value={level} render={(v) => `Lv ${v}/${tool.maxLevel}`} /></span>
         </span>
         <span className="upgrade-row-effect">{effectText}</span>
         <span className="upgrade-row-rule">
@@ -515,11 +514,11 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
       <button
         className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
         disabled={maxed || state.gold < (cost ?? 0)}
-        onClick={(e) => { e.stopPropagation(); engine.upgradeHarvestTool(nodeId); }}
+        onClick={(e) => { e.stopPropagation(); buyWithFx(engine, e.currentTarget, () => engine.upgradeHarvestTool(nodeId)); }}
       >
         {buyLabel}
       </button>
-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(nodeId)} />}
+      {beat?.phase === 'stamp' && <SealStamp label="Mastered" className="upgrade-row-stamp" />}
       {showDetail && (
         <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -532,7 +531,7 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
             </p>
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>{buyLabel}</button>
+              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeHarvestTool(nodeId))}>{buyLabel}</button>
             </div>
           </div>
         </div>
@@ -547,10 +546,14 @@ function WarehouseTab() {
   const cap = HarvestManager.capacity(state);
   const warehouseCost = warehouseUpgradeCost(state.warehouseLevel);
   const warehouseMaxed = warehouseCost === null;
+  // Patch 0424 -- the Warehouse gets the row beats too, plus a crate per
+  // level that stacks onto the pile when it expands.
+  const whBeat = usePurchaseBeats([{ id: 'warehouse', value: state.warehouseLevel, max: WAREHOUSE_UPGRADE.maxLevel }], STAY_BEATS).warehouse;
+  const crates = Math.min(12, state.warehouseLevel + 1);
 
   return (
     <>
-      <div className="card" style={{ marginBottom: 12 }}>
+      <div className={`card wfx-card ${rowBeatClass(whBeat)}`} style={{ marginBottom: 12 }}>
         <div className="spread">
           <div className="card-title">Warehouse</div>
           <Ring
@@ -565,6 +568,12 @@ function WarehouseTab() {
         <p className="card-flavour">
           One shared storage cap, applied to every material. {WAREHOUSE_UPGRADE.capacityPerLevel} more per level.
         </p>
+        <div className="wfx-crates" aria-hidden="true">
+          {Array.from({ length: crates }, (_, i) => (
+            <span key={i} className={`wfx-crate ${i === crates - 1 && whBeat?.phase === 'levelup' ? 'new' : ''}`} />
+          ))}
+          <span className={`tiny muted wfx-cap ${whBeat?.phase === 'levelup' ? 'fx-bump' : ''}`}>{cap} cap</span>
+        </div>
         {MATERIALS.map((m) => (
           <div key={m.id} className="harvest-stock-row" style={{ marginBottom: 4 }}>
             <span className="tiny muted" style={{ width: 70 }}>{m.name}</span>
@@ -580,10 +589,11 @@ function WarehouseTab() {
           className="btn-yellow"
           style={{ marginTop: 8 }}
           disabled={warehouseMaxed || state.gold < (warehouseCost ?? 0)}
-          onClick={() => engine.upgradeWarehouse()}
+          onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeWarehouse())}
         >
           {warehouseMaxed ? 'Fully built' : `Expand · ${formatGold(warehouseCost ?? 0)}`}
         </button>
+        {whBeat?.phase === 'stamp' && <SealStamp label="Fully built" className="upgrade-row-stamp" />}
       </div>
 
       <TradeRouteCard />
@@ -617,9 +627,7 @@ function OverseerRow() {
   const maxed = cost === null;
   const chance = overseerRescueChancePercent(level);
   const nextChance = overseerRescueChancePercent(level + 1);
-  const { flashes, dismiss } = useMaxFlash([{ id: 'overseer', name: OVERSEER_UPGRADE.name, level, maxLevel: OVERSEER_UPGRADE.maxLevel }]);
-  const flash = flashes.overseer;
-  const levelPulses = usePulsesOnChange([{ id: 'overseer', value: level }]);
+  const beat = usePurchaseBeats([{ id: 'overseer', value: level, max: OVERSEER_UPGRADE.maxLevel }], STAY_BEATS).overseer;
   const description = level === 0
     ? 'Hire someone to keep an eye on the Fields. A spawn that would otherwise despawn unclicked gets a chance to be caught anyway -- never the bonus glint, and never as reliable as watching yourself, but nothing goes to waste while you\u2019re elsewhere.'
     : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`;
@@ -628,7 +636,7 @@ function OverseerRow() {
   const buyLabel = maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
   return (
     <div
-      className="upgrade-row"
+      className={`upgrade-row ${rowBeatClass(beat)}`}
       onClick={() => setShowDetail(true)}
       role="button"
       tabIndex={0}
@@ -637,7 +645,7 @@ function OverseerRow() {
       <span style={{ minWidth: 0 }}>
         <span className="upgrade-row-head">
           <span className="upgrade-row-name">Overseer</span>
-          <span className={`upgrade-row-level ${levelPulses.overseer ? 'purchase-pulse' : ''}`}>Lv {level}/{OVERSEER_UPGRADE.maxLevel}</span>
+          <span className="upgrade-row-level"><LevelRoll beat={beat} value={level} render={(v) => `Lv ${v}/${OVERSEER_UPGRADE.maxLevel}`} /></span>
         </span>
         <span className="upgrade-row-effect">{effectText}</span>
         <span className="upgrade-row-rule">
@@ -647,11 +655,11 @@ function OverseerRow() {
       <button
         className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
         disabled={maxed || state.gold < (cost ?? 0)}
-        onClick={(e) => { e.stopPropagation(); engine.upgradeOverseer(); }}
+        onClick={(e) => { e.stopPropagation(); buyWithFx(engine, e.currentTarget, () => engine.upgradeOverseer()); }}
       >
         {buyLabel}
       </button>
-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss('overseer')} />}
+      {beat?.phase === 'stamp' && <SealStamp label="Fully staffed" className="upgrade-row-stamp" />}
       {showDetail && (
         <div className="overlay" onClick={(e) => { e.stopPropagation(); setShowDetail(false); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -662,7 +670,7 @@ function OverseerRow() {
             <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeOverseer()}>{buyLabel}</button>
+              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeOverseer())}>{buyLabel}</button>
             </div>
           </div>
         </div>

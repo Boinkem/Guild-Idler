@@ -188,7 +188,7 @@ export function App() {
           <LevelUpModal compact={mode === 'idle'} onOpenMenu={() => changeMode('menu')} />
         </>
       )}
-      <Toast />
+      <Toast skipBanners={mode === 'menu'} />
       {/* Menu-only -- the notification banner is meant to be a prominent,
           clickable "go check this out" moment, which only makes sense
           once the full menu (with somewhere for it to actually navigate

@@ -145,6 +145,7 @@ export function QuestRow({
   return (
     <div
       className={`card raid-card${isSpotlighted ? ' quest-card-spotlight' : ''}`}
+      data-tour={isSpotlighted ? 'tutorial-quest' : undefined}
       onClick={onOpen}
       role="button"
       tabIndex={0}

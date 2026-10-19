@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
+import { fxMs } from './purchaseFx';
 
 interface Step {
   id: string;
@@ -11,6 +12,12 @@ interface Step {
    *  reuses this same component with the plain shared descriptions
    *  instead. Falls back to STEP_DESCRIPTIONS[id] when omitted. */
   description?: string;
+  /** Patch 0424 -- spotlight this element (a `data-tour` value) instead
+   *  of the nav tab; the tab named by `id` is still switched to first.
+   *  Used by the first-run tour's last stop, the tutorial quest itself. */
+  target?: string;
+  /** Patch 0424 -- pulse a ring on this stop's spotlight (the last stop). */
+  pulse?: boolean;
 }
 
 interface Rect {
@@ -38,11 +45,12 @@ const STEP_DESCRIPTIONS: Record<string, string> = {
   guide: "A running log of what's happened, plus a quick reference for how things work.",
   prestige: 'Retire a hero for Renown, spent on permanent guild-wide perks.',
   stats: 'Lifetime stats and achievements, if you like keeping score.',
+  peddler: 'Grimsby, a travelling peddler with a cart full of maybes. Pay for a card and see what you get.',
   settings: 'Appearance, sound, and other preferences.',
 };
 
-function measure(tabId: string): Rect | null {
-  const el = document.querySelector(`[data-tab-id="${tabId}"]`);
+function measure(tabId: string, target?: string): Rect | null {
+  const el = (target && document.querySelector(`[data-tour="${target}"]`)) || document.querySelector(`[data-tab-id="${tabId}"]`);
   if (!el) return null;
   const r = el.getBoundingClientRect();
   return { top: r.top, left: r.left, width: r.width, height: r.height };
@@ -60,10 +68,23 @@ function measure(tabId: string): Rect | null {
  * that this is simpler than persisting resume state and not a real cost.
  */
 export function OnboardingTour({
-  steps, onTabChange, onDone,
-}: { steps: Step[]; onTabChange: (id: string) => void; onDone: () => void }) {
+  steps, onTabChange, onDone, kicker, delayMs = 0,
+}: {
+  steps: Step[]; onTabChange: (id: string) => void; onDone: () => void;
+  /** Patch 0424 -- small heading above the step title ("New tab unlocked"). */
+  kicker?: string;
+  /** Patch 0424 -- wait this long (1x ms) before appearing, so a tab's
+   *  unlock reveal in the nav can play first. */
+  delayMs?: number;
+}) {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
+  const [ready, setReady] = useState(() => fxMs(delayMs) <= 0);
+  useEffect(() => {
+    if (ready) return undefined;
+    const id = window.setTimeout(() => setReady(true), fxMs(delayMs));
+    return () => window.clearTimeout(id);
+  }, [ready, delayMs]);
   const step = steps[index];
 
   useLayoutEffect(() => {
@@ -71,7 +92,11 @@ export function OnboardingTour({
     onTabChange(step.id);
     // One frame's delay so the measurement reflects whatever the panel
     // switch itself settles into, not a stale layout from the prior step.
-    const raf = requestAnimationFrame(() => setRect(measure(step.id)));
+    // Two frames: the tab switch above has to render before a target
+    // inside it (the tutorial quest card) exists to be measured.
+    let raf2 = 0;
+    const raf = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setRect(measure(step.id, step.target))); });
+    return () => { cancelAnimationFrame(raf); cancelAnimationFrame(raf2); };
     return () => cancelAnimationFrame(raf);
     // Deliberately keyed on index alone -- onTabChange/step are stable in
     // spirit (same steps array, same callback) even if their references
@@ -80,13 +105,13 @@ export function OnboardingTour({
   }, [index]);
 
   useEffect(() => {
-    const recompute = () => setRect(step ? measure(step.id) : null);
+    const recompute = () => setRect(step ? measure(step.id, step.target) : null);
     window.addEventListener('resize', recompute);
     return () => window.removeEventListener('resize', recompute);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
-  if (!step) return null;
+  if (!step || !ready) return null;
 
   const isLast = index === steps.length - 1;
   const next = () => { if (isLast) onDone(); else setIndex((i) => i + 1); };
@@ -104,14 +129,21 @@ export function OnboardingTour({
     <>
       {rect && (
         <div
-          className="onboarding-spotlight"
+          className={`onboarding-spotlight ${step.pulse ? 'tour-pulse' : ''}`}
           style={{ top: rect.top - 4, left: rect.left - 4, width: rect.width + 8, height: rect.height + 8 }}
         />
       )}
       <div className="onboarding-card" style={{ top: cardTop, left: cardLeft }}>
-        <div className="tiny muted" style={{ marginBottom: 4 }}>Step {index + 1} of {steps.length}</div>
-        <div className="card-title" style={{ marginBottom: 6 }}>{step.label}</div>
-        <p className="small" style={{ margin: '0 0 12px' }}>{step.description ?? STEP_DESCRIPTIONS[step.id] ?? ''}</p>
+        {/* Patch 0424 -- step dots fill as you go, and the text swaps in
+            while the card glides to its next stop (see app.css). */}
+        <div className="tour-dots" aria-label={`Step ${index + 1} of ${steps.length}`}>
+          {steps.map((s, i) => <i key={s.id + i} className={i <= index ? 'on' : ''} />)}
+        </div>
+        {kicker && <div className="tour-kicker">{kicker}</div>}
+        <div key={index} className="tour-body">
+          <div className="card-title" style={{ marginBottom: 6 }}>{step.label}</div>
+          <p className="small" style={{ margin: '0 0 12px' }}>{step.description ?? STEP_DESCRIPTIONS[step.id] ?? ''}</p>
+        </div>
         <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
           <button className="btn-ghost" onClick={onDone}>Skip</button>
           <div className="row" style={{ gap: 6 }}>

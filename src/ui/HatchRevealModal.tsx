@@ -1,8 +1,15 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useEngine } from './useEngine';
 import { DlcManager } from '../game/managers/DlcManager';
 import { PetSprite } from './sprites/PetSprite';
 import { RarityPill } from './RarityPill';
+import { EggIcon } from './EggIcon';
+import { at } from './resultFx';
+import { RARITY_COLOR, RARITY_ORDER } from '../game/util';
+
+/** Crack paths drawn across the egg as it wobbles (96px box). */
+const CRACKS = ['M48 20 L44 34 L52 42 L46 54', 'M30 46 L40 50 L36 62 L44 70', 'M66 40 L58 50 L64 60 L56 72', 'M22 62 L34 64 L30 76', 'M74 58 L62 66 L70 78'];
 
 /**
  * Reads engine.lastHatchedPet directly and renders nothing if null -- same
@@ -32,6 +39,10 @@ export function HatchRevealModal() {
   if (!pet) return null;
 
   const def = DlcManager.petDef(pet.defId);
+  // 0 for common/uncommon up to 3 for legendary: longer shake, rays, glints.
+  const extra = Math.max(0, RARITY_ORDER.indexOf(pet.rarity) - 1);
+  const shake = 1300 + extra * 250;
+  const T = { shake, burst: 450 + shake };
 
   // Commits whatever's in the draft field (if it actually differs from
   // the pet's current name) before running the given follow-up action --
@@ -53,28 +64,63 @@ export function HatchRevealModal() {
 
   return (
     <div className="overlay" onClick={close}>
-      <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ marginBottom: 4 }}>It Hatched!</h3>
-        <p className="small muted" style={{ marginTop: 0 }}>
+      <div
+        className="modal hfx-reveal"
+        style={{ textAlign: 'center', color: RARITY_COLOR[pet.rarity], ...({ '--hfx-shake': `calc(var(--fx-t) * ${T.shake})` } as CSSProperties) }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Patch 0424 -- the hatch moment. The egg drops into its nest and
+            wobbles three times, harder each time as cracks spread, then
+            bursts in a flash with shell shards and the pet pops up already
+            playing its idle animation. Higher rarities shake longer and get
+            light rays and glints. One CSS timeline (resultFx.tsx); with
+            Reduce motion it lands straight on the final frame. */}
+        <div className="hfx-stage" aria-hidden="true">
+          {extra > 0 && <span className="hfx-rays" style={at(T.burst)} />}
+          <span className="hfx-nest" />
+          <span className="hfx-shadow" style={at(T.burst)} />
+          <span className="hfx-egg" style={at(150)}>
+            <span className="hfx-egg-shake" style={at(450)}>
+              <span className="hfx-egg-pop" style={at(T.burst)}>
+                <EggIcon rarity={pet.rarity} size={96} />
+                <svg className="hfx-cracks" viewBox="0 0 96 96">
+                  {CRACKS.slice(0, 3 + Math.min(2, extra)).map((d, i, arr) => (
+                    <path key={i} d={d} style={at(450 + T.shake * (0.1 + (i * 0.8) / arr.length))} />
+                  ))}
+                </svg>
+              </span>
+            </span>
+          </span>
+          {Array.from({ length: 8 + extra * 3 }, (_, i) => (
+            <span key={i} className={`hfx-shard h${i % 8}`} style={at(T.burst)} />
+          ))}
+          <span className="hfx-pet" style={at(T.burst + 120)}>
+            <PetSprite
+              species={def?.spriteFolder ?? pet.defId}
+              rarity={pet.rarity}
+              animation="idle"
+              height={84}
+              title={draft || pet.name}
+              fallback={<span style={{ fontSize: '2.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
+            />
+          </span>
+          {extra >= 2 && Array.from({ length: 4 + extra * 2 }, (_, i) => (
+            <span key={i} className="hfx-glint" style={at(T.burst + 320 + i * 140, { left: `${22 + ((i * 37) % 56)}%`, top: `${14 + ((i * 23) % 50)}%` })} />
+          ))}
+          <span className="hfx-flash" style={at(T.burst)} />
+        </div>
+
+        <h3 className="hfx-title" style={at(T.burst + 450, { marginBottom: 4 })}>It Hatched!</h3>
+        <p className="small muted hfx-late" style={at(T.burst + 650, { marginTop: 0 })}>
           A new {def?.name ?? 'creature'} joins your guild.
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
-          <PetSprite
-            species={def?.spriteFolder ?? pet.defId}
-            rarity={pet.rarity}
-            animation="idle"
-            height={72}
-            title={draft || pet.name}
-            fallback={<span style={{ fontSize: '2.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
-          />
+        <div className="row hfx-late" style={at(T.burst + 850, { justifyContent: 'center', gap: 6, marginBottom: 4 })}>
+          <span className="small" style={{ color: 'var(--parchment)' }}>{def?.name ?? 'Unknown species'}</span>
+          <span className="hfx-pill"><RarityPill rarity={pet.rarity} /></span>
         </div>
 
-        <div className="row" style={{ justifyContent: 'center', gap: 6, marginBottom: 4 }}>
-          <span className="small">{def?.name ?? 'Unknown species'}</span>
-          <RarityPill rarity={pet.rarity} />
-        </div>
-
+        <div className="hfx-late" style={at(T.burst + 1100)}>
         <div className="row" style={{ justifyContent: 'center', gap: 6, marginTop: 10 }}>
           <label className="tiny muted" htmlFor="hatch-name-input">Name this pet</label>
         </div>
@@ -93,7 +139,9 @@ export function HatchRevealModal() {
           />
         </div>
 
-        <div className="row end" style={{ marginTop: 14, gap: 8, justifyContent: 'center' }}>
+        </div>
+
+        <div className="row end hfx-late" style={at(T.burst + 1400, { marginTop: 14, gap: 8, justifyContent: 'center' })}>
           <button className="btn-primary" onClick={close}>Close</button>
           <button className="btn-primary" onClick={goToPets}>Go to Pets</button>
         </div>

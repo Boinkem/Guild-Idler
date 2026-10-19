@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import { useEngine } from './useEngine';
+import { flyIcon, flyTokens, ghostOut } from './purchaseFx';
 import { MailboxEntry } from '../game/types';
 import { RARITY_BANNER, RARITY_COLOR, formatGold } from '../game/util';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
@@ -41,6 +43,44 @@ export function MailboxModal({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
   const state = engine.state;
   const entries = state.mailbox;
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Patch 0424 -- claiming plays the letter leaving: its wax seal pops,
+  // the card slides out, and what was inside flies to its own counter
+  // (coins to gold, shards to scrap, the item to the Inventory tab). The
+  // engine claim runs first and only entries that actually left the
+  // mailbox animate, so a gold letter held back by the storage cap stays.
+  const playClaimed = (ids: string[], before: MailboxEntry[]) => {
+    ids.forEach((id, i) => {
+      const el = cardRefs.current[id];
+      const entry = before.find((e) => e.id === id);
+      if (!el || !entry) return;
+      const r = el.getBoundingClientRect();
+      const from = { x: r.left + r.width / 2, y: r.top + r.height * 0.35 };
+      const delay = i * 120;
+      ghostOut(el, delay);
+      if (entry.type === 'gold') flyTokens(from, 'gold', 'coin', 6, delay + 260);
+      else if (entry.type === 'scrap') flyTokens(from, 'scrap', 'shard', 5, delay + 260);
+      else if (entry.type === 'equipment' && entry.item) {
+        const def = EQUIPMENT_BY_ID[entry.item.defId];
+        void flyIcon(el, 'inventory', { icon: def?.icon, glyph: '✦' }, { delay: delay + 260 });
+      } else if (entry.type === 'consumable' && entry.consumableId) {
+        const def = CONSUMABLE_BY_ID[entry.consumableId];
+        void flyIcon(el, 'inventory', { icon: def?.icon, glyph: def?.glyph }, { delay: delay + 260 });
+      }
+    });
+  };
+  const claimOne = (id: string) => {
+    const before = [...entries];
+    engine.claimMailboxEntry(id);
+    if (!engine.state.mailbox.some((e) => e.id === id)) playClaimed([id], before);
+  };
+  const claimAll = () => {
+    const before = [...entries];
+    engine.claimAllMailbox();
+    const left = new Set(engine.state.mailbox.map((e) => e.id));
+    playClaimed(before.filter((e) => !left.has(e.id)).map((e) => e.id), before);
+  };
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -57,13 +97,16 @@ export function MailboxModal({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <div className="row end" style={{ marginBottom: 8 }}>
-              <button className="btn-ghost" onClick={() => engine.claimAllMailbox()}>
+              <button className="btn-ghost" onClick={claimAll}>
                 Claim all ({entries.length})
               </button>
             </div>
             <div className="item-card-grid">
               {entries.map((entry) => (
-                <MailboxCard key={entry.id} entry={entry} onClaim={() => engine.claimMailboxEntry(entry.id)} />
+                <div key={entry.id} ref={(el) => { cardRefs.current[entry.id] = el; }} className="mfx-card">
+                  <MailboxCard entry={entry} onClaim={() => claimOne(entry.id)} />
+                  <span className="mfx-seal" aria-hidden="true" />
+                </div>
               ))}
             </div>
           </>

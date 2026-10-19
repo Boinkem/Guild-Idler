@@ -10,6 +10,8 @@ import { Hero, Role } from '../../game/types';
 import { formatGold, formatNumber } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { RoleIcon } from '../RoleIcon';
+import { buyWithFx } from '../purchaseFx';
+import { useJustUnlocked } from '../unlockFx';
 
 /**
  * One role card per Role inside the training modal -- the "richer, card
@@ -36,16 +38,19 @@ function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: bool
   // required -- but a malformed DLC class def is the same defensive
   // case roleDisplayName's own fallback already guards against).
   const description = classDef?.roleDescriptions[role] ?? ROLE_DESCRIPTION[role];
+  // Patch 0424 -- a role the hero just trained into stamps its icon and
+  // glows the card (only for a change watched happen, not on open).
+  const fresh = useJustUnlocked(`role:${hero.id}:${role}`, active);
 
   return (
     <div
-      className="card"
+      className={`card ${fresh ? 'rfx-trained' : ''}`}
       style={{
         flex: '1 1 170px', minWidth: 170, marginBottom: 0, textAlign: 'center',
         borderColor: active ? 'var(--moss)' : undefined,
       }}
     >
-      <RoleIcon role={role} size={56} />
+      <span className="rfx-roleicon"><RoleIcon role={role} size={56} /></span>
       <div className="card-title" style={{ marginTop: 6 }}>{flavorName}</div>
       <p className="tiny muted" style={{ margin: '2px 0 0' }}>{ROLE_LABEL[role]}</p>
       <p className="tiny" style={{ marginTop: 6, minHeight: '2.4em' }}>
@@ -58,7 +63,7 @@ function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: bool
           className="btn-primary"
           style={{ marginTop: 10, width: '100%' }}
           disabled={state.gold < cost}
-          onClick={() => engine.trainRole(hero.id, role)}
+          onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.trainRole(hero.id, role))}
         >
           {unlocked ? 'Swap' : 'Unlock'} · {formatGold(cost)}
         </button>
@@ -120,7 +125,7 @@ function TierUpSection({ hero }: { hero: Hero }) {
         style={{ marginTop: 8, width: '100%' }}
         disabled={!canBuy}
         title={!questsMet ? `Needs ${step.questsRequired} quests completed first` : !afforded ? `Not enough ${step.currency === 'gold' ? 'gold' : 'Renown'}` : undefined}
-        onClick={() => engine.tierUpHero(hero.id)}
+        onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.tierUpHero(hero.id))}
       >
         Tier Up · {costLabel}
       </button>
@@ -207,7 +212,7 @@ export function TrainingPanel() {
             className="btn-primary"
             style={{ marginTop: 10 }}
             disabled={cost === null || state.gold < cost}
-            onClick={() => engine.buyUpgrade('training_grounds')}
+            onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.buyUpgrade('training_grounds'))}
           >
             Fund Training · {cost !== null ? formatGold(cost) : 'unavailable'}
           </button>

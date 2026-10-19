@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { formatGold, formatNumber } from './../game/util';
 import { Tuning } from '../game/data/tuning';
+import { useCountUp } from './useCountUp';
+import { flyTokens, fxMs, fxSpeed } from './purchaseFx';
 
 /**
  * "Fund the Guild" -- patch 0220, direct request. An open-ended, uncapped
@@ -47,12 +49,35 @@ export function FundGuildModal({ onClose }: { onClose: () => void }) {
 
   const setMax = () => setAmountText(String(state.gold));
 
+  // Patch 0424 -- coins stream from the header gold into the coffer, its
+  // lid gulps, "+N Power" rises out of it, blue sparks fly to the Power
+  // figure below and the lifetime totals count up.
+  const cofferRef = useRef<HTMLSpanElement>(null);
+  const powerRef = useRef<HTMLElement>(null);
+  const [gulp, setGulp] = useState<{ key: number; gain: number } | null>(null);
+  const shownTotal = useCountUp(state.guildDonationsTotal, { durationMs: Math.max(1, fxMs(700)) });
+  const shownPower = powerFor(shownTotal);
+  useEffect(() => {
+    if (!gulp) return undefined;
+    const id = window.setTimeout(() => setGulp(null), fxMs(1300));
+    return () => window.clearTimeout(id);
+  }, [gulp]);
+
   const handleFund = () => {
     if (!canAfford) return;
+    const gain = previewGain;
     const donated = engine.donateToGuild(amount);
     if (donated) {
       setJustDonated(donated);
       setAmountText('');
+      if (fxSpeed() > 0 && cofferRef.current) {
+        const n = Math.min(12, 4 + Math.round(Math.log10(donated) * 2));
+        flyTokens('gold', cofferRef.current, 'coin', n);
+        window.setTimeout(() => {
+          setGulp({ key: Date.now(), gain });
+          if (cofferRef.current && powerRef.current) flyTokens(cofferRef.current, powerRef.current, 'spark', 3, fxMs(250));
+        }, fxMs(420 + n * 45));
+      }
     }
   };
 
@@ -68,6 +93,17 @@ export function FundGuildModal({ onClose }: { onClose: () => void }) {
             <p className="tiny muted" style={{ marginBottom: 10 }}>
               Every gold given adds to the guild's standing -- a small, permanent sliver of Guild Power, forever.
             </p>
+
+            <span ref={cofferRef} className={`gfx-coffer ${gulp ? 'gfx-gulp' : ''}`} key={gulp?.key ?? 'idle'} aria-hidden="true">
+              <span className="gfx-pile">
+                {Array.from({ length: Math.min(24, 4 + Math.floor(Math.sqrt(state.guildDonationsTotal) / 20)) }, (_, i) => <i key={i} />)}
+              </span>
+              <svg viewBox="0 0 120 96" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round">
+                <path d="M14 40h92v46H14z" fill="oklch(30% 0.05 60)" /><path d="M14 56h92M52 50h16v14H52z" />
+                <g className="gfx-lid"><path d="M14 40c0-16 12-24 46-24s46 8 46 24z" fill="oklch(34% 0.06 60)" /><path d="M30 22v16M90 22v16" /></g>
+              </svg>
+              {gulp && gulp.gain > 0 && <span className="gfx-gain">+{gulp.gain} Power</span>}
+            </span>
 
             <div className="row wrap" style={{ gap: 6, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               <input
@@ -99,10 +135,13 @@ export function FundGuildModal({ onClose }: { onClose: () => void }) {
               Fund Power{validAmount ? ` -- +${previewGain} Power` : ''}
             </button>
 
+            <div className="gfx-ledger">
+              <span>Lifetime given<b>{formatNumber(shownTotal)}</b></span>
+              <span>Power from donations<b ref={powerRef} className="p">{shownPower}</b></span>
+            </div>
             {justDonated !== null && (
-              <p className="tiny" style={{ marginTop: 10, color: 'var(--brass)' }}>
-                Donated {formatGold(justDonated)} gold. Lifetime total: {formatNumber(state.guildDonationsTotal)} gold
-                {' '}-- {currentPower} Power from Donations.
+              <p className="tiny" style={{ marginTop: 8, color: 'var(--brass)' }}>
+                Donated {formatGold(justDonated)} gold.
               </p>
             )}
           </div>

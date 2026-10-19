@@ -1,22 +1,11 @@
-import { useEffect } from 'react';
-import type { CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine } from './useEngine';
+import { BARD_TRACK_BY_ID } from '../game/data/bard';
+import { AchievementDef } from '../game/data/achievements';
+import { fxMs } from './purchaseFx';
 
 const AUTO_DISMISS_MS = 4500;
 
-/** Small, compact spread -- this popup is a fixed corner card (max 280px),
- *  not a full-screen modal, so the burst is scaled down to match rather
- *  than reusing one of the wider result-modal bursts. Anchored on the
- *  glyph specifically (see achievement-popup-glyph-wrap below), not the
- *  whole card, so it reads as "the star icon is doing something" rather
- *  than particles flying out from an arbitrary corner. */
-const ACHIEVEMENT_BURST: { dx: number; dy: number; rot: number }[] = [
-  { dx: -18, dy: -22, rot: -20 },
-  { dx: 14, dy: -26, rot: 18 },
-  { dx: 24, dy: -2, rot: -14 },
-  { dx: -22, dy: 4, rot: 12 },
-  { dx: -4, dy: 22, rot: -8 },
-];
 
 /**
  * A dedicated visual moment for achievement unlocks -- these are
@@ -29,38 +18,58 @@ const ACHIEVEMENT_BURST: { dx: number; dy: number; rot: number }[] = [
  *
  * Sits in the opposite corner from Toast (top-right vs. bottom-center) so
  * the two can never visually collide if both fire close together.
+ *
+ * Patch 0424 -- rebuilt from the Claude Design board: the toast slides in
+ * from the corner, a medal drops and spins twice before settling with a
+ * star burst, the "Achievement unlocked" ribbon unfurls with a shine,
+ * and a reward line pops in when the achievement grants a bard track
+ * (notes float up) or a guild title. A thin bar drains for its 4.5s.
+ * Several unlocking together now stack down the corner a beat apart
+ * (engine.visibleAchievements, up to three) instead of queueing 4.5s each.
  */
+
 export function AchievementPopup() {
   const engine = useEngine();
-  const achievement = engine.currentAchievement;
-
-  useEffect(() => {
-    if (!achievement) return;
-    const id = window.setTimeout(() => engine.dismissAchievement(), AUTO_DISMISS_MS);
-    return () => window.clearTimeout(id);
-  }, [achievement, engine]);
-
-  if (!achievement) return null;
-
+  const list = engine.visibleAchievements;
+  if (list.length === 0) return null;
   return (
-    <div key={achievement.id} className="achievement-popup achievement-popup-pop" role="status">
-      <span className="achievement-popup-glyph-wrap" aria-hidden="true">
-        <span className="achievement-popup-glyph">✦</span>
-        {ACHIEVEMENT_BURST.map((s, i) => (
-          <span
-            key={i}
-            className="achievement-popup-star"
-            style={{ '--dx': `${s.dx}px`, '--dy': `${s.dy}px`, '--rot': `${s.rot}deg`, animationDelay: `${120 + i * 40}ms` } as CSSProperties}
-          >
-            ★
-          </span>
-        ))}
+    <div className="achievement-stack">
+      {list.map((a) => <AchievementToast key={a.id} achievement={a} onDone={() => engine.dismissAchievementId(a.id)} />)}
+    </div>
+  );
+}
+
+function AchievementToast({ achievement, onDone }: { achievement: AchievementDef; onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    // Real time, not fxMs: reading time shouldn't shrink at a fast
+    // animation speed. The exit slide is short and does scale.
+    let done: number | undefined;
+    const out = window.setTimeout(() => {
+      setLeaving(true);
+      done = window.setTimeout(onDone, fxMs(380));
+    }, AUTO_DISMISS_MS);
+    return () => { window.clearTimeout(out); if (done !== undefined) window.clearTimeout(done); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const track = achievement.unlocksTrackId ? BARD_TRACK_BY_ID[achievement.unlocksTrackId] : undefined;
+  const title = achievement.grantsGuildTitle;
+  return (
+    <div className={`achievement-popup afx-toast ${leaving ? 'afx-leaving' : ''}`} role="status">
+      <span className="afx-medal" aria-hidden="true">
+        <span className="afx-ribbons" />
+        <span className="afx-coin">✦</span>
+        {[0, 1, 2, 3, 4].map((i) => <span key={i} className={`afx-star s${i}`} />)}
       </span>
       <div className="achievement-popup-body">
-        <div className="achievement-popup-kicker">Achievement Unlocked</div>
-        <div className="achievement-popup-name">{achievement.name}</div>
-        <div className="achievement-popup-desc">{achievement.description}</div>
+        <span className="afx-kick">Achievement unlocked</span>
+        <div className="achievement-popup-name afx-name">{achievement.name}</div>
+        <div className="achievement-popup-desc afx-desc">{achievement.description}</div>
+        {track && <div className="afx-reward track">♪ <span>New bard track: "{track.name}"</span></div>}
+        {title && <div className="afx-reward title">⚑ <span>The guild is now known as {title}</span></div>}
       </div>
+      {track && <><span className="afx-note n1" aria-hidden="true">♪</span><span className="afx-note n2" aria-hidden="true">♫</span></>}
+      <span className="afx-timer" style={{ animationDuration: `${AUTO_DISMISS_MS}ms` }} aria-hidden="true" />
     </div>
   );
 }

@@ -34400,3 +34400,114 @@ a chain, a raid, the Overseer, every badge), the 1-day report from the
 bug screenshot, and a nothing-finished report. Frames were checked mid
 and end. The engine change is a straight extraction (tsc-clean), and
 the buttons weren't clicked through in-game here.
+
+### Animated hatch, tier-up, chain scroll, infuse, mailbox and achievements; purchase beats everywhere; reworked intro (patch 0424)
+```discord-update
+Dev Update | Patch 0424
+
+- Added a proper hatching moment: the egg wobbles in its nest, shakes harder the rarer it is, cracks open in a burst of shell and light, and your new pet pops out. Eggs now use real egg art, too
+- Added a new Tier Up card: your hero rises on a pillar of light, the tier badge flips over, and each stat bar grows to its new value (with a seal when they hit max tier)
+- Added a sealed scroll for your first quest chain: the wax seal cracks, the scroll unrolls and a trail draws out to every stage
+- Added an infusing moment to Weapon Enchanting and Armour Infusion: the gem charges, a stream of element-coloured sparks pours into the item and it flares
+- Changed Mailbox claims so each letter gets stamped and slides away while its rewards fly to your counters
+- Changed achievement pop-ups to a medal card that stacks when several unlock at once, showing every reward (bard tracks and titles included)
+- Added the same buy animations and currency fly-ins to Harvest tools, Overseers, the Warehouse, Renown perks, Hero perks, Training and the Renown exchange
+- Changed Fund the Guild into a coffer: gold pours in, the lid gulps and your Guild Power ticks up
+- Added a founding charter that stamps your new guild's name when you start a game
+- Changed the first-run tour to glide between stops and finish by pointing at your first job on the Quest Board
+- Added a reveal when a new tab unlocks: the lock breaks open before the tip appears
+- Changed the first-quest flow: result, then level-up, then a new Quest Board explainer (difficulties, speed vs reward) with clear next steps
+- Fixed tips piling up: they now show one at a time in the top banner, wait until cards are closed, and no longer double up as toasts at the bottom
+- Changed the Guild Hall and second-hero tips into one combined tip
+```
+
+Mocked up on the Claude Design canvas (Hatch, TierUp, ChainScroll,
+Infuse, Mailbox, Achievements, PurchaseRows, FundGuild, GuildFounding,
+Tour, TabUnlock and FirstQuest boards) and signed off before building.
+Retirement was dropped from the list (the feature is shelved). All new
+timelines follow 0422's result-card pattern: `at(ms)` delays in `--fx-t`
+units, `both` fill, a root class containing `fx-` so Reduce motion shows
+the final frame, and `fxMs`/`fxSpeed` for anything timed in JS.
+
+**Hatching.** `HatchReadyModal` gains a nest stage (halo, sparks behind
+the egg, the waiting egg wobbling). `HatchRevealModal` plays drop, shake,
+crack and burst. Shake length grows with rarity
+(`1300 + max(0, rarityIndex - 1) * 250` ms, exposed as `--hfx-shake`),
+then shards, rays, flash and the `PetSprite` pop, with the title, rarity
+pill and name field following. Egg art: `tools/import_eggs.py` was
+rewritten to cut `public/pets/egg/<rarity>/icon.png` (column 2) and
+`open.png` (column 9) from `public/pets/Eggs/Eggs_48x48.png`, rows
+common 3 / uncommon 4 / rare 5 / epic 9 / legendary 6. `public/pets` is
+gitignored (licensed art), so the PNGs are not in this patch -- run the
+script to regenerate them. `EggIcon` still falls back to the emoji.
+
+**Tier Up.** `engine.lastTierUpStats` (`{ heroId, before }`) is set in
+`tierUpHero` so the card can grow STR/END/LCK/WIS bars from the old
+values. Max tier is `HeroManager.nextTierUpStep(hero) === null`.
+
+**Chain discovery.** `ChainDiscoveryModal` reads the rolled chain from
+`state.chainBoard` and shows its banner, icon, name and up to 5 stage
+nodes (stage 1 live, the rest "???", "+N more" past five). It falls back
+to generic copy if no chain resolves.
+
+**Infuse.** New `src/ui/infuseFx.tsx` (`ELEMENT_FX_COLOR`,
+`useInfuseBeat`, `InfuseFx`), drawn in the infuse scene's % space over
+the item and gem slots. Mote and flare counts scale with gem tier.
+`engine.infuseItem` now returns a boolean so the stations only play on
+success. Skipped entirely with motion off.
+
+**Mailbox.** Claims run in the engine first; only the ids that actually
+left animate (`ghostOut` clones the card into the fx layer, stamps its
+seal and slides it out), with `flyTokens` coins/shards and `flyIcon` to
+inventory.
+
+**Achievements.** `engine.visibleAchievements` (first 3 of the queue)
+and `dismissAchievementId(id)`. `AchievementPopup` renders a stack; each
+toast holds 4.5s real time, then leaves over `fxMs(380)`.
+
+**Purchase rows.** `purchaseFx` gains `FlyKind` (`coin | shard | gem |
+spark`), `flyTokens(from, to, kind, count, delay)` (which `flyParticles`
+now wraps), renown handling in `buyWithFx`, `ghostOut`, `rowBeatClass`
+and `STAY_BEATS`. Harvest tool and Overseer rows use the 0420
+`usePurchaseBeats`/`LevelRoll`/`SealStamp` beats ("Mastered", "Fully
+staffed") instead of `maxFlash`. The Warehouse gets a crate row and a
+cap bump. Renown/Hero perks, Training (train, tier up, grounds, plus a
+`rfx-trained` reveal on newly trained roles) and the Guild exchange go
+through `buyWithFx`. Fund the Guild flies gold into a coffer, then
+sparks to Guild Power, with a count-up ledger.
+
+**Intro sequencing.**
+- `GuildNamingModal`: after "Guide me" the charter stamps the name with
+  a seal, then the card leaves. The guided flag and name are committed
+  after `fxMs(3150)` (immediately with motion off). Backgrounds
+  crossfade between vibe steps.
+- `OnboardingTour`: steps can target any `[data-tour=...]` element and
+  pulse it. The spotlight glides between stops, with dots and a kicker.
+  The guided tour adds a 4th stop on the tutorial quest
+  (`data-tour="tutorial-quest"` in `QuestPanel`) when it's on a board.
+  Tab-unlock spotlights wait 1.5s for the new `unlockingTab` lock-break
+  reveal in `MenuWindow`.
+- Order after the first quest: result card, then level-up, then the
+  Quest Board explainer. `levelUpBlocked` no longer includes
+  `pendingQuestBoardIntro`, and the explainer waits for an empty
+  `levelUpQueue`. `QuestBoardIntroModal` is rebuilt (difficulty ladder,
+  speed vs reward sample card, Next steps).
+- Guidance: `first_level_up`'s first line goes to the archive only.
+  `first_consumable_obtained` and `first_quest_complete_vendor_nudge` are
+  archive-only while the explainer is pending, since it covers them.
+  `guild_hall_intro` and `second_hero_affordable` merge into one `say()`.
+- `NotificationBanner` is now a queue: every banner entry newer than
+  `lastBannerShownId`, oldest first, one at a time with a 900 ms gap.
+  It's held while a level-up or the explainer is up. Entries older than
+  5 minutes are skipped. `Toast` drops banner-length toasts in menu mode
+  (`skipBanners`), so tips no longer double up at the bottom.
+
+**Tested:** `npx tsc --noEmit` and `npm run build` pass. The full intro
+was played headless in the web build: naming, vibe, Guide me, charter,
+the tour ending on the tutorial quest, Send, Complete now, the result
+card with stacked achievements, level-up, the explainer, then the top
+banner tips showing one at a time with no bottom toasts. Hatch reveal
+(common and legendary, mid and end frames), Tier Up, the chain scroll
+and the achievement stack were rendered through a throwaway harness.
+Mailbox, infuse and the purchase rows were type-checked and built but
+not clicked through in-game here.
