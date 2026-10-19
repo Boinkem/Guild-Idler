@@ -2050,28 +2050,86 @@ function openIconPicker(folders, currentValue, onPick) {
   const panel = document.createElement('div');
   panel.className = 'editor icon-picker';
 
-  const sectionsHtml = folders.length === 0
-    ? '<p class="tiny muted">No icons found in public/item-icons/. Drop image files into its subfolders (weapons, armor, shields, potions, crafting, food, accessories, misc) and reopen this picker.</p>'
-    : folders.map((f) => `
-        <div class="icon-picker-section">
-          <div class="icon-picker-folder">${escapeHtml(f.name)} (${f.files.length})</div>
-          <div class="icon-picker-grid">
-            ${f.files.map((file) => {
-              const rel = `${f.name}/${file}`;
-              const selected = rel === currentValue;
-              return `<button type="button" class="icon-picker-item ${selected ? 'selected' : ''}" data-icon="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
-                <img src="/item-icons/${escapeHtml(rel)}" alt="" loading="lazy" />
-              </button>`;
-            }).join('')}
-          </div>
-        </div>`).join('');
+  // Patch 0416 -- category tabs. The picker used to render every folder's
+  // grid at once (~3,500 <img>s across armor/crafting/misc/...), which made
+  // opening it slow. Now only one folder's grid exists in the DOM at a time:
+  // the tab row picks the folder, a filter box narrows by filename, and the
+  // _hueN colour variants (5 per base icon -- most of the file count) stay
+  // hidden unless "Colour variants" is ticked. Opens on the folder of the
+  // currently-assigned icon, else whichever folder was used last this
+  // session, else the first folder.
+  const currentFolder = currentValue && currentValue.includes('/') ? currentValue.split('/')[0] : null;
+  const pickerState = {
+    folder: [currentFolder, state.lastIconFolder].find((n) => n && folders.some((f) => f.name === n)) || folders[0]?.name || null,
+    filter: '',
+    showHues: /_hue\d+\.[a-z]+$/i.test(currentValue || ''),
+  };
+  const isHue = (file) => /_hue\d+\.[a-z]+$/i.test(file);
+  const isPreviewSheet = (file) => /preview\.[a-z]+$/i.test(file);
+
+  function visibleFiles(folder) {
+    const q = pickerState.filter.trim().toLowerCase();
+    return folder.files.filter((file) =>
+      (pickerState.showHues || !isHue(file))
+      && !isPreviewSheet(file)
+      && (!q || file.toLowerCase().includes(q)))
+      // Natural order (Armor_2 before Armor_10) -- /api/icons sorts plain
+      // alphabetically, which scatters numbered packs across the grid.
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }
+
+  function renderPickerBody() {
+    const body = panel.querySelector('.icon-picker-body');
+    if (!body) return;
+    if (folders.length === 0) {
+      body.innerHTML = '<p class="tiny muted">No icons found in public/item-icons/. Drop image files into its subfolders (weapons, armor, shields, potions, crafting, food, accessories, misc) and reopen this picker.</p>';
+      return;
+    }
+    const folder = folders.find((f) => f.name === pickerState.folder) || folders[0];
+    const files = visibleFiles(folder);
+    panel.querySelectorAll('[data-icon-tab]').forEach((tab) => {
+      tab.classList.toggle('active', tab.dataset.iconTab === folder.name);
+    });
+    body.innerHTML = files.length === 0
+      ? '<p class="tiny muted">No icons in this category match.</p>'
+      : `<div class="icon-picker-grid">
+          ${files.map((file) => {
+            const rel = `${folder.name}/${file}`;
+            const selected = rel === currentValue;
+            return `<button type="button" class="icon-picker-item ${selected ? 'selected' : ''}" data-icon="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
+              <img src="/item-icons/${escapeHtml(rel)}" alt="" loading="lazy" />
+            </button>`;
+          }).join('')}
+        </div>`;
+    body.querySelectorAll('[data-icon]').forEach((btn) => {
+      btn.onclick = () => {
+        state.lastIconFolder = folder.name;
+        onPick(btn.dataset.icon);
+        overlay.remove();
+      };
+    });
+    const selectedBtn = body.querySelector('.icon-picker-item.selected');
+    if (selectedBtn) selectedBtn.scrollIntoView({ block: 'nearest' });
+  }
+
+  const tabsHtml = folders.length === 0 ? '' : `
+    <div class="icon-picker-tabs">
+      ${folders.map((f) => {
+        const baseCount = f.files.filter((file) => !isHue(file) && !isPreviewSheet(file)).length;
+        return `<button type="button" class="icon-picker-tab" data-icon-tab="${escapeHtml(f.name)}">${escapeHtml(f.name)} <span class="muted">${baseCount}</span></button>`;
+      }).join('')}
+    </div>
+    <div class="icon-picker-filter-row">
+      <input type="text" id="iconPickerFilter" placeholder="Filter by filename (e.g. Armor_5)" />
+      <label class="tiny"><input type="checkbox" id="iconPickerHues" ${pickerState.showHues ? 'checked' : ''} /> Colour variants</label>
+    </div>`;
 
   // Patch 0296 -- upload target folder: a free-text field (with existing
   // folder names offered via datalist, so "Heroes" etc is one click, not
   // retyped) rather than a rigid <select>, since a brand-new class of icon
   // (this patch's own Centaur emblem) needs a folder that may not exist as
   // a section yet -- uploadImageFile on the server creates it on demand.
-  const defaultUploadFolder = folders.some((f) => f.name === 'Heroes') ? 'Heroes' : (folders[0]?.name || '');
+  const defaultUploadFolder = pickerState.folder || (folders.some((f) => f.name === 'Heroes') ? 'Heroes' : (folders[0]?.name || ''));
   const uploadRowHtml = `
     <div class="icon-picker-upload-row">
       <input type="text" id="iconPickerUploadFolder" list="iconPickerFolderList" placeholder="Folder (e.g. Heroes)" value="${escapeHtml(defaultUploadFolder)}" />
@@ -2083,7 +2141,8 @@ function openIconPicker(folders, currentValue, onPick) {
   panel.innerHTML = `
     <h2>Choose an icon</h2>
     ${uploadRowHtml}
-    <div class="icon-picker-body">${sectionsHtml}</div>
+    ${tabsHtml}
+    <div class="icon-picker-body"></div>
     <div class="editor-actions">
       <button id="iconPickerCancel">Cancel</button>
     </div>`;
@@ -2091,12 +2150,22 @@ function openIconPicker(folders, currentValue, onPick) {
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
-  panel.querySelectorAll('[data-icon]').forEach((btn) => {
-    btn.onclick = () => {
-      onPick(btn.dataset.icon);
-      overlay.remove();
+  panel.querySelectorAll('[data-icon-tab]').forEach((tab) => {
+    tab.onclick = () => {
+      pickerState.folder = tab.dataset.iconTab;
+      panel.scrollTop = 0;
+      // Upload target follows the open category -- dropping a new icon in
+      // while looking at Shields almost always means it's a shield.
+      const uploadFolder = panel.querySelector('#iconPickerUploadFolder');
+      if (uploadFolder) uploadFolder.value = pickerState.folder;
+      renderPickerBody();
     };
   });
+  const filterInput = panel.querySelector('#iconPickerFilter');
+  if (filterInput) filterInput.oninput = () => { pickerState.filter = filterInput.value; renderPickerBody(); };
+  const huesBox = panel.querySelector('#iconPickerHues');
+  if (huesBox) huesBox.onchange = () => { pickerState.showHues = huesBox.checked; renderPickerBody(); };
+  renderPickerBody();
   const uploadInput = panel.querySelector('#iconPickerUploadInput');
   const uploadFolderField = panel.querySelector('#iconPickerUploadFolder');
   uploadInput.onchange = async () => {
@@ -2443,6 +2512,11 @@ const ahState = {
   saving: false,
   authTest: null, // { target, reachable, status, body, checkedAt } | null
   testingAuth: false,
+  // Patch 0416 -- the AH server process this DevTool launched (if any).
+  proc: null, // { owned, pid, startedAt, exitCode, exitedAt, logTail } | null
+  launching: false,
+  stopping: false,
+  launchMessage: null, // { text, cls } | null
 };
 
 
@@ -4098,6 +4172,7 @@ async function selectAuctionHouseTab() {
   try {
     const cfg = await api('/api/auction-house/config');
     ahState.url = cfg.url;
+    ahState.proc = await api('/api/auction-house/server').catch(() => null);
     setStatus('');
     renderAuctionHouse();
     await checkAhNow();
@@ -4121,6 +4196,65 @@ async function checkAhNow() {
   }
   ahState.checking = false;
   renderAuctionHouse();
+}
+
+/** Patch 0416 -- launches server/'s `npm run dev` via the DevTool, then
+ *  re-checks /health every 1.5s (up to ~30s) until the local backend answers
+ *  or the launched process dies -- tsx takes a few seconds to boot, so a
+ *  single immediate check would always report "unreachable". */
+async function startAhServerNow() {
+  ahState.launching = true;
+  ahState.launchMessage = null;
+  renderAuctionHouse();
+  try {
+    const result = await api('/api/auction-house/server/start', { method: 'POST' });
+    ahState.proc = result.process;
+    if (result.alreadyRunning) {
+      ahState.launchMessage = { text: escapeHtml(result.error), cls: 'good' };
+    } else if (!result.ok) {
+      ahState.launchMessage = { text: escapeHtml(result.error || 'Could not start the server.'), cls: 'bad' };
+    } else {
+      ahState.launchMessage = { text: `Started (PID ${result.pid}) -- waiting for /health…`, cls: '' };
+      renderAuctionHouse();
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        ahState.proc = await api('/api/auction-house/server').catch(() => ahState.proc);
+        await checkAhNow();
+        if (ahState.status?.local?.reachable) {
+          ahState.launchMessage = { text: `Running (PID ${result.pid}) -- /health is answering.`, cls: 'good' };
+          break;
+        }
+        if (ahState.proc && !ahState.proc.owned && ahState.proc.exitCode !== null) {
+          ahState.launchMessage = { text: `Server process exited (code ${ahState.proc.exitCode}) -- see the log below.`, cls: 'bad' };
+          break;
+        }
+      }
+      if (!ahState.status?.local?.reachable && ahState.proc?.owned) {
+        ahState.launchMessage = { text: 'Process is running but /health still isn\'t answering -- check the log below and the Local backend URL.', cls: 'bad' };
+      }
+    }
+  } catch (err) {
+    ahState.launchMessage = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
+  }
+  ahState.launching = false;
+  renderAuctionHouse();
+}
+
+async function stopAhServerNow() {
+  ahState.stopping = true;
+  renderAuctionHouse();
+  try {
+    const result = await api('/api/auction-house/server/stop', { method: 'POST' });
+    ahState.proc = result.process;
+    ahState.launchMessage = result.ok
+      ? { text: 'Stopped.', cls: '' }
+      : { text: escapeHtml(result.error || 'Could not stop the server.'), cls: 'bad' };
+  } catch (err) {
+    ahState.launchMessage = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
+  }
+  ahState.stopping = false;
+  renderAuctionHouse();
+  await checkAhNow();
 }
 
 async function testAhAuthNow() {
@@ -4175,11 +4309,12 @@ function renderAuctionHouse() {
   const publicLine = ahStatusLine(ahState.status?.public);
   const authLine = ahAuthTestLine();
   const checkedAt = ahState.status?.checkedAt ? new Date(ahState.status.checkedAt).toLocaleTimeString() : null;
+  const localRunning = !ahState.checking && !!ahState.status?.local?.reachable;
 
   appEl.innerHTML = `
     <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Auction House</h2>
     <p class="tiny muted" style="margin: 0 0 12px;">
-      Connection/health monitor for the AH backend (server/). Build-order item 3 from
+      Connection/health monitor (and, since patch 0416, launcher) for the AH backend (server/). Build-order item 3 from
       guild-idler-status.md's Auction House entry -- nothing else here yet on purpose:
       force-rotation, transaction search, trade reversal, and suspension all need real
       <code>/admin/*</code> routes the backend doesn't have yet.
@@ -4197,6 +4332,21 @@ function renderAuctionHouse() {
       <button id="ahSaveBtn" ${ahState.saving ? 'disabled' : ''}>${ahState.saving ? 'Saving…' : 'Save URL'}</button>
       <button id="ahCheckBtn" ${ahState.checking ? 'disabled' : ''}>${ahState.checking ? 'Checking…' : 'Check now'}</button>
     </div>
+
+    <div class="section-heading">AH server process</div>
+    <p class="tiny muted" style="margin: 0 0 6px;">
+      Runs <code>npm run dev</code> inside <code>server/</code> in the background (no extra window),
+      logging to <code>server/ah-devtool.log</code>. Won't start a second copy if the local URL above
+      already answers -- including one started by hand or as the GuildboundAH Windows Service.
+      Closing the DevTool leaves it running; use Stop first if you want it gone.
+    </p>
+    <div class="row" style="gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+      <button id="ahStartBtn" ${ahState.launching || localRunning ? 'disabled' : ''}>${ahState.launching ? 'Starting…' : (localRunning ? 'AH server running' : 'Start AH server')}</button>
+      ${ahState.proc?.owned ? `<button id="ahStopBtn" class="remove" ${ahState.stopping ? 'disabled' : ''}>${ahState.stopping ? 'Stopping…' : 'Stop AH server'}</button>` : ''}
+      ${ahState.proc?.owned ? `<span class="tiny muted" style="align-self: center;">Started by DevTool, PID ${ahState.proc.pid}</span>` : ''}
+    </div>
+    ${ahState.launchMessage ? `<div class="patch-result ${ahState.launchMessage.cls}"><div class="patch-result-label">${ahState.launchMessage.text}</div></div>` : ''}
+    ${ahState.proc?.logTail ? `<details style="margin-bottom: 10px;" ${ahState.launchMessage?.cls === 'bad' ? 'open' : ''}><summary class="tiny muted">server/ah-devtool.log (last lines)</summary><pre class="tiny" style="white-space: pre-wrap; max-height: 220px; overflow-y: auto; background: var(--panel2); padding: 8px; margin: 6px 0 0;">${escapeHtml(ahState.proc.logTail)}</pre></details>` : ''}
 
     <div class="section-heading">Status -- local (is the process up?)</div>
     <div class="patch-result ${localLine.cls}">
@@ -4251,4 +4401,9 @@ function renderAuctionHouse() {
 
   const ahAuthTestBtn = document.getElementById('ahAuthTestBtn');
   if (ahAuthTestBtn) ahAuthTestBtn.onclick = () => testAhAuthNow();
+
+  const ahStartBtn = document.getElementById('ahStartBtn');
+  if (ahStartBtn) ahStartBtn.onclick = () => startAhServerNow();
+  const ahStopBtn = document.getElementById('ahStopBtn');
+  if (ahStopBtn) ahStopBtn.onclick = () => stopAhServerNow();
 }

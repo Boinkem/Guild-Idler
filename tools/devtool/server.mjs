@@ -19,6 +19,7 @@
  */
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import { openSync, closeSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile, spawn } from 'node:child_process';
@@ -2766,6 +2767,97 @@ async function testAhAuth(url) {
   }
 }
 
+/* ------------------------------------------- auction house: launch --- */
+// Patch 0416 -- a "Start AH server" button for the Auction House tab, so the
+// backend doesn't need its own PowerShell window opened by hand
+// (`cd server; npm run dev`) before the monitor above has anything to check.
+// Same detached/unref'd/PID-tracked shape as startDevServer, with two
+// differences: stdout/stderr go to server/ah-devtool.log (gitignored via
+// server/.gitignore's *.log) so a crash on boot is visible from the DevTool
+// instead of vanishing with a hidden console, and it refuses to launch a
+// second copy if the configured URL's /health already answers -- whether
+// that's a copy this DevTool started, one started by hand, or the
+// GuildboundAH Windows Service.
+
+const AH_SERVER_DIR = path.join(ROOT, 'server');
+const AH_SERVER_LOG = path.join(AH_SERVER_DIR, 'ah-devtool.log');
+const AH_LOG_TAIL_LINES = 40;
+
+let ahProcess = null; // { pid, startedAt, exitCode, exitedAt }
+
+async function ahLogTail() {
+  try {
+    const raw = await fs.readFile(AH_SERVER_LOG, 'utf8');
+    return raw.split(/\r?\n/).slice(-AH_LOG_TAIL_LINES).join('\n').trimEnd();
+  } catch {
+    return '';
+  }
+}
+
+async function ahServerProcessInfo() {
+  const running = !!(ahProcess && ahProcess.exitCode === undefined && isPidAlive(ahProcess.pid));
+  return {
+    owned: running,
+    pid: running ? ahProcess.pid : null,
+    startedAt: ahProcess?.startedAt ?? null,
+    exitCode: ahProcess && ahProcess.exitCode !== undefined ? ahProcess.exitCode : null,
+    exitedAt: ahProcess?.exitedAt ?? null,
+    logTail: await ahLogTail(),
+  };
+}
+
+async function startAhServer() {
+  const cfg = await readAhConfig();
+  const health = await checkAhBackend(cfg.url);
+  if (health.reachable) {
+    return { ok: false, alreadyRunning: true, error: `Already running -- ${cfg.url}/health answered.` };
+  }
+  if (ahProcess && ahProcess.exitCode === undefined && isPidAlive(ahProcess.pid)) {
+    return { ok: false, error: `Already started by the DevTool (PID ${ahProcess.pid}) -- still booting? Check again in a few seconds.` };
+  }
+  try {
+    await fs.access(path.join(AH_SERVER_DIR, 'node_modules'));
+  } catch {
+    return { ok: false, error: 'server/node_modules is missing -- run `cd server; npm install` once first.' };
+  }
+  let logFd;
+  try {
+    logFd = openSync(AH_SERVER_LOG, 'w');
+  } catch (err) {
+    return { ok: false, error: `Could not open ${AH_SERVER_LOG}: ${err.message}` };
+  }
+  let child;
+  try {
+    child = spawn(NPM_BIN, ['run', 'dev'], {
+      cwd: AH_SERVER_DIR,
+      detached: true,
+      windowsHide: true,
+      stdio: ['ignore', logFd, logFd],
+      shell: process.platform === 'win32',
+    });
+  } catch (err) {
+    closeSync(logFd);
+    return { ok: false, error: `Could not start npm: ${err.message}` };
+  }
+  closeSync(logFd); // the child holds its own copy of the handle
+  const entry = { pid: child.pid, startedAt: Date.now(), exitCode: undefined, exitedAt: null };
+  ahProcess = entry;
+  child.on('exit', (code) => { entry.exitCode = code ?? -1; entry.exitedAt = Date.now(); });
+  child.on('error', () => { entry.exitCode = -1; entry.exitedAt = Date.now(); });
+  child.unref();
+  return { ok: true, pid: child.pid };
+}
+
+async function stopAhServer() {
+  if (!ahProcess || ahProcess.exitCode !== undefined || !isPidAlive(ahProcess.pid)) {
+    return { ok: false, error: 'No AH server started by this DevTool is running (one started by hand or as a Windows Service has to be stopped there).' };
+  }
+  await killProcessTree(ahProcess.pid);
+  ahProcess.exitCode = 0;
+  ahProcess.exitedAt = Date.now();
+  return { ok: true };
+}
+
 /**
  * Locates electron-builder's unpacked Windows build -- the actual runnable
  * game (exe + resources), as opposed to the NSIS installer wrapped around
@@ -3152,6 +3244,20 @@ const server = http.createServer(async (req, res) => {
       local: { url: cfg.url, ...local },
       public: { url: AH_PUBLIC_URL, ...publicResult },
     });
+  }
+
+  if (url.pathname === '/api/auction-house/server' && req.method === 'GET') {
+    return json(res, 200, await ahServerProcessInfo());
+  }
+
+  if (url.pathname === '/api/auction-house/server/start' && req.method === 'POST') {
+    const result = await startAhServer();
+    return json(res, 200, { ...result, process: await ahServerProcessInfo() });
+  }
+
+  if (url.pathname === '/api/auction-house/server/stop' && req.method === 'POST') {
+    const result = await stopAhServer();
+    return json(res, 200, { ...result, process: await ahServerProcessInfo() });
   }
 
   if (url.pathname === '/api/auction-house/test-auth' && req.method === 'POST') {

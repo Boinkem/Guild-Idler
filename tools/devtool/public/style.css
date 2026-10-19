@@ -436,6 +436,20 @@ td.actions button.danger:hover { background: var(--bad-wash); border-color: var(
 .icon-picker-item.selected { border-color: var(--brass); background: #2b2741; }
 .icon-picker-item img { width: 32px; height: 32px; image-rendering: pixelated; }
 
+/* Patch 0416 -- category tabs + filter row for openIconPicker. Only the
+   active category's grid is rendered; see openIconPicker's own comment. */
+.icon-picker-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.icon-picker-tab {
+  padding: 4px 9px; font-size: 11px; border-radius: var(--radius); text-transform: capitalize;
+  background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); cursor: pointer;
+}
+.icon-picker-tab:hover { border-color: var(--muted); }
+.icon-picker-tab.active { border-color: var(--brass); background: #2b2741; }
+.icon-picker-tab .muted { font-size: 10px; margin-left: 2px; }
+.icon-picker-filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.icon-picker-filter-row input[type="text"] { flex: 1; min-width: 0; }
+.icon-picker-filter-row label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+
 /* Patch 0296 -- "Upload new image…" row shared by openIconPicker and
    openBannerPicker. A label styled as a button (rather than a real
    <button>) so clicking it can trigger the paired hidden file input via

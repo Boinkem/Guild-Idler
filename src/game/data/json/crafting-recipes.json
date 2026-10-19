@@ -1546,6 +1546,7 @@
     "name": "Heirloom Sigil of Vitality III",
     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_26.png",
     "materialCost": {
       "ore": 45,
       "timber": 20,
@@ -1565,6 +1566,7 @@
     "name": "Heirloom Sigil of Vitality IV",
     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_24_hue5.png",
     "materialCost": {
       "ore": 65,
       "timber": 25,
@@ -1585,6 +1587,7 @@
     "name": "Heirloom Sigil of Vitality V",
     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_46.png",
     "materialCost": {
       "ore": 80,
       "timber": 30,
@@ -1605,6 +1608,7 @@
     "name": "Heirloom Sigil of Vitality VI",
     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_45_hue2.png",
     "materialCost": {
       "ore": 100,
       "timber": 35,
@@ -1625,6 +1629,7 @@
     "name": "Heirloom Sigil of Fortune I",
     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_33_hue2.png",
     "materialCost": {
       "ore": 10,
       "timber": 5
@@ -1643,6 +1648,7 @@
     "name": "Heirloom Sigil of Fortune II",
     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_40_hue2.png",
     "materialCost": {
       "ore": 25,
       "timber": 12,
@@ -1662,6 +1668,7 @@
     "name": "Heirloom Sigil of Fortune III",
     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_24.png",
     "materialCost": {
       "ore": 45,
       "timber": 20,
@@ -1681,6 +1688,7 @@
     "name": "Heirloom Sigil of Fortune IV",
     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_25.png",
     "materialCost": {
       "ore": 65,
       "timber": 25,
@@ -1701,6 +1709,7 @@
     "name": "Heirloom Sigil of Fortune V",
     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_48_hue3.png",
     "materialCost": {
       "ore": 80,
       "timber": 30,
@@ -1721,6 +1730,7 @@
     "name": "Heirloom Sigil of Fortune VI",
     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_47_hue4.png",
     "materialCost": {
       "ore": 100,
       "timber": 35,
@@ -1741,6 +1751,7 @@
     "name": "Heirloom Sigil of Wisdom I",
     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_33.png",
     "materialCost": {
       "ore": 10,
       "timber": 5
@@ -1759,6 +1770,7 @@
     "name": "Heirloom Sigil of Wisdom II",
     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_40_hue4.png",
     "materialCost": {
       "ore": 25,
       "timber": 12,
@@ -1778,6 +1790,7 @@
     "name": "Heirloom Sigil of Wisdom III",
     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_24_hue3.png",
     "materialCost": {
       "ore": 45,
       "timber": 20,
@@ -1797,6 +1810,7 @@
     "name": "Heirloom Sigil of Wisdom IV",
     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_25_hue2.png",
     "materialCost": {
       "ore": 65,
       "timber": 25,
@@ -1817,6 +1831,7 @@
     "name": "Heirloom Sigil of Wisdom V",
     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_48.png",
     "materialCost": {
       "ore": 80,
       "timber": 30,
@@ -1837,6 +1852,7 @@
     "name": "Heirloom Sigil of Wisdom VI",
     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_45_hue5.png",
     "materialCost": {
       "ore": 100,
       "timber": 35,
@@ -1857,6 +1873,7 @@
     "name": "Heirloom Sigil of Haste I",
     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_33_hue3.png",
     "materialCost": {
       "ore": 10,
       "timber": 5
@@ -1875,6 +1892,7 @@
     "name": "Heirloom Sigil of Haste II",
     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_40_hue3.png",
     "materialCost": {
       "ore": 25,
       "timber": 12,
@@ -1894,6 +1912,7 @@
     "name": "Heirloom Sigil of Haste III",
     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_24_hue2.png",
     "materialCost": {
       "ore": 45,
       "timber": 20,
@@ -1913,6 +1932,7 @@
     "name": "Heirloom Sigil of Haste IV",
     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_25_hue1.png",
     "materialCost": {
       "ore": 65,
       "timber": 25,
@@ -1933,6 +1953,7 @@
     "name": "Heirloom Sigil of Haste V",
     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_47.png",
     "materialCost": {
       "ore": 80,
       "timber": 30,
@@ -1953,6 +1974,7 @@
     "name": "Heirloom Sigil of Haste VI",
     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_45_hue4.png",
     "materialCost": {
       "ore": 100,
       "timber": 35,
@@ -1973,6 +1995,7 @@
     "name": "Heirloom Sigil of the Unbreakable I",
     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_29.png",
     "materialCost": {
       "ore": 10,
       "timber": 5
@@ -1991,6 +2014,7 @@
     "name": "Heirloom Sigil of the Unbreakable II",
     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_29_hue2.png",
     "materialCost": {
       "ore": 25,
       "timber": 12,
@@ -2010,6 +2034,7 @@
     "name": "Heirloom Sigil of the Unbreakable III",
     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_25_hue3.png",
     "materialCost": {
       "ore": 45,
       "timber": 20,
@@ -2029,6 +2054,7 @@
     "name": "Heirloom Sigil of the Unbreakable IV",
     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_47_hue2.png",
     "materialCost": {
       "ore": 65,
       "timber": 25,
@@ -2049,6 +2075,7 @@
     "name": "Heirloom Sigil of the Unbreakable V",
     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_48_hue1.png",
     "materialCost": {
       "ore": 80,
       "timber": 30,
@@ -2069,6 +2096,7 @@
     "name": "Heirloom Sigil of the Unbreakable VI",
     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
     "category": "gear",
+    "icon": "misc/Misc_45_hue1.png",
     "materialCost": {
       "ore": 100,
       "timber": 35,
@@ -2236,6 +2264,7 @@
     "name": "Guildmade Blade I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "weapons/Weapon_02.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -2258,6 +2287,7 @@
     "name": "Guildmade Blade III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "weapons/Weapon_05.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -2281,6 +2311,7 @@
     "name": "Guildmade Blade IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "weapons/Weapon_07.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -2306,6 +2337,7 @@
     "name": "Guildmade Blade V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "weapons/Weapon_09.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -2331,6 +2363,7 @@
     "name": "Guildmade Band I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "accessories/Accessory_01.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -2353,6 +2386,7 @@
     "name": "Guildmade Band III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "accessories/Accessory_09.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -2376,6 +2410,7 @@
     "name": "Guildmade Band IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "accessories/Accessory_08.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -2401,6 +2436,7 @@
     "name": "Guildmade Band V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "accessories/Accessory_10.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -2426,6 +2462,7 @@
     "name": "Guildmade Helm I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "armor/Armor_24.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -2448,6 +2485,7 @@
     "name": "Guildmade Helm III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "armor/Armor_31.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -2471,6 +2509,7 @@
     "name": "Guildmade Helm IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "armor/Armor_38.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -2496,6 +2535,7 @@
     "name": "Guildmade Helm V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "armor/Armor_37.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -2521,6 +2561,7 @@
     "name": "Guildmade Plate I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "armor/Armor_03.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -2543,6 +2584,7 @@
     "name": "Guildmade Plate III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "armor/Armor_17.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -2566,6 +2608,7 @@
     "name": "Guildmade Plate IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "armor/Armor_18.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -2591,6 +2634,7 @@
     "name": "Guildmade Plate V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "armor/Armor_16.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -2616,6 +2660,7 @@
     "name": "Guildmade Boots I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "armor/Armor_54.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -2638,6 +2683,7 @@
     "name": "Guildmade Boots III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "armor/Armor_53.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -2661,6 +2707,7 @@
     "name": "Guildmade Boots IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "armor/Armor_55.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -2686,6 +2733,7 @@
     "name": "Guildmade Boots V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "armor/Armor_51.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -2711,6 +2759,7 @@
     "name": "Guildmade Cloak I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "armor/Armor_134.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -2733,6 +2782,7 @@
     "name": "Guildmade Cloak III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "armor/Armor_144.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -2756,6 +2806,7 @@
     "name": "Guildmade Cloak IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "armor/Armor_135.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -2781,6 +2832,7 @@
     "name": "Guildmade Cloak V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "armor/Armor_128.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -2806,6 +2858,7 @@
     "name": "Guildmade Gauntlets I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "armor/Armor_74.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -2828,6 +2881,7 @@
     "name": "Guildmade Gauntlets III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "armor/Armor_80.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -2851,6 +2905,7 @@
     "name": "Guildmade Gauntlets IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "armor/Armor_87.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -2876,6 +2931,7 @@
     "name": "Guildmade Gauntlets V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "armor/Armor_72.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -2901,6 +2957,7 @@
     "name": "Guildmade Buckler I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "shields/Shield_25.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -2923,6 +2980,7 @@
     "name": "Guildmade Buckler III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "shields/Shield_27.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -2946,6 +3004,7 @@
     "name": "Guildmade Buckler IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "shields/Shield_12.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -2971,6 +3030,7 @@
     "name": "Guildmade Buckler V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "shields/Shield_11.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,
@@ -2996,6 +3056,7 @@
     "name": "Guildmade Talisman I",
     "description": "Guild-forged, fresh off the guild's own bench.",
     "category": "gear",
+    "icon": "accessories/Accessory_14.png",
     "materialCost": {
       "ore": 8,
       "timber": 4
@@ -3018,6 +3079,7 @@
     "name": "Guildmade Talisman III",
     "description": "Guild-forged, proven, a season further along.",
     "category": "gear",
+    "icon": "accessories/Accessory_17.png",
     "materialCost": {
       "ore": 35,
       "timber": 15,
@@ -3041,6 +3103,7 @@
     "name": "Guildmade Talisman IV",
     "description": "Guild-forged, trusted, further along still.",
     "category": "gear",
+    "icon": "accessories/Accessory_19.png",
     "materialCost": {
       "ore": 55,
       "timber": 20,
@@ -3066,6 +3129,7 @@
     "name": "Guildmade Talisman V",
     "description": "Guild-forged, veteran-grade, nearly the finished article.",
     "category": "gear",
+    "icon": "accessories/Accessory_15.png",
     "materialCost": {
       "ore": 70,
       "timber": 25,

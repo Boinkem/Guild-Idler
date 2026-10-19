@@ -1,0 +1,1742 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 6196cf0..6432ab1 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -33815,3 +33815,87 @@ Normal one.
+ **Not done / worth knowing:** no Steam achievement (by choice). A future
+ second perClass skin just needs a skins.json entry + art -- the section,
+ unlock hook and backfill are all data-driven off those three fields.
++
++### DevTool icon picker categories, AH server launcher, gear icon fill, Curios batch 2 (patch 0416)
++```discord-update
++Dev Update | Patch 0416
++
++- Added icons to every Guildmade item tier (Blade, Band, Talisman, Helm, Plate, Boots, Gauntlets, Cloak, Buckler) plus the Masterwork Band, Bulwark and Mantle
++- Added icons to all 30 Heirloom Sigils: each sigil has its own colour, and its icon grows from a charm to a medallion to a sigil scroll as the tier climbs
++- Added 14 new Curios to find on quests, including Grimsby's IOU, a Polite Skull, Half a Treasure Map and a Shed Dragon Scale
++- Changed crafting recipes for those items to show the same icon as the item they make
++```
++
++Four direct requests in one pass.
++
++**1. DevTool icon picker -- category tabs** (`tools/devtool/public/app.js`
++`openIconPicker`, `style.css`). The picker used to render every
++`public/item-icons/` folder's full grid at once (~3,500 `<img>`s, most
++of them `_hueN` colour variants), which made opening it slow. Now a tab
++row (one per folder, showing its base-icon count) picks the category and
++only that folder's grid is in the DOM. Also added: a filename filter box,
++a "Colour variants" checkbox (hue variants hidden by default -- that
++alone cuts armor from 883 to 147 tiles), the pack's `*_preview.png`
++contact sheets hidden from the grid, natural sort (Armor_2 before
++Armor_10 -- `/api/icons` sorts plain-alphabetically), and the upload
++folder now follows the open tab. Opens on the folder of the
++currently-assigned icon, else the last folder picked from this session
++(`state.lastIconFolder`), else the first. Verified in headless Chromium
++against the real devtool server: 147 tiles on open for an armor item
++(selected one highlighted), accessories filtered by "1" = 12, with hues
++= 85, picking sets the value and remembers the folder, no page errors.
++Other pickers (banners, guild-hall art, decor) untouched -- smaller sets.
++
++**2. Auction House tab -- Start/Stop AH server** (`server.mjs`
++`startAhServer`/`stopAhServer`/`ahServerProcessInfo`, routes
++`GET /api/auction-house/server`, `POST .../server/start`,
++`POST .../server/stop`; new "AH server process" section in
++`renderAuctionHouse`). Start runs `npm run dev` in `server/` detached
++and hidden (`windowsHide`), stdout/stderr to `server/ah-devtool.log`
++(already gitignored via `server/.gitignore`'s `*.log`), then the UI
++re-checks `/health` every 1.5s for up to ~30s until it answers or the
++process exits, and shows the log tail (auto-expanded on failure).
++Refuses to start if the configured local URL's `/health` already
++answers (covers a hand-started copy and the GuildboundAH Windows
++Service), and gives a clear message if `server/node_modules` is missing.
++Stop only kills a process this DevTool started (same `killProcessTree`
++as the game dev server); a hand-started or service copy has to be
++stopped where it was started. Closing the DevTool leaves the server
++running. Verified end-to-end on Linux: missing node_modules -> clear
++error; after `npm install`, start -> `/health` answered within ~1s of
++tsx booting, second start -> "already running", stop -> `/health`
++down. Not run on the real Windows host yet (npm.cmd + `shell: true` is
++the same combo `startDevServer` already uses there).
++
++**3. Icons for every equipment entry that had none** (72 in
++`equipment.json`, plus the 64 matching recipes in
++`crafting-recipes.json` -- a recipe with no icon now carries its result
++item's icon; the two heirloom Vitality recipes that already had their
++own art were left alone). Equipment now has zero icon-less entries.
++Choices, all picked against rendered contact sheets of the pack:
++- Guildmade tiers progress plain/leather -> steel -> gold, built around
++  each line's existing tier II icon. Bands use only ring icons
++  (Accessory_01-10/25); Talismans use only pendants/necklaces
++  (Accessory_11-24). Helm/Plate/Boots/Gauntlets/Cloak from `armor/`
++  matching the right piece type; Bucklers use the small round shields
++  (bronze Shield_25-27 for I-III, steel rounds Shield_12/11 for IV-V).
++  The base `guildmade_gauntlets`/`_buckler`/`_talisman` (tier II) entries
++  were also missing icons and got Armor_73 / Shield_26 / Accessory_11.
++- Masterwork: Band Accessory_25, Bulwark Shield_23, Mantle Armor_141.
++- Heirloom Sigils (from `misc/`): one colour per stat (Vitality red,
++  Fortune gold, Wisdom blue, Haste green, Unbreakable purple/stone);
++  I-II crystal charms (Misc_33/40 hues, matching the existing Vitality I
++  recipe art), III-IV medallions (Misc_24/25 hues), V-VI sigil scrolls
++  (Misc_45-48 hues).
++Pure data change; any of these can be swapped in the DevTool picker.
++
++**4. Curios batch 2** -- 14 new entries in `curios.json` (10 -> 24):
++mismatched_boots (3g), suspicious_fish (1g), petrified_loaf (4g),
++empty_coin_purse (2g), grimsby_iou (5g), dented_tankard (10g),
++mummified_bat (9g), mystery_key (12g), glass_eye (16g), polite_skull
++(20g), bards_quill (24g), half_a_treasure_map (40g), soup_grimoire
++(55g), shed_dragon_scale (90g). All have icons from the existing pack
++(food/misc/crafting/armor). Quest curio drops pick uniformly from the
++whole list (`QuestManager`), so the existing 10 now drop proportionally
++less often -- no tuning change; sell values stay in the same 1-150 band.
++No save migration needed (`GameState.curios` is a free-form id->count map).
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+index a7f89c9..5c53128 100644
+--- a/src/game/data/json/crafting-recipes.json
++++ b/src/game/data/json/crafting-recipes.json
+@@ -1546,6 +1546,7 @@
+     "name": "Heirloom Sigil of Vitality III",
+     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_26.png",
+     "materialCost": {
+       "ore": 45,
+       "timber": 20,
+@@ -1565,6 +1566,7 @@
+     "name": "Heirloom Sigil of Vitality IV",
+     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_24_hue5.png",
+     "materialCost": {
+       "ore": 65,
+       "timber": 25,
+@@ -1585,6 +1587,7 @@
+     "name": "Heirloom Sigil of Vitality V",
+     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_46.png",
+     "materialCost": {
+       "ore": 80,
+       "timber": 30,
+@@ -1605,6 +1608,7 @@
+     "name": "Heirloom Sigil of Vitality VI",
+     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_45_hue2.png",
+     "materialCost": {
+       "ore": 100,
+       "timber": 35,
+@@ -1625,6 +1629,7 @@
+     "name": "Heirloom Sigil of Fortune I",
+     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_33_hue2.png",
+     "materialCost": {
+       "ore": 10,
+       "timber": 5
+@@ -1643,6 +1648,7 @@
+     "name": "Heirloom Sigil of Fortune II",
+     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_40_hue2.png",
+     "materialCost": {
+       "ore": 25,
+       "timber": 12,
+@@ -1662,6 +1668,7 @@
+     "name": "Heirloom Sigil of Fortune III",
+     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_24.png",
+     "materialCost": {
+       "ore": 45,
+       "timber": 20,
+@@ -1681,6 +1688,7 @@
+     "name": "Heirloom Sigil of Fortune IV",
+     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_25.png",
+     "materialCost": {
+       "ore": 65,
+       "timber": 25,
+@@ -1701,6 +1709,7 @@
+     "name": "Heirloom Sigil of Fortune V",
+     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_48_hue3.png",
+     "materialCost": {
+       "ore": 80,
+       "timber": 30,
+@@ -1721,6 +1730,7 @@
+     "name": "Heirloom Sigil of Fortune VI",
+     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_47_hue4.png",
+     "materialCost": {
+       "ore": 100,
+       "timber": 35,
+@@ -1741,6 +1751,7 @@
+     "name": "Heirloom Sigil of Wisdom I",
+     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_33.png",
+     "materialCost": {
+       "ore": 10,
+       "timber": 5
+@@ -1759,6 +1770,7 @@
+     "name": "Heirloom Sigil of Wisdom II",
+     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_40_hue4.png",
+     "materialCost": {
+       "ore": 25,
+       "timber": 12,
+@@ -1778,6 +1790,7 @@
+     "name": "Heirloom Sigil of Wisdom III",
+     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_24_hue3.png",
+     "materialCost": {
+       "ore": 45,
+       "timber": 20,
+@@ -1797,6 +1810,7 @@
+     "name": "Heirloom Sigil of Wisdom IV",
+     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_25_hue2.png",
+     "materialCost": {
+       "ore": 65,
+       "timber": 25,
+@@ -1817,6 +1831,7 @@
+     "name": "Heirloom Sigil of Wisdom V",
+     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_48.png",
+     "materialCost": {
+       "ore": 80,
+       "timber": 30,
+@@ -1837,6 +1852,7 @@
+     "name": "Heirloom Sigil of Wisdom VI",
+     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_45_hue5.png",
+     "materialCost": {
+       "ore": 100,
+       "timber": 35,
+@@ -1857,6 +1873,7 @@
+     "name": "Heirloom Sigil of Haste I",
+     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_33_hue3.png",
+     "materialCost": {
+       "ore": 10,
+       "timber": 5
+@@ -1875,6 +1892,7 @@
+     "name": "Heirloom Sigil of Haste II",
+     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_40_hue3.png",
+     "materialCost": {
+       "ore": 25,
+       "timber": 12,
+@@ -1894,6 +1912,7 @@
+     "name": "Heirloom Sigil of Haste III",
+     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_24_hue2.png",
+     "materialCost": {
+       "ore": 45,
+       "timber": 20,
+@@ -1913,6 +1932,7 @@
+     "name": "Heirloom Sigil of Haste IV",
+     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_25_hue1.png",
+     "materialCost": {
+       "ore": 65,
+       "timber": 25,
+@@ -1933,6 +1953,7 @@
+     "name": "Heirloom Sigil of Haste V",
+     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_47.png",
+     "materialCost": {
+       "ore": 80,
+       "timber": 30,
+@@ -1953,6 +1974,7 @@
+     "name": "Heirloom Sigil of Haste VI",
+     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_45_hue4.png",
+     "materialCost": {
+       "ore": 100,
+       "timber": 35,
+@@ -1973,6 +1995,7 @@
+     "name": "Heirloom Sigil of the Unbreakable I",
+     "description": "A guild heirloom, freshly forged. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_29.png",
+     "materialCost": {
+       "ore": 10,
+       "timber": 5
+@@ -1991,6 +2014,7 @@
+     "name": "Heirloom Sigil of the Unbreakable II",
+     "description": "A guild heirloom, well-worn. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_29_hue2.png",
+     "materialCost": {
+       "ore": 25,
+       "timber": 12,
+@@ -2010,6 +2034,7 @@
+     "name": "Heirloom Sigil of the Unbreakable III",
+     "description": "A guild heirloom, time-tested. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_25_hue3.png",
+     "materialCost": {
+       "ore": 45,
+       "timber": 20,
+@@ -2029,6 +2054,7 @@
+     "name": "Heirloom Sigil of the Unbreakable IV",
+     "description": "A guild heirloom, masterfully kept. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_47_hue2.png",
+     "materialCost": {
+       "ore": 65,
+       "timber": 25,
+@@ -2049,6 +2075,7 @@
+     "name": "Heirloom Sigil of the Unbreakable V",
+     "description": "A guild heirloom, ancient. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_48_hue1.png",
+     "materialCost": {
+       "ore": 80,
+       "timber": 30,
+@@ -2069,6 +2096,7 @@
+     "name": "Heirloom Sigil of the Unbreakable VI",
+     "description": "A guild heirloom, legendary beyond memory. Bound to whoever wears it -- there is no other way to come by one.",
+     "category": "gear",
++    "icon": "misc/Misc_45_hue1.png",
+     "materialCost": {
+       "ore": 100,
+       "timber": 35,
+@@ -2236,6 +2264,7 @@
+     "name": "Guildmade Blade I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "weapons/Weapon_02.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -2258,6 +2287,7 @@
+     "name": "Guildmade Blade III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "weapons/Weapon_05.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -2281,6 +2311,7 @@
+     "name": "Guildmade Blade IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "weapons/Weapon_07.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -2306,6 +2337,7 @@
+     "name": "Guildmade Blade V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "weapons/Weapon_09.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+@@ -2331,6 +2363,7 @@
+     "name": "Guildmade Band I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "accessories/Accessory_01.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -2353,6 +2386,7 @@
+     "name": "Guildmade Band III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "accessories/Accessory_09.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -2376,6 +2410,7 @@
+     "name": "Guildmade Band IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "accessories/Accessory_08.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -2401,6 +2436,7 @@
+     "name": "Guildmade Band V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "accessories/Accessory_10.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+@@ -2426,6 +2462,7 @@
+     "name": "Guildmade Helm I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "armor/Armor_24.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -2448,6 +2485,7 @@
+     "name": "Guildmade Helm III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "armor/Armor_31.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -2471,6 +2509,7 @@
+     "name": "Guildmade Helm IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "armor/Armor_38.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -2496,6 +2535,7 @@
+     "name": "Guildmade Helm V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "armor/Armor_37.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+@@ -2521,6 +2561,7 @@
+     "name": "Guildmade Plate I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "armor/Armor_03.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -2543,6 +2584,7 @@
+     "name": "Guildmade Plate III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "armor/Armor_17.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -2566,6 +2608,7 @@
+     "name": "Guildmade Plate IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "armor/Armor_18.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -2591,6 +2634,7 @@
+     "name": "Guildmade Plate V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "armor/Armor_16.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+@@ -2616,6 +2660,7 @@
+     "name": "Guildmade Boots I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "armor/Armor_54.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -2638,6 +2683,7 @@
+     "name": "Guildmade Boots III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "armor/Armor_53.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -2661,6 +2707,7 @@
+     "name": "Guildmade Boots IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "armor/Armor_55.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -2686,6 +2733,7 @@
+     "name": "Guildmade Boots V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "armor/Armor_51.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+@@ -2711,6 +2759,7 @@
+     "name": "Guildmade Cloak I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "armor/Armor_134.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -2733,6 +2782,7 @@
+     "name": "Guildmade Cloak III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "armor/Armor_144.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -2756,6 +2806,7 @@
+     "name": "Guildmade Cloak IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "armor/Armor_135.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -2781,6 +2832,7 @@
+     "name": "Guildmade Cloak V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "armor/Armor_128.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+@@ -2806,6 +2858,7 @@
+     "name": "Guildmade Gauntlets I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "armor/Armor_74.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -2828,6 +2881,7 @@
+     "name": "Guildmade Gauntlets III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "armor/Armor_80.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -2851,6 +2905,7 @@
+     "name": "Guildmade Gauntlets IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "armor/Armor_87.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -2876,6 +2931,7 @@
+     "name": "Guildmade Gauntlets V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "armor/Armor_72.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+@@ -2901,6 +2957,7 @@
+     "name": "Guildmade Buckler I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "shields/Shield_25.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -2923,6 +2980,7 @@
+     "name": "Guildmade Buckler III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "shields/Shield_27.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -2946,6 +3004,7 @@
+     "name": "Guildmade Buckler IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "shields/Shield_12.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -2971,6 +3030,7 @@
+     "name": "Guildmade Buckler V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "shields/Shield_11.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+@@ -2996,6 +3056,7 @@
+     "name": "Guildmade Talisman I",
+     "description": "Guild-forged, fresh off the guild's own bench.",
+     "category": "gear",
++    "icon": "accessories/Accessory_14.png",
+     "materialCost": {
+       "ore": 8,
+       "timber": 4
+@@ -3018,6 +3079,7 @@
+     "name": "Guildmade Talisman III",
+     "description": "Guild-forged, proven, a season further along.",
+     "category": "gear",
++    "icon": "accessories/Accessory_17.png",
+     "materialCost": {
+       "ore": 35,
+       "timber": 15,
+@@ -3041,6 +3103,7 @@
+     "name": "Guildmade Talisman IV",
+     "description": "Guild-forged, trusted, further along still.",
+     "category": "gear",
++    "icon": "accessories/Accessory_19.png",
+     "materialCost": {
+       "ore": 55,
+       "timber": 20,
+@@ -3066,6 +3129,7 @@
+     "name": "Guildmade Talisman V",
+     "description": "Guild-forged, veteran-grade, nearly the finished article.",
+     "category": "gear",
++    "icon": "accessories/Accessory_15.png",
+     "materialCost": {
+       "ore": 70,
+       "timber": 25,
+diff --git a/src/game/data/json/curios.json b/src/game/data/json/curios.json
+index 68d3a30..9861dbf 100644
+--- a/src/game/data/json/curios.json
++++ b/src/game/data/json/curios.json
+@@ -78,5 +78,117 @@
+     "sellValue": 50,
+     "glyph": "🥄",
+     "icon": "misc/Misc_73.png"
++  },
++  {
++    "id": "mismatched_boots",
++    "name": "Mismatched Boots",
++    "description": "Two left boots. Whoever owns the right ones is having an equally bad day.",
++    "sellValue": 3,
++    "glyph": "🥾",
++    "icon": "armor/Armor_47.png"
++  },
++  {
++    "id": "suspicious_fish",
++    "name": "Suspicious Fish",
++    "description": "It's been at the bottom of a hero's pack since the last contract. Nobody wants to check exactly how long.",
++    "sellValue": 1,
++    "glyph": "🐟",
++    "icon": "food/Food_42.png"
++  },
++  {
++    "id": "petrified_loaf",
++    "name": "Petrified Loaf",
++    "description": "Baked in a gentler age. It now outranks most of the guild's shields for sheer toughness.",
++    "sellValue": 4,
++    "glyph": "🍞",
++    "icon": "food/Food_33.png"
++  },
++  {
++    "id": "empty_coin_purse",
++    "name": "Empty Coin Purse",
++    "description": "Whoever lost it got the last laugh -- it was empty before it ever hit the ground.",
++    "sellValue": 2,
++    "glyph": "👝",
++    "icon": "misc/Misc_28.png"
++  },
++  {
++    "id": "grimsby_iou",
++    "name": "Grimsby's IOU",
++    "description": "Signed, sealed, and almost certainly worthless. Grimsby insists it's legal tender in at least two villages.",
++    "sellValue": 5,
++    "glyph": "📜",
++    "icon": "misc/Misc_62.png"
++  },
++  {
++    "id": "dented_tankard",
++    "name": "Dented Tankard",
++    "description": "Survived three tavern brawls. Lost all three, but survived them.",
++    "sellValue": 10,
++    "glyph": "🍺",
++    "icon": "food/Food_52.png"
++  },
++  {
++    "id": "mummified_bat",
++    "name": "Mummified Bat",
++    "description": "Smells exactly how you'd expect. An apothecary somewhere will pay good coin not to ask questions.",
++    "sellValue": 9,
++    "glyph": "🦇",
++    "icon": "misc/Misc_04.png"
++  },
++  {
++    "id": "mystery_key",
++    "name": "Mystery Key",
++    "description": "Opens something, somewhere. The lock was sadly not included.",
++    "sellValue": 12,
++    "glyph": "🗝️",
++    "icon": "misc/Misc_70.png"
++  },
++  {
++    "id": "glass_eye",
++    "name": "Glass Eye",
++    "description": "Looks in every direction except the one you expect. Its previous owner is presumably squinting.",
++    "sellValue": 16,
++    "glyph": "👁️",
++    "icon": "misc/Misc_14.png"
++  },
++  {
++    "id": "polite_skull",
++    "name": "Polite Skull",
++    "description": "Hasn't said a word since it joined the stash. The recruits find this more unsettling than if it had.",
++    "sellValue": 20,
++    "glyph": "💀",
++    "icon": "misc/Misc_12.png"
++  },
++  {
++    "id": "bards_quill",
++    "name": "Famous Bard's Quill",
++    "description": "The bard in question is famous chiefly for the size of their unpaid tavern tab.",
++    "sellValue": 24,
++    "glyph": "🪶",
++    "icon": "crafting/Crafting_118.png"
++  },
++  {
++    "id": "half_a_treasure_map",
++    "name": "Half a Treasure Map",
++    "description": "The X is on the other half. Of course it is.",
++    "sellValue": 40,
++    "glyph": "🗺️",
++    "icon": "misc/Misc_15.png"
++  },
++  {
++    "id": "soup_grimoire",
++    "name": "Soup Grimoire",
++    "description": "Leather-bound, rune-etched, deeply arcane. Every single page is a soup recipe.",
++    "sellValue": 55,
++    "glyph": "📕",
++    "icon": "misc/Misc_49.png"
++  },
++  {
++    "id": "shed_dragon_scale",
++    "name": "Shed Dragon Scale",
++    "description": "Probably a dragon's. Possibly a very, very large lizard's. The buyer won't be asking which.",
++    "sellValue": 90,
++    "glyph": "🐉",
++    "icon": "crafting/Crafting_84.png"
+   }
+ ]
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index 9c5da8e..c20a312 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -2299,6 +2299,7 @@
+       "health": 15
+     },
+     "value": 90,
++    "icon": "misc/Misc_33_hue1.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2313,6 +2314,7 @@
+       "health": 30
+     },
+     "value": 360,
++    "icon": "misc/Misc_40_hue1.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2327,6 +2329,7 @@
+       "health": 55
+     },
+     "value": 1320,
++    "icon": "misc/Misc_26.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2341,6 +2344,7 @@
+       "health": 90
+     },
+     "value": 3300,
++    "icon": "misc/Misc_24_hue5.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2355,6 +2359,7 @@
+       "health": 140
+     },
+     "value": 5700,
++    "icon": "misc/Misc_46.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2369,6 +2374,7 @@
+       "health": 200
+     },
+     "value": 9000,
++    "icon": "misc/Misc_45_hue2.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2383,6 +2389,7 @@
+       "gold": 3
+     },
+     "value": 90,
++    "icon": "misc/Misc_33_hue2.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2397,6 +2404,7 @@
+       "gold": 5
+     },
+     "value": 360,
++    "icon": "misc/Misc_40_hue2.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2411,6 +2419,7 @@
+       "gold": 8
+     },
+     "value": 1320,
++    "icon": "misc/Misc_24.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2425,6 +2434,7 @@
+       "gold": 12
+     },
+     "value": 3300,
++    "icon": "misc/Misc_25.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2439,6 +2449,7 @@
+       "gold": 16
+     },
+     "value": 5700,
++    "icon": "misc/Misc_48_hue3.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2453,6 +2464,7 @@
+       "gold": 20
+     },
+     "value": 9000,
++    "icon": "misc/Misc_47_hue4.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2467,6 +2479,7 @@
+       "xp": 3
+     },
+     "value": 90,
++    "icon": "misc/Misc_33.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2481,6 +2494,7 @@
+       "xp": 5
+     },
+     "value": 360,
++    "icon": "misc/Misc_40_hue4.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2495,6 +2509,7 @@
+       "xp": 8
+     },
+     "value": 1320,
++    "icon": "misc/Misc_24_hue3.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2509,6 +2524,7 @@
+       "xp": 12
+     },
+     "value": 3300,
++    "icon": "misc/Misc_25_hue2.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2523,6 +2539,7 @@
+       "xp": 16
+     },
+     "value": 5700,
++    "icon": "misc/Misc_48.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2537,6 +2554,7 @@
+       "xp": 20
+     },
+     "value": 9000,
++    "icon": "misc/Misc_45_hue5.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2551,6 +2569,7 @@
+       "speed": 3
+     },
+     "value": 90,
++    "icon": "misc/Misc_33_hue3.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2565,6 +2584,7 @@
+       "speed": 5
+     },
+     "value": 360,
++    "icon": "misc/Misc_40_hue3.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2579,6 +2599,7 @@
+       "speed": 8
+     },
+     "value": 1320,
++    "icon": "misc/Misc_24_hue2.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2593,6 +2614,7 @@
+       "speed": 12
+     },
+     "value": 3300,
++    "icon": "misc/Misc_25_hue1.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2607,6 +2629,7 @@
+       "speed": 16
+     },
+     "value": 5700,
++    "icon": "misc/Misc_47.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2621,6 +2644,7 @@
+       "speed": 20
+     },
+     "value": 9000,
++    "icon": "misc/Misc_45_hue4.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2635,6 +2659,7 @@
+       "durability": 3
+     },
+     "value": 90,
++    "icon": "misc/Misc_29.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2649,6 +2674,7 @@
+       "durability": 5
+     },
+     "value": 360,
++    "icon": "misc/Misc_29_hue2.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2663,6 +2689,7 @@
+       "durability": 8
+     },
+     "value": 1320,
++    "icon": "misc/Misc_25_hue3.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2677,6 +2704,7 @@
+       "durability": 12
+     },
+     "value": 3300,
++    "icon": "misc/Misc_47_hue2.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2691,6 +2719,7 @@
+       "durability": 16
+     },
+     "value": 5700,
++    "icon": "misc/Misc_48_hue1.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2705,6 +2734,7 @@
+       "durability": 20
+     },
+     "value": 9000,
++    "icon": "misc/Misc_45_hue1.png",
+     "craftable": true,
+     "enhanceCostMultiplier": 4
+   },
+@@ -2716,6 +2746,7 @@
+     "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
++    "icon": "armor/Armor_73.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2728,6 +2759,7 @@
+     "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
++    "icon": "shields/Shield_26.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2740,6 +2772,7 @@
+     "reqLevel": 10,
+     "maxDurability": 100,
+     "value": 550,
++    "icon": "accessories/Accessory_11.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2752,6 +2785,7 @@
+     "reqLevel": 50,
+     "maxDurability": 320,
+     "value": 13000,
++    "icon": "accessories/Accessory_25.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2764,6 +2798,7 @@
+     "reqLevel": 50,
+     "maxDurability": 320,
+     "value": 13000,
++    "icon": "shields/Shield_23.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2776,6 +2811,7 @@
+     "reqLevel": 50,
+     "maxDurability": 320,
+     "value": 13000,
++    "icon": "armor/Armor_141.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2788,6 +2824,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "weapons/Weapon_02.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2800,6 +2837,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "weapons/Weapon_05.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2812,6 +2850,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "weapons/Weapon_07.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2824,6 +2863,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "weapons/Weapon_09.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2836,6 +2876,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "accessories/Accessory_01.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2848,6 +2889,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "accessories/Accessory_09.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2860,6 +2902,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "accessories/Accessory_08.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2872,6 +2915,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "accessories/Accessory_10.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2884,6 +2928,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "armor/Armor_24.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2896,6 +2941,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "armor/Armor_31.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2908,6 +2954,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "armor/Armor_38.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2920,6 +2967,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "armor/Armor_37.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2932,6 +2980,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "armor/Armor_03.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2944,6 +2993,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "armor/Armor_17.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2956,6 +3006,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "armor/Armor_18.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2968,6 +3019,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "armor/Armor_16.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2980,6 +3032,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "armor/Armor_54.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -2992,6 +3045,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "armor/Armor_53.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3004,6 +3058,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "armor/Armor_55.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3016,6 +3071,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "armor/Armor_51.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3028,6 +3084,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "armor/Armor_134.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3040,6 +3097,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "armor/Armor_144.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3052,6 +3110,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "armor/Armor_135.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3064,6 +3123,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "armor/Armor_128.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3076,6 +3136,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "armor/Armor_74.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3088,6 +3149,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "armor/Armor_80.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3100,6 +3162,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "armor/Armor_87.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3112,6 +3175,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "armor/Armor_72.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3124,6 +3188,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "shields/Shield_25.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3136,6 +3201,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "shields/Shield_27.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3148,6 +3214,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "shields/Shield_12.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3160,6 +3227,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "shields/Shield_11.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3172,6 +3240,7 @@
+     "reqLevel": 1,
+     "maxDurability": 70,
+     "value": 150,
++    "icon": "accessories/Accessory_14.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3184,6 +3253,7 @@
+     "reqLevel": 20,
+     "maxDurability": 150,
+     "value": 1800,
++    "icon": "accessories/Accessory_17.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3196,6 +3266,7 @@
+     "reqLevel": 30,
+     "maxDurability": 200,
+     "value": 5000,
++    "icon": "accessories/Accessory_19.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+@@ -3208,6 +3279,7 @@
+     "reqLevel": 40,
+     "maxDurability": 260,
+     "value": 10000,
++    "icon": "accessories/Accessory_15.png",
+     "mods": {},
+     "craftable": true,
+     "setId": "guildmade"
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index f7e12a0..9fc7037 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -2050,28 +2050,86 @@ function openIconPicker(folders, currentValue, onPick) {
+   const panel = document.createElement('div');
+   panel.className = 'editor icon-picker';
+ 
+-  const sectionsHtml = folders.length === 0
+-    ? '<p class="tiny muted">No icons found in public/item-icons/. Drop image files into its subfolders (weapons, armor, shields, potions, crafting, food, accessories, misc) and reopen this picker.</p>'
+-    : folders.map((f) => `
+-        <div class="icon-picker-section">
+-          <div class="icon-picker-folder">${escapeHtml(f.name)} (${f.files.length})</div>
+-          <div class="icon-picker-grid">
+-            ${f.files.map((file) => {
+-              const rel = `${f.name}/${file}`;
+-              const selected = rel === currentValue;
+-              return `<button type="button" class="icon-picker-item ${selected ? 'selected' : ''}" data-icon="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
+-                <img src="/item-icons/${escapeHtml(rel)}" alt="" loading="lazy" />
+-              </button>`;
+-            }).join('')}
+-          </div>
+-        </div>`).join('');
++  // Patch 0416 -- category tabs. The picker used to render every folder's
++  // grid at once (~3,500 <img>s across armor/crafting/misc/...), which made
++  // opening it slow. Now only one folder's grid exists in the DOM at a time:
++  // the tab row picks the folder, a filter box narrows by filename, and the
++  // _hueN colour variants (5 per base icon -- most of the file count) stay
++  // hidden unless "Colour variants" is ticked. Opens on the folder of the
++  // currently-assigned icon, else whichever folder was used last this
++  // session, else the first folder.
++  const currentFolder = currentValue && currentValue.includes('/') ? currentValue.split('/')[0] : null;
++  const pickerState = {
++    folder: [currentFolder, state.lastIconFolder].find((n) => n && folders.some((f) => f.name === n)) || folders[0]?.name || null,
++    filter: '',
++    showHues: /_hue\d+\.[a-z]+$/i.test(currentValue || ''),
++  };
++  const isHue = (file) => /_hue\d+\.[a-z]+$/i.test(file);
++  const isPreviewSheet = (file) => /preview\.[a-z]+$/i.test(file);
++
++  function visibleFiles(folder) {
++    const q = pickerState.filter.trim().toLowerCase();
++    return folder.files.filter((file) =>
++      (pickerState.showHues || !isHue(file))
++      && !isPreviewSheet(file)
++      && (!q || file.toLowerCase().includes(q)))
++      // Natural order (Armor_2 before Armor_10) -- /api/icons sorts plain
++      // alphabetically, which scatters numbered packs across the grid.
++      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
++  }
++
++  function renderPickerBody() {
++    const body = panel.querySelector('.icon-picker-body');
++    if (!body) return;
++    if (folders.length === 0) {
++      body.innerHTML = '<p class="tiny muted">No icons found in public/item-icons/. Drop image files into its subfolders (weapons, armor, shields, potions, crafting, food, accessories, misc) and reopen this picker.</p>';
++      return;
++    }
++    const folder = folders.find((f) => f.name === pickerState.folder) || folders[0];
++    const files = visibleFiles(folder);
++    panel.querySelectorAll('[data-icon-tab]').forEach((tab) => {
++      tab.classList.toggle('active', tab.dataset.iconTab === folder.name);
++    });
++    body.innerHTML = files.length === 0
++      ? '<p class="tiny muted">No icons in this category match.</p>'
++      : `<div class="icon-picker-grid">
++          ${files.map((file) => {
++            const rel = `${folder.name}/${file}`;
++            const selected = rel === currentValue;
++            return `<button type="button" class="icon-picker-item ${selected ? 'selected' : ''}" data-icon="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
++              <img src="/item-icons/${escapeHtml(rel)}" alt="" loading="lazy" />
++            </button>`;
++          }).join('')}
++        </div>`;
++    body.querySelectorAll('[data-icon]').forEach((btn) => {
++      btn.onclick = () => {
++        state.lastIconFolder = folder.name;
++        onPick(btn.dataset.icon);
++        overlay.remove();
++      };
++    });
++    const selectedBtn = body.querySelector('.icon-picker-item.selected');
++    if (selectedBtn) selectedBtn.scrollIntoView({ block: 'nearest' });
++  }
++
++  const tabsHtml = folders.length === 0 ? '' : `
++    <div class="icon-picker-tabs">
++      ${folders.map((f) => {
++        const baseCount = f.files.filter((file) => !isHue(file) && !isPreviewSheet(file)).length;
++        return `<button type="button" class="icon-picker-tab" data-icon-tab="${escapeHtml(f.name)}">${escapeHtml(f.name)} <span class="muted">${baseCount}</span></button>`;
++      }).join('')}
++    </div>
++    <div class="icon-picker-filter-row">
++      <input type="text" id="iconPickerFilter" placeholder="Filter by filename (e.g. Armor_5)" />
++      <label class="tiny"><input type="checkbox" id="iconPickerHues" ${pickerState.showHues ? 'checked' : ''} /> Colour variants</label>
++    </div>`;
+ 
+   // Patch 0296 -- upload target folder: a free-text field (with existing
+   // folder names offered via datalist, so "Heroes" etc is one click, not
+   // retyped) rather than a rigid <select>, since a brand-new class of icon
+   // (this patch's own Centaur emblem) needs a folder that may not exist as
+   // a section yet -- uploadImageFile on the server creates it on demand.
+-  const defaultUploadFolder = folders.some((f) => f.name === 'Heroes') ? 'Heroes' : (folders[0]?.name || '');
++  const defaultUploadFolder = pickerState.folder || (folders.some((f) => f.name === 'Heroes') ? 'Heroes' : (folders[0]?.name || ''));
+   const uploadRowHtml = `
+     <div class="icon-picker-upload-row">
+       <input type="text" id="iconPickerUploadFolder" list="iconPickerFolderList" placeholder="Folder (e.g. Heroes)" value="${escapeHtml(defaultUploadFolder)}" />
+@@ -2083,7 +2141,8 @@ function openIconPicker(folders, currentValue, onPick) {
+   panel.innerHTML = `
+     <h2>Choose an icon</h2>
+     ${uploadRowHtml}
+-    <div class="icon-picker-body">${sectionsHtml}</div>
++    ${tabsHtml}
++    <div class="icon-picker-body"></div>
+     <div class="editor-actions">
+       <button id="iconPickerCancel">Cancel</button>
+     </div>`;
+@@ -2091,12 +2150,22 @@ function openIconPicker(folders, currentValue, onPick) {
+   overlay.appendChild(panel);
+   document.body.appendChild(overlay);
+ 
+-  panel.querySelectorAll('[data-icon]').forEach((btn) => {
+-    btn.onclick = () => {
+-      onPick(btn.dataset.icon);
+-      overlay.remove();
++  panel.querySelectorAll('[data-icon-tab]').forEach((tab) => {
++    tab.onclick = () => {
++      pickerState.folder = tab.dataset.iconTab;
++      panel.scrollTop = 0;
++      // Upload target follows the open category -- dropping a new icon in
++      // while looking at Shields almost always means it's a shield.
++      const uploadFolder = panel.querySelector('#iconPickerUploadFolder');
++      if (uploadFolder) uploadFolder.value = pickerState.folder;
++      renderPickerBody();
+     };
+   });
++  const filterInput = panel.querySelector('#iconPickerFilter');
++  if (filterInput) filterInput.oninput = () => { pickerState.filter = filterInput.value; renderPickerBody(); };
++  const huesBox = panel.querySelector('#iconPickerHues');
++  if (huesBox) huesBox.onchange = () => { pickerState.showHues = huesBox.checked; renderPickerBody(); };
++  renderPickerBody();
+   const uploadInput = panel.querySelector('#iconPickerUploadInput');
+   const uploadFolderField = panel.querySelector('#iconPickerUploadFolder');
+   uploadInput.onchange = async () => {
+@@ -2443,6 +2512,11 @@ const ahState = {
+   saving: false,
+   authTest: null, // { target, reachable, status, body, checkedAt } | null
+   testingAuth: false,
++  // Patch 0416 -- the AH server process this DevTool launched (if any).
++  proc: null, // { owned, pid, startedAt, exitCode, exitedAt, logTail } | null
++  launching: false,
++  stopping: false,
++  launchMessage: null, // { text, cls } | null
+ };
+ 
+ 
+@@ -4098,6 +4172,7 @@ async function selectAuctionHouseTab() {
+   try {
+     const cfg = await api('/api/auction-house/config');
+     ahState.url = cfg.url;
++    ahState.proc = await api('/api/auction-house/server').catch(() => null);
+     setStatus('');
+     renderAuctionHouse();
+     await checkAhNow();
+@@ -4123,6 +4198,65 @@ async function checkAhNow() {
+   renderAuctionHouse();
+ }
+ 
++/** Patch 0416 -- launches server/'s `npm run dev` via the DevTool, then
++ *  re-checks /health every 1.5s (up to ~30s) until the local backend answers
++ *  or the launched process dies -- tsx takes a few seconds to boot, so a
++ *  single immediate check would always report "unreachable". */
++async function startAhServerNow() {
++  ahState.launching = true;
++  ahState.launchMessage = null;
++  renderAuctionHouse();
++  try {
++    const result = await api('/api/auction-house/server/start', { method: 'POST' });
++    ahState.proc = result.process;
++    if (result.alreadyRunning) {
++      ahState.launchMessage = { text: escapeHtml(result.error), cls: 'good' };
++    } else if (!result.ok) {
++      ahState.launchMessage = { text: escapeHtml(result.error || 'Could not start the server.'), cls: 'bad' };
++    } else {
++      ahState.launchMessage = { text: `Started (PID ${result.pid}) -- waiting for /health…`, cls: '' };
++      renderAuctionHouse();
++      for (let i = 0; i < 20; i++) {
++        await new Promise((r) => setTimeout(r, 1500));
++        ahState.proc = await api('/api/auction-house/server').catch(() => ahState.proc);
++        await checkAhNow();
++        if (ahState.status?.local?.reachable) {
++          ahState.launchMessage = { text: `Running (PID ${result.pid}) -- /health is answering.`, cls: 'good' };
++          break;
++        }
++        if (ahState.proc && !ahState.proc.owned && ahState.proc.exitCode !== null) {
++          ahState.launchMessage = { text: `Server process exited (code ${ahState.proc.exitCode}) -- see the log below.`, cls: 'bad' };
++          break;
++        }
++      }
++      if (!ahState.status?.local?.reachable && ahState.proc?.owned) {
++        ahState.launchMessage = { text: 'Process is running but /health still isn\'t answering -- check the log below and the Local backend URL.', cls: 'bad' };
++      }
++    }
++  } catch (err) {
++    ahState.launchMessage = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
++  }
++  ahState.launching = false;
++  renderAuctionHouse();
++}
++
++async function stopAhServerNow() {
++  ahState.stopping = true;
++  renderAuctionHouse();
++  try {
++    const result = await api('/api/auction-house/server/stop', { method: 'POST' });
++    ahState.proc = result.process;
++    ahState.launchMessage = result.ok
++      ? { text: 'Stopped.', cls: '' }
++      : { text: escapeHtml(result.error || 'Could not stop the server.'), cls: 'bad' };
++  } catch (err) {
++    ahState.launchMessage = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
++  }
++  ahState.stopping = false;
++  renderAuctionHouse();
++  await checkAhNow();
++}
++
+ async function testAhAuthNow() {
+   ahState.testingAuth = true;
+   renderAuctionHouse();
+@@ -4175,11 +4309,12 @@ function renderAuctionHouse() {
+   const publicLine = ahStatusLine(ahState.status?.public);
+   const authLine = ahAuthTestLine();
+   const checkedAt = ahState.status?.checkedAt ? new Date(ahState.status.checkedAt).toLocaleTimeString() : null;
++  const localRunning = !ahState.checking && !!ahState.status?.local?.reachable;
+ 
+   appEl.innerHTML = `
+     <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Auction House</h2>
+     <p class="tiny muted" style="margin: 0 0 12px;">
+-      Connection/health monitor for the AH backend (server/). Build-order item 3 from
++      Connection/health monitor (and, since patch 0416, launcher) for the AH backend (server/). Build-order item 3 from
+       guild-idler-status.md's Auction House entry -- nothing else here yet on purpose:
+       force-rotation, transaction search, trade reversal, and suspension all need real
+       <code>/admin/*</code> routes the backend doesn't have yet.
+@@ -4198,6 +4333,21 @@ function renderAuctionHouse() {
+       <button id="ahCheckBtn" ${ahState.checking ? 'disabled' : ''}>${ahState.checking ? 'Checking…' : 'Check now'}</button>
+     </div>
+ 
++    <div class="section-heading">AH server process</div>
++    <p class="tiny muted" style="margin: 0 0 6px;">
++      Runs <code>npm run dev</code> inside <code>server/</code> in the background (no extra window),
++      logging to <code>server/ah-devtool.log</code>. Won't start a second copy if the local URL above
++      already answers -- including one started by hand or as the GuildboundAH Windows Service.
++      Closing the DevTool leaves it running; use Stop first if you want it gone.
++    </p>
++    <div class="row" style="gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
++      <button id="ahStartBtn" ${ahState.launching || localRunning ? 'disabled' : ''}>${ahState.launching ? 'Starting…' : (localRunning ? 'AH server running' : 'Start AH server')}</button>
++      ${ahState.proc?.owned ? `<button id="ahStopBtn" class="remove" ${ahState.stopping ? 'disabled' : ''}>${ahState.stopping ? 'Stopping…' : 'Stop AH server'}</button>` : ''}
++      ${ahState.proc?.owned ? `<span class="tiny muted" style="align-self: center;">Started by DevTool, PID ${ahState.proc.pid}</span>` : ''}
++    </div>
++    ${ahState.launchMessage ? `<div class="patch-result ${ahState.launchMessage.cls}"><div class="patch-result-label">${ahState.launchMessage.text}</div></div>` : ''}
++    ${ahState.proc?.logTail ? `<details style="margin-bottom: 10px;" ${ahState.launchMessage?.cls === 'bad' ? 'open' : ''}><summary class="tiny muted">server/ah-devtool.log (last lines)</summary><pre class="tiny" style="white-space: pre-wrap; max-height: 220px; overflow-y: auto; background: var(--panel2); padding: 8px; margin: 6px 0 0;">${escapeHtml(ahState.proc.logTail)}</pre></details>` : ''}
++
+     <div class="section-heading">Status -- local (is the process up?)</div>
+     <div class="patch-result ${localLine.cls}">
+       <div class="patch-result-label">${localLine.text}</div>
+@@ -4251,4 +4401,9 @@ function renderAuctionHouse() {
+ 
+   const ahAuthTestBtn = document.getElementById('ahAuthTestBtn');
+   if (ahAuthTestBtn) ahAuthTestBtn.onclick = () => testAhAuthNow();
++
++  const ahStartBtn = document.getElementById('ahStartBtn');
++  if (ahStartBtn) ahStartBtn.onclick = () => startAhServerNow();
++  const ahStopBtn = document.getElementById('ahStopBtn');
++  if (ahStopBtn) ahStopBtn.onclick = () => stopAhServerNow();
+ }
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index 699d015..4fcd87c 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -436,6 +436,20 @@ td.actions button.danger:hover { background: var(--bad-wash); border-color: var(
+ .icon-picker-item.selected { border-color: var(--brass); background: #2b2741; }
+ .icon-picker-item img { width: 32px; height: 32px; image-rendering: pixelated; }
+ 
++/* Patch 0416 -- category tabs + filter row for openIconPicker. Only the
++   active category's grid is rendered; see openIconPicker's own comment. */
++.icon-picker-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
++.icon-picker-tab {
++  padding: 4px 9px; font-size: 11px; border-radius: var(--radius); text-transform: capitalize;
++  background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); cursor: pointer;
++}
++.icon-picker-tab:hover { border-color: var(--muted); }
++.icon-picker-tab.active { border-color: var(--brass); background: #2b2741; }
++.icon-picker-tab .muted { font-size: 10px; margin-left: 2px; }
++.icon-picker-filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
++.icon-picker-filter-row input[type="text"] { flex: 1; min-width: 0; }
++.icon-picker-filter-row label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
++
+ /* Patch 0296 -- "Upload new image…" row shared by openIconPicker and
+    openBannerPicker. A label styled as a button (rather than a real
+    <button>) so clicking it can trigger the paired hidden file input via
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 80ef199..588456c 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -19,6 +19,7 @@
+  */
+ import http from 'node:http';
+ import fs from 'node:fs/promises';
++import { openSync, closeSync } from 'node:fs';
+ import path from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { execFile, spawn } from 'node:child_process';
+@@ -2766,6 +2767,97 @@ async function testAhAuth(url) {
+   }
+ }
+ 
++/* ------------------------------------------- auction house: launch --- */
++// Patch 0416 -- a "Start AH server" button for the Auction House tab, so the
++// backend doesn't need its own PowerShell window opened by hand
++// (`cd server; npm run dev`) before the monitor above has anything to check.
++// Same detached/unref'd/PID-tracked shape as startDevServer, with two
++// differences: stdout/stderr go to server/ah-devtool.log (gitignored via
++// server/.gitignore's *.log) so a crash on boot is visible from the DevTool
++// instead of vanishing with a hidden console, and it refuses to launch a
++// second copy if the configured URL's /health already answers -- whether
++// that's a copy this DevTool started, one started by hand, or the
++// GuildboundAH Windows Service.
++
++const AH_SERVER_DIR = path.join(ROOT, 'server');
++const AH_SERVER_LOG = path.join(AH_SERVER_DIR, 'ah-devtool.log');
++const AH_LOG_TAIL_LINES = 40;
++
++let ahProcess = null; // { pid, startedAt, exitCode, exitedAt }
++
++async function ahLogTail() {
++  try {
++    const raw = await fs.readFile(AH_SERVER_LOG, 'utf8');
++    return raw.split(/\r?\n/).slice(-AH_LOG_TAIL_LINES).join('\n').trimEnd();
++  } catch {
++    return '';
++  }
++}
++
++async function ahServerProcessInfo() {
++  const running = !!(ahProcess && ahProcess.exitCode === undefined && isPidAlive(ahProcess.pid));
++  return {
++    owned: running,
++    pid: running ? ahProcess.pid : null,
++    startedAt: ahProcess?.startedAt ?? null,
++    exitCode: ahProcess && ahProcess.exitCode !== undefined ? ahProcess.exitCode : null,
++    exitedAt: ahProcess?.exitedAt ?? null,
++    logTail: await ahLogTail(),
++  };
++}
++
++async function startAhServer() {
++  const cfg = await readAhConfig();
++  const health = await checkAhBackend(cfg.url);
++  if (health.reachable) {
++    return { ok: false, alreadyRunning: true, error: `Already running -- ${cfg.url}/health answered.` };
++  }
++  if (ahProcess && ahProcess.exitCode === undefined && isPidAlive(ahProcess.pid)) {
++    return { ok: false, error: `Already started by the DevTool (PID ${ahProcess.pid}) -- still booting? Check again in a few seconds.` };
++  }
++  try {
++    await fs.access(path.join(AH_SERVER_DIR, 'node_modules'));
++  } catch {
++    return { ok: false, error: 'server/node_modules is missing -- run `cd server; npm install` once first.' };
++  }
++  let logFd;
++  try {
++    logFd = openSync(AH_SERVER_LOG, 'w');
++  } catch (err) {
++    return { ok: false, error: `Could not open ${AH_SERVER_LOG}: ${err.message}` };
++  }
++  let child;
++  try {
++    child = spawn(NPM_BIN, ['run', 'dev'], {
++      cwd: AH_SERVER_DIR,
++      detached: true,
++      windowsHide: true,
++      stdio: ['ignore', logFd, logFd],
++      shell: process.platform === 'win32',
++    });
++  } catch (err) {
++    closeSync(logFd);
++    return { ok: false, error: `Could not start npm: ${err.message}` };
++  }
++  closeSync(logFd); // the child holds its own copy of the handle
++  const entry = { pid: child.pid, startedAt: Date.now(), exitCode: undefined, exitedAt: null };
++  ahProcess = entry;
++  child.on('exit', (code) => { entry.exitCode = code ?? -1; entry.exitedAt = Date.now(); });
++  child.on('error', () => { entry.exitCode = -1; entry.exitedAt = Date.now(); });
++  child.unref();
++  return { ok: true, pid: child.pid };
++}
++
++async function stopAhServer() {
++  if (!ahProcess || ahProcess.exitCode !== undefined || !isPidAlive(ahProcess.pid)) {
++    return { ok: false, error: 'No AH server started by this DevTool is running (one started by hand or as a Windows Service has to be stopped there).' };
++  }
++  await killProcessTree(ahProcess.pid);
++  ahProcess.exitCode = 0;
++  ahProcess.exitedAt = Date.now();
++  return { ok: true };
++}
++
+ /**
+  * Locates electron-builder's unpacked Windows build -- the actual runnable
+  * game (exe + resources), as opposed to the NSIS installer wrapped around
+@@ -3154,6 +3246,20 @@ const server = http.createServer(async (req, res) => {
+     });
+   }
+ 
++  if (url.pathname === '/api/auction-house/server' && req.method === 'GET') {
++    return json(res, 200, await ahServerProcessInfo());
++  }
++
++  if (url.pathname === '/api/auction-house/server/start' && req.method === 'POST') {
++    const result = await startAhServer();
++    return json(res, 200, { ...result, process: await ahServerProcessInfo() });
++  }
++
++  if (url.pathname === '/api/auction-house/server/stop' && req.method === 'POST') {
++    const result = await stopAhServer();
++    return json(res, 200, { ...result, process: await ahServerProcessInfo() });
++  }
++
+   if (url.pathname === '/api/auction-house/test-auth' && req.method === 'POST') {
+     const cfg = await readAhConfig();
+     let body = {};

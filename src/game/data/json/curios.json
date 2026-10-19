@@ -78,5 +78,117 @@
     "sellValue": 50,
     "glyph": "🥄",
     "icon": "misc/Misc_73.png"
+  },
+  {
+    "id": "mismatched_boots",
+    "name": "Mismatched Boots",
+    "description": "Two left boots. Whoever owns the right ones is having an equally bad day.",
+    "sellValue": 3,
+    "glyph": "🥾",
+    "icon": "armor/Armor_47.png"
+  },
+  {
+    "id": "suspicious_fish",
+    "name": "Suspicious Fish",
+    "description": "It's been at the bottom of a hero's pack since the last contract. Nobody wants to check exactly how long.",
+    "sellValue": 1,
+    "glyph": "🐟",
+    "icon": "food/Food_42.png"
+  },
+  {
+    "id": "petrified_loaf",
+    "name": "Petrified Loaf",
+    "description": "Baked in a gentler age. It now outranks most of the guild's shields for sheer toughness.",
+    "sellValue": 4,
+    "glyph": "🍞",
+    "icon": "food/Food_33.png"
+  },
+  {
+    "id": "empty_coin_purse",
+    "name": "Empty Coin Purse",
+    "description": "Whoever lost it got the last laugh -- it was empty before it ever hit the ground.",
+    "sellValue": 2,
+    "glyph": "👝",
+    "icon": "misc/Misc_28.png"
+  },
+  {
+    "id": "grimsby_iou",
+    "name": "Grimsby's IOU",
+    "description": "Signed, sealed, and almost certainly worthless. Grimsby insists it's legal tender in at least two villages.",
+    "sellValue": 5,
+    "glyph": "📜",
+    "icon": "misc/Misc_62.png"
+  },
+  {
+    "id": "dented_tankard",
+    "name": "Dented Tankard",
+    "description": "Survived three tavern brawls. Lost all three, but survived them.",
+    "sellValue": 10,
+    "glyph": "🍺",
+    "icon": "food/Food_52.png"
+  },
+  {
+    "id": "mummified_bat",
+    "name": "Mummified Bat",
+    "description": "Smells exactly how you'd expect. An apothecary somewhere will pay good coin not to ask questions.",
+    "sellValue": 9,
+    "glyph": "🦇",
+    "icon": "misc/Misc_04.png"
+  },
+  {
+    "id": "mystery_key",
+    "name": "Mystery Key",
+    "description": "Opens something, somewhere. The lock was sadly not included.",
+    "sellValue": 12,
+    "glyph": "🗝️",
+    "icon": "misc/Misc_70.png"
+  },
+  {
+    "id": "glass_eye",
+    "name": "Glass Eye",
+    "description": "Looks in every direction except the one you expect. Its previous owner is presumably squinting.",
+    "sellValue": 16,
+    "glyph": "👁️",
+    "icon": "misc/Misc_14.png"
+  },
+  {
+    "id": "polite_skull",
+    "name": "Polite Skull",
+    "description": "Hasn't said a word since it joined the stash. The recruits find this more unsettling than if it had.",
+    "sellValue": 20,
+    "glyph": "💀",
+    "icon": "misc/Misc_12.png"
+  },
+  {
+    "id": "bards_quill",
+    "name": "Famous Bard's Quill",
+    "description": "The bard in question is famous chiefly for the size of their unpaid tavern tab.",
+    "sellValue": 24,
+    "glyph": "🪶",
+    "icon": "crafting/Crafting_118.png"
+  },
+  {
+    "id": "half_a_treasure_map",
+    "name": "Half a Treasure Map",
+    "description": "The X is on the other half. Of course it is.",
+    "sellValue": 40,
+    "glyph": "🗺️",
+    "icon": "misc/Misc_15.png"
+  },
+  {
+    "id": "soup_grimoire",
+    "name": "Soup Grimoire",
+    "description": "Leather-bound, rune-etched, deeply arcane. Every single page is a soup recipe.",
+    "sellValue": 55,
+    "glyph": "📕",
+    "icon": "misc/Misc_49.png"
+  },
+  {
+    "id": "shed_dragon_scale",
+    "name": "Shed Dragon Scale",
+    "description": "Probably a dragon's. Possibly a very, very large lizard's. The buyer won't be asking which.",
+    "sellValue": 90,
+    "glyph": "🐉",
+    "icon": "crafting/Crafting_84.png"
   }
 ]

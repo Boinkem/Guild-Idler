@@ -2299,6 +2299,7 @@
       "health": 15
     },
     "value": 90,
+    "icon": "misc/Misc_33_hue1.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2313,6 +2314,7 @@
       "health": 30
     },
     "value": 360,
+    "icon": "misc/Misc_40_hue1.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2327,6 +2329,7 @@
       "health": 55
     },
     "value": 1320,
+    "icon": "misc/Misc_26.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2341,6 +2344,7 @@
       "health": 90
     },
     "value": 3300,
+    "icon": "misc/Misc_24_hue5.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2355,6 +2359,7 @@
       "health": 140
     },
     "value": 5700,
+    "icon": "misc/Misc_46.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2369,6 +2374,7 @@
       "health": 200
     },
     "value": 9000,
+    "icon": "misc/Misc_45_hue2.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2383,6 +2389,7 @@
       "gold": 3
     },
     "value": 90,
+    "icon": "misc/Misc_33_hue2.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2397,6 +2404,7 @@
       "gold": 5
     },
     "value": 360,
+    "icon": "misc/Misc_40_hue2.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2411,6 +2419,7 @@
       "gold": 8
     },
     "value": 1320,
+    "icon": "misc/Misc_24.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2425,6 +2434,7 @@
       "gold": 12
     },
     "value": 3300,
+    "icon": "misc/Misc_25.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2439,6 +2449,7 @@
       "gold": 16
     },
     "value": 5700,
+    "icon": "misc/Misc_48_hue3.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2453,6 +2464,7 @@
       "gold": 20
     },
     "value": 9000,
+    "icon": "misc/Misc_47_hue4.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2467,6 +2479,7 @@
       "xp": 3
     },
     "value": 90,
+    "icon": "misc/Misc_33.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2481,6 +2494,7 @@
       "xp": 5
     },
     "value": 360,
+    "icon": "misc/Misc_40_hue4.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2495,6 +2509,7 @@
       "xp": 8
     },
     "value": 1320,
+    "icon": "misc/Misc_24_hue3.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2509,6 +2524,7 @@
       "xp": 12
     },
     "value": 3300,
+    "icon": "misc/Misc_25_hue2.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2523,6 +2539,7 @@
       "xp": 16
     },
     "value": 5700,
+    "icon": "misc/Misc_48.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2537,6 +2554,7 @@
       "xp": 20
     },
     "value": 9000,
+    "icon": "misc/Misc_45_hue5.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2551,6 +2569,7 @@
       "speed": 3
     },
     "value": 90,
+    "icon": "misc/Misc_33_hue3.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2565,6 +2584,7 @@
       "speed": 5
     },
     "value": 360,
+    "icon": "misc/Misc_40_hue3.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2579,6 +2599,7 @@
       "speed": 8
     },
     "value": 1320,
+    "icon": "misc/Misc_24_hue2.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2593,6 +2614,7 @@
       "speed": 12
     },
     "value": 3300,
+    "icon": "misc/Misc_25_hue1.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2607,6 +2629,7 @@
       "speed": 16
     },
     "value": 5700,
+    "icon": "misc/Misc_47.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2621,6 +2644,7 @@
       "speed": 20
     },
     "value": 9000,
+    "icon": "misc/Misc_45_hue4.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2635,6 +2659,7 @@
       "durability": 3
     },
     "value": 90,
+    "icon": "misc/Misc_29.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2649,6 +2674,7 @@
       "durability": 5
     },
     "value": 360,
+    "icon": "misc/Misc_29_hue2.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2663,6 +2689,7 @@
       "durability": 8
     },
     "value": 1320,
+    "icon": "misc/Misc_25_hue3.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2677,6 +2704,7 @@
       "durability": 12
     },
     "value": 3300,
+    "icon": "misc/Misc_47_hue2.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2691,6 +2719,7 @@
       "durability": 16
     },
     "value": 5700,
+    "icon": "misc/Misc_48_hue1.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2705,6 +2734,7 @@
       "durability": 20
     },
     "value": 9000,
+    "icon": "misc/Misc_45_hue1.png",
     "craftable": true,
     "enhanceCostMultiplier": 4
   },
@@ -2716,6 +2746,7 @@
     "reqLevel": 10,
     "maxDurability": 100,
     "value": 550,
+    "icon": "armor/Armor_73.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2728,6 +2759,7 @@
     "reqLevel": 10,
     "maxDurability": 100,
     "value": 550,
+    "icon": "shields/Shield_26.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2740,6 +2772,7 @@
     "reqLevel": 10,
     "maxDurability": 100,
     "value": 550,
+    "icon": "accessories/Accessory_11.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2752,6 +2785,7 @@
     "reqLevel": 50,
     "maxDurability": 320,
     "value": 13000,
+    "icon": "accessories/Accessory_25.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2764,6 +2798,7 @@
     "reqLevel": 50,
     "maxDurability": 320,
     "value": 13000,
+    "icon": "shields/Shield_23.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2776,6 +2811,7 @@
     "reqLevel": 50,
     "maxDurability": 320,
     "value": 13000,
+    "icon": "armor/Armor_141.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2788,6 +2824,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "weapons/Weapon_02.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2800,6 +2837,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "weapons/Weapon_05.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2812,6 +2850,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "weapons/Weapon_07.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2824,6 +2863,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "weapons/Weapon_09.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2836,6 +2876,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "accessories/Accessory_01.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2848,6 +2889,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "accessories/Accessory_09.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2860,6 +2902,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "accessories/Accessory_08.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2872,6 +2915,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "accessories/Accessory_10.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2884,6 +2928,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "armor/Armor_24.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2896,6 +2941,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "armor/Armor_31.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2908,6 +2954,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "armor/Armor_38.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2920,6 +2967,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "armor/Armor_37.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2932,6 +2980,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "armor/Armor_03.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2944,6 +2993,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "armor/Armor_17.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2956,6 +3006,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "armor/Armor_18.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2968,6 +3019,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "armor/Armor_16.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2980,6 +3032,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "armor/Armor_54.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -2992,6 +3045,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "armor/Armor_53.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3004,6 +3058,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "armor/Armor_55.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3016,6 +3071,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "armor/Armor_51.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3028,6 +3084,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "armor/Armor_134.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3040,6 +3097,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "armor/Armor_144.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3052,6 +3110,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "armor/Armor_135.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3064,6 +3123,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "armor/Armor_128.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3076,6 +3136,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "armor/Armor_74.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3088,6 +3149,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "armor/Armor_80.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3100,6 +3162,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "armor/Armor_87.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3112,6 +3175,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "armor/Armor_72.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3124,6 +3188,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "shields/Shield_25.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3136,6 +3201,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "shields/Shield_27.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3148,6 +3214,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "shields/Shield_12.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3160,6 +3227,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "shields/Shield_11.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3172,6 +3240,7 @@
     "reqLevel": 1,
     "maxDurability": 70,
     "value": 150,
+    "icon": "accessories/Accessory_14.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3184,6 +3253,7 @@
     "reqLevel": 20,
     "maxDurability": 150,
     "value": 1800,
+    "icon": "accessories/Accessory_17.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3196,6 +3266,7 @@
     "reqLevel": 30,
     "maxDurability": 200,
     "value": 5000,
+    "icon": "accessories/Accessory_19.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"
@@ -3208,6 +3279,7 @@
     "reqLevel": 40,
     "maxDurability": 260,
     "value": 10000,
+    "icon": "accessories/Accessory_15.png",
     "mods": {},
     "craftable": true,
     "setId": "guildmade"

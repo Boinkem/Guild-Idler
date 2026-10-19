@@ -33815,3 +33815,87 @@ Normal one.
 **Not done / worth knowing:** no Steam achievement (by choice). A future
 second perClass skin just needs a skins.json entry + art -- the section,
 unlock hook and backfill are all data-driven off those three fields.
+
+### DevTool icon picker categories, AH server launcher, gear icon fill, Curios batch 2 (patch 0416)
+```discord-update
+Dev Update | Patch 0416
+
+- Added icons to every Guildmade item tier (Blade, Band, Talisman, Helm, Plate, Boots, Gauntlets, Cloak, Buckler) plus the Masterwork Band, Bulwark and Mantle
+- Added icons to all 30 Heirloom Sigils: each sigil has its own colour, and its icon grows from a charm to a medallion to a sigil scroll as the tier climbs
+- Added 14 new Curios to find on quests, including Grimsby's IOU, a Polite Skull, Half a Treasure Map and a Shed Dragon Scale
+- Changed crafting recipes for those items to show the same icon as the item they make
+```
+
+Four direct requests in one pass.
+
+**1. DevTool icon picker -- category tabs** (`tools/devtool/public/app.js`
+`openIconPicker`, `style.css`). The picker used to render every
+`public/item-icons/` folder's full grid at once (~3,500 `<img>`s, most
+of them `_hueN` colour variants), which made opening it slow. Now a tab
+row (one per folder, showing its base-icon count) picks the category and
+only that folder's grid is in the DOM. Also added: a filename filter box,
+a "Colour variants" checkbox (hue variants hidden by default -- that
+alone cuts armor from 883 to 147 tiles), the pack's `*_preview.png`
+contact sheets hidden from the grid, natural sort (Armor_2 before
+Armor_10 -- `/api/icons` sorts plain-alphabetically), and the upload
+folder now follows the open tab. Opens on the folder of the
+currently-assigned icon, else the last folder picked from this session
+(`state.lastIconFolder`), else the first. Verified in headless Chromium
+against the real devtool server: 147 tiles on open for an armor item
+(selected one highlighted), accessories filtered by "1" = 12, with hues
+= 85, picking sets the value and remembers the folder, no page errors.
+Other pickers (banners, guild-hall art, decor) untouched -- smaller sets.
+
+**2. Auction House tab -- Start/Stop AH server** (`server.mjs`
+`startAhServer`/`stopAhServer`/`ahServerProcessInfo`, routes
+`GET /api/auction-house/server`, `POST .../server/start`,
+`POST .../server/stop`; new "AH server process" section in
+`renderAuctionHouse`). Start runs `npm run dev` in `server/` detached
+and hidden (`windowsHide`), stdout/stderr to `server/ah-devtool.log`
+(already gitignored via `server/.gitignore`'s `*.log`), then the UI
+re-checks `/health` every 1.5s for up to ~30s until it answers or the
+process exits, and shows the log tail (auto-expanded on failure).
+Refuses to start if the configured local URL's `/health` already
+answers (covers a hand-started copy and the GuildboundAH Windows
+Service), and gives a clear message if `server/node_modules` is missing.
+Stop only kills a process this DevTool started (same `killProcessTree`
+as the game dev server); a hand-started or service copy has to be
+stopped where it was started. Closing the DevTool leaves the server
+running. Verified end-to-end on Linux: missing node_modules -> clear
+error; after `npm install`, start -> `/health` answered within ~1s of
+tsx booting, second start -> "already running", stop -> `/health`
+down. Not run on the real Windows host yet (npm.cmd + `shell: true` is
+the same combo `startDevServer` already uses there).
+
+**3. Icons for every equipment entry that had none** (72 in
+`equipment.json`, plus the 64 matching recipes in
+`crafting-recipes.json` -- a recipe with no icon now carries its result
+item's icon; the two heirloom Vitality recipes that already had their
+own art were left alone). Equipment now has zero icon-less entries.
+Choices, all picked against rendered contact sheets of the pack:
+- Guildmade tiers progress plain/leather -> steel -> gold, built around
+  each line's existing tier II icon. Bands use only ring icons
+  (Accessory_01-10/25); Talismans use only pendants/necklaces
+  (Accessory_11-24). Helm/Plate/Boots/Gauntlets/Cloak from `armor/`
+  matching the right piece type; Bucklers use the small round shields
+  (bronze Shield_25-27 for I-III, steel rounds Shield_12/11 for IV-V).
+  The base `guildmade_gauntlets`/`_buckler`/`_talisman` (tier II) entries
+  were also missing icons and got Armor_73 / Shield_26 / Accessory_11.
+- Masterwork: Band Accessory_25, Bulwark Shield_23, Mantle Armor_141.
+- Heirloom Sigils (from `misc/`): one colour per stat (Vitality red,
+  Fortune gold, Wisdom blue, Haste green, Unbreakable purple/stone);
+  I-II crystal charms (Misc_33/40 hues, matching the existing Vitality I
+  recipe art), III-IV medallions (Misc_24/25 hues), V-VI sigil scrolls
+  (Misc_45-48 hues).
+Pure data change; any of these can be swapped in the DevTool picker.
+
+**4. Curios batch 2** -- 14 new entries in `curios.json` (10 -> 24):
+mismatched_boots (3g), suspicious_fish (1g), petrified_loaf (4g),
+empty_coin_purse (2g), grimsby_iou (5g), dented_tankard (10g),
+mummified_bat (9g), mystery_key (12g), glass_eye (16g), polite_skull
+(20g), bards_quill (24g), half_a_treasure_map (40g), soup_grimoire
+(55g), shed_dragon_scale (90g). All have icons from the existing pack
+(food/misc/crafting/armor). Quest curio drops pick uniformly from the
+whole list (`QuestManager`), so the existing 10 now drop proportionally
+less often -- no tuning change; sell values stay in the same 1-150 band.
+No save migration needed (`GameState.curios` is a free-form id->count map).
