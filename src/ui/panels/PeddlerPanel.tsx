@@ -9,6 +9,8 @@ import { PeddlerDiceModal } from '../PeddlerDiceModal';
 import { PeddlerTabModal } from '../PeddlerTabModal';
 import { ReputationRing } from '../ReputationRing';
 import { vendorRepLevel, vendorRepPercent } from '../../game/data/vendorRep';
+import { buyWithFx } from '../purchaseFx';
+import { UnlockFx, useJustUnlocked } from '../unlockFx';
 
 /**
  * Grimsby tab redesign -- Claude Design handoff, direct request. The
@@ -66,6 +68,10 @@ export function PeddlerPanel() {
   const canAffordHighRollerUnlock = PeddlerManager.canUnlockHighRoller(state);
 
   const permanentSpotUnlocked = state.grimsbyPermanentSpotUnlocked;
+  // Patch 0421 -- the shared unlock moment (see unlockFx.tsx) on whichever
+  // card a one-time purchase just opened up.
+  const highRollerJustUnlocked = useJustUnlocked('highRoller', highRollerUnlocked);
+  const permanentSpotJustUnlocked = useJustUnlocked('permanentSpot', permanentSpotUnlocked);
   const permanentSpotCost = PeddlerManager.permanentSpotUnlockCost();
   const canAffordPermanentSpot = PeddlerManager.canUnlockPermanentSpot(state);
 
@@ -221,7 +227,8 @@ export function PeddlerPanel() {
         {/* 03 / THE TAB -- gated behind Permanent Spot; locked-card
             treatment (see .grimsby-game-card.locked below) until then,
             same skeleton as the unlocked state either way. */}
-        <div className={`grimsby-game-card ${permanentSpotUnlocked ? '' : 'locked'}`}>
+        <div className={`grimsby-game-card fx-unlock-host ${permanentSpotUnlocked ? '' : 'locked'} ${permanentSpotJustUnlocked ? 'fx-unlocking' : ''}`}>
+          {permanentSpotJustUnlocked && <UnlockFx />}
           <div className="grimsby-game-card-header">
             <span className="grimsby-game-card-index">03 / THE TAB</span>
             <span
@@ -275,7 +282,8 @@ export function PeddlerPanel() {
             Previously two separate elements (a standalone locked-upgrade
             card for the purchase, a second button crammed onto the Cards
             card for play) -- now one card that just changes state. */}
-        <div className={`grimsby-game-card ${highRollerUnlocked ? '' : 'locked'}`}>
+        <div className={`grimsby-game-card fx-unlock-host ${highRollerUnlocked ? '' : 'locked'} ${highRollerJustUnlocked ? 'fx-unlocking' : ''}`}>
+          {highRollerJustUnlocked && <UnlockFx />}
           <div className="grimsby-game-card-header">
             <span className="grimsby-game-card-index">04 / HIGH ROLLER</span>
             <span
@@ -319,7 +327,7 @@ export function PeddlerPanel() {
               <button
                 className="btn-yellow"
                 disabled={!canAffordHighRollerUnlock}
-                onClick={() => engine.unlockHighRoller()}
+                onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.unlockHighRoller())}
                 title={canAffordHighRollerUnlock ? undefined : 'Not enough gold'}
               >
                 Unlock -- {formatGold(highRollerUnlockCost)} gold
@@ -354,7 +362,7 @@ export function PeddlerPanel() {
           <button
             className="btn-primary"
             disabled={!canAffordPermanentSpot}
-            onClick={() => engine.unlockGrimsbyPermanentSpot()}
+            onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.unlockGrimsbyPermanentSpot())}
             title={canAffordPermanentSpot ? undefined : 'Not enough gold'}
           >
             Unlock -- {formatGold(permanentSpotCost)} gold

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { fxMs, fxSpeed } from './purchaseFx';
 import type { CSSProperties } from 'react';
 import { STAR_BURST } from './maxFlash';
 
@@ -80,4 +81,58 @@ export function ReviveFlash({ onDone }: { onDone: () => void }) {
       ))}
     </div>
   );
+}
+
+export type RevivePhase = 'wait' | 'crack' | 'shatter' | 'rise';
+
+/**
+ * Patch 0421 -- the revive moment as a timeline instead of the old star
+ * burst: the tombstone rattles and cracks ('crack'), breaks apart under a
+ * pillar of light ('shatter'), then the hero rises back up out of the
+ * portrait slot ('rise'). Same fallen -> not-fallen detection as
+ * useReviveFlash above (never on mount). A bulk revive (Revive All)
+ * staggers them ~350ms apart; anyone still waiting their turn holds on
+ * their tombstone ('wait'). `riseOnly` skips straight to 'rise' -- pets
+ * keep their sprite while Fallen, so there's no tombstone to break.
+ * Empty when motion is off: the card just shows its new state.
+ */
+export function useReviveBeats(items: { id: string; fallen: boolean }[], riseOnly = false): Record<string, RevivePhase> {
+  const prevRef = useRef<Record<string, boolean> | null>(null);
+  const timers = useRef<number[]>([]);
+  const [phases, setPhases] = useState<Record<string, RevivePhase>>({});
+  const signature = items.map((i) => `${i.id}:${i.fallen}`).join('|');
+  useLayoutEffect(() => {
+    const prev = prevRef.current;
+    const next: Record<string, boolean> = {};
+    const revived: string[] = [];
+    for (const item of items) {
+      next[item.id] = item.fallen;
+      if (prev && prev[item.id] === true && item.fallen === false) revived.push(item.id);
+    }
+    prevRef.current = next;
+    if (revived.length === 0 || fxSpeed() <= 0) return;
+    const set = (id: string, p: RevivePhase | null) => setPhases((cur) => {
+      const n = { ...cur };
+      if (p) n[id] = p; else delete n[id];
+      return n;
+    });
+    revived.forEach((id, i) => {
+      const t0 = i * 350;
+      const at = (ms: number, p: RevivePhase | null) => timers.current.push(window.setTimeout(() => set(id, p), fxMs(t0 + ms)));
+      if (riseOnly) {
+        set(id, i === 0 ? 'rise' : 'wait');
+        if (i > 0) at(0, 'rise');
+        at(1100, null);
+      } else {
+        set(id, i === 0 ? 'crack' : 'wait');
+        if (i > 0) at(0, 'crack');
+        at(520, 'shatter');
+        at(900, 'rise');
+        at(2000, null);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
+  useEffect(() => () => { timers.current.forEach((t) => window.clearTimeout(t)); }, []);
+  return phases;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
@@ -14,6 +14,7 @@ import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
 import { ConfirmModal } from '../ConfirmModal';
+import { buyWithFx, fxMs, fxSpeed } from '../purchaseFx';
 
 export type Offer = QuestOffer;
 
@@ -646,7 +647,22 @@ export function QuestPanel() {
   // free/paid count is account-wide, shared across every hero's board, not
   // reset per hero.
   const rerollCost = QuestManager.questRerollCost(state, now);
-  const reroll = () => engine.rerollQuestBoard(selectedHero.id);
+  // Patch 0421 -- reroll moment: the die on the button spins, each new
+  // contract flips in over the old one in turn, and a frozen contract
+  // shivers and holds its place. Only when the board actually changed.
+  const [rerollFx, setRerollFx] = useState(0);
+  const rerollTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(rerollTimer.current), []);
+  const reroll = (btn: HTMLElement) => {
+    const ids = () => (engine.state.questBoards[selectedHero.id] ?? []).map((o) => o.id).sort().join('|');
+    const before = ids();
+    buyWithFx(engine, btn, () => engine.rerollQuestBoard(selectedHero.id));
+    const after = ids();
+    if (after === before || fxSpeed() <= 0) return;
+    window.clearTimeout(rerollTimer.current);
+    setRerollFx(Date.now());
+    rerollTimer.current = window.setTimeout(() => setRerollFx(0), fxMs(1400));
+  };
 
   // Patch 0334, direct report: a guided-onboarding player could reroll
   // away the scripted tutorial quest before ever sending it -- the
@@ -797,9 +813,9 @@ export function QuestPanel() {
                 <option value="reward">Sort: Best reward</option>
               </select>
               <button
-                className="btn-primary"
+                className={`btn-primary quest-reroll-btn ${rerollFx ? 'fx-rolling' : ''}`}
                 style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
-                onClick={reroll}
+                onClick={(e) => reroll(e.currentTarget)}
                 disabled={tutorialQuestPending || rerollCost > state.gold}
                 title={tutorialQuestPending
                   ? 'Complete the tutorial quest first'
@@ -807,6 +823,10 @@ export function QuestPanel() {
                     ? `Reroll this hero's contracts for ${rerollCost} gold`
                     : "Reroll this hero's contracts -- free today"}
               >
+                <svg className="quest-reroll-die" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <rect x="2" y="2" width="12" height="12" rx="2.5" />
+                  <circle cx="5.5" cy="5.5" r="1" fill="currentColor" /><circle cx="8" cy="8" r="1" fill="currentColor" /><circle cx="10.5" cy="10.5" r="1" fill="currentColor" />
+                </svg>
                 {rerollCost > 0 ? `Reroll · ${formatGold(rerollCost)}` : 'Reroll · Free'}
               </button>
               <span
@@ -836,15 +856,20 @@ export function QuestPanel() {
           </div>
           {contractOffers.length === 0 && <p className="small muted">Nothing open right now. New contracts arrive within the half hour.</p>}
           <div className="raid-list">
-            {contractOffers.map((offer) => (
-              <QuestRow
+            {contractOffers.map((offer, i) => (
+              <div
                 key={offer.id}
-                offer={offer}
-                hero={selectedHero}
-                now={now}
-                isFrozen={frozenOfferId === offer.id}
-                onOpen={() => setOpenOfferId(offer.id)}
-              />
+                className={rerollFx ? (frozenOfferId === offer.id ? 'fx-reroll-hold' : 'fx-reroll-in') : undefined}
+                style={rerollFx ? { animationDelay: `${fxMs(150 + i * 110)}ms` } : undefined}
+              >
+                <QuestRow
+                  offer={offer}
+                  hero={selectedHero}
+                  now={now}
+                  isFrozen={frozenOfferId === offer.id}
+                  onOpen={() => setOpenOfferId(offer.id)}
+                />
+              </div>
             ))}
           </div>
           {openContractOffer && (

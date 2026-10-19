@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { backgroundSrc } from '../game/settings';
@@ -15,6 +16,7 @@ import { measureFlyOffset } from './flyTarget';
 import { RewardGlowParticle } from './RewardGlowParticle';
 import { GrimsbyBustCard } from './GrimsbyBustCard';
 import { vendorRepPercent } from '../game/data/vendorRep';
+import { fxMs, fxSpeed } from './purchaseFx';
 
 /**
  * Random one-liners Grimsby fires off the moment the cards spawn --
@@ -45,13 +47,10 @@ const TIER_LABEL: Record<PeddlerCardTier, string> = {
   bust: 'Nothing', refund: 'Partial Refund', modest: 'Modest Find', good: 'Good Find', jackpot: 'JACKPOT',
 };
 
-/** How long the two unpicked cards take to fade away before the result
- *  summary appears -- shared between the CSS animation (see .peddler-
- *  card-fading-out in app.css) and the setTimeout that gates the summary,
- *  so they can never drift out of sync with each other. Doubled from 480
- *  -- the original fade read as too abrupt to actually register as a
- *  fade rather than a snap. */
-const UNPICKED_FADE_MS = 960;
+/* The two unpicked cards now fade during the picked card's 'tell' (see
+   TELL_MS below) instead of gating the summary on their own 960ms timer
+   -- .peddler-card-fading-out in app.css runs 700ms (scaled by animation
+   speed) to land inside the shortest tell. */
 
 /** How many little glow particles fly off for a given outcome -- keyed
  *  to the outcome's own tier rather than a raw gold/material amount,
@@ -60,9 +59,39 @@ const UNPICKED_FADE_MS = 960;
  *  is already a normalized 1-5 "how big a deal is this" signal every
  *  outcome already carries. Reads as "more flourish for a better pull,"
  *  which is what "more depending on the amount" is really getting at. */
-const BURST_PARTICLE_COUNT: Record<PeddlerCardTier, number> = {
-  bust: 1, refund: 1, modest: 2, good: 3, jackpot: 5,
+/**
+ * Patch 0421 -- every tier gets its own reveal (mocked up and signed off
+ * on the Design canvas first). The engine resolves the pick instantly;
+ * these only pace what the player sees:
+ *   'tell'  -- picked card lifts, still face-down, while the other two
+ *              fade. A Good find gets one blue glint across the back; a
+ *              Jackpot trembles, leaks gold light and dims the table for
+ *              noticeably longer. Bust/Refund/Modest give nothing away.
+ *   'flip'  -- the card turns over (FLIP_MS).
+ *   'settled' -- the tier's own moment plays (CSS, .fx-t-<tier>) and the
+ *              existing reward flight / result summary / BUST card show.
+ * Times are at 1x and scale with Settings > Animation speed; Reduce
+ * motion skips straight to 'settled'.
+ */
+const TELL_MS: Record<PeddlerCardTier, number> = {
+  bust: 700, refund: 700, modest: 700, good: 950, jackpot: 1600,
 };
+const FLIP_MS = 450;
+
+/** How many little glow particles fly off for a given outcome -- keyed
+ *  to tier, not raw amount (see the original note this replaced in
+ *  guild-idler-status.md). Refund went 1 -> 3 in patch 0421 so its slow
+ *  trickle reads as a trickle. Doubled for High Roller. */
+const BURST_PARTICLE_COUNT: Record<PeddlerCardTier, number> = {
+  bust: 1, refund: 3, modest: 2, good: 3, jackpot: 5,
+};
+/** Gap between reward particles -- a refund's coins trickle back slowly,
+ *  almost reluctantly, where every other tier's go together. */
+const BURST_SPACING_MS: Record<PeddlerCardTier, number> = {
+  bust: 90, refund: 260, modest: 90, good: 90, jackpot: 70,
+};
+/** Tiers Grimsby nods along to; he just shrugs (idle) at a bust or refund. */
+const CHEER_TIERS: PeddlerCardTier[] = ['modest', 'good', 'jackpot'];
 
 /** Which shared fly-target (see flyTarget.ts) this outcome's reward
  *  particles head toward, or null for kinds with nothing to fly at all
@@ -257,6 +286,59 @@ function PeddlerCard({
   );
 }
 
+/**
+ * Patch 0421 -- the picked card as a real two-sided card: face-down back
+ * through the 'tell', turning over during 'flip', then carrying the
+ * tier's own moment (rays, ring, burst, the bust sag) once settled. The
+ * face-up side is the existing PeddlerCard, unchanged, passed as children.
+ */
+function PeddlerFlipCard({
+  backIndex, tier, stage, children,
+}: {
+  backIndex: number; tier: PeddlerCardTier; stage: 'idle' | 'tell' | 'flip' | 'settled'; children: ReactNode;
+}) {
+  const flipped = stage === 'flip' || stage === 'settled';
+  const moment = stage === 'settled';
+  const burstCount = tier === 'jackpot' ? 24 : tier === 'good' ? 14 : tier === 'modest' ? 8 : 0;
+  return (
+    <div className={`peddler-flip ${stage === 'tell' ? `fx-tell-${tier}` : ''} ${moment ? `fx-moment fx-t-${tier}` : ''}`}>
+      <span className="peddler-fx-rays" aria-hidden="true" />
+      <span className="peddler-fx-ring" aria-hidden="true" />
+      <div className={`peddler-flip-inner ${flipped ? 'flipped' : ''}`}>
+        <div className="peddler-flip-front">{children}</div>
+        <div className="peddler-flip-back" style={{ backgroundImage: `url(./peddler/cards/back_${backIndex}.png)` }} aria-hidden="true" />
+      </div>
+      {moment && burstCount > 0 && (
+        <span className="peddler-fx-burst" aria-hidden="true">
+          {Array.from({ length: burstCount }, (_, i) => (
+            <span key={i} style={{ transform: `rotate(${Math.round((i * 360) / burstCount)}deg)` }}>
+              <i className={`d${(i % 3) + 1}`} style={{ animationDelay: `${(i % 4) * 30}ms` }} />
+            </span>
+          ))}
+        </span>
+      )}
+      {moment && tier === 'bust' && (
+        <span className="peddler-fx-dust" aria-hidden="true"><i /><i /><i /><i /></span>
+      )}
+    </div>
+  );
+}
+
+/** The tier's name over the result line -- JACKPOT slams in letter by
+ *  letter, Good Find gets a shine pass, the rest just rise in. */
+function PeddlerTierLabel({ tier }: { tier: PeddlerCardTier }) {
+  if (tier === 'jackpot') {
+    return (
+      <div className="peddler-tier-label fx-t-jackpot" aria-label="Jackpot">
+        {'JACKPOT'.split('').map((ch, i) => (
+          <span key={i} style={{ animationDelay: `${fxMs(i * 90)}ms` }} aria-hidden="true">{ch}</span>
+        ))}
+      </div>
+    );
+  }
+  return <div className={`peddler-tier-label fx-t-${tier}`} style={{ color: tierColorFor(tier) }}>{TIER_LABEL[tier]}</div>;
+}
+
 /** The "new card laid over the top" detail view for the picked card --
  *  an absolutely-positioned layer inside .peddler-modal (which is
  *  already `position: relative` via .modal) rather than a growing inline
@@ -305,7 +387,8 @@ export function PeddlerCardModal({
   // cards animate away, then 'settled' once only the picked card (and the
   // result summary) remain. Local UI sequencing, independent of the
   // engine's own (instant) result resolution -- see the effect below.
-  const [revealStage, setRevealStage] = useState<'idle' | 'fading' | 'settled'>('idle');
+  const [revealStage, setRevealStage] = useState<'idle' | 'tell' | 'flip' | 'settled'>('idle');
+  const revealTimers = useRef<number[]>([]);
   // Grimsby's header sprite used to loop 'wave'/'approval' indefinitely --
   // both are one-shot gestures (a wave hello, a nod of approval), not
   // idle loops, so they should play once and settle back to 'idle'
@@ -330,14 +413,20 @@ export function PeddlerCardModal({
 
   const result = engine.lastGrimsbyResult;
 
+  // Timers live in a ref rather than this effect's own cleanup: the
+  // effect re-runs the moment it moves the stage to 'tell', and a cleanup
+  // here would cancel the very timers it just scheduled.
   useEffect(() => {
-    if (result && revealStage === 'idle') {
-      setRevealStage('fading');
-      const t = window.setTimeout(() => setRevealStage('settled'), UNPICKED_FADE_MS);
-      return () => window.clearTimeout(t);
-    }
-    return undefined;
+    if (!result || revealStage !== 'idle') return;
+    const tier = result.cards[result.pickedIndex].outcome.tier;
+    if (fxSpeed() <= 0) { setRevealStage('settled'); return; }
+    setRevealStage('tell');
+    revealTimers.current.push(
+      window.setTimeout(() => setRevealStage('flip'), fxMs(TELL_MS[tier])),
+      window.setTimeout(() => setRevealStage('settled'), fxMs(TELL_MS[tier] + FLIP_MS)),
+    );
   }, [result, revealStage]);
+  useEffect(() => () => { revealTimers.current.forEach((t) => window.clearTimeout(t)); }, []);
 
   useEffect(() => {
     if (revealStage !== 'settled' || !result || burstParticles || !burstOriginRef.current) return;
@@ -349,10 +438,14 @@ export function PeddlerCardModal({
     const rect = burstOriginRef.current.getBoundingClientRect();
     const origin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     const color = burstColorFor(outcome);
-    const count = BURST_PARTICLE_COUNT[outcome.tier];
+    const count = BURST_PARTICLE_COUNT[outcome.tier] * (highRoller ? 2 : 1);
+    const spacing = BURST_SPACING_MS[outcome.tier];
     setBurstParticles(Array.from({ length: count }, (_, i) => ({
-      ...origin, dx: offset.dx, dy: offset.dy, color, icon: outcome.icon, delay: i * 90,
+      // A beat after the moment starts, so the reward leaves the card once
+      // the tier has had its say rather than on top of it.
+      ...origin, dx: offset.dx, dy: offset.dy, color, icon: outcome.icon, delay: 350 + i * spacing,
     })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealStage, result, burstParticles]);
 
   const handlePick = (index: number) => {
@@ -377,6 +470,8 @@ export function PeddlerCardModal({
    * step instead of making the player close and reopen the whole modal.
    */
   const handleRollAgain = () => {
+    revealTimers.current.forEach((t) => window.clearTimeout(t));
+    revealTimers.current = [];
     engine.dismissGrimsbyResult();
     setLocalBacks([Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3)]);
     setResultBackIndex(Math.floor(Math.random() * 3));
@@ -388,9 +483,31 @@ export function PeddlerCardModal({
   };
 
   const pickedCard = result?.cards[result.pickedIndex];
+  const pickedTier = pickedCard?.outcome.tier;
+  const settled = revealStage === 'settled';
+  // Approval only once the card is face-up, and only for a result worth
+  // nodding at -- a bust or refund gets his plain idle shrug instead.
+  const cheering = !!pickedTier && settled && CHEER_TIERS.includes(pickedTier);
   const headerAnimation = result
-    ? (approvalDone ? 'idle' : 'approval')
+    ? (cheering && !approvalDone ? 'approval' : 'idle')
     : (waveDone ? 'idle' : 'wave');
+  // Jackpot's coin rain and confetti -- rolled once per result.
+  const jackpotRain = useMemo(() => {
+    if (pickedTier !== 'jackpot') return null;
+    const coins = highRoller ? 56 : 28;
+    const colors = ['var(--brass)', 'var(--moss)', 'var(--sky)', 'var(--pink)', 'var(--parchment)'];
+    return {
+      coins: Array.from({ length: coins }, () => ({
+        left: Math.random() * 96, delay: Math.random() * 1400, dur: 1100 + Math.random() * 700,
+      })),
+      confetti: Array.from({ length: 36 }, (_, i) => ({
+        left: Math.random() * 98, delay: 200 + Math.random() * 1600, dur: 1600 + Math.random() * 1200, color: colors[i % colors.length],
+      })),
+    };
+  }, [result, pickedTier, highRoller]);
+  const modalFx = pickedTier === 'jackpot'
+    ? (revealStage === 'tell' ? 'fx-jackpot-tell' : settled ? 'fx-jackpot-moment' : '')
+    : '';
 
   // Same fee resolveFlip itself will actually charge on the next pick --
   // see PeddlerManager.feeWithStake's own comment for why this reads from
@@ -404,7 +521,7 @@ export function PeddlerCardModal({
   return (
     <div className="overlay" onClick={handleClose}>
       <div
-        className="modal peddler-modal"
+        className={`modal peddler-modal ${modalFx}`}
         style={{ backgroundImage: `url(${backgroundSrc('./lore/peddler-table.png', settings.backgroundMood)})` }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -455,7 +572,7 @@ export function PeddlerCardModal({
               <div className="peddler-card-row" ref={burstOriginRef}>
                 {result.cards.map((c, i) => {
                   const isPicked = i === result.pickedIndex;
-                  if (!isPicked && revealStage === 'settled') return null;
+                  if (!isPicked && (revealStage === 'flip' || revealStage === 'settled')) return null;
                   // Unpicked cards never flip -- they just fade away face-
                   // down, so their outcome is never shown at all (see the
                   // reasoning in app.css next to .peddler-card-fading-out).
@@ -466,24 +583,25 @@ export function PeddlerCardModal({
                         faceUp={false}
                         backIndex={c.backIndex}
                         disabled
-                        fadingOut={revealStage === 'fading'}
+                        fadingOut={revealStage === 'tell'}
                       />
                     );
                   }
                   return (
-                    <PeddlerCard
-                      key={i}
-                      faceUp
-                      backIndex={c.backIndex}
-                      outcome={c.outcome}
-                      resultBackIndex={resultBackIndex}
-                      spotlight={revealStage === 'settled'}
-                      onOpenDetails={() => setDetailOpen(true)}
-                    />
+                    <PeddlerFlipCard key={i} backIndex={c.backIndex} tier={c.outcome.tier} stage={revealStage}>
+                      <PeddlerCard
+                        faceUp
+                        backIndex={c.backIndex}
+                        outcome={c.outcome}
+                        resultBackIndex={resultBackIndex}
+                        spotlight={settled}
+                        onOpenDetails={() => setDetailOpen(true)}
+                      />
+                    </PeddlerFlipCard>
                   );
                 })}
               </div>
-              {revealStage === 'settled' && (
+              {settled && (
                 pickedCard?.outcome.tier === 'bust' ? (
                   <GrimsbyBustCard
                     subtitle="Nothing this time. Try again?"
@@ -493,6 +611,7 @@ export function PeddlerCardModal({
                   />
                 ) : (
                   <div className="peddler-result-summary">
+                    {pickedTier && <PeddlerTierLabel tier={pickedTier} />}
                     <p><b>You got:</b> {result.rewardSummary}</p>
                   </div>
                 )
@@ -505,6 +624,16 @@ export function PeddlerCardModal({
                   durationMs={700}
                 />
               ))}
+              {settled && jackpotRain && (
+                <div className="peddler-rain" aria-hidden="true">
+                  {jackpotRain.coins.map((c, i) => (
+                    <span key={`c${i}`} className="peddler-rain-coin" style={{ left: `${c.left}%`, animationDelay: `${fxMs(c.delay)}ms`, animationDuration: `${fxMs(c.dur)}ms` }} />
+                  ))}
+                  {jackpotRain.confetti.map((c, i) => (
+                    <span key={`f${i}`} className="peddler-rain-confetti" style={{ left: `${c.left}%`, background: c.color, animationDelay: `${fxMs(c.delay)}ms`, animationDuration: `${fxMs(c.dur)}ms` }} />
+                  ))}
+                </div>
+              )}
               {detailOpen && pickedCard && (
                 <PeddlerCardDetailOverlay outcome={pickedCard.outcome} onClose={() => setDetailOpen(false)} />
               )}

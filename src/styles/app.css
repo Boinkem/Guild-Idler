@@ -5708,7 +5708,9 @@ button.harvest-item:hover {
 .peddler-card-fading-out {
   /* Matches UNPICKED_FADE_MS in PeddlerCardModal.tsx exactly -- see that
      constant's own comment. */
-  animation: peddler-card-fade-out 960ms ease forwards;
+  /* Patch 0421: 700ms (was 960) so it finishes inside the picked card's
+     shortest 'tell' -- see TELL_MS in PeddlerCardModal.tsx. */
+  animation: peddler-card-fade-out calc(var(--fx-t) * 700) ease forwards;
   pointer-events: none;
 }
 @keyframes peddler-card-fade-out {
@@ -6635,3 +6637,593 @@ button.harvest-item:hover {
 .class-skin-card.owned { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sky) 60%, transparent); }
 .class-skin-name { font-size: 0.8rem; }
 .class-skin-lock { line-height: 1.3; }
+
+/* ------------------------ grimsby outcomes (0421) ------------------------ */
+/*
+ * Patch 0421 -- see TELL_MS / PeddlerFlipCard in PeddlerCardModal.tsx.
+ * Each tier has its own moment once the picked card turns over; the
+ * Good and Jackpot tiers also get a tell before it does. Timed in
+ * --fx-t like the 0420 purchase fx.
+ */
+.peddler-flip { position: relative; perspective: 900px; }
+.peddler-flip-inner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform calc(var(--fx-t) * 450) cubic-bezier(.3, 1.3, .5, 1);
+  transform: rotateY(180deg) translateY(-8px) scale(1.04);
+}
+.peddler-flip-inner.flipped { transform: none; }
+.peddler-flip-front { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.peddler-flip-back {
+  position: absolute; inset: 0;
+  transform: rotateY(180deg);
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+}
+.peddler-fx-rays, .peddler-fx-ring { position: absolute; pointer-events: none; opacity: 0; }
+.peddler-fx-ring { inset: -6px; border-radius: 8px; }
+.peddler-fx-rays {
+  left: 50%; top: 50%;
+  width: 420px; height: 420px; margin: -210px 0 0 -210px;
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%);
+  mask: radial-gradient(circle, #000 18%, transparent 62%);
+}
+
+/* Tells (card still face-down). */
+.fx-tell-good .peddler-flip-back::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 4px;
+  background: linear-gradient(115deg, transparent 40%, color-mix(in srgb, var(--sky) 70%, white) 50%, transparent 60%);
+  background-size: 300% 100%;
+  animation: fx-back-glint calc(var(--fx-t) * 500) ease-out calc(var(--fx-t) * 250) both;
+}
+@keyframes fx-back-glint { from { background-position: 120% 0; } to { background-position: -20% 0; } }
+.fx-tell-jackpot .peddler-flip-inner { animation: fx-tremble calc(var(--fx-t) * 90) linear calc(var(--fx-t) * 350) infinite; }
+@keyframes fx-tremble {
+  25% { transform: rotateY(180deg) translateY(-8px) scale(1.04) rotate(-1.2deg); }
+  75% { transform: rotateY(180deg) translateY(-8px) scale(1.04) rotate(1.2deg); }
+}
+.fx-tell-jackpot .peddler-fx-ring {
+  opacity: 1;
+  animation: fx-leak calc(var(--fx-t) * 600) ease-in calc(var(--fx-t) * 350) infinite alternate;
+}
+@keyframes fx-leak {
+  from { box-shadow: 0 0 10px 2px color-mix(in srgb, var(--brass) 50%, transparent); }
+  to { box-shadow: 0 0 26px 8px color-mix(in srgb, var(--brass) 95%, white), 0 0 70px 18px color-mix(in srgb, var(--brass) 50%, transparent); }
+}
+.peddler-modal.fx-jackpot-tell::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  z-index: 1;
+  animation: fx-dim-in calc(var(--fx-t) * 400) calc(var(--fx-t) * 350) both;
+}
+@keyframes fx-dim-in { from { opacity: 0; } to { opacity: 1; } }
+.peddler-modal.fx-jackpot-tell .peddler-card-row { position: relative; z-index: 2; }
+
+/* Moments (card face-up). */
+/* Bust -- sags, drains to grey, puffs dust. */
+.fx-t-bust .peddler-flip-inner {
+  transition: transform calc(var(--fx-t) * 600) cubic-bezier(.5, 0, .7, 1), filter calc(var(--fx-t) * 600);
+  transform: translateY(16px) rotate(7deg);
+  filter: grayscale(.9) brightness(.7);
+}
+.peddler-fx-dust { position: absolute; left: 50%; bottom: -4px; width: 0; height: 0; pointer-events: none; }
+.peddler-fx-dust > i {
+  position: absolute;
+  width: 16px; height: 16px; margin: -8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+  opacity: 0;
+  animation: fx-puff calc(var(--fx-t) * 700) ease-out calc(var(--fx-t) * 420) forwards;
+}
+.peddler-fx-dust > i:nth-child(1) { --puff-x: -40px; }
+.peddler-fx-dust > i:nth-child(2) { --puff-x: -14px; }
+.peddler-fx-dust > i:nth-child(3) { --puff-x: 14px; }
+.peddler-fx-dust > i:nth-child(4) { --puff-x: 40px; }
+@keyframes fx-puff { 0% { opacity: .8; transform: scale(.3); } 100% { opacity: 0; transform: translate(var(--puff-x), -14px) scale(1.6); } }
+/* The shared BUST card (Card, Dice and Tab): letters drop in and land crooked. */
+.grimsby-bust-card-label > span { display: inline-block; opacity: 0; animation: fx-letter-drop calc(var(--fx-t) * 420) cubic-bezier(.5, 0, .6, 1.6) forwards; }
+.grimsby-bust-card-label > span:nth-child(1) { --tilt: -6deg; }
+.grimsby-bust-card-label > span:nth-child(2) { --tilt: 4deg; animation-delay: calc(var(--fx-t) * 140); }
+.grimsby-bust-card-label > span:nth-child(3) { --tilt: -3deg; animation-delay: calc(var(--fx-t) * 280); }
+.grimsby-bust-card-label > span:nth-child(4) { --tilt: 7deg; animation-delay: calc(var(--fx-t) * 420); }
+@keyframes fx-letter-drop {
+  0% { opacity: 0; transform: translateY(-50px) rotate(-10deg); }
+  70% { opacity: 1; transform: translateY(4px); }
+  100% { opacity: 1; transform: rotate(var(--tilt, 0deg)); }
+}
+.grimsby-bust-card { animation: fx-plate-up calc(var(--fx-t) * 400) cubic-bezier(.3, 1.4, .5, 1) both; }
+@keyframes fx-plate-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+/* Refund -- one dull bronze pulse (the coins trickle back via the reward
+   particles, spaced out by BURST_SPACING_MS). */
+.fx-t-refund .peddler-fx-ring { animation: fx-dull calc(var(--fx-t) * 900) ease-out forwards; }
+@keyframes fx-dull {
+  0% { opacity: 1; box-shadow: 0 0 0 2px var(--brass-dim), 0 0 14px color-mix(in srgb, var(--brass-dim) 60%, transparent); }
+  100% { opacity: 0; }
+}
+/* Modest -- one green ring, a gentle bob, a small spray. */
+.fx-t-modest .peddler-fx-ring { border: 2px solid var(--moss); animation: fx-ring-out calc(var(--fx-t) * 800) ease-out forwards; }
+@keyframes fx-ring-out { 0% { opacity: 1; transform: scale(.95); } 100% { opacity: 0; transform: scale(1.25); } }
+.fx-t-modest .peddler-flip-inner { animation: fx-bob calc(var(--fx-t) * 600) ease-in-out; }
+@keyframes fx-bob { 50% { transform: translateY(-18px) scale(1.06); } }
+/* Good -- blue rays turn behind the card, a pop, a bigger burst. */
+.fx-t-good .peddler-fx-rays {
+  background: repeating-conic-gradient(color-mix(in srgb, var(--sky) 45%, transparent) 0 8deg, transparent 8deg 22deg);
+  animation: fx-tier-rays calc(var(--fx-t) * 2400) linear forwards;
+}
+.fx-t-good .peddler-flip-inner { animation: fx-card-pop calc(var(--fx-t) * 500) cubic-bezier(.3, 1.8, .5, 1); }
+/* Jackpot -- huge gold rays, a bigger pop, a pulsing gold ring. */
+.fx-t-jackpot .peddler-fx-rays {
+  width: 700px; height: 700px; margin: -350px 0 0 -350px;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--brass) 60%, white) 0 7deg, transparent 7deg 18deg);
+  animation: fx-tier-rays calc(var(--fx-t) * 3600) linear forwards;
+}
+.fx-t-jackpot .peddler-flip-inner { animation: fx-card-pop calc(var(--fx-t) * 600) cubic-bezier(.3, 1.9, .5, 1); }
+.fx-t-jackpot .peddler-fx-ring {
+  opacity: 1;
+  animation: fx-jring calc(var(--fx-t) * 700) ease-in-out infinite alternate;
+}
+@keyframes fx-jring {
+  from { box-shadow: 0 0 0 2px var(--brass), 0 0 16px 4px color-mix(in srgb, var(--brass) 60%, transparent); }
+  to { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brass) 60%, white), 0 0 36px 12px color-mix(in srgb, var(--brass) 90%, transparent); }
+}
+@keyframes fx-tier-rays {
+  0% { opacity: 0; transform: rotate(0) scale(.5); }
+  15% { opacity: 1; transform: rotate(10deg) scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(60deg) scale(1.05); }
+}
+@keyframes fx-card-pop { 0% { transform: scale(.85); } 100% { transform: none; } }
+.peddler-fx-burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.peddler-fx-burst > span { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.peddler-fx-burst i {
+  position: absolute;
+  width: 6px; height: 6px; margin: -3px;
+  border-radius: 50%;
+  opacity: 0;
+  background: var(--moss);
+  animation: fx-tier-burst calc(var(--fx-t) * 700) cubic-bezier(.1, .7, .3, 1) forwards;
+}
+.peddler-fx-burst i.d2 { --burst-k: .8; }
+.peddler-fx-burst i.d3 { --burst-k: .6; }
+.fx-t-modest .peddler-fx-burst { --burst-d: 80px; }
+.fx-t-good .peddler-fx-burst { --burst-d: 125px; }
+.fx-t-good .peddler-fx-burst i { background: color-mix(in srgb, var(--sky) 70%, white); }
+.fx-t-jackpot .peddler-fx-burst { --burst-d: 180px; }
+.fx-t-jackpot .peddler-fx-burst i { background: color-mix(in srgb, var(--brass) 70%, white); }
+@keyframes fx-tier-burst {
+  0% { opacity: 1; transform: translateX(10px); }
+  100% { opacity: 0; transform: translateX(calc(var(--burst-d, 90px) * var(--burst-k, 1))); }
+}
+/* Tier name over "You got:". */
+.peddler-tier-label {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+  animation: fx-label-in calc(var(--fx-t) * 420) cubic-bezier(.3, 1.5, .5, 1) both;
+}
+@keyframes fx-label-in { from { opacity: 0; transform: translateY(10px) scale(.8); } to { opacity: 1; transform: none; } }
+.peddler-tier-label.fx-t-good {
+  background: linear-gradient(100deg, currentColor 40%, #fff 50%, currentColor 60%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: fx-label-in calc(var(--fx-t) * 420) cubic-bezier(.3, 1.5, .5, 1) both, fx-label-shine calc(var(--fx-t) * 1200) linear calc(var(--fx-t) * 300) 2;
+}
+@keyframes fx-label-shine { from { background-position: 120% 0; } to { background-position: -20% 0; } }
+.peddler-tier-label.fx-t-jackpot {
+  display: flex; justify-content: center;
+  font-size: 2.6rem; font-weight: 700;
+  color: color-mix(in srgb, var(--brass) 60%, white);
+  text-shadow: 0 3px 0 var(--brass-dim), 0 0 18px var(--brass);
+  animation: none;
+}
+.peddler-tier-label.fx-t-jackpot > span { display: inline-block; opacity: 0; animation: fx-slam calc(var(--fx-t) * 360) cubic-bezier(.3, 1.8, .5, 1) forwards; }
+@keyframes fx-slam { 0% { opacity: 0; transform: scale(3) translateY(-10px); } 100% { opacity: 1; transform: none; } }
+/* Jackpot table: white-gold flash on the turn, a shake, a pulsing gold
+   vignette, and the coin rain + confetti layer. */
+.peddler-modal.fx-jackpot-moment { animation: fx-table-shake calc(var(--fx-t) * 380) linear; }
+@keyframes fx-table-shake {
+  15% { transform: translate(-4px, 2px); } 30% { transform: translate(4px, -2px); }
+  45% { transform: translate(-3px, 1px); } 60% { transform: translate(3px, -1px); } 80% { transform: translate(-1px, 1px); }
+}
+.peddler-modal.fx-jackpot-moment::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: color-mix(in srgb, var(--brass) 25%, white);
+  animation: fx-white-flash calc(var(--fx-t) * 450) ease-out forwards;
+}
+@keyframes fx-white-flash { 0% { opacity: .9; } 100% { opacity: 0; } }
+.peddler-modal.fx-jackpot-moment::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  box-shadow: inset 0 0 80px color-mix(in srgb, var(--brass) 55%, transparent);
+  opacity: 0;
+  animation: fx-vignette calc(var(--fx-t) * 900) ease-in-out 4 alternate;
+}
+@keyframes fx-vignette { from { opacity: .2; } to { opacity: 1; } }
+.peddler-rain { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 4; }
+.peddler-rain-coin, .peddler-rain-confetti {
+  position: absolute; top: -24px;
+  opacity: 0;
+  animation-name: fx-rain;
+  animation-timing-function: cubic-bezier(.4, 0, .9, .7);
+  animation-fill-mode: forwards;
+}
+.peddler-rain-coin {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--brass);
+  border: 1px solid var(--brass-dim);
+  box-shadow: inset -2px -2px 0 color-mix(in srgb, var(--brass-dim) 70%, var(--brass)), inset 2px 2px 0 color-mix(in srgb, var(--brass) 55%, white);
+}
+.peddler-rain-confetti { width: 7px; height: 11px; animation-name: fx-confetti; animation-timing-function: linear; }
+@keyframes fx-rain { 0% { opacity: 1; transform: translateY(0) rotate(0); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateY(820px) rotate(720deg); } }
+@keyframes fx-confetti { 0% { opacity: 1; transform: translateY(0) rotate(0); } 85% { opacity: .9; } 100% { opacity: 0; transform: translateY(820px) translateX(40px) rotate(900deg); } }
+/* Reduce motion: the BUST letters' stagger delays are in --fx-t, which
+   stretches ~1000x at speed 0 -- zero them so the word just appears. */
+:root[data-motion='off'] .grimsby-bust-card-label > span { animation-delay: 0ms !important; }
+
+/* ---------------------- skins, revive, pets (0421) ---------------------- */
+/* Skin / tombstone purchase: the card's two swatch colours (--dye-a/b,
+   set inline per card) wash across it, a brush stroke in those colours
+   sweeps the preview into the new livery, then a glint and an OWNED
+   ribbon. See DyeFx in HeroesPanel.tsx. */
+.skin-card { position: relative; overflow: hidden; }
+.skin-card-preview {
+  position: relative;
+  height: 60px;
+  margin: -4px 0 6px;
+  display: flex; align-items: flex-end; justify-content: center;
+  border-radius: var(--radius);
+  background: radial-gradient(ellipse at 50% 85%, var(--panel-3), transparent 70%);
+}
+.skin-card-preview-base, .skin-card-preview-dye { display: flex; align-items: flex-end; justify-content: center; }
+.skin-card-preview-dye {
+  position: absolute; inset: 0;
+  clip-path: inset(0 100% 0 0);
+  animation: fx-dye-wipe calc(var(--fx-t) * 800) cubic-bezier(.6, 0, .3, 1) calc(var(--fx-t) * 350) forwards;
+}
+@keyframes fx-dye-wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.fx-dye { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; border-radius: inherit; }
+.fx-dye-wash {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, var(--dye-a), var(--dye-b));
+  opacity: 0;
+  clip-path: inset(0 100% 0 0);
+  animation: fx-dye-wash calc(var(--fx-t) * 1300) cubic-bezier(.6, 0, .3, 1) calc(var(--fx-t) * 350) forwards;
+}
+@keyframes fx-dye-wash {
+  0% { opacity: .35; clip-path: inset(0 100% 0 0); }
+  55% { opacity: .35; clip-path: inset(0 0 0 0); }
+  100% { opacity: 0; clip-path: inset(0 0 0 0); }
+}
+.fx-dye-brush {
+  position: absolute; top: -10%; bottom: -10%; left: -20px;
+  width: 16px;
+  background: linear-gradient(var(--dye-a), var(--dye-b));
+  filter: blur(1px);
+  opacity: 0;
+  animation: fx-dye-brush calc(var(--fx-t) * 800) cubic-bezier(.6, 0, .3, 1) calc(var(--fx-t) * 350) forwards;
+}
+@keyframes fx-dye-brush { 0% { left: -20px; opacity: 1; } 90% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+.fx-dye-glint {
+  position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.4) 50%, transparent 60%);
+  background-size: 300% 100%;
+  background-position: 120% 0;
+  animation: fx-dye-glint calc(var(--fx-t) * 700) ease-out calc(var(--fx-t) * 1150) forwards;
+}
+@keyframes fx-dye-glint { to { background-position: -20% 0; } }
+.fx-dye-ribbon {
+  position: absolute; right: -30px; top: 10px;
+  width: 110px;
+  text-align: center;
+  transform: rotate(35deg);
+  font-family: var(--font-display);
+  font-size: 0.5625rem;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  background: var(--moss);
+  padding: 2px 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  animation: fx-ribbon calc(var(--fx-t) * 1700) cubic-bezier(.3, 1.5, .5, 1) calc(var(--fx-t) * 1150) forwards;
+}
+.fx-dyed-row .fx-dye-ribbon { top: 4px; right: -34px; }
+@keyframes fx-ribbon {
+  0% { opacity: 0; transform: translate(40px, -30px) rotate(35deg); }
+  20% { opacity: 1; transform: rotate(35deg); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(35deg); }
+}
+
+/* Revive: tombstone rattles and cracks, breaks into six chunks under a
+   pillar of light, the sprite rises back up. See PortraitSlot in
+   HeroBlock.tsx; pets use the rise only. */
+.fx-revive { position: relative; display: inline-flex; align-items: flex-end; justify-content: center; min-width: 40px; }
+.fx-revive-stone { position: relative; display: inline-block; }
+.fx-revive-crack .fx-revive-stone { animation: fx-stone-shake calc(var(--fx-t) * 500) linear; }
+@keyframes fx-stone-shake {
+  10% { transform: translate(-1px, 0) rotate(-1deg); } 30% { transform: translate(2px, 0) rotate(1.5deg); }
+  50% { transform: translate(-2px, 1px) rotate(-1.5deg); } 70% { transform: translate(2px, 0) rotate(1deg); } 90% { transform: translate(-1px, 0); }
+}
+.fx-revive-cracks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.fx-revive-cracks path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--brass) 60%, white);
+  stroke-width: 1.8;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  filter: drop-shadow(0 0 2px var(--brass));
+  animation: fx-crack calc(var(--fx-t) * 420) ease-out forwards;
+}
+.fx-revive-cracks path:nth-child(2) { animation-delay: calc(var(--fx-t) * 120); }
+.fx-revive-cracks path:nth-child(3) { animation-delay: calc(var(--fx-t) * 220); }
+@keyframes fx-crack { to { stroke-dashoffset: 0; } }
+.fx-revive-chunks { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); pointer-events: none; }
+.fx-chunk { position: absolute; left: 50%; bottom: 0; width: auto; transform: translateX(-50%); opacity: 0; animation: fx-chunk calc(var(--fx-t) * 600) cubic-bezier(.3, 0, .8, .6) forwards; }
+.fx-chunk-1 { clip-path: polygon(0 0, 50% 0, 45% 40%, 0 45%); --cx: -26px; --cy: -10px; --cr: -40deg; }
+.fx-chunk-2 { clip-path: polygon(50% 0, 100% 0, 100% 40%, 45% 40%); --cx: 24px; --cy: -14px; --cr: 35deg; }
+.fx-chunk-3 { clip-path: polygon(0 45%, 45% 40%, 40% 75%, 0 80%); --cx: -30px; --cy: 26px; --cr: -70deg; }
+.fx-chunk-4 { clip-path: polygon(45% 40%, 100% 40%, 100% 75%, 40% 75%); --cx: 30px; --cy: 22px; --cr: 60deg; }
+.fx-chunk-5 { clip-path: polygon(0 80%, 40% 75%, 55% 100%, 0 100%); --cx: -14px; --cy: 40px; --cr: -20deg; }
+.fx-chunk-6 { clip-path: polygon(40% 75%, 100% 75%, 100% 100%, 55% 100%); --cx: 16px; --cy: 40px; --cr: 25deg; }
+@keyframes fx-chunk {
+  0% { opacity: 1; transform: translateX(-50%); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--cx)), var(--cy)) rotate(var(--cr)); }
+}
+.fx-revive-pillar {
+  position: absolute; left: 50%; top: -20%; bottom: 0;
+  width: 46px; margin-left: -23px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brass) 45%, white), color-mix(in srgb, var(--brass) 35%, transparent) 70%, transparent);
+  filter: blur(3px);
+}
+.fx-revive-shatter .fx-revive-pillar, .fx-revive-rise .fx-revive-pillar, .fx-pet-rise .fx-revive-pillar {
+  animation: fx-pillar calc(var(--fx-t) * 1300) ease-out forwards;
+}
+@keyframes fx-pillar { 0% { opacity: 0; transform: scaleX(.2); } 20% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(1.6); } }
+.fx-revive-sprite { display: inline-flex; animation: fx-rise calc(var(--fx-t) * 700) cubic-bezier(.2, 1.2, .4, 1) both; }
+@keyframes fx-rise { from { transform: translateY(70%); opacity: 0; } 30% { opacity: 1; } to { transform: none; opacity: 1; } }
+.fx-revive-mote {
+  position: absolute; bottom: 4px;
+  width: 3px; height: 3px; border-radius: 50%;
+  background: color-mix(in srgb, var(--brass) 60%, white);
+  opacity: 0;
+  animation: fx-mote calc(var(--fx-t) * 900) ease-out forwards;
+}
+.fx-revive-mote-0 { left: 20%; } .fx-revive-mote-1 { left: 50%; animation-delay: calc(var(--fx-t) * 120); } .fx-revive-mote-2 { left: 75%; animation-delay: calc(var(--fx-t) * 60); }
+.card.fx-revive-glow { animation: fx-revive-glow calc(var(--fx-t) * 1100) ease-out; }
+@keyframes fx-revive-glow {
+  0% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--brass) 70%, white), 0 0 26px color-mix(in srgb, var(--brass) 50%, transparent); }
+  100% { box-shadow: var(--bevel), var(--carved-line); }
+}
+.pet-card-sprite { position: relative; }
+.fx-pet-rise .pet-card-sprite > :first-child { animation: fx-rise calc(var(--fx-t) * 700) cubic-bezier(.2, 1.2, .4, 1) both; }
+
+/* Pet feeding: chomp twice, then hearts and a glowing happiness bar. */
+.fx-pet-chomp .pet-card-sprite > :first-child { animation: fx-chomp calc(var(--fx-t) * 400) ease-in-out 2; transform-origin: 50% 100%; }
+@keyframes fx-chomp { 0%, 100% { transform: none; } 35% { transform: scale(1.14, .86); } 65% { transform: scale(.94, 1.08) translateY(-3px); } }
+.fx-pet-love .pet-card-sprite > :first-child { animation: fx-wiggle calc(var(--fx-t) * 700) ease-in-out; transform-origin: 50% 100%; }
+@keyframes fx-wiggle { 20% { transform: rotate(-7deg); } 45% { transform: rotate(6deg); } 70% { transform: rotate(-3deg); } 100% { transform: none; } }
+.fx-hearts { position: absolute; left: 50%; top: 45%; width: 0; height: 0; pointer-events: none; z-index: 2; }
+.fx-hearts > i {
+  position: absolute; left: -7px; top: 0;
+  width: 14px; height: 14px;
+  background: var(--pink);
+  clip-path: path('M7 13 L1.5 7.5 A3.2 3.2 0 0 1 7 3 A3.2 3.2 0 0 1 12.5 7.5 Z');
+  opacity: 0;
+  animation: fx-heart calc(var(--fx-t) * 1100) ease-out forwards;
+}
+.fx-hearts > i:nth-child(2) { left: -26px; animation-delay: calc(var(--fx-t) * 160); }
+.fx-hearts > i:nth-child(3) { left: 12px; animation-delay: calc(var(--fx-t) * 300); }
+@keyframes fx-heart { 0% { opacity: 0; transform: scale(.3); } 20% { opacity: 1; transform: scale(1.2) translateY(-6px); } 100% { opacity: 0; transform: scale(.9) translateY(-30px); } }
+.fx-pet-love .pet-happiness-row .harvest-stock-bar { animation: fx-bar-love calc(var(--fx-t) * 1100) ease-out; }
+@keyframes fx-bar-love { 0% { box-shadow: 0 0 0 1px var(--pink), 0 0 10px color-mix(in srgb, var(--pink) 60%, transparent); } 100% { box-shadow: none; } }
+.fx-icon-fly {
+  position: fixed;
+  display: flex; align-items: center; justify-content: center;
+  image-rendering: pixelated;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+}
+.pet-happiness-row .harvest-stock-bar span { transition: width calc(var(--fx-t) * 900) cubic-bezier(.2, .8, .2, 1); }
+
+/* ------------------- crafting, unlocks, reroll (0421) ------------------- */
+/* Forge moment over the recipe slot (ForgeFx, CraftingStation.tsx). Full
+   craft: three strikes 300ms apart, then the reveal at 950ms. Quick craft
+   (consumables/charms): one strike, reveal at 380ms. */
+.craft-forge { position: absolute; width: 0; height: 0; z-index: 5; pointer-events: none; }
+.craft-forge-heat {
+  position: absolute; left: -80px; top: -60px;
+  width: 160px; height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, color-mix(in srgb, oklch(72% 0.17 50) 60%, transparent), transparent 70%);
+  opacity: 0;
+  animation: fx-heat calc(var(--fx-t) * 1300) ease-in-out forwards;
+}
+@keyframes fx-heat { 0% { opacity: 0; } 70% { opacity: 1; } 100% { opacity: 0; } }
+.craft-forge-hammer {
+  position: absolute; left: -6px; top: -78px;
+  color: var(--parchment);
+  transform-origin: 44px 44px;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.6));
+  opacity: 0;
+  animation: fx-strike calc(var(--fx-t) * 300) cubic-bezier(.6, 0, .9, .5) 3;
+}
+@keyframes fx-strike { 0% { opacity: 1; transform: rotate(-55deg); } 70% { opacity: 1; transform: rotate(12deg); } 100% { opacity: 0; transform: rotate(0); } }
+.craft-forge-flash {
+  position: absolute; left: -30px; top: -30px;
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--brass) 60%, white);
+  opacity: 0;
+  animation: fx-forge-flash calc(var(--fx-t) * 300) ease-out 3;
+}
+@keyframes fx-forge-flash { 0%, 60% { opacity: 0; transform: scale(.3); } 70% { opacity: 1; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.8); } }
+.craft-forge-sparks { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.craft-forge-sparks > i { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.craft-forge-sparks > i::after {
+  content: '';
+  position: absolute; left: -1px; top: -4px;
+  width: 3px; height: 9px;
+  border-radius: 2px;
+  background: oklch(72% 0.17 50);
+  box-shadow: 0 0 4px oklch(72% 0.17 50);
+  opacity: 0;
+  animation: fx-spark-fly calc(var(--fx-t) * 300) cubic-bezier(.1, .7, .3, 1) 3;
+}
+@keyframes fx-spark-fly { 0%, 60% { opacity: 0; transform: translateY(-6px); } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-44px) scaleY(.4); } }
+.craft-scene.fx-forging { animation: fx-forge-shake calc(var(--fx-t) * 300) linear 3; }
+@keyframes fx-forge-shake { 0%, 65% { transform: none; } 75% { transform: translate(-2px, 1px); } 85% { transform: translate(2px, -1px); } 95% { transform: translate(-1px, 0); } }
+.craft-forge-result {
+  position: absolute; left: -90px; top: -60px;
+  width: 180px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  opacity: 0;
+  animation: fx-forge-reveal calc(var(--fx-t) * 1350) ease-out calc(var(--fx-t) * 950) forwards;
+}
+@keyframes fx-forge-reveal { 0% { opacity: 0; } 10% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 1; } }
+.craft-forge-rays {
+  position: absolute; left: 50%; top: 32px;
+  width: 200px; height: 200px; margin: -100px 0 0 -100px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--forge-color) 45%, transparent) 0 9deg, transparent 9deg 24deg);
+  -webkit-mask: radial-gradient(circle, #000 20%, transparent 65%);
+  mask: radial-gradient(circle, #000 20%, transparent 65%);
+  animation: fx-forge-rays calc(var(--fx-t) * 1300) linear forwards;
+}
+@keyframes fx-forge-rays { 0% { opacity: 0; transform: scale(.4) rotate(0); } 25% { opacity: 1; } 100% { opacity: .6; transform: scale(1) rotate(30deg); } }
+.craft-forge-item {
+  position: relative;
+  width: 64px; height: 64px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 85%, var(--forge-color));
+  border: 2px solid var(--forge-color);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--forge-color) 70%, transparent);
+  font-size: 2rem;
+  animation: fx-forge-pop calc(var(--fx-t) * 500) cubic-bezier(.3, 1.7, .5, 1) calc(var(--fx-t) * 950) both;
+}
+.craft-forge-item img { width: 44px; height: 44px; image-rendering: pixelated; }
+@keyframes fx-forge-pop { from { transform: scale(0) rotate(-20deg); } to { transform: none; } }
+.craft-forge-name {
+  position: relative;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--night) 90%, transparent);
+  border: 1px solid var(--forge-color);
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  color: var(--forge-color);
+  white-space: nowrap;
+  animation: fx-forge-banner calc(var(--fx-t) * 420) cubic-bezier(.3, 1.4, .5, 1) calc(var(--fx-t) * 1100) both;
+}
+@keyframes fx-forge-banner { from { opacity: 0; transform: translateY(-8px) scaleX(.4); } to { opacity: 1; transform: none; } }
+/* Quick craft: one strike, reveal sooner. */
+.fx-forging-quick { animation-iteration-count: 1 !important; }
+.fx-forging-quick .craft-forge-hammer, .fx-forging-quick .craft-forge-flash, .fx-forging-quick .craft-forge-sparks > i::after { animation-iteration-count: 1; }
+.fx-forging-quick .craft-forge-heat { animation-duration: calc(var(--fx-t) * 700); }
+.fx-forging-quick .craft-forge-result { animation-duration: calc(var(--fx-t) * 770); animation-delay: calc(var(--fx-t) * 380); }
+.fx-forging-quick .craft-forge-item { animation-delay: calc(var(--fx-t) * 380); }
+.fx-forging-quick .craft-forge-name { animation-delay: calc(var(--fx-t) * 480); }
+
+/* One-time unlock (UnlockFx, unlockFx.tsx). */
+.fx-unlock-host { position: relative; overflow: hidden; }
+.fx-unlock { position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: inherit; }
+.fx-unlock-veil {
+  position: absolute; inset: 0;
+  background: var(--panel);
+  border: 1px dashed var(--panel-3);
+  border-radius: inherit;
+  animation: fx-veil-out calc(var(--fx-t) * 520) ease-in calc(var(--fx-t) * 600) forwards;
+}
+.fx-unlock-lock {
+  position: absolute; left: 50%; top: 50%;
+  width: 40px; height: 46px; margin: -23px 0 0 -20px;
+  color: color-mix(in srgb, var(--brass) 80%, var(--panel-3));
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.6));
+  animation: fx-big-rattle calc(var(--fx-t) * 340) linear, fx-big-drop calc(var(--fx-t) * 650) cubic-bezier(.5, 0, .9, .5) calc(var(--fx-t) * 520) forwards;
+}
+.fx-unlock-shackle {
+  position: absolute; left: 9px; top: 0;
+  width: 22px; height: 22px; box-sizing: border-box;
+  border: 4px solid currentColor; border-bottom: none;
+  border-radius: 11px 11px 0 0;
+  transform-origin: 18px 20px;
+  animation: fx-big-shackle calc(var(--fx-t) * 220) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 350) forwards;
+}
+.fx-unlock-body { position: absolute; left: 3px; top: 18px; width: 34px; height: 27px; border-radius: 5px; background: currentColor; }
+.fx-unlock-body::after { content: ''; position: absolute; left: 14px; top: 8px; width: 6px; height: 10px; border-radius: 3px; background: var(--panel); }
+@keyframes fx-big-rattle { 15% { transform: rotate(-12deg); } 35% { transform: rotate(10deg); } 55% { transform: rotate(-8deg); } 75% { transform: rotate(5deg); } }
+@keyframes fx-big-shackle { to { transform: translateY(-7px) rotate(-38deg); } }
+@keyframes fx-big-drop {
+  0% { transform: none; color: color-mix(in srgb, var(--brass) 60%, white); }
+  25% { transform: translateY(-10px) scale(1.15); }
+  100% { transform: translateY(120px) rotate(70deg) scale(.7); opacity: 0; }
+}
+.fx-unlock-chain { position: absolute; left: -40px; right: -40px; top: 50%; height: 10px; margin-top: -5px; display: flex; }
+.fx-unlock-chain.a { transform: rotate(-12deg); }
+.fx-unlock-chain.b { transform: rotate(12deg); }
+.fx-unlock-chain > i {
+  flex: 1;
+  background: repeating-linear-gradient(90deg, transparent 0 3px, color-mix(in srgb, var(--muted) 70%, var(--panel)) 3px 13px, transparent 13px 16px);
+  animation: fx-chain-l calc(var(--fx-t) * 500) cubic-bezier(.4, 0, .8, .6) calc(var(--fx-t) * 400) forwards;
+}
+.fx-unlock-chain > i:last-child { animation-name: fx-chain-r; }
+@keyframes fx-chain-l { to { transform: translate(-60px, 30px) rotate(-12deg); opacity: 0; } }
+@keyframes fx-chain-r { to { transform: translate(60px, 30px) rotate(12deg); opacity: 0; } }
+.fx-unlock-banner {
+  position: absolute; left: 0; right: 0; top: 0;
+  padding: 3px 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  letter-spacing: 0.24em;
+  color: var(--ink);
+  background: linear-gradient(90deg, var(--brass-dim), color-mix(in srgb, var(--brass) 60%, white), var(--brass-dim));
+  transform: scaleX(0);
+  animation: fx-banner-life calc(var(--fx-t) * 1500) cubic-bezier(.3, 1.4, .5, 1) calc(var(--fx-t) * 700) forwards;
+}
+@keyframes fx-banner-life {
+  0% { transform: scaleX(0); opacity: 1; }
+  25% { transform: none; opacity: 1; }
+  80% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+.fx-unlock-sweep {
+  position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--brass) 30%, transparent) 50%, transparent 65%);
+  background-size: 260% 100%;
+  background-position: 110% 0;
+  animation: fx-sweep calc(var(--fx-t) * 800) ease-out calc(var(--fx-t) * 800) forwards;
+}
+.fx-unlocking { animation: fx-unlock-glow calc(var(--fx-t) * 1200) ease-out calc(var(--fx-t) * 700) both; }
+@keyframes fx-unlock-glow {
+  0% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--brass) 60%, white), 0 0 30px color-mix(in srgb, var(--brass) 50%, transparent); }
+  100% { box-shadow: var(--bevel), var(--carved-line); }
+}
+
+/* Quest board reroll: die spins, new contracts flip in one after another,
+   a frozen contract shivers and holds. */
+.quest-reroll-btn { display: inline-flex; align-items: center; gap: 5px; }
+.quest-reroll-btn.fx-rolling .quest-reroll-die { animation: fx-die calc(var(--fx-t) * 600) cubic-bezier(.3, 0, .3, 1); }
+@keyframes fx-die { 60% { transform: rotate(400deg) scale(1.25); } 100% { transform: rotate(360deg); } }
+.fx-reroll-in { perspective: 900px; }
+.fx-reroll-in > * { animation: fx-flip-in calc(var(--fx-t) * 380) cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: inherit; }
+@keyframes fx-flip-in { from { transform: rotateX(-90deg); filter: brightness(1.6); } to { transform: none; filter: none; } }
+.fx-reroll-hold > * { animation: fx-shiver calc(var(--fx-t) * 320) linear; animation-delay: inherit; }
+@keyframes fx-shiver { 20% { transform: translateX(-2px); } 40% { transform: translateX(2px); } 60% { transform: translateX(-1px); } 80% { transform: translateX(1px); } }

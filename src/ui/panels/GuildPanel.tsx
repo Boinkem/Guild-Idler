@@ -12,6 +12,7 @@ import { GuildHallCategory } from '../../game/types';
 import { usePulsesOnChange } from '../maxFlash';
 import { buyWithFx, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
 import type { Beat } from '../purchaseFx';
+import { UnlockFx, useJustUnlocked } from '../unlockFx';
 import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
 import { FundGuildModal } from '../FundGuildModal';
 import waxSealComplete from '../../assets/wax-seal-complete.png';
@@ -441,6 +442,7 @@ export function GuildPanel() {
   // The strip's own "one more filed" pop -- only on a real increase, never
   // on mount (same rule usePulsesOnChange always follows).
   const builtPulse = usePulsesOnChange([{ id: 'built', value: built.length }]).built;
+  const exchangeJustUnlocked = useJustUnlocked('renownExchange', state.goldRenownExchangeUnlocked);
   const builtHasHighlight = built.some((r) => r.id === highlightId);
   const builtExpanded = showBuilt || builtHasHighlight;
 
@@ -555,14 +557,14 @@ export function GuildPanel() {
           <button
             className="btn-primary"
             disabled={!GuildManager.canUnlockRenownExchange(state)}
-            onClick={() => engine.unlockRenownExchange()}
+            onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.unlockRenownExchange())}
             title={GuildManager.canUnlockRenownExchange(state) ? undefined : 'Not enough gold'}
           >
             Unlock -- {formatGold(GuildManager.renownExchangeUnlockCost())} gold
           </button>
         </div>
       ) : (
-        <RenownExchangeCard />
+        <RenownExchangeCard justUnlocked={exchangeJustUnlocked} />
       )}
 
       {fundingOpen && <FundGuildModal onClose={() => setFundingOpen(false)} />}
@@ -575,7 +577,7 @@ export function GuildPanel() {
  * The exchange itself, once unlocked -- unchanged by this patch. See its
  * own original comment history for the offerText/rate/validOffer shape.
  */
-function RenownExchangeCard() {
+function RenownExchangeCard({ justUnlocked }: { justUnlocked: boolean }) {
   const engine = useEngine();
   const state = engine.state;
   const [offerText, setOfferText] = useState('');
@@ -584,9 +586,12 @@ function RenownExchangeCard() {
   const validOffer = Number.isFinite(offer) && offer > 0;
   const renownPreview = validOffer ? Math.floor(offer / rate) : 0;
   const canExchange = validOffer && renownPreview >= 1 && state.gold >= renownPreview * rate;
-
+  // Patch 0421 -- this card only mounts once the exchange is unlocked, so
+  // "just unlocked" is simply "mounted because the flag flipped while the
+  // Treasury section was on screen" -- tracked one level up, passed in.
   return (
-    <div className="card">
+    <div className={`card fx-unlock-host ${justUnlocked ? 'fx-unlocking' : ''}`}>
+      {justUnlocked && <UnlockFx />}
       <div className="card-title">Gold-for-Renown Exchange</div>
       <p className="card-flavour muted">{formatGold(rate)} gold per 1 Renown.</p>
       <div className="row wrap" style={{ gap: 6, alignItems: 'center' }}>

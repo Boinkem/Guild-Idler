@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -16,7 +16,11 @@ import { PetSprite } from '../sprites/PetSprite';
 import { PetEnlargedModal } from '../PetEnlargedModal';
 import { EggIcon } from '../EggIcon';
 import { EggSelectModal } from '../EggSelectModal';
-import { useReviveFlash, ReviveFlash } from '../reviveFlash';
+import { useReviveBeats } from '../reviveFlash';
+import type { RevivePhase } from '../reviveFlash';
+import { buyWithFx, flyIcon, fxMs, fxSpeed } from '../purchaseFx';
+import { MATERIAL_BY_ID } from '../../game/data/materials';
+import { CONSUMABLE_BY_ID } from '../../game/data/items';
 
 type SubTab = 'home' | 'pets';
 
@@ -203,11 +207,13 @@ function PetsTab() {
   const engine = useEngine();
   const state = engine.state;
   const petSlots = ModifierManager.petSlots(state);
-  // Batched the same way HeroesPanel's own useReviveFlash call is -- one
-  // hook call here at the list level, keyed lookup passed down to each
-  // PetCard, rather than a hook call inside the .map() below.
-  const { flashes: reviveFlashes, dismiss: dismissReviveFlash } = useReviveFlash(
+  // Batched at the list level, keyed lookup passed down to each PetCard.
+  // Patch 0421 -- a revived pet rises back into its card under a pillar
+  // of light (riseOnly: pets keep their sprite while Fallen, there's no
+  // tombstone to break) instead of the old "Revived!" star burst.
+  const revivePhases = useReviveBeats(
     state.pets.map((p) => ({ id: p.uid, fallen: PetManager.isFallen(p) })),
+    true,
   );
 
   return (
@@ -243,8 +249,7 @@ function PetsTab() {
           <PetCard
             key={pet.uid}
             pet={pet}
-            reviveFlash={reviveFlashes[pet.uid]}
-            dismissReviveFlash={() => dismissReviveFlash(pet.uid)}
+            revivePhase={revivePhases[pet.uid]}
           />
         );
         if (!showDivider) {
@@ -263,10 +268,9 @@ function PetsTab() {
   );
 }
 
-function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
+function PetCard({ pet, revivePhase }: {
   pet: Pet;
-  reviveFlash?: { key: number };
-  dismissReviveFlash: () => void;
+  revivePhase?: RevivePhase;
 }) {
   const engine = useEngine();
   const state = engine.state;
@@ -301,16 +305,45 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
     setEditing(false);
   };
 
+  // Patch 0421 -- feeding: the food arcs from the button into the pet,
+  // the pet chomps twice, then hearts float up while the happiness bar
+  // glows and fills. Only plays when the feed actually landed (the pet's
+  // stored happiness changed), so a refused feed (out of food) does nothing.
+  const spriteRef = useRef<HTMLButtonElement>(null);
+  const [feedFx, setFeedFx] = useState<'chomp' | 'love' | null>(null);
+  // The happiness shown while the food is still in the air -- the engine
+  // has already applied the feed, so without this the bar would fill
+  // before the pet has eaten anything.
+  const [heldHappiness, setHeldHappiness] = useState<number | null>(null);
+  const feedTimers = useRef<number[]>([]);
+  useEffect(() => () => { feedTimers.current.forEach((t) => window.clearTimeout(t)); }, []);
+  const feedWithFx = (btn: HTMLElement, art: { icon?: string; glyph?: string }, action: () => void) => {
+    const before = `${pet.happiness}:${pet.happinessUpdatedAt}`;
+    const shownBefore = happiness;
+    action();
+    const after = engine.state.pets.find((p) => p.uid === pet.uid);
+    if (!after || `${after.happiness}:${after.happinessUpdatedAt}` === before || fxSpeed() <= 0) return;
+    feedTimers.current.forEach((t) => window.clearTimeout(t));
+    setHeldHappiness(shownBefore);
+    void flyIcon(btn, spriteRef.current, art).then(() => {
+      setFeedFx('chomp');
+      feedTimers.current = [
+        window.setTimeout(() => { setFeedFx('love'); setHeldHappiness(null); }, fxMs(800)),
+        window.setTimeout(() => setFeedFx(null), fxMs(2000)),
+      ];
+    });
+  };
+
   return (
     <div
-      className="card pet-card-hover"
+      className={`card pet-card-hover ${feedFx ? `fx-pet-${feedFx}` : ''} ${revivePhase === 'rise' ? 'fx-revive-glow fx-pet-rise' : ''}`}
       style={{ marginBottom: 0, '--rarity-color': RARITY_COLOR[pet.rarity] } as CSSProperties}
     >
-      {reviveFlash && <ReviveFlash key={reviveFlash.key} onDone={dismissReviveFlash} />}
       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
         <button
+          ref={spriteRef}
           type="button"
-          className="btn-ghost"
+          className="btn-ghost pet-card-sprite"
           style={{ padding: 0, border: 'none', background: 'none', minHeight: 0 }}
           onClick={() => setEnlarged(true)}
           title={`${pet.name}, view enlarged`}
@@ -323,6 +356,10 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
             title={pet.name}
             fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
           />
+          {feedFx === 'love' && (
+            <span className="fx-hearts" aria-hidden="true"><i /><i /><i /></span>
+          )}
+          {revivePhase === 'rise' && <span className="fx-revive-pillar" aria-hidden="true" />}
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           {editing ? (
@@ -367,12 +404,12 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
         {happiness < 100 && <span className="tiny muted"> (scaled down by happiness)</span>}
       </p>
 
-      <div className="harvest-stock-row" style={{ marginBottom: 8 }}>
+      <div className="harvest-stock-row pet-happiness-row" style={{ marginBottom: 8 }}>
         <span className="tiny muted" style={{ width: 70 }}>Happiness</span>
         <div className="harvest-stock-bar">
-          <span style={{ width: `${happiness}%` }} />
+          <span style={{ width: `${heldHappiness ?? happiness}%` }} />
         </div>
-        <span className="tiny muted" style={{ width: 40, textAlign: 'right' }}>{Math.round(happiness)}%</span>
+        <span className="tiny muted" style={{ width: 40, textAlign: 'right' }}>{Math.round(heldHappiness ?? happiness)}%</span>
       </div>
       {/* Patch 0303 -- happiness no longer decays while unpaired (see
        *  PetManager.currentHappiness's own comment: an unpaired pet's
@@ -394,14 +431,26 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
         >
           {FEEDABLE_MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
-        <button className="btn-ghost" style={{ minHeight: 26 }} onClick={() => engine.feedPetMaterial(pet.uid, feedMaterial)}>
+        <button
+          className="btn-ghost"
+          style={{ minHeight: 26 }}
+          onClick={(e) => feedWithFx(
+            e.currentTarget,
+            { icon: MATERIAL_BY_ID[feedMaterial]?.icon, glyph: MATERIAL_BY_ID[feedMaterial]?.glyph },
+            () => engine.feedPetMaterial(pet.uid, feedMaterial),
+          )}
+        >
           Feed (5)
         </button>
         <button
           className="btn-ghost"
           style={{ minHeight: 26 }}
           disabled={treatCount < 1}
-          onClick={() => engine.feedPetCrafted(pet.uid)}
+          onClick={(e) => feedWithFx(
+            e.currentTarget,
+            { icon: CONSUMABLE_BY_ID.pet_treat?.icon, glyph: CONSUMABLE_BY_ID.pet_treat?.glyph },
+            () => engine.feedPetCrafted(pet.uid),
+          )}
         >
           Feed Treat ({treatCount})
         </button>
@@ -418,7 +467,7 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
         <div className="spread" style={{ marginTop: 8 }}>
           <span className="small bad">Fallen -- can't be paired until revived</span>
           <button
-            onClick={() => engine.revivePet(pet.uid)}
+            onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.revivePet(pet.uid))}
             disabled={state.gold < PetManager.revivalCost(pet, ModifierManager.global(state).petRevivalDiscount ?? 0)}
           >
             Revive · {formatGold(PetManager.revivalCost(pet, ModifierManager.global(state).petRevivalDiscount ?? 0))}

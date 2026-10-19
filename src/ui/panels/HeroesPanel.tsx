@@ -20,10 +20,10 @@ import { describeMods, formatGold } from '../../game/util';
 import { HeroStatusList } from '../HeroStatusBar';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
-import { useReviveFlash, ReviveFlash } from '../reviveFlash';
+import { useReviveBeats } from '../reviveFlash';
 import { HeroBlock } from '../HeroBlock';
 import { usePulsesOnChange } from '../maxFlash';
-import { buyWithFx, flyCard, fxMs, fxSpeed, LevelRoll, usePurchaseBeats } from '../purchaseFx';
+import { buyWithFx, flyCard, fxMs, fxSpeed, LevelRoll, usePurchaseBeats, useRecentIncrease } from '../purchaseFx';
 
 /**
  * Patch 0296. Recruit-card portrait for a hero class -- mirrors
@@ -119,8 +119,25 @@ function recruitStatusFor(
  * a raid-locked style as a distinct, non-purchasable disabled state)
  * the way a custom popover can.
  */
+/** Patch 0421 -- the dye wash, brush stroke, glint and OWNED ribbon laid
+ *  over a skin (or tombstone style) card for the moment it's bought.
+ *  Colours come from the card's own --dye-a / --dye-b. */
+function DyeFx() {
+  return (
+    <span className="fx-dye" aria-hidden="true">
+      <span className="fx-dye-wash" />
+      <span className="fx-dye-brush" />
+      <span className="fx-dye-glint" />
+      <span className="fx-dye-ribbon">OWNED</span>
+    </span>
+  );
+}
+
 function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: GameState }) {
   const [open, setOpen] = useState(false);
+  const justBought = useRecentIncrease(TOMBSTONE_STYLES.map((st) => ({
+    id: st.id, value: (state.unlockedTombstoneStyles ?? []).includes(st.id) ? 1 : 0,
+  })), 1700);
   const unlockedTombstoneStyles = state.unlockedTombstoneStyles ?? ['plain'];
   const selectedId = state.selectedTombstoneStyle ?? 'plain';
   const selected = TOMBSTONE_STYLE_BY_ID[selectedId];
@@ -162,12 +179,15 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
               return (
                 <div
                   key={style.id}
-                  className="row"
+                  className={`row ${justBought[style.id] ? 'fx-dyed fx-dyed-row' : ''}`}
                   style={{
                     alignItems: 'center', gap: 8, padding: '4px 6px', borderRadius: 4,
                     background: active ? 'var(--panel-3)' : 'transparent',
-                  }}
+                    position: 'relative', overflow: 'hidden',
+                    '--dye-a': 'var(--muted)', '--dye-b': 'var(--brass-dim)',
+                  } as CSSProperties}
                 >
+                  {justBought[style.id] && <DyeFx />}
                   <img
                     src={`./hero-status/${style.icon}`}
                     alt=""
@@ -197,7 +217,7 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
                     <button
                       className="chip"
                       style={{ flex: 'none' }}
-                      onClick={() => engine.buyTombstoneStyle(style.id)}
+                      onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.buyTombstoneStyle(style.id))}
                       disabled={!afford}
                       title={!afford ? 'Not enough gold' : undefined}
                     >
@@ -329,6 +349,14 @@ function HeroesRosterView() {
   }, [heroIdSignature]);
   // "N of M slots filled" rolls up with the recruit, and the class chip's
   // badge flips over to "Recruited".
+  // Patch 0421 -- skins bought while watching (guild-wide and per-class).
+  const justDyed = useRecentIncrease([
+    ...SKINS.filter((sk) => sk.id !== 'original' && !sk.perClass).map((sk) => ({ id: sk.id, value: state.unlockedSkins.includes(sk.id) ? 1 : 0 })),
+    ...PER_CLASS_SKINS.flatMap((sk) => Object.keys(HERO_CLASSES).map((cls) => ({
+      id: `${sk.id}:${cls}`, value: isClassSkinOwned(state, sk.id, cls) ? 1 : 0,
+    }))),
+  ], 1700);
+  const previewClass = (state.heroes[0]?.heroClass ?? 'adventurer') as HeroClass;
   const rosterBeat = usePurchaseBeats([{ id: 'roster', value: state.heroes.length, max: Infinity }]).roster;
   const recruitedFlips = usePulsesOnChange((Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => ({
     id, value: recruitStatusFor(engine, id, recruitable, slots).alreadyRecruited ? 1 : 0,
@@ -337,7 +365,9 @@ function HeroesRosterView() {
   const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
     state.heroes.map((h) => ({ id: h.id, level: h.level })),
   );
-  const { flashes: reviveFlashes, dismiss: dismissReviveFlash } = useReviveFlash(
+  // Patch 0421 -- the tombstone crack / shatter / rise moment replaces
+  // the old "Revived!" star burst (see useReviveBeats).
+  const revivePhases = useReviveBeats(
     state.heroes.map((h) => ({ id: h.id, fallen: h.status === 'fallen' })),
   );
 
@@ -371,7 +401,7 @@ function HeroesRosterView() {
         <button
           className="chip"
           style={{ marginBottom: 10 }}
-          onClick={() => engine.reviveAllFallen()}
+          onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.reviveAllFallen())}
           disabled={state.gold < bulkReviveCost}
           title={`Revive all ${fallenHeroes.length} Fallen heroes at once, ${Math.round(Tuning.get('health.bulkReviveDiscount') * 100)}% cheaper than one at a time`}
         >
@@ -413,18 +443,13 @@ function HeroesRosterView() {
           tombstoneIcon={tombstoneIcon}
           isOpen={expanded.has(hero.id)}
           onToggle={() => toggleExpanded(hero.id)}
+          revivePhase={revivePhases[hero.id]}
         >
           {levelFlashes[hero.id] && (
             <LevelUpFlash
               key={levelFlashes[hero.id].key}
               levels={levelFlashes[hero.id].levels}
               onDone={() => dismissLevelFlash(hero.id)}
-            />
-          )}
-          {reviveFlashes[hero.id] && (
-            <ReviveFlash
-              key={reviveFlashes[hero.id].key}
-              onDone={() => dismissReviveFlash(hero.id)}
             />
           )}
         </HeroBlock>
@@ -634,6 +659,10 @@ function HeroesRosterView() {
         );
       })()}
 
+      {/* Patch 0421 -- a skin bought while watching gets a dye moment: its
+          two swatch colours wash across the card, a brush stroke wipes the
+          preview from the plain colours into the new livery, a glint and an
+          OWNED ribbon follow (see .fx-dyed in app.css). */}
       <div className="section-heading">Skins</div>
       <p className="small muted subtitle">
         Cosmetic liveries, unlocked once for the whole guild and usable by any hero.
@@ -642,8 +671,25 @@ function HeroesRosterView() {
       <div className="grid three">
         {SKINS.filter((sk) => sk.id !== 'original' && !sk.perClass).map((sk) => {
           const owned = state.unlockedSkins.includes(sk.id);
+          const dyeing = !!justDyed[sk.id];
           return (
-            <div key={sk.id} className="card" style={{ marginBottom: 0 }}>
+            <div
+              key={sk.id}
+              className={`card skin-card ${dyeing ? 'fx-dyed' : ''}`}
+              style={{ marginBottom: 0, '--dye-a': sk.swatch[0], '--dye-b': sk.swatch[1] } as CSSProperties}
+            >
+              {/* Preview on the guild's first hero's class, so the purchase
+                  has something to visibly recolour. */}
+              <div className="skin-card-preview" aria-hidden="true">
+                <span className="skin-card-preview-base">
+                  <HeroSprite heroClass={previewClass} skin={dyeing ? 'original' : sk.id} height={56} />
+                </span>
+                {dyeing && (
+                  <span className="skin-card-preview-dye">
+                    <HeroSprite heroClass={previewClass} skin={sk.id} height={56} />
+                  </span>
+                )}
+              </div>
               <div className="spread">
                 <span className="card-title">{sk.name}</span>
                 <span className="skin-dots">
@@ -655,10 +701,11 @@ function HeroesRosterView() {
               <button
                 className="btn-primary"
                 disabled={owned || state.gold < sk.cost}
-                onClick={() => engine.buySkin(sk.id)}
+                onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.buySkin(sk.id))}
               >
                 {owned ? 'Owned' : `Unlock · ${formatGold(sk.cost)}`}
               </button>
+              {dyeing && <DyeFx />}
             </div>
           );
         })}
@@ -681,8 +728,14 @@ function HeroesRosterView() {
                 const owned = isClassSkinOwned(state, sk.id, cls);
                 const earned = owned || isClassSkinEarned(state, sk.id, cls);
                 const def = HERO_CLASSES[cls as keyof typeof HERO_CLASSES];
+                const dyeing = !!justDyed[`${sk.id}:${cls}`];
                 return (
-                  <div key={cls} className={`card class-skin-card ${owned ? 'owned' : earned ? 'earned' : 'locked'}`}>
+                  <div
+                    key={cls}
+                    className={`card class-skin-card ${owned ? 'owned' : earned ? 'earned' : 'locked'} ${dyeing ? 'fx-dyed' : ''}`}
+                    style={{ '--dye-a': sk.swatch[0], '--dye-b': sk.swatch[1] } as CSSProperties}
+                  >
+                    {dyeing && <DyeFx />}
                     <div className="class-skin-sprite" aria-hidden={!earned}>
                       <HeroSprite heroClass={cls as keyof typeof HERO_CLASSES} skin={sk.id} height={64} title={`${sk.name} ${def.name}`} />
                     </div>
@@ -690,7 +743,7 @@ function HeroesRosterView() {
                     {owned ? (
                       <span className="tiny good">Owned</span>
                     ) : earned ? (
-                      <button className="btn-primary" disabled={state.gold < sk.cost} onClick={() => engine.buyClassSkin(sk.id, cls)}>
+                      <button className="btn-primary" disabled={state.gold < sk.cost} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.buyClassSkin(sk.id, cls))}>
                         Unlock · {formatGold(sk.cost)}
                       </button>
                     ) : (

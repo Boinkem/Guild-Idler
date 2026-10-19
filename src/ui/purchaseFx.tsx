@@ -291,3 +291,83 @@ export function SealStamp({ label, className }: { label: string; className?: str
     </span>
   );
 }
+
+/**
+ * Patch 0421 -- the ids whose tracked value just went UP (an item became
+ * owned, a level rose, happiness was topped up), each held for `ms` (1x,
+ * scaled by animation speed) so a one-off CSS moment can play on it. Same
+ * "never on mount, only a real change you watched happen" rule as
+ * usePurchaseBeats. Returns a fresh key per change so a repeat purchase
+ * inside the window can remount the effect. Empty when motion is off.
+ */
+export function useRecentIncrease(items: { id: string; value: number }[], ms: number): Record<string, number> {
+  const prevRef = useRef<Record<string, number> | null>(null);
+  const timers = useRef<Record<string, number>>({});
+  const [active, setActive] = useState<Record<string, number>>({});
+  const signature = items.map((i) => `${i.id}:${i.value}`).join('|');
+  useLayoutEffect(() => {
+    const prev = prevRef.current;
+    const next: Record<string, number> = {};
+    for (const item of items) {
+      next[item.id] = item.value;
+      const before = prev?.[item.id];
+      if (!prev || before === undefined || item.value <= before || fxSpeed() <= 0) continue;
+      const id = item.id;
+      window.clearTimeout(timers.current[id]);
+      setActive((cur) => ({ ...cur, [id]: Date.now() + Math.random() }));
+      timers.current[id] = window.setTimeout(() => setActive((cur) => {
+        const rest = { ...cur };
+        delete rest[id];
+        return rest;
+      }), fxMs(ms));
+    }
+    prevRef.current = next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
+  useEffect(() => () => { for (const t of Object.values(timers.current)) window.clearTimeout(t); }, []);
+  return active;
+}
+
+/**
+ * Patch 0421 -- a single item icon (an `./item-icons/` path, or a glyph
+ * when there's no art yet) arcing from one element to another (or to a
+ * registered fly-target key): food into a pet, a freshly forged item off
+ * to the Inventory tab. Resolves on landing;
+ * resolves immediately when motion is off or either end is missing.
+ */
+export function flyIcon(
+  from: Element | null, to: Element | string | null,
+  art: { icon?: string; glyph?: string }, opts: { duration?: number; size?: number; delay?: number } = {},
+): Promise<void> {
+  const dur = fxMs(opts.duration ?? 460);
+  const host = fxLayer();
+  if (!dur || !host || !from || !to || typeof Element.prototype.animate !== 'function') return Promise.resolve();
+  const a = centerOf(from);
+  // A string is a flyTarget.ts key (the header gold, the Inventory tab).
+  const b = typeof to === 'string' ? getFlyTargetCenter(to) : centerOf(to);
+  if (!b) return Promise.resolve();
+  const size = opts.size ?? 26;
+  const el = document.createElement(art.icon ? 'img' : 'span');
+  el.className = 'fx-icon-fly';
+  if (art.icon) (el as HTMLImageElement).src = `./item-icons/${art.icon}`;
+  else el.textContent = art.glyph ?? '✦';
+  el.style.left = `${a.x}px`;
+  el.style.top = `${a.y}px`;
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
+  el.style.fontSize = `${Math.round(size * 0.8)}px`;
+  host.appendChild(el);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lift = Math.min(70, 30 + Math.abs(dx) * 0.15);
+  const anim = el.animate([
+    { transform: 'translate(-50%, -50%) scale(.6) rotate(0deg)', opacity: 0.4 },
+    { transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5 - lift}px)) scale(1.1) rotate(160deg)`, opacity: 1, offset: 0.5 },
+    { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.55) rotate(320deg)`, opacity: 1 },
+  ], { duration: dur, delay: fxMs(opts.delay ?? 0), easing: 'cubic-bezier(.3,0,.7,1)', fill: 'backwards' });
+  return new Promise((resolve) => {
+    const done = () => { el.remove(); resolve(); };
+    anim.onfinish = done;
+    anim.oncancel = done;
+  });
+}

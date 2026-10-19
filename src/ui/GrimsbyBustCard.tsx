@@ -24,7 +24,12 @@ export function GrimsbyBustCard({
 }) {
   return (
     <div className="grimsby-bust-card">
-      <div className="grimsby-bust-card-label">BUST</div>
+      {/* Patch 0421 -- the letters drop in one at a time and land a little
+          crooked (see .grimsby-bust-card-label > span in app.css). Shared
+          by all three games, so Dice and Tab busts get it too. */}
+      <div className="grimsby-bust-card-label" aria-label="Bust">
+        {'BUST'.split('').map((ch, i) => <span key={i} aria-hidden="true">{ch}</span>)}
+      </div>
       <p className="grimsby-bust-card-subtitle tiny">{subtitle}</p>
       <button
         type="button"

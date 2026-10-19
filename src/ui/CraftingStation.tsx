@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
+import { buyWithFx, flyIcon, fxMs, fxSpeed } from './purchaseFx';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { CraftingManager } from '../game/managers/CraftingManager';
@@ -11,7 +12,7 @@ import { EQUIPMENT_BY_ID } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { backgroundSrc } from '../game/settings';
 import {
-  CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Rarity, Stats,
+  CraftingRecipeDef, EquipmentDef, EquipmentItem, GameState, MaterialId, Modifiers, Rarity, Stats,
 } from '../game/types';
 import {
   describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP, STAT_EFFECT_TOOLTIP,
@@ -256,6 +257,66 @@ export interface PickerOption {
    * appears under "All". Ignored entirely by a picker with no `tabs`.
    */
   tags?: string[];
+}
+
+/** Patch 0421 -- what the forge moment shows: the recipe's own icon and
+ *  name, coloured by the result's rarity where it has one. */
+interface ForgeInfo { key?: number; name: string; icon?: string; glyph: string; color: string; quick: boolean; flies: boolean }
+
+/** Gear, enchants and gems get the full three-strike forge; consumables
+ *  and charms (made five at a time, see "Keep crafting" below) get one
+ *  quick strike so back-to-back brewing never waits on it. 1x ms. */
+const FORGE_MS = { full: { reveal: 950, total: 2300 }, quick: { reveal: 380, total: 1150 } } as const;
+
+function forgeInfoFor(category: Category, recipe: CraftingRecipeDef): ForgeInfo {
+  const gearDef = recipe.resultDefId ? EQUIPMENT_BY_ID[recipe.resultDefId] : undefined;
+  const color = gearDef ? RARITY_COLOR[gearDef.rarity]
+    : category === 'enchant' ? 'var(--violet)'
+      : category === 'gem' ? 'var(--sky)' : 'var(--moss)';
+  return {
+    name: recipe.name,
+    icon: recipe.icon,
+    glyph: '\u2726',
+    color,
+    quick: category === 'consumable' || category === 'charm',
+    flies: category !== 'enchant',
+  };
+}
+
+/** Everything a craft can change, as one comparable string. */
+function craftSnapshot(state: GameState): string {
+  return JSON.stringify([state.gold, state.scrap, state.materials, state.inventory, state.stash?.length]);
+}
+
+/** Patch 0421 -- heat builds under the recipe slot, the hammer comes down
+ *  (three times, or once for a quick craft) with a flash and sparks, then
+ *  the result pops up in its rarity colour with its name. CSS-timed; see
+ *  .craft-forge in app.css. */
+function ForgeFx({ info, rect, iconRef }: { info: ForgeInfo; rect: Rect; iconRef: RefObject<HTMLSpanElement> }) {
+  return (
+    <div
+      className="craft-forge"
+      style={{
+        left: `${rect.left + rect.width / 2}%`, top: `${rect.top + rect.height / 2}%`,
+        '--forge-color': info.color,
+      } as CSSProperties}
+      aria-hidden="true"
+    >
+      <span className="craft-forge-heat" />
+      <span className="craft-forge-flash" />
+      <span className="craft-forge-sparks">{[-90, -60, -30, 0, 30, 60, 90].map((a) => <i key={a} style={{ transform: `rotate(${a}deg)` }} />)}</span>
+      <svg className="craft-forge-hammer" width="56" height="56" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M8 20l12-12 8 8-12 12z" /><path d="M24 24l18 18" />
+      </svg>
+      <span className="craft-forge-result">
+        <span className="craft-forge-rays" />
+        <span className="craft-forge-item" ref={iconRef}>
+          {info.icon ? <img src={`./item-icons/${info.icon}`} alt="" /> : <span>{info.glyph}</span>}
+        </span>
+        <span className="craft-forge-name">{info.name}</span>
+      </span>
+    </div>
+  );
 }
 
 /** One clickable frame on the scene -- shows what's picked, or a plain
@@ -654,12 +715,36 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
    * back" shape a potion recipe does, so both keep resetting after every
    * craft same as before this patch.
    */
-  function handleCraft() {
+  // Patch 0421 -- the forge moment (see ForgeFx below). Snapshots what was
+  // being made before the craft (gear/enchant/gem reset the recipe), and
+  // only plays if the craft actually went through -- detected the same
+  // way buyWithFx detects a real spend, by what changed in state.
+  const [forge, setForge] = useState<ForgeInfo | null>(null);
+  const forgeTimers = useRef<number[]>([]);
+  useEffect(() => () => { forgeTimers.current.forEach((t) => window.clearTimeout(t)); }, []);
+  const forgeIconRef = useRef<HTMLSpanElement>(null);
+
+  function handleCraft(btn: HTMLElement) {
     if (!recipe) return;
-    if (category === 'gear') { engine.craftGear(recipe.id, chosenGearStats); reset(); }
-    else if (category === 'enchant') { engine.enchantItem(recipe.id, targetUid, chosenStats); reset(); }
-    else if (category === 'gem') { engine.craftGem(recipe.id); reset(); }
-    else engine.craftConsumable(recipe.id, chosenConsumableMods);
+    const before = craftSnapshot(state);
+    const info = forgeInfoFor(category, recipe);
+    buyWithFx(engine, btn, () => {
+      if (category === 'gear') { engine.craftGear(recipe.id, chosenGearStats); reset(); }
+      else if (category === 'enchant') { engine.enchantItem(recipe.id, targetUid, chosenStats); reset(); }
+      else if (category === 'gem') { engine.craftGem(recipe.id); reset(); }
+      else engine.craftConsumable(recipe.id, chosenConsumableMods);
+    });
+    if (craftSnapshot(engine.state) === before || fxSpeed() <= 0) return;
+    forgeTimers.current.forEach((t) => window.clearTimeout(t));
+    const timing = FORGE_MS[info.quick ? 'quick' : 'full'];
+    setForge({ ...info, key: Date.now() });
+    forgeTimers.current = [
+      window.setTimeout(() => {
+        // Enchanting changes an item you already own -- nothing new to send.
+        if (info.flies) void flyIcon(forgeIconRef.current, 'inventory', { icon: info.icon, glyph: info.glyph }, { size: 34, duration: 520 });
+        setForge(null);
+      }, fxMs(timing.total)),
+    ];
   }
 
   /* ------------------------------- top slot ------------------------------ */
@@ -869,7 +954,11 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   }
 
   const scene = (
-    <div className={SCENE_CLASS[category]} style={{ backgroundImage: `url(${backgroundSrc(STATION_BG[category], settings.backgroundMood)})` }}>
+    <div
+      className={`${SCENE_CLASS[category]} ${forge ? `fx-forging ${forge.quick ? 'fx-forging-quick' : ''}` : ''}`}
+      style={{ backgroundImage: `url(${backgroundSrc(STATION_BG[category], settings.backgroundMood)})` }}
+    >
+      {forge && <ForgeFx key={forge.key} info={forge} rect={rects.top} iconRef={forgeIconRef} />}
       <SlotBox
         rect={rects.top}
         filled={topFilled}
@@ -1007,7 +1096,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
             one holdout relying on the ◆ have/need row above (which stays;
             it answers a different question -- can I afford this right
             now -- than the flat sticker price the button now shows). */}
-        <button className="btn-purple" disabled={!canCraft} onClick={handleCraft}>
+        <button className="btn-purple" disabled={!canCraft} onClick={(e) => handleCraft(e.currentTarget)}>
           {afford && !afford.ok
             ? afford.reason
             : recipe

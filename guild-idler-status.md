@@ -34147,3 +34147,115 @@ tools/Warehouse/Overseer, Renown perks and the Training tab can reuse
 `buyWithFx` + `usePurchaseBeats` directly; skins/tombstones, revive,
 crafting, pet feeding, one-time unlocks (a shared padlock-open) and the
 quest board reroll still need their own moments.
+
+### Grimsby outcomes, skins, revive, crafting, pets, unlocks and rerolls animated (patch 0421)
+```discord-update
+Dev Update | Patch 0421
+
+- Added a distinct reveal for every Grimsby card result: a Bust sags and greys out, a Refund trickles your coins back, a Modest find bobs, a Good find glints before it flips, and a Jackpot trembles and glows before exploding into a coin shower
+- Added letters dropping into the BUST card in all three of Grimsby's games
+- Added a dye-wash moment when you buy a skin or tombstone style, with a preview of the skin on your hero
+- Added a revive moment: the tombstone cracks and shatters and your hero rises back up
+- Added a forge moment when you craft: hammer strikes, the item reveals in its rarity colour and flies to your Inventory
+- Added a feeding moment: the food flies to your pet, it chomps, and hearts float up as happiness fills
+- Added a padlock-and-chains unlock moment for High Roller, Grimsby's permanent spot, the Trade Route and the Gold-for-Renown Exchange
+- Added a reroll moment on the quest board: the die spins and new contracts flip in one after another, while a frozen contract holds
+```
+
+Second batch of the animation pass (patch 0420 was the first). Every
+moment was mocked up on the Claude Design canvas first and signed off.
+All of them build on 0420's `purchaseFx.tsx` (coin flights via
+`buyWithFx`, timing via `fxMs` / `--fx-t`, everything skipped when
+Reduce motion is on) and only play for a change the player actually
+watched happen.
+
+**New shared pieces.**
+- `useRecentIncrease(items, ms)` (purchaseFx.tsx) -- the ids whose value
+  just went up, held for `ms`. Drives the skin, tombstone and unlock
+  moments.
+- `flyIcon(from, to, art)` (purchaseFx.tsx) -- one item icon (or glyph)
+  arcing between two elements, or to a fly-target key like
+  `'inventory'`. Used for food into a pet and a forged item to the
+  Inventory tab.
+- `useReviveBeats(items, riseOnly)` (reviveFlash.tsx) -- the revive
+  timeline (`crack` -> `shatter` -> `rise`), staggered ~350ms per hero
+  for Revive All. Replaces the old "Revived!" star burst for heroes and
+  pets (`ReviveFlash`/`useReviveFlash` are now unused but left in place).
+- `unlockFx.tsx` (new) -- `useJustUnlocked` + `UnlockFx`, the one shared
+  unlock moment.
+
+**Grimsby (`PeddlerCardModal.tsx`).** The reveal is now staged:
+`tell` (picked card lifts face-down while the other two fade) -> `flip`
+-> `settled` (the tier's own moment). Tells are deliberate: a Good find
+gets one blue glint across the back, a Jackpot trembles, leaks gold
+light and dims the table for 1.6s; Bust/Refund/Modest give nothing away.
+Moments: Bust sags, tilts, greys and puffs dust; Refund pulses dull
+bronze while its coins trickle back 260ms apart (particle count 1 -> 3);
+Modest bobs with a green ring and a small spray; Good gets turning blue
+rays, a pop, a bigger burst and a shine pass over "Good Find"; Jackpot
+gets a white-gold flash, a table shake, huge gold rays, JACKPOT slammed
+in letter by letter, a pulsing vignette and a coin rain + confetti layer
+(56 coins on High Roller instead of 28; reward particles also double on
+High Roller). The picked card is now a real two-sided card
+(`PeddlerFlipCard`, wrapping the unchanged face-up `PeddlerCard`). The
+unpicked fade went 960ms -> 700ms to finish inside the shortest tell.
+Grimsby's approval animation now waits for the card to turn over and
+only plays for Modest and up (a bust or refund gets his idle).
+`GrimsbyBustCard`'s BUST label drops in letter by letter and lands
+crooked, shared by Card, Dice and Tab.
+
+**Skins (`HeroesPanel.tsx`).** Guild-wide skin cards gain a small sprite
+preview (the first hero's class in that skin) so a purchase has
+something to recolour. On purchase: the swatch colours wash across the
+card, a brush stroke wipes the preview into the new livery, then a glint
+and an OWNED ribbon. Per-class skin cards and tombstone styles get the
+same wash/glint/ribbon. All three buy through `buyWithFx`.
+
+**Revive (`HeroBlock.tsx`, `HatcheryPanel.tsx`).** New `PortraitSlot`:
+during a revive the tombstone stays up (rattling, cracks drawing across
+it), breaks into six chunks under a pillar of light, then the sprite
+rises back into the slot while the card glows. Pets rise only (they keep
+their sprite while Fallen). Revive, Revive All and pet revive buy
+through `buyWithFx`.
+
+**Crafting (`CraftingStation.tsx`).** New `ForgeFx` over the recipe
+slot: heat builds, the hammer strikes three times with a flash, sparks
+and a scene shake, then the result pops up in its rarity colour
+(enchant violet, gem sky, consumable moss) with its name, and flies to
+the Inventory tab (not for enchants, which change an item you already
+own). Consumables and charms get a one-strike quick version so "Keep
+crafting" never waits on it. Only plays if the craft actually changed
+state.
+
+**Pets (`HatcheryPanel.tsx`).** Feeding: the food (material or Pet
+Treat icon) arcs from the button into the pet, it chomps twice, then
+hearts float up and the happiness bar glows pink and fills. The bar
+holds its old value until the pet has eaten.
+
+**One-time unlocks.** High Roller, the permanent spot (plays on the Tab
+card it opens), the Trade Route and the Gold-for-Renown Exchange: a
+locked veil covers the newly unlocked card, the padlock rattles and
+drops while the chains snap, the veil dissolves, an UNLOCKED banner
+unfurls and a light sweeps across. Each unlock buys through `buyWithFx`.
+Replay Memories' unlock already lives in the Guild Hall rows (0420).
+
+**Quest board reroll (`QuestPanel.tsx`).** The Reroll button gains a
+small die that spins; each new contract flips in (rotateX) 110ms after
+the last; a frozen contract shivers and stays. Only when the board
+actually changed.
+
+Verified: `npm run build` (tsc + vite + electron) clean. Drove the real
+web build in headless Chromium with seeded saves and checked frames of
+all five Grimsby tiers (forced per tier), a revive, a guild-wide skin
+purchase, a consumable craft, a pet feed, the Renown Exchange unlock and
+a reroll. Two fixes came out of that: rain coins now fade at the end of
+their fall instead of parking in a row at the bottom, and the feed
+hearts start lower so the card doesn't clip them. Hero sprites and the
+vendor/class preview art aren't in the repo, so the revive rise and the
+skin preview wipe were seen on the placeholder box -- worth a look with
+real art in the desktop app. Gear crafting (full three strikes), High
+Roller, the permanent spot and the Trade Route weren't driven in the
+test, only the shared code they use.
+
+**Follow-ups:** vendor upgrade rows, Harvest tools/Warehouse/Overseer,
+Renown perks and the Training tab can still adopt 0420's row beats.

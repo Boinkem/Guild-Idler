@@ -16,6 +16,8 @@ import { Ring } from './DashboardPanel';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
 import { backgroundSrc } from '../../game/settings';
+import { UnlockFx, useJustUnlocked } from '../unlockFx';
+import { buyWithFx } from '../purchaseFx';
 
 type SubTab = 'warehouse' | 'fields';
 
@@ -673,6 +675,8 @@ function TradeRouteCard() {
   const engine = useEngine();
   const state = engine.state;
   const now = useNow(2000);
+  // Patch 0421 -- shared unlock moment over the newly opened route.
+  const justOpened = useJustUnlocked('tradeRoute', state.tradeRouteUnlocked);
 
   if (!state.tradeRouteUnlocked) {
     return (
@@ -682,7 +686,7 @@ function TradeRouteCard() {
           Opens a market for the guild&rsquo;s surplus materials. Without it, everything gathered has to be used,
           not sold.
         </p>
-        <button className="btn-yellow" disabled={state.gold < TRADE_ROUTE_COST} onClick={() => engine.unlockTradeRoute()}>
+        <button className="btn-yellow" disabled={state.gold < TRADE_ROUTE_COST} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.unlockTradeRoute())}>
           Open · {formatGold(TRADE_ROUTE_COST)}
         </button>
       </div>
@@ -701,7 +705,8 @@ function TradeRouteCard() {
   const etaMs = HarvestManager.timeUntilAffordable(state, now, costPerSale);
 
   return (
-    <div className="card" style={{ marginBottom: 12 }}>
+    <div className={`card fx-unlock-host ${justOpened ? 'fx-unlocking' : ''}`} style={{ marginBottom: 12 }}>
+      {justOpened && <UnlockFx />}
       <div className="card-title">Trade Route</div>
       <p className="card-flavour">
         Sell surplus materials for a little gold -- 10 units nets {costPerSale}. The trader only has so much to

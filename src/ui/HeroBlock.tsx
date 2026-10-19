@@ -14,6 +14,8 @@ import { HeroSprite } from './sprites/HeroSprite';
 import { GearScoreBadge } from './GearScoreBadge';
 import { RoleIcon } from './RoleIcon';
 import { registerFlyTarget } from './flyTarget';
+import { buyWithFx } from './purchaseFx';
+import type { RevivePhase } from './reviveFlash';
 import { statEffectBlocks, formatEffect } from './heroStatEffects';
 
 /**
@@ -67,10 +69,53 @@ export interface HeroBlockProps {
   onToggle: () => void;
   /** Level-up / revive flash overlays, still owned by HeroesPanel. */
   children?: React.ReactNode;
+  /** Patch 0421 -- where this hero is in the revive moment, if one is
+   *  playing (see useReviveBeats in reviveFlash.tsx). */
+  revivePhase?: RevivePhase;
+}
+
+/**
+ * Patch 0421 -- the portrait slot during a revive: the tombstone stays up
+ * (rattling and cracking, then breaking into six chunks under a pillar of
+ * light) even though the engine has already revived the hero, then the
+ * sprite rises back into the slot. Outside a revive it's just the plain
+ * tombstone-or-sprite it always was.
+ */
+function PortraitSlot({
+  fallen, phase, icon, height, sprite,
+}: { fallen: boolean; phase?: RevivePhase; icon: string; height: number; sprite: React.ReactNode }) {
+  if (!phase) return fallen ? <Tombstone height={height} icon={icon} /> : <>{sprite}</>;
+  const breaking = phase === 'crack' || phase === 'shatter';
+  return (
+    <span className={`fx-revive fx-revive-${phase}`} style={{ height }}>
+      <span className="fx-revive-pillar" aria-hidden="true" />
+      {(phase === 'wait' || phase === 'crack') && (
+        <span className="fx-revive-stone">
+          <Tombstone height={height} icon={icon} />
+          {phase === 'crack' && (
+            <svg className="fx-revive-cracks" viewBox="0 0 66 72" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M33 8 L30 22 L36 30 L29 44" />
+              <path d="M30 22 L20 28 L16 40" />
+              <path d="M36 30 L46 36 L49 50" />
+            </svg>
+          )}
+        </span>
+      )}
+      {(phase === 'shatter' || phase === 'rise') && (
+        <span className="fx-revive-chunks" aria-hidden="true">
+          {[1, 2, 3, 4, 5, 6].map((k) => (
+            <img key={k} className={`fx-chunk fx-chunk-${k}`} src={`./hero-status/${icon}`} alt="" style={{ height }} />
+          ))}
+        </span>
+      )}
+      {!breaking && phase === 'rise' && <span className="fx-revive-sprite">{sprite}</span>}
+      {phase === 'rise' && [0, 1, 2].map((k) => <span key={k} className={`fx-revive-mote fx-revive-mote-${k}`} aria-hidden="true" />)}
+    </span>
+  );
 }
 
 export function HeroBlock({
-  hero, engine, now, settings, tombstoneIcon, isOpen, onToggle, children,
+  hero, engine, now, settings, tombstoneIcon, isOpen, onToggle, children, revivePhase,
 }: HeroBlockProps) {
   const state = engine.state;
   const classDef = HERO_CLASSES[hero.heroClass];
@@ -130,7 +175,7 @@ export function HeroBlock({
 
   if (collapsed) {
     return (
-      <div className={`card hero-block hero-block-summary ${fallen ? 'fallen' : ''} ${injured ? 'injured' : ''}`}>
+      <div className={`card hero-block hero-block-summary ${fallen ? 'fallen' : ''} ${injured ? 'injured' : ''} ${revivePhase === 'rise' ? 'fx-revive-glow' : ''}`}>
         {children}
         <div
           className="hero-block-summary-row"
@@ -141,16 +186,13 @@ export function HeroBlock({
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(false); } }}
         >
           <div className="hero-block-summary-sprite">
-            {fallen
-              ? <Tombstone height={Math.round(44 * settings.spriteScale)} icon={tombstoneIcon} />
-              : (
-                <HeroSprite
-                  heroClass={hero.heroClass}
-                  skin={hero.skin}
-                  animation="idle"
-                  height={Math.round(44 * settings.spriteScale)}
-                />
-              )}
+            <PortraitSlot
+              fallen={fallen}
+              phase={revivePhase}
+              icon={tombstoneIcon}
+              height={Math.round(44 * settings.spriteScale)}
+              sprite={<HeroSprite heroClass={hero.heroClass} skin={hero.skin} animation="idle" height={Math.round(44 * settings.spriteScale)} />}
+            />
           </div>
           <div className="hero-block-summary-body">
             <div className="spread">
@@ -182,22 +224,19 @@ export function HeroBlock({
   }
 
   return (
-    <div className={`card hero-block ${fallen ? 'fallen' : ''} ${injured ? 'injured' : ''}`}>
+    <div className={`card hero-block ${fallen ? 'fallen' : ''} ${injured ? 'injured' : ''} ${revivePhase === 'rise' ? 'fx-revive-glow' : ''}`}>
       {children}
       <div className="hero-block-grid">
 
         <div className="hero-block-portrait">
           <div className="hero-block-plate">
-            {fallen
-              ? <Tombstone height={spriteHeight} icon={tombstoneIcon} />
-              : (
-                <HeroSprite
-                  heroClass={hero.heroClass}
-                  skin={hero.skin}
-                  animation="idle"
-                  height={spriteHeight}
-                />
-              )}
+            <PortraitSlot
+              fallen={fallen}
+              phase={revivePhase}
+              icon={tombstoneIcon}
+              height={spriteHeight}
+              sprite={<HeroSprite heroClass={hero.heroClass} skin={hero.skin} animation="idle" height={spriteHeight} />}
+            />
           </div>
           <div className="hero-block-level">
             <span className="hero-block-level-num">Lv {hero.level}</span>
@@ -283,7 +322,7 @@ export function HeroBlock({
                   </div>
                   <button
                     className="btn-primary"
-                    onClick={() => engine.reviveHero(hero.id)}
+                    onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.reviveHero(hero.id))}
                     disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
                   >
                     Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
