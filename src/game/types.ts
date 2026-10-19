@@ -1725,6 +1725,9 @@ export interface RaidResult {
    * already uses, not a separate flag to keep in sync.
    */
   tombstoneStyleUnlocked?: string;
+  /** Patch 0415 -- per-class skins this clear earned for the first time
+   *  (see classSkins.earnFromRaidClear), announced once by engine.ts. */
+  classSkinsEarned?: { skinId: string; heroClass: string }[];
   /** Heroes whose own health damage this run dropped to 0, flipping them
    *  to 'fallen' -- a subset of `injuries` above (a heroId can appear in
    *  both), kept as its own field for the same reason
@@ -2352,6 +2355,12 @@ export interface GameState {
   discoveredItems: string[];
   /** Skins the guild has purchased; usable by any hero of that class. */
   unlockedSkins: string[];
+  /** Per-class skins (patch 0415) -- `${skinId}:${heroClass}` keys whose
+   *  unlock condition has been met (now purchasable), and those bought.
+   *  Optional: undefined on saves from before this patch; always read via
+   *  src/game/classSkins.ts with `?? []`. */
+  classSkinsEarned?: string[];
+  classSkinsOwned?: string[];
   /**
    * Tombstone cosmetics -- global rather than per-hero (see
    * TombstoneStyleDef's own comment), so these are just an unlocked-ids

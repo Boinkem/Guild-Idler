@@ -33726,3 +33726,92 @@ everywhere else that sprite appears. Separately noticed while testing:
 (`audio.volume = start + (target - start) * t` with no clamp), which
 throws "volume outside the range [0, 1]" in the console -- pre-existing,
 untouched by this patch, worth a one-line clamp later.
+
+### Frost Court: per-class Frost Sovereign skins (patch 0415)
+```discord-update
+Dev Update | Frost Court
+
+- Added Frost Sovereign, a new skin for every hero class: ice crowns, glowing eyes, frost-forged weapons and armour
+- Added per-class skin unlocks: clear The Frozen Wyrmkeep on Heroic or harder with a hero in the party to earn that class's Frost Sovereign
+- Added a Frost Sovereign section to Heroes > Skins showing every class, how to earn it, and a 5,000 gold unlock once earned
+- Clears from before this update count too, if they're still in your raid history
+```
+
+Direct request: a themed skin set across all 14 classes, each unlocked
+individually by an achievement-style condition and then bought with gold.
+Decisions locked in conversation: condition = full-clear **The Frozen
+Wyrmkeep on Heroic or harder** with that class in the party; price =
+**5,000 gold per class**; **no new Steam achievement** (per-class unlocks
+stay in-game only).
+
+**Art (not in git -- `public/heroes` is gitignored, licensed pack):**
+`public/heroes/<class>/frost_sovereign/*.png` for all 14 classes, placed
+directly in the local working copy. idle + walk (+ run for the knight)
+carry hand-tuned armour changes on top of a shared "Frost Court" palette
+(frost-blue plate, pale undead skin, violet cloth, ice for gold/greens,
+glowing cyan eyes, ice crown or frost-tipped headgear, faint cold aura,
+drifting motes): knight -- longer serrated blade + pauldron icicles; Huge
+Knight -- spiked pauldron + serrated greatsword; lizardman -- dorsal ice
+spines + serrated scimitar; werewolf -- frost spines along the back;
+dwarf -- crystal axe head; minotaur -- ice-ridged horns + axe; centaur --
+icicle tail/belly + iced axe; kobold -- crest + tail spines; wizard --
+ice crystal staff; witch -- frozen orb + icicle hem; pyromancer --
+ice-fire + spiked gauntlet/hood; gladiator -- crystal bow tips; samurai
+and adventurer -- ice spikes on hair/shoulders. Every other sheet a class
+has (attack_*, hurt, death, defend, jump, throw) got the palette/crown/
+eye pass too, because IdleView flashes a random attack animation mid-
+quest -- a skin folder missing those would blank the companion for
+~1.8s. Generator scripts live outside the repo (themepack.py / mods.py /
+knight2.py) and can be re-run for a new class or tweak.
+
+**Data.** New skins.json entry `frost_sovereign` (cost 5000) with three
+new optional SkinDef fields: `perClass`, `unlockRaidId`,
+`unlockMinDifficulty`. Flat scalars rather than a nested object so the
+DevTool round-trips them -- added to its `skins` schema (boolean, string,
+enum) for the same "don't silently strip on save" reason requiresDlc was
+added there.
+
+**Ownership -- `src/game/classSkins.ts`.** Two new optional GameState
+lists keyed `${skinId}:${heroClass}`: `classSkinsEarned` (condition met,
+now purchasable) and `classSkinsOwned` (bought). Optional and always read
+`?? []`, so no save migration. `canWearSkin` is now the single check for
+both kinds; guild-wide liveries are untouched and still live in
+`unlockedSkins`. `engine.buySkin` refuses a perClass skin; new
+`engine.buyClassSkin(skinId, heroClass)` charges per class and requires
+the class to be earned. `setHeroSkin` uses `canWearSkin` against the
+hero's own class.
+
+**Earning.** `RaidManager.resolve` calls `earnFromRaidClear` on a FULL
+clear only (same gate as every other raid reward) with the party's
+classes; matches any perClass skin whose raid/difficulty rank fits
+(heroic, mythic, legendary all count). Newly earned entries ride on
+`RaidResult.classSkinsEarned` and `engine.announceClassSkins` toasts them
+once (banner when live, archive-only during offline catch-up; also wired
+into `testCompleteActiveRaid`). **Backfill:** `backfillFromRaidLog` runs
+once on boot for existing saves -- raidLog keeps the last 30 raids with
+heroIds, so qualifying clears still in that log earn their classes;
+retired heroes can't be resolved to a class and are skipped.
+
+**UI.** Heroes > Skins: guild-wide skins grid unchanged (perClass skins
+filtered out of it); new per-skin section with one card per class --
+locked (greyed preview sprite, "Heroic+ Frozen Wyrmkeep with this class",
+full sentence on hover), earned ("Unlock · 5,000"), or owned -- plus an
+"N/14 classes" count. HeroBlock's livery chips use `canWearSkin`; a
+locked perClass chip's tooltip explains how to earn it.
+
+**Achievement fix.** COMPLETE_WARDROBE now ignores perClass skins --
+otherwise adding a 5,000-gold skin that can't go in `unlockedSkins`
+would have made the existing achievement impossible.
+
+**Verified** (web build, real engine, `npx tsc --noEmit` clean): all 14
+cards start locked with the right reason (incl. "an Adventurer"); a
+Normal full clear earns nothing; a Heroic full clear with a 6-hero party
+earns exactly those 6 classes and the result carries them; buying the
+Knight deducts 5,000 and lets a knight equip it; an adventurer can't
+equip it until bought; `buySkin('frost_sovereign')` is refused;
+backfill from a synthetic raidLog counts a Mythic clear and ignores a
+Normal one.
+
+**Not done / worth knowing:** no Steam achievement (by choice). A future
+second perClass skin just needs a skins.json entry + art -- the section,
+unlock hook and backfill are all data-driven off those three fields.

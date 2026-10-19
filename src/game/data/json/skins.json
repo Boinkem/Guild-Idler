@@ -48,5 +48,18 @@
       "#5aa8d8",
       "#79c0c0"
     ]
+  },
+  {
+    "id": "frost_sovereign",
+    "name": "Frost Sovereign",
+    "description": "The Frost Court's regalia: ice crowns, glowing eyes and frost-forged arms. Earned one class at a time.",
+    "cost": 5000,
+    "swatch": [
+      "#8ee6ff",
+      "#5b3a92"
+    ],
+    "perClass": true,
+    "unlockRaidId": "frozen_wyrmkeep",
+    "unlockMinDifficulty": "heroic"
   }
 ]

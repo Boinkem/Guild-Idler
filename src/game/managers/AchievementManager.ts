@@ -56,7 +56,9 @@ const CHECKS: Record<string, Check> = {
   BLACK_MARKET_REGULAR: (state) => state.stats.blackMarketPurchases >= 1,
 
   COMPLETE_WARDROBE: (state) => {
-    const purchasable = SKINS.filter((s) => s.cost > 0).map((s) => s.id);
+    // Per-class skins (patch 0415, Frost Court) are a separate collection,
+    // owned class by class -- not part of the guild-wide wardrobe.
+    const purchasable = SKINS.filter((s) => s.cost > 0 && !s.perClass).map((s) => s.id);
     return purchasable.every((id) => (state.unlockedSkins ?? []).includes(id));
   },
 

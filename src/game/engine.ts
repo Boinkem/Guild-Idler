@@ -37,6 +37,8 @@ import {
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
+import { canWearSkin, isClassSkinEarned, isClassSkinOwned, classSkinKey, classSkinLockReason, backfillFromRaidLog } from './classSkins';
+import { HERO_CLASSES as CLASS_DEFS } from './data/progression';
 import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
@@ -253,6 +255,9 @@ export class GameEngine {
   static async boot(adapter: SaveAdapter = defaultAdapter()): Promise<GameEngine> {
     const { state, isNew } = await SaveManager.load(adapter);
     const engine = new GameEngine(state, adapter);
+    // Patch 0415 -- saves that already cleared a per-class skin's raid
+    // before the skin existed earn those classes from raidLog, once.
+    if (!isNew) backfillFromRaidLog(engine.state);
     if (!isNew) engine.catchUpOffline();
     engine.refreshWorld(Date.now());
     engine.start();
@@ -979,6 +984,7 @@ export class GameEngine {
       if (raidResult.tombstoneStyleUnlocked) {
         this.say(`New tombstone style unlocked: ${raidResult.tombstoneStyleUnlocked}. Pick it from the Heroes tab.`, 'heroes', true);
       }
+      this.announceClassSkins(raidResult.classSkinsEarned, true);
       // Same "Fallen earns its own prominent callout" treatment as the
       // quest path above -- see that comment for the full reasoning.
       // Grouped into one toast per kind (heroes / pets) rather than one
@@ -1313,6 +1319,7 @@ export class GameEngine {
       const raidEndsAt = this.state.activeRaid.endsAt;
       const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, raidEndsAt);
       raidResults.push(raidResult);
+      this.announceClassSkins(raidResult.classSkinsEarned, false);
       // Same quiet offline treatment as the quest loop above.
       if (raidResult.heroesFallen?.length) {
         const names = raidResult.heroesFallen.map((h) => h.heroName);
@@ -1712,6 +1719,7 @@ export class GameEngine {
     if (!this.state.activeRaid) return;
     const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, this.state.activeRaid.endsAt);
     this.lastRaidResult = raidResult;
+    this.announceClassSkins(raidResult.classSkinsEarned, true);
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.reportGuidance(GuidanceManager.checkAll(this.state));
     this.notify();
@@ -3744,6 +3752,7 @@ export class GameEngine {
     if (this.state.unlockedSkins.includes(skinId)) return this.say('Already owned.');
     const def = SKIN_BY_ID[skinId];
     if (!def) return this.say('Unknown skin.');
+    if (def.perClass) return this.say('That livery is bought one class at a time.');
     if (this.state.gold < def.cost) return this.say('Not enough gold.');
     playSound('purchase');
     this.state.gold -= def.cost;
@@ -3785,10 +3794,42 @@ export class GameEngine {
   }
 
   /** Applies an owned skin to one hero. Free once unlocked. */
+  /** Patch 0415 -- one toast per earned skin, naming every class it
+   *  opened up. `live` = banner-worthy (a raid just finished on screen);
+   *  offline catch-up only archives it, same split the title toasts use. */
+  private announceClassSkins(earned: { skinId: string; heroClass: string }[] | undefined, live: boolean) {
+    if (!earned?.length) return;
+    const bySkin = new Map<string, string[]>();
+    for (const e of earned) bySkin.set(e.skinId, [...(bySkin.get(e.skinId) ?? []), CLASS_DEFS[e.heroClass as keyof typeof CLASS_DEFS]?.name ?? e.heroClass]);
+    for (const [skinId, names] of bySkin) {
+      const skin = SKIN_BY_ID[skinId]?.name ?? skinId;
+      const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+      const msg = `${skin} livery earned for ${who}! Buy it in Heroes > Skins.`;
+      if (live) this.say(msg, 'heroes', true); else this.archive(msg, 'heroes');
+    }
+  }
+
+  /** Patch 0415 -- buy a per-class skin for one hero class. */
+  buyClassSkin(skinId: string, heroClass: string) {
+    const def = SKIN_BY_ID[skinId];
+    if (!def || !def.perClass) return this.say('Unknown skin.');
+    if (isClassSkinOwned(this.state, skinId, heroClass)) return this.say('Already owned.');
+    if (!isClassSkinEarned(this.state, skinId, heroClass)) return this.say(classSkinLockReason(skinId, heroClass));
+    if (this.state.gold < def.cost) return this.say('Not enough gold.');
+    playSound('purchase');
+    this.state.gold -= def.cost;
+    this.state.stats.goldSpent += def.cost;
+    this.state.classSkinsOwned = [...(this.state.classSkinsOwned ?? []), classSkinKey(skinId, heroClass)];
+    const cls = CLASS_DEFS[heroClass as keyof typeof CLASS_DEFS]?.name ?? heroClass;
+    this.say(`${def.name} livery unlocked for your ${cls}s.`);
+    this.reportAchievements(AchievementManager.checkAll(this.state));
+    void this.saveNow();
+  }
+
   setHeroSkin(heroId: string, skinId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
-    if (skinId !== 'original' && !this.state.unlockedSkins.includes(skinId)) {
+    if (!canWearSkin(this.state, skinId, hero.heroClass)) {
       return this.say('That livery is not unlocked yet.');
     }
     hero.skin = skinId as typeof hero.skin;

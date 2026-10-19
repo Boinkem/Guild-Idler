@@ -1160,6 +1160,16 @@ export interface SkinDef {
    * about this field alone makes content appear or disappear.
    */
   requiresDlc?: string;
+  /**
+   * Patch 0415 (Frost Court). When true this skin is owned per hero CLASS
+   * (state.classSkinsOwned) instead of guild-wide (state.unlockedSkins),
+   * `cost` is charged once per class, and each class must first be earned
+   * by full-clearing `unlockRaidId` at `unlockMinDifficulty` or harder
+   * with a hero of that class in the party. See src/game/classSkins.ts.
+   */
+  perClass?: boolean;
+  unlockRaidId?: string;
+  unlockMinDifficulty?: RaidDifficulty;
 }
 
 /** Flat gold price for a purchasable (non-DLC) skin -- tuning registry

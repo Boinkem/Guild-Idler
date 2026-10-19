@@ -408,6 +408,15 @@ const SCHEMAS = {
       // couldn't be edited through the DevTool without silently stripping
       // its DLC gate on save.
       requiresDlc: { type: 'string', required: false },
+      // Patch 0415 (Frost Court) -- per-class skins. perClass makes the
+      // skin owned one hero class at a time (cost charged per class);
+      // each class is earned by full-clearing unlockRaidId at
+      // unlockMinDifficulty or harder with that class in the party. Kept
+      // as flat fields (not a nested object) so the editor round-trips
+      // them like every other scalar here.
+      perClass: { type: 'boolean', required: false },
+      unlockRaidId: { type: 'string', required: false },
+      unlockMinDifficulty: { type: 'enum', required: false, options: ['normal', 'heroic', 'mythic', 'legendary'] },
     },
   },
   'ascension-ranks': {

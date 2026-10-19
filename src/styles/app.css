@@ -6200,3 +6200,13 @@ button.harvest-item:hover {
 :root[data-motion='off'] .lu-compact * {
   animation-delay: 0ms !important;
 }
+
+/* ------------------------- per-class skins (0415) ------------------------- */
+.class-skin-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.class-skin-card { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; margin-bottom: 0; }
+.class-skin-card .btn-primary { width: 100%; }
+.class-skin-sprite { height: 68px; display: flex; align-items: flex-end; justify-content: center; }
+.class-skin-card.locked .class-skin-sprite { filter: grayscale(1) brightness(0.45); }
+.class-skin-card.owned { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sky) 60%, transparent); }
+.class-skin-name { font-size: 0.8rem; }
+.class-skin-lock { line-height: 1.3; }

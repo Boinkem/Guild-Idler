@@ -14,6 +14,7 @@ import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
 import { elementalBonusForHero } from '../data/elements';
 import { createRng } from '../rng';
+import { earnFromRaidClear } from '../classSkins';
 import { clamp, sumMods, MINUTE, softCap } from '../util';
 import { RecipeManager } from './RecipeManager';
 import { raidRecipeDropChance } from '../data/recipeScrolls';
@@ -670,6 +671,12 @@ export const RaidManager = {
       PetManager.grantEquippedXp(state, hero, heroXp);
     }
 
+    // Patch 0415 -- per-class skin unlocks (Frost Court: Frozen Wyrmkeep on
+    // Heroic+). Same "real reward, full clear only" gate as everything above.
+    const classSkinsEarned = fullClear
+      ? earnFromRaidClear(state, active.raidId, active.difficulty, heroes.map((h) => h.heroClass))
+      : [];
+
     const result: RaidResult = {
       raidId: active.raidId,
       raidName: raid?.name ?? 'Unknown Raid',
@@ -691,6 +698,7 @@ export const RaidManager = {
       petsFallen: petsFallen.length > 0 ? petsFallen : undefined,
       heroesLeveledUp: heroesLeveledUp.length > 0 ? heroesLeveledUp : undefined,
       tombstoneStyleUnlocked,
+      classSkinsEarned: classSkinsEarned.length > 0 ? classSkinsEarned : undefined,
     };
 
     state.raidLog.unshift(result);

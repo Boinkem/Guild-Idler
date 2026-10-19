@@ -9,6 +9,8 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { isTabUnread } from '../../game/attention';
 import { TrainingPanel } from './TrainingPanel';
 import { HERO_CLASSES, HeroClassDef, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+import { PER_CLASS_SKINS, isClassSkinEarned, isClassSkinOwned, classSkinLockReason, classSkinLockShort } from '../../game/classSkins';
+import { HeroSprite } from '../sprites/HeroSprite';
 import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { heroMilestoneUnlocked } from '../../game/data/heroMilestones';
 import { Tuning } from '../../game/data/tuning';
@@ -564,7 +566,7 @@ function HeroesRosterView() {
         A pure gold sink, no effect on stats.
       </p>
       <div className="grid three">
-        {SKINS.filter((sk) => sk.id !== 'original').map((sk) => {
+        {SKINS.filter((sk) => sk.id !== 'original' && !sk.perClass).map((sk) => {
           const owned = state.unlockedSkins.includes(sk.id);
           return (
             <div key={sk.id} className="card" style={{ marginBottom: 0 }}>
@@ -587,6 +589,46 @@ function HeroesRosterView() {
           );
         })}
       </div>
+
+      {/* Patch 0415 -- per-class skins (Frost Court). One card per class:
+          locked (with the reason), earned (buy), or owned. */}
+      {PER_CLASS_SKINS.map((sk) => {
+        const classes = Object.keys(HERO_CLASSES);
+        const ownedCount = classes.filter((c) => isClassSkinOwned(state, sk.id, c)).length;
+        return (
+          <div key={sk.id} className="class-skin-set">
+            <div className="spread" style={{ marginTop: 14 }}>
+              <div className="section-heading" style={{ margin: 0 }}>{sk.name}</div>
+              <span className="tiny muted">{ownedCount}/{classes.length} classes</span>
+            </div>
+            <p className="small muted subtitle">{sk.description}</p>
+            <div className="grid class-skin-grid">
+              {classes.map((cls) => {
+                const owned = isClassSkinOwned(state, sk.id, cls);
+                const earned = owned || isClassSkinEarned(state, sk.id, cls);
+                const def = HERO_CLASSES[cls as keyof typeof HERO_CLASSES];
+                return (
+                  <div key={cls} className={`card class-skin-card ${owned ? 'owned' : earned ? 'earned' : 'locked'}`}>
+                    <div className="class-skin-sprite" aria-hidden={!earned}>
+                      <HeroSprite heroClass={cls as keyof typeof HERO_CLASSES} skin={sk.id} height={64} title={`${sk.name} ${def.name}`} />
+                    </div>
+                    <div className="card-title class-skin-name">{def.name}</div>
+                    {owned ? (
+                      <span className="tiny good">Owned</span>
+                    ) : earned ? (
+                      <button className="btn-primary" disabled={state.gold < sk.cost} onClick={() => engine.buyClassSkin(sk.id, cls)}>
+                        Unlock · {formatGold(sk.cost)}
+                      </button>
+                    ) : (
+                      <span className="tiny muted class-skin-lock" title={classSkinLockReason(sk.id, cls)}>🔒 {classSkinLockShort(sk.id)}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
       </div>
     </div>
   );

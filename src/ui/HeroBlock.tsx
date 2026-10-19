@@ -6,6 +6,7 @@ import { PrestigeManager } from '../game/managers/PrestigeManager';
 import { InventoryManager } from '../game/managers/InventoryManager';
 import { rerollsUsedToday } from '../game/data/reroll';
 import { HERO_CLASSES, SKINS, infirmaryAutoReviveUnlocked, statResetCost } from '../game/data/progression';
+import { canWearSkin, classSkinLockReason } from '../game/classSkins';
 import { Tuning } from '../game/data/tuning';
 import { Hero } from '../game/types';
 import { describeMods, formatDuration, formatGold, formatNumber, HOUR } from '../game/util';
@@ -456,14 +457,14 @@ export function HeroBlock({
               <div className="row wrap hero-block-livery">
                 <span className="tiny muted">Livery:</span>
                 {SKINS.map((sk) => {
-                  const owned = sk.id === 'original' || state.unlockedSkins.includes(sk.id);
+                  const owned = canWearSkin(state, sk.id, hero.heroClass);
                   const active = (hero.skin ?? 'original') === sk.id;
                   return (
                     <button
                       key={sk.id}
                       className={`skin-chip ${active ? 'on' : ''}`}
                       disabled={!owned}
-                      title={owned ? sk.name : `${sk.name}, buy in the Skins shop below`}
+                      title={owned ? sk.name : sk.perClass ? `${sk.name}: ${classSkinLockReason(sk.id, hero.heroClass)} Then buy it in the Skins shop.` : `${sk.name}, buy in the Skins shop below`}
                       onClick={() => engine.setHeroSkin(hero.id, sk.id)}
                     >
                       <span className="skin-dots">
