@@ -7708,3 +7708,144 @@ button.harvest-item:hover {
   85% { opacity: .9; }
   100% { opacity: 0; transform: translateY(100vh) translateX(40px) rotate(900deg); }
 }
+
+/* ---- While you were away (0423) ---- */
+/*
+ * Patch 0423 -- see OfflineReportModal.tsx. Same CSS-timeline approach as
+ * the 0422 result cards: every beat is a `both`-filled animation with an
+ * inline --fx-t delay, and the root class contains "fx-" so Reduce motion
+ * shows the final frame at once.
+ */
+.modal.ofx-card { max-width: 540px; padding: 0; border-width: 2px; }
+.modal.ofx-card:not(.ofx-closing) { animation: ofx-in calc(var(--fx-t) * 500) cubic-bezier(.3, 1.3, .5, 1) both; }
+@keyframes ofx-in { 0% { opacity: 0; transform: translateY(30px) scale(.97); } 100% { opacity: 1; transform: none; } }
+.modal.ofx-card.ofx-closing { overflow: hidden; animation: ofx-fold calc(var(--fx-t) * 420) cubic-bezier(.5, 0, .8, .4) calc(var(--fx-t) * 120) both; }
+@keyframes ofx-fold { 0% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scaleY(.04) translateY(-40px); } }
+
+.ofx-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 18px 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brass) 14%, var(--panel)), var(--panel));
+  border-bottom: 1px solid var(--panel-3);
+}
+.ofx-glass { flex: none; width: 44px; height: 44px; color: var(--brass); animation: ofx-flip calc(var(--fx-t) * 700) cubic-bezier(.6, -.3, .4, 1.4) calc(var(--fx-t) * 250) both; }
+@keyframes ofx-flip { from { transform: rotate(180deg); } to { transform: rotate(0); } }
+.ofx-sandtop { transform-origin: 22px 18px; animation: ofx-drain calc(var(--fx-t) * 1400) linear calc(var(--fx-t) * 900) both; }
+@keyframes ofx-drain { from { transform: scaleY(1); } to { transform: scaleY(.15); } }
+.ofx-sandbot { transform-origin: 22px 37px; animation: ofx-fill calc(var(--fx-t) * 1400) linear calc(var(--fx-t) * 900) both; }
+@keyframes ofx-fill { from { transform: scaleY(.15); } to { transform: scaleY(1); } }
+.ofx-stream { animation: ofx-stream calc(var(--fx-t) * 1400) linear calc(var(--fx-t) * 900) both; }
+@keyframes ofx-stream { 0% { opacity: 0; } 1%, 95% { opacity: 1; } 100% { opacity: 0; } }
+.ofx-kick { font-size: 10px; letter-spacing: .24em; text-transform: uppercase; color: var(--brass); }
+.ofx-ttl { font-family: var(--font-display); font-size: 1.25rem; margin-top: 2px; letter-spacing: .02em; }
+.ofx-ttl b { color: color-mix(in srgb, var(--brass) 70%, white); font-weight: 400; font-variant-numeric: tabular-nums; }
+
+.ofx-body { padding: 12px 16px 16px; }
+.ofx-tally { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.ofx-tile {
+  position: relative; padding: 8px 10px; border-radius: 8px;
+  background: var(--panel-2); border: 1px solid var(--panel-3);
+  animation: ofx-pop calc(var(--fx-t) * 420) cubic-bezier(.3, 1.7, .5, 1) both;
+}
+@keyframes ofx-pop { 0% { opacity: 0; transform: scale(.6); } 100% { opacity: 1; transform: none; } }
+.ofx-v { font-family: var(--font-display); font-size: 1.125rem; font-variant-numeric: tabular-nums; }
+.ofx-l { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 1px; }
+.ofx-tile.g .ofx-v { color: var(--brass); }
+.ofx-tile.x .ofx-v { color: var(--moss); }
+.ofx-tile.lv .ofx-v { color: var(--sky); }
+.ofx-coin {
+  position: absolute; left: 50%; top: 12px; width: 9px; height: 9px; margin-top: -4px; border-radius: 50%;
+  background: var(--brass); border: 1px solid var(--brass-dim); pointer-events: none;
+  animation: ofx-coin calc(var(--fx-t) * 800) cubic-bezier(.2, .7, .4, 1) both;
+}
+@keyframes ofx-coin { 0% { opacity: 0; transform: translateY(0) scale(.5); } 10% { opacity: 1; } 100% { opacity: 0; transform: translateY(-46px) scale(1); } }
+
+.ofx-hl { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ofx-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 6px; border-radius: 999px; font-size: 10.5px;
+  background: var(--panel-2); border: 1px solid currentColor;
+  animation: ofx-stampin calc(var(--fx-t) * 380) cubic-bezier(.3, 1.7, .5, 1) both;
+}
+@keyframes ofx-stampin { 0% { opacity: 0; transform: scale(1.7) rotate(-4deg); } 100% { opacity: 1; transform: none; } }
+.ofx-badge img { width: 18px; height: 18px; }
+.ofx-badge > span { color: var(--parchment); }
+.ofx-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.ofx-badge.chain { color: var(--violet); }
+.ofx-badge.legend { color: var(--brass); box-shadow: 0 0 12px color-mix(in srgb, var(--brass) 35%, transparent); }
+.ofx-badge.title { color: var(--teal); }
+.ofx-badge.lvl { color: var(--sky); }
+.ofx-badge.fall { color: color-mix(in srgb, var(--blood) 80%, white); }
+
+.ofx-quiet { margin: 4px 0 0; animation: qfx-rise calc(var(--fx-t) * 360) ease-out both; }
+.ofx-ledger { margin-top: 12px; border-top: 1px solid var(--panel-3); }
+.ofx-row {
+  position: relative;
+  display: grid; grid-template-columns: 36px 1fr auto; gap: 4px 10px; align-items: center;
+  padding: 9px 2px; border-bottom: 1px dashed var(--panel-3);
+  animation: ofx-write calc(var(--fx-t) * 360) ease-out both;
+}
+@keyframes ofx-write { 0% { opacity: 0; transform: translateX(-12px); } 100% { opacity: 1; transform: none; } }
+.ofx-row::after {
+  content: ''; position: absolute; left: 0; bottom: -1px; height: 1px; width: 0; background: var(--brass);
+  animation: ofx-ink calc(var(--fx-t) * 500) ease-out both; animation-delay: inherit;
+}
+@keyframes ofx-ink { 0% { width: 0; opacity: 1; } 70% { width: 100%; opacity: 1; } 100% { width: 100%; opacity: 0; } }
+.ofx-ava {
+  width: 36px; height: 36px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid var(--panel-3); background: var(--panel-3) center / cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); color: var(--muted);
+}
+.ofx-raid .ofx-ava, .ofx-overseer .ofx-ava { border-radius: 8px; }
+.ofx-overseer .ofx-ava { background: var(--panel-2); }
+.ofx-mid { min-width: 0; }
+.ofx-who { font-size: 12px; font-weight: 700; }
+.ofx-who small { font-weight: 400; color: var(--muted); margin-left: 6px; font-size: 10px; }
+.ofx-pips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; align-items: center; }
+.ofx-pip {
+  width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--panel-3); background: var(--panel);
+}
+.ofx-pip svg { width: 8px; height: 8px; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; animation: qfx-show calc(var(--fx-t) * 1) both; animation-delay: inherit; }
+.ofx-pip.ok { animation: ofx-pipok calc(var(--fx-t) * 260) cubic-bezier(.3, 1.8, .5, 1) both; }
+.ofx-pip.ok svg { stroke: var(--ink); }
+.ofx-pip.no { animation: ofx-pipno calc(var(--fx-t) * 260) cubic-bezier(.3, 1.8, .5, 1) both; }
+.ofx-pip.no svg { stroke: #fff; }
+.ofx-pip.chain { box-shadow: 0 0 0 2px var(--violet); }
+@keyframes ofx-pipok {
+  0% { transform: scale(1.7); border-color: var(--panel-3); background: var(--panel); }
+  1% { border-color: var(--moss); background: var(--moss); }
+  100% { transform: none; border-color: var(--moss); background: var(--moss); }
+}
+@keyframes ofx-pipno {
+  0% { transform: scale(1.7); border-color: var(--panel-3); background: var(--panel); }
+  1% { border-color: var(--blood); background: var(--blood); }
+  100% { transform: none; border-color: var(--blood); background: var(--blood); }
+}
+.ofx-more { font-size: 9.5px; color: var(--muted); margin-left: 3px; }
+.ofx-road { font-size: 10px; color: var(--brass); margin-top: 4px; }
+.ofx-sum { text-align: right; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ofx-g { color: var(--brass); display: block; }
+.ofx-x { color: var(--moss); font-weight: 400; font-size: 10px; display: block; margin-top: 2px; }
+.ofx-st {
+  display: inline-block; margin-bottom: 3px; padding: 1px 6px;
+  font-family: var(--font-display); font-weight: 400; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  border: 2px solid currentColor; border-radius: 4px; transform: rotate(-5deg);
+}
+.ofx-st.clear { color: color-mix(in srgb, var(--moss) 75%, white); }
+.ofx-st.part { color: var(--brass); }
+.ofx-st.fail { color: color-mix(in srgb, var(--blood) 80%, white); }
+.ofx-chips { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 5px; perspective: 500px; }
+.ofx-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px 2px 3px; border-radius: 6px;
+  background: var(--panel-2); border: 1px solid currentColor;
+  font-size: 10px; font-weight: 700; color: var(--parchment);
+  animation: qfx-flip calc(var(--fx-t) * 380) cubic-bezier(.3, 1.4, .5, 1) both;
+}
+.ofx-chip.legend { box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 40%, transparent); }
+.ofx-chip.hurt { color: color-mix(in srgb, var(--blood) 80%, white); font-weight: 400; padding-left: 8px; }
+.ofx-chip.more { color: var(--muted); font-weight: 400; padding-left: 8px; }
+.ofx-actions { animation: qfx-rise calc(var(--fx-t) * 300) ease-out both; }

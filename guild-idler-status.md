@@ -34343,3 +34343,60 @@ Frames were checked mid-timeline and at the end, and with Reduce
 motion forced on. The streak capture in the engine wasn't driven
 through a real Auto-Chain run in-game, so it's worth watching on the
 first streak.
+
+### "While you were away" ledger card; testing buttons finish quests for real (patch 0423)
+```discord-update
+Dev Update | Patch 0423
+
+- Added a new animated "While you were away" card: an hourglass flips as your time away counts up, your totals pop in and count up, and the big moments stamp in as badges (a chain finished, a legendary find, titles, levels, anyone who fell)
+- Changed the away report to one row per hero: each hero's quests show as a strip of green ticks and red crosses in order, with their gold, XP and loot beside them, plus rows for raids and the Overseer
+- Added a "who's still out" list when nothing finished while you were away, showing when each hero is due back
+- Fixed the testing tools' Complete buttons skipping Auto-Chain and the story chain card -- they now finish quests and raids exactly like the clock running out
+```
+
+Mocked up on the Claude Design canvas (AwayReport board) and signed off
+before building.
+
+**Away card (OfflineReportModal).** Rebuilt on 0422's result-card
+approach (`resultFx.tsx`): a single CSS timeline, `at(ms)` delays in
+`--fx-t` units, root class `ofx-card` so Reduce motion shows the final
+frame, and `useDelayedCount` for the clock and totals. The outer
+component still owns the "summary turned off" auto-dismiss. The card is
+an inner keyed `AwayCard`.
+- **Badges** come from the report itself: chain completions
+  (`chainAdvanced.completed`), legendary loot (two named, then "+N"),
+  quest and raid titles, heroes who levelled (their current level, three
+  named), and anyone who fell.
+- **Ledger rows** group `report.results` by hero in order of first
+  finish. Pips are one per quest (a violet ring for a story chain stage),
+  capped at 16 with "+N more". Chips are capped at 6.
+- **Raids and Overseer:** raids get a row with their banner and a Full
+  clear / N/M / Turned back stamp, and the Overseer gets a materials row.
+- **Nothing finished:** the card lists up to four heroes still out, each
+  with "Back in ...".
+- **Long reports:** the whole ledger is squeezed to fit inside 2.6s
+  (`LEDGER_MAX_MS`), so a long week doesn't make you wait for it.
+- **Dismiss:** Back to work folds the card shut and flies the gold from
+  the Gold tile. The flight now sits outside the card so the fold doesn't
+  squash it. The old arrival particle burst is replaced by coins rising
+  off the Gold tile.
+
+**Testing tools.** The live quest and raid handling in `tick()` moved
+into `resolveQuestLive(quest, now)` and `resolveRaidLive(now)` with no
+behaviour change. `testCompleteActiveQuest`, `testCompleteAllActiveQuests`
+and `testCompleteActiveRaid` now call them, so the buttons get exactly
+what a natural finish gets:
+- the result card and its sounds and toasts;
+- the story chain card on a chain's last step;
+- Auto-Chain continuing, with the streak track on the card.
+
+Complete all only finishes the quests active when it's pressed. A
+contract Auto-Chain starts as a result needs another press, which also
+means a streak can be stepped through one contract at a time.
+
+**Tested:** `npm run build` passes. The away card was rendered headless
+through a throwaway harness in three cases: a busy week (three heroes,
+a chain, a raid, the Overseer, every badge), the 1-day report from the
+bug screenshot, and a nothing-finished report. Frames were checked mid
+and end. The engine change is a straight extraction (tsc-clean), and
+the buttons weren't clicked through in-game here.

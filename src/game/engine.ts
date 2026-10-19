@@ -828,6 +828,181 @@ export class GameEngine {
     this.timer = null;
   }
 
+  /**
+   * Patch 0423 -- everything that happens when a quest finishes while the
+   * player is watching: the result card, sounds, toasts, the story chain
+   * celebration, and Auto-Chain moving on to the next contract. Pulled out
+   * of tick() so the Testing tools' "Complete now" buttons run exactly the
+   * same path instead of a cut-down copy that skipped Auto-Chain and the
+   * chain-complete card. Offline catch-up still has its own quieter loop.
+   */
+  private resolveQuestLive(quest: ActiveQuest, now: number) {
+    const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+    this.pushResult(result);
+    // Biggest news first, and only one cue per resolution — a chain
+    // completion is a bigger deal than a routine level-up, which is a
+    // bigger deal than a plain success. Offline catch-up never reaches
+    // here, so this only fires for quests you were actually watching.
+    if (result.chainAdvanced?.completed) {
+      playSound('chain_complete');
+      const chain = CHAIN_BY_ID[result.chainAdvanced.chainId];
+      if (chain) {
+        this.completedChainCelebration = {
+          chainId: chain.id,
+          chainName: chain.name,
+          title: chain.title,
+          rewardGold: chain.rewardGold,
+          rewardRenown: chain.rewardRenown,
+          items: chain.rewardItems
+            .map((defId) => {
+              const def = EQUIPMENT_BY_ID[defId];
+              return def ? { defId, name: def.name, rarity: def.rarity } : null;
+            })
+            .filter((x): x is { defId: string; name: string; rarity: Rarity } => x !== null),
+        };
+      }
+    } else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
+    else if (result.levelsGained > 0) playSound('level_up');
+    else playSound(result.success ? 'quest_success' : 'quest_fail');
+    // The "egg is ready" moment now gets its own dedicated prompt
+    // (HatchReadyModal, plus an idle-view banner) rather than a toast --
+    // set directly on state.pendingHatchReadyNotice inside
+    // QuestManager.resolve, nothing to do here. A toast was too easy to
+    // miss for something the player has to act on (open the Hatchery,
+    // click the ready egg) rather than just read.
+    if (result.eggDropped) {
+      this.say(`Found a ${result.eggDropped.rarity} egg! Equip it in the Hatchery to start it incubating.`, 'hatchery', true);
+    }
+    // Grimsby's arrival -- same "live play only, offline catch-up never
+    // reaches here" treatment as everything else in this block. A
+    // flavor-first banner rather than a plain announcement, matching
+    // his character; "Go to" points straight at his tab.
+    if (result.grimsbyArrived) {
+      this.say('A cart rattles up outside the gate, one wheel squeaking like it\u2019s begging to be replaced.', 'peddler');
+    }
+    // First title ever earned gets the prominent banner treatment
+    // (matches every other genuine "first time" milestone that goes
+    // through reportGuidance with banner:true); every title after that
+    // is a smaller, ordinary Toast -- same say()/banner split, just
+    // driven by hasEarnedFirstTitle instead of a GuidanceTopic.
+    if (result.titleGranted) {
+      const isFirst = !this.state.hasEarnedFirstTitle;
+      this.state.hasEarnedFirstTitle = true;
+      this.say(`${result.heroName} has earned the title "${result.titleGranted}"!`, 'heroes', isFirst);
+    }
+    // Fallen is a bigger deal than an ordinary injury -- routine
+    // injuries get no toast at all, just the modal/log -- because it
+    // changes what the player can actually do with this hero (or pet)
+    // right now, not just their odds on the next send. Same banner
+    // treatment recovering from Fallen already gets a few lines up in
+    // the tick loop above; going in deserves the same prominence
+    // coming out does.
+    if (result.heroFallen) {
+      this.say(`${result.heroName} has fallen and needs to be revived before questing again.`, 'heroes', true);
+    }
+    if (result.petFallen) {
+      this.say(`${result.petFallen.petName} has fallen and needs to be revived.`, 'heroes', true);
+    }
+    this.reportAchievements(AchievementManager.checkAll(this.state, now));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
+
+    const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
+    if (chainHero) {
+      const chainResult = this.tryContinueAutoChain(chainHero, now, result.success);
+      this.noteStreakResult(chainHero, result, chainResult);
+      if (chainResult) {
+        if (chainResult.continued) {
+          playSound('depart');
+          const label = chainResult.via === 'chain' ? 'chain step' : 'streak';
+          this.say(`${chainHero.name} keeps going, ${chainResult.completedCount}/${chainResult.target} in this ${label}.`, 'quests');
+        } else if (chainResult.stoppedByFailure) {
+          playSound('quest_fail');
+          const note = chainResult.via === 'chain' ? 'a failed stage' : 'a failed quest';
+          this.say(`${chainHero.name}'s run stops after ${note} and waits for new orders.`, 'quests');
+        } else {
+          playSound('chain_complete');
+          const n = chainResult.completedCount;
+          this.say(`${chainHero.name} has chained ${n} quest${n === 1 ? '' : 's'} and is waiting for new orders.`, 'quests');
+        }
+      }
+    }
+  }
+
+  /** Patch 0423 -- the live raid resolve, shared by tick() and the
+   *  Testing tools' "Complete raid" button. */
+  private resolveRaidLive(now: number) {
+    const active = this.state.activeRaid;
+    if (!active) return;
+    const raidResult = RaidManager.resolve(this.state, active, now);
+    this.lastRaidResult = raidResult;
+    playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
+    // Only the heroes who actually cleared the raid earn its title --
+    // titledHeroNames is already that exact subset (RaidManager.resolve
+    // excludes anyone who already held it from a prior clear), so the
+    // toast names them directly rather than crediting the guild at
+    // large. Same first-title-ever banner split as the quest-chain path
+    // above.
+    if (raidResult.titleGranted && raidResult.titledHeroNames?.length) {
+      const isFirst = !this.state.hasEarnedFirstTitle;
+      this.state.hasEarnedFirstTitle = true;
+      const names = raidResult.titledHeroNames;
+      const who = names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+      const verb = names.length === 1 ? 'has' : 'have';
+      this.say(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes', isFirst);
+    }
+    // Patch 0335 -- new tombstone cosmetic, same banner treatment as a
+    // title grant just above (both are "the guild just earned
+    // something permanent and cosmetic" moments).
+    if (raidResult.tombstoneStyleUnlocked) {
+      this.say(`New tombstone style unlocked: ${raidResult.tombstoneStyleUnlocked}. Pick it from the Heroes tab.`, 'heroes', true);
+    }
+    this.announceClassSkins(raidResult.classSkinsEarned, true);
+    // Same "Fallen earns its own prominent callout" treatment as the
+    // quest path above -- see that comment for the full reasoning.
+    // Grouped into one toast per kind (heroes / pets) rather than one
+    // per faller, same "credit everyone in one line" shape the title
+    // toast just above already uses for a multi-hero party.
+    if (raidResult.heroesFallen?.length) {
+      const names = raidResult.heroesFallen.map((h) => h.heroName);
+      const who = names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+      const verb = names.length === 1 ? 'has' : 'have';
+      const noun = names.length === 1 ? 'needs' : 'need';
+      this.say(`${who} ${verb} fallen and ${noun} to be revived before questing again.`, 'heroes', true);
+    }
+    if (raidResult.petsFallen?.length) {
+      const names = raidResult.petsFallen.map((p) => p.petName);
+      const who = names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+      const verb = names.length === 1 ? 'has' : 'have';
+      const noun = names.length === 1 ? 'needs' : 'need';
+      this.say(`${who} ${verb} fallen and ${noun} to be revived.`, 'heroes', true);
+    }
+    // Patch 0284 -- raids now actually grant hero XP/levels (see
+    // RaidManager.resolve's own comment); this is the first toast/
+    // sound that progress ever gets, same level_up cue the quest path
+    // already plays via QuestResult.levelsGained. Grouped into one
+    // toast for the whole party, same shape as titled/fallen above --
+    // a level number isn't meaningful to combine across heroes who
+    // may have gained different amounts, so the toast names who
+    // leveled without claiming a single shared total.
+    if (raidResult.heroesLeveledUp?.length) {
+      playSound('level_up');
+      const names = raidResult.heroesLeveledUp.map((h) => h.heroName);
+      const who = names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+      const verb = names.length === 1 ? 'has' : 'have';
+      this.say(`${who} ${verb} leveled up!`, 'heroes', true);
+    }
+    this.reportAchievements(AchievementManager.checkAll(this.state, now));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
+  }
+
   private tick() {
     const now = Date.now();
     const delta = now - this.lastTick;
@@ -866,168 +1041,13 @@ export class GameEngine {
 
     const due = this.state.activeQuests.filter((q) => q.endsAt <= now);
     for (const quest of due) {
-      const result = QuestManager.resolve(this.state, quest, quest.endsAt);
-      this.pushResult(result);
+      this.resolveQuestLive(quest, now);
       changed = true;
-      // Biggest news first, and only one cue per resolution — a chain
-      // completion is a bigger deal than a routine level-up, which is a
-      // bigger deal than a plain success. Offline catch-up never reaches
-      // here, so this only fires for quests you were actually watching.
-      if (result.chainAdvanced?.completed) {
-        playSound('chain_complete');
-        const chain = CHAIN_BY_ID[result.chainAdvanced.chainId];
-        if (chain) {
-          this.completedChainCelebration = {
-            chainId: chain.id,
-            chainName: chain.name,
-            title: chain.title,
-            rewardGold: chain.rewardGold,
-            rewardRenown: chain.rewardRenown,
-            items: chain.rewardItems
-              .map((defId) => {
-                const def = EQUIPMENT_BY_ID[defId];
-                return def ? { defId, name: def.name, rarity: def.rarity } : null;
-              })
-              .filter((x): x is { defId: string; name: string; rarity: Rarity } => x !== null),
-          };
-        }
-      } else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
-      else if (result.levelsGained > 0) playSound('level_up');
-      else playSound(result.success ? 'quest_success' : 'quest_fail');
-      // The "egg is ready" moment now gets its own dedicated prompt
-      // (HatchReadyModal, plus an idle-view banner) rather than a toast --
-      // set directly on state.pendingHatchReadyNotice inside
-      // QuestManager.resolve, nothing to do here. A toast was too easy to
-      // miss for something the player has to act on (open the Hatchery,
-      // click the ready egg) rather than just read.
-      if (result.eggDropped) {
-        this.say(`Found a ${result.eggDropped.rarity} egg! Equip it in the Hatchery to start it incubating.`, 'hatchery', true);
-      }
-      // Grimsby's arrival -- same "live play only, offline catch-up never
-      // reaches here" treatment as everything else in this block. A
-      // flavor-first banner rather than a plain announcement, matching
-      // his character; "Go to" points straight at his tab.
-      if (result.grimsbyArrived) {
-        this.say('A cart rattles up outside the gate, one wheel squeaking like it\u2019s begging to be replaced.', 'peddler');
-      }
-      // First title ever earned gets the prominent banner treatment
-      // (matches every other genuine "first time" milestone that goes
-      // through reportGuidance with banner:true); every title after that
-      // is a smaller, ordinary Toast -- same say()/banner split, just
-      // driven by hasEarnedFirstTitle instead of a GuidanceTopic.
-      if (result.titleGranted) {
-        const isFirst = !this.state.hasEarnedFirstTitle;
-        this.state.hasEarnedFirstTitle = true;
-        this.say(`${result.heroName} has earned the title "${result.titleGranted}"!`, 'heroes', isFirst);
-      }
-      // Fallen is a bigger deal than an ordinary injury -- routine
-      // injuries get no toast at all, just the modal/log -- because it
-      // changes what the player can actually do with this hero (or pet)
-      // right now, not just their odds on the next send. Same banner
-      // treatment recovering from Fallen already gets a few lines up in
-      // the tick loop above; going in deserves the same prominence
-      // coming out does.
-      if (result.heroFallen) {
-        this.say(`${result.heroName} has fallen and needs to be revived before questing again.`, 'heroes', true);
-      }
-      if (result.petFallen) {
-        this.say(`${result.petFallen.petName} has fallen and needs to be revived.`, 'heroes', true);
-      }
-      this.reportAchievements(AchievementManager.checkAll(this.state, now));
-      this.reportGuidance(GuidanceManager.checkAll(this.state));
-
-      const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
-      if (chainHero) {
-        const chainResult = this.tryContinueAutoChain(chainHero, now, result.success);
-        this.noteStreakResult(chainHero, result, chainResult);
-        if (chainResult) {
-          if (chainResult.continued) {
-            playSound('depart');
-            const label = chainResult.via === 'chain' ? 'chain step' : 'streak';
-            this.say(`${chainHero.name} keeps going, ${chainResult.completedCount}/${chainResult.target} in this ${label}.`, 'quests');
-          } else if (chainResult.stoppedByFailure) {
-            playSound('quest_fail');
-            const note = chainResult.via === 'chain' ? 'a failed stage' : 'a failed quest';
-            this.say(`${chainHero.name}'s run stops after ${note} and waits for new orders.`, 'quests');
-          } else {
-            playSound('chain_complete');
-            const n = chainResult.completedCount;
-            this.say(`${chainHero.name} has chained ${n} quest${n === 1 ? '' : 's'} and is waiting for new orders.`, 'quests');
-          }
-        }
-      }
     }
 
     if (this.state.activeRaid && this.state.activeRaid.endsAt <= now) {
-      const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, now);
-      this.lastRaidResult = raidResult;
+      this.resolveRaidLive(now);
       changed = true;
-      playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
-      // Only the heroes who actually cleared the raid earn its title --
-      // titledHeroNames is already that exact subset (RaidManager.resolve
-      // excludes anyone who already held it from a prior clear), so the
-      // toast names them directly rather than crediting the guild at
-      // large. Same first-title-ever banner split as the quest-chain path
-      // above.
-      if (raidResult.titleGranted && raidResult.titledHeroNames?.length) {
-        const isFirst = !this.state.hasEarnedFirstTitle;
-        this.state.hasEarnedFirstTitle = true;
-        const names = raidResult.titledHeroNames;
-        const who = names.length === 1
-          ? names[0]
-          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-        const verb = names.length === 1 ? 'has' : 'have';
-        this.say(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes', isFirst);
-      }
-      // Patch 0335 -- new tombstone cosmetic, same banner treatment as a
-      // title grant just above (both are "the guild just earned
-      // something permanent and cosmetic" moments).
-      if (raidResult.tombstoneStyleUnlocked) {
-        this.say(`New tombstone style unlocked: ${raidResult.tombstoneStyleUnlocked}. Pick it from the Heroes tab.`, 'heroes', true);
-      }
-      this.announceClassSkins(raidResult.classSkinsEarned, true);
-      // Same "Fallen earns its own prominent callout" treatment as the
-      // quest path above -- see that comment for the full reasoning.
-      // Grouped into one toast per kind (heroes / pets) rather than one
-      // per faller, same "credit everyone in one line" shape the title
-      // toast just above already uses for a multi-hero party.
-      if (raidResult.heroesFallen?.length) {
-        const names = raidResult.heroesFallen.map((h) => h.heroName);
-        const who = names.length === 1
-          ? names[0]
-          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-        const verb = names.length === 1 ? 'has' : 'have';
-        const noun = names.length === 1 ? 'needs' : 'need';
-        this.say(`${who} ${verb} fallen and ${noun} to be revived before questing again.`, 'heroes', true);
-      }
-      if (raidResult.petsFallen?.length) {
-        const names = raidResult.petsFallen.map((p) => p.petName);
-        const who = names.length === 1
-          ? names[0]
-          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-        const verb = names.length === 1 ? 'has' : 'have';
-        const noun = names.length === 1 ? 'needs' : 'need';
-        this.say(`${who} ${verb} fallen and ${noun} to be revived.`, 'heroes', true);
-      }
-      // Patch 0284 -- raids now actually grant hero XP/levels (see
-      // RaidManager.resolve's own comment); this is the first toast/
-      // sound that progress ever gets, same level_up cue the quest path
-      // already plays via QuestResult.levelsGained. Grouped into one
-      // toast for the whole party, same shape as titled/fallen above --
-      // a level number isn't meaningful to combine across heroes who
-      // may have gained different amounts, so the toast names who
-      // leveled without claiming a single shared total.
-      if (raidResult.heroesLeveledUp?.length) {
-        playSound('level_up');
-        const names = raidResult.heroesLeveledUp.map((h) => h.heroName);
-        const who = names.length === 1
-          ? names[0]
-          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-        const verb = names.length === 1 ? 'has' : 'have';
-        this.say(`${who} ${verb} leveled up!`, 'heroes', true);
-      }
-      this.reportAchievements(AchievementManager.checkAll(this.state, now));
-      this.reportGuidance(GuidanceManager.checkAll(this.state));
     }
 
     if (this.refreshWorld(now)) changed = true;
@@ -1685,26 +1705,26 @@ export class GameEngine {
   }
 
   /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */
+  /** Patch 0423 -- runs the same live path a quest finishing on its own
+   *  does (resolveQuestLive): result card, sounds/toasts, the story chain
+   *  card on a chain's last step, and Auto-Chain continuing to the next
+   *  contract, so a whole streak or chain can be stepped through with
+   *  these buttons. */
   testCompleteActiveQuest(heroId: string) {
     if (!TESTING_TOOLS_ENABLED) return;
     const quest = this.state.activeQuests.find((q) => q.heroId === heroId);
     if (!quest) return;
-    const result = QuestManager.resolve(this.state, quest, quest.endsAt);
-    this.pushResult(result);
-    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
-    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    this.resolveQuestLive(quest, Date.now());
     this.notify();
     void this.saveNow();
   }
 
+  /** Completes every quest active right now. A contract Auto-Chain starts
+   *  as a result isn't included -- press again to complete that one. */
   testCompleteAllActiveQuests() {
     if (!TESTING_TOOLS_ENABLED) return;
-    for (const quest of [...this.state.activeQuests]) {
-      const result = QuestManager.resolve(this.state, quest, quest.endsAt);
-      this.pushResult(result);
-    }
-    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
-    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    const now = Date.now();
+    for (const quest of [...this.state.activeQuests]) this.resolveQuestLive(quest, now);
     this.notify();
     void this.saveNow();
   }
@@ -1718,11 +1738,7 @@ export class GameEngine {
   testCompleteActiveRaid() {
     if (!TESTING_TOOLS_ENABLED) return;
     if (!this.state.activeRaid) return;
-    const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, this.state.activeRaid.endsAt);
-    this.lastRaidResult = raidResult;
-    this.announceClassSkins(raidResult.classSkinsEarned, true);
-    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
-    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    this.resolveRaidLive(Date.now());
     this.notify();
     void this.saveNow();
   }
