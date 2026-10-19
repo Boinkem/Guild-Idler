@@ -66,7 +66,7 @@ export function AuctionHousePanel() {
 
   if (!unlocked) {
     return (
-      <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/auction-house.jpg', settings.backgroundMood)})` }}>
+      <div className="tab-scene ah-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/auction-house.jpg', settings.backgroundMood)})` }}>
         <div className="tab-scene-content">
           <h2>Auction House</h2>
           <div className="card">
@@ -90,7 +90,7 @@ export function AuctionHousePanel() {
   }
 
   return (
-    <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/auction-house.jpg', settings.backgroundMood)})` }}>
+    <div className="tab-scene ah-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/auction-house.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
         <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
           <h2 style={{ margin: 0 }}>Auction House</h2>

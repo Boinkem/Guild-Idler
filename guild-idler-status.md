@@ -34004,3 +34004,42 @@ applying (the DevTool tracks the process it started in memory, so after
 a DevTool restart it can no longer stop a copy the old one launched),
 then restart the DevTool and **Start AH server** again. If you forget, end
 the stray `node.exe` in Task Manager.
+
+### Auction House: solid buttons (patch 0419)
+```discord-update
+Dev Update | Auction House
+
+- Fixed the Auction House's List for sale, Buy and Cancel listing buttons looking faded and see-through
+- Changed the Auction House's tabs, Refresh, Mailbox and filter dropdowns to have a solid background so they stand out against the hall
+```
+
+Direct report with screenshots after the first live Auction House test:
+buttons "have no fill", List for sale / Buy shouldn't be transparent.
+
+**Card buttons (List for sale, Buy, Cancel listing).** Same painting-order
+quirk `.rarity-banner-content` already documents: the button is an
+in-flow child placed after `.item-card-summary`, so the absolutely
+positioned 42%-opacity `.rarity-banner` painted over it, washing it out.
+New generic `.item-card > .item-card-action` (app.css, next to
+`.item-card-name`) lifts it above the banner (`position: relative;
+z-index: 1`) and insets it 10px from the card edges. All five AH call
+sites switched from the inline `marginTop/width` style to the class.
+
+**Ghost buttons and fields.** The unselected Browse/Sell/My Listings tabs,
+Refresh, Mailbox, Gold/Scrap and 24h/48h toggles are `.btn-ghost`
+(transparent by design), which vanishes over the hall art. The AH's
+`tab-scene` now carries `.ah-scene`, and `.ah-scene .btn-ghost` gets a
+solid panel gradient + bevel (the fill Modern style already gives
+`.btn-ghost` everywhere), with a brass-edged hover. Separately, the
+filter `<select>`s and the price `<input>` used `var(--panel2)` /
+`var(--panel3)`, which don't exist (the real tokens are `--panel-2` /
+`--panel-3`), so they had no background at all -- fixed in
+`AuctionHouseTrade.tsx`. Same typo still exists in TestingPanel's AH dev
+session field (`TestingPanel.tsx:240`), left alone (dev-only panel, not
+reported).
+
+Verified: `npx tsc --noEmit` clean; rendered the real `app.css` with
+matching markup over `auction-house.jpg` in headless Chromium -- card
+buttons now solid brass and inset, ghost buttons solid dark. Not checked
+in the live Electron app. Client-side change, so it needs a new Steam
+build to reach the Steam version.

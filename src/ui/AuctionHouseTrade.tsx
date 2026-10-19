@@ -74,13 +74,13 @@ function BrowseTab() {
     <>
       <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={itemTypeFilter} onChange={(e) => setItemTypeFilter(e.target.value as typeof itemTypeFilter)}
-          style={{ background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '6px 8px' }}>
+          style={{ background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--text)', padding: '6px 8px' }}>
           <option value="">All types</option>
           <option value="equipment">Gear</option>
           <option value="consumable">Consumables</option>
         </select>
         <select value={rarityFilter} onChange={(e) => setRarityFilter(e.target.value as typeof rarityFilter)}
-          style={{ background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '6px 8px' }}>
+          style={{ background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--text)', padding: '6px 8px' }}>
           <option value="">All rarities</option>
           {RARITY_ORDER.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
@@ -126,7 +126,7 @@ function ListingCard({ row, buying, onBuy }: { row: ServerListingRow; buying: bo
             <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
           </div>
         </div>
-        <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} disabled={buying} onClick={onBuy}>
+        <button className="btn-primary item-card-action" disabled={buying} onClick={onBuy}>
           {buying ? 'Buying...' : 'Buy'}
         </button>
       </div>
@@ -146,7 +146,7 @@ function ListingCard({ row, buying, onBuy }: { row: ServerListingRow; buying: bo
           <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
         </div>
       </div>
-      <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} disabled={buying} onClick={onBuy}>
+      <button className="btn-primary item-card-action" disabled={buying} onClick={onBuy}>
         {buying ? 'Buying...' : 'Buy'}
       </button>
     </div>
@@ -196,7 +196,7 @@ function SellTab() {
                     </div>
                   </div>
                 </div>
-                <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={() => setDraft({ kind: 'equipment', item })}>
+                <button className="btn-primary item-card-action" onClick={() => setDraft({ kind: 'equipment', item })}>
                   List for sale →
                 </button>
               </div>
@@ -223,7 +223,7 @@ function SellTab() {
                     <div className="tiny muted">Lists 1 at a time</div>
                   </div>
                 </div>
-                <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={() => setDraft({ kind: 'consumable', consumableId })}>
+                <button className="btn-primary item-card-action" onClick={() => setDraft({ kind: 'consumable', consumableId })}>
                   List for sale →
                 </button>
               </div>
@@ -273,7 +273,7 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
       <input
         type="number" min="1" placeholder="Price" value={price}
         onChange={(e) => setPrice(e.target.value)}
-        style={{ width: '100%', background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '7px 8px', marginBottom: 10 }}
+        style={{ width: '100%', background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--text)', padding: '7px 8px', marginBottom: 10 }}
       />
       <div className="row" style={{ gap: 8, marginBottom: 10, alignItems: 'center' }}>
         <button className={duration === 24 ? 'btn-primary' : 'btn-ghost'} onClick={() => setDuration(24)}>24h</button>
@@ -344,7 +344,7 @@ function MyListingsTab() {
 
 function MyListingCard({ row, cancelling, onCancel }: { row: ServerListingRow; cancelling: boolean; onCancel: () => void }) {
   const cancelButton = (
-    <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} disabled={cancelling} onClick={onCancel}>
+    <button className="btn-primary item-card-action" disabled={cancelling} onClick={onCancel}>
       {cancelling ? 'Cancelling...' : 'Cancel listing'}
     </button>
   );
