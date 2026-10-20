@@ -35092,3 +35092,100 @@ launcher). No database migration and no save-version change.
 integration run (35 checks) and an engine-against-server run (18 checks),
 both all passing, on a real Postgres. The Steam ticket step and the
 Electron UI were not exercised here.
+
+### Paladin: per-class Paladin skins (patch 0432)
+```discord-update
+Dev Update | Paladin
+
+- Added Paladin, a third skin set for every hero class: sun-gold halos, white-and-gold plate, royal blue tabards and capes, and holy light where there used to be fire or poison
+- Added Paladin unlocks: clear The House of Bones on Heroic or harder with a hero in the party to earn that class's Paladin
+- Added a Paladin section to the Wardrobe, with a 10,000 gold unlock per class once earned
+- Clears from before this update count too, if they're still in your raid history
+```
+
+Direct request: recreate a ChatGPT Paladin knight mockup (white plate,
+gold halo with a cross, gold pauldron, blue shield with a gold cross,
+white cape lined blue, gold sparkles) and give every other class a
+Paladin take that is more than a recolour. As with Bound Wraith, the
+mockup's look was rebuilt on the working sprite frames rather than used
+directly. Decisions locked in conversation: tied to **The House of Bones
+on Heroic or harder** (a lich in an ossuary is the obvious paladin foe,
+and the next raid tier after the Vault), priced at **10,000 gold per
+class** (continuing 5,000 / 7,500), no Steam achievement.
+
+**For future skins: only idle and walk/run are needed.** Those are the
+only hero animations the game uses right now, so a new skin set only
+has to ship `idle.png` + `walk.png` (+ `run.png` for the knight). This
+set (and 0415/0417) also carry attack/hurt/death/etc. sheets; they're
+harmless but not required. `run.py` takes an animation filter if you
+want to regenerate just those.
+
+**Data-only on top of the 0415 per-class system.** One new skins.json
+entry, `paladin` (cost 10000, swatch `#ffd452`/`#2f5fd0`, `perClass:
+true`, `unlockRaidId: "house_of_bones"`, `unlockMinDifficulty:
+"heroic"`). No code changes: `earnFromRaidClear`, `backfillFromRaidLog`,
+the Wardrobe set list and the lock-reason strings are all driven off
+those fields, and COMPLETE_WARDROBE already ignores perClass skins.
+
+**Art (not in git -- `public/heroes` is gitignored, licensed pack):**
+`public/heroes/<class>/paladin/*.png`, all 84 sheets across the 14
+classes, same sizes and frame counts as `original/` (every animation,
+for the IdleView attack-flash reason in 0415). Already written into the
+local working copy.
+
+Shared across every class: a gold halo with a cross finial (top arc
+only, so it reads as a sunburst behind the head), animated shimmer
+running round the ring, a faint warm rim light, drifting gold twinkles,
+and in death the halo and sparkles fade out as the hero falls. The halo
+follows the head through every animation via template matching against
+a hand-picked head box on idle frame 0 (mirrored too, for the witch's
+left-facing hurt/death); white hurt-flash frames borrow the nearest good
+frame. Adventurer and Gladiator heads sit at the very top of their
+frames, so their halo is lower and drops the cross rather than clipping.
+
+Per class:
+- **Knight** (the mockup): white plate, plume removed and re-outlined so
+  the halo replaces it, closed white helm with dark visor slits, gold
+  pauldron and gorget, blue shield with gold rim and gold cross, blue
+  chest cross, white cape with blue lining, warm-white blade and slashes.
+- **Huge Knight**: white plate, gold pauldrons on both shoulders, large
+  blue chest cross, blue plume and belt, holy-gold codpiece glow.
+- **Adventurer**: blue cloak and scarf, ivory shirt with blue cross, navy
+  trousers, gilded buckle.
+- **Gladiator**: white helm with a gilded crest, royal blue tunic, navy
+  boots.
+- **Samurai**: golden-blonde hair, white haori with blue cross, royal
+  blue hakama, gold sash, blue eyes.
+- **Witch**: an ivory-and-blue priestess robe, gold horn-circlet, gold
+  cross on the robe, green poison turned to golden holy light.
+- **Pyromancer**: white hood and robe with blue shadows, gold cross,
+  gilded gauntlet, and the flame split from the robe (it's the colour
+  shared with the robe that sits outside the black outline) and turned
+  to gold holy fire.
+- **Wizard**: white robe and hat with blue lining, gilded staff, gold
+  cross on the robe.
+- **Dwarf**: white helm and axe, blue cape, ivory tunic with a gold cross.
+- **Kobold**: blue scales kept, ivory tunic with a blue cross, navy wraps.
+- **Lizardman**: ivory-and-blue loincloth and wraps, gold sigil on the
+  chest, warm-white scimitar.
+- **Minotaur**: gilded horns and great-axe, royal blue loincloth, belt
+  and greaves, gold chest sigil.
+- **Werewolf**: silver-white fur, pale chest, golden eyes.
+- **Centaur**: white steed with a golden mane and tail and gold hooves,
+  golden hair, gilded axe accents, blue gem, gold cross on the chest.
+
+**Generator now in the repo** (Frost Court and Bound Wraith scripts
+were lost with their sessions): `tools/skin-gen/paladin/` -- `run.py`
+(entry point, `python tools/skin-gen/paladin/run.py [class ...]`, needs
+pillow/numpy/scipy), `track.py` (head tracking), `paladin.py` (halo,
+aura, sparkles, palettes), `classes.py` (per-class colour-role maps and
+hooks). Writes straight into `public/heroes/<class>/paladin/`; verified
+it reproduces the shipped knight sheet byte-for-byte.
+
+**Not done / worth knowing:** only the idle/walk/run sheets matter in
+game today (see above). The halo can drift off the head for a
+frame or two where the head turns sharply (Huge Knight's overhead swing,
+the start of a couple of hurt animations, late death frames); it fades
+in death so this mostly reads as the soul's halo lingering. Not checked
+in the running game -- no in-engine test this session; worth a look in
+the Wardrobe and a Heroic House of Bones clear.

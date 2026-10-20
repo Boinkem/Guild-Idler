@@ -74,5 +74,18 @@
     "perClass": true,
     "unlockRaidId": "bonewrought_vault",
     "unlockMinDifficulty": "heroic"
+  },
+  {
+    "id": "paladin",
+    "name": "Paladin",
+    "description": "Sun-gold halos, white-and-gold plate, royal blue tabards and holy fire. Earned one class at a time.",
+    "cost": 10000,
+    "swatch": [
+      "#ffd452",
+      "#2f5fd0"
+    ],
+    "perClass": true,
+    "unlockRaidId": "house_of_bones",
+    "unlockMinDifficulty": "heroic"
   }
-]
+]

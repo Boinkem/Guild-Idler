@@ -1,0 +1,598 @@
+From acbbc06efcb8bf0662f91e426754146c5a7c2f33 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 21 Oct 2026 07:43:11 +1030
+Subject: [PATCH] Paladin per-class skins (patch 0432)
+
+---
+ guild-idler-status.md             |  97 ++++++++++++++
+ src/game/data/json/skins.json     |  13 ++
+ tools/skin-gen/paladin/classes.py | 212 ++++++++++++++++++++++++++++++
+ tools/skin-gen/paladin/paladin.py | 111 ++++++++++++++++
+ tools/skin-gen/paladin/run.py     |  60 +++++++++
+ tools/skin-gen/paladin/track.py   |  41 ++++++
+ 6 files changed, 534 insertions(+)
+ create mode 100644 tools/skin-gen/paladin/classes.py
+ create mode 100644 tools/skin-gen/paladin/paladin.py
+ create mode 100644 tools/skin-gen/paladin/run.py
+ create mode 100644 tools/skin-gen/paladin/track.py
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 864ff70..bdaa42c 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -35092,3 +35092,100 @@ launcher). No database migration and no save-version change.
+ integration run (35 checks) and an engine-against-server run (18 checks),
+ both all passing, on a real Postgres. The Steam ticket step and the
+ Electron UI were not exercised here.
++
++### Paladin: per-class Paladin skins (patch 0432)
++```discord-update
++Dev Update | Paladin
++
++- Added Paladin, a third skin set for every hero class: sun-gold halos, white-and-gold plate, royal blue tabards and capes, and holy light where there used to be fire or poison
++- Added Paladin unlocks: clear The House of Bones on Heroic or harder with a hero in the party to earn that class's Paladin
++- Added a Paladin section to the Wardrobe, with a 10,000 gold unlock per class once earned
++- Clears from before this update count too, if they're still in your raid history
++```
++
++Direct request: recreate a ChatGPT Paladin knight mockup (white plate,
++gold halo with a cross, gold pauldron, blue shield with a gold cross,
++white cape lined blue, gold sparkles) and give every other class a
++Paladin take that is more than a recolour. As with Bound Wraith, the
++mockup's look was rebuilt on the working sprite frames rather than used
++directly. Decisions locked in conversation: tied to **The House of Bones
++on Heroic or harder** (a lich in an ossuary is the obvious paladin foe,
++and the next raid tier after the Vault), priced at **10,000 gold per
++class** (continuing 5,000 / 7,500), no Steam achievement.
++
++**For future skins: only idle and walk/run are needed.** Those are the
++only hero animations the game uses right now, so a new skin set only
++has to ship `idle.png` + `walk.png` (+ `run.png` for the knight). This
++set (and 0415/0417) also carry attack/hurt/death/etc. sheets; they're
++harmless but not required. `run.py` takes an animation filter if you
++want to regenerate just those.
++
++**Data-only on top of the 0415 per-class system.** One new skins.json
++entry, `paladin` (cost 10000, swatch `#ffd452`/`#2f5fd0`, `perClass:
++true`, `unlockRaidId: "house_of_bones"`, `unlockMinDifficulty:
++"heroic"`). No code changes: `earnFromRaidClear`, `backfillFromRaidLog`,
++the Wardrobe set list and the lock-reason strings are all driven off
++those fields, and COMPLETE_WARDROBE already ignores perClass skins.
++
++**Art (not in git -- `public/heroes` is gitignored, licensed pack):**
++`public/heroes/<class>/paladin/*.png`, all 84 sheets across the 14
++classes, same sizes and frame counts as `original/` (every animation,
++for the IdleView attack-flash reason in 0415). Already written into the
++local working copy.
++
++Shared across every class: a gold halo with a cross finial (top arc
++only, so it reads as a sunburst behind the head), animated shimmer
++running round the ring, a faint warm rim light, drifting gold twinkles,
++and in death the halo and sparkles fade out as the hero falls. The halo
++follows the head through every animation via template matching against
++a hand-picked head box on idle frame 0 (mirrored too, for the witch's
++left-facing hurt/death); white hurt-flash frames borrow the nearest good
++frame. Adventurer and Gladiator heads sit at the very top of their
++frames, so their halo is lower and drops the cross rather than clipping.
++
++Per class:
++- **Knight** (the mockup): white plate, plume removed and re-outlined so
++  the halo replaces it, closed white helm with dark visor slits, gold
++  pauldron and gorget, blue shield with gold rim and gold cross, blue
++  chest cross, white cape with blue lining, warm-white blade and slashes.
++- **Huge Knight**: white plate, gold pauldrons on both shoulders, large
++  blue chest cross, blue plume and belt, holy-gold codpiece glow.
++- **Adventurer**: blue cloak and scarf, ivory shirt with blue cross, navy
++  trousers, gilded buckle.
++- **Gladiator**: white helm with a gilded crest, royal blue tunic, navy
++  boots.
++- **Samurai**: golden-blonde hair, white haori with blue cross, royal
++  blue hakama, gold sash, blue eyes.
++- **Witch**: an ivory-and-blue priestess robe, gold horn-circlet, gold
++  cross on the robe, green poison turned to golden holy light.
++- **Pyromancer**: white hood and robe with blue shadows, gold cross,
++  gilded gauntlet, and the flame split from the robe (it's the colour
++  shared with the robe that sits outside the black outline) and turned
++  to gold holy fire.
++- **Wizard**: white robe and hat with blue lining, gilded staff, gold
++  cross on the robe.
++- **Dwarf**: white helm and axe, blue cape, ivory tunic with a gold cross.
++- **Kobold**: blue scales kept, ivory tunic with a blue cross, navy wraps.
++- **Lizardman**: ivory-and-blue loincloth and wraps, gold sigil on the
++  chest, warm-white scimitar.
++- **Minotaur**: gilded horns and great-axe, royal blue loincloth, belt
++  and greaves, gold chest sigil.
++- **Werewolf**: silver-white fur, pale chest, golden eyes.
++- **Centaur**: white steed with a golden mane and tail and gold hooves,
++  golden hair, gilded axe accents, blue gem, gold cross on the chest.
++
++**Generator now in the repo** (Frost Court and Bound Wraith scripts
++were lost with their sessions): `tools/skin-gen/paladin/` -- `run.py`
++(entry point, `python tools/skin-gen/paladin/run.py [class ...]`, needs
++pillow/numpy/scipy), `track.py` (head tracking), `paladin.py` (halo,
++aura, sparkles, palettes), `classes.py` (per-class colour-role maps and
++hooks). Writes straight into `public/heroes/<class>/paladin/`; verified
++it reproduces the shipped knight sheet byte-for-byte.
++
++**Not done / worth knowing:** only the idle/walk/run sheets matter in
++game today (see above). The halo can drift off the head for a
++frame or two where the head turns sharply (Huge Knight's overhead swing,
++the start of a couple of hurt animations, late death frames); it fades
++in death so this mostly reads as the soul's halo lingering. Not checked
++in the running game -- no in-engine test this session; worth a look in
++the Wardrobe and a Heroic House of Bones clear.
+diff --git a/src/game/data/json/skins.json b/src/game/data/json/skins.json
+index 18978f7..f80bd90 100644
+--- a/src/game/data/json/skins.json
++++ b/src/game/data/json/skins.json
+@@ -74,5 +74,18 @@
+     "perClass": true,
+     "unlockRaidId": "bonewrought_vault",
+     "unlockMinDifficulty": "heroic"
++  },
++  {
++    "id": "paladin",
++    "name": "Paladin",
++    "description": "Sun-gold halos, white-and-gold plate, royal blue tabards and holy fire. Earned one class at a time.",
++    "cost": 10000,
++    "swatch": [
++      "#ffd452",
++      "#2f5fd0"
++    ],
++    "perClass": true,
++    "unlockRaidId": "house_of_bones",
++    "unlockMinDifficulty": "heroic"
+   }
+ ]
+\ No newline at end of file
+diff --git a/tools/skin-gen/paladin/classes.py b/tools/skin-gen/paladin/classes.py
+new file mode 100644
+index 0000000..ce1b2dd
+--- /dev/null
++++ b/tools/skin-gen/paladin/classes.py
+@@ -0,0 +1,212 @@
++import numpy as np
++from paladin import *
++
++RED_L=(198,69,36); RED_D=(142,37,29)
++SH=[(93,44,40),(87,28,39),(57,31,33)]
++STEEL=[(199,207,221),(146,161,185),(101,115,146),(66,76,110),(42,47,78)]
++OUTS=[(27,27,27),(19,19,19)]
++
++def cleanup_removed(orig,o,removed):
++    """after making `removed` transparent: re-outline exposed body, drop orphaned outline"""
++    body=(o[...,3]>0)&~mask_of(o,OUTS)
++    # orphan outline pixels: outline with no body neighbour (8-conn)
++    outl=(o[...,3]>0)&mask_of(o,OUTS)
++    orphan=outl&~dilate(body,1,True)
++    o[orphan,3]=0
++    # exposed body edges -> outline on the removed side
++    edge=removed&dilate(body,1,False)&(o[...,3]==0)
++    o[edge]=(27,27,27,255)
++    return o
++
++def knight_pre(f,head,i,anim):
++    hx,hy,hw,hh=head
++    o=f.copy()
++    red=mask_of(f,[RED_L,RED_D])
++    yy,xx=np.mgrid[:f.shape[0],:f.shape[1]]
++    plume=(red&(yy<hy+7)&(xx<=hx+hw//2+1))|(red&(yy<hy+11)&(xx<hx+1))
++    # also take any red connected strand above the helmet top
++    plume|=red&(yy<hy+2)
++    o[plume,3]=0
++    o=cleanup_removed(f,o,plume)
++    # scarf at the neck -> gold gorget (marked with sentinel colours, mapped later)
++    neck=red&~plume&(yy>=hy+hh-3)&(yy<=hy+hh+2)&(xx>=hx+2)&(xx<=hx+hw)
++    o[neck&mask_of(f,[RED_L])]=(1,2,3,255)
++    o[neck&mask_of(f,[RED_D])]=(1,2,4,255)
++    return o
++
++def knight_post(o,f,head,i,anim):
++    hx,hy,hw,hh=head
++    # shield: gold rim + gold cross
++    sh=mask_of(f,SH)
++    st=mask_of(f,STEEL)
++    rim=st&dilate(sh,1,False)
++    o[rim&mask_of(f,[(199,207,221)])]=(*G[0],255)
++    o[rim&mask_of(f,[(146,161,185)])]=(*G[1],255)
++    o[rim&mask_of(f,[(101,115,146),(66,76,110),(42,47,78)])]=(*G[2],255)
++    from scipy import ndimage
++    lab,n=ndimage.label(sh)
++    for k in range(1,n+1):
++        ys,xs=np.where(lab==k)
++        if len(xs)<14: continue
++        x0,x1,y0,y1=xs.min(),xs.max(),ys.min(),ys.max()
++        if x1-x0<3 or y1-y0<6: continue
++        cx=(x0+x1+1)//2; cy=y0+(y1-y0)//3+1
++        for y in range(y0+2,y1-1):
++            if lab[y,cx]==k: o[y,cx,:3]=G[1] if y!=cy else G[0]
++        for x in range(x0+1,x1):
++            if lab[cy,x]==k and x!=cx: o[cy,x,:3]=G[1]
++    # gold pauldron on the near shoulder
++    plate=mask_of(f,STEEL[:4])
++    yy,xx=np.mgrid[:f.shape[0],:f.shape[1]]
++    pc=((xx-(hx-0.5))**2+(yy-(hy+hh+3.5))**2)<=3.2**2
++    for src,dst in zip(STEEL[:4],[G[0],G[1],G[2],G[3]]):
++        o[pc&mask_of(f,[src])]=(*dst,255)
++    # chest: blue cross on plate, below the helm
++    cx=hx+hw//2-2; cy=hy+hh+4
++    pts=[(cx,cy-1),(cx,cy),(cx,cy+1),(cx,cy+2),(cx-1,cy),(cx+1,cy)]
++    plate=mask_of(f,STEEL[:3])
++    if all(0<=y<f.shape[0] and 0<=x<f.shape[1] and plate[y,x] for x,y in pts):
++        for x,y in pts: o[y,x,:3]=B[1]
++        o[cy,cx,:3]=B[0]
++    return o
++
++CLASSES={
++ 'knight':dict(
++   cmap={(199,207,221):P[0],(146,161,185):P[1],(101,115,146):P[2],(66,76,110):P[3],(42,47,78):P[4],(186,198,212):P[0],
++         RED_L:C[0],RED_D:B[1],(93,44,40):B[1],(87,28,39):B[2],(57,31,33):B[3],
++         (246,202,159):P[0],(230,156,105):P[1],(191,111,74):P[2],(0,152,220):(34,34,46),
++         (255,255,255):WARM,(1,2,3):G[1],(1,2,4):G[2]},
++   halo=dict(r=8,dx=-1,dy=-3.5),pre=knight_pre,post=knight_post,spark=3),
++}
++
++ST={ (199,207,221):P[0],(146,161,185):P[1],(101,115,146):P[2],(66,76,110):P[3],(42,47,78):P[4],(255,255,255):WARM }
++STG={ (199,207,221):G[0],(146,161,185):G[1],(101,115,146):G[2],(66,76,110):G[3],(42,47,78):G[4],(255,255,255):WARM }
++def mk(*ds):
++    o={}
++    for d in ds: o.update(d)
++    return o
++
++def centaur_pre(f,head,i,anim):
++    hx,hy,hw,hh=head
++    o=f.copy(); yy,xx=np.mgrid[:f.shape[0],:f.shape[1]]
++    low=(yy>=hy+27)|((yy>=hy+17)&(xx<hx-3))
++    for src,dst in [((191,111,74),(9,9,1)),((138,72,54),(9,9,2))]:
++        o[low&mask_of(f,[src])]=(*dst,255)
++    return o
++
++CLASSES.update({
++ 'huge_knight':dict(cmap=mk(ST,{(250,254,253):WARM,(252,247,251):WARM,(255,245,255):WARM,
++     (196,34,47):B[1],(137,27,41):B[2],(137,30,43):B[2],(87,25,37):B[3],(87,28,39):B[3]}),
++   halo=dict(r=17,dx=-1,dy=-8),spark=5),
++ 'adventurer':dict(cmap={(217,87,99):B[0],(171,67,67):B[1],(173,59,59):B[1],(143,50,50):B[2],
++     (132,126,135):C[1],(107,105,112):C[2],(89,86,82):C[3],(85,84,89):C[3],
++     (58,69,66):B[3],(45,56,53):B[4],(46,57,54):B[4],
++     (214,235,255):P[0],(203,219,252):P[0],(165,174,234):P[1],(155,173,183):P[1],(133,144,159):P[2],
++     (235,198,89):G[0],(217,160,102):G[1],(179,153,50):G[2],(105,91,39):G[3],(82,64,30):G[4]},
++   halo=dict(r=5.5,dx=0,dy=-2.5),spark=2),
++ 'gladiator':dict(cmap=mk(ST,{(0,105,170):B[1],(0,57,109):B[2],(12,46,68):B[3],
++     (93,44,40):G[3],(88,56,40):G[3],(57,31,33):G[4],(87,28,39):B[3]}),
++   halo=dict(r=6,dx=0,dy=-2),spark=2),
++ 'samurai':dict(cmap={(98,36,97):(250,226,140),(59,20,67):(204,150,66),
++     (199,207,221):C[0],(146,161,185):C[1],(101,115,146):C[2],
++     (66,76,110):B[1],(42,47,78):B[2],(26,25,50):B[3],
++     (137,30,43):G[2],(87,28,39):G[3],(90,197,79):B[0],(255,255,255):WARM},
++   halo=dict(r=7,dx=0,dy=-3),spark=3),
++ 'witch':dict(cmap={(147,56,143):C[0],(98,36,97):C[1],(59,20,67):B[3],
++     (133,133,133):G[1],(93,93,93):G[2],(61,61,61):G[3],(180,180,180):G[0],
++     (153,230,95):G[0],(90,197,79):G[1],(51,152,75):G[2],(3,25,63):B[4],(255,255,255):WARM},
++   halo=dict(r=9.5,dx=0,dy=-3),spark=3),
++ 'pyromancer':dict(cmap={(234,50,60):C[0],(196,36,48):C[1],(137,30,43):C[2],(87,28,39):B[3],
++     (199,207,221):G[0],(146,161,185):G[1],(101,115,146):G[2],
++     (129,4,0):G[3],(127,9,0):G[3],(255,255,255):WARM,
++     (138,72,54):B[2],(93,44,40):B[3],(57,31,33):B[4]},
++   halo=dict(r=9.5,dx=0,dy=-3),spark=3),
++ 'lizardman':dict(cmap=mk(ST,{(191,111,74):C[1],(138,72,54):C[2],(93,44,40):B[3],
++     (237,171,80):G[1],(224,116,56):G[2],(142,37,29):B[2]}),
++   halo=dict(r=9,dx=-1,dy=-3),spark=4),
++ 'wizard':dict(cmap={(0,152,220):C[0],(0,105,170):C[1],(0,57,109):C[2],(3,25,63):B[3],
++     (138,72,54):G[2],(93,44,40):G[3],(66,76,110):B[2],
++     (146,161,185):P[1],(199,207,221):P[0]},
++   halo=dict(r=13,dx=0,dy=-2),spark=4),
++ 'dwarf':dict(cmap=mk(ST,{(196,36,48):B[0],(137,30,43):B[1],(87,28,39):B[2],
++     (0,152,220):C[0],(0,105,170):C[1],(0,57,109):C[2]}),
++   halo=dict(r=9,dx=-1,dy=-3),spark=4),
++ 'kobold':dict(cmap=mk(ST,{(138,72,54):C[0],(93,44,40):C[1],(57,31,33):C[2],(28,18,28):B[3],(52,24,39):B[3]}),
++   halo=dict(r=13,dx=0,dy=-3),spark=4),
++ 'minotaur':dict(cmap=mk(STG,{(61,61,61):B[2],(93,93,93):B[1],(133,133,133):B[0],(39,39,39):B[3],(28,18,28):B[3],
++     (87,47,17):G[2],(196,36,48):G[0]}),
++   halo=dict(r=14,dx=0,dy=-4),spark=5),
++ 'werewolf':dict(cmap={(39,39,39):(104,112,148),(61,61,61):(150,158,190),(93,93,93):(198,204,226),(27,27,27):(70,76,110),
++     (255,255,255):WARM,(146,161,185):G[1],(199,207,221):G[0],(195,202,220):G[0],(130,134,169):G[2],(196,36,48):G[0]},
++   halo=dict(r=13,dx=0,dy=-4),spark=5),
++ 'centaur':dict(cmap=mk(ST,{(9,9,1):C[0],(9,9,2):C[1],(93,44,40):C[2],(57,31,33):C[3],
++     (93,93,93):G[1],(61,61,61):G[2],(39,39,39):G[3],(180,180,180):P[0],(133,133,133):P[2],
++     (30,111,80):B[2],(90,197,79):B[1],(153,230,95):B[0]}),
++   pre=centaur_pre,halo=dict(r=9,dx=0,dy=-3),spark=4),
++})
++
++def gold_zones(o,f,head,zones,src=None):
++    """recolour steel inside circles (relative to head centre) to the gold ramp"""
++    hx,hy,hw,hh=head; cx,cy=hx+hw/2,hy+hh/2
++    yy,xx=np.mgrid[:f.shape[0],:f.shape[1]]
++    src=src or STEEL
++    ramp=[G[0],G[1],G[2],G[3],G[4]]
++    for dx,dy,r in zones:
++        z=((xx-(cx+dx))**2+(yy-(cy+dy))**2)<=r*r
++        for s_,d_ in zip(src,ramp): o[z&mask_of(f,[s_])]=(*d_,255)
++    return o
++
++def emblem(o,f,head,dx,dy,allow,col='blue',big=False):
++    hx,hy,hw,hh=head; cx,cy=int(round(hx+hw/2+dx)),int(round(hy+hh/2+dy))
++    if big: pts=[(cx,cy+k) for k in range(-3,6)]+[(cx+k,cy) for k in (-2,-1,1,2)]
++    else: pts=[(cx,cy-1),(cx,cy),(cx,cy+1),(cx,cy+2),(cx-1,cy),(cx+1,cy)]
++    ok=mask_of(f,allow)
++    H,W=f.shape[:2]
++    if not all(0<=y<H and 0<=x<W and ok[y,x] for x,y in pts): return o
++    ramp=B if col=='blue' else G
++    for x,y in pts: o[y,x,:3]=ramp[1]
++    o[cy,cx,:3]=ramp[0]
++    if big:
++        for x,y in pts:
++            if x==cx and y>cy: o[y,x,:3]=ramp[2]
++    return o
++
++def pyro_pre(f,head,i,anim):
++    from scipy import ndimage
++    o=f.copy()
++    fire=mask_of(f,[(234,50,60),(196,36,48),(137,30,43),(87,28,39),(255,200,37),(255,255,255),(129,4,0),(127,9,0)])
++    outl=mask_of(f,[(19,19,19),(4,7,22),(7,4,0),(7,0,12),(14,7,0),(25,12,6),(15,5,6),(15,11,25)])
++    robe=ndimage.binary_fill_holes(outl)
++    flame=fire&~robe
++    for src,dst in [((234,50,60),G[0]),((196,36,48),G[1]),((137,30,43),G[2]),((87,28,39),G[3]),((255,200,37),WARM),((129,4,0),G[3]),((127,9,0),G[3])]:
++        o[flame&mask_of(f,[src])]=(*dst,254)   # alpha 254 marks "already mapped"
++    return o
++
++def post_chain(*fns):
++    def p(o,f,head,i,anim):
++        for fn in fns: o=fn(o,f,head)
++        return o
++    return p
++
++SKIN=[(246,202,159),(230,156,105),(249,230,207)]
++CLASSES['huge_knight']['post']=post_chain(
++    lambda o,f,h: gold_zones(o,f,h,[(-18,17,12.5),(21,16,8.5)]),
++    lambda o,f,h: emblem(o,f,h,7,23,STEEL[:3],'blue',big=True))
++CLASSES['gladiator']['cmap'].update({(138,72,54):(138,72,54),(93,44,40):(93,44,40),(57,31,33):B[3],(88,56,40):G[3]})
++CLASSES['gladiator']['post']=post_chain(lambda o,f,h: gold_zones(o,f,h,[(0,-4,4)]))
++CLASSES['werewolf']['cmap'].update({(199,207,221):(238,240,250),(146,161,185):(204,210,230),(195,202,220):(238,240,250),(130,134,169):(170,178,204)})
++CLASSES['pyromancer']['pre']=pyro_pre
++CLASSES['lizardman']['post']=post_chain(lambda o,f,h: emblem(o,f,h,2,17,SKIN,'gold'))
++CLASSES['minotaur']['post']=post_chain(lambda o,f,h: emblem(o,f,h,-2,22,[(191,111,74),(230,156,105),(138,72,54)],'gold',big=True))
++CLASSES['centaur']['post']=post_chain(lambda o,f,h: emblem(o,f,h,0,15,SKIN+[(191,111,74)],'gold'))
++CLASSES['adventurer']['post']=post_chain(lambda o,f,h: emblem(o,f,h,-1,10,[(132,126,135),(107,105,112)],'blue'))
++CLASSES['kobold']['post']=post_chain(lambda o,f,h: emblem(o,f,h,-6,22,[(138,72,54),(93,44,40),(57,31,33)],'blue'))
++CLASSES['dwarf']['post']=post_chain(lambda o,f,h: emblem(o,f,h,0,22,[(0,152,220),(0,105,170),(0,57,109)],'gold'))
++CLASSES['wizard']['post']=post_chain(lambda o,f,h: emblem(o,f,h,8,26,[(0,152,220),(0,105,170),(0,57,109)],'gold',big=True))
++CLASSES['witch']['post']=post_chain(lambda o,f,h: emblem(o,f,h,0,22,[(98,36,97),(147,56,143),(59,20,67)],'gold',big=True))
++CLASSES['pyromancer']['post']=post_chain(lambda o,f,h: emblem(o,f,h,1,22,[(234,50,60),(196,36,48),(137,30,43)],'gold',big=True))
++CLASSES['samurai']['post']=post_chain(lambda o,f,h: emblem(o,f,h,0,11,[(199,207,221),(146,161,185)],'blue'))
++
++CLASSES['adventurer']['halo']=dict(r=5,dx=-1,dy=0,cross=False)
++CLASSES['gladiator']['halo']=dict(r=5.5,dx=-1.5,dy=0.5,cross=False)
++CLASSES['wizard']['halo']=dict(r=16,dx=-1,dy=0)
+diff --git a/tools/skin-gen/paladin/paladin.py b/tools/skin-gen/paladin/paladin.py
+new file mode 100644
+index 0000000..ce226dd
+--- /dev/null
++++ b/tools/skin-gen/paladin/paladin.py
+@@ -0,0 +1,111 @@
++import numpy as np, json, math, os, sys
++from PIL import Image
++from track import M, HEAD, frames, track
++
++G=[(255,244,176),(255,214,82),(232,166,44),(176,108,30),(112,62,22)]
++B=[(120,170,255),(64,110,222),(40,74,176),(26,46,122),(16,26,74)]
++C=[(255,253,244),(236,230,214),(204,192,168),(152,138,120),(100,88,84)]
++P=[(250,250,252),(218,222,234),(170,178,204),(120,126,160),(74,78,110)]
++WARM=(255,252,236)
++OUT=(19,19,19)
++
++def remap(f,cmap):
++    o=f.copy()
++    for src,dst in cmap.items():
++        m=(f[...,0]==src[0])&(f[...,1]==src[1])&(f[...,2]==src[2])&(f[...,3]>0)
++        if dst is None: o[m,3]=0
++        else: o[m,:3]=dst
++    return o
++
++def mask_of(f,cols):
++    m=np.zeros(f.shape[:2],bool)
++    for c in cols: m|=(f[...,0]==c[0])&(f[...,1]==c[1])&(f[...,2]==c[2])&(f[...,3]>0)
++    return m
++
++def dilate(m,n=1,diag=True):
++    for _ in range(n):
++        o=m.copy()
++        o[1:]|=m[:-1]; o[:-1]|=m[1:]; o[:,1:]|=m[:,:-1]; o[:,:-1]|=m[:,1:]
++        if diag:
++            o[1:,1:]|=m[:-1,:-1]; o[:-1,:-1]|=m[1:,1:]; o[1:,:-1]|=m[:-1,1:]; o[:-1,1:]|=m[1:,:-1]
++        m=o
++    return m
++
++def put(layer,x,y,col,a=255):
++    h,w=layer.shape[:2]
++    x,y=int(round(x)),int(round(y))
++    if 0<=x<w and 0<=y<h:
++        # alpha-over onto layer
++        sa=a/255; da=layer[y,x,3]/255
++        oa=sa+da*(1-sa)
++        if oa<=0: return
++        for k in range(3): layer[y,x,k]=(col[k]*sa+layer[y,x,k]*da*(1-sa))/oa
++        layer[y,x,3]=oa*255
++
++def over(dst,src):
++    """alpha composite src over dst (float arrays)"""
++    sa=src[...,3:4]/255; da=dst[...,3:4]/255
++    oa=sa+da*(1-sa)
++    rgb=np.where(oa>0,(src[...,:3]*sa+dst[...,:3]*da*(1-sa))/np.maximum(oa,1e-6),0)
++    return np.concatenate([rgb,oa*255],-1)
++
++def halo(shape,cx,cy,r,i,alpha=1.0,rays=True,cross=True,cut=0.35):
++    L=np.zeros(shape[:2]+(4,),float)
++    h,w=shape[:2]
++    R=int(r+4)
++    for y in range(int(cy-R),int(cy+R)+1):
++        for x in range(int(cx-R),int(cx+R)+1):
++            d=math.hypot(x-cx,y-cy)
++            if y>cy+r*cut: continue
++            if abs(d-r)<0.75:
++                ang=math.atan2(y-cy,x-cx)
++                # shimmer: a bright spot travelling round the ring
++                sh=math.cos(ang-(i*0.9))
++                col=G[0] if sh>0.85 else (G[1] if y<=cy else G[2])
++                put(L,x,y,col,255*alpha)
++            elif r-0.75-1<=d<r-0.75 and y<cy:
++                put(L,x,y,G[3],170*alpha)
++    if rays:
++        for k in range(8):
++            ang=-math.pi/2+k*math.pi/4
++            if k in (3,4,5): continue   # no rays under the chin
++            ln=2 if k%2==0 else 1
++            if k==0: continue
++            if (k+i)%4==0: ln+=1
++            for t in range(1,ln+1):
++                put(L,cx+math.cos(ang)*(r+t),cy+math.sin(ang)*(r+t),G[1] if t==1 else G[0],255*alpha*(1 if t<ln else .75))
++    if cross:
++        tx,ty=round(cx),round(cy-r)
++        for t in range(2,6): put(L,tx,ty-t,WARM if t==4 else G[1],255*alpha)
++        put(L,tx-1,ty-4,G[1],255*alpha); put(L,tx+1,ty-4,G[1],255*alpha)
++    return L
++
++def aura(f,alpha=1.0):
++    a=f[...,3]>0
++    r1=dilate(a,1,False)&~a
++    r2=dilate(a,2,True)&~a&~r1
++    L=np.zeros(f.shape[:2]+(4,),float)
++    L[r1]=(255,232,140,int(50*alpha))
++    return L
++
++def sparkles(shape,bbox,i,n,seed,alpha=1.0):
++    L=np.zeros(shape[:2]+(4,),float)
++    x0,y0,x1,y1=bbox
++    rng=np.random.RandomState(seed)
++    for k in range(n):
++        px=rng.uniform(x0-3,x1+3); py=rng.uniform(y0-2,y1-4); ph=rng.randint(0,6); drift=rng.uniform(0.6,1.4)
++        t=(i+ph)%6
++        y=py-t*drift
++        if t in (0,5): put(L,px,y,G[1],160*alpha)
++        elif t in (1,4): put(L,px,y,WARM,230*alpha); 
++        else:
++            put(L,px,y,WARM,255*alpha)
++            for dx,dy in((1,0),(-1,0),(0,1),(0,-1)): put(L,px+dx,y+dy,G[1],200*alpha)
++            if t==3:
++                for dx,dy in((2,0),(-2,0),(0,2),(0,-2)): put(L,px+dx,y+dy,G[0],110*alpha)
++    return L
++
++def bbox_of(f):
++    ys,xs=np.where(f[...,3]>0)
++    if len(xs)==0: return (0,0,1,1)
++    return xs.min(),ys.min(),xs.max(),ys.max()
+diff --git a/tools/skin-gen/paladin/run.py b/tools/skin-gen/paladin/run.py
+new file mode 100644
+index 0000000..f167f6d
+--- /dev/null
++++ b/tools/skin-gen/paladin/run.py
+@@ -0,0 +1,60 @@
++"""Paladin per-class skin generator (patch 0432).
++
++Reads public/heroes/<class>/original/*.png and writes public/heroes/<class>/paladin/*.png.
++Needs: pip install pillow numpy scipy.   Run from anywhere:  python tools/skin-gen/paladin/run.py [class ...] [--anims idle,walk,run|all]
++  track.py   - head tracking (template match vs a hand-picked head box on idle frame 0, mirrored too)
++  paladin.py - shared effects: halo, aura, sparkles, palette ramps
++  classes.py - per-class colour-role maps and hooks (knight plume removal, pauldrons, shield cross, emblems...)
++"""
++import sys,json,os
++import numpy as np
++from PIL import Image
++from paladin import *
++from classes import CLASSES
++from track import H
++OUTDIR=os.environ.get('OUT_DIR',H)
++def build(c,anims=None,save=True):
++    cfg=CLASSES[c]; fw,fh=M[c]['frameW'],M[c]['frameH']
++    x0,y0,x1,y1=HEAD[c]; hw,hh=x1-x0,y1-y0
++    res={}
++    for a in (anims or M[c]['animations']):
++        fr=frames(c,a); tr=track(c,fr,a)
++        # bad matches -> previous good
++        good=[k for k,t in enumerate(tr) if t[2]<=200] or list(range(len(tr)))
++        fixed=[]
++        for k,(x,y,cost,fl) in enumerate(tr):
++            if cost>200:
++                j=min(good,key=lambda g:(abs(g-k),g>k)); x,y,fl=tr[j][0],tr[j][1],tr[j][3]
++            fixed.append((x,y,fl))
++        n=len(fr); outs=[]
++        for i,f in enumerate(fr):
++            hx,hy,fl=fixed[i]; head=(hx,hy,hw,hh)
++            g=f.copy()
++            if cfg.get('pre'): g=cfg['pre'](g,head,i,a)
++            o=remap(g,cfg['cmap']); o[o[...,3]==254,3]=255
++            if cfg.get('post'): o=cfg['post'](o,g,head,i,a)
++            al=1.0
++            if a=='death':
++                al=max(0.0,1-(i/(n-1))**1.5) if n>1 else 1
++                if tr[i][2]>200: al*=0.4
++            hp=cfg['halo']
++            L=np.zeros((fh,fw,4),float)
++            L=over(L,aura(o,0.8*max(al,0.35)))
++            if al>0.05:
++                L=over(L,halo(o.shape,hx+hw/2+(-hp['dx'] if fl else hp['dx']),hy+hh/2+hp['dy'],hp['r'],i,alpha=al,rays=hp.get('rays',True),cross=hp.get('cross',True),cut=hp.get('cut',0.35)))
++            L=over(L,o.astype(float))
++            L=over(L,sparkles(o.shape,bbox_of(f),i,cfg.get('spark',3),sum(map(ord,c))+len(a),alpha=al))
++            outs.append(np.clip(L,0,255).astype('uint8'))
++        sheet=np.concatenate(outs,1)
++        res[a]=sheet
++        if save:
++            os.makedirs(f'{OUTDIR}/{c}/paladin',exist_ok=True)
++            Image.fromarray(sheet,'RGBA').save(f'{OUTDIR}/{c}/paladin/{a}.png')
++    return res
++if __name__=='__main__':
++    # python run.py [class ...] [--anims idle,walk,run]   (defaults: all classes, the animations the game uses)
++    args=sys.argv[1:]; anims=['idle','walk','run']
++    if '--anims' in args:
++        k=args.index('--anims'); anims=None if args[k+1]=='all' else args[k+1].split(','); args=args[:k]+args[k+2:]
++    for c in (args or list(CLASSES)):
++        build(c,[a for a in M[c]['animations'] if anims is None or a in anims]); print('built',c)
+diff --git a/tools/skin-gen/paladin/track.py b/tools/skin-gen/paladin/track.py
+new file mode 100644
+index 0000000..645fb02
+--- /dev/null
++++ b/tools/skin-gen/paladin/track.py
+@@ -0,0 +1,41 @@
++import numpy as np, json
++from PIL import Image
++import os
++# repo root: python tools/skin-gen/paladin/run.py <class...>  (or set HEROES_DIR)
++H=os.environ.get('HEROES_DIR',os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','..','..','public','heroes'))+os.sep
++M=json.load(open(H+'manifest.json'))
++HEAD={'knight':(27,11,40,23),'adventurer':(13,3,23,12),'gladiator':(9,3,19,15),'samurai':(15,16,27,28),
++'witch':(20,14,37,32),'pyromancer':(18,26,35,43),'dwarf':(39,18,52,33),'wizard':(24,16,50,36),
++'kobold':(48,22,74,46),'lizardman':(40,16,54,32),'minotaur':(34,30,56,50),'werewolf':(48,12,80,36),
++'centaur':(49,14,64,31),'huge_knight':(108,62,132,92)}
++def frames(c,anim,variant='original'):
++    fw,fh=M[c]['frameW'],M[c]['frameH']
++    im=Image.open(H+f'{c}/{variant}/{anim}.png').convert('RGBA')
++    n=im.width//fw
++    return [np.array(im.crop((i*fw,0,i*fw+fw,fh))).astype(np.int32) for i in range(n)]
++def track(c,fr,anim):
++    x0,y0,x1,y1=HEAD[c]
++    ref=frames(c,'idle')[0]
++    T=ref[y0:y1,x0:x1]; w,h=x1-x0,y1-y0
++    Ts=[(T,T[...,3]>0,False),(T[:,::-1],T[:,::-1][...,3]>0,True)]
++    out=[]; prev=(x0,y0)
++    for i,f in enumerate(fr):
++        fh,fw=f.shape[:2]
++        R=max(6,int(max(w,h)*(1.6 if i==0 else 0.8)))
++        best=None
++        for yy in range(max(-h//2,prev[1]-R),min(fh-h//2,prev[1]+R)+1):
++            for xx in range(max(-w//2,prev[0]-R),min(fw-w//2,prev[0]+R)+1):
++                # crop with padding
++                P=np.zeros((h,w,4),np.int32)
++                ys0,xs0=max(0,yy),max(0,xx); ys1,xs1=min(fh,yy+h),min(fw,xx+w)
++                if ys1<=ys0 or xs1<=xs0: continue
++                P[ys0-yy:ys1-yy,xs0-xx:xs1-xx]=f[ys0:ys1,xs0:xs1]
++                pm=P[...,3]>0
++                for TT,mask,fl in Ts:
++                    d=np.abs(P[...,:3]-TT[...,:3]).sum(-1)
++                    cost=np.where(mask&pm,d,np.where(mask^pm,300,0)).sum()/mask.sum()
++                    cost+=0.5*(abs(xx-prev[0])+abs(yy-prev[1]))+(8 if fl else 0)
++                    if best is None or cost<best[0]: best=(cost,xx,yy,fl)
++        out.append((best[1],best[2],best[0],best[3]))
++        if best[0]<=200: prev=(best[1],best[2])
++    return out
+-- 
+2.43.0
+
