@@ -35189,3 +35189,93 @@ the start of a couple of hurt animations, late death frames); it fades
 in death so this mostly reads as the soul's halo lingering. Not checked
 in the running game -- no in-engine test this session; worth a look in
 the Wardrobe and a Heroic House of Bones clear.
+
+### Demonic: per-class Demonic skins + missing-sheet fallback (patch 0433)
+```discord-update
+Dev Update | Demonic
+
+- Added Demonic, a fourth skin set for every hero class: horns, charred plate split with molten seams, hellfire and drifting embers
+- Added Demonic unlocks: clear What Got Out on Heroic or harder with a hero in the party to earn that class's Demonic
+- Added a Demonic section to the Wardrobe, with a 10,000 gold unlock per class once earned
+- Clears from before this update count too, if they're still in your raid history
+```
+
+Direct request: a Demonic set across all 14 classes from a ChatGPT knight
+mockup (black charred plate with orange lava cracks, red horns, glowing
+T-visor, fiery tattered cape, black shield with a molten sigil, molten
+blade). Decisions locked in conversation: tied to **What Got Out on
+Heroic or harder** (the demon lord's fortress), **10,000 gold per
+class** (same as Paladin), no Steam achievement. Built idle + walk
+(+ run for the knight) only, per the 0432 note.
+
+**Data:** one new skins.json entry, `demonic` (cost 10000, swatch
+`#f6701c`/`#2a262e`, `perClass: true`, `unlockRaidId: "what_got_out"`,
+`unlockMinDifficulty: "heroic"`). Earning, backfill, Wardrobe section
+and lock text all come from those fields, as in 0415/0417/0432.
+
+**Code -- missing-sheet fallback in `HeroSprite`.** IdleView still plays
+a random attack animation for ~1.8s partway through any long quest, and
+HeroSprite pointed the background at `<skin>/attack_N.png` -- with an
+idle/walk-only skin that file doesn't exist, so the hero would have
+blanked out for that moment. HeroSprite now probes each non-original
+skin sheet once with an `Image()` (results cached module-wide, all
+mounted sprites re-render when a probe settles) and, if the sheet fails
+to load, shows that same skin's `walk` (for `run`) or `idle` instead.
+`original` and `idle` are never probed. Net effect: future skins really
+only need idle + walk (+ run for the knight); older skins that ship
+every sheet behave exactly as before. While a probe is still pending
+(first request for that URL) the requested sheet is used, so at worst
+one frame of a first-ever attack flash could be blank.
+
+**Art (not in git):** `public/heroes/<class>/demonic/{idle,walk}.png`
+for all 14 classes + `knight/demonic/run.png` -- 29 sheets, same sizes
+and frame counts as `original/`, already written into the local copy.
+
+Shared: charred-iron plate ramp with the darkest steel seams turned to
+molten lava that pulses (loops cleanly over each animation's frame
+count), jagged lava cracks pinned to the head-tracked body, a faint
+ember rim light, and embers rising and fading off every hero. Thick
+horns (dark red base, orange tip curling inward) follow the head via
+the same tracker as Paladin.
+
+Per class:
+- **Knight** (the mockup): plume removed for horns, charred plate with
+  molten seams and chest cracks, glowing T-visor, red cape whose edge
+  flickers with fire tongues, black shield with molten rim and trident
+  sigil, molten blade and hilt.
+- **Huge Knight**: charred plate with seams and cracks, big horns, red
+  plume and sash kept, molten greatsword.
+- **Adventurer**: charred shirt and gauntlets, deep red cloak, glowing
+  eyes; no horns (a 30px frame has no room above the head -- they read
+  as ear-muffs).
+- **Gladiator**: charred helm with horns, crimson tunic.
+- **Samurai**: oni look -- crimson hair, horns, black kimono, red
+  hakama, molten sash, ember eyes.
+- **Witch**: black-and-red robe, her own horns turned red, green magic
+  turned to hellfire.
+- **Pyromancer**: charred robe with lava cracks, horns over the hood,
+  glowing eyes inside it, flame (split from the robe as in 0432) turned
+  to brighter hellfire.
+- **Wizard**: crimson robe and hat, horns through the brim, ash beard,
+  charred staff with a molten orb.
+- **Dwarf**: charred helm and axe with seams, horns, ember-red beard,
+  crimson cape.
+- **Kobold**: a red-scaled imp with horns and a charred outfit.
+- **Lizardman**: obsidian salamander with a glowing magma belly, crimson
+  wraps, molten scimitar, horns.
+- **Minotaur**: red demon skin, black horns and axe with molten seams,
+  glowing eyes.
+- **Werewolf**: black hellhound with a molten chest and muzzle, red-
+  tinged fur, horns.
+- **Centaur**: black nightmare steed with a fire mane and tail, fiery
+  hair, glowing hooves, horns, charred axe.
+
+**Generator in the repo:** `tools/skin-gen/demonic/` (`run.py`,
+`demonic.py`, `dclasses.py`); reuses `tools/skin-gen/paladin/` for head
+tracking and helpers, so keep both. Defaults to idle/walk/run. Verified
+it reproduces the shipped sheets byte-for-byte.
+
+**Tested:** `npx tsc --noEmit` clean. Not checked in the running game --
+worth confirming a Demonic hero on a long quest keeps showing (idle
+frames) during the attack flash, and a Heroic What Got Out clear earns
+the skin.

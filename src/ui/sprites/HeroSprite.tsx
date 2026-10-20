@@ -205,6 +205,42 @@ export interface HeroSpriteProps {
   framePhase?: number;
 }
 
+/**
+ * Missing-sheet fallback (patch 0433). Newer skin sets only ship the sheets
+ * the game shows most -- idle and walk (+ run for the knight) -- so asking a
+ * skin folder for anything else (IdleView's mid-quest attack flash, say)
+ * would point the background at a file that isn't there and blank the hero
+ * for the length of that animation. Each skin sheet URL is probed once with
+ * an Image() and remembered here; a sheet that fails to load falls back to
+ * walk (for run) or idle *in the same skin*, so the skin never drops out.
+ * 'original' is never probed -- it always ships every sheet.
+ */
+const sheetStatus = new Map<string, 'pending' | 'ok' | 'missing'>();
+const sheetListeners = new Set<() => void>();
+function probeSheet(url: string): void {
+  if (sheetStatus.has(url) || typeof Image === 'undefined') return;
+  sheetStatus.set(url, 'pending');
+  const img = new Image();
+  const done = (st: 'ok' | 'missing') => {
+    sheetStatus.set(url, st);
+    sheetListeners.forEach((fn) => fn());
+  };
+  img.onload = () => done('ok');
+  img.onerror = () => done('missing');
+  img.src = url;
+}
+function useSheetStatus(url: string | null): 'pending' | 'ok' | 'missing' {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (!url) return undefined;
+    const fn = () => bump((n) => n + 1);
+    sheetListeners.add(fn);
+    probeSheet(url);
+    return () => { sheetListeners.delete(fn); };
+  }, [url]);
+  return url ? sheetStatus.get(url) ?? 'pending' : 'ok';
+}
+
 export function HeroSprite({
   heroClass,
   skin = 'original',
@@ -230,8 +266,15 @@ export function HeroSprite({
     return 'idle';
   }, [char, animation]);
 
-  const frames = char?.animations[resolved] ?? 1;
-  const rate = fps ?? DEFAULT_FPS[resolved] ?? 8;
+  const base = char?.basePath ?? './heroes';
+  const probeUrl = char && skin !== 'original' && resolved !== 'idle'
+    ? `${base}/${heroClass}/${skin}/${resolved}.png` : null;
+  const sheet = useSheetStatus(probeUrl);
+  const shown: HeroAnimation = sheet !== 'missing' ? resolved
+    : resolved === 'run' && char?.animations.walk ? 'walk' : 'idle';
+
+  const frames = char?.animations[shown] ?? 1;
+  const rate = fps ?? DEFAULT_FPS[shown] ?? 8;
   const [index, setIndex] = useState(0);
   const doneRef = useRef(false);
 
@@ -241,7 +284,7 @@ export function HeroSprite({
       : 0;
     setIndex(startIndex);
     doneRef.current = false;
-  }, [resolved, heroClass, skin, frames, once, framePhase]);
+  }, [shown, heroClass, skin, frames, once, framePhase]);
 
   useEffect(() => {
     if (!char || frames <= 1) return;
@@ -283,7 +326,7 @@ export function HeroSprite({
 
   const correction = resolveDisplayCorrection(heroClass);
   const scale = (height / char.frameH) * correction.scale;
-  const url = `${char.basePath ?? './heroes'}/${heroClass}/${skin}/${resolved}.png`;
+  const url = `${base}/${heroClass}/${skin}/${shown}.png`;
   const offset = correction.offset;
   // XOR, not OR/AND -- a reversed-facing class should flip exactly when a
   // normal class WOULDN'T, and vice versa, not simply flip more often.
