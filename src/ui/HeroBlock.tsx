@@ -5,12 +5,12 @@ import { ModifierManager } from '../game/managers/ModifierManager';
 import { PrestigeManager } from '../game/managers/PrestigeManager';
 import { InventoryManager } from '../game/managers/InventoryManager';
 import { rerollsUsedToday } from '../game/data/reroll';
-import { HERO_CLASSES, SKINS, infirmaryAutoReviveUnlocked, statResetCost } from '../game/data/progression';
-import { canWearSkin, classSkinLockReason } from '../game/classSkins';
+import { HERO_CLASSES, infirmaryAutoReviveUnlocked, statResetCost } from '../game/data/progression';
 import { Tuning } from '../game/data/tuning';
 import { Hero } from '../game/types';
 import { describeMods, formatDuration, formatGold, formatNumber, HOUR } from '../game/util';
 import { HeroSprite } from './sprites/HeroSprite';
+import { LiveryPicker } from './Wardrobe';
 import { GearScoreBadge } from './GearScoreBadge';
 import { RoleIcon } from './RoleIcon';
 import { registerFlyTarget } from './flyTarget';
@@ -495,25 +495,8 @@ export function HeroBlock({
 
               <div className="row wrap hero-block-livery">
                 <span className="tiny muted">Livery:</span>
-                {SKINS.map((sk) => {
-                  const owned = canWearSkin(state, sk.id, hero.heroClass);
-                  const active = (hero.skin ?? 'original') === sk.id;
-                  return (
-                    <button
-                      key={sk.id}
-                      className={`skin-chip ${active ? 'on' : ''}`}
-                      disabled={!owned}
-                      title={owned ? sk.name : sk.perClass ? `${sk.name}: ${classSkinLockReason(sk.id, hero.heroClass)} Then buy it in the Skins shop.` : `${sk.name}, buy in the Skins shop below`}
-                      onClick={() => engine.setHeroSkin(hero.id, sk.id)}
-                    >
-                      <span className="skin-dots">
-                        <span style={{ background: sk.swatch[0] }} />
-                        <span style={{ background: sk.swatch[1] }} />
-                      </span>
-                      {sk.name}
-                    </button>
-                  );
-                })}
+                {/* Patch 0429 -- one dropdown instead of a chip per livery. */}
+                <LiveryPicker hero={hero} />
                 {editingName ? (
                   <span className="row" style={{ gap: 4, alignItems: 'center' }}>
                     <input

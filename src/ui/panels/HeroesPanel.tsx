@@ -8,9 +8,7 @@ import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { isTabUnread } from '../../game/attention';
 import { TrainingPanel } from './TrainingPanel';
-import { HERO_CLASSES, HeroClassDef, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
-import { PER_CLASS_SKINS, isClassSkinEarned, isClassSkinOwned, classSkinLockReason, classSkinLockShort } from '../../game/classSkins';
-import { HeroSprite } from '../sprites/HeroSprite';
+import { HERO_CLASSES, HeroClassDef, PRESTIGE_MIN_LEVEL, RECRUIT_COST, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { heroMilestoneUnlocked } from '../../game/data/heroMilestones';
 import { Tuning } from '../../game/data/tuning';
@@ -22,6 +20,8 @@ import { GearScoreBadge } from '../GearScoreBadge';
 import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
 import { useReviveBeats } from '../reviveFlash';
 import { HeroBlock } from '../HeroBlock';
+import { Wardrobe } from '../Wardrobe';
+import { DyeFx } from '../dyeFx';
 import { usePulsesOnChange } from '../maxFlash';
 import { buyWithFx, flyCard, fxMs, fxSpeed, LevelRoll, usePurchaseBeats, useRecentIncrease } from '../purchaseFx';
 
@@ -119,20 +119,6 @@ function recruitStatusFor(
  * a raid-locked style as a distinct, non-purchasable disabled state)
  * the way a custom popover can.
  */
-/** Patch 0421 -- the dye wash, brush stroke, glint and OWNED ribbon laid
- *  over a skin (or tombstone style) card for the moment it's bought.
- *  Colours come from the card's own --dye-a / --dye-b. */
-function DyeFx() {
-  return (
-    <span className="fx-dye" aria-hidden="true">
-      <span className="fx-dye-wash" />
-      <span className="fx-dye-brush" />
-      <span className="fx-dye-glint" />
-      <span className="fx-dye-ribbon">OWNED</span>
-    </span>
-  );
-}
-
 function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: GameState }) {
   const [open, setOpen] = useState(false);
   const justBought = useRecentIncrease(TOMBSTONE_STYLES.map((st) => ({
@@ -349,14 +335,6 @@ function HeroesRosterView() {
   }, [heroIdSignature]);
   // "N of M slots filled" rolls up with the recruit, and the class chip's
   // badge flips over to "Recruited".
-  // Patch 0421 -- skins bought while watching (guild-wide and per-class).
-  const justDyed = useRecentIncrease([
-    ...SKINS.filter((sk) => sk.id !== 'original' && !sk.perClass).map((sk) => ({ id: sk.id, value: state.unlockedSkins.includes(sk.id) ? 1 : 0 })),
-    ...PER_CLASS_SKINS.flatMap((sk) => Object.keys(HERO_CLASSES).map((cls) => ({
-      id: `${sk.id}:${cls}`, value: isClassSkinOwned(state, sk.id, cls) ? 1 : 0,
-    }))),
-  ], 1700);
-  const previewClass = (state.heroes[0]?.heroClass ?? 'adventurer') as HeroClass;
   const rosterBeat = usePurchaseBeats([{ id: 'roster', value: state.heroes.length, max: Infinity }]).roster;
   const recruitedFlips = usePulsesOnChange((Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => ({
     id, value: recruitStatusFor(engine, id, recruitable, slots).alreadyRecruited ? 1 : 0,
@@ -659,103 +637,14 @@ function HeroesRosterView() {
         );
       })()}
 
-      {/* Patch 0421 -- a skin bought while watching gets a dye moment: its
-          two swatch colours wash across the card, a brush stroke wipes the
-          preview from the plain colours into the new livery, a glint and an
-          OWNED ribbon follow (see .fx-dyed in app.css). */}
-      <div className="section-heading">Skins</div>
+      {/* Patch 0429 -- the Wardrobe replaces the tint grid and the per-class
+          14-card grids (Design canvas "Wardrobe -- skins & tints"). */}
+      <div className="section-heading">Wardrobe</div>
       <p className="small muted subtitle">
-        Cosmetic liveries, unlocked once for the whole guild and usable by any hero.
+        Cosmetic looks for your heroes: pick a class, then a skin, then a tint.
         A pure gold sink, no effect on stats.
       </p>
-      <div className="grid three">
-        {SKINS.filter((sk) => sk.id !== 'original' && !sk.perClass).map((sk) => {
-          const owned = state.unlockedSkins.includes(sk.id);
-          const dyeing = !!justDyed[sk.id];
-          return (
-            <div
-              key={sk.id}
-              className={`card skin-card ${dyeing ? 'fx-dyed' : ''}`}
-              style={{ marginBottom: 0, '--dye-a': sk.swatch[0], '--dye-b': sk.swatch[1] } as CSSProperties}
-            >
-              {/* Preview on the guild's first hero's class, so the purchase
-                  has something to visibly recolour. */}
-              <div className="skin-card-preview" aria-hidden="true">
-                <span className="skin-card-preview-base">
-                  <HeroSprite heroClass={previewClass} skin={dyeing ? 'original' : sk.id} height={56} />
-                </span>
-                {dyeing && (
-                  <span className="skin-card-preview-dye">
-                    <HeroSprite heroClass={previewClass} skin={sk.id} height={56} />
-                  </span>
-                )}
-              </div>
-              <div className="spread">
-                <span className="card-title">{sk.name}</span>
-                <span className="skin-dots">
-                  <span style={{ background: sk.swatch[0] }} />
-                  <span style={{ background: sk.swatch[1] }} />
-                </span>
-              </div>
-              <p className="card-flavour">{sk.description}</p>
-              <button
-                className="btn-primary"
-                disabled={owned || state.gold < sk.cost}
-                onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.buySkin(sk.id))}
-              >
-                {owned ? 'Owned' : `Unlock · ${formatGold(sk.cost)}`}
-              </button>
-              {dyeing && <DyeFx />}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Patch 0415 -- per-class skins (Frost Court). One card per class:
-          locked (with the reason), earned (buy), or owned. */}
-      {PER_CLASS_SKINS.map((sk) => {
-        const classes = Object.keys(HERO_CLASSES);
-        const ownedCount = classes.filter((c) => isClassSkinOwned(state, sk.id, c)).length;
-        return (
-          <div key={sk.id} className="class-skin-set">
-            <div className="spread" style={{ marginTop: 14 }}>
-              <div className="section-heading" style={{ margin: 0 }}>{sk.name}</div>
-              <span className="tiny muted">{ownedCount}/{classes.length} classes</span>
-            </div>
-            <p className="small muted subtitle">{sk.description}</p>
-            <div className="grid class-skin-grid">
-              {classes.map((cls) => {
-                const owned = isClassSkinOwned(state, sk.id, cls);
-                const earned = owned || isClassSkinEarned(state, sk.id, cls);
-                const def = HERO_CLASSES[cls as keyof typeof HERO_CLASSES];
-                const dyeing = !!justDyed[`${sk.id}:${cls}`];
-                return (
-                  <div
-                    key={cls}
-                    className={`card class-skin-card ${owned ? 'owned' : earned ? 'earned' : 'locked'} ${dyeing ? 'fx-dyed' : ''}`}
-                    style={{ '--dye-a': sk.swatch[0], '--dye-b': sk.swatch[1] } as CSSProperties}
-                  >
-                    {dyeing && <DyeFx />}
-                    <div className="class-skin-sprite" aria-hidden={!earned}>
-                      <HeroSprite heroClass={cls as keyof typeof HERO_CLASSES} skin={sk.id} height={64} title={`${sk.name} ${def.name}`} />
-                    </div>
-                    <div className="card-title class-skin-name">{def.name}</div>
-                    {owned ? (
-                      <span className="tiny good">Owned</span>
-                    ) : earned ? (
-                      <button className="btn-primary" disabled={state.gold < sk.cost} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.buyClassSkin(sk.id, cls))}>
-                        Unlock · {formatGold(sk.cost)}
-                      </button>
-                    ) : (
-                      <span className="tiny muted class-skin-lock" title={classSkinLockReason(sk.id, cls)}>🔒 {classSkinLockShort(sk.id)}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+      <Wardrobe />
       </div>
     </div>
   );

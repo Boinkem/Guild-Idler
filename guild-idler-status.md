@@ -34868,3 +34868,67 @@ web build (with a throwaway build that exposed the engine for setup):
 The Auction House needs the live server, so its animations and the
 buyer-charge fix were type-checked and built but not clicked through
 here.
+
+### Wardrobe replaces the Skins grids; hero card livery becomes a dropdown (patch 0429)
+```discord-update
+Dev Update | Wardrobe
+
+- Added the Wardrobe to the Heroes tab: pick a class, then a skin, then a tint, with a big preview of the look before you buy it
+- Added tint previews: hover a tint in the list to see it on your hero straight away
+- Added a 14-class tracker under Frost Sovereign and Bound Wraith showing which classes own or have earned each set
+- Added a "Dress a hero" picker so you can unlock a look and put it on a hero in one place
+- Changed the hero card's row of livery chips into a single Livery dropdown, with tints under Original and class sets below
+- Changed the Skins section, which had grown into a full screen of cards, into a single compact card
+```
+
+Design canvas board "Wardrobe -- skins & tints (replaces Skins grids)",
+signed off. Reported problem: the Skins section had grown into a tint card
+grid plus a 14-card grid per per-class set (Frost Sovereign, Bound Wraith),
+too crowded even fullscreen. The data model is unchanged: a hero still
+wears one skin id, so "Original + tint" is the tint's own id and per-class
+sets keep their own palette.
+
+**Wardrobe (new `src/ui/Wardrobe.tsx`).**
+- `Wardrobe` replaces both Skins blocks in `HeroesPanel` (section now
+  titled "Wardrobe"). Local UI state only: `cls`, `set` ('original' or a
+  per-class skin id), `tint`, `hover`, `targetId`. Opens on the first
+  hero's class and current look.
+- Top row: Class dropdown (each class lists hero count and "N / 7 looks"
+  owned, where 7 = non-perClass SKINS + PER_CLASS_SKINS) and "Dress a hero"
+  (heroes of that class; Lv and what they're wearing).
+- Stage: `HeroSprite` at 150px with an Owned / Not owned / Earned / Locked
+  tag (prefixed "Preview" while hovering a tint) and "Worn by ...". For a
+  per-class set, 14 pips show owned (filled) / earned (ring) per class,
+  with the viewed class outlined.
+- Skin rows: Original (tints owned count), then each PER_CLASS_SKINS entry
+  with a thumbnail of this class wearing it and its status
+  (`classSkinLockShort` minus the trailing "with this class").
+- Tint dropdown: only enabled for Original ("Fixed palette" otherwise).
+  `onMouseEnter`/`onFocus` set `hover`, which drives the stage but not
+  the action bar.
+- Action bar (for the committed look): `engine.buySkin` / `buyClassSkin`
+  through `buyWithFx`, Locked with `classSkinLockReason`, or
+  "Dress <hero>" via `engine.setHeroSkin`, which plays a DRESSED stamp
+  (`.wdr-stamp`).
+- Unlocks reuse the 0421 dye moment on the stage. `useRecentIncrease` over
+  tints and `skin:class` keys moved here from HeroesPanel; `DyeFx` moved
+  to the new `src/ui/dyeFx.tsx` (still used by the tombstone picker).
+- `Dropdown` is a small button + floating listbox closed by an outside
+  mousedown or Escape (the same family as the tombstone style picker,
+  because rows branch between pick, buy and locked).
+
+**Hero card livery.** `LiveryPicker` (same file) replaces the HeroBlock
+chip row: one dropdown with tints grouped under Original, then "Class
+sets". Unwearable entries are disabled and say where to get them
+("3,500 in Wardrobe", "Unlock in Wardrobe", or the raid).
+
+**CSS.** New `.wdr-*` block at the end of app.css. The dead
+`.class-skin-*` rules were removed. `.skin-card-preview-base/-dye` and the
+`.fx-dye*` rules are kept and reused by the stage.
+
+**Noticed, not changed:** Dwarf's `displayOffsetX: -60` (hero-classes.json)
+shifts its idle sprite about 60% of a frame to the left after the
+reversed-facing flip. In the current art the figure already sits near the
+middle of its 82px frame, so in centred slots (Wardrobe stage and
+thumbnails, the hero summary row) the dwarf is drawn at the left edge or
+clipped. This needs a retune once checked in the idle view.
