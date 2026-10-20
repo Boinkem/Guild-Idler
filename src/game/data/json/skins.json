@@ -100,5 +100,18 @@
     "perClass": true,
     "unlockRaidId": "what_got_out",
     "unlockMinDifficulty": "heroic"
+  },
+  {
+    "id": "void",
+    "name": "Void",
+    "description": "Writhing tendrils, a third eye that never closes, and black plate split with violet light. Earned one class at a time.",
+    "cost": 10000,
+    "swatch": [
+      "#c048ec",
+      "#22202c"
+    ],
+    "perClass": true,
+    "unlockRaidId": "silence_the_loom",
+    "unlockMinDifficulty": "heroic"
   }
 ]

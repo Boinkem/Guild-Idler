@@ -35279,3 +35279,88 @@ it reproduces the shipped sheets byte-for-byte.
 worth confirming a Demonic hero on a long quest keeps showing (idle
 frames) during the attack flash, and a Heroic What Got Out clear earns
 the skin.
+
+### Void: per-class Void skins (patch 0434)
+```discord-update
+Dev Update | Void
+
+- Added Void, a fifth skin set for every hero class: writhing tendrils, a third eye that never closes, and black plate split with violet light
+- Added Void unlocks: clear Silence the Loom on Heroic or harder with a hero in the party to earn that class's Void
+- Added a Void section to the Wardrobe, with a 10,000 gold unlock per class once earned
+- Clears from before this update count too, if they're still in your raid history
+```
+
+Direct request: a Void / old-god set across all 14 classes from a ChatGPT
+knight mockup (black plate, writhing purple tendrils streaming off the
+back, glowing violet visor bars, a red eye sigil on the helm, black
+shield with a glowing slit-eye, violet-lit blade). Decisions locked in
+conversation: tied to **Silence the Loom on Heroic or harder** (the
+Loom -- an entity speaking through every voice it has taken -- is the
+old-god raid), **10,000 gold per class**, no Steam achievement. idle +
+walk (+ run for the knight) only; the 0433 HeroSprite fallback covers
+every other animation.
+
+**Data-only.** One new skins.json entry, `void` (cost 10000, swatch
+`#c048ec`/`#22202c`, `perClass: true`, `unlockRaidId:
+"silence_the_loom"`, `unlockMinDifficulty: "heroic"`). No code changes.
+
+**Art (not in git):** `public/heroes/<class>/void/{idle,walk}.png` for
+all 14 classes + `knight/void/run.png` -- 29 sheets, same sizes as
+`original/`, already in the local copy.
+
+Shared: void-plate ramp with the darkest steel seams pulsing violet,
+writhing tendrils rooted down the hero's back (behind the sprite,
+waving on a loop that matches each animation's frame count, a bright
+glint travelling down each one), a third eye on the forehead (red iris,
+violet lids, blinks once per loop), a faint violet rim light and slow
+orbiting void motes. Tendrils stream from the back of the head-tracked
+position and respect facing -- dwarf, wizard and witch art is drawn
+facing left (HeroSprite's HERO_REVERSED_FACING), so theirs stream right.
+
+Per class:
+- **Knight** (the mockup): plume removed, black plate with violet seams,
+  glowing visor bars, third eye on the helm, purple cape plus tendrils,
+  black shield with a violet rim and a slit-eye sigil, chest rune,
+  violet-white blade.
+- **Huge Knight**: black plate with violet seams, purple plume and sash,
+  violet codpiece glow, big third eye, violet-white greatsword.
+- **Adventurer**: purple cloak, void-dark shirt and gauntlets, violet
+  eyes, small tendrils.
+- **Gladiator**: black helm with the third eye, purple tunic.
+- **Samurai**: violet-black hair, dark kimono, purple hakama, violet sash
+  and eyes, third eye.
+- **Witch**: black robe, black horns, green magic turned violet.
+- **Pyromancer**: black robe with violet seams, flame turned to violet
+  void-fire, red eyes in the hood.
+- **Wizard**: purple robe and hat, lavender beard, violet orb.
+- **Dwarf**: black helm and axe, purple cape, violet-black beard.
+- **Kobold**: void-black scales with violet highlights, big third eye.
+- **Lizardman**: deep violet scales, pale lavender belly, red eyes,
+  violet blade.
+- **Minotaur**: ashen grey-violet hide, black horns and axe with violet
+  seams, purple belt, big third eye.
+- **Werewolf**: black fur with violet sheen, glowing violet chest and
+  muzzle, third eye.
+- **Centaur**: black steed with a purple mane and tail, violet hooves,
+  purple hair.
+
+**Generator in the repo:** `tools/skin-gen/void/` (`run.py`, `void.py`,
+`vclasses.py`); reuses `tools/skin-gen/paladin/`. Verified it reproduces
+the shipped sheets byte-for-byte.
+
+**Backlog -- retiring the tints (discussed, deferred).** The four
+guild-wide recolours (Holy, Infernal, Frost, Necrotic) are now each
+covered by a per-class set (Paladin, Demonic, Frost Sovereign, Bound
+Wraith/Void). Kept for now. When they go: migrate any `hero.skin` set
+to a tint back to `original` on load, refund 3,500 gold per tint in
+`unlockedSkins` (one-time), drop the Wardrobe Tint dropdown, delete the
+56 tint folders under `public/heroes`, and repoint COMPLETE_WARDROBE
+("Unlock every livery") to **own every per-class set for one class**
+(agreed in conversation) -- otherwise its `every()` over an empty list
+would pass for everyone. Early-game note: tints are the only cosmetic
+before the first raid set (Wyrmkeep, lvl 18); Blackford Keep (lvl 8) is
+the one raid with no set if an early one is wanted. Requiem for the
+Last God is also still free for a final set.
+
+**Not checked in the running game** -- worth a Heroic Silence the Loom
+clear and a look in the Wardrobe.
