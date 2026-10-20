@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { QUEST_CHAINS, ChainDef, DIFFICULTIES } from '../../game/data/quests';
 import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, powerToNextRank, rankTierForLevel } from '../../game/data/guildRank';
 import { outgoingConnections, incomingConnections } from '../../game/data/chainConnections';
@@ -9,6 +9,8 @@ import { describeMods, RARITY_COLOR, formatDuration } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
 import { RarityPill } from '../RarityPill';
 import { useEngine } from '../useEngine';
+import { useEntryInk, EntryInkMarks } from '../entryInk';
+import type { EntryInk } from '../entryInk';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 
@@ -198,19 +200,26 @@ function ChainDetailModal({
  * beyond the meta line.
  */
 function ChainCard({
-  chain, completedIds, stage,
-}: { chain: ChainDef; completedIds: Set<string>; stage?: number }) {
+  chain, completedIds, stage, ink,
+}: { chain: ChainDef; completedIds: Set<string>; stage?: number; ink?: EntryInk }) {
   const [showModal, setShowModal] = useState(false);
   const inProgress = stage !== undefined;
+  // Patch 0428 -- an in-progress chain and its completed entry are
+  // separate pages: finishing a chain inks it in again under Completed.
+  const entryId = `${inProgress ? 'ip' : 'done'}:${chain.id}`;
+  const inkProps = ink?.props(entryId);
+  const openIt = () => { ink?.open(entryId); setShowModal(true); };
   return (
     <>
       <div
-        className="card raid-card"
-        onClick={() => setShowModal(true)}
+        className={`card raid-card ${inkProps?.className ?? ''}`}
+        style={inkProps?.style}
+        onClick={openIt}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}
       >
+        {ink && <EntryInkMarks ink={ink} id={entryId} />}
         <ChainBanner chainId={chain.id} banner={chain.banner} icon={chain.icon} useIcon className="raid-card-thumb" />
         <div className="raid-card-body">
           <div className="raid-card-name">{chain.name}</div>
@@ -256,6 +265,10 @@ function StoryQuestsTab() {
     tier,
     chains: completed.filter((c) => rankTierForLevel(c.reqLevel).id === tier.id),
   })).filter((g) => g.chains.length > 0);
+  const ink = useEntryInk('lore-quests', [
+    ...inProgress.map((x) => `ip:${x.chain.id}`),
+    ...groups.flatMap((g) => g.chains.map((c) => `done:${c.id}`)),
+  ]);
 
   return (
     <>
@@ -263,7 +276,7 @@ function StoryQuestsTab() {
         <>
           <div className="section-heading">Still unfolding</div>
           {inProgress.map(({ active, chain }) => (
-            <ChainCard key={chain.id} chain={chain} completedIds={discoveredIds} stage={active.stage} />
+            <ChainCard key={chain.id} chain={chain} completedIds={discoveredIds} stage={active.stage} ink={ink} />
           ))}
         </>
       )}
@@ -282,7 +295,7 @@ function StoryQuestsTab() {
       {groups.map(({ tier, chains }) => (
         <div key={tier.id}>
           <div className="section-heading" style={{ color: tier.color }}>{tier.name}</div>
-          {chains.map((chain) => <ChainCard key={chain.id} chain={chain} completedIds={completedIds} />)}
+          {chains.map((chain) => <ChainCard key={chain.id} chain={chain} completedIds={completedIds} ink={ink} />)}
         </div>
       ))}
 
@@ -352,19 +365,23 @@ function RaidHistoryDetailModal({ raidId, onClose }: { raidId: string; onClose: 
   );
 }
 
-function RaidCompletedEntry({ raidId }: { raidId: string }) {
+function RaidCompletedEntry({ raidId, ink }: { raidId: string; ink?: EntryInk }) {
   const [showModal, setShowModal] = useState(false);
   const raid = RAIDS.find((r) => r.id === raidId);
   if (!raid) return null;
+  const inkProps = ink?.props(raidId);
+  const openIt = () => { ink?.open(raidId); setShowModal(true); };
   return (
     <>
       <div
-        className="card raid-card"
-        onClick={() => setShowModal(true)}
+        className={`card raid-card ${inkProps?.className ?? ''}`}
+        style={inkProps?.style}
+        onClick={openIt}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}
       >
+        {ink && <EntryInkMarks ink={ink} id={raidId} />}
         <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
         <div className="raid-card-body">
           <div className="raid-card-name">{raid.name}</div>
@@ -416,6 +433,7 @@ function StoryRaidsTab() {
 
   const completed = RAIDS.filter((r) => state.completedRaids.includes(r.id)).sort((a, b) => a.reqLevel - b.reqLevel);
   const undiscovered = RAIDS.filter((r) => !isRaidUnlocked(r.id, state.completedRaids, state.completedChains)).length;
+  const ink = useEntryInk('lore-raids', completed.map((r) => r.id));
 
   return (
     <>
@@ -430,7 +448,7 @@ function StoryRaidsTab() {
       {completed.length === 0 ? (
         <p className="small muted subtitle">No raid has been cleared yet. These need the whole guild, not just one hero. See the Raids tab.</p>
       ) : (
-        completed.map((r) => <RaidCompletedEntry key={r.id} raidId={r.id} />)
+        completed.map((r) => <RaidCompletedEntry key={r.id} raidId={r.id} ink={ink} />)
       )}
 
       {undiscovered > 0 && (
@@ -453,6 +471,14 @@ function StoryRaidsTab() {
 function CollectionTab() {
   const engine = useEngine();
   const state = engine.state;
+  // Patch 0428 -- newly found set pieces ink in; a set card with any new
+  // piece wears the NEW tab for this visit (there's nothing to open here,
+  // so leaving the tab counts as having seen them).
+  const pieceIds = ITEM_SETS.flatMap((s) => s.pieces.filter((p) => state.discoveredItems.includes(p)));
+  const ink = useEntryInk('lore-collection', pieceIds);
+  const latest = useRef(pieceIds);
+  latest.current = pieceIds;
+  useEffect(() => () => { for (const id of latest.current) if (engine.state.entryMarks[`lore-collection|${id}`] === 1) engine.markEntryOpened('lore-collection', id); }, [engine]);
 
   return (
     <>
@@ -461,8 +487,10 @@ function CollectionTab() {
       </p>
       {ITEM_SETS.map((set) => {
         const found = set.pieces.filter((p) => state.discoveredItems.includes(p));
+        const anyNew = found.some((p) => ink.isNew(p));
         return (
-          <div key={set.id} className="card">
+          <div key={set.id} className={`card nex-entry ${anyNew ? 'nex-new' : ''}`}>
+            {anyNew && <span className="nex-tab" aria-label="New">New</span>}
             <div className="spread">
               <span className="card-title">{set.name}</span>
               <span className="small muted">{found.length}/{set.pieces.length} found</span>
@@ -471,7 +499,8 @@ function CollectionTab() {
               {set.pieces.map((pieceId) => (
                 <span
                   key={pieceId}
-                  style={{ color: state.discoveredItems.includes(pieceId) ? RARITY_COLOR.legendary : undefined }}
+                  className={ink.inking(pieceId) ? 'nex-piece fx-ink' : undefined}
+                  style={{ color: state.discoveredItems.includes(pieceId) ? RARITY_COLOR.legendary : undefined, ...ink.props(pieceId).style }}
                 >
                   {EQUIPMENT_BY_ID[pieceId]?.name ?? pieceId}
                 </span>

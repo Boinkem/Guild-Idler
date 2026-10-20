@@ -638,7 +638,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     // inventory" (see Grimsby's own reward-burst) lands
                     // here, same registry gold already uses for its own
                     // header target just below in this same nav.
-                    ref={t.id === 'equipment' ? (el) => registerFlyTarget('inventory', el) : undefined}
+                    ref={t.id === 'equipment' ? (el) => registerFlyTarget('inventory', el) : t.id === 'vendors' ? (el) => registerFlyTarget('vendors', el) : undefined}
                     // Rotating border-light rather than a numeric badge --
                     // see isNavTabUnread's own comment in attention.ts for
                     // why this is a boolean per tab rather than a count

@@ -9,7 +9,7 @@ import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance, itemDisplayName } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
-import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef, RecipeScrollDef } from '../../game/types';
+import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef, RecipeScrollDef, CraftingRecipeDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
 import { RecipeManager } from '../../game/managers/RecipeManager';
@@ -26,6 +26,8 @@ import { Row, Toggle } from './SettingsPanel';
 import { RewardGlowParticle } from '../RewardGlowParticle';
 import { getFlyTargetCenter } from '../flyTarget';
 import { useEquipFx } from '../equipFx';
+import { RecipeLearnFx } from '../recipeFx';
+import { fxSpeed } from '../purchaseFx';
 import { useRepairFx } from '../repairFx';
 import { useRecentIncrease } from '../purchaseFx';
 
@@ -375,7 +377,12 @@ function isInstantUseOnHero(def: ConsumableDef): boolean {
  * this reads `CRAFTING_RECIPE_BY_ID[def.recipeId]` once and falls back
  * to the bare id if content ever drifts out from under an old save.
  */
-function RecipeScrollCard({ def, count, engine }: { def: RecipeScrollDef; count: number; engine: GameEngine }) {
+function RecipeScrollCard({ def, count, engine, onLearned }: {
+  def: RecipeScrollDef; count: number; engine: GameEngine;
+  /** Patch 0428 -- plays the learn moment at panel level (this card may
+   *  unmount once its last scroll is used). */
+  onLearned?: (recipe: CraftingRecipeDef) => void;
+}) {
   const [open, setOpen] = useState(false);
   const recipe = CRAFTING_RECIPE_BY_ID[def.recipeId];
   const name = recipe ? `Recipe: ${recipe.name}` : def.recipeId;
@@ -419,7 +426,12 @@ function RecipeScrollCard({ def, count, engine }: { def: RecipeScrollDef; count:
               </button>
               <button
                 className="btn-green"
-                onClick={() => { engine.learnRecipe(def.id); setOpen(false); }}
+                onClick={() => {
+                  const known = engine.state.unlockedRecipes.length;
+                  engine.learnRecipe(def.id);
+                  setOpen(false);
+                  if (recipe && onLearned && (engine.state.unlockedRecipes.length) > known) onLearned(recipe);
+                }}
               >
                 Learn
               </button>
@@ -1089,6 +1101,8 @@ export function EquipmentPanel() {
   const [heroId, setHeroId] = useState(state.heroes[0].id);
   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
   const { fx: eqFx, run: runEquip } = useEquipFx(engine, hero.id);
+  // Patch 0428 -- the recipe being learned (scroll moment, recipeFx.tsx).
+  const [learning, setLearning] = useState<CraftingRecipeDef | null>(null);
   const { fx: rpFx, run: runRepair } = useRepairFx(engine);
   // Patch 0425 -- auto-repair (or anything else) topping a piece back up
   // without a click: a glint on that card and the wrench on the
@@ -1444,7 +1458,7 @@ export function EquipmentPanel() {
           </div>
           <div className="item-card-grid">
             {recipesOwned.map(({ def, count }) => (
-              <RecipeScrollCard key={def.id} def={def} count={count} engine={engine} />
+              <RecipeScrollCard key={def.id} def={def} count={count} engine={engine} onLearned={(r) => { if (fxSpeed() > 0) setLearning(r); }} />
             ))}
           </div>
           {recipeFlights.map((f) => (
@@ -1488,6 +1502,7 @@ export function EquipmentPanel() {
           ))}
         </>
       )}
+      {learning && <RecipeLearnFx recipe={learning} onDone={() => setLearning(null)} />}
       </div>
     </div>
   );

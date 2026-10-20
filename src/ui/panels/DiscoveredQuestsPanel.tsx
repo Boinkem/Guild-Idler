@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { useEntryInk, EntryInkMarks } from '../entryInk';
+import type { EntryInk } from '../entryInk';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 import {
@@ -106,6 +108,9 @@ export function DiscoveredQuestsPanel() {
     [state.chainBoard, selectedHero],
   );
 
+  // Patch 0428 -- new chains on the board ink in, NEW until opened.
+  const boardInk = useEntryInk('dq-board', chainOffers.map((o) => o.chain?.chainId ?? o.id));
+
   const openOffer = openOfferId ? chainOffers.find((o) => o.id === openOfferId) ?? null : null;
 
   const send = (offer: Offer, chainSteps = false) => {
@@ -204,7 +209,8 @@ export function DiscoveredQuestsPanel() {
                   offer={offer}
                   hero={selectedHero}
                   now={now}
-                  onOpen={() => setOpenOfferId(offer.id)}
+                  ink={boardInk}
+                  onOpen={() => { boardInk.open(offer.chain?.chainId ?? offer.id); setOpenOfferId(offer.id); }}
                 />
               ))}
             </div>
@@ -243,8 +249,10 @@ export function DiscoveredQuestsPanel() {
  * are still visible without opening the detail view.
  */
 function ChainRow({
-  offer, hero, now, onOpen,
-}: { offer: Offer; hero: Hero; now: number; onOpen: () => void }) {
+  offer, hero, now, onOpen, ink,
+}: { offer: Offer; hero: Hero; now: number; onOpen: () => void; ink?: EntryInk }) {
+  const entryId = offer.chain?.chainId ?? offer.id;
+  const inkProps = ink?.props(entryId);
   const engine = useEngine();
   const state = engine.state;
   const cfg = DIFFICULTIES[offer.difficulty];
@@ -253,12 +261,14 @@ function ChainRow({
 
   return (
     <div
-      className="card raid-card"
+      className={`card raid-card ${inkProps?.className ?? ''}`}
+      style={inkProps?.style}
       onClick={onOpen}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
     >
+      {ink && <EntryInkMarks ink={ink} id={entryId} />}
       <div
         className="raid-card-thumb"
         style={{ backgroundImage: `url(${chainIconSrc(offer.chain?.chainId ?? '', chain?.icon, chain?.banner)})` }}

@@ -2734,6 +2734,37 @@ export class GameEngine {
     return true;
   }
 
+  /**
+   * Patch 0428 -- seen/opened marks for Lore and Discovered Quests entries
+   * (ui/entryInk.tsx). A scope seen for the first time on an older save is
+   * adopted silently: everything already in it counts as opened.
+   */
+  adoptEntryScope(scope: string, ids: string[]) {
+    if (this.state.entryScopes.includes(scope)) return;
+    this.state.entryScopes.push(scope);
+    for (const id of ids) this.state.entryMarks[`${scope}|${id}`] = 2;
+    void this.saveNow();
+  }
+
+  /** The ink-in has played for these entries (NEW tab stays until opened). */
+  markEntriesShown(scope: string, ids: string[]) {
+    let changed = false;
+    for (const id of ids) {
+      const key = `${scope}|${id}`;
+      if (!this.state.entryMarks[key]) { this.state.entryMarks[key] = 1; changed = true; }
+    }
+    if (changed) void this.saveNow();
+  }
+
+  /** The player opened this entry -- its NEW tab goes. */
+  markEntryOpened(scope: string, id: string) {
+    const key = `${scope}|${id}`;
+    if (this.state.entryMarks[key] === 2) return;
+    this.state.entryMarks[key] = 2;
+    this.notify();
+    void this.saveNow();
+  }
+
   sellItem(itemUid: string) {
     const error = ShopManager.sell(this.state, itemUid, Date.now());
     if (error) return this.say(error);
@@ -3013,12 +3044,33 @@ export class GameEngine {
    * (rather than waiting for the next natural one) so the purchase shows
    * up right away instead of on some later trigger.
    */
-  async buyListing(listingId: string): Promise<boolean> {
+  /**
+   * Patch 0428 -- now charges the buyer. Until this patch nothing did:
+   * the server's buyout route only moves the item and pays the seller
+   * (server/src/listings.ts), and gold/scrap live in the local save, so
+   * a purchase was free. Same "confirmed by the server before touching
+   * local state" rule listEquipmentForSale uses for the deposit: checked
+   * up front, deducted only once the buy succeeds.
+   */
+  async buyListing(listingId: string, price: number, currency: 'gold' | 'scrap'): Promise<boolean> {
+    const cost = Math.max(0, Math.floor(price));
+    if ((currency === 'gold' ? this.state.gold : this.state.scrap) < cost) {
+      this.say(`Not enough ${currency} for that.`);
+      return false;
+    }
     this.say('Buying...');
     const result = await buyListingRequest(listingId);
     if (!result.ok) { this.say(`Could not buy: ${result.error}`); return false; }
+    if (currency === 'gold') {
+      this.state.gold = Math.max(0, this.state.gold - cost);
+      this.state.stats.goldSpent += cost;
+    } else {
+      this.state.scrap = Math.max(0, this.state.scrap - cost);
+    }
     playSound('purchase');
     this.say('Purchased! Check your mailbox.');
+    this.notify();
+    void this.saveNow();
     void this.syncMailboxFromServer();
     return true;
   }

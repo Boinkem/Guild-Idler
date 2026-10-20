@@ -21,6 +21,9 @@ import type { RevivePhase } from '../reviveFlash';
 import { buyWithFx, flyIcon, fxMs, fxSpeed } from '../purchaseFx';
 import { MATERIAL_BY_ID } from '../../game/data/materials';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
+import { PairStage, pairFxDuration } from '../pairFx';
+import type { PairFx } from '../pairFx';
+import type { Hero } from '../../game/types';
 
 type SubTab = 'home' | 'pets';
 
@@ -311,6 +314,17 @@ function PetCard({ pet, revivePhase }: {
   // stored happiness changed), so a refused feed (out of food) does nothing.
   const spriteRef = useRef<HTMLButtonElement>(null);
   const [feedFx, setFeedFx] = useState<'chomp' | 'love' | null>(null);
+  // Patch 0428 -- the pairing moment (pairFx.tsx).
+  const [pairFx, setPairFx] = useState<PairFx | null>(null);
+  const pairTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(pairTimer.current), []);
+  const playPair = (from: Hero | null, to: Hero | null) => {
+    if (fxSpeed() <= 0) return;
+    const fx = { key: Date.now(), from, to };
+    setPairFx(fx);
+    window.clearTimeout(pairTimer.current);
+    pairTimer.current = window.setTimeout(() => setPairFx(null), fxMs(pairFxDuration(fx)));
+  };
   // The happiness shown while the food is still in the air -- the engine
   // has already applied the feed, so without this the bar would fill
   // before the pet has eaten anything.
@@ -336,9 +350,10 @@ function PetCard({ pet, revivePhase }: {
 
   return (
     <div
-      className={`card pet-card-hover ${feedFx ? `fx-pet-${feedFx}` : ''} ${revivePhase === 'rise' ? 'fx-revive-glow fx-pet-rise' : ''}`}
-      style={{ marginBottom: 0, '--rarity-color': RARITY_COLOR[pet.rarity] } as CSSProperties}
+      className={`card pet-card-hover ${feedFx ? `fx-pet-${feedFx}` : ''} ${revivePhase === 'rise' ? 'fx-revive-glow fx-pet-rise' : ''} ${pairFx?.to ? 'ppx-lit' : ''}`}
+      style={{ marginBottom: 0, position: 'relative', '--rarity-color': RARITY_COLOR[pet.rarity] } as CSSProperties}
     >
+      {pairFx && <PairStage fx={pairFx} pet={pet} species={def?.spriteFolder ?? pet.defId} />}
       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
         <button
           ref={spriteRef}
@@ -404,7 +419,7 @@ function PetCard({ pet, revivePhase }: {
         {happiness < 100 && <span className="tiny muted"> (scaled down by happiness)</span>}
       </p>
 
-      <div className="harvest-stock-row pet-happiness-row" style={{ marginBottom: 8 }}>
+      <div className={`harvest-stock-row pet-happiness-row ${pairFx?.to ? 'ppx-wake' : ''}`} style={{ marginBottom: 8 }}>
         <span className="tiny muted" style={{ width: 70 }}>Happiness</span>
         <div className="harvest-stock-bar">
           <span style={{ width: `${heldHappiness ?? happiness}%` }} />
@@ -480,11 +495,15 @@ function PetCard({ pet, revivePhase }: {
             value={boundHero?.id ?? ''}
             onChange={(e) => {
               const heroId = e.target.value;
+              const before = boundHero ?? null;
               if (!heroId) {
                 if (boundHero) engine.unequipPet(boundHero.id);
               } else {
                 engine.equipPet(heroId, pet.uid);
               }
+              // Patch 0428 -- only play what actually happened.
+              const after = engine.state.heroes.find((h) => h.equippedPetId === pet.uid) ?? null;
+              if (after?.id !== before?.id) playPair(before, after);
             }}
             style={{ flex: 1, minWidth: 0, background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--parchment)', padding: '4px 6px' }}
           >

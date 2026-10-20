@@ -5,6 +5,7 @@ import { backgroundSrc } from '../../game/settings';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { AH_READY, AhConnectionStatus, checkAhConnection } from '../../game/auctionHouse';
 import { MailboxModal } from '../MailboxModal';
+import { registerFlyTarget } from '../flyTarget';
 import { AuctionHouseTrade } from '../AuctionHouseTrade';
 
 /**
@@ -94,7 +95,7 @@ export function AuctionHousePanel() {
       <div className="tab-scene-content">
         <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
           <h2 style={{ margin: 0 }}>Auction House</h2>
-          <button className="btn-ghost mailbox-btn" onClick={() => setMailboxOpen(true)}>
+          <button className="btn-ghost mailbox-btn" onClick={() => setMailboxOpen(true)} ref={(el) => registerFlyTarget('mailbox', el)}>
             📬 Mailbox
             {mailboxCount > 0 && <span className="btn-count-badge">{mailboxCount > 99 ? '99+' : mailboxCount}</span>}
           </button>

@@ -34775,3 +34775,96 @@ web build:
 - Re-level on the two-box art (Lv 12 → 24, 50% → 100%), its hover card,
   and a run (arrows chase on each level, the replica fills, then FULL
   STRENGTH).
+
+### Recipe learning, pet pairing, new Lore pages and Auction House animated; buyers now pay (patch 0428)
+```discord-update
+Dev Update | Patch 0428
+
+- Added a learning moment for recipes: the scroll unrolls, its contents ink in, LEARNED is stamped across it, and it flies off to the Vendors tab, telling you who can craft it
+- Added a pairing moment for pets: your hero walks into the pet's card, the pet hops, a heart pops and a "Paired with" ribbon drops (and an outgoing hero says "See you!" on the way out)
+- Added "new pages" to Lore and Discovered Quests: newly unlocked chains, raids and set pieces ink in with a quill the first time you see them, and keep a red NEW tab until you open them
+- Added Auction House moments: listing wraps your item in paper, ties and seals it and posts it to My Listings; buying stamps the card YOURS and sends it to your mailbox as a letter
+- Fixed buying on the Auction House not charging you: the price is now taken from your gold or Scrap when the purchase goes through
+```
+
+Second half of the "milestones that pass quietly" list. All four were mocked up on
+the Claude Design canvas (RecipeLearn, PetPair, NewEntry and AuctionHouse
+boards) and signed off, with the saved version of new-entry tracking chosen.
+The fifth item, the vendor reputation level-up, shipped in 0425.
+
+**Recipe learn (new `src/ui/recipeFx.tsx`).**
+- `RecipeScrollCard`'s Learn now reports back to `EquipmentPanel`
+  (`onLearned`), only when `unlockedRecipes` actually grew. The panel
+  mounts `RecipeLearnFx`, because the card itself can unmount once its
+  last scroll is used.
+- The overlay is a fixed, centred scroll that unrolls, then inks in the
+  recipe's name, description and costs (materials, Scrap, gold) plus
+  "Craft it at …". `RECIPE_VENDOR` follows VendorsPanel's routing: gear
+  at the Blacksmith, supplies and charms at the Alchemist, enchant and
+  gem crafting at the Enchanter.
+- LEARNED is stamped at 1.6s. The scroll rolls up and flies to a new
+  `'vendors'` fly target, registered on the Vendors nav tab in
+  MenuWindow next to the existing `'inventory'` one.
+
+**Pet pairing (new `src/ui/pairFx.tsx`).**
+- The "Paired with" dropdown in HatcheryPanel's `PetCard` compares the
+  bound hero before and after the engine call, so only a real change
+  plays.
+- `PairStage` lays a short scene over the top of the card. An outgoing
+  hero says "See you!" and walks off. An incoming hero (their own
+  `HeroSprite`, walking then idle, facing the pet) walks in from the
+  right. The pet hops, a heart pops, a dotted tether draws, and a
+  "Paired with <name>" ribbon drops. The card glows and the happiness bar
+  pulses awake.
+- It removes itself after `pairFxDuration`, and is never mounted with
+  motion off.
+
+**New pages (new `src/ui/entryInk.tsx`, new `src/game/data/entryScopes.ts`).**
+- New saved state: `entryMarks` (`${scope}|${id}` → 1 shown, 2 opened)
+  and `entryScopes`. `SAVE_VERSION` goes 72 → 73; migration 72 seeds
+  both empty.
+- A fresh save starts with every scope adopted, so its first entries do
+  ink in. An existing save adopts each list silently the first time it's
+  opened (`engine.adoptEntryScope` marks everything already there as
+  opened), so a long-running guild's history doesn't all read as new.
+- `useEntryInk(scope, ids)` inks every entry it hasn't shown before:
+  sepia art fading up, the name and line wiping in with steps, and a
+  quill crossing, 650 ms apart. It then calls `markEntriesShown`, so the
+  ink never replays. The red NEW tab stays until `markEntryOpened`, which
+  fires when the entry is clicked.
+- Wired into:
+  - Discovered Quests board rows (`dq-board`, by chain id);
+  - Lore Story Quests (`lore-quests`; `ip:` and `done:` ids, so finishing
+    a chain inks its completed page in again);
+  - Lore Story Raids (`lore-raids`);
+  - Lore Collection (`lore-collection`, per set piece: new piece names
+    ink in, and the set card wears NEW for that visit; leaving the tab
+    counts as having seen them, since there's nothing to open).
+
+**Auction House (AuctionHouseTrade).**
+- **Listing:** after the server confirms, the deposit flies from the
+  header counter into Confirm. The form card is wrapped in kraft paper,
+  tied with twine and sealed, then flies into the My Listings tab button
+  (`data-ah-mine`), and the form closes after the flight.
+- **Buying:** after the server confirms, coins fly into Buy and the card
+  is stamped YOURS. It folds and a ✉ flies to a new `'mailbox'` fly
+  target (the AH page's Mailbox button). The list refreshes once that has
+  played.
+
+**Fixed: AH purchases were free.** `engine.buyListing` never charged the
+buyer, and neither does the server's buyout route: it moves the item and
+pays the seller, but gold and Scrap live in the local save. It now takes
+`(listingId, price, currency)`, refuses up front if you can't afford it,
+and deducts on success, the same "server confirms, then touch local
+state" rule `listEquipmentForSale` uses for the deposit. Gold spent is
+counted in `stats.goldSpent` like any other purchase.
+
+**Tested:** `npx tsc --noEmit` and `npm run build` pass. Headless in the
+web build (with a throwaway build that exposed the engine for setup):
+- learning a recipe (unroll, ink, stamp, fly to Vendors);
+- pairing and unpairing a pet (walk in, ribbon, "See you!");
+- two newly completed chains inking in on Lore, one after the other, with
+  NEW tabs. Marks went 1 → 2 on the one opened, and the other kept NEW.
+The Auction House needs the live server, so its animations and the
+buyer-charge fix were type-checked and built but not clicked through
+here.

@@ -8680,3 +8680,133 @@ button.harvest-item:hover {
 .thx-to { font-variant-numeric: tabular-nums; font-weight: 700; }
 .thx-to.up { color: var(--moss); }
 .thx-to.same { color: var(--muted); font-weight: 400; }
+
+/* ======================================================================
+ * Patch 0428 -- recipe learn (rcx), pet pairing (ppx), new entries (nex),
+ * Auction House (ahx). Root classes carry `fx-` for Reduce motion.
+ * ==================================================================== */
+.rcx-overlay { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.rcx-scroll { position: relative; width: 320px; height: 330px; --paper: #e8dcc0; --paper-dk: #b8a47c; }
+.rcx-rod { position: absolute; left: 0; right: 0; top: 0; height: 16px; border-radius: 8px; z-index: 2; background: linear-gradient(var(--paper-dk), var(--paper) 45%, var(--paper-dk)); box-shadow: 0 2px 4px rgba(0, 0, 0, .5); }
+.rcx-rod.bottom { top: 300px; animation: rcx-rod calc(var(--fx-t) * 520) cubic-bezier(.3, 0, .2, 1) both; }
+@keyframes rcx-rod { from { top: 8px; } to { top: 300px; } }
+.rcx-sheet {
+  position: absolute; left: 12px; right: 12px; top: 8px; height: 300px; overflow: hidden; color: #3a2e20;
+  background: var(--paper) radial-gradient(ellipse at 30% 20%, #f2e8d0, transparent 60%);
+  box-shadow: inset 0 0 18px rgba(120, 90, 50, .4);
+  animation: rcx-unroll calc(var(--fx-t) * 520) cubic-bezier(.3, 0, .2, 1) both;
+}
+@keyframes rcx-unroll { from { height: 0; } to { height: 292px; } }
+.rcx-scroll.closing .rcx-sheet { animation: rcx-rollup calc(var(--fx-t) * 380) ease-in forwards; }
+.rcx-scroll.closing .rcx-rod.bottom { animation: rcx-rodup calc(var(--fx-t) * 380) ease-in forwards; }
+@keyframes rcx-rollup { from { height: 292px; } to { height: 0; } }
+@keyframes rcx-rodup { from { top: 300px; } to { top: 8px; } }
+.rcx-scroll.fly { animation: rcx-fly calc(var(--fx-t) * 560) cubic-bezier(.5, 0, .6, 1) forwards; }
+@keyframes rcx-fly { to { transform: translate(var(--dx, 0), var(--dy, -200px)) scale(.12) rotate(30deg); opacity: 0; } }
+.rcx-inner { padding: 18px 20px; }
+.rcx-ink { clip-path: inset(0 100% 0 0); animation: rcx-ink calc(var(--fx-t) * 500) steps(14) both; }
+@keyframes rcx-ink { to { clip-path: inset(0 0 0 0); } }
+.rcx-title { font-family: var(--font-display); font-size: 1.25rem; color: #2f4f86; }
+.rcx-desc { font-size: .66rem; margin: 4px 0 12px; color: #5a4a36; }
+.rcx-mat { display: flex; justify-content: space-between; font-size: .72rem; padding: 4px 0; border-bottom: 1px dashed rgba(120, 95, 60, .6); }
+.rcx-note { font-size: .66rem; margin-top: 12px; color: #4a3c2c; }
+.rcx-stamp {
+  position: absolute; right: 22px; bottom: 26px; font-family: var(--font-display); font-size: 1.25rem; letter-spacing: .14em;
+  text-transform: uppercase; color: #3d7a3a; border: 3px solid currentColor; border-radius: 6px; padding: 2px 12px; transform: rotate(-8deg);
+  animation: qsx-stamp calc(var(--fx-t) * 380) cubic-bezier(.3, 1.6, .5, 1) both;
+}
+
+/* Pet pairing (pairFx.tsx). */
+.ppx-stage {
+  position: absolute; left: 0; right: 0; top: 0; height: 112px; z-index: 6; overflow: hidden; pointer-events: none;
+  border-radius: inherit; background: linear-gradient(#22303a, #1f2e22 72%, #1d2a1a);
+  animation: ppx-in calc(var(--fx-t) * 220) ease-out both;
+}
+@keyframes ppx-in { from { opacity: 0; } to { opacity: 1; } }
+.ppx-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; background: #26391f; }
+.ppx-pet { position: absolute; left: 20%; bottom: 12px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .6)); }
+.ppx-pet.hop { animation: ppx-hop calc(var(--fx-t) * 520) cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes ppx-hop { 40% { transform: translateY(-22px); } }
+.ppx-hero { position: absolute; bottom: 12px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .6)); }
+.ppx-hero.arrive { left: 110%; animation: ppx-arrive calc(var(--fx-t) * 700) linear both; }
+@keyframes ppx-arrive { from { left: 110%; } to { left: 48%; } }
+.ppx-hero.leave { left: 48%; animation: ppx-leave calc(var(--fx-t) * 700) cubic-bezier(.4, 0, .9, .6) both; }
+@keyframes ppx-leave { 0% { left: 48%; opacity: 1; } 90% { opacity: 1; } 100% { left: 115%; opacity: 0; } }
+.ppx-walking, .ppx-standing { display: block; }
+.ppx-walking { animation: ppx-hide 1ms linear both; }
+.ppx-standing { position: absolute; left: 0; bottom: 0; animation: ppx-show 1ms linear both; }
+@keyframes ppx-hide { to { visibility: hidden; } }
+@keyframes ppx-show { from { visibility: hidden; } to { visibility: visible; } }
+.ppx-bye { position: absolute; left: 50%; top: 14px; font-size: .68rem; color: var(--parchment); background: rgba(0, 0, 0, .45); border-radius: 8px; padding: 2px 8px; animation: ppx-pop calc(var(--fx-t) * 1000) ease-out both; }
+.ppx-heart { position: absolute; left: 36%; top: 18px; width: 22px; height: 20px; color: var(--pink); animation: ppx-pop calc(var(--fx-t) * 1300) cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes ppx-pop { 0% { opacity: 0; transform: scale(0); } 22% { opacity: 1; transform: scale(1.3); } 35% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-18px); } }
+.ppx-tether { position: absolute; left: 30%; width: 18%; bottom: 34px; height: 2px; background: repeating-linear-gradient(90deg, var(--pink) 0 6px, transparent 6px 10px); transform-origin: 0 50%; animation: ppx-tether calc(var(--fx-t) * 500) ease-out both; }
+@keyframes ppx-tether { from { transform: scaleX(0); opacity: 1; } to { transform: none; opacity: .8; } }
+.ppx-ribbon {
+  position: absolute; left: 50%; top: 8px; translate: -50% 0; white-space: nowrap;
+  font-family: var(--font-display); font-size: .66rem; letter-spacing: .08em; color: var(--parchment);
+  background: color-mix(in srgb, var(--pink) 55%, #3a1020); padding: 2px 12px; border-radius: 3px; box-shadow: 0 2px 4px rgba(0, 0, 0, .5);
+  animation: ppx-rib calc(var(--fx-t) * 500) cubic-bezier(.3, 1.6, .5, 1) both;
+}
+@keyframes ppx-rib { from { opacity: 0; transform: translateY(-12px) scaleX(.3); } to { opacity: 1; transform: none; } }
+.card.ppx-lit { animation: ppx-lit calc(var(--fx-t) * 900) ease-out calc(var(--fx-t) * 800) both; }
+@keyframes ppx-lit { 0%, 30% { box-shadow: inset 0 0 0 1px var(--pink), 0 0 20px color-mix(in srgb, var(--pink) 30%, transparent); } 100% { box-shadow: none; } }
+.ppx-wake .harvest-stock-bar { animation: ppx-wake calc(var(--fx-t) * 800) ease-out calc(var(--fx-t) * 1000) both; }
+@keyframes ppx-wake { 30% { box-shadow: 0 0 10px var(--pink); } }
+
+/* New Lore / Discovered Quests entries (entryInk.tsx). */
+.nex-entry { position: relative; }
+.nex-new { border-color: color-mix(in srgb, var(--brass) 55%, var(--panel-3)); }
+.nex-tab {
+  position: absolute; right: -1px; top: -1px; z-index: 3; pointer-events: none;
+  font-family: var(--font-display); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--parchment);
+  background: var(--blood); padding: 2px 8px 2px 10px; border-radius: 0 8px 0 9px; box-shadow: 0 2px 4px rgba(0, 0, 0, .5);
+  animation: nex-tab calc(var(--fx-t) * 420) cubic-bezier(.3, 1.6, .5, 1) both;
+}
+.nex-ink .nex-tab { animation-delay: calc(var(--nex-d, 0ms) + var(--fx-t) * 900); }
+@keyframes nex-tab { 0% { opacity: 0; transform: translateY(-12px) rotate(-8deg); } 100% { opacity: 1; transform: none; } }
+.nex-ink .raid-card-thumb { animation: nex-thumb calc(var(--fx-t) * 900) ease-out both; animation-delay: var(--nex-d, 0ms); }
+@keyframes nex-thumb { 0% { filter: sepia(1) brightness(1.3) contrast(.5); opacity: .35; } 60% { filter: sepia(.6); opacity: 1; } 100% { filter: none; opacity: 1; } }
+.nex-ink .raid-card-name, .nex-ink .raid-card-meta, .nex-ink .raid-card-body > p, .nex-piece {
+  clip-path: inset(0 100% 0 0); animation: nex-ink calc(var(--fx-t) * 700) steps(16) both;
+}
+.nex-ink .raid-card-name { animation-delay: calc(var(--nex-d, 0ms) + var(--fx-t) * 150); }
+.nex-ink .raid-card-meta, .nex-ink .raid-card-body > p { animation-delay: calc(var(--nex-d, 0ms) + var(--fx-t) * 380); }
+.nex-piece { display: inline-block; animation-delay: calc(var(--nex-d, 0ms) + var(--fx-t) * 150); }
+@keyframes nex-ink { to { clip-path: inset(0 0 0 0); } }
+.nex-quill {
+  position: absolute; top: 8px; left: 30%; z-index: 3; width: 16px; height: 26px; color: var(--parchment); pointer-events: none;
+  filter: drop-shadow(0 2px 2px #000); opacity: 0;
+  animation: nex-quill calc(var(--fx-t) * 1100) ease-in-out both; animation-delay: calc(var(--nex-d, 0ms) + var(--fx-t) * 120);
+}
+@keyframes nex-quill { 0% { opacity: 0; left: 30%; transform: rotate(10deg); } 10% { opacity: 1; } 50% { transform: rotate(-6deg) translateY(12px); } 90% { opacity: 1; } 100% { opacity: 0; left: 80%; transform: rotate(8deg) translateY(4px); } }
+
+/* Auction House list & buy (AuctionHouseTrade.tsx). */
+.ahx-bought { position: relative; overflow: hidden; animation: ahx-fold calc(var(--fx-t) * 380) cubic-bezier(.5, 0, .9, .5) calc(var(--fx-t) * 1150) forwards; }
+@keyframes ahx-fold { to { transform: scaleY(.08); opacity: .15; } }
+.ahx-stamp {
+  position: absolute; right: 14px; top: 50%; margin-top: -16px; z-index: 4; pointer-events: none;
+  font-family: var(--font-display); font-size: 1.05rem; letter-spacing: .14em; text-transform: uppercase; color: var(--moss);
+  border: 3px solid currentColor; border-radius: 6px; padding: 1px 10px; background: color-mix(in srgb, var(--panel) 70%, transparent);
+  transform: rotate(-8deg); animation: qsx-stamp calc(var(--fx-t) * 380) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 450) both;
+}
+.ahx-wrap { position: relative; overflow: hidden; }
+.ahx-parcel { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.ahx-paper {
+  position: absolute; inset: 0; transform-origin: 50% 0; transform: scaleY(0);
+  background: #9c8253 repeating-linear-gradient(115deg, transparent 0 12px, rgba(110, 85, 45, .45) 12px 13px);
+  animation: ahx-paper calc(var(--fx-t) * 420) cubic-bezier(.4, 0, .2, 1) calc(var(--fx-t) * 250) forwards;
+}
+@keyframes ahx-paper { to { transform: none; } }
+.ahx-twine { position: absolute; background: #e3d6b0; opacity: 0; }
+.ahx-twine.h { left: 0; right: 0; top: 50%; height: 3px; margin-top: -1px; transform: scaleX(0); animation: ahx-twine calc(var(--fx-t) * 260) ease-out calc(var(--fx-t) * 680) forwards; }
+.ahx-twine.v { top: 0; bottom: 0; left: 30%; width: 3px; transform: scaleY(0); animation: ahx-twine calc(var(--fx-t) * 260) ease-out calc(var(--fx-t) * 820) forwards; }
+@keyframes ahx-twine { to { opacity: 1; transform: none; } }
+.ahx-seal {
+  position: absolute; left: 30%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle at 40% 35%, #b8443a, #7a1f1a); box-shadow: 0 2px 3px rgba(0, 0, 0, .5);
+  animation: ahx-seal calc(var(--fx-t) * 360) cubic-bezier(.3, 1.6, .5, 1) calc(var(--fx-t) * 1000) forwards;
+}
+@keyframes ahx-seal { 0% { opacity: 0; transform: scale(2.4); } 100% { opacity: 1; transform: none; } }
+.ahx-post { animation: ahx-post calc(var(--fx-t) * 560) cubic-bezier(.5, 0, .6, 1) forwards; }
+@keyframes ahx-post { to { transform: translate(var(--dx, 0), var(--dy, -160px)) scale(.15) rotate(-12deg); opacity: 0; } }

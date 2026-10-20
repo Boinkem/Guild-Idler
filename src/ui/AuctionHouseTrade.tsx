@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentItem, Rarity } from '../game/types';
 import { RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, formatGold } from '../game/util';
@@ -7,6 +7,7 @@ import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { ItemIcon, ConsumableIcon } from './icons';
 import { ServerListingRow } from '../game/auctionHouse';
 import { GuildManager } from '../game/managers/GuildManager';
+import { flyIcon, flyTokens, fxMs, fxSpeed } from './purchaseFx';
 
 /**
  * Real Auction House browse/sell UI, patch 0411, extended patch 0413 to
@@ -24,7 +25,7 @@ export function AuctionHouseTrade() {
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <button className={tab === 'browse' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('browse')}>Browse</button>
         <button className={tab === 'sell' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('sell')}>Sell</button>
-        <button className={tab === 'mine' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('mine')}>My Listings</button>
+        <button className={tab === 'mine' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('mine')} data-ah-mine="">My Listings</button>
       </div>
       {tab === 'browse' ? <BrowseTab /> : tab === 'sell' ? <SellTab /> : <MyListingsTab />}
     </div>
@@ -61,11 +62,21 @@ function BrowseTab() {
   // rarity is filtered client-side below, no refetch needed for it.
   useEffect(() => { refresh(); }, [itemTypeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleBuy = async (id: string) => {
-    setBuyingId(id);
-    const ok = await engine.buyListing(id);
+  // Patch 0428 -- the buy moment: coins into the Buy button, YOURS
+  // stamped on the card, which folds into a letter for the mailbox (where
+  // the item actually arrives). The list refreshes once it's played.
+  const [boughtId, setBoughtId] = useState<string | null>(null);
+  const handleBuy = async (row: ServerListingRow, btn: HTMLElement | null) => {
+    setBuyingId(row.id);
+    const ok = await engine.buyListing(row.id, Number(row.price), row.currency === 'scrap' ? 'scrap' : 'gold');
     setBuyingId(null);
-    if (ok) refresh();
+    if (!ok) return;
+    if (fxSpeed() <= 0 || !btn) { refresh(); return; }
+    flyTokens(row.currency === 'scrap' ? 'scrap' : 'gold', btn, row.currency === 'scrap' ? 'shard' : 'coin', 6);
+    setBoughtId(row.id);
+    const card = btn.closest('.item-card');
+    window.setTimeout(() => { void flyIcon(card, 'mailbox', { glyph: '\u2709' }, { size: 30, duration: 560 }); }, fxMs(1150));
+    window.setTimeout(() => { setBoughtId(null); refresh(); }, fxMs(1750));
   };
 
   const visible = (listings ?? []).filter((row) => !rarityFilter || rarityOf(row) === rarityFilter);
@@ -101,7 +112,7 @@ function BrowseTab() {
       ) : (
         <div className="item-card-grid">
           {visible.map((row) => (
-            <ListingCard key={row.id} row={row} buying={buyingId === row.id} onBuy={() => handleBuy(row.id)} />
+            <ListingCard key={row.id} row={row} buying={buyingId === row.id} bought={boughtId === row.id} onBuy={(btn) => handleBuy(row, btn)} />
           ))}
         </div>
       )}
@@ -109,13 +120,13 @@ function BrowseTab() {
   );
 }
 
-function ListingCard({ row, buying, onBuy }: { row: ServerListingRow; buying: boolean; onBuy: () => void }) {
+function ListingCard({ row, buying, bought = false, onBuy }: { row: ServerListingRow; buying: boolean; bought?: boolean; onBuy: (btn: HTMLElement | null) => void }) {
   if (row.item_type === 'equipment') {
     const item = row.item_payload as EquipmentItem;
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return null;
     return (
-      <div className="item-card rarity-card">
+      <div className={`item-card rarity-card ${bought ? 'ahx-bought fx-ah' : ''}`}>
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} size={48} />
@@ -126,9 +137,10 @@ function ListingCard({ row, buying, onBuy }: { row: ServerListingRow; buying: bo
             <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
           </div>
         </div>
-        <button className="btn-primary item-card-action" disabled={buying} onClick={onBuy}>
-          {buying ? 'Buying...' : 'Buy'}
+        <button className="btn-primary item-card-action" disabled={buying || bought} onClick={(e) => onBuy(e.currentTarget)}>
+          {buying ? 'Buying...' : bought ? 'Bought' : 'Buy'}
         </button>
+        {bought && <span className="ahx-stamp">Yours</span>}
       </div>
     );
   }
@@ -137,7 +149,7 @@ function ListingCard({ row, buying, onBuy }: { row: ServerListingRow; buying: bo
   const def = payload.defId ? CONSUMABLE_BY_ID[payload.defId] : undefined;
   if (!def) return null;
   return (
-    <div className="item-card rarity-card">
+    <div className={`item-card rarity-card ${bought ? 'ahx-bought fx-ah' : ''}`}>
       <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
       <div className="item-card-summary">
         <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
@@ -146,9 +158,10 @@ function ListingCard({ row, buying, onBuy }: { row: ServerListingRow; buying: bo
           <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
         </div>
       </div>
-      <button className="btn-primary item-card-action" disabled={buying} onClick={onBuy}>
-        {buying ? 'Buying...' : 'Buy'}
+      <button className="btn-primary item-card-action" disabled={buying || bought} onClick={(e) => onBuy(e.currentTarget)}>
+        {buying ? 'Buying...' : bought ? 'Bought' : 'Buy'}
       </button>
+      {bought && <span className="ahx-stamp">Yours</span>}
     </div>
   );
 }
@@ -253,18 +266,45 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
       })()
     : CONSUMABLE_BY_ID[draft.consumableId]?.name ?? draft.consumableId;
 
+  // Patch 0428 -- the listing moment: the deposit flies in, the item is
+  // wrapped in paper, tied and sealed, then posted off to My Listings.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [post, setPost] = useState<'wrap' | 'fly' | null>(null);
+  const [flyTo, setFlyTo] = useState<{ dx: number; dy: number } | null>(null);
   const submit = async () => {
     const value = Number(price);
     setSubmitting(true);
+    const before = currency === 'gold' ? engine.state.gold : engine.state.scrap;
     const ok = draft.kind === 'equipment'
       ? await engine.listEquipmentForSale(draft.item.uid, currency, value, duration)
       : await engine.listConsumableForSale(draft.consumableId, currency, value, duration);
     setSubmitting(false);
-    if (ok) onDone();
+    if (!ok) return;
+    if (fxSpeed() <= 0) { onDone(); return; }
+    const paid = before - (currency === 'gold' ? engine.state.gold : engine.state.scrap);
+    if (paid > 0 && btnRef.current) flyTokens(currency, btnRef.current, currency === 'gold' ? 'coin' : 'shard', 3);
+    setPost('wrap');
+    window.setTimeout(() => {
+      const r = cardRef.current?.getBoundingClientRect();
+      const to = document.querySelector('[data-ah-mine]')?.getBoundingClientRect();
+      setFlyTo(r && to ? { dx: to.left + to.width / 2 - (r.left + r.width / 2), dy: to.top + to.height / 2 - (r.top + r.height / 2) } : { dx: 0, dy: -160 });
+      setPost('fly');
+    }, fxMs(1250));
+    window.setTimeout(onDone, fxMs(1850));
   };
 
   return (
-    <div className="card">
+    <div
+      ref={cardRef}
+      className={`card ${post ? 'ahx-wrap fx-ah' : ''} ${post === 'fly' ? 'ahx-post' : ''}`}
+      style={flyTo ? { ['--dx' as string]: `${flyTo.dx}px`, ['--dy' as string]: `${flyTo.dy}px` } : undefined}
+    >
+      {post && (
+        <span className="ahx-parcel" aria-hidden="true">
+          <span className="ahx-paper" /><span className="ahx-twine h" /><span className="ahx-twine v" /><span className="ahx-seal" />
+        </span>
+      )}
       <div className="card-title">List: {name}</div>
       <div className="row" style={{ gap: 8, margin: '10px 0' }}>
         <button className={currency === 'gold' ? 'btn-primary' : 'btn-ghost'} onClick={() => setCurrency('gold')}>Gold</button>
@@ -286,7 +326,7 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
         </p>
       )}
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn-primary" disabled={submitting || !price} onClick={submit}>
+        <button ref={btnRef} className="btn-primary" disabled={submitting || !price || !!post} onClick={submit}>
           {submitting ? 'Listing...' : 'Confirm listing'}
         </button>
         <button onClick={onDone} disabled={submitting}>Cancel</button>

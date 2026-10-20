@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 72;
+export const SAVE_VERSION = 73;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2215,6 +2215,19 @@ export interface GameState {
    * `claimed_at` column, which a lost ack would leave unset.
    */
   claimedServerMailboxIds: string[];
+  /**
+   * Patch 0428 -- which Lore / Discovered Quests entries the player has
+   * already been shown (1, the "new page" ink-in has played) or opened
+   * (2, its NEW tab is gone). Keyed `${scope}|${entryId}`. See
+   * ui/entryInk.tsx.
+   */
+  entryMarks: Record<string, number>;
+  /** Patch 0428 -- scopes (a list's own id) the marks above are tracking.
+   *  A scope missing from here is adopted silently the first time it's
+   *  shown: everything already in it counts as seen, so an old save
+   *  doesn't light up its whole history as "new". A fresh save starts
+   *  with every scope adopted, so its first entries do ink in. */
+  entryScopes: string[];
 
   /**
    * Contract offers, one pool per hero (keyed by hero id) -- each hero

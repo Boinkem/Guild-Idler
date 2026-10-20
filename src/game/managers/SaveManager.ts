@@ -6,6 +6,7 @@ import { UPGRADES, vendorUpgrades } from '../data/progression';
 import { BARD_TRACKS } from '../data/bard';
 import { ACHIEVEMENT_BY_ID } from '../data/achievements';
 import { NODE_ORDER } from '../data/materials';
+import { ENTRY_SCOPES } from '../data/entryScopes';
 import { Tuning } from '../data/tuning';
 import { PeddlerManager } from './PeddlerManager';
 import { HarvestManager } from './HarvestManager';
@@ -134,6 +135,8 @@ export function createInitialState(now = Date.now()): GameState {
     buyback: [],
     mailbox: [],
     claimedServerMailboxIds: [],
+    entryMarks: {},
+    entryScopes: [...ENTRY_SCOPES],
     // The starter hero's board isn't left empty for the normal
     // procedural generator to fill -- it's seeded directly with the
     // scripted tutorial quest (see quests.ts's own tutorialQuestOffer
@@ -1548,6 +1551,11 @@ const MIGRATIONS: Record<number, Migration> = {
    *  patch, same `?? []` reasoning migration 69 already used for the
    *  mailbox array itself. */
   71: (save) => ({ ...save, version: 72, claimedServerMailboxIds: save.claimedServerMailboxIds ?? [] }),
+  /** Patch 0428 -- seen/opened marks for Lore and Discovered Quests
+   *  entries. An existing save adopts no scopes up front: each list is
+   *  adopted silently the first time it's opened (see entryScopes), so a
+   *  long-running guild's history doesn't all read as new. */
+  72: (save) => ({ ...save, version: 73, entryMarks: save.entryMarks ?? {}, entryScopes: save.entryScopes ?? [] }),
 };
 
 export const SaveManager = {
