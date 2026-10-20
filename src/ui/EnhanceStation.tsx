@@ -3,7 +3,7 @@ import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { EquipmentManager, MAX_PLUS } from '../game/managers/EquipmentManager';
 import { backgroundSrc } from '../game/settings';
-import { formatGold, formatModValue, scaleMods, MOD_LABEL, STAT_LABEL } from '../game/util';
+import { formatGold, formatModValue, scaleMods, MOD_LABEL, STAT_LABEL, RARITY_COLOR } from '../game/util';
 import { Modifiers, Stats } from '../game/types';
 import { ItemIcon } from './icons';
 import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
@@ -11,6 +11,8 @@ import type { PickerOption, Rect } from './CraftingStation';
 import { buyWithFx, fxMs, fxSpeed, SealStamp } from './purchaseFx';
 import { at } from './resultFx';
 import { RelevelPanel } from './RelevelPanel';
+import { TransformHover } from './transformHover';
+import type { TransformRow } from './transformHover';
 
 /**
  * Two slots now (patch 0360, direct design request, with commissioned
@@ -151,6 +153,16 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   const nextMods = scaleMods(baseMods, nextScale);
   const currentStats = scaleStats(baseStats, currentScale);
   const nextStats = scaleStats(baseStats, nextScale);
+  // Patch 0427 -- the right box's hover card: each line, now -> after.
+  const hoverRows: TransformRow[] = !item ? [] : [
+    { key: 'dur', label: 'Durability cap', from: `${durAt(basePlus)}`, to: `${durAt(goal)}` },
+    ...(Object.keys(MOD_LABEL) as (keyof Modifiers)[])
+      .filter((k) => (currentMods[k] ?? 0) !== 0 || (nextMods[k] ?? 0) !== 0)
+      .map((k) => ({ key: k, label: MOD_LABEL[k], from: formatModValue(k, Math.round((currentMods[k] ?? 0) * 10) / 10), to: formatModValue(k, Math.round((nextMods[k] ?? 0) * 10) / 10) })),
+    ...(Object.keys(STAT_LABEL) as (keyof Stats)[])
+      .filter((k) => (currentStats[k] ?? 0) !== 0 || (nextStats[k] ?? 0) !== 0)
+      .map((k) => ({ key: k, label: STAT_LABEL[k], from: `+${Math.round(currentStats[k] ?? 0)}`, to: `+${Math.round(nextStats[k] ?? 0)}` })),
+  ];
   const crosses = item ? [5, 10].filter((m) => m > basePlus && m <= goal) : [];
 
   const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
@@ -259,17 +271,30 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
               rect shape as SlotBox but with no click handler, since
               there's nothing to choose here, just something to look at. */}
           <div
-            className={`craft-slot enhance-preview-slot ${def && item && !maxed ? 'filled' : ''}`}
+            className={`craft-slot enhance-preview-slot thx-slot ${def && item && !maxed ? 'filled' : ''}`}
+            tabIndex={def && item && !maxed ? 0 : -1}
             style={{
               left: `${RIGHT_SLOT_RECT.left}%`, top: `${RIGHT_SLOT_RECT.top}%`,
               width: `${RIGHT_SLOT_RECT.width}%`, height: `${RIGHT_SLOT_RECT.height}%`,
             }}
           >
             {def && item && !maxed ? (
-              <span className="enhance-slot-icon ehx-preview">
-                <ItemIcon slot={def.slot} icon={def.icon} size={72} />
-                <span className="ehx-plus">+{goal}</span>
-              </span>
+              <>
+                <span className="enhance-slot-icon ehx-preview">
+                  <ItemIcon slot={def.slot} icon={def.icon} size={72} />
+                  <span className="ehx-plus">+{goal}</span>
+                </span>
+                {!busy && (
+                  <TransformHover
+                    title={def.name}
+                    fromLabel={`+${basePlus}`}
+                    toLabel={`+${goal}`}
+                    fromColor={RARITY_COLOR[def.rarity]}
+                    toColor={RARITY_COLOR[def.rarity]}
+                    rows={hoverRows}
+                  />
+                )}
+              </>
             ) : null}
           </div>
 

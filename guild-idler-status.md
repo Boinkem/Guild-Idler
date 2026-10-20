@@ -34728,3 +34728,50 @@ setup):
   deltas and "Better roll".
 A stashed item's refusal and the Herbs-short state were type-checked
 but not clicked through.
+
+### Re-level moved onto the two-box Enhance art, hover to see the change (patch 0427)
+```discord-update
+Dev Update | Patch 0427
+
+- Changed the Re-level tab to use the same two-box anvil as Enhance: your item on the left, and on the right a copy of it at the level it's becoming
+- Added a hover card to that right-hand box in both Enhance tabs: hover the copy to see every stat as it is now and what it turns into
+- Changed the Re-level animation so the arrows light up and the glow carries across into the new copy at every level gained
+```
+
+Direct correction after 0426: `gearenhance.jpg` (which 0426 built the
+Re-level tab on) is old art. The current art is `enhance.jpg`'s two-box
+layout, and it's meant for both Enhance and gear re-leveling. The left box
+takes your item, and the right box is a replica of it as it will be.
+Hovering the replica shows the before/after.
+
+- **`RelevelPanel`** now uses `./lore/crafting/enhance.jpg` (through
+  `backgroundSrc`, so the bright mood works too) with the same rects as
+  EnhanceStation (`LEFT_RECT` / `RIGHT_RECT`). The item sits on the left
+  with "Lv N". The right box holds a faded green replica labelled with the
+  target level; it's empty once the item matches its wearer. The level
+  readout above and the Stat strength bar below are unchanged and sit
+  inside the art's panel.
+- **Per-level beat:** each level gained re-keys a quick `.ehx-beat` (the
+  three arrows plus the streak), reusing the Refine tab's CSS. The quench
+  steam and flash now land on the right box (the flash reuses
+  `.ehx-flash`; the old `.rlx-flash` is gone).
+- **New `src/ui/transformHover.tsx`.**
+  - `TransformHover` is a small card on the right box, shown on
+    hover/focus (the box is focusable). It shows the item name, a header
+    "from → to", and one row per line with an unchanged value muted and a
+    changed one green.
+  - Refine's header shows "+N → +M" in the item's rarity colour, with
+    rows for durability cap, mods and stats.
+  - Re-level's header shows "Lv · strength%" for each side, coloured by
+    `strengthColor` (red, amber, brass, then green at full strength), with
+    rows for the item's own stats and mods at each level.
+  - Neither action changes rarity, so the "quality colour" is the rarity
+    on Refine and the strength on Re-level.
+  - The card is hidden while a run is animating.
+
+**Tested:** `npx tsc --noEmit` and `npm run build` pass. Headless in the
+web build:
+- the Refine hover card (+0 → +4);
+- Re-level on the two-box art (Lv 12 → 24, 50% → 100%), its hover card,
+  and a run (arrows chase on each level, the replica fills, then FULL
+  STRENGTH).

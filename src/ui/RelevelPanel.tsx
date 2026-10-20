@@ -9,6 +9,10 @@ import { ItemIcon } from './icons';
 import { PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 import { buyWithFx, fxMs, fxSpeed } from './purchaseFx';
+import { at } from './resultFx';
+import { useSettings } from './useSettings';
+import { backgroundSrc } from '../game/settings';
+import { TransformHover, strengthColor } from './transformHover';
 
 /**
  * Patch 0426 -- the Enhance station's second tab: Blacksmith re-leveling.
@@ -18,9 +22,11 @@ import { buyWithFx, fxMs, fxSpeed } from './purchaseFx';
  * replaced, never brought back. This is that missing station, mocked up on
  * the Design canvas ("Enhance — Re-level tab") and signed off:
  *
- *  - one central slot on the station's own art (gearenhance.jpg, which was
- *    in the repo unused), the item's level above it and a "Stat strength"
- *    bar below it (HeroManager.gearRelevance -- itemLevel / heroLevel,
+ *  - (patch 0427) the same two-box art as Refine (it was first built on
+ *    gearenhance.jpg, which turned out to be old art): the item on the
+ *    left, its replica at the target level on the right (hover it for the
+ *    before/after), the item's level above them and a "Stat strength"
+ *    bar below them (HeroManager.gearRelevance -- itemLevel / heroLevel,
  *    floored), so it's obvious what re-leveling buys;
  *  - capped at the WEARER's level (direct decision), so only equipped
  *    items can be picked; a stashed item has nothing to aim at;
@@ -34,10 +40,13 @@ import { buyWithFx, fxMs, fxSpeed } from './purchaseFx';
  * With motion off the run applies straight away.
  */
 
-/** Hand-measured against gearenhance.jpg's 1402x1122 canvas. */
-const SLOT_RECT: Rect = { left: 40, top: 37.2, width: 20, height: 25 };
-/** No bright variant of this art exists yet, so it's used as-is. */
-const RELEVEL_BG = './lore/crafting/gearenhance.jpg';
+/** Patch 0427 -- the same two-box enhance.jpg art the Refine tab uses
+ *  (gearenhance.jpg was old art): the left box holds the item, the right
+ *  box is its replica at the target level. Same hand-measured rects as
+ *  EnhanceStation's LEFT/RIGHT_SLOT_RECT. */
+const LEFT_RECT: Rect = { left: 29.7, top: 39.3, width: 14.3, height: 17.5 };
+const RIGHT_RECT: Rect = { left: 56.3, top: 39.3, width: 14.3, height: 17.5 };
+const RELEVEL_BG = './lore/crafting/enhance.jpg';
 
 function itemLevelOf(item: EquipmentItem): number {
   const def = EQUIPMENT_BY_ID[item.defId];
@@ -65,6 +74,7 @@ function linesAt(item: EquipmentItem, itemLevel: number, heroLevel: number): { k
 
 export function RelevelPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
   const engine = useEngine();
+  const { settings } = useSettings();
   const state = engine.state;
   const [uid, setUid] = useState('');
   const [openPicker, setOpenPicker] = useState(false);
@@ -148,7 +158,7 @@ export function RelevelPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) 
 
   return (
     <>
-      <div className={`craft-scene rlx-scene ${run?.quench && full ? 'rlx-shake' : ''}`} style={{ backgroundImage: `url(${RELEVEL_BG})` }}>
+      <div className={`craft-scene rlx-scene ${run?.quench && full ? 'rlx-shake' : ''}`} style={{ backgroundImage: `url(${backgroundSrc(RELEVEL_BG, settings.backgroundMood)})` }}>
         {item && hero && (
           <div className="rlx-read" aria-live="polite">
             <span className="rlx-lbl">Lv</span>
@@ -156,11 +166,11 @@ export function RelevelPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) 
               {run?.tick ? <span className="rlx-old">{run.prev}</span> : null}
               <span className="rlx-new">{shownLv}</span>
             </span>
-            {!full && shownLv < goal && <><span className="rlx-arrow">{'→'}</span><span className="rlx-goal">{goal}</span></>}
+            {!full && shownLv < goal && <><span className="rlx-arrow">{'\u2192'}</span><span className="rlx-goal">{goal}</span></>}
           </div>
         )}
         <SlotBox
-          rect={SLOT_RECT}
+          rect={LEFT_RECT}
           disabled={busy}
           filled={def && item ? (
             <span className={`enhance-slot-icon rlx-item ${hero && relNow < 1 && !busy ? 'dim' : ''}`}>
@@ -177,12 +187,46 @@ export function RelevelPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) 
           label="Choose a worn item to re-level"
           onOpen={() => setOpenPicker(true)}
         />
+        {/* The replica: the same item at the target level. Hover it to see
+            what it was and what it's turning into. */}
+        <div
+          className={`craft-slot enhance-preview-slot thx-slot ${def && item && hero && !full ? 'filled' : ''}`}
+          tabIndex={def && item && hero && !full ? 0 : -1}
+          style={{ left: `${RIGHT_RECT.left}%`, top: `${RIGHT_RECT.top}%`, width: `${RIGHT_RECT.width}%`, height: `${RIGHT_RECT.height}%` }}
+        >
+          {def && item && hero && !full ? (
+            <>
+              <span className="enhance-slot-icon ehx-preview">
+                <ItemIcon slot={def.slot} icon={def.icon} size={72} />
+                <span className="ehx-plus">Lv {goal}</span>
+              </span>
+              {!busy && (
+                <TransformHover
+                  title={itemDisplayName(item, def)}
+                  fromLabel={`Lv ${shownLv} · ${Math.round(relNow * 100)}%`}
+                  toLabel={`Lv ${goal} · ${Math.round(relGoal * 100)}%`}
+                  fromColor={strengthColor(relNow)}
+                  toColor={strengthColor(relGoal)}
+                  rows={nowLines.map((l) => ({ key: l.key, label: l.label, from: l.value, to: goalLines.find((g) => g.key === l.key)?.value ?? l.value }))}
+                />
+              )}
+            </>
+          ) : null}
+        </div>
+        {/* One quick forge beat per level: the arrows chase and a streak
+            carries the glow into the replica. */}
+        {run?.tick ? (
+          <div key={run.tick} className="ehx-beat quick fx-forge" aria-hidden="true">
+            {[0, 1, 2].map((i) => <span key={i} className="ehx-chev" style={at(i * 45, { left: `${46.2 + i * 2.4}%` })} />)}
+            <span className="ehx-streak" style={at(120)} />
+          </div>
+        ) : null}
         {run?.quench && (
           <>
-            <span className="rlx-steam" aria-hidden="true">
+            <span className="rlx-steam" style={{ left: `${RIGHT_RECT.left + RIGHT_RECT.width / 2}%` }} aria-hidden="true">
               {[-24, -6, 14, 28].map((x, i) => <i key={x} style={{ ['--x' as string]: `${x}px`, animationDelay: `calc(var(--fx-t) * ${i * 60})` }} />)}
             </span>
-            <span className="rlx-flash" aria-hidden="true" />
+            <span className="ehx-flash" aria-hidden="true" />
           </>
         )}
         {item && hero && (

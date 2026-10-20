@@ -8615,7 +8615,6 @@ button.harvest-item:hover {
 .rlx-steam { position: absolute; left: 50%; top: 40%; width: 0; height: 0; z-index: 4; pointer-events: none; }
 .rlx-steam i { position: absolute; width: 26px; height: 26px; margin: -13px; border-radius: 50%; background: radial-gradient(circle, rgba(235, 235, 235, .7), transparent 70%); opacity: 0; animation: rlx-steam calc(var(--fx-t) * 1000) ease-out both; }
 @keyframes rlx-steam { 0% { opacity: .9; transform: translate(var(--x), 0) scale(.4); } 100% { opacity: 0; transform: translate(calc(var(--x) * 1.8), -70px) scale(1.8); } }
-.rlx-flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; background: radial-gradient(circle at 50% 49%, rgba(230, 240, 255, .8), transparent 32%); opacity: 0; animation: ehx-heat calc(var(--fx-t) * 600) ease-out both; }
 .rlx-meter { position: absolute; left: 30%; right: 30%; top: 68%; z-index: 2; }
 .rlx-cap { display: flex; justify-content: space-between; font-size: .62rem; color: var(--muted); margin-bottom: 4px; text-shadow: 0 1px 2px #000; }
 .rlx-cap b { color: var(--parchment); font-variant-numeric: tabular-nums; }
@@ -8659,3 +8658,25 @@ button.harvest-item:hover {
 .rrx-verdict { font-size: .62rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--panel-3); color: var(--muted); animation: repx-perk calc(var(--fx-t) * 500) cubic-bezier(.3, 1.8, .5, 1); }
 .rrx-verdict.up { color: var(--moss); border-color: var(--moss); }
 .rrx-verdict.dn { color: var(--blood); border-color: var(--blood); }
+
+/* Patch 0427 -- the Enhance station's right-box "what it's becoming" card
+ * (transformHover.tsx), shown on hover/focus of the replica, both tabs. */
+.thx-slot { overflow: visible; }
+.thx-slot:focus-visible { outline: 1px solid var(--moss); outline-offset: 2px; }
+.thx-card {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); z-index: 20; translate: -50% 0;
+  display: none; flex-direction: column; gap: 3px; min-width: 230px; padding: 8px 10px; white-space: nowrap;
+  background: color-mix(in srgb, var(--panel) 96%, transparent); border: 1px solid var(--brass-dim);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .6); pointer-events: none; text-align: left;
+}
+.thx-slot:hover .thx-card, .thx-slot:focus-within .thx-card { display: flex; animation: thx-in calc(var(--fx-t) * 160) ease-out both; }
+@keyframes thx-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.thx-title { font-size: .72rem; font-weight: 700; color: var(--parchment); }
+.thx-head { display: flex; align-items: baseline; gap: 6px; font-size: .68rem; padding-bottom: 4px; border-bottom: 1px solid var(--panel-3); }
+.thx-head i, .thx-row i { font-style: normal; color: var(--muted); }
+.thx-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: baseline; font-size: .62rem; }
+.thx-k { color: var(--muted); }
+.thx-from { color: var(--parchment); opacity: .8; font-variant-numeric: tabular-nums; }
+.thx-to { font-variant-numeric: tabular-nums; font-weight: 700; }
+.thx-to.up { color: var(--moss); }
+.thx-to.same { color: var(--muted); font-weight: 400; }
