@@ -279,6 +279,7 @@
       "caster": "Wards and rites learned alongside the sword, not instead of it, prayer and steel drawn in the same breath."
     },
     "milestoneGoldCost": 0,
+    "displayScale": 1.32,
     "displayOffsetX": 21,
     "displayOffsetY": 22
   },

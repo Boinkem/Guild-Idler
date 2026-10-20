@@ -16,6 +16,8 @@ public/dlc/*/*/
 
 # Licensed sprite pack: usable in the project, but not redistributable as files.
 # Regenerate with:  python3 tools/recolor.py --src <pack> --out public/heroes
+# 1x copies of hero sheets saved by tools/upscale_heroes.py --backup (same licensed art)
+backups/
 public/heroes
 
 # Regenerate with:  python3 tools/import_vendors.py --src <folder> --out public/vendors

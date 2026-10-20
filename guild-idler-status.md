@@ -35364,3 +35364,89 @@ Last God is also still free for a final set.
 
 **Not checked in the running game** -- worth a Heroic Silence the Loom
 clear and a look in the Wardrobe.
+
+### Sharper Adventurer, Knight, Gladiator and Samurai (patch 0435)
+```discord-update
+Dev Update | Sharper Heroes
+
+- Changed the Adventurer, Knight and Gladiator to double-resolution art: smoother curves on hair, capes, plumes and armour, at the same size on screen
+- Changed the Adventurer to have a thin dark outline like the rest of the roster
+- Changed the Samurai to stand as tall as the Knight and Adventurer instead of noticeably shorter, with doubled art so she stays sharp at the bigger size
+- Every skin those four classes have, from the tints to Paladin, Demonic and Void, got the same treatment, so nothing looks out of place
+```
+
+Direct request: the small source packs were the limit on how much detail
+a skin could add. Measured on-screen pixel size per class (HeroSprite at
+height 96, times displayScale): adventurer 2.66 screen px per sprite px,
+gladiator 2.53, knight 2.09, against 1.1-1.6 for most of the roster
+(huge knight 0.56). Doubling those three lands them at 1.33 / 1.27 /
+1.05 -- inside the range the rest already use -- so this *reduces* the
+mixed-pixel-size look rather than adding to it. Decision in
+conversation: do all three, every skin, now; Champion (parked, see
+below) stays out of it.
+
+**Samurai (added in the same patch, from the roster review).** Her
+figure only fills ~62% of her 60px frame (the frame leaves room for
+jump/attack poses), so she drew ~59px tall against ~76-80px for the
+knight, adventurer, dwarf and pyromancer. Decision in conversation:
+match the knight/adventurer, doubling resolution if that's what it
+takes. hero-classes.json `samurai.displayScale` 1 -> **1.32** (figure
+~78px), and her art doubled with the same tool (70x60 -> 140x120, all
+84 sheets) so the bigger draw lands at ~1.06 screen px per sprite px
+instead of a chunky ~2.1. Her existing displayOffsetX/Y (21/22) are
+percentages of the sprite's own box, so they scale with displayScale
+and still put her feet on the ground line -- unchanged. The pack uses
+selective outlining (dark in places, coloured edges like the purple
+hair elsewhere); the tool only thins true dark outline, so that style
+is kept. Her frame box is now ~148px wide at height 96 -- wider than
+the knight's 134, narrower than the werewolf's ~190, which already
+uses displayScale 1.35 without trouble.
+
+**Art + one data value + one tool -- no game code changes.** HeroSprite (and the
+DevTool sprite lab) size everything from manifest frameW/frameH, so
+doubling the sheets and the manifest entry draws them at exactly the
+same size. Nothing else reads hero frame sizes (checked: Pet/Vendor/
+Grimsby sprites have their own manifests; no direct heroes/ sheet use).
+
+**`tools/upscale_heroes.py`** (new; `python tools/upscale_heroes.py
+adventurer knight gladiator samurai`, needs pillow/numpy):
+- Scale2x (EPX) per frame -- pixel-art-aware 2x: stays crisp, rounds
+  off stair-steps, never blurs or invents colours.
+- knight/gladiator: Scale2x makes their 1px dark outline 2px; the
+  outer layer is peeled back to 1px (peeled pixels take the colour of
+  what's beside them on the outside, so soft glows like Paladin's rim
+  light stay intact).
+- adventurer: its pack never had an outline; adds a 1px dark one
+  around the body, using the *original* skin's silhouette so halos,
+  embers and tendrils on the per-class sets aren't outlined.
+- manifest: frameW/frameH doubled and `"artScale": 2` recorded; the
+  script skips any class already at artScale 2, so it's safe to re-run.
+- `--backup DIR` copies every 1x sheet (and the manifest) first.
+
+**Art (not in git -- `public/heroes` is gitignored):** applied in the
+local copy to all 234 sheets of the four classes (150 for the first
+three, 84 for the samurai) -- original, the four
+tints, Frost Sovereign, Bound Wraith, Paladin, Demonic, Void, every
+animation each has. Sizes: adventurer 31x30 -> 62x60, knight 64x46 ->
+128x92, gladiator 40x38 -> 80x76, samurai 70x60 -> 140x120. 1x originals saved to
+`backups/heroes-1x/` (now in .gitignore -- same licensed art); to
+undo, copy that folder's contents back over `public/heroes/`.
+
+**Worth knowing:**
+- `tools/import_characters.py` regenerates these classes at 1x and
+  rewrites the manifest -- run `upscale_heroes.py` again after it.
+- The paladin/demonic/void generators in `tools/skin-gen/` read
+  `original/` and assume 1x head boxes (`track.py` HEAD). Regenerating
+  a set for these three classes now needs those boxes doubled (or run
+  the generator on `backups/heroes-1x` and upscale the result).
+- Champion (parked after 0434, never shipped) wasn't touched; its
+  leftover `champion/` folders for these four classes are still 1x and
+  unregistered. When it comes back, build those three at the new size.
+- Stray non-animation files in `adventurer/holy` and
+  `adventurer/infernal` (idle3.png, idleguildedInfernal.png, ...)
+  were left alone; the game never loads them.
+
+**Not checked in the running game** -- worth a look at the roster,
+the Wardrobe and an idle-screen quest with each of the four,
+especially the samurai in the small companion window at the bigger
+displayScale.
