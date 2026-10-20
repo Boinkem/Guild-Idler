@@ -164,6 +164,29 @@ async function getSessionToken(): Promise<string | null> {
   return result.ok ? (result.sessionToken ?? null) : null;
 }
 
+const NO_SESSION = { ok: false as const, error: 'Could not get a Steam ticket -- Steam may not be running.' };
+
+/**
+ * Authenticated fetch (patch 0431). Session tokens last one hour
+ * (server/src/sessions.ts) but `cachedSessionToken` used to be reused
+ * forever, so an hour into a play session EVERY Auction House call began
+ * failing with a 401 until the game was restarted. A 401 now drops the
+ * cached token, re-runs the Steam sign-in once, and retries the request
+ * once. Returns `null` when no session can be obtained at all.
+ */
+async function authedFetch(url: string, init: RequestInit = {}): Promise<Response | null> {
+  const send = (token: string) =>
+    fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${token}` } });
+  const token = await getSessionToken();
+  if (!token) return null;
+  const first = await send(token);
+  if (first.status !== 401) return first;
+  cachedSessionToken = null;
+  const fresh = await getSessionToken();
+  if (!fresh) return first;
+  return send(fresh);
+}
+
 /** Raw shape of one row from the server's GET /mailbox (server/src/
  *  listings.ts) -- snake_case, matching the Postgres columns directly,
  *  converted into the client's own camelCase MailboxEntry shape by
@@ -185,13 +208,10 @@ export interface ServerMailboxRow {
  * whole module already uses throughout.
  */
 export async function fetchServerMailbox(): Promise<ServerMailboxRow[] | null> {
-  const token = await getSessionToken();
-  if (!token || !AH_READY || !AH_BACKEND_URL) return null;
+  if (!AH_READY || !AH_BACKEND_URL) return null;
   try {
-    const response = await fetch(`${AH_BACKEND_URL}/mailbox`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) return null;
+    const response = await authedFetch(`${AH_BACKEND_URL}/mailbox`);
+    if (!response || !response.ok) return null;
     const body = await response.json();
     return Array.isArray(body?.mailbox) ? body.mailbox : null;
   } catch {
@@ -209,14 +229,10 @@ export async function fetchServerMailbox(): Promise<ServerMailboxRow[] | null> {
  * comment (types.ts) for how a failed ack here is still handled safely.
  */
 export async function claimServerMailboxEntry(entryId: string): Promise<boolean> {
-  const token = await getSessionToken();
-  if (!token || !AH_READY || !AH_BACKEND_URL) return false;
+  if (!AH_READY || !AH_BACKEND_URL) return false;
   try {
-    const response = await fetch(`${AH_BACKEND_URL}/mailbox/${entryId}/claim`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return response.ok;
+    const response = await authedFetch(`${AH_BACKEND_URL}/mailbox/${entryId}/claim`, { method: 'POST' });
+    return !!response && response.ok;
   } catch {
     return false;
   }
@@ -278,13 +294,10 @@ export async function fetchActiveListings(filters: ListingFilters = {}): Promise
  *  view's data source. `null` on failure (including no session
  *  obtainable), same contract as fetchServerMailbox. */
 export async function fetchMyListings(): Promise<ServerListingRow[] | null> {
-  const token = await getSessionToken();
-  if (!token || !AH_READY || !AH_BACKEND_URL) return null;
+  if (!AH_READY || !AH_BACKEND_URL) return null;
   try {
-    const response = await fetch(`${AH_BACKEND_URL}/listings/mine`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) return null;
+    const response = await authedFetch(`${AH_BACKEND_URL}/listings/mine`);
+    if (!response || !response.ok) return null;
     const body = await response.json();
     return Array.isArray(body?.listings) ? body.listings : null;
   } catch {
@@ -316,16 +329,15 @@ export async function createListing(
   price: number,
   durationHours: 24 | 48 = 24
 ): Promise<CreateListingResult> {
-  const token = await getSessionToken();
-  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
   if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
 
   try {
-    const response = await fetch(`${AH_BACKEND_URL}/listings`, {
+    const response = await authedFetch(`${AH_BACKEND_URL}/listings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemType, itemPayload, currency, price, durationHours }),
     });
+    if (!response) return NO_SESSION;
     const body = await response.json();
     if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
     return { ok: true, listing: body.listing };
@@ -337,6 +349,10 @@ export async function createListing(
 export interface BuyListingResult {
   ok: boolean;
   error?: string;
+  /** What the server actually sold it for (patch 0431) -- the client
+   *  charges these, not whatever its listing card happened to show. */
+  price?: number;
+  currency?: 'gold' | 'scrap';
 }
 
 /**
@@ -348,18 +364,19 @@ export interface BuyListingResult {
  * purchase, same as any other server-side mailbox change would.
  */
 export async function buyListing(listingId: string): Promise<BuyListingResult> {
-  const token = await getSessionToken();
-  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
   if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
 
   try {
-    const response = await fetch(`${AH_BACKEND_URL}/listings/${listingId}/buy`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await authedFetch(`${AH_BACKEND_URL}/listings/${listingId}/buy`, { method: 'POST' });
+    if (!response) return NO_SESSION;
     const body = await response.json();
     if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
-    return { ok: true };
+    const price = Number(body?.price);
+    return {
+      ok: true,
+      price: Number.isFinite(price) ? price : undefined,
+      currency: body?.currency === 'scrap' ? 'scrap' : body?.currency === 'gold' ? 'gold' : undefined,
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -378,15 +395,11 @@ export interface CancelListingResult {
  * refund on this side.
  */
 export async function cancelListing(listingId: string): Promise<CancelListingResult> {
-  const token = await getSessionToken();
-  if (!token) return { ok: false, error: 'Could not get a Steam ticket -- Steam may not be running.' };
   if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
 
   try {
-    const response = await fetch(`${AH_BACKEND_URL}/listings/${listingId}/cancel`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await authedFetch(`${AH_BACKEND_URL}/listings/${listingId}/cancel`, { method: 'POST' });
+    if (!response) return NO_SESSION;
     const body = await response.json();
     if (!response.ok) return { ok: false, error: body?.error ?? `HTTP ${response.status}` };
     return { ok: true };

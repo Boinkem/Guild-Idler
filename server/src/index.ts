@@ -18,7 +18,7 @@ import Fastify from 'fastify';
 import { loadConfig } from './config.js';
 import { verifySteamTicket } from './steamAuth.js';
 import { issueSessionToken } from './sessions.js';
-import { registerListingsRoutes } from './listings.js';
+import { registerListingsRoutes, sweepExpiredListings } from './listings.js';
 
 const config = loadConfig();
 const app = Fastify({ logger: true });
@@ -92,6 +92,16 @@ app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) =
  */
 if (config.databaseUrl) {
   registerListingsRoutes(app, config);
+  // Expiry sweep (patch 0431): expired listings return their item to the
+  // seller's mailbox. Also runs lazily on /mailbox and /listings/mine, so
+  // a seller never waits on this timer to see their item.
+  if (config.ahEnabled) {
+    const sweep = () => {
+      sweepExpiredListings().catch((err) => app.log.error({ err }, 'expiry sweep failed'));
+    };
+    setInterval(sweep, 60_000).unref();
+    sweep();
+  }
 } else {
   app.log.warn('DATABASE_URL not set -- listings/mailbox/buyout routes are not registered.');
 }

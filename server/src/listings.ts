@@ -14,10 +14,10 @@ import { AppConfig } from './config.js';
  * cheap to retune later the same way the Auction House Charter's own
  * price already got adjusted once.
  *
- * Still deliberately not built: an expired-listing sweep (a background
- * job -- an expired listing just stops showing up in browse, its seller
- * doesn't get it back via mailbox automatically yet, same gap patch 0409
- * already flagged and this patch doesn't close).
+ * Patch 0431 (full AH audit) closed the last gap that used to be listed
+ * here: an expired-listing sweep (see sweepExpiredListings below), plus
+ * input validation, a per-seller listing cap and uuid checks on every
+ * :id route.
  */
 
 const LISTING_DURATION_HOURS = 24;
@@ -45,6 +45,63 @@ const DEPOSIT_PERCENT = 0.05;
 
 function computeDeposit(price: number): number {
   return Math.max(1, Math.ceil(price * DEPOSIT_PERCENT));
+}
+
+/** Patch 0431 -- sanity bounds. The price column is BIGINT but the wire
+ *  type is a JS number, so anything past 2^53 silently loses precision and
+ *  a fractional price makes Postgres throw (a 500). 1 billion is far above
+ *  any realistic gold/scrap price in this game. */
+export const MAX_PRICE = 1_000_000_000;
+/** Patch 0431 -- active listings one seller may have open at once. */
+export const MAX_ACTIVE_LISTINGS_PER_SELLER = 25;
+const MAX_PAYLOAD_JSON_CHARS = 20_000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Returns an error string if the payload isn't the shape the client
+ *  actually sends for that item type, else null. Shape only -- the server
+ *  still has no source of truth to check the stats against (see the trust
+ *  note on POST /listings). */
+function validatePayload(itemType: 'equipment' | 'consumable', payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'itemPayload must be an object.';
+  if (JSON.stringify(payload).length > MAX_PAYLOAD_JSON_CHARS) return 'itemPayload is too large.';
+  const p = payload as Record<string, unknown>;
+  if (typeof p.defId !== 'string' || p.defId.length === 0 || p.defId.length > 80) return 'itemPayload.defId is required.';
+  if (itemType === 'equipment' && (typeof p.uid !== 'string' || p.uid.length === 0)) return 'Equipment payload needs a uid.';
+  return null;
+}
+
+/**
+ * Expiry sweep (patch 0431). Until now a listing that ran out its
+ * 24h/48h simply stopped appearing in browse -- its row stayed
+ * status='active' forever and the item only came back if the seller
+ * happened to open My Listings and cancel it. This moves every expired
+ * listing to status='expired' and posts the item back to the seller's
+ * mailbox, in ONE statement (so a crash can't mark it expired without the
+ * mailbox row). `FOR UPDATE SKIP LOCKED` means a sweep never blocks on, or
+ * steps over, a buyout/cancel that's mid-transaction on the same row
+ * (those hold the row lock); buyout also requires expires_at > now(), so
+ * an expired listing can't be bought either way. Deposit is forfeited,
+ * the same as a cancel. System-seeded listings (no seller) just expire.
+ * Returns how many listings were swept.
+ */
+export async function sweepExpiredListings(): Promise<number> {
+  const { rowCount } = await getPool().query(
+    `WITH due AS (
+       SELECT id FROM listings
+       WHERE status = 'active' AND expires_at <= now()
+       ORDER BY expires_at
+       LIMIT 500
+       FOR UPDATE SKIP LOCKED
+     ), swept AS (
+       UPDATE listings l SET status = 'expired'
+       FROM due WHERE l.id = due.id
+       RETURNING l.seller_steam_id, l.item_type, l.item_payload
+     )
+     INSERT INTO mailbox (owner_steam_id, type, item_payload, note)
+     SELECT seller_steam_id, item_type, item_payload, 'Auction House listing expired'
+     FROM swept WHERE seller_steam_id IS NOT NULL`
+  );
+  return rowCount ?? 0;
 }
 
 /**
@@ -111,10 +168,11 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
    *  is scoped to "mine" by definition. */
   app.get('/listings/mine', { preHandler: auth }, async (request) => {
     const steamId = (request as FastifyRequest & { steamId: string }).steamId;
+    await sweepExpiredListings();
     const { rows } = await getPool().query(
       `SELECT id, item_type, item_payload, currency, price, deposit_amount, created_at, expires_at
        FROM listings
-       WHERE seller_steam_id = $1 AND status = 'active'
+       WHERE seller_steam_id = $1 AND status = 'active' AND expires_at > now()
        ORDER BY created_at DESC`,
       [steamId]
     );
@@ -147,21 +205,42 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
         reply.code(400);
         return { error: 'currency must be "gold" or "scrap".' };
       }
-      if (!itemPayload || typeof price !== 'number' || price <= 0) {
+      if (typeof price !== 'number' || !Number.isSafeInteger(price) || price <= 0 || price > MAX_PRICE) {
         reply.code(400);
-        return { error: 'itemPayload and a positive price are required.' };
+        return { error: `price must be a whole number between 1 and ${MAX_PRICE}.` };
+      }
+      const payloadError = validatePayload(itemType, itemPayload);
+      if (payloadError) {
+        reply.code(400);
+        return { error: payloadError };
       }
       const duration = durationHours === LISTING_DURATION_HOURS_EXTENDED
         ? LISTING_DURATION_HOURS_EXTENDED
         : LISTING_DURATION_HOURS;
       const depositAmount = computeDeposit(price);
 
-      const { rows } = await getPool().query(
-        `INSERT INTO listings (seller_steam_id, item_type, item_payload, currency, price, deposit_amount, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 hour')
-         RETURNING id, created_at, expires_at, deposit_amount`,
-        [steamId, itemType, JSON.stringify(itemPayload), currency, price, depositAmount, duration]
-      );
+      // Per-seller cap, counted and inserted under a per-seller advisory
+      // lock so two simultaneous list requests can't both slip under it.
+      const created = await withTransaction(async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [steamId]);
+        const { rows: countRows } = await client.query(
+          `SELECT count(*)::int AS n FROM listings WHERE seller_steam_id = $1 AND status = 'active' AND expires_at > now()`,
+          [steamId]
+        );
+        if (countRows[0].n >= MAX_ACTIVE_LISTINGS_PER_SELLER) return null;
+        const { rows } = await client.query(
+          `INSERT INTO listings (seller_steam_id, item_type, item_payload, currency, price, deposit_amount, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 hour')
+           RETURNING id, created_at, expires_at, deposit_amount`,
+          [steamId, itemType, JSON.stringify(itemPayload), currency, price, depositAmount, duration]
+        );
+        return rows;
+      });
+      if (!created) {
+        reply.code(409);
+        return { error: `You already have ${MAX_ACTIVE_LISTINGS_PER_SELLER} active listings -- wait for one to sell or cancel one.` };
+      }
+      const rows = created;
       return { listing: rows[0] };
     }
   );
@@ -187,6 +266,10 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
   app.post<{ Params: { id: string } }>('/listings/:id/buy', { preHandler: auth }, async (request, reply) => {
     const buyerSteamId = (request as FastifyRequest & { steamId: string }).steamId;
     const { id } = request.params;
+    if (!UUID_RE.test(id)) {
+      reply.code(404);
+      return { error: 'Listing not found.' };
+    }
 
     try {
       const result = await withTransaction(async (client) => {
@@ -233,7 +316,9 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
           [id, buyerSteamId, listing.seller_steam_id, listing.price, listing.currency]
         );
 
-        return { listingId: id };
+        // price/currency echoed back (patch 0431) so the client charges
+        // exactly what the server sold it for, not what its card showed.
+        return { listingId: id, price: Number(listing.price), currency: listing.currency as string };
       });
       return result;
     } catch (err) {
@@ -263,6 +348,10 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
   app.post<{ Params: { id: string } }>('/listings/:id/cancel', { preHandler: auth }, async (request, reply) => {
     const steamId = (request as FastifyRequest & { steamId: string }).steamId;
     const { id } = request.params;
+    if (!UUID_RE.test(id)) {
+      reply.code(404);
+      return { error: 'Listing not found.' };
+    }
 
     try {
       const result = await withTransaction(async (client) => {
@@ -309,6 +398,7 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
    *  client's mailbox-sync step pulls from. */
   app.get('/mailbox', { preHandler: auth }, async (request) => {
     const steamId = (request as FastifyRequest & { steamId: string }).steamId;
+    await sweepExpiredListings();
     const { rows } = await getPool().query(
       `SELECT id, type, amount, item_payload, note, created_at
        FROM mailbox
@@ -326,6 +416,10 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
    *  (MailboxManager.ts). */
   app.post<{ Params: { id: string } }>('/mailbox/:id/claim', { preHandler: auth }, async (request, reply) => {
     const steamId = (request as FastifyRequest & { steamId: string }).steamId;
+    if (!UUID_RE.test(request.params.id)) {
+      reply.code(404);
+      return { error: 'Mailbox entry not found, not yours, or already claimed.' };
+    }
     const { rows } = await getPool().query(
       `UPDATE mailbox SET claimed_at = now()
        WHERE id = $1 AND owner_steam_id = $2 AND claimed_at IS NULL

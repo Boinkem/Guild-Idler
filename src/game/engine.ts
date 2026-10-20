@@ -2988,27 +2988,67 @@ export class GameEngine {
    * the UI, so a stale button state can't request 48h the player hasn't
    * paid for.
    */
+  /** Patch 0431 -- uids / consumable ids / listing ids with an AH request
+   *  currently in flight. A double-click (or two quick clicks on different
+   *  tabs) used to fire two requests for the same item: both listings were
+   *  created server-side, but the item only existed once locally, so one
+   *  item became two listings. Not saved -- it only spans a request. */
+  private ahInFlight = new Set<string>();
+
+  /** Mirrors the server's computeDeposit (server/src/listings.ts) -- only
+   *  used to refuse a listing the player visibly can't afford BEFORE the
+   *  request; the amount actually charged is still the server's. */
+  private estimateDeposit(price: number): number {
+    return Math.max(1, Math.ceil(price * 0.05));
+  }
+
+  private canAffordDeposit(currency: 'gold' | 'scrap', price: number): boolean {
+    const have = currency === 'gold' ? this.state.gold : this.state.scrap;
+    if (have >= this.estimateDeposit(price)) return true;
+    this.say(`You need ${this.estimateDeposit(price)} ${currency} for the listing deposit.`);
+    return false;
+  }
+
+  private chargeDeposit(currency: 'gold' | 'scrap', amount: number) {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    if (currency === 'gold') {
+      this.state.gold = Math.max(0, this.state.gold - amount);
+    } else {
+      this.state.scrap = Math.max(0, this.state.scrap - amount);
+    }
+  }
+
   async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
     const item = this.state.stash.find((i) => i.uid === itemUid);
     if (!item) { this.say('That item is equipped or missing.'); return false; }
     if (item.locked) { this.say('That item is locked in the Vault.'); return false; }
     if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
+    const whole = Math.floor(price);
+    if (whole < 1) { this.say('Enter a valid price.'); return false; }
+    if (!this.canAffordDeposit(currency, whole)) return false;
+    const key = `item:${itemUid}`;
+    if (this.ahInFlight.has(key)) return false;
     const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
 
-    this.say('Listing...');
-    const result = await createListing('equipment', item, currency, Math.floor(price), duration);
-    if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
+    this.ahInFlight.add(key);
+    try {
+      this.say('Listing...');
+      const result = await createListing('equipment', item, currency, whole, duration);
+      if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
 
-    // Only now, confirmed by the server -- the same item, by uid, in
-    // case anything else changed the stash while this request was in
-    // flight.
-    this.state.stash = this.state.stash.filter((i) => i.uid !== itemUid);
-    if (currency === 'gold' && result.listing) this.state.gold = Math.max(0, this.state.gold - Number(result.listing.deposit_amount));
-    if (currency === 'scrap' && result.listing) this.state.scrap = Math.max(0, this.state.scrap - Number(result.listing.deposit_amount));
-    this.say(`Listed on the Auction House (${result.listing ? Number(result.listing.deposit_amount) : 0} ${currency} deposit).`);
-    this.notify();
-    void this.saveNow();
-    return true;
+      // Only now, confirmed by the server -- the same item, by uid, in
+      // case anything else changed the stash while this request was in
+      // flight.
+      this.state.stash = this.state.stash.filter((i) => i.uid !== itemUid);
+      const deposit = result.listing ? Number(result.listing.deposit_amount) : 0;
+      this.chargeDeposit(currency, deposit);
+      this.say(`Listed on the Auction House (${deposit} ${currency} deposit).`);
+      this.notify();
+      void this.saveNow();
+      return true;
+    } finally {
+      this.ahInFlight.delete(key);
+    }
   }
 
   /** Lists one unit of an owned consumable -- same "confirmed by the
@@ -3018,61 +3058,78 @@ export class GameEngine {
    *  server/db/migrations/001_init.sql's own comment on what's still
    *  open. */
   async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
-    const owned = this.state.inventory[consumableId] ?? 0;
-    if (owned < 1) { this.say("You don't have any of those."); return false; }
+    if ((this.state.inventory[consumableId] ?? 0) < 1) { this.say("You don't have any of those."); return false; }
     if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
+    const whole = Math.floor(price);
+    if (whole < 1) { this.say('Enter a valid price.'); return false; }
+    if (!this.canAffordDeposit(currency, whole)) return false;
+    const key = `cons:${consumableId}`;
+    if (this.ahInFlight.has(key)) return false;
     const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
 
-    this.say('Listing...');
-    const result = await createListing('consumable', { defId: consumableId }, currency, Math.floor(price), duration);
-    if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
+    this.ahInFlight.add(key);
+    try {
+      this.say('Listing...');
+      const result = await createListing('consumable', { defId: consumableId }, currency, whole, duration);
+      if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
 
-    this.state.inventory[consumableId] = owned - 1;
-    if (currency === 'gold' && result.listing) this.state.gold = Math.max(0, this.state.gold - Number(result.listing.deposit_amount));
-    if (currency === 'scrap' && result.listing) this.state.scrap = Math.max(0, this.state.scrap - Number(result.listing.deposit_amount));
-    this.say(`Listed on the Auction House (${result.listing ? Number(result.listing.deposit_amount) : 0} ${currency} deposit).`);
-    this.notify();
-    void this.saveNow();
-    return true;
+      // Re-read the count AFTER the await (patch 0431) -- the old code
+      // wrote back a stale pre-request count, so anything spent or gained
+      // while the request was in flight was silently overwritten.
+      this.state.inventory[consumableId] = Math.max(0, (this.state.inventory[consumableId] ?? 0) - 1);
+      const deposit = result.listing ? Number(result.listing.deposit_amount) : 0;
+      this.chargeDeposit(currency, deposit);
+      this.say(`Listed on the Auction House (${deposit} ${currency} deposit).`);
+      this.notify();
+      void this.saveNow();
+      return true;
+    } finally {
+      this.ahInFlight.delete(key);
+    }
   }
 
   /**
-   * Buys a listing. Doesn't touch local stash/inventory/gold at all --
-   * per the design revision (patch 0403), the purchased item and the
-   * seller's gold both route through mailbox server-side, so there's
-   * nothing to apply locally here beyond triggering an immediate sync
-   * (rather than waiting for the next natural one) so the purchase shows
-   * up right away instead of on some later trigger.
-   */
-  /**
-   * Patch 0428 -- now charges the buyer. Until this patch nothing did:
-   * the server's buyout route only moves the item and pays the seller
-   * (server/src/listings.ts), and gold/scrap live in the local save, so
-   * a purchase was free. Same "confirmed by the server before touching
-   * local state" rule listEquipmentForSale uses for the deposit: checked
-   * up front, deducted only once the buy succeeds.
+   * Buys a listing. The purchased item itself routes through the mailbox
+   * server-side (patch 0403), so the only local changes are the charge
+   * and an immediate mailbox sync.
+   *
+   * Patch 0428 made this charge the buyer; patch 0431 charges what the
+   * SERVER says the listing sold for (echoed in the buy response) rather
+   * than the price on the card, and serialises per listing so a
+   * double-click can't send two requests. The affordability check up
+   * front uses the card's price; the charge uses the server's, falling
+   * back to the card's only for a pre-0431 server that doesn't echo it.
    */
   async buyListing(listingId: string, price: number, currency: 'gold' | 'scrap'): Promise<boolean> {
-    const cost = Math.max(0, Math.floor(price));
-    if ((currency === 'gold' ? this.state.gold : this.state.scrap) < cost) {
+    const key = `buy:${listingId}`;
+    if (this.ahInFlight.has(key)) return false;
+    const quoted = Math.max(0, Math.floor(price));
+    if ((currency === 'gold' ? this.state.gold : this.state.scrap) < quoted) {
       this.say(`Not enough ${currency} for that.`);
       return false;
     }
-    this.say('Buying...');
-    const result = await buyListingRequest(listingId);
-    if (!result.ok) { this.say(`Could not buy: ${result.error}`); return false; }
-    if (currency === 'gold') {
-      this.state.gold = Math.max(0, this.state.gold - cost);
-      this.state.stats.goldSpent += cost;
-    } else {
-      this.state.scrap = Math.max(0, this.state.scrap - cost);
+    this.ahInFlight.add(key);
+    try {
+      this.say('Buying...');
+      const result = await buyListingRequest(listingId);
+      if (!result.ok) { this.say(`Could not buy: ${result.error}`); return false; }
+      const paidCurrency = result.currency ?? currency;
+      const paid = Math.max(0, Math.floor(result.price ?? quoted));
+      if (paidCurrency === 'gold') {
+        this.state.gold = Math.max(0, this.state.gold - paid);
+        this.state.stats.goldSpent += paid;
+      } else {
+        this.state.scrap = Math.max(0, this.state.scrap - paid);
+      }
+      playSound('purchase');
+      this.say('Purchased! Check your mailbox.');
+      this.notify();
+      void this.saveNow();
+      void this.syncMailboxFromServer();
+      return true;
+    } finally {
+      this.ahInFlight.delete(key);
     }
-    playSound('purchase');
-    this.say('Purchased! Check your mailbox.');
-    this.notify();
-    void this.saveNow();
-    void this.syncMailboxFromServer();
-    return true;
   }
 
   /**
@@ -3084,12 +3141,19 @@ export class GameEngine {
    * either way, the deposit was already spent at listing time.
    */
   async cancelListing(listingId: string): Promise<boolean> {
-    this.say('Cancelling...');
-    const result = await cancelListingRequest(listingId);
-    if (!result.ok) { this.say(`Could not cancel: ${result.error}`); return false; }
-    this.say('Listing cancelled -- item back in your mailbox. Deposit is not refunded.');
-    void this.syncMailboxFromServer();
-    return true;
+    const key = `cancel:${listingId}`;
+    if (this.ahInFlight.has(key)) return false;
+    this.ahInFlight.add(key);
+    try {
+      this.say('Cancelling...');
+      const result = await cancelListingRequest(listingId);
+      if (!result.ok) { this.say(`Could not cancel: ${result.error}`); return false; }
+      this.say('Listing cancelled -- item back in your mailbox. Deposit is not refunded.');
+      void this.syncMailboxFromServer();
+      return true;
+    } finally {
+      this.ahInFlight.delete(key);
+    }
   }
 
   /** Bulk-sells every owned curio in one action -- the Curios-section

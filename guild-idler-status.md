@@ -34998,3 +34998,97 @@ Known compromise: the Werewolf walks on all fours, so its walk body sits
 about 13% right of its idle body. It is tuned for idle, the pose it shows
 most. Pets were not touched: PetSprite's offset is positioning relative
 to the hero, not a centring fix.
+
+### Auction House full audit: session refresh, expiry returns, double-click dupes, deposit and cap holes closed (patch 0431)
+```discord-update
+Dev Update | Auction House
+
+- Fixed the Auction House stopping working an hour into a session; it now signs you back in on its own
+- Fixed expired listings: your item now comes back to your mailbox when a listing runs out, instead of sitting in limbo
+- Fixed double-clicking List creating two listings from one item
+- Fixed listing for free when you couldn't afford the deposit; you now need the deposit up front
+- Fixed big sales that were bigger than your Gold Storage Cap being impossible to ever claim
+- Changed buying so you are always charged the price the server sold it for
+- Added limits: 25 active listings per player, and sensible price and item checks on every listing
+```
+
+Requested as a full correctness review before the Steam build: do listings
+reach the database, does a buy move the item to the buyer, is gold taken
+from the buyer and paid to the seller, and what has been missed. Traced
+the whole path, then tested it for real: a Postgres 16 database, the real
+Fastify server, and the real `GameEngine` driving it (a seller engine and a
+buyer engine, sessions minted the way `mint-test-session` does).
+
+**Confirmed working, no change needed**
+- **List:** `POST /listings` stores the full rolled item in `listings`
+  (`item_payload` JSONB), the item leaves the stash only after the server
+  confirms, and the deposit (5%, min 1) is taken from the seller then.
+- **Buy:** the row is locked (`FOR UPDATE`); three simultaneous buyers on
+  one listing gave exactly one 200 and two 409s. The listing flips to
+  `sold`, the buyer gets an `equipment`/`consumable` mailbox row, a
+  `transactions` row is written, all in one transaction.
+- **Gold out:** the buyer is charged (the 0428 fix), refused up front when
+  short, and charged once even on a double-click.
+- **Gold in:** the seller's mailbox gets one entry for price + deposit
+  refund (1000 + 50 = 1050 in the test), claimed through the normal
+  mailbox, and never re-synced once claimed.
+- Own-listing buys, buying a cancelled or expired listing, cancelling
+  someone else's listing and double-acking a claim are all refused.
+
+**Fixed in this patch**
+1. **Session never refreshed.** `getSessionToken()` kept the first token
+   forever, but tokens last 1 hour, so after an hour every AH call 401'd
+   until the game restarted. New `authedFetch` in `auctionHouse.ts` drops
+   the cached token on a 401, signs in again once, and retries once. All
+   five authed calls use it.
+2. **Expired listings stranded the item.** Nothing ever swept them. A new
+   `sweepExpiredListings()` (`server/src/listings.ts`) marks them
+   `expired` and posts the item to the seller's mailbox in one statement
+   (`FOR UPDATE SKIP LOCKED`, so it never fights a buy or cancel). Runs
+   every 60s and also on `GET /mailbox` and `GET /listings/mine`. Deposit
+   is forfeited, as with a cancel. Expired listings no longer show in My
+   Listings.
+3. **Double-submit duplicated items.** Two quick List clicks sent two
+   requests; both listings were created but the item existed once. The
+   engine now tracks in-flight requests (`ahInFlight`) per item, per
+   listing and per cancel. Consumable listing also re-reads the count
+   after the request instead of writing back a stale one.
+4. **Listing with an unaffordable deposit was free.** The deposit used
+   `Math.max(0, gold - deposit)`, so a broke player listed for nothing.
+   Listing now checks the estimated deposit up front and refuses.
+5. **A big sale could be unclaimable forever.** The Gold Storage Cap block
+   refused any entry larger than the whole cap, even with an empty purse.
+   The effective cap is now at least the entry's own size, so it can be
+   claimed once you've spent down. Claiming on top of gold you already
+   hold is still blocked.
+6. **The buyer is charged the server's price.** `POST /listings/:id/buy`
+   now returns `price` and `currency`; the engine charges those, falling
+   back to the card's price only against an older server. (Tested: a card
+   claiming 1 gold on a 400 gold listing still charged 400.)
+7. **Server input checks.** Price must be a whole number from 1 to
+   1,000,000,000 (a fractional or huge price used to 500); `itemPayload`
+   must be an object with a `defId` (and a `uid` for equipment) under 20k
+   characters; a non-uuid id on buy/cancel/claim now returns 404 instead
+   of a 500.
+8. **Listing cap.** 25 active listings per seller, counted under a
+   per-seller advisory lock so a burst can't slip past it (10 simultaneous
+   requests all succeeded under the cap; the 26th single request got 409).
+
+**Known and accepted, not changed**
+- Trust model unchanged: gold and scrap live in the local save, so the
+  server can't stop an edited save from spending more than it has. The
+  server only records what happened.
+- If a buy's response is lost after the server committed it (network drop
+  at exactly that moment), the buyer gets the item without being charged.
+  The item is in their mailbox; there's no safe way to tell this from a
+  failed request client-side. A real server-side ledger would close it.
+- Browse rows include `seller_steam_id`.
+
+**Applying this one:** run `npm install` in `server/` if you haven't since
+0409, then Stop and Start the AH server (no watch mode in the DevTool
+launcher). No database migration and no save-version change.
+
+**Tested:** `npx tsc --noEmit` in both the game and `server/`. Server
+integration run (35 checks) and an engine-against-server run (18 checks),
+both all passing, on a real Postgres. The Steam ticket step and the
+Electron UI were not exercised here.

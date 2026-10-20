@@ -38,7 +38,13 @@ export const MailboxManager = {
 
     if (entry.type === 'gold') {
       const amount = entry.amount ?? 0;
-      const cap = ModifierManager.goldStorage(state);
+      // Patch 0431 -- a single entry bigger than the whole cap (a big sale
+      // plus its deposit refund) used to be permanently unclaimable, even
+      // with an empty purse. The cap still blocks claiming on top of gold
+      // you already hold, but an entry larger than the cap itself may be
+      // claimed once you're down to (almost) nothing: the effective cap is
+      // never lower than the entry's own size.
+      const cap = Math.max(ModifierManager.goldStorage(state), amount);
       if (state.gold + amount > cap) {
         return "Claiming this would put you over your Gold Storage Cap -- spend some gold first, then come back.";
       }
