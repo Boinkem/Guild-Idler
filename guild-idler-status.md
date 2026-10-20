@@ -35372,7 +35372,7 @@ Dev Update | Sharper Heroes
 - Changed the Adventurer, Knight and Gladiator to double-resolution art: smoother curves on hair, capes, plumes and armour, at the same size on screen
 - Changed the Adventurer to have a thin dark outline like the rest of the roster
 - Changed the Samurai to stand as tall as the Knight and Adventurer instead of noticeably shorter, with doubled art so she stays sharp at the bigger size
-- Every skin those four classes have, from the tints to Paladin, Demonic and Void, got the same treatment, so nothing looks out of place
+- Updated every skin those four classes have, from the tints to Paladin, Demonic and Void, so nothing looks out of place
 ```
 
 Direct request: the small source packs were the limit on how much detail
@@ -35419,8 +35419,16 @@ adventurer knight gladiator samurai`, needs pillow/numpy):
 - adventurer: its pack never had an outline; adds a 1px dark one
   around the body, using the *original* skin's silhouette so halos,
   embers and tendrils on the per-class sets aren't outlined.
-- manifest: frameW/frameH doubled and `"artScale": 2` recorded; the
-  script skips any class already at artScale 2, so it's safe to re-run.
+- manifest: frameW/frameH doubled and `"artScale": 2` recorded.
+- **Works per sheet, safe to re-run any time.** It covers every skin
+  folder of a class -- original, the tints/recolours, every per-class
+  set -- and on a class that's already doubled it only touches sheets
+  still at the old 1x height. So adding a new skin to one of these
+  classes later (a generator that outputs 1x, a hand-made recolour) is
+  just: drop it in, run the tool for that class again. Tested: fresh run
+  reproduces the shipped sheets byte-for-byte; a re-run changes nothing;
+  a 1x copy of a tint dropped into a doubled class comes out identical
+  to the already-doubled tint (adventurer outline included).
 - `--backup DIR` copies every 1x sheet (and the manifest) first.
 
 **Art (not in git -- `public/heroes` is gitignored):** applied in the
@@ -35436,12 +35444,16 @@ undo, copy that folder's contents back over `public/heroes/`.
 - `tools/import_characters.py` regenerates these classes at 1x and
   rewrites the manifest -- run `upscale_heroes.py` again after it.
 - The paladin/demonic/void generators in `tools/skin-gen/` read
-  `original/` and assume 1x head boxes (`track.py` HEAD). Regenerating
-  a set for these three classes now needs those boxes doubled (or run
-  the generator on `backups/heroes-1x` and upscale the result).
+  `original/` and assume 1x head boxes (`track.py` HEAD). To regenerate
+  a set for these four classes: run the generator with
+  `HEROES_DIR=backups/heroes-1x` (the 1x originals) and `OUT_DIR=public/heroes`,
+  then run `upscale_heroes.py` for that class -- it picks up just the
+  new 1x sheets.
 - Champion (parked after 0434, never shipped) wasn't touched; its
   leftover `champion/` folders for these four classes are still 1x and
-  unregistered. When it comes back, build those three at the new size.
+  unregistered (harmless -- nothing loads them). When it comes back,
+  generate it as above and run the tool; the next run of the tool for
+  these classes would also double the leftovers, which is fine.
 - Stray non-animation files in `adventurer/holy` and
   `adventurer/infernal` (idle3.png, idleguildedInfernal.png, ...)
   were left alone; the game never loads them.

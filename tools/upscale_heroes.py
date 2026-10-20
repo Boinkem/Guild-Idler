@@ -17,8 +17,12 @@ What it does, per class, for EVERY skin folder (original, tints, per-class sets)
        - classes without one (adventurer): add a 1px dark outline around the body,
          using the original skin's silhouette so effects drawn around the hero
          (halos, sparkles, tendrils) don't get outlined.
-  3. manifest.json: frameW/frameH doubled and "artScale": 2 recorded, which also
-     stops the script from doubling a class twice.
+  3. manifest.json: frameW/frameH doubled and "artScale": 2 recorded.
+
+Safe to re-run at any time: it works per sheet and only doubles sheets still at
+the class's 1x size. So after adding a NEW skin to an upscaled class (a generator
+that outputs 1x, a hand-made recolour), just run it again for that class and only
+the new sheets are touched.
 
 HeroSprite (and the DevTool sprite lab) size everything from the manifest, so no
 code change is needed -- the doubled art draws at exactly the same size.
@@ -37,7 +41,7 @@ from PIL import Image
 
 ANIMS = {'idle', 'walk', 'run', 'defend', 'hurt', 'death', 'jump', 'throw',
          'attack_1', 'attack_2', 'attack_3'}
-SKIP_SKINS = {'champion'}          # parked set, regenerated later at the new size
+SKIP_SKINS = set()                 # skin folders to leave alone (none at the moment)
 NEEDS_OUTLINE = {'adventurer'}     # source pack has no dark outline
 OUTLINE = (27, 27, 27, 255)
 
@@ -111,7 +115,11 @@ def frames(path, fw):
 
 
 def process_class(root, cls, entry, backup):
-    fw, fh = entry['frameW'], entry['frameH']
+    """Double every 1x sheet of a class. Works per sheet, so it is safe to re-run:
+    on a class that is already doubled it only touches sheets still at the old
+    size -- e.g. a new skin set generated at 1x after the class was upscaled."""
+    scale = entry.get('artScale', 1)
+    fw, fh = entry['frameW'] // scale, entry['frameH'] // scale      # the 1x frame size
     cdir = os.path.join(root, cls)
     skins = sorted(d for d in os.listdir(cdir)
                    if os.path.isdir(os.path.join(cdir, d)) and d not in SKIP_SKINS)
@@ -121,7 +129,13 @@ def process_class(root, cls, entry, backup):
         for a in ANIMS:
             p = os.path.join(cdir, 'original', a + '.png')
             if os.path.exists(p):
-                bodies[a] = [scale2x(f)[..., 3] == 255 for f in frames(p, fw)]
+                with Image.open(p) as probe:
+                    doubled = probe.size[1] != fh
+                if doubled:      # original already done: its silhouette minus the outline we added
+                    bodies[a] = [(f[..., 3] == 255) & ~np.all(f[..., :3] == OUTLINE[:3], -1)
+                                 for f in frames(p, fw * 2)]
+                else:
+                    bodies[a] = [scale2x(f)[..., 3] == 255 for f in frames(p, fw)]
     n = 0
     for s in skins:
         for fn in sorted(os.listdir(os.path.join(cdir, s))):
@@ -129,6 +143,9 @@ def process_class(root, cls, entry, backup):
             if ext != '.png' or a not in ANIMS:
                 continue
             src = os.path.join(cdir, s, fn)
+            with Image.open(src) as probe:
+                if probe.size[1] != fh:          # already doubled (or not this class's art)
+                    continue
             if backup:
                 dst = os.path.join(backup, cls, s, fn)
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -161,11 +178,9 @@ def main():
         shutil.copy2(mpath, os.path.join(args.backup, 'manifest.json'))
     for cls in args.classes:
         entry = manifest[cls]
-        if entry.get('artScale', 1) >= 2:
-            print(f'{cls}: already doubled, skipped')
-            continue
         n = process_class(args.heroes, cls, entry, args.backup)
-        print(f'{cls}: {n} sheets doubled -> {entry["frameW"]}x{entry["frameH"]}')
+        print(f'{cls}: {n} sheet(s) doubled -> {entry["frameW"]}x{entry["frameH"]}'
+              + ('' if n else ' (nothing at 1x left to do)'))
     json.dump(manifest, open(mpath, 'w'), indent=2)
 
 
