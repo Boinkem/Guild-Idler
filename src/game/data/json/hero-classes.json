@@ -168,7 +168,7 @@
     },
     "milestoneGoldCost": 0,
     "displayScale": 0.92,
-    "displayOffsetX": -60
+    "displayOffsetX": -11
   },
   {
     "id": "gladiator",
@@ -223,7 +223,8 @@
       "ranged": "Bow in hand and a showman's grin for the ones smart enough to run.",
       "caster": "Arena tricks dressed up with whatever charm coin could buy, half showmanship, half genuine spellcraft."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayOffsetX": 10
   },
   {
     "id": "samurai",
@@ -277,7 +278,9 @@
       "ranged": "Trades the blade for a bow, the same unbroken patience behind the string.",
       "caster": "Wards and rites learned alongside the sword, not instead of it, prayer and steel drawn in the same breath."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayOffsetX": 21,
+    "displayOffsetY": 22
   },
   {
     "id": "witch",
@@ -334,7 +337,9 @@
       "ranged": "Flings hexbolts from a safe distance, wary of a body this easily broken.",
       "caster": "Hexes bent toward guarding as often as harming, binding wards and bargained protection struck in the dark."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayOffsetX": 8,
+    "displayOffsetY": 4
   },
   {
     "id": "lizardman",
@@ -390,7 +395,9 @@
       "ranged": "Hunts from range the patient way its swamp taught it, still as reeds until the strike.",
       "caster": "Old swamp magic, murky and older by far than the guild that hired it."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayOffsetX": 12,
+    "displayOffsetY": 11
   },
   {
     "id": "pyromancer",
@@ -445,7 +452,8 @@
       "ranged": "Flings raw firebolts at range, blunt and immediate, no finesse required.",
       "caster": "Wreathes allies in guardian embers and blinding cinder-clouds as readily as it burns the enemy down."
     },
-    "milestoneGoldCost": 0
+    "milestoneGoldCost": 0,
+    "displayOffsetX": 8
   },
   {
     "id": "wizard",
@@ -503,7 +511,8 @@
       "caster": "Decades of study spent as much on arcane barriers to shield allies as on unleashing the arcane itself."
     },
     "milestoneGoldCost": 0,
-    "displayScale": 0.86
+    "displayScale": 0.86,
+    "displayOffsetX": 15
   },
   {
     "id": "huge_knight",
@@ -560,7 +569,9 @@
       "caster": "Wards himself in old, borrowed magic rather than learning any of it properly -- just enough to shrug off what should have ended him."
     },
     "milestoneUnlockDescription": "Clear any raid on Legendary difficulty.",
-    "milestoneGoldCost": 4000
+    "milestoneGoldCost": 4000,
+    "displayOffsetX": -3,
+    "displayOffsetY": 3
   },
   {
     "id": "kobold",
@@ -617,7 +628,8 @@
       "caster": "Never trained properly, just picked up enough hex-craft from things it shouldn't have survived meeting."
     },
     "milestoneUnlockDescription": "Finish The Founding Days memory tier on Legendary.",
-    "milestoneGoldCost": 4000
+    "milestoneGoldCost": 4000,
+    "displayOffsetX": 5
   },
   {
     "id": "minotaur",
@@ -674,7 +686,9 @@
       "caster": "Bellows old herd-magic through a cracked horn -- crude, loud, and somehow still effective."
     },
     "milestoneUnlockDescription": "Retire a hero for the first time.",
-    "milestoneGoldCost": 3000
+    "milestoneGoldCost": 3000,
+    "displayOffsetX": 12,
+    "displayOffsetY": 3
   },
   {
     "id": "werewolf",
@@ -731,7 +745,9 @@
     },
     "milestoneUnlockDescription": "Complete The Kindred Moon quest chain.",
     "milestoneGoldCost": 3000,
-    "displayScale": 1.35
+    "displayScale": 1.35,
+    "displayOffsetX": 11,
+    "displayOffsetY": 4
   },
   {
     "id": "centaur",
@@ -787,6 +803,8 @@
       "caster": "Old herd-lore about the stars, half-remembered and mostly self-taught, cast between one stride and the next."
     },
     "milestoneUnlockDescription": "Clear three different raids.",
-    "milestoneGoldCost": 3500
+    "milestoneGoldCost": 3500,
+    "displayOffsetX": 16,
+    "displayOffsetY": 5
   }
 ]

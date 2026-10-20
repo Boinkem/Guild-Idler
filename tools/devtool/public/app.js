@@ -3645,11 +3645,11 @@ function stopHeroLabAnimator() {
 /** Same scale/backgroundSize/backgroundPosition formula HeroSprite.tsx
  *  uses, split out from the interval tick so a scale/offset slider can
  *  restyle the element without restarting (and visibly resetting) the
- *  animation loop -- same reasoning as applyPetLabSpriteStyle. Offset is
- *  only ever applied while previewing the Idle pose, matching HeroSprite.
- *  tsx's own gate (resolveDisplayCorrection) exactly -- Moving
- *  intentionally shows the sprite WITHOUT the offset correction, since
- *  that's exactly what a player sees in-game, not a Lab-only shortcut. */
+ *  animation loop -- same reasoning as applyPetLabSpriteStyle. The offset
+ *  shows in both poses, matching HeroSprite.tsx (patch 0430). The art is
+ *  shown unflipped, as drawn: the offset is in the sheet's own space and
+ *  mirrors with the sprite in-game, so centred here is centred facing
+ *  either way. */
 function applyHeroLabSpriteStyle() {
   const el = document.getElementById('heroLabSprite');
   const a = heroLabAnimator;
@@ -3659,9 +3659,12 @@ function applyHeroLabSpriteStyle() {
   el.style.height = `${a.frameH * scale}px`;
   el.style.backgroundSize = `${a.frameW * a.frames * scale}px ${a.frameH * scale}px`;
   el.style.backgroundPosition = `-${a.index * a.frameW * scale}px 0`;
-  el.style.transform = heroLabState.pose === 'idle'
-    ? `translate(${heroLabState.offsetX}%, ${heroLabState.offsetY}%)`
-    : '';
+  // Patch 0430 -- keep the stage's own centring (.hero-lab-sprite's
+  // translateX(-50%)) and add the offset on top. Writing the offset alone
+  // replaced that centring, so every class looked half a frame off-centre
+  // here and was "corrected" by about -50% (the Dwarf's old -60). Offset
+  // now applies in both poses, matching HeroSprite.tsx.
+  el.style.transform = `translateX(-50%) translate(${heroLabState.offsetX}%, ${heroLabState.offsetY}%)`;
 }
 
 function startHeroLabAnimator(opts) {
@@ -3749,9 +3752,9 @@ function renderHeroLab() {
       Preview a hero class at its real default corner-companion size, in both poses, then dial in a
       per-class scale/position correction -- the same fix Pet Sprite Lab applies for pet species, now
       data-driven here too instead of HeroSprite.tsx's old hardcoded HERO_DISPLAY_SCALE/OFFSET tables.
-      Saves straight to hero-classes.json. The offset only ever shows in the Idle pose, matching
-      exactly what the real corner companion does -- action animations already fill their own crop box
-      and never get the offset applied.
+      Saves straight to hero-classes.json. The art is shown as drawn (unflipped); the offset is in the
+      sheet's own space, applies to every pose, and mirrors with the hero when it turns, so centring the
+      body here centres it facing either way in-game.
     </p>
 
     <div class="field-row" style="margin-bottom: 12px;">
@@ -3788,7 +3791,7 @@ function renderHeroLab() {
       <div class="field">
         <label>Vertical offset (${heroLabState.offsetY}%)</label>
         <input type="range" id="heroLabOffsetYSlider" min="-60" max="60" step="1" value="${heroLabState.offsetY}" />
-        <div class="hint">Idle-only, same as in-game -- switch to Moving above to confirm this class's action poses still look right unshifted.</div>
+        <div class="hint">Applies to every pose, same as in-game -- switch to Moving above to check the walk lines up with idle.</div>
       </div>
     </div>
 

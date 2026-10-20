@@ -73,17 +73,27 @@ const DEFAULT_FPS: Partial<Record<HeroAnimation, number>> = {
  * on the desktop 90%+ of the time, ends up sitting in the upper-left
  * portion of a box built for a much bigger swing. Used to be a hardcoded
  * HERO_DISPLAY_OFFSET table here; migrated to HeroClassDef.displayOffsetX/
- * displayOffsetY the same way. Still gated to the idle pose specifically
- * (see resolveDisplayCorrection), since action animations already fill
- * the box they defined and don't need the same push.
+ * displayOffsetY the same way.
+ *
+ * Patch 0430 -- the offset is now measured in the SOURCE SHEET's own space
+ * (percent of a frame, as the art is drawn, unflipped) and moves with the
+ * sprite: when it's mirrored (`flip`, or a reversed-facing class) the push
+ * mirrors too, so a body that sits left of centre in its frame is centred
+ * facing either way. It used to be held at a fixed screen direction, which
+ * centred one facing and doubled the error on the other. It also applies
+ * to every pose now, not just idle: the shared crop box means the body
+ * sits in the same place across idle/walk/attack, so pushing only idle
+ * made the hero jump sideways whenever it started or stopped moving.
+ * Values were re-measured from the art (lower-body centre and feet line of
+ * the idle frames); the Hero Sprite Lab previews them the same way.
  */
-function resolveDisplayCorrection(heroClass: HeroClass, resolvedAnim: HeroAnimation): {
+function resolveDisplayCorrection(heroClass: HeroClass): {
   scale: number;
   offset?: { x: number; y: number };
 } {
   const def = DlcManager.heroClassDef(heroClass);
   const scale = def?.displayScale ?? 1;
-  const offset = resolvedAnim === 'idle' && (def?.displayOffsetX || def?.displayOffsetY)
+  const offset = (def?.displayOffsetX || def?.displayOffsetY)
     ? { x: def?.displayOffsetX ?? 0, y: def?.displayOffsetY ?? 0 }
     : undefined;
   return { scale, offset };
@@ -271,7 +281,7 @@ export function HeroSprite({
     );
   }
 
-  const correction = resolveDisplayCorrection(heroClass, resolved);
+  const correction = resolveDisplayCorrection(heroClass);
   const scale = (height / char.frameH) * correction.scale;
   const url = `${char.basePath ?? './heroes'}/${heroClass}/${skin}/${resolved}.png`;
   const offset = correction.offset;
@@ -280,7 +290,8 @@ export function HeroSprite({
   const effectiveFlip = HERO_REVERSED_FACING[heroClass] ? !flip : flip;
   const transforms: string[] = [];
   if (effectiveFlip) transforms.push('scaleX(-1)');
-  if (offset) transforms.push(`translate(${effectiveFlip ? -offset.x : offset.x}%, ${offset.y}%)`);
+  // Inside the flip on purpose: the push mirrors with the art (see above).
+  if (offset) transforms.push(`translate(${offset.x}%, ${offset.y}%)`);
   const style: CSSProperties = {
     width: char.frameW * scale,
     height: char.frameH * scale,

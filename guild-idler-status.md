@@ -34932,3 +34932,69 @@ reversed-facing flip. In the current art the figure already sits near the
 middle of its 82px frame, so in centred slots (Wardrobe stage and
 thumbnails, the hero summary row) the dwarf is drawn at the left edge or
 clipped. This needs a retune once checked in the idle view.
+
+### Hero sprite placement retune; Hero Sprite Lab centring fix (patch 0430)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the Dwarf Warrior standing far off to the left (and getting cut off) on the desktop, hero cards and the Wardrobe
+- Fixed heroes drifting off-centre: every class now stands centred over its shadow, whichever way it's facing
+- Fixed the Samurai, Lizardman and a few others floating above the ground instead of standing on it
+- Fixed heroes jumping sideways when they start or stop walking
+```
+
+Follow-up to the 0429 note about the Dwarf's `displayOffsetX: -60`. The
+user asked for that to be retuned, plus any other hero sprites with
+placement problems.
+
+**Root cause: the Hero Sprite Lab (DevTool, patch 0384) was off by half a
+frame.** `.hero-lab-sprite` centres the preview with `transform:
+translateX(-50%)`, but `applyHeroLabSpriteStyle` overwrote the inline
+transform with `translate(x%, y%)` alone. In the Idle pose every class
+therefore showed half its width right of centre, and pulling it back by
+eye gave about -50% plus the real skew. The Dwarf's -60 is exactly that:
+-50, plus its body sitting about 11% right of centre in its raw frame.
+The Lab now composes `translateX(-50%) translate(x%, y%)`.
+
+**`HeroSprite.tsx`: the offset now mirrors with the sprite and applies to
+every pose.**
+- Before: `translate(${effectiveFlip ? -x : x}%)` held the push at a fixed
+  screen direction. A body left of centre in its frame was fixed facing
+  one way and pushed twice as far off facing the other (returning home,
+  or a reversed-facing class: dwarf, wizard, witch).
+- Now: `translate(x%, y%)` sits inside the `scaleX(-1)`, so the push
+  follows the art. Values are in the sheet's own space (the art as drawn,
+  unflipped), which is exactly what the Lab shows.
+- The idle-only gate is gone (`resolveDisplayCorrection(heroClass)`).
+  The importer's shared crop box keeps the body in the same spot across
+  idle, walk and attack, so offsetting idle alone made heroes hop
+  sideways when they started or stopped moving.
+- Lab copy and hints are updated to match.
+
+**Re-measured offsets (`hero-classes.json`).** Measured from each class's
+original idle sheet: X centres the lower-body pixel mass, Y drops the
+feet onto the frame bottom. Anything under 3% (X) or 2% (Y) is left at 0.
+Scales are untouched.
+
+| class | old | new (x, y) |
+|---|---|---|
+| dwarf | -60, 0 | -11, 0 |
+| gladiator | - | 10, 0 |
+| samurai | - | 21, 22 (feet were 13px above the frame bottom) |
+| witch | - | 8, 4 |
+| lizardman | - | 12, 11 |
+| pyromancer | - | 8, 0 |
+| wizard | - | 15, 0 |
+| huge_knight | - | -3, 3 |
+| kobold | - | 5, 0 |
+| minotaur | - | 12, 3 |
+| werewolf | - | 11, 4 |
+| centaur | - | 16, 5 |
+| adventurer, knight | - | 0, 0 |
+
+Checked in a web build by stepping the Wardrobe stage through all 14
+classes against a centre line; every body now sits centred on the shadow.
+Known compromise: the Werewolf walks on all fours, so its walk body sits
+about 13% right of its idle body. It is tuned for idle, the pose it shows
+most. Pets were not touched: PetSprite's offset is positioning relative
+to the hero, not a centring fix.
