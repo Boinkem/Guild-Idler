@@ -462,6 +462,25 @@ export const EquipmentManager = {
     return null;
   },
 
+  /**
+   * Patch 0425 -- total gold + scrap to refine `item` from its current
+   * +level up to `targetPlus` in one go (the Enhance station's target
+   * bar). Each step is priced exactly like a single upgrade() at that
+   * step's own +level, so buying +3 -> +7 at once costs the same as four
+   * separate clicks.
+   */
+  upgradeCostTo(item: EquipmentItem, targetPlus: number, workshopLevel: number): { gold: number; scrap: number } {
+    let gold = 0;
+    let scrap = 0;
+    const to = Math.min(MAX_PLUS, targetPlus);
+    for (let p = item.plus; p < to; p++) {
+      const step = { ...item, plus: p };
+      gold += EquipmentManager.upgradeCost(step, workshopLevel);
+      scrap += EquipmentManager.upgradeScrapCost(step, workshopLevel);
+    }
+    return { gold, scrap };
+  },
+
   upgrade(state: GameState, item: EquipmentItem, workshopLevel: number): string | null {
     if (item.plus >= MAX_PLUS) return 'Already at maximum refinement.';
     const cost = EquipmentManager.upgradeCost(item, workshopLevel);

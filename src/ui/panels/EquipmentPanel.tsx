@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -24,6 +25,9 @@ import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
 import { RewardGlowParticle } from '../RewardGlowParticle';
 import { getFlyTargetCenter } from '../flyTarget';
+import { useEquipFx } from '../equipFx';
+import { useRepairFx } from '../repairFx';
+import { useRecentIncrease } from '../purchaseFx';
 
 const SLOTS = EQUIP_SLOTS;
 
@@ -139,13 +143,21 @@ function UpgradePill() {
  * doesn't affect the fill itself. Omitted entirely when Auto-repair is off,
  * since there's nothing meaningful to mark.
  */
-function DurabilityBar({ item, compact = false, thresholdPercent }: { item: EquipmentItem; compact?: boolean; thresholdPercent?: number }) {
+function DurabilityBar({ item, compact = false, thresholdPercent, shown, glint = false }: {
+  item: EquipmentItem; compact?: boolean; thresholdPercent?: number;
+  /** Patch 0425 -- durability to display instead of the real value while
+   *  a repair replay counts it up. */
+  shown?: number;
+  /** Patch 0425 -- a glint across the bar (repair / auto-repair). */
+  glint?: boolean;
+}) {
   const max = EquipmentManager.maxDurability(item);
-  const ratio = item.durability / max;
+  const durability = shown ?? item.durability;
+  const ratio = durability / max;
   return (
     <>
       <div className="dura-row" style={{ marginTop: compact ? 2 : 4 }}>
-        <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`}>
+        <div className={`bar dura ${ratio < 0.25 ? 'low' : ''} ${glint ? 'rpx-glint' : ''}`}>
           <span style={{ width: `${ratio * 100}%` }} />
           {thresholdPercent !== undefined && (
             <i
@@ -164,7 +176,7 @@ function DurabilityBar({ item, compact = false, thresholdPercent }: { item: Equi
             costs no extra vertical space in a dense item grid. The
             expanded (non-compact) view below keeps its own existing text
             line instead, since it already has the room. */}
-        {compact && <span className="dura-value tiny muted">{item.durability}/{max}</span>}
+        {compact && <span className="dura-value tiny muted">{durability}/{max}</span>}
         {/* Wrench glyph, patch 0300 -- same "below auto-repair threshold"
             condition the bar's own marker (above) already renders at,
             just made spottable without hunting for a thin threshold tick
@@ -178,7 +190,7 @@ function DurabilityBar({ item, compact = false, thresholdPercent }: { item: Equi
       </div>
       {!compact && (
         <div className="tiny muted">
-          {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${max}`}
+          {durability === 0 ? 'Broken, no bonuses' : `Durability ${durability}/${max}`}
         </div>
       )}
     </>
@@ -743,15 +755,28 @@ function ElementalInfoLine({ item }: { item: EquipmentItem }) {
   );
 }
 
+/** Patch 0425 -- one card's part in a repair replay (see repairFx.tsx). */
+interface CardRepairFx { shown?: number; glint: boolean; clank: boolean; restored: boolean }
+
+function RestoredTag({ on }: { on: boolean }): ReactNode {
+  return on ? <span className="rpx-restored" aria-hidden="true">Restored</span> : null;
+}
+
 function SlotCard({
-  slot, item, workshop, hero, engine,
-}: { slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine }) {
+  slot, item, workshop, hero, engine, fxClass = '', deltas, repairFx, onRepair,
+}: {
+  slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine;
+  repairFx?: CardRepairFx; onRepair?: (uid: string) => void;
+  /** Patch 0425 -- equip replay state ('eqx-wait' / 'eqx-land'), and the
+   *  stat changes to float over the card after a single equip. */
+  fxClass?: string; deltas?: string[];
+}) {
   const [open, setOpen] = useState(false);
   const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
 
   if (!item || !def) {
     return (
-      <div className="item-card empty rarity-card">
+      <div className="item-card empty rarity-card" data-eq-slot={slot}>
         <div className="rarity-banner" style={{ backgroundImage: `url(${EMPTY_SLOT_BANNER})` }} />
         <div className="item-card-summary">
           {/* hideFallback (patch 0343, re-added patch 0367 direct
@@ -788,7 +813,9 @@ function SlotCard({
   return (
     <>
       <div
-        className={`item-card rarity-card ${hasActiveSetBonus ? 'set-active' : ''}`}
+        className={`item-card rarity-card ${hasActiveSetBonus ? 'set-active' : ''} ${fxClass} ${repairFx?.clank ? 'rpx-clank' : ''}`}
+        data-eq-slot={slot}
+        data-dura-uid={item.uid}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
@@ -796,17 +823,25 @@ function SlotCard({
       >
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
-          <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />
+          <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={repairFx?.shown !== undefined ? repairFx.shown === 0 : EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <div className="item-card-meta-row">
               <RarityPill rarity={def.rarity} />
               {def.setId && <SetPill />}
               {def.craftable && <CraftedPill />}
-              <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
+              <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} shown={repairFx?.shown} glint={repairFx?.glint} />
             </div>
           </div>
         </div>
+        <RestoredTag on={!!repairFx?.restored} />
+        {deltas && deltas.length > 0 && (
+          <div className="eqx-deltas" aria-hidden="true">
+            {deltas.map((d, i) => (
+              <span key={d} className={`eqx-delta ${d.startsWith('-') ? 'dn' : 'up'}`} style={{ animationDelay: `calc(var(--fx-t) * ${i * 120})` }}>{d}</span>
+            ))}
+          </div>
+        )}
       </div>
 
       {open && (
@@ -870,7 +905,7 @@ function SlotCard({
                 <button
                   className="btn-primary"
                   disabled={EquipmentManager.repairCost(item, workshop, repairDiscount) === 0}
-                  onClick={() => { engine.repair(item.uid); setOpen(false); }}
+                  onClick={() => { if (onRepair) onRepair(item.uid); else engine.repair(item.uid); setOpen(false); }}
                 >
                   {`Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))} + ${EquipmentManager.repairScrapCost(item, workshop, repairDiscount)} Scrap`}
                 </button>
@@ -889,7 +924,7 @@ function SlotCard({
                 {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
                   <button
                     className="btn-teal"
-                    onClick={() => { engine.repair(item.uid); setOpen(false); }}
+                    onClick={() => { if (onRepair) onRepair(item.uid); else engine.repair(item.uid); setOpen(false); }}
                   >
                     Free Repair
                   </button>
@@ -921,8 +956,16 @@ function SlotCard({
  *  no Sell action left in this component, there's nothing left for it to
  *  gate. */
 function StashCard({
-  item, hero, engine,
-}: { item: EquipmentItem; hero: Hero; engine: GameEngine }) {
+  item, hero, engine, onEquip, back, repairFx,
+}: {
+  item: EquipmentItem; hero: Hero; engine: GameEngine;
+  repairFx?: CardRepairFx;
+  /** Patch 0425 -- routes Equip through the panel's equip replay. */
+  onEquip?: (uid: string) => void;
+  /** Patch 0425 -- this piece was just swapped out: hidden while its icon
+   *  is still in the air ('hold'), then lands back in ('back'). */
+  back?: 'hold' | 'back';
+}) {
   const [open, setOpen] = useState(false);
   const def = EQUIPMENT_BY_ID[item.defId];
   if (!def) return null;
@@ -932,7 +975,9 @@ function StashCard({
   return (
     <>
       <div
-        className="item-card rarity-card"
+        className={`item-card rarity-card ${back ? `eqx-${back}` : ''} ${repairFx?.clank ? 'rpx-clank' : ''}`}
+        data-eq-uid={item.uid}
+        data-dura-uid={item.uid}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
@@ -940,7 +985,7 @@ function StashCard({
       >
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
-          <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />
+          <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={repairFx?.shown !== undefined ? repairFx.shown === 0 : EquipmentManager.isBroken(item)} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <div className="item-card-meta-row">
@@ -949,10 +994,11 @@ function StashCard({
               {def.craftable && <CraftedPill />}
               {isUpgrade && <UpgradePill />}
               {item.locked && <LockedPill />}
-              <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
+              <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} shown={repairFx?.shown} glint={repairFx?.glint} />
             </div>
           </div>
         </div>
+        <RestoredTag on={!!repairFx?.restored} />
       </div>
 
       {open && (
@@ -1013,7 +1059,7 @@ function StashCard({
                 <button
                   className="btn-primary"
                   disabled={!canEquip.ok}
-                  onClick={() => { engine.equip(hero.id, item.uid); setOpen(false); }}
+                  onClick={() => { if (onEquip) onEquip(item.uid); else engine.equip(hero.id, item.uid); setOpen(false); }}
                   title={canEquip.reason}
                 >
                   Equip on {hero.name}
@@ -1042,6 +1088,22 @@ export function EquipmentPanel() {
   const workshop = state.guild.workshop ?? 0;
   const [heroId, setHeroId] = useState(state.heroes[0].id);
   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
+  const { fx: eqFx, run: runEquip } = useEquipFx(engine, hero.id);
+  const { fx: rpFx, run: runRepair } = useRepairFx(engine);
+  // Patch 0425 -- auto-repair (or anything else) topping a piece back up
+  // without a click: a glint on that card and the wrench on the
+  // Auto-repair row gives a turn. A manual replay covers its own cards.
+  const autoUp = useRecentIncrease(
+    EquipmentManager.allItems(state).map((e) => ({ id: e.item.uid, value: e.item.durability })), 900,
+  );
+  const autoActive = !rpFx && Object.keys(autoUp).length > 0;
+  const cardRepairFx = (uid: string): CardRepairFx | undefined => {
+    if (rpFx) {
+      if (!(uid in rpFx.shown)) return undefined;
+      return { shown: rpFx.shown[uid], glint: rpFx.fill.includes(uid), clank: rpFx.clank.includes(uid), restored: rpFx.restored.includes(uid) };
+    }
+    return autoUp[uid] ? { glint: true, clank: false, restored: false } : undefined;
+  };
 
   const repairDiscountForBill = ModifierManager.global(state).repairDiscount ?? 0;
   const repairBill = EquipmentManager.allItems(state)
@@ -1155,7 +1217,8 @@ export function EquipmentPanel() {
           each hero's own gear grid), rather than in the Settings panel,
           whose own subtitle promises it "never touches your guild's
           progress" -- these two genuinely do. */}
-      <div className="card" style={{ marginBottom: 10 }}>
+      <div className="card" style={{ marginBottom: 10, position: 'relative' }}>
+        {autoActive && <span className="rpx-autowrench" aria-hidden="true">{'\u2692'}</span>}
         <Row
           label="Auto-repair"
           hint={`Automatically repair gear once it drops to ${state.autoRepairThresholdPercent}% durability or below, whenever the guild can afford it.`}
@@ -1193,16 +1256,20 @@ export function EquipmentPanel() {
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <GearScoreBadge score={HeroManager.gearScore(hero)} showProgress />
-        <button
-          className="btn-green"
-          onClick={() => engine.equipBestGear(hero.id)}
-          style={{ marginLeft: 10 }}
-          title="Equip the highest Gear Score item in the stash for each slot, wherever it beats what's already worn"
-        >
-          Equip best from stash
-        </button>
-        <button className="btn-primary" onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
+        <span className={`eqx-gs ${eqFx?.tick ? 'tick' : ''}`}>
+          <GearScoreBadge score={eqFx ? eqFx.gsShown : HeroManager.gearScore(hero)} showProgress />
+        </span>
+        <span className="eqx-anchor" style={{ marginLeft: 10 }}>
+          <button
+            className="btn-green"
+            onClick={(e) => runEquip(() => engine.equipBestGear(hero.id), 'best', e.currentTarget)}
+            title="Equip the highest Gear Score item in the stash for each slot, wherever it beats what's already worn"
+          >
+            Equip best from stash
+          </button>
+          {eqFx?.summary && <span className="eqx-sum" key={eqFx.key}>{eqFx.summary}</span>}
+        </span>
+        <button className="btn-primary" onClick={(e) => runRepair(() => engine.repairAll(), e.currentTarget)} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
           Repair everything · {formatGold(repairBill)} + {repairScrapBill} Scrap
         </button>
       </div>
@@ -1247,7 +1314,13 @@ export function EquipmentPanel() {
 
       <div className="item-card-grid gear-card-grid">
         {SLOTS.map((slot) => (
-          <SlotCard key={slot} slot={slot} item={hero.equipment[slot]} workshop={workshop} hero={hero} engine={engine} />
+          <SlotCard
+            key={slot} slot={slot} item={hero.equipment[slot]} workshop={workshop} hero={hero} engine={engine}
+            fxClass={eqFx?.wait.includes(slot) ? 'eqx-wait' : eqFx?.land.includes(slot) ? 'eqx-land' : ''}
+            deltas={eqFx?.deltas[slot]}
+            repairFx={hero.equipment[slot] ? cardRepairFx(hero.equipment[slot]!.uid) : undefined}
+            onRepair={(uid) => runRepair(() => engine.repair(uid))}
+          />
         ))}
       </div>
 
@@ -1341,7 +1414,12 @@ export function EquipmentPanel() {
       )}
       <div className="item-card-grid gear-card-grid">
         {filteredStash.map((item) => (
-          <StashCard key={item.uid} item={item} hero={hero} engine={engine} />
+          <StashCard
+            key={item.uid} item={item} hero={hero} engine={engine}
+            onEquip={(uid) => runEquip(() => engine.equip(hero.id, uid), 'one')}
+            repairFx={cardRepairFx(item.uid)}
+            back={eqFx?.hold.includes(item.uid) ? 'hold' : eqFx?.back.includes(item.uid) ? 'back' : undefined}
+          />
         ))}
       </div>
 

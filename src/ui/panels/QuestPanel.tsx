@@ -15,6 +15,8 @@ import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
 import { ConfirmModal } from '../ConfirmModal';
 import { buyWithFx, fxMs, fxSpeed } from '../purchaseFx';
+import { at } from '../resultFx';
+import { HeroSprite } from '../sprites/HeroSprite';
 
 export type Offer = QuestOffer;
 
@@ -260,14 +262,40 @@ export function QuestDetailModal({
   // Patch 0332.
   const isFastOffer = QuestManager.isFastOffer(offer);
 
+  // Patch 0425 -- the send-off: the contract is stamped DISPATCHED, the
+  // hero walks off across the banner and the modal folds away, and only
+  // then does the quest actually start (which swaps the board for the
+  // "on the road" card). Straight through with motion off.
+  const [dispatching, setDispatching] = useState(false);
+  const sendTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(sendTimer.current), []);
+  const dispatch = (chainSteps?: boolean, startStreak?: boolean) => {
+    if (dispatching) return;
+    const wait = fxMs(1350);
+    if (!wait) { onSend(offer, chainSteps, startStreak); return; }
+    setDispatching(true);
+    sendTimer.current = window.setTimeout(() => onSend(offer, chainSteps, startStreak), wait);
+  };
+
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
-        {offer.chain ? (
-          <ChainQuestBanner chainId={offer.chain.chainId} banner={chain?.banner} height={90} />
-        ) : tagSrc ? (
-          <div className="raid-detail-banner" style={{ backgroundImage: `url(${tagSrc})` }} />
-        ) : null}
+    <div className="overlay" onClick={dispatching ? undefined : onClose}>
+      <div className={`modal raid-detail-modal ${dispatching ? 'qsx-go' : ''}`} onClick={(e) => e.stopPropagation()}>
+        <div className="qsx-banwrap">
+          {offer.chain ? (
+            <ChainQuestBanner chainId={offer.chain.chainId} banner={chain?.banner} height={90} />
+          ) : tagSrc ? (
+            <div className="raid-detail-banner" style={{ backgroundImage: `url(${tagSrc})` }} />
+          ) : null}
+          {dispatching && (
+            <div className="qsx-stage fx-dispatch" aria-hidden="true">
+              <span className="qsx-walker" style={at(250)}>
+                <HeroSprite heroClass={hero.heroClass} skin={hero.skin} animation="walk" height={64} />
+              </span>
+              {[0, 1, 2, 3].map((i) => <span key={i} className="qsx-dust" style={at(380 + i * 220, { left: `${10 + i * 22}%` })} />)}
+            </div>
+          )}
+        </div>
+        {dispatching && <span className="qsx-stamp fx-dispatch" aria-hidden="true">Dispatched</span>}
         <div className="spread">
           <span className="card-title hero-card-name">{offer.name}</span>
           <span>
@@ -411,14 +439,16 @@ export function QuestDetailModal({
               <button
                 className="btn-ghost"
                 title="Send this stage only -- return to the board afterward"
-                onClick={() => onSend(offer, false)}
+                onClick={() => dispatch(false)}
+                disabled={dispatching}
               >
                 Send on Quest
               </button>
               <button
                 className="btn-primary"
                 title="Automatically continue this hero through the rest of the chain"
-                onClick={() => onSend(offer, true)}
+                onClick={() => dispatch(true)}
+                disabled={dispatching}
               >
                 Chain Quest Steps
               </button>
@@ -433,20 +463,22 @@ export function QuestDetailModal({
               <button
                 className="btn-ghost"
                 title="Send just this one -- no Auto-Chain streak"
-                onClick={() => onSend(offer, false, false)}
+                onClick={() => dispatch(false, false)}
+                disabled={dispatching}
               >
                 Send Once
               </button>
               <button
                 className="btn-primary"
                 title="Send, then automatically keep this hero chaining into further contracts"
-                onClick={() => onSend(offer, false, true)}
+                onClick={() => dispatch(false, true)}
+                disabled={dispatching}
               >
                 Send &amp; Chain
               </button>
             </>
           ) : (
-            <button className="btn-primary" onClick={() => onSend(offer)}>
+            <button className="btn-primary" onClick={() => dispatch()} disabled={dispatching}>
               Send {hero.name}
             </button>
           )}
@@ -493,14 +525,14 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
  * the card's own text sitting right below it.
  */
 function ActiveQuestCard({
-  quest, questHero, now, onRecall,
-}: { quest: ActiveQuest; questHero: Hero | undefined; now: number; onRecall: () => void }) {
+  quest, questHero, now, onRecall, fresh = false,
+}: { quest: ActiveQuest; questHero: Hero | undefined; now: number; onRecall: () => void; fresh?: boolean }) {
   const state = useEngine().state;
   const total = quest.endsAt - quest.startedAt;
   const progress = Math.min(100, ((now - quest.startedAt) / total) * 100);
   const onTheRoadTagSrc = !quest.offer.chain ? questTagBannerSrc(quest.offer.tag) : undefined;
   return (
-    <div className={`card ${quest.offer.difficulty}`}>
+    <div className={`card ${quest.offer.difficulty} ${fresh ? 'qsx-drop' : ''}`}>
       {quest.offer.chain ? (
         <ChainQuestBanner chainId={quest.offer.chain.chainId} height={48} style={{ opacity: 0.85 }} />
       ) : onTheRoadTagSrc ? (
@@ -518,7 +550,17 @@ function ActiveQuestCard({
           <span>Used {quest.consumables.map((c) => InventoryManager.resolveDef(state, c)?.name).join(', ')}</span>
         )}
       </div>
-      <div className="bar"><span style={{ width: `${progress}%` }} /></div>
+      {/* Patch 0425 -- the hero walks along their own progress bar,
+          a small flag waiting at the end. */}
+      <div className="qsx-track">
+        {questHero && (
+          <span className="qsx-rider" style={{ left: `${progress}%` }} aria-hidden="true">
+            <HeroSprite heroClass={questHero.heroClass} skin={questHero.skin} animation="walk" height={28} />
+          </span>
+        )}
+        <span className="qsx-flag" aria-hidden="true">⚑</span>
+        <div className="bar"><span style={{ width: `${progress}%` }} /></div>
+      </div>
       <div className="row end" style={{ marginTop: 6 }}>
         <button
           className="btn-ghost"
@@ -602,8 +644,16 @@ export function QuestPanel() {
   // Consumables no longer live on this tab -- quests automatically use
   // whatever's equipped on the sent hero's own consumable slots instead of
   // a loadout picked at send time.
+  // Patch 0425 -- whose "on the road" card should drop in (just sent).
+  const [justSent, setJustSent] = useState<string | null>(null);
+  const justSentTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(justSentTimer.current), []);
   const send = (offer: Offer, chainSteps = false, startStreak = true) => {
     engine.startQuest(selectedHero.id, offer, [], chainSteps, startStreak);
+    if (fxSpeed() <= 0) return;
+    setJustSent(selectedHero.id);
+    window.clearTimeout(justSentTimer.current);
+    justSentTimer.current = window.setTimeout(() => setJustSent(null), fxMs(1400));
   };
 
   // Confirmed before cancelling anything -- pulling a hero back mid-quest
@@ -790,6 +840,7 @@ export function QuestPanel() {
                   questHero={selectedHero}
                   now={now}
                   onRecall={() => recall(selectedHero.id)}
+                  fresh={justSent === selectedHero.id}
                 />
               </>
             )

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -16,6 +16,9 @@ import { ROLE_BY_ID } from '../../game/data/progression';
 import { RoleIcon } from '../RoleIcon';
 import { RarityPill } from '../RarityPill';
 import { RaidPartySprites } from '../sprites/RaidPartySprites';
+import { HeroSprite } from '../sprites/HeroSprite';
+import { fxMs } from '../purchaseFx';
+import { at } from '../resultFx';
 import { formatDuration, describeMods, describeStats, RARITY_COLOR } from '../../game/util';
 
 // Single-letter fallback badge (used only if the icon art at
@@ -478,12 +481,27 @@ function RaidDetailModal({
     setConfirming(true);
   };
 
-  const confirmCommit = () => {
+  // Patch 0425 -- the party files into the dungeon one by one, the
+  // portcullis slams down behind them, and only then is the raid
+  // committed. Straight through with motion off.
+  const [marching, setMarching] = useState(false);
+  const marchTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(marchTimer.current), []);
+  const commitNow = () => {
     if (!difficulty) return;
     engine.startRaid(raid.id, difficulty, selectedHeroIds);
+    if (fxMs(1)) lastRaidCommitAt = Date.now();
     setConfirming(false);
     onClose();
   };
+  const confirmCommit = () => {
+    if (!difficulty || marching) return;
+    const wait = fxMs(2500 + selectedHeroIds.length * 140);
+    if (!wait) { commitNow(); return; }
+    setMarching(true);
+    marchTimer.current = window.setTimeout(commitNow, wait);
+  };
+  const gateAt = 1150 + selectedHeroIds.length * 140;
 
   return (
     <>
@@ -661,8 +679,31 @@ function RaidDetailModal({
       </div>
 
       {confirming && cfg && difficulty && (
-        <div className="overlay" onClick={() => setConfirming(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay" onClick={marching ? undefined : () => setConfirming(false)}>
+          <div className={`modal ${marching ? 'rsx-go' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <div className={`rsx-stage ${marching ? 'fx-march' : ''}`}>
+              <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-detail-banner" />
+              <div className="rsx-party" aria-hidden="true">
+                {selectedHeroIds.map((id, i) => {
+                  const h = state.heroes.find((hero) => hero.id === id);
+                  return h ? (
+                    <span key={id} className="rsx-member" style={marching ? at(150 + i * 140) : undefined}>
+                      <HeroSprite heroClass={h.heroClass} skin={h.skin} animation={marching ? 'walk' : 'idle'} height={selectedHeroIds.length > 3 ? 40 : 56} framePhase={i * 0.37} />
+                    </span>
+                  ) : null;
+                })}
+              </div>
+              {marching && (
+                <>
+                  <svg className="rsx-gate" style={at(gateAt)} viewBox="0 0 440 90" preserveAspectRatio="none" aria-hidden="true">
+                    <rect x="0" y="0" width="440" height="10" />
+                    {Array.from({ length: 10 }, (_, i) => <rect key={i} x={18 + i * 44} y="0" width="8" height="90" />)}
+                    <rect x="0" y="32" width="440" height="6" /><rect x="0" y="62" width="440" height="6" />
+                  </svg>
+                  <div className="rsx-sealed" style={at(gateAt + 380)}>The gate is sealed</div>
+                </>
+              )}
+            </div>
             <h3>Send the guild?</h3>
             <p className="small muted" style={{ marginTop: 0 }}>
               {raid.name}, {RAID_DIFFICULTY_LABEL[difficulty]}
@@ -677,8 +718,8 @@ function RaidDetailModal({
               The whole party is committed until the raid resolves. There's no early retreat.
             </p>
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
-              <button onClick={() => setConfirming(false)}>Cancel</button>
-              <button className="btn-primary" onClick={confirmCommit}>Send them</button>
+              <button onClick={() => setConfirming(false)} disabled={marching}>Cancel</button>
+              <button className="btn-primary" onClick={confirmCommit} disabled={marching}>Send them</button>
             </div>
           </div>
         </div>
@@ -773,7 +814,12 @@ function RaidClearBadges({ raidId }: { raidId: string }) {
   );
 }
 
+/** Patch 0425 -- set when a raid is committed with motion on, so the
+ *  in-progress card that replaces the detail view drops in once. */
+let lastRaidCommitAt = 0;
+
 function ActiveRaidCard() {
+  const [fresh] = useState(() => Date.now() - lastRaidCommitAt < 1500);
   const engine = useEngine();
   const state = engine.state;
   const active = state.activeRaid;
@@ -789,7 +835,7 @@ function ActiveRaidCard() {
   const color = DIFFICULTY_COLOR[active.difficulty];
 
   return (
-    <div className="card raid-active-card" style={{ borderLeft: `3px solid ${color}` }}>
+    <div className={`card raid-active-card ${fresh ? 'qsx-drop' : ''}`} style={{ borderLeft: `3px solid ${color}` }}>
       <RaidBanner raidId={active.raidId} banner={raid?.banner} className="raid-active-banner" />
       <div className="raid-active-header">
         <span className="card-title">{raid?.name ?? 'A raid'}, {active.difficulty}</span>

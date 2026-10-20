@@ -27,8 +27,11 @@ import { CraftingStation } from '../CraftingStation';
 import { EnhanceStation } from '../EnhanceStation';
 import { WeaponEnchantStation } from '../WeaponEnchantStation';
 import { ArmourInfusionStation } from '../ArmourInfusionStation';
+import { RerollStation } from '../RerollStation';
 import { ScrapStation } from '../ScrapStation';
 import { ReputationRing } from '../ReputationRing';
+import { PriceTag, REP_LINES, useRepLevelUp } from '../repFx';
+import { vendorRepPercent } from '../../game/data/vendorRep';
 import { ConfirmModal } from '../ConfirmModal';
 import { RewardGlowParticle } from '../RewardGlowParticle';
 import { getFlyTargetCenter } from '../flyTarget';
@@ -275,6 +278,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const { settings } = useSettings();
   const [showCrafting, setShowCrafting] = useState(false);
   const [showEnhance, setShowEnhance] = useState(false);
+  // Patch 0426 -- Enchanter reroll (RerollStation.tsx).
+  const [showReroll, setShowReroll] = useState(false);
   const [showScrap, setShowScrap] = useState(false);
   const [showWeaponEnchant, setShowWeaponEnchant] = useState(false);
   const [showArmourInfusion, setShowArmourInfusion] = useState(false);
@@ -304,8 +309,14 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   useEffect(() => {
     if (taughtId) setNewlyTaught((cur) => (cur.has(taughtId) ? cur : new Set(cur).add(taughtId)));
   }, [taughtId]);
+  // Patch 0425 -- rep level-up: the vendor hops with a line of their own
+  // and the "% off" badge pops (the ring bursts itself, the prices tick).
+  const repSpent = state.vendorGoldSpent[vendorId] ?? 0;
+  const repUp = useRepLevelUp(repSpent);
+  const repPct = vendorRepPercent(repSpent);
   const bubbleLine = vendorBeat && (vendorBeat.phase === 'levelup' || vendorBeat.phase === 'stamp')
-    ? VENDOR_LEVEL_LINES[vendorId][level] : undefined;
+    ? VENDOR_LEVEL_LINES[vendorId][level]
+    : repUp ? REP_LINES[repUp % REP_LINES.length] : undefined;
 
   const { flashes, dismiss } = useMaxFlash([
     ...upgradeList.map((def) => ({
@@ -328,7 +339,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
         style={{ marginBottom: 12, position: 'relative' }}
       >
         <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
-          <span className={`vendor-sprite-wrap ${vendorBeat?.phase === 'levelup' ? 'fx-hop' : ''}`}>
+          <span className={`vendor-sprite-wrap ${vendorBeat?.phase === 'levelup' || repUp ? 'fx-hop' : ''}`} key={repUp ?? 'v'}>
             <VendorSprite vendor={vendorId} height={72} animate />
             {bubbleLine && <span className="vendor-bubble" role="status">{bubbleLine}</span>}
           </span>
@@ -336,7 +347,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
             <div className="spread">
               <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
                 {vendorDef.name}
-                <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
+                <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} motes />
+                {repPct > 0 && <span className={`repx-perk ${repUp ? 'pop' : ''}`} key={repUp ?? 'p'}>{repPct}% off here</span>}
               </span>
               <span className="small muted">
                 <LevelRoll beat={vendorBeat} value={level} render={(v) => `Level ${v}/${upgradeList.length}`} />
@@ -392,6 +404,9 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               )}
               {vendorId === 'enchanter' && (
                 <button className="btn-purple" onClick={() => setShowArmourInfusion(true)}>Armour Infusion</button>
+              )}
+              {vendorId === 'enchanter' && (
+                <button className="btn-purple" onClick={() => setShowReroll(true)}>Reroll stats</button>
               )}
               {/* A handful of consumables (Lucky Charm, Fortune Weave,
                   Windfall Sigil) were mistakenly showing under the
@@ -468,6 +483,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
       {showScrap && <ScrapStation onClose={() => setShowScrap(false)} />}
       {showWeaponEnchant && <WeaponEnchantStation onClose={() => setShowWeaponEnchant(false)} />}
       {showArmourInfusion && <ArmourInfusionStation onClose={() => setShowArmourInfusion(false)} />}
+      {showReroll && <RerollStation onClose={() => setShowReroll(false)} />}
       {showCharms && <CraftingStation category="charm" onClose={() => setShowCharms(false)} />}
     </>
   );
@@ -1219,7 +1235,7 @@ function EquipmentShopCard({
           <ItemIcon slot={def.slot} icon={def.icon} size={41} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{displayName}</div>
-            <div className="item-card-meta-row tiny muted">Lv {displayLevel} · {formatGold(price)}</div>
+            <div className="item-card-meta-row tiny muted">Lv {displayLevel} · <PriceTag value={price} /></div>
           </div>
         </div>
       </div>
@@ -1299,7 +1315,7 @@ function ConsumableShopCard({
           <ConsumableIcon icon={def.icon} glyph={def.glyph} size={41} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
-            <div className="item-card-meta-row tiny muted">{formatGold(price)}</div>
+            <div className="item-card-meta-row tiny muted"><PriceTag value={price} /></div>
           </div>
         </div>
       </div>

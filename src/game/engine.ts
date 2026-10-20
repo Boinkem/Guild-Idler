@@ -7,7 +7,7 @@ import { CHAIN_REPLAY_TIER_BY_ID } from './data/chainReplay';
 import { RaidManager } from './managers/RaidManager';
 import { ShopManager } from './managers/ShopManager';
 import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
-import { EquipmentManager } from './managers/EquipmentManager';
+import { EquipmentManager, MAX_PLUS } from './managers/EquipmentManager';
 import { InventoryManager } from './managers/InventoryManager';
 import { CurioManager } from './managers/CurioManager';
 import { RecipeManager } from './managers/RecipeManager';
@@ -2659,6 +2659,79 @@ export class GameEngine {
     playSound('enhance');
     this.say(`Refined to +${found.item.plus}.`);
     void this.saveNow();
+  }
+
+  /**
+   * Patch 0425 -- refine an item several +levels at once (the Enhance
+   * station's target bar). All-or-nothing: refuses unless the whole run
+   * is affordable, then applies each step through the same
+   * EquipmentManager.upgrade a single click uses. One toast for the lot.
+   * Returns how many levels were gained.
+   */
+  upgradeItemTo(itemUid: string, targetPlus: number): number {
+    const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+    if (!found) return 0;
+    const item = found.item;
+    const workshop = this.state.guild.workshop ?? 0;
+    const to = Math.min(MAX_PLUS, Math.floor(targetPlus));
+    if (to <= item.plus) { this.say(item.plus >= MAX_PLUS ? 'Already at maximum refinement.' : 'Pick a higher refinement.'); return 0; }
+    const bill = EquipmentManager.upgradeCostTo(item, to, workshop);
+    if (this.state.gold < bill.gold) { this.say('Not enough gold for the upgrade.'); return 0; }
+    if (this.state.scrap < bill.scrap) { this.say('Not enough scrap for the upgrade.'); return 0; }
+    const from = item.plus;
+    while (item.plus < to) {
+      const error = EquipmentManager.upgrade(this.state, item, workshop);
+      if (error) break;
+    }
+    const gained = item.plus - from;
+    if (gained <= 0) return 0;
+    playSound('enhance');
+    this.say(`Refined to +${item.plus}.`);
+    void this.saveNow();
+    return gained;
+  }
+
+  /**
+   * Patch 0426 -- Blacksmith re-leveling, finally reachable (the logic
+   * shipped in patch 0215 as EquipmentManager.relevel, but nothing ever
+   * called it). Raises an equipped item's level toward its wearer's,
+   * undoing outleveled decay (HeroManager.gearRelevance). Capped at the
+   * wearer's level, so a stashed item has nothing to aim at: equip it
+   * first. Returns the levels gained.
+   */
+  relevelItem(itemUid: string, targetLevel: number): number {
+    const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+    if (!found) return 0;
+    const def = EQUIPMENT_BY_ID[found.item.defId];
+    const hero = found.heroId ? this.hero(found.heroId) : undefined;
+    if (!def || !hero) { this.say('Equip it on a hero first -- re-leveling raises an item to its wearer\u2019s level.'); return 0; }
+    const before = found.item.rolledItemLevel ?? def.reqLevel;
+    const error = EquipmentManager.relevel(this.state, found.item, targetLevel, hero.level);
+    if (error) { this.say(error); return 0; }
+    const after = found.item.rolledItemLevel ?? def.reqLevel;
+    playSound('enhance');
+    this.say(after >= hero.level ? `Re-leveled to ${after} -- full strength on ${hero.name}.` : `Re-leveled to ${after}.`);
+    void this.saveNow();
+    return after - before;
+  }
+
+  /**
+   * Patch 0426 -- Enchanter reroll, finally reachable (CraftingManager.
+   * reroll shipped in patch 0215 with no caller). Re-runs the procedural
+   * roll on the item's stats at its current level, so re-leveling first
+   * gets the most out of it. Only for procedurally-rolled gear.
+   */
+  rerollItem(itemUid: string): boolean {
+    const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+    if (!found) return false;
+    const wearer = found.heroId ? this.hero(found.heroId) : undefined;
+    const heroLevel = wearer?.level ?? Math.max(1, ...this.state.heroes.map((h) => h.level));
+    const error = CraftingManager.reroll(this.state, found.item, heroLevel);
+    if (error) { this.say(error); return false; }
+    playSound('enchant');
+    this.say('Rerolled.');
+    void this.saveNow();
+    return true;
   }
 
   sellItem(itemUid: string) {

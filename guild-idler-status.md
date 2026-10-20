@@ -34511,3 +34511,220 @@ banner tips showing one at a time with no bottom toasts. Hatch reveal
 and the achievement stack were rendered through a throwaway harness.
 Mailbox, infuse and the purchase rows were type-checked and built but
 not clicked through in-game here.
+
+### Send-off, equip, Enhance target bar, repair and vendor rep animated (patch 0425)
+```discord-update
+Dev Update | Patch 0425
+
+- Added a send-off when you send a hero on a quest: the contract gets stamped DISPATCHED and your hero walks off across the banner before the "on the road" card drops in
+- Added your hero walking along their own progress bar on every "on the road" card
+- Added a raid march: your party files into the dungeon one by one, the portcullis slams shut and "The gate is sealed" appears before the raid starts
+- Added an equip moment: new gear arcs out of the stash into its slot, the old piece drops back into the stash, the slot shines and your stat changes float up green or red
+- Changed Equip best from stash to swap each upgrade in one after another, counting your Gear Score up as each piece lands, then showing a summary (the button shakes if there's nothing better)
+- Added a forge moment to Enhance: the hammer strikes, the arrows light up, the glow streaks into the preview slot and the +level rolls over, with a bigger flash at +5 and +10 and a Max refinement seal at +10
+- Added a refinement bar to Enhance: tap any +level to aim for it, see the stats at that level, and pay for the whole run in one go
+- Added a repair moment: a wrench hops from card to card, most-worn first, bars refill and count up, and broken gear gets its colour back with a RESTORED tag
+- Added a small glint when auto-repair fixes something, with the wrench spinning on the Auto-repair setting
+- Added vendor reputation moments: every purchase tops up the rep ring, and a new rep level makes it burst, the vendor hops with a line, and any prices that drop tick down
+- Added a "% off here" badge next to each vendor's rep ring
+```
+
+Mocked up on the Claude Design canvas (SendOut, EquipGear, Enhance, Repair,
+VendorRep boards) and signed off before building. The Enhance board's
+target bar was added after review at the user's request. Everything
+follows the 0422/0424 pattern: `at(ms)` delays in `--fx-t` units, root
+classes containing `fx-` for Reduce motion, `fxMs`/`fxSpeed` for anything
+timed in JS, and with motion off every action applies straight away.
+
+**Send-off (QuestPanel).** `QuestDetailModal` gains a `dispatch()` wrapper
+around `onSend`: it stamps the modal (`.qsx-stamp`), walks the hero's own
+`HeroSprite` (walk) across the banner (`.qsx-stage`), folds the modal at
+1050 ms and only calls `onSend` (so `engine.startQuest`) at `fxMs(1350)`.
+Buttons are disabled and the overlay can't be clicked away while it runs.
+All four send buttons (Send, Send Once, Send & Chain, chain stage pair)
+go through it. `ActiveQuestCard` now always carries a `.qsx-track`: the
+hero walks along the bar at `left: progress%`, with a flag at the end.
+`QuestPanel.send` sets `justSent` for `fxMs(1400)` so the selected hero's
+card drops in (`fresh` → `.qsx-drop` with a glint across the bar).
+Quick-assign gets the drop-in too; Send All Idle is unchanged.
+
+**Raid march (RaidsPanel).** The "Send the guild?" confirm now shows the
+raid banner with the chosen party standing on it. "Send them" walks each
+member in (staggered 140 ms), drops an SVG portcullis (`.rsx-gate`) at
+`1150 + n × 140` ms, shows "The gate is sealed", folds the modal, and
+commits at `fxMs(2500 + n × 140)`. A module-level `lastRaidCommitAt`
+lets `ActiveRaidCard` drop in once when it mounts right after a commit.
+
+**Equip (new `src/ui/equipFx.tsx`, `useEquipFx`).** Snapshot before /
+diff after, so it works for any equip action:
+- It records the hero's equipment, `HeroManager.equipmentStats` and Gear
+  Score, plus the on-screen centre of every stash card (`data-eq-uid`).
+- After the action, each changed slot (`data-eq-slot`) holds its new icon
+  hidden (`eqx-wait`) while the piece flies in (`flyIcon` now accepts a
+  captured point as well as an element). It then lands (`eqx-land`
+  shine), and the swapped-out piece flies back into its stash card. That
+  card is hidden (`eqx-hold`) until the piece arrives (`eqx-back`).
+- The Gear Score badge is fed `gsShown`, which adds each slot's
+  `gearScoreForInstance` gain as it lands, so `GearScoreBadge`'s own
+  tier-up flash fires on the right landing.
+- A single equip floats the stat deltas over the slot.
+- "Equip best" staggers the slots 300 ms apart and ends with a summary
+  pill. When `equipBestGear` changes nothing, the button shakes and the
+  engine's own toast explains why.
+- `StashCard` routes Equip through `onEquip`.
+
+**Enhance (EnhanceStation + engine).**
+- `EquipmentManager.upgradeCostTo(item, target, workshop)` prices a
+  multi-level run step by step. It costs exactly the same as clicking
+  each level.
+- `engine.upgradeItemTo(uid, target)` is all-or-nothing on affordability,
+  applies each step through the existing `EquipmentManager.upgrade`,
+  sends one toast and returns the levels gained. `upgradeItem` is
+  unchanged.
+- The station has a 10-pip refinement bar (`.ehx-pip`; +5 and +10 marked
+  as milestones, which are visual only). Tapping a higher pip sets `aim`.
+  The pips along the path are striped, and the preview slot, stat delta
+  lines and durability line all read at the target. The button reads
+  "Enhance to +N · cost" and pays for the run through `buyWithFx`.
+- The replay (`run` state) holds the shown +level. Each step re-keys an
+  `.ehx-beat` overlay: rune circle, anvil glow, heat, hammer strikes with
+  sparks, the three arrows, a streak and a flash. The first step plays in
+  full (1140 ms, two strikes); later steps are quick (430 ms, one strike).
+- On each landing the +label rolls and the stat lines pulse. +5 and +10
+  show a milestone banner and a violet rune circle. Reaching +10 stamps
+  `SealStamp` "Max refinement".
+- The old `enhance-flash` overlay is no longer used.
+
+**Repair (new `src/ui/repairFx.tsx`, `useRepairFx`).**
+- The hook snapshots every item's durability, runs the action (through
+  `buyWithFx` when there's a button), and replays only the cards on
+  screen (`data-dura-uid`), most-worn first, 330 ms apart.
+- A ⚒ `flyIcon` hops card to card, and `DurabilityBar` takes `shown` and
+  `glint` so each bar refills from where it was and counts up in 8 steps.
+- Each card clanks (`rpx-clank`), and a piece that was at 0 shows a
+  RESTORED tag; its broken badge follows `shown`.
+- Repair everything and both single-item Repair buttons in the slot
+  modal go through it.
+- Auto-repair (or any other refill with no click) is picked up by
+  `useRecentIncrease` on durability: a glint on that card, and the wrench
+  spinning on the Auto-repair row (`rpx-autowrench`).
+
+**Vendor reputation.**
+- `ReputationRing` now trails the real total by 800 ms (`shown`). With
+  `motes` set (only on the vendor card's ring, so they don't double up),
+  three gold coins fly from the header into it.
+- When the total catches up, the ring either sips (arc slides, small
+  pop) or, on a level change, bursts (two shockwaves, number roll). This
+  covers every ring, Grimsby's included.
+- New `src/ui/repFx.tsx`:
+  - `useRepLevelUp` makes the vendor hop with a `REP_LINES` line, in the
+    existing bubble.
+  - `PriceTag` replaces the plain prices on the shop cards. When a price
+    actually drops, it holds the old figure until the burst, then strikes
+    it through and rolls in the new one with a "-N%" chip.
+- A "% off here" badge sits next to the vendor card's ring. It pops on a
+  level-up.
+
+**Tested:** `npx tsc --noEmit` and `npm run build` pass. Played headless
+in the web build (with a throwaway build that exposed the engine for
+setup):
+- quest send-off: stamp, walk, fold, then the on-the-road card with its
+  walker;
+- raid confirm: party walking in, gate, sealed text, then the active
+  card;
+- Equipment: a single equip, Equip best (three upgrades, Gear Score
+  counting up, summary) and the no-upgrade shake;
+- Repair everything over worn and broken gear (RESTORED, sequential
+  refill), plus an auto-repair refill;
+- a Blacksmith purchase crossing a rep level (bubble, badge);
+- an Enhance run from +0 to +6 through the +5 milestone.
+Single-item repair and the max-refinement seal were type-checked and
+built but not clicked through here.
+
+### Re-leveling and Enchanter reroll, finally reachable (patch 0426)
+```discord-update
+Dev Update | Re-level & Reroll
+
+- Added a Re-level tab to the Blacksmith's Enhance station: when a hero outlevels their gear it gives less of its stats, and re-leveling brings an item back up to its wearer's level so it's at full strength again
+- Added a Stat strength bar to Re-level so you can see exactly how much an outleveled item is holding back, and what you'll get back
+- Added the same tap-to-target track as Enhance: re-level all the way, or stop short to save gold
+- Added a tempering moment: the item heats up, its level ticks up one at a time in a shower of embers, then it's quenched in steam, with FULL STRENGTH stamped when it matches its wearer
+- Added Reroll stats at the Enchanter: give a random-stat item a fresh roll of its bonuses at its current level (Enchanting and Infusion are kept)
+- Added a reroll moment: the rune circle spins up, the stats scramble and settle one by one, and you see what went up, what went down, and whether it's a better roll overall
+- Fixed both of these being announced in patch 0215 but never actually reachable in the game
+```
+
+Direct report: re-leveling (and, it turned out, the Enchanter reroll)
+had never been reachable. Patch 0215 added `EquipmentManager.relevel` /
+`relevelCost` and `CraftingManager.reroll` / `rerollCost` to the managers
+only. No engine method, button or station ever called them (checked
+against the full git history: nothing outside the managers ever
+referenced them), even though that patch's Discord update announced both.
+Re-level was mocked up on the Claude Design canvas ("Enhance — Re-level
+tab") and signed off. Reroll was approved to be wired up in the same
+patch, built in the same style. This patch sits on top of 0425.
+
+**Engine.**
+- `relevelItem(uid, targetLevel)` finds the item's wearer. A stashed item
+  is refused with a toast (direct decision: the cap is the wearer's
+  level, so an item with no wearer has nothing to aim at). It then calls
+  `EquipmentManager.relevel`, which was unchanged and already clamps to
+  the wearer's level and never lowers. One toast, which mentions "full
+  strength" when the item reaches the wearer's level. Returns the levels
+  gained.
+- `rerollItem(uid)` calls `CraftingManager.reroll`, unchanged. The hero
+  level passed in is the wearer's, or the highest hero's for a stashed
+  item; it's only used as a fallback for an item with no
+  `rolledItemLevel`. Returns success.
+
+**Re-level tab (new `src/ui/RelevelPanel.tsx`, inside EnhanceStation).**
+- `EnhanceStation` gets two tabs, "Refine +N" (unchanged) and
+  "Re-level". The tabs are locked while either one is mid-animation, and
+  so are Close and the overlay.
+- Re-level uses `./lore/crafting/gearenhance.jpg`, which was in the repo
+  unused. It has a single central slot (`SLOT_RECT` 40/37.2/20/25%, hand
+  measured). There's no `bright/` variant yet, so it's used as-is for
+  both moods.
+- The picker only lists equipped items, each with its wearer, level and
+  current strength %.
+- The scene shows the item's level above the slot ("Lv 12 → 24"). Below
+  it, a "Stat strength" bar shows `HeroManager.gearRelevance`
+  (itemLevel / heroLevel, floored at `gear_relevance.floor`), with the
+  target striped in.
+- The side lines are the item's own stats and mods at the current and
+  target level, using the same maths as `equipmentStats` /
+  `equipmentMods`.
+- The target track reuses the `.ehx-pip` bar: one pip per level up to the
+  wearer's level, and tapping one stops short. The button pays the whole
+  `relevelCost` through `buyWithFx`.
+- The replay holds the shown level. The item heats (`rlx-glow`), the
+  level ticks up one at a time (70–170 ms per level, so a big jump stays
+  around a second) with embers and a number roll while the strength bar
+  climbs. Then a quench (steam and flash) and a stamp: "Full strength"
+  (which stays) or "Lv N".
+
+**Enchanter reroll (new `src/ui/RerollStation.tsx`).**
+- There's a new "Reroll stats" button on the Enchanter's page, next to
+  Weapon Enchanting and Armour Infusion.
+- The picker only lists procedural items (`isProceduralTemplate`); set
+  pieces and named gear have fixed stats.
+- It shows the item in a slowly turning rune circle, with its rolled
+  stats and roll total. It says plainly that the new roll replaces the
+  old one with no undo. The cost is `rerollCost` (gold, after the
+  Enchanter's discount, plus 20 Herbs), with Herbs held shown on the
+  button.
+- On reroll, the circle spins up with a burst and every stat line
+  scrambles. They settle one by one, 180 ms apart, each with its change
+  against the old roll. The roll total then shows "old → new" with a
+  Better / Worse / Same verdict.
+- With motion off, the new numbers and deltas simply appear.
+
+**Tested:** `npx tsc --noEmit` and `npm run build` pass. Played headless
+in the web build (with a throwaway build that exposed the engine for
+setup):
+- a Lv 12 item on a Lv 24 hero (50% strength), stopped short at Lv 20
+  (83%), then taken to 24 (FULL STRENGTH stamp, toast);
+- the Enchanter's Reroll stats on the same item: scramble, settle,
+  deltas and "Better roll".
+A stashed item's refusal and the Herbs-short state were type-checked
+but not clicked through.

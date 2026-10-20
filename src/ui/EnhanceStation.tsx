@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { EquipmentManager, MAX_PLUS } from '../game/managers/EquipmentManager';
@@ -8,6 +8,9 @@ import { Modifiers, Stats } from '../game/types';
 import { ItemIcon } from './icons';
 import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
+import { buyWithFx, fxMs, fxSpeed, SealStamp } from './purchaseFx';
+import { at } from './resultFx';
+import { RelevelPanel } from './RelevelPanel';
 
 /**
  * Two slots now (patch 0360, direct design request, with commissioned
@@ -90,6 +93,11 @@ function DeltaLine({ label, current, next, format }: { label: string; current: n
  * "current / next" pair -- no need to reselect the item to keep going,
  * the left slot's own item.plus already ticks up live off the same
  * engine state this component already reads every render.
+ *
+ * Patch 0425 -- a forge beat per +level (hammer, arrows, streak, roll;
+ * +5 and +10 are milestones), and a refinement bar under the stat lines:
+ * tap a pip to aim for that +level and the button pays for the whole
+ * run at once (engine.upgradeItemTo), replayed step by step.
  */
 export function EnhanceStation({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
@@ -104,32 +112,46 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   // to commit gold against the wrong piece of gear without really looking
   // at it. See ItemPreviewModal's own doc comment (CraftingStation.tsx).
   const [previewUid, setPreviewUid] = useState<string | null>(null);
-  // Briefly true right after clicking Enhance -- drives the flash overlay
-  // on both slots, cleared on its own after the animation's own duration.
-  const [flashing, setFlashing] = useState(false);
+
+  // Patch 0425 -- the +level to aim for (null = just the next one), set
+  // by tapping a pip on the refinement bar.
+  const [aim, setAim] = useState<number | null>(null);
+  // Patch 0425 -- the forge replay. The engine applies the whole run at
+  // once; `run` holds what the scene is showing while it plays: the +level
+  // currently displayed, where the run ends, and the step being struck.
+  const [run, setRun] = useState<{ shown: number; to: number; step: { key: number; quick: boolean; milestone: boolean } | null; mile: string | null; rolled: number } | null>(null);
+  const [justMaxed, setJustMaxed] = useState(false);
+  // Patch 0426 -- second tab: Re-level (RelevelPanel.tsx).
+  const [mode, setMode] = useState<'refine' | 'relevel'>('refine');
+  const [relevelBusy, setRelevelBusy] = useState(false);
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
+  const later = (ms: number, fn: () => void) => { timers.current.push(window.setTimeout(fn, fxMs(ms))); };
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
   const def = item ? EquipmentManager.def(item) : undefined;
-  const cost = item ? EquipmentManager.upgradeCost(item, workshop) : 0;
-  const scrapCost = item ? EquipmentManager.upgradeScrapCost(item, workshop) : 0;
-  const maxDurability = item ? EquipmentManager.maxDurability(item) : 0;
-  const maxed = item ? item.plus >= MAX_PLUS : false;
-  // Same formula EquipmentManager.maxDurability itself uses, evaluated one
-  // plus level ahead -- just for the "here's what you'd get" preview line.
-  const nextMaxDurability = def ? Math.floor(def.maxDurability * (1 + ((item?.plus ?? 0) + 1) * 0.1)) : 0;
+  const busy = run !== null || relevelBusy;
+  const basePlus = run ? run.shown : (item?.plus ?? 0);
+  const maxed = item ? basePlus >= MAX_PLUS : false;
+  const goal = !item ? 0 : run ? run.to : Math.min(MAX_PLUS, aim && aim > item.plus ? aim : item.plus + 1);
+  const multi = !!item && !run && goal > item.plus + 1;
+  const bill = item && !run ? EquipmentManager.upgradeCostTo(item, goal, workshop) : { gold: 0, scrap: 0 };
+  const canAfford = state.gold >= bill.gold && state.scrap >= bill.scrap;
+  const durAt = (p: number) => (def ? Math.floor(def.maxDurability * (1 + p * 0.1)) : 0);
 
   // The item's own base mods/stats, unscaled -- see scaleStats' own
   // comment above for why this preview intentionally stops at the
   // plus-multiplier and doesn't attempt gearRelevance.
   const baseMods: Partial<Modifiers> = item?.customMods ?? def?.mods ?? {};
   const baseStats: Partial<Stats> = item?.rolledStats ?? def?.stats ?? {};
-  const currentScale = 1 + (item?.plus ?? 0) * 0.15;
-  const nextScale = 1 + ((item?.plus ?? 0) + 1) * 0.15;
+  const currentScale = 1 + basePlus * 0.15;
+  const nextScale = 1 + goal * 0.15;
   const currentMods = scaleMods(baseMods, currentScale);
   const nextMods = scaleMods(baseMods, nextScale);
   const currentStats = scaleStats(baseStats, currentScale);
   const nextStats = scaleStats(baseStats, nextScale);
+  const crosses = item ? [5, 10].filter((m) => m > basePlus && m <= goal) : [];
 
   const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
   const previewItem = previewFound?.item;
@@ -162,27 +184,72 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
     ...state.heroes.map((h) => ({ id: h.id, label: h.name })),
   ];
 
-  function handleEnhance() {
-    if (!item) return;
-    engine.upgradeItem(item.uid);
-    setFlashing(true);
-    window.setTimeout(() => setFlashing(false), 650);
+  const pickTarget = (lv: number) => {
+    if (!item || busy || lv <= item.plus) return;
+    setAim(lv === item.plus + 1 ? null : lv);
+  };
+
+  // One refinement step of the replay. The first step of a run plays in
+  // full (two strikes); the rest are quick (one strike, fast arrows).
+  // Returns the 1x time the step lands, relative to the run's start.
+  const scheduleStep = (p: number, start: number, quick: boolean) => {
+    const np = p + 1;
+    const milestone = np === 5 || np === MAX_PLUS;
+    const land = start + (quick ? 430 : 1140);
+    later(start, () => setRun((r) => r && { ...r, step: { key: Date.now() + p, quick, milestone } }));
+    later(land, () => setRun((r) => r && {
+      ...r, shown: np, rolled: Date.now(),
+      mile: milestone ? (np === MAX_PLUS ? `+${MAX_PLUS} · Fully refined` : `+${np} milestone`) : r.mile,
+    }));
+    return land;
+  };
+
+  function handleEnhance(btn: HTMLElement) {
+    if (!item || busy || maxed) return;
+    const from = item.plus;
+    const to = goal;
+    let gained = 0;
+    buyWithFx(engine, btn, () => { gained = engine.upgradeItemTo(item.uid, to); });
+    setAim(null);
+    if (gained <= 0 || fxSpeed() <= 0) return;
+    const end = from + gained;
+    setRun({ shown: from, to: end, step: null, mile: null, rolled: 0 });
+    let start = 420;
+    let land = 0;
+    for (let p = from; p < end; p++) {
+      land = scheduleStep(p, start, p > from);
+      start = land + 330;
+    }
+    const sawMile = [5, MAX_PLUS].some((m) => m > from && m <= end);
+    later(land + 330, () => setRun((r) => r && { ...r, step: null }));
+    if (end >= MAX_PLUS) later(land + 200, () => setJustMaxed(true));
+    later(land + (sawMile ? 1700 : 500), () => setRun(null));
   }
 
+  const step = run?.step;
+
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay" onClick={busy ? undefined : onClose}>
       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">Enhance</span>
-          <button className="btn-primary" onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose} disabled={busy}>Close</button>
+        </div>
+        <div className="ehx-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={mode === 'refine'} className={`ehx-tab ${mode === 'refine' ? 'on' : ''}`} disabled={busy} onClick={() => setMode('refine')}>Refine +N</button>
+          <button type="button" role="tab" aria-selected={mode === 'relevel'} className={`ehx-tab ${mode === 'relevel' ? 'on' : ''}`} disabled={busy} onClick={() => setMode('relevel')}>Re-level</button>
         </div>
 
-        <div className="craft-scene" style={{ backgroundImage: `url(${backgroundSrc(ENHANCE_BG, settings.backgroundMood)})` }}>
+        {mode === 'relevel' ? <RelevelPanel onBusyChange={setRelevelBusy} /> : (<>
+
+        <div className="craft-scene ehx-scene" style={{ backgroundImage: `url(${backgroundSrc(ENHANCE_BG, settings.backgroundMood)})` }}>
           <SlotBox
             rect={LEFT_SLOT_RECT}
+            disabled={busy}
             filled={def && item ? (
-              <span className={`enhance-slot-icon ${flashing ? 'enhance-flash' : ''}`}>
+              <span className="enhance-slot-icon ehx-item">
                 <ItemIcon slot={def.slot} icon={def.icon} size={72} />
+                <span key={run?.rolled || 'p'} className={`ehx-plus ${run?.rolled ? 'ehx-roll' : ''}`}>+{basePlus}</span>
               </span>
             ) : null}
             label="Choose an item to enhance"
@@ -199,24 +266,57 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
             }}
           >
             {def && item && !maxed ? (
-              <span className={`enhance-slot-icon ${flashing ? 'enhance-flash' : ''}`}>
+              <span className="enhance-slot-icon ehx-preview">
                 <ItemIcon slot={def.slot} icon={def.icon} size={72} />
+                <span className="ehx-plus">+{goal}</span>
               </span>
             ) : null}
           </div>
+
+          {/* Patch 0425 -- the forge beat, re-keyed for every step. */}
+          {step && (
+            <div key={step.key} className={`ehx-beat fx-forge ${step.quick ? 'quick' : ''} ${step.milestone ? 'mile' : ''}`} aria-hidden="true">
+              <svg className="ehx-runes" style={at(0)} viewBox="0 0 200 200">
+                <circle cx="100" cy="100" r="95" strokeWidth="1.4" strokeDasharray="3 8" />
+                <circle cx="100" cy="100" r="80" strokeWidth="1" strokeDasharray="22 7 3 7" />
+                <circle cx="100" cy="100" r="68" strokeWidth="1.6" strokeDasharray="1 10" />
+              </svg>
+              <span className="ehx-anvil" style={at(0)} />
+              <span className="ehx-heat" style={at(0, { left: `${LEFT_SLOT_RECT.left}%`, top: `${LEFT_SLOT_RECT.top}%`, width: `${LEFT_SLOT_RECT.width}%`, height: `${LEFT_SLOT_RECT.height}%` })} />
+              {(step.quick ? [0] : [100, 360]).map((ms) => (
+                <span key={ms} className="ehx-strike" style={{ left: `${LEFT_SLOT_RECT.left + LEFT_SLOT_RECT.width * 0.55}%`, top: `${LEFT_SLOT_RECT.top - 4}%` }}>
+                  <svg className="ehx-hammer" style={at(ms)} viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinejoin="round" strokeLinecap="round"><path d="M8 20l12-12 8 8-12 12z" /><path d="M24 24l18 18" /></svg>
+                  <span className="ehx-sparks">
+                    {[-70, -35, 0, 35, 70, -110, 110].map((a) => <i key={a} style={at(ms + 190, { ['--a' as string]: `${a}deg` })} />)}
+                  </span>
+                </span>
+              ))}
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="ehx-chev" style={at(step.quick ? 200 + i * 55 : 660 + i * 120, { left: `${46.2 + i * 2.4}%` })} />
+              ))}
+              <span className="ehx-streak" style={at(step.quick ? 310 : 900)} />
+              <span className="ehx-flash" style={at(step.quick ? 430 : 1140)} />
+            </div>
+          )}
+          {run?.mile && <div key={run.mile} className="ehx-mile fx-forge">{run.mile}</div>}
+          {item && item.plus >= MAX_PLUS && !busy && justMaxed && (
+            <span className="ehx-seal-wrap" style={{ left: `${LEFT_SLOT_RECT.left + LEFT_SLOT_RECT.width * 0.7}%`, top: `${LEFT_SLOT_RECT.top + LEFT_SLOT_RECT.height * 0.75}%` }}>
+              <SealStamp label="Max refinement" />
+            </span>
+          )}
         </div>
 
         {item && def ? (
           <>
             <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
-              {def.name}{item.plus > 0 ? ` +${item.plus}` : ''} &mdash;{' '}
+              {def.name}{basePlus > 0 ? ` +${basePlus}` : ''} &mdash;{' '}
               {maxed
                 ? 'already at maximum refinement'
-                : `+${item.plus} \u2192 +${item.plus + 1}`}
+                : `+${basePlus} → +${goal}${crosses.length ? ` (passes the +${crosses.join(' and +')} milestone${crosses.length > 1 ? 's' : ''})` : ''}`}
             </p>
             {!maxed && (
-              <div style={{ margin: '4px 0 8px' }}>
-                <DeltaLine label="Durability cap" current={maxDurability} next={nextMaxDurability} format={(n) => `${Math.round(n)}`} />
+              <div className={`ehx-lines ${run?.rolled ? 'pulse' : ''}`} key={run?.rolled || 'l'} style={{ margin: '4px 0 8px' }}>
+                <DeltaLine label="Durability cap" current={durAt(basePlus)} next={durAt(goal)} format={(n) => `${Math.round(n)}`} />
                 {(Object.keys(MOD_LABEL) as (keyof Modifiers)[]).map((key) => (
                   <DeltaLine
                     key={key} label={MOD_LABEL[key]}
@@ -233,6 +333,43 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             )}
+            {/* Patch 0425 -- the refinement bar: one pip per +level, +5 and
+                +10 marked as milestones. Tap a pip further along to aim for
+                it; the striped pips are the path the button will pay for. */}
+            <div className="ehx-ladder" role="group" aria-label="Refinement target">
+              {Array.from({ length: MAX_PLUS }, (_, i) => {
+                const lv = i + 1;
+                const mile = lv === 5 || lv === MAX_PLUS;
+                const done = lv <= basePlus;
+                const plan = !maxed && lv > basePlus && lv <= goal;
+                const isTarget = multi && lv === goal;
+                return (
+                  <button
+                    key={lv} type="button"
+                    className={`ehx-pip ${done ? 'on' : ''} ${plan ? 'plan' : ''} ${isTarget ? 'tgt' : ''} ${mile ? 'mile' : ''} ${run && lv === run.shown && run.rolled ? 'pop' : ''}`}
+                    onClick={() => pickTarget(lv)}
+                    disabled={busy || done}
+                    title={done ? `+${lv} reached` : `Aim for +${lv}`}
+                    aria-label={done ? `+${lv} reached` : `Aim for +${lv}`}
+                  />
+                );
+              })}
+            </div>
+            <div className="ehx-ladder-labels" aria-hidden="true">
+              {Array.from({ length: MAX_PLUS }, (_, i) => {
+                const lv = i + 1;
+                const isTarget = multi && lv === goal;
+                const mile = lv === 5 || lv === MAX_PLUS;
+                return <span key={lv} className={isTarget ? 'tgt' : mile ? 'mile' : ''}>{isTarget || mile ? `+${lv}` : ''}</span>;
+              })}
+            </div>
+            {!maxed && !busy && (
+              <p className="tiny muted" style={{ margin: '0 0 8px' }}>
+                {multi
+                  ? (canAfford ? `${goal - item.plus} steps in one go. Tap +${item.plus + 1} for just one.` : `Not enough for all ${goal - item.plus} steps.`)
+                  : 'Tap a pip further along to aim higher.'}
+              </p>
+            )}
           </>
         ) : (
           <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see its refinement level.</p>
@@ -245,13 +382,14 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
             miss since nothing else in that sentence was a cost. */}
         <button
           className="btn-purple"
-          disabled={!item || maxed || state.gold < cost || state.scrap < scrapCost}
-          onClick={handleEnhance}
+          disabled={!item || maxed || busy || !canAfford}
+          onClick={(e) => handleEnhance(e.currentTarget)}
         >
-          {!item ? 'Enhance' : maxed ? 'Max refinement' : (
-            <>Enhance {'\u00b7'} <span className="gold-text">{'\u25c6'} {formatGold(cost)}</span> + {scrapCost} Scrap</>
+          {!item ? 'Enhance' : busy ? `Refining… +${basePlus}` : maxed ? 'Max refinement' : (
+            <>{multi ? `Enhance to +${goal}` : 'Enhance'} {'·'} <span className="gold-text">{'◆'} {formatGold(bill.gold)}</span> + {formatGold(bill.scrap)} Scrap</>
           )}
         </button>
+        </>)}
       </div>
 
       {openPicker && (
@@ -269,7 +407,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
           item={previewItem}
           def={previewDef}
           onBack={() => { setPreviewUid(null); setOpenPicker(true); }}
-          onContinue={() => { setTargetUid(previewItem.uid); setPreviewUid(null); }}
+          onContinue={() => { setTargetUid(previewItem.uid); setPreviewUid(null); setAim(null); setJustMaxed(false); }}
           extra={(
             <p className="tiny muted" style={{ margin: '8px 0 0' }}>
               {previewMaxed

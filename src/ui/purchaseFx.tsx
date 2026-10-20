@@ -364,13 +364,15 @@ export function useRecentIncrease(items: { id: string; value: number }[], ms: nu
  * resolves immediately when motion is off or either end is missing.
  */
 export function flyIcon(
-  from: Element | null, to: Element | string | null,
+  from: Element | { x: number; y: number } | null, to: Element | string | null,
   art: { icon?: string; glyph?: string }, opts: { duration?: number; size?: number; delay?: number } = {},
 ): Promise<void> {
   const dur = fxMs(opts.duration ?? 460);
   const host = fxLayer();
   if (!dur || !host || !from || !to || typeof Element.prototype.animate !== 'function') return Promise.resolve();
-  const a = centerOf(from);
+  // Patch 0425 -- a captured point works too (the source card may have
+  // unmounted by the time the flight starts, e.g. an item just equipped).
+  const a = from instanceof Element ? centerOf(from) : from;
   // A string is a flyTarget.ts key (the header gold, the Inventory tab).
   const b = typeof to === 'string' ? getFlyTargetCenter(to) : centerOf(to);
   if (!b) return Promise.resolve();
