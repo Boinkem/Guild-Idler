@@ -35785,3 +35785,70 @@ Unrelated, seen while testing: the browser build threw "Failed to set
 the 'volume' property ... (-0.0007...) is outside the range [0, 1]" from
 a music fade on the menu open. That looks like a fade stepping just
 under 0; it needs a clamp in music.ts.
+
+### Demo review: Steam upload for the demo, demo save carries into the full game, music fade clamp (patch 0439)
+```discord-update
+Dev Update | Patch 0439
+
+- Added: your demo guild now carries over to the full game when you buy it (same PC)
+- Fixed a rare error when the music faded out
+```
+
+Review of patch 0438 (the demo, built in another chat), direct request.
+
+**Heads-up found first: 0437 and 0438 were never applied.** On both
+GitHub and the local folder, the "Apply ..." commits for 0437 and 0438
+only added the `.patch` files themselves -- none of the code changes
+landed (no `GUILD_HALL_DECOR_ENABLED`, no `src/game/demo.ts`, status doc
+topping out at 0436). 0438 was written against a tree with 0437 already
+in, so it won't apply on its own. Order: `git apply 0437-...patch`, then
+`0438-...patch`, then this one. Checked: all three apply cleanly in that
+order, `tsc --noEmit` passes, and both `vite build` and
+`vite build --mode demo` succeed.
+
+**0438 checked and fine (no change):** every demo rule is compile-time
+(`__GUILDBOUND_DEMO__`), so no save edit flips it. The allowed chains
+(Miller's Problem lv 2, First Haul lv 1, Last Clutch lv 5, Man Who Sells
+Maybe lv 5) have no prerequisite chains, so all four appear. Tavern
+capped at rank 2 gives exactly 3 hero slots -- the Normal raid party
+size -- and Blackford Keep (lv 8) is the one raid under the level-10
+cap, so the demo still shows a raid. Separate `guildbound-demo` userData
+folder; DLC off; Testing tab off; Steam init skipped while
+`DEMO_STEAM_APP_ID` is 0; the AH Charter is locked (and the server
+would reject a demo ticket anyway). Achievement/leaderboard Steam calls
+in the demo are all try/catch'd, so a demo app with neither just
+no-ops.
+
+**What changed:**
+- `tools/devtool/server.mjs` + `public/app.js`: the Steam upload step
+  could only ship `release/` to the full game's app -- the demo (its
+  own Steam app, packaged into `release-demo/`) had no upload path. New
+  Demo App ID / Demo Depot ID config fields and "Generate demo build
+  scripts" / "Upload demo to Steam" buttons. Same branch selector. The
+  generate/upload routes take `{ "target": "demo" }`; an empty body is
+  still the full game, so the existing buttons are unchanged. Demo exe
+  is `Guildbound Demo.exe` (package:demo's productName). Package (step
+  7) still only builds the full game -- run `npm run package:demo` by
+  hand first.
+- `electron/main.ts` new `importDemoSave()`, after
+  `migrateLegacySaveFolder()` in `whenReady`: a full-game launch with no
+  save of its own copies the demo's save + backup from
+  `%APPDATA%/guildbound-demo`. Never overwrites an existing full save.
+  Same signing secret, so it verifies. Local PC only (the demo's Steam
+  Cloud is a separate app). `DemoWall.tsx` now says so on the wishlist
+  card.
+- `music.ts` `fadeTo`: volume clamped to [0, 1] -- the
+  `-0.0007...` throw 0438 spotted.
+
+**Before the demo goes up:**
+- Create the demo app in Steamworks (it's a child app of 5143490 with
+  its own store review), then set `DEMO_STEAM_APP_ID` in
+  `electron/main.ts` and the Demo App/Depot IDs in the DevTool.
+- Next Fest wants the demo live for the press preview: submit by 25
+  January. The Desktop Companion Fest starts 14 January, so aim to have
+  it approved by early January.
+
+**Not checked in the running game** -- worth: play the demo in Electron
+for a bit, quit, launch the full build on the same PC with no full save
+(rename yours aside first) and confirm the guild comes across; Generate
+demo scripts in the DevTool and check the VDF points at `release-demo`.

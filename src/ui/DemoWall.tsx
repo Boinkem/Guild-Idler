@@ -106,6 +106,8 @@ export function DemoWallHost({ active }: { active: boolean }) {
         <div className="demo-wall-kicker">{copy.kicker}</div>
         <h2 className="demo-wall-title">{copy.title}</h2>
         <p className="card-flavour">{copy.body}</p>
+        {/* Patch 0439 -- true now: electron/main.ts importDemoSave. */}
+        <p className="small muted" style={{ marginTop: 8 }}>Your guild carries over to the full game on this PC.</p>
         <div className="row end" style={{ marginTop: 16, gap: 8 }}>
           <button onClick={close}>Keep playing</button>
           <button className="btn-yellow" onClick={() => { openStorePage(); close(); }}>Wishlist on Steam</button>

@@ -119,7 +119,9 @@ function fadeTo(audio: HTMLAudioElement, target: number, durationMs: number, onD
   }
   const step = (now: number) => {
     const t = Math.min(1, (now - startTime) / durationMs);
-    audio.volume = start + (target - start) * t;
+    // Patch 0439 -- clamped: float error on a fade toward 0 could land a hair
+    // below it (e.g. -0.0007), which HTMLMediaElement rejects with a throw.
+    audio.volume = Math.min(1, Math.max(0, start + (target - start) * t));
     if (t < 1) {
       fadeHandle = window.requestAnimationFrame(step);
     } else {

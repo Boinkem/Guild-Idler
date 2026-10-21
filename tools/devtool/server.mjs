@@ -128,6 +128,8 @@ const STATUS_MD_PATH = path.join(ROOT, 'guild-idler-status.md');
 // see package.json's own build.directories.output. Read by copyLatestBuild
 // below to find the newest installer to copy.
 const RELEASE_DIR = path.join(ROOT, 'release');
+// Patch 0439 -- `npm run package:demo` (patch 0438) writes here instead.
+const RELEASE_DEMO_DIR = path.join(ROOT, 'release-demo');
 // Local Windows folder targeted by Google Drive's desktop sync -- anything
 // copied here becomes shareable automatically, no separate upload step.
 // Hardcoded rather than configurable since this is a single-developer local
@@ -2662,6 +2664,9 @@ async function readSteamConfig() {
       username: typeof parsed.username === 'string' ? parsed.username : '',
       appId: typeof parsed.appId === 'string' ? parsed.appId : '',
       depotId: typeof parsed.depotId === 'string' ? parsed.depotId : '',
+      // Patch 0439 -- the Steam demo is its own app with its own depot.
+      demoAppId: typeof parsed.demoAppId === 'string' ? parsed.demoAppId : '',
+      demoDepotId: typeof parsed.demoDepotId === 'string' ? parsed.demoDepotId : '',
       contentBuilderDir: typeof parsed.contentBuilderDir === 'string' ? parsed.contentBuilderDir : '',
       // Three real Steamworks branches share this one App ID/Depot ID (patch
       // 0391): 'internal' (Dev Comp package, lowest trust -- upload here
@@ -2673,7 +2678,7 @@ async function readSteamConfig() {
       branch: typeof parsed.branch === 'string' && parsed.branch ? parsed.branch : 'internal',
     };
   } catch {
-    return { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'internal' };
+    return { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal' };
   }
 }
 
@@ -2879,18 +2884,32 @@ async function stopAhServer() {
  * findLatestReleaseFile() has to answer for the installer's own
  * version-stamped filename. Patch 0396.
  */
-async function findWinUnpackedBuild() {
+async function findWinUnpackedBuild(target = 'full') {
   const info = await readPackageInfo();
   if (!info.productName) return { error: `Couldn't read build.productName from package.json.` };
-  const exeName = `${info.productName}.exe`;
-  const dir = path.join(RELEASE_DIR, 'win-unpacked');
+  // Patch 0439 -- package:demo overrides productName to "Guildbound Demo"
+  // (see package.json), so the demo's exe carries that name instead.
+  const exeName = target === 'demo' ? `${info.productName} Demo.exe` : `${info.productName}.exe`;
+  const releaseDir = target === 'demo' ? RELEASE_DEMO_DIR : RELEASE_DIR;
+  const dir = path.join(releaseDir, 'win-unpacked');
   const exePath = path.join(dir, exeName);
   try {
     const stat = await fs.stat(exePath);
-    return { dir, exeName, exePath, mtimeMs: stat.mtimeMs };
+    return { dir, exeName, exePath, mtimeMs: stat.mtimeMs, releaseDir };
   } catch {
-    return { error: `${exePath} not found -- run Package (step 7) first.` };
+    return {
+      error: target === 'demo'
+        ? `${exePath} not found -- run \`npm run package:demo\` first.`
+        : `${exePath} not found -- run Package (step 7) first.`,
+    };
   }
+}
+
+/** Patch 0439 -- the app/depot pair a Steam upload targets. */
+function steamTargetIds(cfg, target) {
+  return target === 'demo'
+    ? { appId: cfg.demoAppId, depotId: cfg.demoDepotId, label: 'Demo App ID', depotLabel: 'Demo Depot ID' }
+    : { appId: cfg.appId, depotId: cfg.depotId, label: 'App ID', depotLabel: 'Depot ID' };
 }
 
 /**
@@ -2972,30 +2991,31 @@ async function findLatestReleaseFile() {
  * still backs the separate Google Drive tester-distribution path -- that
  * one deliberately keeps shipping the installer, unrelated to this change.
  */
-async function generateSteamBuildScripts() {
+async function generateSteamBuildScripts(target = 'full') {
   const cfg = await readSteamConfig();
+  const ids = steamTargetIds(cfg, target);
   const missing = [];
-  if (!cfg.appId) missing.push('App ID');
-  if (!cfg.depotId) missing.push('Depot ID');
+  if (!ids.appId) missing.push(ids.label);
+  if (!ids.depotId) missing.push(ids.depotLabel);
   if (!cfg.contentBuilderDir) missing.push('ContentBuilder folder path');
   if (missing.length) {
     return { ok: false, stdout: '', stderr: `Steam config incomplete -- missing: ${missing.join(', ')}. Fill these in above first.` };
   }
-  const build = await findWinUnpackedBuild();
+  const build = await findWinUnpackedBuild(target);
   if (build.error) {
     return { ok: false, stdout: '', stderr: build.error };
   }
   const { version } = await readPackageInfo();
   const scriptsDir = path.join(cfg.contentBuilderDir, 'scripts');
   const outputDir = path.join(cfg.contentBuilderDir, 'output');
-  const depotVdfPath = path.join(scriptsDir, `depot_build_${cfg.depotId}.vdf`);
-  const appVdfPath = path.join(scriptsDir, `app_build_${cfg.appId}.vdf`);
+  const depotVdfPath = path.join(scriptsDir, `depot_build_${ids.depotId}.vdf`);
+  const appVdfPath = path.join(scriptsDir, `app_build_${ids.appId}.vdf`);
 
   const depotVdf = [
     `"DepotBuildConfig"`,
     `{`,
-    `\t"DepotID" "${cfg.depotId}"`,
-    `\t"ContentRoot" "${RELEASE_DIR}"`,
+    `\t"DepotID" "${ids.depotId}"`,
+    `\t"ContentRoot" "${build.releaseDir}"`,
     `\t"FileMapping"`,
     `\t{`,
     `\t\t"LocalPath" "win-unpacked/*"`,
@@ -3008,16 +3028,16 @@ async function generateSteamBuildScripts() {
   const appVdf = [
     `"appbuild"`,
     `{`,
-    `\t"appid" "${cfg.appId}"`,
-    `\t"desc" "Guildbound -- v${version ?? '?'}"`,
+    `\t"appid" "${ids.appId}"`,
+    `\t"desc" "Guildbound${target === 'demo' ? ' Demo' : ''} -- v${version ?? '?'}"`,
     `\t"buildoutput" "${outputDir}"`,
-    `\t"contentroot" "${RELEASE_DIR}"`,
+    `\t"contentroot" "${build.releaseDir}"`,
     `\t"setlive" "${cfg.branch === 'default' ? '' : cfg.branch}"`,
     `\t"preview" "0"`,
     `\t"local" ""`,
     `\t"depots"`,
     `\t{`,
-    `\t\t"${cfg.depotId}" "depot_build_${cfg.depotId}.vdf"`,
+    `\t\t"${ids.depotId}" "depot_build_${ids.depotId}.vdf"`,
     `\t}`,
     `}`,
   ].join('\n') + '\n';
@@ -3029,7 +3049,7 @@ async function generateSteamBuildScripts() {
     await fs.writeFile(appVdfPath, appVdf, 'utf8');
     return {
       ok: true,
-      stdout: `Wrote ${depotVdfPath}\nWrote ${appVdfPath}\nContentRoot: ${RELEASE_DIR}\nUnpacked build: win-unpacked/${build.exeName}\nSteam Launch Options Executable should be: ${build.exeName}\nTarget branch: ${cfg.branch}`,
+      stdout: `Wrote ${depotVdfPath}\nWrote ${appVdfPath}\nContentRoot: ${build.releaseDir}\nUnpacked build: win-unpacked/${build.exeName}\nSteam Launch Options Executable should be: ${build.exeName}\nTarget branch: ${cfg.branch}`,
       stderr: '',
     };
   } catch (err) {
@@ -3050,8 +3070,23 @@ async function generateSteamBuildScripts() {
  * combined stdout/stderr for steamcmd's own Steam Guard prompt wording and
  * swaps in a specific, actionable error instead of a bare timeout message.
  */
-async function runSteamUpload() {
+/** Patch 0439 -- `{ "target": "demo" }` in the body picks the demo app;
+ *  anything else (including the old empty body) is the full game. */
+async function readSteamTarget(req) {
+  try {
+    const raw = await readBody(req);
+    return raw && JSON.parse(raw).target === 'demo' ? 'demo' : 'full';
+  } catch {
+    return 'full';
+  }
+}
+
+async function runSteamUpload(target = 'full') {
   const cfg = await readSteamConfig();
+  const ids = steamTargetIds(cfg, target);
+  if (!ids.appId) {
+    return { ok: false, stdout: '', stderr: `No ${ids.label} configured above.` };
+  }
   if (!cfg.username) {
     return { ok: false, stdout: '', stderr: 'No Steam username configured above.' };
   }
@@ -3060,7 +3095,7 @@ async function runSteamUpload() {
   }
   const steamcmdBin = process.platform === 'win32' ? 'steamcmd.exe' : 'steamcmd.sh';
   const steamcmdPath = path.join(cfg.contentBuilderDir, '..', 'builder', steamcmdBin);
-  const appVdfPath = path.join(cfg.contentBuilderDir, 'scripts', `app_build_${cfg.appId}.vdf`);
+  const appVdfPath = path.join(cfg.contentBuilderDir, 'scripts', `app_build_${ids.appId}.vdf`);
   try {
     await fs.access(appVdfPath);
   } catch {
@@ -3223,6 +3258,8 @@ const server = http.createServer(async (req, res) => {
       username: typeof body.username === 'string' ? body.username.trim() : '',
       appId: typeof body.appId === 'string' ? body.appId.trim() : '',
       depotId: typeof body.depotId === 'string' ? body.depotId.trim() : '',
+      demoAppId: typeof body.demoAppId === 'string' ? body.demoAppId.trim() : '',
+      demoDepotId: typeof body.demoDepotId === 'string' ? body.demoDepotId.trim() : '',
       contentBuilderDir: typeof body.contentBuilderDir === 'string' ? body.contentBuilderDir.trim() : '',
       branch: typeof body.branch === 'string' && body.branch.trim() ? body.branch.trim() : 'internal',
     };
@@ -3290,11 +3327,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/steam/generate-scripts' && req.method === 'POST') {
-    return json(res, 200, await generateSteamBuildScripts());
+    return json(res, 200, await generateSteamBuildScripts(await readSteamTarget(req)));
   }
 
   if (url.pathname === '/api/steam/upload' && req.method === 'POST') {
-    return json(res, 200, await runSteamUpload());
+    return json(res, 200, await runSteamUpload(await readSteamTarget(req)));
   }
 
   if (url.pathname === '/api/sim/presets' && req.method === 'GET') {

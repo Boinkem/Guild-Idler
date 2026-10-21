@@ -2472,7 +2472,7 @@ init().catch((err) => setStatus(err.message, 'err'));
 const patchState = {
   files: [], gitStatus: null, selected: null, checked: false, applied: false,
   discordConfigured: false, discordPreview: '', discordDraft: '',
-  steam: { username: '', appId: '', depotId: '', contentBuilderDir: '', branch: 'internal' },
+  steam: { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal' },
   // Patches tab now splits into two panes (patch 0331 redesign) -- Patch
   // flow (steps 1-5) and Build & Ship (steps 6-11), toggled by the two
   // nav buttons rendered in renderPatches. false = Patch flow shown,
@@ -2775,6 +2775,14 @@ function renderPatches() {
         style="flex: 1 1 140px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
     </div>
     <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+      <input type="text" id="steamDemoAppIdInput" placeholder="Demo App ID (its own app in Steamworks)"
+        value="${escapeHtml(patchState.steam.demoAppId || '')}"
+        style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <input type="text" id="steamDemoDepotIdInput" placeholder="Demo Depot ID (Windows)"
+        value="${escapeHtml(patchState.steam.demoDepotId || '')}"
+        style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+    </div>
+    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
       <input type="text" id="steamContentBuilderInput" placeholder="Path to Steamworks SDK's ContentBuilder folder"
         value="${escapeHtml(patchState.steam.contentBuilderDir)}"
         style="flex: 2 1 320px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
@@ -2833,6 +2841,17 @@ function renderPatches() {
     </div>
     <div id="steamGenerateResult"></div>
     <div id="steamUploadResult"></div>
+    <p class="tiny muted" style="margin-top:10px;">
+      <b>Demo</b> (patch 0439) — same steps for the demo's own app, from <code>release-demo/</code>.
+      Run <code>npm run package:demo</code> first (Package in step 7 only builds the full game), and fill
+      in the Demo App ID / Depot ID above. Uses the same branch selector.
+    </p>
+    <div class="row" style="gap:6px;">
+      <button id="steamGenerateDemoBtn">Generate demo build scripts</button>
+      <button id="steamUploadDemoBtn" class="primary">Upload demo to Steam</button>
+    </div>
+    <div id="steamGenerateDemoResult"></div>
+    <div id="steamUploadDemoResult"></div>
 
     <div class="section-heading" style="margin-top:18px;">11. Post a dev update to Discord</div>
     <p class="tiny muted">
@@ -3007,6 +3026,8 @@ function renderPatches() {
       username: document.getElementById('steamUsernameInput').value.trim(),
       appId: document.getElementById('steamAppIdInput').value.trim(),
       depotId: document.getElementById('steamDepotIdInput').value.trim(),
+      demoAppId: document.getElementById('steamDemoAppIdInput').value.trim(),
+      demoDepotId: document.getElementById('steamDemoDepotIdInput').value.trim(),
       contentBuilderDir: document.getElementById('steamContentBuilderInput').value.trim(),
       branch: document.getElementById('steamBranchInput').value,
     };
@@ -3015,7 +3036,7 @@ function renderPatches() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cfg),
       });
-      patchState.steam = { username: result.username, appId: result.appId, depotId: result.depotId, contentBuilderDir: result.contentBuilderDir, branch: result.branch };
+      patchState.steam = { username: result.username, appId: result.appId, depotId: result.depotId, demoAppId: result.demoAppId, demoDepotId: result.demoDepotId, contentBuilderDir: result.contentBuilderDir, branch: result.branch };
       document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: true, stdout: 'Saved.', stderr: '' }, 'Steam config');
     } catch (err) {
       document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: false, stdout: '', stderr: err.message || String(err) }, 'Steam config');
@@ -3104,6 +3125,34 @@ function renderPatches() {
     steamUploadBtn.disabled = false;
     steamUploadBtn.textContent = 'Upload to Steam';
     document.getElementById('steamUploadResult').innerHTML = resultBlock(result, 'Upload to Steam');
+  };
+
+  // Patch 0439 -- demo counterparts of the two buttons above.
+  const steamGenerateDemoBtn = document.getElementById('steamGenerateDemoBtn');
+  if (steamGenerateDemoBtn) steamGenerateDemoBtn.onclick = async () => {
+    steamGenerateDemoBtn.disabled = true;
+    steamGenerateDemoBtn.textContent = 'Generating…';
+    const result = await api('/api/steam/generate-scripts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target: 'demo' }),
+    });
+    steamGenerateDemoBtn.disabled = false;
+    steamGenerateDemoBtn.textContent = 'Generate demo build scripts';
+    document.getElementById('steamGenerateDemoResult').innerHTML = resultBlock(result, 'Generate demo build scripts');
+  };
+
+  const steamUploadDemoBtn = document.getElementById('steamUploadDemoBtn');
+  if (steamUploadDemoBtn) steamUploadDemoBtn.onclick = async () => {
+    const branch = patchState.steam.branch || 'internal';
+    const label = STEAM_BRANCH_LABEL[branch] || branch;
+    if (!confirm(`Upload the DEMO to Steam now, targeting ${label}? This actually sends the build.`)) return;
+    steamUploadDemoBtn.disabled = true;
+    steamUploadDemoBtn.textContent = 'Uploading… (this can take a while)';
+    const result = await api('/api/steam/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target: 'demo' }),
+    });
+    steamUploadDemoBtn.disabled = false;
+    steamUploadDemoBtn.textContent = 'Upload demo to Steam';
+    document.getElementById('steamUploadDemoResult').innerHTML = resultBlock(result, 'Upload demo to Steam');
   };
 
   const discordSaveBtn = document.getElementById('discordSaveBtn');

@@ -444,6 +444,44 @@ async function migrateLegacySaveFolder() {
   }
 }
 
+/**
+ * Patch 0439 -- demo progress carries into the full game. On a full-game
+ * launch with no save of its own yet, copies the demo's save (and its
+ * backup) across from the demo's userData folder, so a festival player who
+ * buys the game picks up their guild where the demo stopped. Same guard
+ * shape as migrateLegacySaveFolder: an existing full-game save is never
+ * touched, and it only ever runs once (the copied file IS the full save
+ * from then on). The demo writes the same signed envelope with the same
+ * secret, so the copy verifies like any other save. Nothing to unlock by
+ * hand: every demo cap is compiled into the demo build only, so the full
+ * game simply lets the guild carry on past them.
+ *
+ * Local-only: the demo is a separate Steam app with its own Steam Cloud
+ * storage, so this finds the demo save on the same PC, not another one.
+ */
+async function importDemoSave() {
+  if (IS_DEMO) return;
+  const newSave = savePath();
+  try {
+    await fs.access(newSave);
+    return; // the full game already has a save -- never overwrite it
+  } catch {
+    /* no full-game save yet -- look for a demo one */
+  }
+  const demoDir = path.join(app.getPath('appData'), 'guildbound-demo');
+  try {
+    await fs.copyFile(path.join(demoDir, 'guildbound-save.json'), newSave);
+    console.log('[migration] carried the demo save into the full game');
+  } catch {
+    return; // never played the demo on this PC
+  }
+  try {
+    await fs.copyFile(path.join(demoDir, 'guildbound-save.backup.json'), backupPath());
+  } catch {
+    /* no demo backup is fine */
+  }
+}
+
 interface Settings {
   alwaysOnTop: boolean;
   x?: number;
@@ -1295,6 +1333,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   await migrateLegacySaveFolder();
+  await importDemoSave(); // patch 0439 -- after the legacy check, so a real full save always wins
   await createWindow();
   createTray();
   app.on('activate', () => {
