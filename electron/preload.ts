@@ -113,6 +113,10 @@ const api = {
    * leave-full-screen listeners and window:setFullscreen's own comment for
    * the full "toggle button stops reflecting reality" bug this fixes.
    */
+  /** Patch 0438 -- demo build's "Wishlist on Steam" button. Opens the
+   *  full game's store page in the Steam client (see main.ts's
+   *  shell:openStore handler). */
+  openStorePage: (): Promise<void> => ipcRenderer.invoke('shell:openStore'),
   onFullscreenChanged: (callback: (value: boolean) => void): (() => void) => {
     const listener = (_e: unknown, value: boolean) => callback(value);
     ipcRenderer.on('window:fullscreen-changed', listener);

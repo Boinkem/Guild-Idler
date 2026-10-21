@@ -12,6 +12,7 @@ import { HeroManager } from './HeroManager';
 import { ModifierManager } from './ModifierManager';
 import { Tuning } from '../data/tuning';
 import { applyVendorRepDiscount } from '../data/vendorRep';
+import { DEMO_LOCK_ERROR, demoRankLocked, demoReplayLocked } from '../demo';
 
 export const GuildManager = {
   facilityLevel(state: GameState, id: GuildFacility): number {
@@ -30,6 +31,10 @@ export const GuildManager = {
     if (!def) return 'Unknown facility.';
     const level = GuildManager.facilityLevel(state, id);
     if (level >= def.maxLevel) return `${def.name} is fully built.`;
+    // Patch 0438 -- demo build rank cap (see demo.ts). Cost/nextCost are
+    // deliberately left alone so the UI still treats the row as "more to
+    // buy" and can show its "Full game" button instead of "Fully built".
+    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR;
     const cost = guildCost(def, level);
     if (state.gold < cost) return 'Not enough gold.';
     state.gold -= cost;
@@ -85,6 +90,7 @@ export const GuildManager = {
    */
   buyChainReplayTier(state: GameState, tierId: string): string | null {
     if (GuildManager.hasChainReplayTier(state, tierId)) return 'Already unlocked.';
+    if (demoReplayLocked()) return DEMO_LOCK_ERROR; // patch 0438 -- full game only
     const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
     if (!tier) return 'Unknown tier.';
     if (state.gold < tier.goldCost) return 'Not enough gold.';
@@ -130,6 +136,7 @@ export const GuildManager = {
     }
     const level = GuildManager.upgradeLevel(state, id);
     if (level >= def.maxLevel) return 'Already at maximum.';
+    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR; // patch 0438, see upgradeFacility
     const cost = GuildManager.nextUpgradeCost(state, id);
     if (cost === null) return 'Already at maximum.';
     const scrapCost = GuildManager.nextUpgradeScrapCost(state, id) ?? 0;
@@ -262,6 +269,7 @@ export const GuildManager = {
     const level = GuildManager.raidUpgradeLevel(state, id);
     const next = raidUpgradeCost(def, level);
     if (!next) return 'Already at maximum.';
+    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR; // patch 0438, see upgradeFacility
     if (next.currency === 'gold') {
       if (state.gold < next.cost) return 'Not enough gold.';
       state.gold -= next.cost;
@@ -301,6 +309,7 @@ export const GuildManager = {
     const level = GuildManager.questFastUpgradeLevel(state, id);
     const next = questFastUpgradeCost(def, level);
     if (!next) return 'Already at maximum.';
+    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR; // patch 0438, see upgradeFacility
     if (next.currency === 'gold') {
       if (state.gold < next.cost) return 'Not enough gold.';
       state.gold -= next.cost;

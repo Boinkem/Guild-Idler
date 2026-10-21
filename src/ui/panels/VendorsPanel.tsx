@@ -28,6 +28,7 @@ import { EnhanceStation } from '../EnhanceStation';
 import { WeaponEnchantStation } from '../WeaponEnchantStation';
 import { ArmourInfusionStation } from '../ArmourInfusionStation';
 import { RerollStation } from '../RerollStation';
+import { demoRankLocked, requestDemoWall } from '../../game/demo';
 import { ScrapStation } from '../ScrapStation';
 import { ReputationRing } from '../ReputationRing';
 import { PriceTag, REP_LINES, useRepLevelUp } from '../repFx';
@@ -146,9 +147,11 @@ export function VendorsPanel() {
  * that entirely, each instance owning its own hook call.
  */
 function VendorUpgradeRow({
-  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy, unveiling, isNew,
+  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy, unveiling, isNew, demoLocked,
 }: {
   def: UpgradeDef; level: number; cost: number | null; scrapCost: number; maxed: boolean; affordable: boolean;
+  /** Patch 0438 -- demo build: next rank is full-game only (see demo.ts). */
+  demoLocked?: boolean;
   flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void;
   /** Gets the clicked button so the gold + Scrap can fly into it (patch 0422). */
   onBuy: (btn: HTMLElement) => void;
@@ -166,7 +169,9 @@ function VendorUpgradeRow({
   ];
   const effectText = entries.join(' · ');
   const pctFill = Math.min(100, (level / def.maxLevel) * 100);
-  const buyLabel = maxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
+  const locked = !maxed && !!demoLocked;
+  const buyLabel = maxed ? 'Fully upgraded' : locked ? '🔒 Full game' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
+  const press = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: def.name }) : onBuy(btn));
   return (
     <div
       className={`upgrade-row ${unveiling ? 'fx-unveiling' : ''}`}
@@ -187,9 +192,9 @@ function VendorUpgradeRow({
         </span>
       </span>
       <button
-        className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
-        disabled={maxed || !affordable}
-        onClick={(e) => { e.stopPropagation(); onBuy(e.currentTarget); }}
+        className={`upgrade-buy-btn ${!maxed && !locked && affordable ? 'affordable' : ''} ${locked ? 'demo-locked' : ''}`}
+        disabled={maxed || (!affordable && !locked)}
+        onClick={(e) => { e.stopPropagation(); press(e.currentTarget); }}
       >
         {buyLabel}
       </button>
@@ -215,7 +220,7 @@ function VendorUpgradeRow({
             )}
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || !affordable} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
+              <button className="btn-yellow" disabled={maxed || (!affordable && !locked)} onClick={(e) => press(e.currentTarget)}>{buyLabel}</button>
             </div>
           </div>
         </div>
@@ -466,6 +471,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               onBuy={(btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id))}
               unveiling={vendorBeat?.phase === 'levelup' && def.id === taughtId}
               isNew={newlyTaught.has(def.id)}
+              demoLocked={demoRankLocked(def.id, upLevel)}
             />
           );
         })}

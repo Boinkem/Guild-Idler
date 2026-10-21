@@ -13,6 +13,7 @@ import { GuildHallDecorManager } from '../game/managers/GuildHallDecorManager';
 import { GUILD_HALL_DECOR_ENABLED } from '../game/data/guildHallDecor';
 import { GUILD_HALL_THEME_BY_ID } from '../game/data/guildHallSlots';
 import { GuildHallMenuBackdrop } from './GuildHallMenuBackdrop';
+import { DemoBadge } from './DemoWall';
 import { playSound } from '../game/sound';
 import { useCountUp } from './useCountUp';
 import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
@@ -480,6 +481,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
             <div className="guild-title-subtitle">{engine.state.activeGuildTitle}</div>
           )}
         </div>
+        {/* Patch 0438 -- demo build only; renders nothing in the full game. */}
+        <DemoBadge />
         <div className="resources">
           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>

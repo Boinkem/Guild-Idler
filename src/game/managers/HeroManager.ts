@@ -1,6 +1,7 @@
 import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
+import { demoLevelCap } from '../demo';
 import {
   heroTierUpMaxSteps, heroTierUpStatMultiplier, heroTierUpQuestsRequired,
   heroTierUpGoldCost, heroTierUpRenownCost, heroTierUpNextStepIsFinal,
@@ -15,7 +16,8 @@ import { ModifierManager } from './ModifierManager';
 export const HeroManager = {
   create(heroClass: HeroClass, rng: Rng, nameOverride?: string): Hero {
     const def = HERO_CLASSES[heroClass];
-    const startLevel = RECRUIT_START_LEVEL[def.tier] ?? 1;
+    // Patch 0438 -- clamped to the demo's level cap (no-op in the full game).
+    const startLevel = Math.min(RECRUIT_START_LEVEL[def.tier] ?? 1, demoLevelCap(MAX_HERO_LEVEL));
 
     // Grow base stats up to the starting level so a tier-3 hire isn't a level-1
     // weakling despite the price. Each level applies the class growth once.
@@ -347,7 +349,9 @@ export const HeroManager = {
    * definition rather than each re-deriving `hero.level >= 55` themselves.
    */
   isMaxLevel(hero: Hero): boolean {
-    return hero.level >= MAX_HERO_LEVEL;
+    // Patch 0438 -- demoLevelCap is MAX_HERO_LEVEL itself in the full
+    // game, the demo's own lower cap (demo.ts) in a demo build.
+    return hero.level >= demoLevelCap(MAX_HERO_LEVEL);
   },
 
   /**
@@ -371,7 +375,8 @@ export const HeroManager = {
     if (HeroManager.isMaxLevel(hero)) return 0;
     hero.xp += Math.max(0, Math.floor(amount));
     let gained = 0;
-    while (hero.level < MAX_HERO_LEVEL && hero.xp >= xpForLevel(hero.level)) {
+    const cap = demoLevelCap(MAX_HERO_LEVEL);
+    while (hero.level < cap && hero.xp >= xpForLevel(hero.level)) {
       hero.xp -= xpForLevel(hero.level);
       hero.level += 1;
       gained += 1;
@@ -397,7 +402,7 @@ export const HeroManager = {
     // than left sitting there forever, so a maxed hero's XP bar reads as
     // genuinely full/done rather than stalled at some arbitrary partial
     // fill it can never move past.
-    if (hero.level >= MAX_HERO_LEVEL) hero.xp = 0;
+    if (hero.level >= cap) hero.xp = 0;
     return gained;
   },
 

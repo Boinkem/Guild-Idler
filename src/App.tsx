@@ -17,6 +17,7 @@ import { HeroTierUpModal } from './ui/HeroTierUpModal';
 import { LevelUpModal } from './ui/LevelUpModal';
 import { Toast } from './ui/Toast';
 import { NotificationBanner } from './ui/NotificationBanner';
+import { DemoWallHost } from './ui/DemoWall';
 
 export type ViewMode = 'idle' | 'menu';
 
@@ -186,6 +187,9 @@ export function App() {
               rewards that caused it. Compact layout in the idle window;
               "Open guild" there plays the full card in the menu. */}
           <LevelUpModal compact={mode === 'idle'} onOpenMenu={() => changeMode('menu')} />
+          {/* Patch 0438 -- demo build's wishlist card. Renders nothing in
+              the full game; menu-gated like the result modals above. */}
+          <DemoWallHost active={mode === 'menu'} />
         </>
       )}
       <Toast skipBanners={mode === 'menu'} />

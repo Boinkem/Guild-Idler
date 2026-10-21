@@ -14,6 +14,10 @@
     "preview": "vite preview",
     "start": "npm run build && electron .",
     "package": "npm run build && electron-builder",
+    "dev:demo": "vite --mode demo",
+    "dev:web:demo": "vite --config vite.web.config.ts --mode demo",
+    "build:demo": "tsc --noEmit && vite build --mode demo",
+    "package:demo": "npm run build:demo && electron-builder --config.appId=com.guildbound.demo --config.productName=\"Guildbound Demo\" --config.directories.output=release-demo",
     "devtool": "node tools/devtool/server.mjs",
     "sim": "tsx tools/devtool/sim/runSim.ts"
   },

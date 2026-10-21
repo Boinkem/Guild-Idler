@@ -45,6 +45,7 @@ import { Tuning } from './data/tuning';
 import { rerollDay, rerollsUsedToday } from './data/reroll';
 import { playSound } from './sound';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
+import { DEMO_LOCK_ERROR, requestDemoWall } from './demo';
 
 const TICK_MS = 1000;
 const AUTOSAVE_MS = 15_000;
@@ -2214,6 +2215,7 @@ export class GameEngine {
    */
   buyChainReplayTier(tierId: string) {
     const error = GuildManager.buyChainReplayTier(this.state, tierId);
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'unlock', name: CHAIN_REPLAY_TIER_BY_ID[tierId]?.sagaName });
     if (error) return this.say(error);
     playSound('purchase');
     const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
@@ -3628,6 +3630,11 @@ export class GameEngine {
 
   buyUpgrade(id: string) {
     const error = GuildManager.buyUpgrade(this.state, id);
+    // Patch 0438 -- a demo-gated rank opens the wishlist card rather than
+    // a toast. The rows themselves already route their "Full game" button
+    // straight there; this catches every other caller (Training tab's own
+    // locked screen, Auction House's, etc.).
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' });
     if (error) return this.say(error);
     playSound('purchase');
     // Some upgrades flip an unlock (legendaryQuests, blackMarket, raids --
@@ -3649,6 +3656,7 @@ export class GameEngine {
 
   buyRaidUpgrade(id: string) {
     const error = GuildManager.buyRaidUpgrade(this.state, id);
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' });
     if (error) return this.say(error);
     playSound('purchase');
     this.notify();
@@ -3659,6 +3667,7 @@ export class GameEngine {
    *  shape as buyRaidUpgrade just above (its direct precedent). */
   buyQuestFastUpgrade(id: string) {
     const error = GuildManager.buyQuestFastUpgrade(this.state, id);
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' });
     if (error) return this.say(error);
     playSound('purchase');
     this.notify();
@@ -3677,6 +3686,7 @@ export class GameEngine {
 
   upgradeFacility(id: Parameters<typeof GuildManager.upgradeFacility>[1]) {
     const error = GuildManager.upgradeFacility(this.state, id);
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' });
     if (error) return this.say(error);
     playSound('purchase');
     // Same immediate-check reasoning as buyUpgrade above -- no facility

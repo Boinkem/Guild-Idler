@@ -2,6 +2,7 @@ node_modules
 dist
 dist-electron
 release
+release-demo
 *.log
 
 # DLC pack sprite output (generated locally via tools/import_pets.py

@@ -8911,3 +8911,47 @@ button.harvest-item:hover {
 .wdr-livery .wdr-ddb { min-height: 28px; font-size: 0.7rem; }
 .wdr-livery-menu { right: auto; width: 290px; max-width: 90vw; }
 
+
+/* ---------------------------------------------------------------------
+   Patch 0438 -- demo build only (see src/game/demo.ts). Nothing here
+   matches any element in the full game: every class below is rendered
+   exclusively by DemoWall.tsx or a demo-gated upgrade row.
+   --------------------------------------------------------------------- */
+.guild-buy-btn.demo-locked,
+.upgrade-buy-btn.demo-locked {
+  background: transparent;
+  color: var(--violet);
+  border: 1px dashed var(--violet);
+  cursor: pointer;
+}
+.guild-buy-btn.demo-locked:hover,
+.upgrade-buy-btn.demo-locked:hover { background: color-mix(in srgb, var(--violet) 18%, transparent); }
+
+.demo-badge {
+  align-self: center;
+  margin-left: 10px;
+  padding: 3px 9px;
+  min-height: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--brass);
+  border: 1px solid var(--brass);
+  box-shadow: none;
+  cursor: pointer;
+  position: relative; /* above .rune-texture-overlay */
+  z-index: 1;
+}
+.demo-badge:hover { filter: brightness(1.08); }
+
+.demo-wall-modal { max-width: 440px; }
+.demo-wall-kicker {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--violet);
+}
+.demo-wall-title { margin: 4px 0 8px; }

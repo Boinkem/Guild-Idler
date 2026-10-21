@@ -11,6 +11,7 @@ import { Rarity } from '../game/types';
 import { chainBannerSrc, chainIconSrc } from './panels/QuestPanel';
 import { at, useDelayedCount, TickMark } from './resultFx';
 import waxSealComplete from '../assets/wax-seal-complete.png';
+import { DEMO, DEMO_BUILD, requestDemoWall } from '../game/demo';
 
 /**
  * The big "Story Chain Complete" overlay -- separate from the regular
@@ -72,11 +73,18 @@ function ChainCompleteCard({ celebration, onViewLore }: { celebration: Celebrati
     [],
   );
 
-  const close = () => engine.dismissChainCelebration();
+  // Patch 0438 -- finishing the demo's one story chain hands straight on
+  // to the wishlist card once this celebration is dismissed (either way).
+  const endOfDemoStory = DEMO_BUILD && celebration.chainId === DEMO.storyChainId;
+  const close = () => {
+    engine.dismissChainCelebration();
+    if (endOfDemoStory) requestDemoWall({ kind: 'story' });
+  };
   const viewLore = () => {
     engine.requestTab('lore');
     onViewLore();
     engine.dismissChainCelebration();
+    if (endOfDemoStory) requestDemoWall({ kind: 'story' });
   };
 
   return (

@@ -1134,6 +1134,25 @@ raid fight).
 
 ## Backlog
 
+### Steam demo follow-ups (from patch 0438)
+- **Demo App ID** -- create the demo in Steamworks (base game admin ->
+  "Create new demo"), then set `DEMO_STEAM_APP_ID` in `electron/main.ts`.
+  Until then a demo build runs with Steam off entirely.
+- **Depot upload** -- the DevTool's Steam upload tool still targets the
+  full game's app/depot and `release/`. The demo needs its own app +
+  depot build scripts pointing at `release-demo/`.
+- **Demo save carry-over** -- not built. Demo saves live in their own
+  `guildbound-demo` folder. Carrying them into the full game would mean
+  main.ts reading that folder on first full-game launch, the same shape
+  as `migrateLegacySaveFolder`.
+- **Harvest upgrades aren't rank-capped** -- harvest tools, Warehouse and
+  Overseer are separate trees and the 0438 cap doesn't cover them yet.
+- **Pacing check** -- confirm in a real demo run that The Miller's
+  Problem and level 10 land inside a first evening. If not, either
+  swap `DEMO.storyChainId` or add a demo XP boost.
+- **Steam leaderboards/achievements** -- these stay keyed to whichever
+  App ID is live. Decide whether the demo app gets its own achievements.
+
 ### Prestige tab missing a Bright variant
 Direct report (this session, not yet built): `prestige.jpg` has no
 `bright/` counterpart yet -- same safe fallback as every other tab
@@ -35661,3 +35680,108 @@ before the public build.
 and look at the Minotaur recruit card; open Guild Hall and confirm no
 Customize scene/decorations appear; relaunch on an existing save to
 confirm it still loads (signed path).
+
+### Steam demo build: `--mode demo`, upgrade rank cap, one story chain, level 10 cap, wishlist card (patch 0438)
+```discord-update
+Dev Update | Steam Demo
+
+- Added a Guildbound demo build for Steam festivals: one full story chain, every upgrade up to rank 2, heroes up to level 10
+- Added a "Wishlist on Steam" card that shows up when you reach a demo limit, plus a Demo badge in the title bar
+- Changed nothing in the full game -- every demo limit only exists in the demo build
+```
+
+Direct request: a demo to drive wishlists through Steam festivals (Next
+Fest etc.). A time-limited trial was ruled out -- an idle game can just
+be left running. The demo is gated by content instead.
+
+**How it's built.** A compile-time flag, not a runtime setting.
+`vite --mode demo` defines `__GUILDBOUND_DEMO__` = true in the renderer
+AND the Electron main sub-build (it doesn't inherit the top-level
+`define`, so it's passed through explicitly in `vite.config.ts`). Every
+other mode compiles false. tsx/tsc see it undefined, which also reads
+as the full game, so the balance sim is unaffected. A save edit can't
+switch a full build into demo mode or back.
+- `npm run dev:demo` / `dev:web:demo` -- play the demo locally.
+- `npm run build:demo` -- tsc + demo build into `dist/`.
+- `npm run package:demo` -- electron-builder with
+  `appId com.guildbound.demo`, productName "Guildbound Demo", output
+  `release-demo/` (gitignored). Same `dist/` as the full build, so build
+  one, package it, then build the other.
+
+**Every rule lives in `src/game/demo.ts`** (`DEMO` object):
+- `upgradeRankCap: 2` -- applies to Guild Hall facilities, general
+  upgrades, vendor upgrades, raid upgrades and quest fast-chance
+  upgrades. Enforced in each `GuildManager.buy*`/`upgradeFacility`,
+  which return `DEMO_LOCK_ERROR`. Cost functions are deliberately
+  untouched, so a capped row still counts as "more to buy" (not "Fully
+  built") and keeps its real max ("Lv 2/10").
+- `lockedUpgradeIds` -- Heroic Clearance, Mythic Clearance and the
+  Auction House Charter are full-game only. (The AH server verifies Steam
+  tickets against the full game's App ID, so a demo couldn't use it
+  anyway.) `lockChainReplay` locks every Replay Memories tier.
+- `storyChainId: 'millers_problem'` plus `featureChainIds` (The First
+  Haul / The Last Clutch / The Man Who Sells Maybe -- Harvest, Hatchery,
+  Peddler, so every system still shows). `QuestManager.generateChainBoard`
+  skips every other chain. The Crow's Warning was the first pick for the
+  story chain, but the balance sim (Active and Casual presets, roster
+  growth on) puts level 8 at day 2-3, too long for a festival demo.
+  Swapping is a one-line change.
+- `heroLevelCap: 10` -- `HeroManager.isMaxLevel`/`grantXp` use
+  `demoLevelCap(MAX_HERO_LEVEL)`. Recruits' tier start level is clamped
+  to it too (tier 3/4 classes start at 15/24).
+
+**Wishlist card** (`src/ui/DemoWall.tsx`). `requestDemoWall()` is a tiny
+event bus in demo.ts, not engine state -- the card is purely
+presentation. Triggers:
+- a "🔒 Full game" button on any capped row (Guild Hall rows via
+  `withDemoLock`, vendor rows via `demoLocked`)
+- the engine backstop for any other caller that hits `DEMO_LOCK_ERROR`
+  (Training/AH locked screens)
+- dismissing the story chain's completion celebration
+- the first hero to hit level 10 (once, remembered in localStorage)
+- the titlebar "Demo · Wishlist" badge
+
+The card is menu-gated like the result modals. "Wishlist on Steam"
+calls the new preload `openStorePage()` -> main's `shell:openStore`,
+which opens `steam://store/5143490` (the full game) in the Steam client,
+falling back to the web store URL. The browser build opens a tab.
+
+**Electron main.** In the demo:
+- `app.setName('guildbound-demo')` gives it its own userData folder, so
+  demo and full saves never touch each other.
+- `migrateLegacySaveFolder` is skipped.
+- `DLC_APP_IDS` is empty and `steam:isDlcOwned` returns false (no
+  file-presence fallback).
+- Steam uses `DEMO_STEAM_APP_ID`. It's 0 until the demo app exists in
+  Steamworks, and while it's 0 Steam init is skipped rather than running
+  as the full game's ID.
+
+The browser demo save uses its own `guildbound-demo-save` key.
+
+**Testing tab** -- `TESTING_TOOLS_ENABLED` is now `!DEMO_BUILD`. Always
+off in the demo (the first public build), unchanged in the full game.
+
+**Verified here.**
+- `tsc --noEmit` is clean.
+- Both `vite build` and `vite build --mode demo` succeed. The demo main
+  bundle has `guildbound-demo`; the full one doesn't.
+- A headless tsx run in both modes: in the demo, Barracks and Auto-Chain
+  stop at 2 and the 3rd buy returns the lock, Heroic Clearance and the
+  Replay master tier are locked, Guild Charter still buys, a hero given
+  1e12 XP stops at 10, and the chain board shows exactly the 4 allowed
+  chains. In the full game: 4/4, 55, and every chain.
+- The web demo build rendered in headless Chromium: titlebar badge,
+  "Full game" on Barracks (2/10), Auto-Chain (2/4) and Heroic Clearance,
+  and the card opening from the Barracks button. No Testing tab.
+
+**Not checked in the running game** -- worth:
+- `npm run dev:demo` in Electron: confirm saves land in a
+  `guildbound-demo` folder ("Where is my save?").
+- Finish The Miller's Problem: the wishlist card should follow the
+  celebration.
+- The wishlist button should open the Steam client's store page.
+
+Unrelated, seen while testing: the browser build threw "Failed to set
+the 'volume' property ... (-0.0007...) is outside the range [0, 1]" from
+a music fade on the menu open. That looks like a fade stepping just
+under 0; it needs a clamp in music.ts.

@@ -17,6 +17,7 @@ import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
 import { GUILD_HALL_DECOR_ENABLED } from '../../game/data/guildHallDecor';
 import { FundGuildModal } from '../FundGuildModal';
 import waxSealComplete from '../../assets/wax-seal-complete.png';
+import { demoLockKind, demoReplayLocked, requestDemoWall } from '../../game/demo';
 
 function chainRangeText(level: number): string {
   const range = AUTO_CHAIN_RANGES[level];
@@ -100,6 +101,18 @@ interface RowData {
   buyDisabled: boolean;
   /** Gets the clicked button so the spend can fly into it (patch 0420). */
   onBuy: (btn?: HTMLElement | null) => void;
+  /** Patch 0438 -- next rank is demo-gated; see withDemoLock. */
+  demoLocked?: boolean;
+}
+
+/** Patch 0438 -- demo build: a row whose next rank is demo-gated (see
+ *  demo.ts) keeps its real level/max and stays in the main list, but its
+ *  button reads "Full game" and opens the wishlist card instead of
+ *  buying. `kind` null (always, in the full game) returns the row as-is. */
+function withDemoLock(row: RowData, kind: 'rank' | 'unlock' | null): RowData {
+  if (!kind || row.maxed) return row;
+  const open = () => requestDemoWall({ kind, name: row.name });
+  return { ...row, affordable: false, buyLabel: '🔒 Full game', buyDisabled: false, onBuy: open, demoLocked: true };
 }
 
 /** describeMods's own per-line text, plus every field describeMods can't
@@ -210,7 +223,7 @@ function GuildUpgradeRow({
         </span>
       </span>
       <button
-        className={`guild-buy-btn ${!row.buyDisabled ? 'affordable' : ''}`}
+        className={`guild-buy-btn ${!row.buyDisabled && !row.demoLocked ? 'affordable' : ''} ${row.demoLocked ? 'demo-locked' : ''}`}
         disabled={row.buyDisabled}
         onClick={(e) => { e.stopPropagation(); row.onBuy(e.currentTarget); }}
       >
@@ -320,7 +333,7 @@ export function GuildPanel() {
     const maxed = cost === null;
     const affordable = !maxed && state.gold >= cost;
     const entries = facilityEntries(def);
-    return {
+    return withDemoLock({
       id: def.id, name: def.name, description: def.description,
       category: def.category ?? 'Unlocks', level, maxLevel: def.maxLevel, maxed, affordable, cost,
       effectText: def.shortEffect ?? entries.map((e) => e.text).join(' · '),
@@ -328,7 +341,7 @@ export function GuildPanel() {
       buyLabel: maxed ? 'Fully built' : `Build · ${formatGold(cost ?? 0)}`,
       buyDisabled: maxed || state.gold < (cost ?? 0),
       onBuy: (btn) => buyWithFx(engine, btn, () => engine.upgradeFacility(def.id)),
-    };
+    }, demoLockKind(def.id, level));
   }
 
   function upgradeRow(def: (typeof generalUpgrades)[number]): RowData {
@@ -337,7 +350,7 @@ export function GuildPanel() {
     const maxed = cost === null && level >= def.maxLevel;
     const affordable = !maxed && cost !== null && state.gold >= cost;
     const entries = upgradeEntries(def, level, maxed);
-    return {
+    return withDemoLock({
       id: def.id, name: def.name, description: def.description,
       category: def.category ?? 'Unlocks', level, maxLevel: def.maxLevel, maxed, affordable, cost,
       effectText: def.shortEffect ?? entries.map((e) => e.text).join(' · '),
@@ -345,7 +358,7 @@ export function GuildPanel() {
       buyLabel: maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`,
       buyDisabled: maxed || cost === null || state.gold < cost,
       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id)),
-    };
+    }, demoLockKind(def.id, level));
   }
 
   /**
@@ -365,7 +378,7 @@ export function GuildPanel() {
     const maxed = next === null;
     const affordable = !maxed && (next!.currency === 'gold' ? state.gold >= next!.cost : state.renown >= next!.cost);
     const entries = describeMods(def.modsPerLevel).map((line) => ({ text: `${line} per level` }));
-    return {
+    return withDemoLock({
       id: def.id, name: def.name, description: def.description,
       category: 'Raids', level, maxLevel: def.maxLevel, maxed, affordable,
       cost: next?.currency === 'gold' ? next.cost : null,
@@ -376,7 +389,7 @@ export function GuildPanel() {
         : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
       buyDisabled: maxed || !affordable,
       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyRaidUpgrade(def.id)),
-    };
+    }, demoLockKind(def.id, level));
   }
 
   /** Quest Board's 2 fast-chance upgrades (patch 0351 -- previously their
@@ -390,7 +403,7 @@ export function GuildPanel() {
     const effectText = def.fastChancePctPerLevel
       ? `+${def.fastChancePctPerLevel}% Fast chance per level, every difficulty`
       : `+${def.successPenaltyRecoveryPerLevel}% success back per level on Fast rolls`;
-    return {
+    return withDemoLock({
       id: def.id, name: def.name, description: def.description,
       category: 'Quests', level, maxLevel: def.maxLevel, maxed, affordable,
       cost: next?.currency === 'gold' ? next.cost : null,
@@ -401,7 +414,7 @@ export function GuildPanel() {
         : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
       buyDisabled: maxed || !affordable,
       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyQuestFastUpgrade(def.id)),
-    };
+    }, demoLockKind(def.id, level));
   }
 
   /** Replay Memories' own "buy the feature" tier (patch 0351 -- the 6 saga
@@ -413,7 +426,7 @@ export function GuildPanel() {
     const owned = GuildManager.hasChainReplayTier(state, tier.id);
     const affordable = !owned && state.gold >= tier.goldCost;
     const effectText = 'Unlocks the Replay Memories tab -- revisit completed story chains for a chance at Heroic, Mythic, and Legendary gear.';
-    return {
+    return withDemoLock({
       id: tier.id, name: tier.sagaName, description: tier.description,
       category: 'Quests', level: owned ? 1 : 0, maxLevel: 1, maxed: owned, affordable,
       cost: tier.goldCost,
@@ -422,7 +435,7 @@ export function GuildPanel() {
       buyLabel: owned ? 'Unlocked' : `Buy · ${formatGold(tier.goldCost)}`,
       buyDisabled: owned || !affordable,
       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyChainReplayTier(tier.id)),
-    };
+    }, demoReplayLocked() ? 'unlock' : null);
   }
 
   // Facilities first, then permanent upgrades, then the raid/quest/replay

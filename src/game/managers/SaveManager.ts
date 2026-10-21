@@ -13,6 +13,7 @@ import { HarvestManager } from './HarvestManager';
 import { EquipmentManager } from './EquipmentManager';
 import { tutorialQuestOffer } from '../data/quests';
 import { ALWAYS_KNOWN_RECIPE_IDS, RECIPE_SCROLLS } from '../data/recipeScrolls';
+import { DEMO_BUILD } from '../demo';
 
 /** Storage abstraction so the game also runs in a plain browser tab for testing. */
 export interface SaveAdapter {
@@ -70,11 +71,16 @@ declare global {
        *  preload.ts's own comment for why this exists alongside
        *  setFullscreen/getFullscreen above. */
       onFullscreenChanged(callback: (value: boolean) => void): () => void;
+      /** Patch 0438 -- demo build's wishlist button. Optional: only the
+       *  Electron preload has it; the browser build opens a tab instead. */
+      openStorePage?(): Promise<void>;
     };
   }
 }
 
-const LOCAL_KEY = 'guildbound-save';
+// Patch 0438 -- the browser demo build keeps its own key, same reasoning
+// as main.ts's separate 'guildbound-demo' userData folder.
+const LOCAL_KEY = DEMO_BUILD ? 'guildbound-demo-save' : 'guildbound-save';
 /** Pre-rename key -- browser/dev-mode equivalent of main.ts's own
  *  migrateLegacySaveFolder() for the Electron save file. Same guard
  *  shape: only consulted when the new key is empty, never overwrites it. */
@@ -86,7 +92,7 @@ export const electronAdapter: SaveAdapter = {
 };
 
 export const localStorageAdapter: SaveAdapter = {
-  read: async () => window.localStorage.getItem(LOCAL_KEY) ?? window.localStorage.getItem(LEGACY_LOCAL_KEY),
+  read: async () => window.localStorage.getItem(LOCAL_KEY) ?? (DEMO_BUILD ? null : window.localStorage.getItem(LEGACY_LOCAL_KEY)),
   write: async (json) => { window.localStorage.setItem(LOCAL_KEY, json); },
 };
 

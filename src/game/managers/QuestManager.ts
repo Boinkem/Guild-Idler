@@ -25,6 +25,7 @@ import { InventoryManager } from './InventoryManager';
 import { Tuning } from '../data/tuning';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
+import { demoAllowsChain } from '../demo';
 import { PetManager } from './PetManager';
 import { CurioManager } from './CurioManager';
 import { PeddlerManager } from './PeddlerManager';
@@ -340,6 +341,9 @@ export const QuestManager = {
     if (ModifierManager.hasUnlock(state, 'chains')) {
       for (const chain of QUEST_CHAINS) {
         if (state.completedChains.includes(chain.id)) continue;
+        // Patch 0438 -- the demo build only tells one story chain (plus
+        // the feature-unlock chains); see demo.ts. No-op in the full game.
+        if (!demoAllowsChain(chain.id)) continue;
         if (topLevel < chain.reqLevel) continue;
         const active = state.activeChains.find((c) => c.chainId === chain.id);
         // Only gates a chain that hasn't been started yet -- an existing

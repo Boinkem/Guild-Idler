@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage } from 'electron';
 import type { Display } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -31,7 +31,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * (and only if) the new folder doesn't already have its own save. See that
  * function's own comment for the full guard logic.
  */
-app.setName('guildbound');
+/**
+ * Patch 0438 -- Steam demo build (`--mode demo`, see vite.config.ts and
+ * src/game/demo.ts). Compile-time constant, same as the renderer's copy.
+ */
+declare const __GUILDBOUND_DEMO__: boolean | undefined;
+const IS_DEMO = typeof __GUILDBOUND_DEMO__ !== 'undefined' && __GUILDBOUND_DEMO__ === true;
+
+// Patch 0438 -- the demo gets its own userData folder ('guildbound-demo'),
+// so a demo save and a full-game save can never overwrite each other on
+// a machine that has both installed. Demo progress does NOT carry over
+// into the full game (logged in guild-idler-status.md as a follow-up).
+app.setName(IS_DEMO ? 'guildbound-demo' : 'guildbound');
 
 /**
  * Single-instance lock -- nothing previously stopped a player launching a
@@ -72,7 +83,19 @@ if (!gotSingleInstanceLock) {
  * partner backend — so no reason to hide it behind an env var or config
  * file.
  */
-const STEAM_APP_ID = 5143490;
+const FULL_GAME_STEAM_APP_ID = 5143490;
+
+/**
+ * Patch 0438 -- the demo's own App ID, created in Steamworks from the
+ * full game's admin page ("Create new demo"). 0 = not registered yet, in
+ * which case a demo build skips Steam entirely (no restart-through-Steam,
+ * no achievements) rather than initializing against the full game's ID --
+ * a demo running as 5143490 would show up in Steam as the full game.
+ * Fill this in once Steamworks hands out the number.
+ */
+const DEMO_STEAM_APP_ID = 0;
+
+const STEAM_APP_ID = IS_DEMO ? DEMO_STEAM_APP_ID : FULL_GAME_STEAM_APP_ID;
 
 /**
  * Child App IDs for each DLC pack this game knows about, keyed by the same
@@ -87,7 +110,9 @@ const STEAM_APP_ID = 5143490;
  * back to file-presence detection, same graceful-degradation shape
  * every other Steam feature in this file already has).
  */
-const DLC_APP_IDS: Record<string, number> = {
+const DLC_APP_IDS: Record<string, number> = IS_DEMO ? {} : {
+  // Patch 0438 -- empty in the demo: DLC belongs to the full game, and a
+  // demo App ID can't own it anyway.
   founders_pack: 5256720,
 };
 
@@ -116,6 +141,10 @@ const DLC_APP_IDS: Record<string, number> = {
  */
 let steamClient: ReturnType<typeof steamworks.init> | null = null;
 try {
+  if (!STEAM_APP_ID) {
+    // Patch 0438 -- demo build with no demo App ID filled in yet.
+    throw new Error('demo build has no DEMO_STEAM_APP_ID set yet');
+  }
   if (app.isPackaged && steamworks.restartAppIfNecessary(STEAM_APP_ID)) {
     app.quit();
   } else {
@@ -380,6 +409,10 @@ function verifyAndDecodeSaveEnvelope(raw: string): string {
  * migrated file, not a race against it.
  */
 async function migrateLegacySaveFolder() {
+  // Patch 0438 -- never in the demo: the demo has never been called
+  // little-knight, and copying an old full-game save into a fresh demo
+  // folder would hand a demo player a full-game guild.
+  if (IS_DEMO) return;
   const newSave = savePath();
   try {
     await fs.access(newSave);
@@ -1103,7 +1136,23 @@ ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
  * on disk. Only an explicit `true`/`false` from the real SDK call is
  * ever treated as authoritative.
  */
+/**
+ * Patch 0438 -- the demo's "Wishlist on Steam" button. Always the FULL
+ * game's store page (that's what gets wishlisted), handed to the Steam
+ * client as a steam:// link so it opens inside Steam, signed in, one click
+ * from the Wishlist button. Falls back to the web store page if nothing
+ * is registered to handle steam:// (Steam not installed -- dev, mostly).
+ */
+ipcMain.handle('shell:openStore', async () => {
+  try {
+    await shell.openExternal(`steam://store/${FULL_GAME_STEAM_APP_ID}`);
+  } catch {
+    await shell.openExternal(`https://store.steampowered.com/app/${FULL_GAME_STEAM_APP_ID}/`);
+  }
+});
+
 ipcMain.handle('steam:isDlcOwned', (_e, packId: string) => {
+  if (IS_DEMO) return false; // patch 0438 -- no DLC in the demo, not even by file presence
   if (!steamClient) return null;
   const appId = DLC_APP_IDS[packId];
   if (!appId) return null;

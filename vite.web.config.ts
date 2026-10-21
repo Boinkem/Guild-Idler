@@ -12,8 +12,11 @@ import react from '@vitejs/plugin-react';
  *
  *   npm run dev:web
  */
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: './',
+  // Patch 0438 -- `vite --config vite.web.config.ts --mode demo` for a
+  // browser demo build; see vite.config.ts / src/game/demo.ts.
+  define: { __GUILDBOUND_DEMO__: JSON.stringify(mode === 'demo') },
   plugins: [react()],
   server: { open: true },
-});
+}));
