@@ -1,0 +1,1200 @@
+diff --git a/.gitignore b/.gitignore
+index a74c70e..5d2b552 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,6 +2,7 @@ node_modules
+ dist
+ dist-electron
+ release
++release-demo
+ *.log
+ 
+ # DLC pack sprite output (generated locally via tools/import_pets.py
+diff --git a/electron/main.ts b/electron/main.ts
+index c3a4526..3e7f00a 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -1,4 +1,4 @@
+-import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } from 'electron';
++import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage } from 'electron';
+ import type { Display } from 'electron';
+ import path from 'node:path';
+ import fs from 'node:fs/promises';
+@@ -31,7 +31,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  * (and only if) the new folder doesn't already have its own save. See that
+  * function's own comment for the full guard logic.
+  */
+-app.setName('guildbound');
++/**
++ * Patch 0438 -- Steam demo build (`--mode demo`, see vite.config.ts and
++ * src/game/demo.ts). Compile-time constant, same as the renderer's copy.
++ */
++declare const __GUILDBOUND_DEMO__: boolean | undefined;
++const IS_DEMO = typeof __GUILDBOUND_DEMO__ !== 'undefined' && __GUILDBOUND_DEMO__ === true;
++
++// Patch 0438 -- the demo gets its own userData folder ('guildbound-demo'),
++// so a demo save and a full-game save can never overwrite each other on
++// a machine that has both installed. Demo progress does NOT carry over
++// into the full game (logged in guild-idler-status.md as a follow-up).
++app.setName(IS_DEMO ? 'guildbound-demo' : 'guildbound');
+ 
+ /**
+  * Single-instance lock -- nothing previously stopped a player launching a
+@@ -72,7 +83,19 @@ if (!gotSingleInstanceLock) {
+  * partner backend — so no reason to hide it behind an env var or config
+  * file.
+  */
+-const STEAM_APP_ID = 5143490;
++const FULL_GAME_STEAM_APP_ID = 5143490;
++
++/**
++ * Patch 0438 -- the demo's own App ID, created in Steamworks from the
++ * full game's admin page ("Create new demo"). 0 = not registered yet, in
++ * which case a demo build skips Steam entirely (no restart-through-Steam,
++ * no achievements) rather than initializing against the full game's ID --
++ * a demo running as 5143490 would show up in Steam as the full game.
++ * Fill this in once Steamworks hands out the number.
++ */
++const DEMO_STEAM_APP_ID = 0;
++
++const STEAM_APP_ID = IS_DEMO ? DEMO_STEAM_APP_ID : FULL_GAME_STEAM_APP_ID;
+ 
+ /**
+  * Child App IDs for each DLC pack this game knows about, keyed by the same
+@@ -87,7 +110,9 @@ const STEAM_APP_ID = 5143490;
+  * back to file-presence detection, same graceful-degradation shape
+  * every other Steam feature in this file already has).
+  */
+-const DLC_APP_IDS: Record<string, number> = {
++const DLC_APP_IDS: Record<string, number> = IS_DEMO ? {} : {
++  // Patch 0438 -- empty in the demo: DLC belongs to the full game, and a
++  // demo App ID can't own it anyway.
+   founders_pack: 5256720,
+ };
+ 
+@@ -116,6 +141,10 @@ const DLC_APP_IDS: Record<string, number> = {
+  */
+ let steamClient: ReturnType<typeof steamworks.init> | null = null;
+ try {
++  if (!STEAM_APP_ID) {
++    // Patch 0438 -- demo build with no demo App ID filled in yet.
++    throw new Error('demo build has no DEMO_STEAM_APP_ID set yet');
++  }
+   if (app.isPackaged && steamworks.restartAppIfNecessary(STEAM_APP_ID)) {
+     app.quit();
+   } else {
+@@ -380,6 +409,10 @@ function verifyAndDecodeSaveEnvelope(raw: string): string {
+  * migrated file, not a race against it.
+  */
+ async function migrateLegacySaveFolder() {
++  // Patch 0438 -- never in the demo: the demo has never been called
++  // little-knight, and copying an old full-game save into a fresh demo
++  // folder would hand a demo player a full-game guild.
++  if (IS_DEMO) return;
+   const newSave = savePath();
+   try {
+     await fs.access(newSave);
+@@ -1103,7 +1136,23 @@ ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
+  * on disk. Only an explicit `true`/`false` from the real SDK call is
+  * ever treated as authoritative.
+  */
++/**
++ * Patch 0438 -- the demo's "Wishlist on Steam" button. Always the FULL
++ * game's store page (that's what gets wishlisted), handed to the Steam
++ * client as a steam:// link so it opens inside Steam, signed in, one click
++ * from the Wishlist button. Falls back to the web store page if nothing
++ * is registered to handle steam:// (Steam not installed -- dev, mostly).
++ */
++ipcMain.handle('shell:openStore', async () => {
++  try {
++    await shell.openExternal(`steam://store/${FULL_GAME_STEAM_APP_ID}`);
++  } catch {
++    await shell.openExternal(`https://store.steampowered.com/app/${FULL_GAME_STEAM_APP_ID}/`);
++  }
++});
++
+ ipcMain.handle('steam:isDlcOwned', (_e, packId: string) => {
++  if (IS_DEMO) return false; // patch 0438 -- no DLC in the demo, not even by file presence
+   if (!steamClient) return null;
+   const appId = DLC_APP_IDS[packId];
+   if (!appId) return null;
+diff --git a/electron/preload.ts b/electron/preload.ts
+index f3d22c8..ac1a408 100644
+--- a/electron/preload.ts
++++ b/electron/preload.ts
+@@ -113,6 +113,10 @@ const api = {
+    * leave-full-screen listeners and window:setFullscreen's own comment for
+    * the full "toggle button stops reflecting reality" bug this fixes.
+    */
++  /** Patch 0438 -- demo build's "Wishlist on Steam" button. Opens the
++   *  full game's store page in the Steam client (see main.ts's
++   *  shell:openStore handler). */
++  openStorePage: (): Promise<void> => ipcRenderer.invoke('shell:openStore'),
+   onFullscreenChanged: (callback: (value: boolean) => void): (() => void) => {
+     const listener = (_e: unknown, value: boolean) => callback(value);
+     ipcRenderer.on('window:fullscreen-changed', listener);
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 541cdab..88d8441 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1134,6 +1134,25 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Steam demo follow-ups (from patch 0438)
++- **Demo App ID** -- create the demo in Steamworks (base game admin ->
++  "Create new demo"), then set `DEMO_STEAM_APP_ID` in `electron/main.ts`.
++  Until then a demo build runs with Steam off entirely.
++- **Depot upload** -- the DevTool's Steam upload tool still targets the
++  full game's app/depot and `release/`. The demo needs its own app +
++  depot build scripts pointing at `release-demo/`.
++- **Demo save carry-over** -- not built. Demo saves live in their own
++  `guildbound-demo` folder. Carrying them into the full game would mean
++  main.ts reading that folder on first full-game launch, the same shape
++  as `migrateLegacySaveFolder`.
++- **Harvest upgrades aren't rank-capped** -- harvest tools, Warehouse and
++  Overseer are separate trees and the 0438 cap doesn't cover them yet.
++- **Pacing check** -- confirm in a real demo run that The Miller's
++  Problem and level 10 land inside a first evening. If not, either
++  swap `DEMO.storyChainId` or add a demo XP boost.
++- **Steam leaderboards/achievements** -- these stay keyed to whichever
++  App ID is live. Decide whether the demo app gets its own achievements.
++
+ ### Prestige tab missing a Bright variant
+ Direct report (this session, not yet built): `prestige.jpg` has no
+ `bright/` counterpart yet -- same safe fallback as every other tab
+@@ -35661,3 +35680,108 @@ before the public build.
+ and look at the Minotaur recruit card; open Guild Hall and confirm no
+ Customize scene/decorations appear; relaunch on an existing save to
+ confirm it still loads (signed path).
++
++### Steam demo build: `--mode demo`, upgrade rank cap, one story chain, level 10 cap, wishlist card (patch 0438)
++```discord-update
++Dev Update | Steam Demo
++
++- Added a Guildbound demo build for Steam festivals: one full story chain, every upgrade up to rank 2, heroes up to level 10
++- Added a "Wishlist on Steam" card that shows up when you reach a demo limit, plus a Demo badge in the title bar
++- Changed nothing in the full game -- every demo limit only exists in the demo build
++```
++
++Direct request: a demo to drive wishlists through Steam festivals (Next
++Fest etc.). A time-limited trial was ruled out -- an idle game can just
++be left running. The demo is gated by content instead.
++
++**How it's built.** A compile-time flag, not a runtime setting.
++`vite --mode demo` defines `__GUILDBOUND_DEMO__` = true in the renderer
++AND the Electron main sub-build (it doesn't inherit the top-level
++`define`, so it's passed through explicitly in `vite.config.ts`). Every
++other mode compiles false. tsx/tsc see it undefined, which also reads
++as the full game, so the balance sim is unaffected. A save edit can't
++switch a full build into demo mode or back.
++- `npm run dev:demo` / `dev:web:demo` -- play the demo locally.
++- `npm run build:demo` -- tsc + demo build into `dist/`.
++- `npm run package:demo` -- electron-builder with
++  `appId com.guildbound.demo`, productName "Guildbound Demo", output
++  `release-demo/` (gitignored). Same `dist/` as the full build, so build
++  one, package it, then build the other.
++
++**Every rule lives in `src/game/demo.ts`** (`DEMO` object):
++- `upgradeRankCap: 2` -- applies to Guild Hall facilities, general
++  upgrades, vendor upgrades, raid upgrades and quest fast-chance
++  upgrades. Enforced in each `GuildManager.buy*`/`upgradeFacility`,
++  which return `DEMO_LOCK_ERROR`. Cost functions are deliberately
++  untouched, so a capped row still counts as "more to buy" (not "Fully
++  built") and keeps its real max ("Lv 2/10").
++- `lockedUpgradeIds` -- Heroic Clearance, Mythic Clearance and the
++  Auction House Charter are full-game only. (The AH server verifies Steam
++  tickets against the full game's App ID, so a demo couldn't use it
++  anyway.) `lockChainReplay` locks every Replay Memories tier.
++- `storyChainId: 'millers_problem'` plus `featureChainIds` (The First
++  Haul / The Last Clutch / The Man Who Sells Maybe -- Harvest, Hatchery,
++  Peddler, so every system still shows). `QuestManager.generateChainBoard`
++  skips every other chain. The Crow's Warning was the first pick for the
++  story chain, but the balance sim (Active and Casual presets, roster
++  growth on) puts level 8 at day 2-3, too long for a festival demo.
++  Swapping is a one-line change.
++- `heroLevelCap: 10` -- `HeroManager.isMaxLevel`/`grantXp` use
++  `demoLevelCap(MAX_HERO_LEVEL)`. Recruits' tier start level is clamped
++  to it too (tier 3/4 classes start at 15/24).
++
++**Wishlist card** (`src/ui/DemoWall.tsx`). `requestDemoWall()` is a tiny
++event bus in demo.ts, not engine state -- the card is purely
++presentation. Triggers:
++- a "🔒 Full game" button on any capped row (Guild Hall rows via
++  `withDemoLock`, vendor rows via `demoLocked`)
++- the engine backstop for any other caller that hits `DEMO_LOCK_ERROR`
++  (Training/AH locked screens)
++- dismissing the story chain's completion celebration
++- the first hero to hit level 10 (once, remembered in localStorage)
++- the titlebar "Demo · Wishlist" badge
++
++The card is menu-gated like the result modals. "Wishlist on Steam"
++calls the new preload `openStorePage()` -> main's `shell:openStore`,
++which opens `steam://store/5143490` (the full game) in the Steam client,
++falling back to the web store URL. The browser build opens a tab.
++
++**Electron main.** In the demo:
++- `app.setName('guildbound-demo')` gives it its own userData folder, so
++  demo and full saves never touch each other.
++- `migrateLegacySaveFolder` is skipped.
++- `DLC_APP_IDS` is empty and `steam:isDlcOwned` returns false (no
++  file-presence fallback).
++- Steam uses `DEMO_STEAM_APP_ID`. It's 0 until the demo app exists in
++  Steamworks, and while it's 0 Steam init is skipped rather than running
++  as the full game's ID.
++
++The browser demo save uses its own `guildbound-demo-save` key.
++
++**Testing tab** -- `TESTING_TOOLS_ENABLED` is now `!DEMO_BUILD`. Always
++off in the demo (the first public build), unchanged in the full game.
++
++**Verified here.**
++- `tsc --noEmit` is clean.
++- Both `vite build` and `vite build --mode demo` succeed. The demo main
++  bundle has `guildbound-demo`; the full one doesn't.
++- A headless tsx run in both modes: in the demo, Barracks and Auto-Chain
++  stop at 2 and the 3rd buy returns the lock, Heroic Clearance and the
++  Replay master tier are locked, Guild Charter still buys, a hero given
++  1e12 XP stops at 10, and the chain board shows exactly the 4 allowed
++  chains. In the full game: 4/4, 55, and every chain.
++- The web demo build rendered in headless Chromium: titlebar badge,
++  "Full game" on Barracks (2/10), Auto-Chain (2/4) and Heroic Clearance,
++  and the card opening from the Barracks button. No Testing tab.
++
++**Not checked in the running game** -- worth:
++- `npm run dev:demo` in Electron: confirm saves land in a
++  `guildbound-demo` folder ("Where is my save?").
++- Finish The Miller's Problem: the wishlist card should follow the
++  celebration.
++- The wishlist button should open the Steam client's store page.
++
++Unrelated, seen while testing: the browser build threw "Failed to set
++the 'volume' property ... (-0.0007...) is outside the range [0, 1]" from
++a music fade on the menu open. That looks like a fade stepping just
++under 0; it needs a clamp in music.ts.
+diff --git a/package.json b/package.json
+index d2eab61..12cc158 100644
+--- a/package.json
++++ b/package.json
+@@ -14,6 +14,10 @@
+     "preview": "vite preview",
+     "start": "npm run build && electron .",
+     "package": "npm run build && electron-builder",
++    "dev:demo": "vite --mode demo",
++    "dev:web:demo": "vite --config vite.web.config.ts --mode demo",
++    "build:demo": "tsc --noEmit && vite build --mode demo",
++    "package:demo": "npm run build:demo && electron-builder --config.appId=com.guildbound.demo --config.productName=\"Guildbound Demo\" --config.directories.output=release-demo",
+     "devtool": "node tools/devtool/server.mjs",
+     "sim": "tsx tools/devtool/sim/runSim.ts"
+   },
+diff --git a/src/App.tsx b/src/App.tsx
+index 1ff7270..cb643ea 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -17,6 +17,7 @@ import { HeroTierUpModal } from './ui/HeroTierUpModal';
+ import { LevelUpModal } from './ui/LevelUpModal';
+ import { Toast } from './ui/Toast';
+ import { NotificationBanner } from './ui/NotificationBanner';
++import { DemoWallHost } from './ui/DemoWall';
+ 
+ export type ViewMode = 'idle' | 'menu';
+ 
+@@ -186,6 +187,9 @@ export function App() {
+               rewards that caused it. Compact layout in the idle window;
+               "Open guild" there plays the full card in the menu. */}
+           <LevelUpModal compact={mode === 'idle'} onOpenMenu={() => changeMode('menu')} />
++          {/* Patch 0438 -- demo build's wishlist card. Renders nothing in
++              the full game; menu-gated like the result modals above. */}
++          <DemoWallHost active={mode === 'menu'} />
+         </>
+       )}
+       <Toast skipBanners={mode === 'menu'} />
+diff --git a/src/game/demo.ts b/src/game/demo.ts
+new file mode 100644
+index 0000000..6eaeb52
+--- /dev/null
++++ b/src/game/demo.ts
+@@ -0,0 +1,122 @@
++/**
++ * Steam demo build (patch 0438) -- every demo-only rule lives in this one
++ * file, so a later "make the demo bigger/smaller" request is an edit here,
++ * not a hunt through managers.
++ *
++ * The flag is compiled in, never read at runtime: `vite --mode demo` /
++ * `vite build --mode demo` (npm run dev:demo / build:demo / package:demo)
++ * defines `__GUILDBOUND_DEMO__` as `true`; every other build defines it
++ * as `false`, and anything that runs without Vite at all (the DevTool's
++ * tsx balance sim, tsc) sees it undefined -- both read as "full game".
++ * Since it's a compile-time constant, a full-game build can't be flipped
++ * into demo mode (or back) by editing a save or a settings file.
++ *
++ * What the demo is (direct request -- a wishlist driver for Steam
++ * festivals, NOT a time-limited trial, which an idle game can't use):
++ *  - Every leveled upgrade stops at rank `upgradeRankCap` (2). Rank 3+
++ *    still shows with its real max ("Lv 2/10") and a "Full game" button
++ *    that opens the wishlist card, so the player sees exactly how much
++ *    further each one goes.
++ *  - A few whole unlocks are full-game only (`lockedUpgradeIds`), plus
++ *    Replay Memories.
++ *  - One story chain (`storyChainId`) plus the chains that unlock whole
++ *    systems (`featureChainIds`: Harvest, Hatchery, Peddler) -- every other
++ *    chain simply never shows on the board. Finishing the story chain
++ *    plays its normal celebration, then the wishlist card.
++ *  - Heroes stop at level `heroLevelCap` (10).
++ */
++
++declare const __GUILDBOUND_DEMO__: boolean | undefined;
++
++export const DEMO_BUILD: boolean = typeof __GUILDBOUND_DEMO__ !== 'undefined' && __GUILDBOUND_DEMO__ === true;
++
++export const DEMO = {
++  /** Highest rank any leveled upgrade/facility can reach in the demo. */
++  upgradeRankCap: 2,
++  /**
++   * Bought outright in the full game, not available at all in the demo.
++   * Heroic/Mythic Clearance -- the demo's raid ceiling is Normal.
++   * Auction House Charter -- the AH server authenticates against the
++   * full game's App ID, so a demo ticket would never verify anyway.
++   */
++  lockedUpgradeIds: ['raid_heroic_clearance', 'raid_mythic_clearance', 'auction_house_charter'] as readonly string[],
++  /** Every Replay Memories tier (including the 'master' unlock itself). */
++  lockChainReplay: true,
++  /**
++   * The one story chain the demo tells. Lv 2, 3 stages -- reachable in
++   * a first session. (The Crow's Warning, lv 8, was the other candidate:
++   * a stronger cliffhanger, but the balance sim puts lv 8 at day 2-3 of
++   * play, longer than most festival players give a demo.)
++   */
++  storyChainId: 'millers_problem',
++  /** Chains whose reward is a whole system (Harvest/Hatchery/Peddler) --
++   *  kept so the demo shows off everything the game does. */
++  featureChainIds: ['the_first_haul', 'the_last_clutch', 'the_man_who_sells_maybe'] as readonly string[],
++  heroLevelCap: 10,
++  /** The FULL game's App ID -- what the wishlist button opens, not the demo's own. */
++  fullGameAppId: 5143490,
++} as const;
++
++export const DEMO_STORE_URL = `https://store.steampowered.com/app/${DEMO.fullGameAppId}/`;
++
++/** Sentinel error string GuildManager returns for a demo-gated purchase --
++ *  engine.ts checks for it to open the wishlist card instead of a toast. */
++export const DEMO_LOCK_ERROR = 'Available in the full game.';
++
++/**
++ * Whether buying the NEXT rank of upgrade `id` (currently at
++ * `currentLevel`) is blocked by the demo. 'unlock' = never available in
++ * the demo at all, 'rank' = ranks up to the cap were fine, this one isn't.
++ * Always null in the full game.
++ */
++export function demoLockKind(id: string, currentLevel: number): 'unlock' | 'rank' | null {
++  if (!DEMO_BUILD) return null;
++  if (DEMO.lockedUpgradeIds.includes(id)) return 'unlock';
++  if (currentLevel >= DEMO.upgradeRankCap) return 'rank';
++  return null;
++}
++
++export function demoRankLocked(id: string, currentLevel: number): boolean {
++  return demoLockKind(id, currentLevel) !== null;
++}
++
++/** Replay Memories tiers -- all locked in the demo. */
++export function demoReplayLocked(): boolean {
++  return DEMO_BUILD && DEMO.lockChainReplay;
++}
++
++/** Whether a story chain is allowed onto the board. Always true in the full game. */
++export function demoAllowsChain(chainId: string): boolean {
++  if (!DEMO_BUILD) return true;
++  return chainId === DEMO.storyChainId || DEMO.featureChainIds.includes(chainId);
++}
++
++/** The hero level cap actually in force -- the demo's, or the full game's. */
++export function demoLevelCap(fullGameCap: number): number {
++  return DEMO_BUILD ? Math.min(fullGameCap, DEMO.heroLevelCap) : fullGameCap;
++}
++
++/* ------------------------------ wishlist card ------------------------------ */
++// A tiny event bus rather than engine state: the card is pure presentation
++// (nothing about it is saved or affects play), and it has to be reachable
++// from both the engine (a gated purchase that slipped past the UI) and
++// plain UI code (a "Full game" button, the chain celebration closing).
++
++export type DemoWallReason =
++  | { kind: 'rank'; name?: string }
++  | { kind: 'unlock'; name?: string }
++  | { kind: 'story' }
++  | { kind: 'level' }
++  | { kind: 'badge' };
++
++const listeners = new Set<(reason: DemoWallReason) => void>();
++
++export function requestDemoWall(reason: DemoWallReason): void {
++  if (!DEMO_BUILD) return;
++  for (const fn of listeners) fn(reason);
++}
++
++export function onDemoWall(fn: (reason: DemoWallReason) => void): () => void {
++  listeners.add(fn);
++  return () => { listeners.delete(fn); };
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index a2f1f88..4dc564c 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -45,6 +45,7 @@ import { Tuning } from './data/tuning';
+ import { rerollDay, rerollsUsedToday } from './data/reroll';
+ import { playSound } from './sound';
+ import { TESTING_TOOLS_ENABLED } from './testingTools';
++import { DEMO_LOCK_ERROR, requestDemoWall } from './demo';
+ 
+ const TICK_MS = 1000;
+ const AUTOSAVE_MS = 15_000;
+@@ -2214,6 +2215,7 @@ export class GameEngine {
+    */
+   buyChainReplayTier(tierId: string) {
+     const error = GuildManager.buyChainReplayTier(this.state, tierId);
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'unlock', name: CHAIN_REPLAY_TIER_BY_ID[tierId]?.sagaName });
+     if (error) return this.say(error);
+     playSound('purchase');
+     const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
+@@ -3628,6 +3630,11 @@ export class GameEngine {
+ 
+   buyUpgrade(id: string) {
+     const error = GuildManager.buyUpgrade(this.state, id);
++    // Patch 0438 -- a demo-gated rank opens the wishlist card rather than
++    // a toast. The rows themselves already route their "Full game" button
++    // straight there; this catches every other caller (Training tab's own
++    // locked screen, Auction House's, etc.).
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' });
+     if (error) return this.say(error);
+     playSound('purchase');
+     // Some upgrades flip an unlock (legendaryQuests, blackMarket, raids --
+@@ -3649,6 +3656,7 @@ export class GameEngine {
+ 
+   buyRaidUpgrade(id: string) {
+     const error = GuildManager.buyRaidUpgrade(this.state, id);
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' });
+     if (error) return this.say(error);
+     playSound('purchase');
+     this.notify();
+@@ -3659,6 +3667,7 @@ export class GameEngine {
+    *  shape as buyRaidUpgrade just above (its direct precedent). */
+   buyQuestFastUpgrade(id: string) {
+     const error = GuildManager.buyQuestFastUpgrade(this.state, id);
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' });
+     if (error) return this.say(error);
+     playSound('purchase');
+     this.notify();
+@@ -3677,6 +3686,7 @@ export class GameEngine {
+ 
+   upgradeFacility(id: Parameters<typeof GuildManager.upgradeFacility>[1]) {
+     const error = GuildManager.upgradeFacility(this.state, id);
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' });
+     if (error) return this.say(error);
+     playSound('purchase');
+     // Same immediate-check reasoning as buyUpgrade above -- no facility
+diff --git a/src/game/managers/GuildManager.ts b/src/game/managers/GuildManager.ts
+index f639ff6..f5ab146 100644
+--- a/src/game/managers/GuildManager.ts
++++ b/src/game/managers/GuildManager.ts
+@@ -12,6 +12,7 @@ import { HeroManager } from './HeroManager';
+ import { ModifierManager } from './ModifierManager';
+ import { Tuning } from '../data/tuning';
+ import { applyVendorRepDiscount } from '../data/vendorRep';
++import { DEMO_LOCK_ERROR, demoRankLocked, demoReplayLocked } from '../demo';
+ 
+ export const GuildManager = {
+   facilityLevel(state: GameState, id: GuildFacility): number {
+@@ -30,6 +31,10 @@ export const GuildManager = {
+     if (!def) return 'Unknown facility.';
+     const level = GuildManager.facilityLevel(state, id);
+     if (level >= def.maxLevel) return `${def.name} is fully built.`;
++    // Patch 0438 -- demo build rank cap (see demo.ts). Cost/nextCost are
++    // deliberately left alone so the UI still treats the row as "more to
++    // buy" and can show its "Full game" button instead of "Fully built".
++    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR;
+     const cost = guildCost(def, level);
+     if (state.gold < cost) return 'Not enough gold.';
+     state.gold -= cost;
+@@ -85,6 +90,7 @@ export const GuildManager = {
+    */
+   buyChainReplayTier(state: GameState, tierId: string): string | null {
+     if (GuildManager.hasChainReplayTier(state, tierId)) return 'Already unlocked.';
++    if (demoReplayLocked()) return DEMO_LOCK_ERROR; // patch 0438 -- full game only
+     const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
+     if (!tier) return 'Unknown tier.';
+     if (state.gold < tier.goldCost) return 'Not enough gold.';
+@@ -130,6 +136,7 @@ export const GuildManager = {
+     }
+     const level = GuildManager.upgradeLevel(state, id);
+     if (level >= def.maxLevel) return 'Already at maximum.';
++    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR; // patch 0438, see upgradeFacility
+     const cost = GuildManager.nextUpgradeCost(state, id);
+     if (cost === null) return 'Already at maximum.';
+     const scrapCost = GuildManager.nextUpgradeScrapCost(state, id) ?? 0;
+@@ -262,6 +269,7 @@ export const GuildManager = {
+     const level = GuildManager.raidUpgradeLevel(state, id);
+     const next = raidUpgradeCost(def, level);
+     if (!next) return 'Already at maximum.';
++    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR; // patch 0438, see upgradeFacility
+     if (next.currency === 'gold') {
+       if (state.gold < next.cost) return 'Not enough gold.';
+       state.gold -= next.cost;
+@@ -301,6 +309,7 @@ export const GuildManager = {
+     const level = GuildManager.questFastUpgradeLevel(state, id);
+     const next = questFastUpgradeCost(def, level);
+     if (!next) return 'Already at maximum.';
++    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR; // patch 0438, see upgradeFacility
+     if (next.currency === 'gold') {
+       if (state.gold < next.cost) return 'Not enough gold.';
+       state.gold -= next.cost;
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 6bfc613..58dc093 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -1,6 +1,7 @@
+ import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
+ import { INJURIES } from '../data/items';
+ import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
++import { demoLevelCap } from '../demo';
+ import {
+   heroTierUpMaxSteps, heroTierUpStatMultiplier, heroTierUpQuestsRequired,
+   heroTierUpGoldCost, heroTierUpRenownCost, heroTierUpNextStepIsFinal,
+@@ -15,7 +16,8 @@ import { ModifierManager } from './ModifierManager';
+ export const HeroManager = {
+   create(heroClass: HeroClass, rng: Rng, nameOverride?: string): Hero {
+     const def = HERO_CLASSES[heroClass];
+-    const startLevel = RECRUIT_START_LEVEL[def.tier] ?? 1;
++    // Patch 0438 -- clamped to the demo's level cap (no-op in the full game).
++    const startLevel = Math.min(RECRUIT_START_LEVEL[def.tier] ?? 1, demoLevelCap(MAX_HERO_LEVEL));
+ 
+     // Grow base stats up to the starting level so a tier-3 hire isn't a level-1
+     // weakling despite the price. Each level applies the class growth once.
+@@ -347,7 +349,9 @@ export const HeroManager = {
+    * definition rather than each re-deriving `hero.level >= 55` themselves.
+    */
+   isMaxLevel(hero: Hero): boolean {
+-    return hero.level >= MAX_HERO_LEVEL;
++    // Patch 0438 -- demoLevelCap is MAX_HERO_LEVEL itself in the full
++    // game, the demo's own lower cap (demo.ts) in a demo build.
++    return hero.level >= demoLevelCap(MAX_HERO_LEVEL);
+   },
+ 
+   /**
+@@ -371,7 +375,8 @@ export const HeroManager = {
+     if (HeroManager.isMaxLevel(hero)) return 0;
+     hero.xp += Math.max(0, Math.floor(amount));
+     let gained = 0;
+-    while (hero.level < MAX_HERO_LEVEL && hero.xp >= xpForLevel(hero.level)) {
++    const cap = demoLevelCap(MAX_HERO_LEVEL);
++    while (hero.level < cap && hero.xp >= xpForLevel(hero.level)) {
+       hero.xp -= xpForLevel(hero.level);
+       hero.level += 1;
+       gained += 1;
+@@ -397,7 +402,7 @@ export const HeroManager = {
+     // than left sitting there forever, so a maxed hero's XP bar reads as
+     // genuinely full/done rather than stalled at some arbitrary partial
+     // fill it can never move past.
+-    if (hero.level >= MAX_HERO_LEVEL) hero.xp = 0;
++    if (hero.level >= cap) hero.xp = 0;
+     return gained;
+   },
+ 
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 8c8b485..62d5444 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -25,6 +25,7 @@ import { InventoryManager } from './InventoryManager';
+ import { Tuning } from '../data/tuning';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
++import { demoAllowsChain } from '../demo';
+ import { PetManager } from './PetManager';
+ import { CurioManager } from './CurioManager';
+ import { PeddlerManager } from './PeddlerManager';
+@@ -340,6 +341,9 @@ export const QuestManager = {
+     if (ModifierManager.hasUnlock(state, 'chains')) {
+       for (const chain of QUEST_CHAINS) {
+         if (state.completedChains.includes(chain.id)) continue;
++        // Patch 0438 -- the demo build only tells one story chain (plus
++        // the feature-unlock chains); see demo.ts. No-op in the full game.
++        if (!demoAllowsChain(chain.id)) continue;
+         if (topLevel < chain.reqLevel) continue;
+         const active = state.activeChains.find((c) => c.chainId === chain.id);
+         // Only gates a chain that hasn't been started yet -- an existing
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 2f42a14..4c94d4b 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -13,6 +13,7 @@ import { HarvestManager } from './HarvestManager';
+ import { EquipmentManager } from './EquipmentManager';
+ import { tutorialQuestOffer } from '../data/quests';
+ import { ALWAYS_KNOWN_RECIPE_IDS, RECIPE_SCROLLS } from '../data/recipeScrolls';
++import { DEMO_BUILD } from '../demo';
+ 
+ /** Storage abstraction so the game also runs in a plain browser tab for testing. */
+ export interface SaveAdapter {
+@@ -70,11 +71,16 @@ declare global {
+        *  preload.ts's own comment for why this exists alongside
+        *  setFullscreen/getFullscreen above. */
+       onFullscreenChanged(callback: (value: boolean) => void): () => void;
++      /** Patch 0438 -- demo build's wishlist button. Optional: only the
++       *  Electron preload has it; the browser build opens a tab instead. */
++      openStorePage?(): Promise<void>;
+     };
+   }
+ }
+ 
+-const LOCAL_KEY = 'guildbound-save';
++// Patch 0438 -- the browser demo build keeps its own key, same reasoning
++// as main.ts's separate 'guildbound-demo' userData folder.
++const LOCAL_KEY = DEMO_BUILD ? 'guildbound-demo-save' : 'guildbound-save';
+ /** Pre-rename key -- browser/dev-mode equivalent of main.ts's own
+  *  migrateLegacySaveFolder() for the Electron save file. Same guard
+  *  shape: only consulted when the new key is empty, never overwrites it. */
+@@ -86,7 +92,7 @@ export const electronAdapter: SaveAdapter = {
+ };
+ 
+ export const localStorageAdapter: SaveAdapter = {
+-  read: async () => window.localStorage.getItem(LOCAL_KEY) ?? window.localStorage.getItem(LEGACY_LOCAL_KEY),
++  read: async () => window.localStorage.getItem(LOCAL_KEY) ?? (DEMO_BUILD ? null : window.localStorage.getItem(LEGACY_LOCAL_KEY)),
+   write: async (json) => { window.localStorage.setItem(LOCAL_KEY, json); },
+ };
+ 
+diff --git a/src/game/testingTools.ts b/src/game/testingTools.ts
+index 3d13d6a..8180f0d 100644
+--- a/src/game/testingTools.ts
++++ b/src/game/testingTools.ts
+@@ -15,4 +15,9 @@
+  * Everything testing-related lives inside that one fenced block; nothing
+  * else in engine.ts references it.
+  */
+-export const TESTING_TOOLS_ENABLED = true;
++import { DEMO_BUILD } from './demo';
++
++// Patch 0438 -- always off in the demo build: the demo is the first build
++// that goes out publicly, so it can never ship the Testing tab. The full
++// game's own value is unchanged (still flipped by hand before release).
++export const TESTING_TOOLS_ENABLED = !DEMO_BUILD;
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 3d255c2..1415c88 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -8911,3 +8911,47 @@ button.harvest-item:hover {
+ .wdr-livery .wdr-ddb { min-height: 28px; font-size: 0.7rem; }
+ .wdr-livery-menu { right: auto; width: 290px; max-width: 90vw; }
+ 
++
++/* ---------------------------------------------------------------------
++   Patch 0438 -- demo build only (see src/game/demo.ts). Nothing here
++   matches any element in the full game: every class below is rendered
++   exclusively by DemoWall.tsx or a demo-gated upgrade row.
++   --------------------------------------------------------------------- */
++.guild-buy-btn.demo-locked,
++.upgrade-buy-btn.demo-locked {
++  background: transparent;
++  color: var(--violet);
++  border: 1px dashed var(--violet);
++  cursor: pointer;
++}
++.guild-buy-btn.demo-locked:hover,
++.upgrade-buy-btn.demo-locked:hover { background: color-mix(in srgb, var(--violet) 18%, transparent); }
++
++.demo-badge {
++  align-self: center;
++  margin-left: 10px;
++  padding: 3px 9px;
++  min-height: 0;
++  font-size: 0.625rem;
++  font-weight: 700;
++  letter-spacing: 0.08em;
++  text-transform: uppercase;
++  color: var(--ink);
++  background: var(--brass);
++  border: 1px solid var(--brass);
++  box-shadow: none;
++  cursor: pointer;
++  position: relative; /* above .rune-texture-overlay */
++  z-index: 1;
++}
++.demo-badge:hover { filter: brightness(1.08); }
++
++.demo-wall-modal { max-width: 440px; }
++.demo-wall-kicker {
++  font-size: 0.6875rem;
++  font-weight: 700;
++  letter-spacing: 0.1em;
++  text-transform: uppercase;
++  color: var(--violet);
++}
++.demo-wall-title { margin: 4px 0 8px; }
+diff --git a/src/ui/ChainCompleteModal.tsx b/src/ui/ChainCompleteModal.tsx
+index 7d26816..04cabd7 100644
+--- a/src/ui/ChainCompleteModal.tsx
++++ b/src/ui/ChainCompleteModal.tsx
+@@ -11,6 +11,7 @@ import { Rarity } from '../game/types';
+ import { chainBannerSrc, chainIconSrc } from './panels/QuestPanel';
+ import { at, useDelayedCount, TickMark } from './resultFx';
+ import waxSealComplete from '../assets/wax-seal-complete.png';
++import { DEMO, DEMO_BUILD, requestDemoWall } from '../game/demo';
+ 
+ /**
+  * The big "Story Chain Complete" overlay -- separate from the regular
+@@ -72,11 +73,18 @@ function ChainCompleteCard({ celebration, onViewLore }: { celebration: Celebrati
+     [],
+   );
+ 
+-  const close = () => engine.dismissChainCelebration();
++  // Patch 0438 -- finishing the demo's one story chain hands straight on
++  // to the wishlist card once this celebration is dismissed (either way).
++  const endOfDemoStory = DEMO_BUILD && celebration.chainId === DEMO.storyChainId;
++  const close = () => {
++    engine.dismissChainCelebration();
++    if (endOfDemoStory) requestDemoWall({ kind: 'story' });
++  };
+   const viewLore = () => {
+     engine.requestTab('lore');
+     onViewLore();
+     engine.dismissChainCelebration();
++    if (endOfDemoStory) requestDemoWall({ kind: 'story' });
+   };
+ 
+   return (
+diff --git a/src/ui/DemoWall.tsx b/src/ui/DemoWall.tsx
+new file mode 100644
+index 0000000..d12297e
+--- /dev/null
++++ b/src/ui/DemoWall.tsx
+@@ -0,0 +1,127 @@
++import { useEffect, useRef, useState } from 'react';
++import { useEngine } from './useEngine';
++import { HeroManager } from '../game/managers/HeroManager';
++import { CHAIN_BY_ID } from '../game/managers/QuestManager';
++import { QUEST_CHAINS } from '../game/data/quests';
++import { DEMO, DEMO_BUILD, DEMO_STORE_URL, DemoWallReason, demoAllowsChain, onDemoWall, requestDemoWall } from '../game/demo';
++
++/**
++ * Patch 0438 -- the demo build's wishlist card, and the small "Demo ·
++ * Wishlist" badge in the menu titlebar. Both render nothing in the full
++ * game (DEMO_BUILD is a compile-time constant, see demo.ts).
++ *
++ * Opening the store goes through the Electron main process
++ * (`openStorePage`, which hands Steam a steam://store link so the page
++ * opens inside the Steam client, where the Wishlist button is one click).
++ * The browser build has no preload bridge, so it opens the web store page
++ * in a new tab instead.
++ */
++export function openStorePage() {
++  const bridge = window.littleKnight;
++  if (bridge?.openStorePage) {
++    void bridge.openStorePage();
++    return;
++  }
++  window.open(DEMO_STORE_URL, '_blank', 'noopener');
++}
++
++function copyFor(reason: DemoWallReason): { kicker: string; title: string; body: string } {
++  switch (reason.kind) {
++    case 'rank':
++      return {
++        kicker: 'Demo limit reached',
++        title: reason.name ? `${reason.name} goes further` : 'This upgrade goes further',
++        body: `The demo stops every upgrade at rank ${DEMO.upgradeRankCap}. In the full game, every one of them can be built all the way up.`,
++      };
++    case 'unlock':
++      return {
++        kicker: 'Full game feature',
++        title: reason.name ?? 'Not in the demo',
++        body: "This one's waiting in the full game, along with Heroic and Mythic raids, the Auction House, and every story chain.",
++      };
++    case 'story': {
++      const chain = CHAIN_BY_ID[DEMO.storyChainId];
++      return {
++        kicker: 'End of the demo story',
++        title: chain ? `${chain.name} was only the beginning` : 'The story continues',
++        body: `${QUEST_CHAINS.filter((c) => !demoAllowsChain(c.id)).length} more story chains wait in the full game: a keep to win and hold, a villain who never shows its face, and something very old at the bottom of the world. Your guild can keep playing here as long as you like.`,
++      };
++    }
++    case 'level':
++      return {
++        kicker: 'Demo level cap',
++        title: `Level ${DEMO.heroLevelCap} reached`,
++        body: `Heroes stop at level ${DEMO.heroLevelCap} in the demo. The full game goes all the way to 55, with Legendary and Mythic contracts, raids and retirements along the way.`,
++      };
++    case 'badge':
++    default:
++      return {
++        kicker: 'Guildbound Demo',
++        title: 'Enjoying the guild?',
++        body: `This demo includes one story chain, upgrades up to rank ${DEMO.upgradeRankCap} and heroes up to level ${DEMO.heroLevelCap}. Wishlist Guildbound on Steam to hear the moment the full game launches.`,
++      };
++  }
++}
++
++/** Lifetime "level cap card already shown" marker -- a light per-player
++ *  convenience, so a guild that sits at the cap doesn't get the card on
++ *  every launch. Losing it (private window, cleared storage) only means
++ *  the card shows once more. */
++const LEVEL_SEEN_KEY = 'guildbound-demo-level-card-seen';
++function levelCardSeen(): boolean {
++  try { return window.localStorage.getItem(LEVEL_SEEN_KEY) === '1'; } catch { return false; }
++}
++function markLevelCardSeen() {
++  try { window.localStorage.setItem(LEVEL_SEEN_KEY, '1'); } catch { /* storage unavailable -- fine */ }
++}
++
++/**
++ * Mounted once in App. `active` is the menu-is-open flag every other big
++ * modal already uses -- a request that arrives while only the idle
++ * companion window is showing waits here until the menu opens, rather
++ * than rendering cropped inside the tiny window.
++ */
++export function DemoWallHost({ active }: { active: boolean }) {
++  const engine = useEngine();
++  const [reason, setReason] = useState<DemoWallReason | null>(null);
++
++  useEffect(() => (DEMO_BUILD ? onDemoWall((r) => setReason(r)) : undefined), []);
++
++  // First hero to hit the demo's level cap -> the card, once.
++  const anyCapped = DEMO_BUILD && engine.state.heroes.some((h) => HeroManager.isMaxLevel(h));
++  const firedRef = useRef(false);
++  useEffect(() => {
++    if (!anyCapped || firedRef.current || levelCardSeen()) return;
++    firedRef.current = true;
++    markLevelCardSeen();
++    requestDemoWall({ kind: 'level' });
++  }, [anyCapped]);
++
++  if (!DEMO_BUILD || !active || !reason) return null;
++  const copy = copyFor(reason);
++  const close = () => setReason(null);
++  return (
++    <div className="overlay demo-wall-overlay" onClick={close}>
++      <div className="modal demo-wall-modal" onClick={(e) => e.stopPropagation()}>
++        <div className="demo-wall-kicker">{copy.kicker}</div>
++        <h2 className="demo-wall-title">{copy.title}</h2>
++        <p className="card-flavour">{copy.body}</p>
++        <div className="row end" style={{ marginTop: 16, gap: 8 }}>
++          <button onClick={close}>Keep playing</button>
++          <button className="btn-yellow" onClick={() => { openStorePage(); close(); }}>Wishlist on Steam</button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/** Titlebar badge -- always there in the demo, so the wishlist link is
++ *  never more than one click away. */
++export function DemoBadge() {
++  if (!DEMO_BUILD) return null;
++  return (
++    <button className="demo-badge" onClick={() => requestDemoWall({ kind: 'badge' })} title="This is the Guildbound demo">
++      Demo · Wishlist
++    </button>
++  );
++}
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 0151710..bf6f910 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -13,6 +13,7 @@ import { GuildHallDecorManager } from '../game/managers/GuildHallDecorManager';
+ import { GUILD_HALL_DECOR_ENABLED } from '../game/data/guildHallDecor';
+ import { GUILD_HALL_THEME_BY_ID } from '../game/data/guildHallSlots';
+ import { GuildHallMenuBackdrop } from './GuildHallMenuBackdrop';
++import { DemoBadge } from './DemoWall';
+ import { playSound } from '../game/sound';
+ import { useCountUp } from './useCountUp';
+ import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
+@@ -480,6 +481,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+             <div className="guild-title-subtitle">{engine.state.activeGuildTitle}</div>
+           )}
+         </div>
++        {/* Patch 0438 -- demo build only; renders nothing in the full game. */}
++        <DemoBadge />
+         <div className="resources">
+           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index b3048e3..3fa188f 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -17,6 +17,7 @@ import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
+ import { GUILD_HALL_DECOR_ENABLED } from '../../game/data/guildHallDecor';
+ import { FundGuildModal } from '../FundGuildModal';
+ import waxSealComplete from '../../assets/wax-seal-complete.png';
++import { demoLockKind, demoReplayLocked, requestDemoWall } from '../../game/demo';
+ 
+ function chainRangeText(level: number): string {
+   const range = AUTO_CHAIN_RANGES[level];
+@@ -100,6 +101,18 @@ interface RowData {
+   buyDisabled: boolean;
+   /** Gets the clicked button so the spend can fly into it (patch 0420). */
+   onBuy: (btn?: HTMLElement | null) => void;
++  /** Patch 0438 -- next rank is demo-gated; see withDemoLock. */
++  demoLocked?: boolean;
++}
++
++/** Patch 0438 -- demo build: a row whose next rank is demo-gated (see
++ *  demo.ts) keeps its real level/max and stays in the main list, but its
++ *  button reads "Full game" and opens the wishlist card instead of
++ *  buying. `kind` null (always, in the full game) returns the row as-is. */
++function withDemoLock(row: RowData, kind: 'rank' | 'unlock' | null): RowData {
++  if (!kind || row.maxed) return row;
++  const open = () => requestDemoWall({ kind, name: row.name });
++  return { ...row, affordable: false, buyLabel: '🔒 Full game', buyDisabled: false, onBuy: open, demoLocked: true };
+ }
+ 
+ /** describeMods's own per-line text, plus every field describeMods can't
+@@ -210,7 +223,7 @@ function GuildUpgradeRow({
+         </span>
+       </span>
+       <button
+-        className={`guild-buy-btn ${!row.buyDisabled ? 'affordable' : ''}`}
++        className={`guild-buy-btn ${!row.buyDisabled && !row.demoLocked ? 'affordable' : ''} ${row.demoLocked ? 'demo-locked' : ''}`}
+         disabled={row.buyDisabled}
+         onClick={(e) => { e.stopPropagation(); row.onBuy(e.currentTarget); }}
+       >
+@@ -320,7 +333,7 @@ export function GuildPanel() {
+     const maxed = cost === null;
+     const affordable = !maxed && state.gold >= cost;
+     const entries = facilityEntries(def);
+-    return {
++    return withDemoLock({
+       id: def.id, name: def.name, description: def.description,
+       category: def.category ?? 'Unlocks', level, maxLevel: def.maxLevel, maxed, affordable, cost,
+       effectText: def.shortEffect ?? entries.map((e) => e.text).join(' · '),
+@@ -328,7 +341,7 @@ export function GuildPanel() {
+       buyLabel: maxed ? 'Fully built' : `Build · ${formatGold(cost ?? 0)}`,
+       buyDisabled: maxed || state.gold < (cost ?? 0),
+       onBuy: (btn) => buyWithFx(engine, btn, () => engine.upgradeFacility(def.id)),
+-    };
++    }, demoLockKind(def.id, level));
+   }
+ 
+   function upgradeRow(def: (typeof generalUpgrades)[number]): RowData {
+@@ -337,7 +350,7 @@ export function GuildPanel() {
+     const maxed = cost === null && level >= def.maxLevel;
+     const affordable = !maxed && cost !== null && state.gold >= cost;
+     const entries = upgradeEntries(def, level, maxed);
+-    return {
++    return withDemoLock({
+       id: def.id, name: def.name, description: def.description,
+       category: def.category ?? 'Unlocks', level, maxLevel: def.maxLevel, maxed, affordable, cost,
+       effectText: def.shortEffect ?? entries.map((e) => e.text).join(' · '),
+@@ -345,7 +358,7 @@ export function GuildPanel() {
+       buyLabel: maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`,
+       buyDisabled: maxed || cost === null || state.gold < cost,
+       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id)),
+-    };
++    }, demoLockKind(def.id, level));
+   }
+ 
+   /**
+@@ -365,7 +378,7 @@ export function GuildPanel() {
+     const maxed = next === null;
+     const affordable = !maxed && (next!.currency === 'gold' ? state.gold >= next!.cost : state.renown >= next!.cost);
+     const entries = describeMods(def.modsPerLevel).map((line) => ({ text: `${line} per level` }));
+-    return {
++    return withDemoLock({
+       id: def.id, name: def.name, description: def.description,
+       category: 'Raids', level, maxLevel: def.maxLevel, maxed, affordable,
+       cost: next?.currency === 'gold' ? next.cost : null,
+@@ -376,7 +389,7 @@ export function GuildPanel() {
+         : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
+       buyDisabled: maxed || !affordable,
+       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyRaidUpgrade(def.id)),
+-    };
++    }, demoLockKind(def.id, level));
+   }
+ 
+   /** Quest Board's 2 fast-chance upgrades (patch 0351 -- previously their
+@@ -390,7 +403,7 @@ export function GuildPanel() {
+     const effectText = def.fastChancePctPerLevel
+       ? `+${def.fastChancePctPerLevel}% Fast chance per level, every difficulty`
+       : `+${def.successPenaltyRecoveryPerLevel}% success back per level on Fast rolls`;
+-    return {
++    return withDemoLock({
+       id: def.id, name: def.name, description: def.description,
+       category: 'Quests', level, maxLevel: def.maxLevel, maxed, affordable,
+       cost: next?.currency === 'gold' ? next.cost : null,
+@@ -401,7 +414,7 @@ export function GuildPanel() {
+         : next!.currency === 'gold' ? `Buy · ${formatGold(next!.cost)}` : `Buy · ${formatNumber(next!.cost)} renown`,
+       buyDisabled: maxed || !affordable,
+       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyQuestFastUpgrade(def.id)),
+-    };
++    }, demoLockKind(def.id, level));
+   }
+ 
+   /** Replay Memories' own "buy the feature" tier (patch 0351 -- the 6 saga
+@@ -413,7 +426,7 @@ export function GuildPanel() {
+     const owned = GuildManager.hasChainReplayTier(state, tier.id);
+     const affordable = !owned && state.gold >= tier.goldCost;
+     const effectText = 'Unlocks the Replay Memories tab -- revisit completed story chains for a chance at Heroic, Mythic, and Legendary gear.';
+-    return {
++    return withDemoLock({
+       id: tier.id, name: tier.sagaName, description: tier.description,
+       category: 'Quests', level: owned ? 1 : 0, maxLevel: 1, maxed: owned, affordable,
+       cost: tier.goldCost,
+@@ -422,7 +435,7 @@ export function GuildPanel() {
+       buyLabel: owned ? 'Unlocked' : `Buy · ${formatGold(tier.goldCost)}`,
+       buyDisabled: owned || !affordable,
+       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyChainReplayTier(tier.id)),
+-    };
++    }, demoReplayLocked() ? 'unlock' : null);
+   }
+ 
+   // Facilities first, then permanent upgrades, then the raid/quest/replay
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 62cc31f..873df12 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -28,6 +28,7 @@ import { EnhanceStation } from '../EnhanceStation';
+ import { WeaponEnchantStation } from '../WeaponEnchantStation';
+ import { ArmourInfusionStation } from '../ArmourInfusionStation';
+ import { RerollStation } from '../RerollStation';
++import { demoRankLocked, requestDemoWall } from '../../game/demo';
+ import { ScrapStation } from '../ScrapStation';
+ import { ReputationRing } from '../ReputationRing';
+ import { PriceTag, REP_LINES, useRepLevelUp } from '../repFx';
+@@ -146,9 +147,11 @@ export function VendorsPanel() {
+  * that entirely, each instance owning its own hook call.
+  */
+ function VendorUpgradeRow({
+-  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy, unveiling, isNew,
++  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy, unveiling, isNew, demoLocked,
+ }: {
+   def: UpgradeDef; level: number; cost: number | null; scrapCost: number; maxed: boolean; affordable: boolean;
++  /** Patch 0438 -- demo build: next rank is full-game only (see demo.ts). */
++  demoLocked?: boolean;
+   flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void;
+   /** Gets the clicked button so the gold + Scrap can fly into it (patch 0422). */
+   onBuy: (btn: HTMLElement) => void;
+@@ -166,7 +169,9 @@ function VendorUpgradeRow({
+   ];
+   const effectText = entries.join(' · ');
+   const pctFill = Math.min(100, (level / def.maxLevel) * 100);
+-  const buyLabel = maxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
++  const locked = !maxed && !!demoLocked;
++  const buyLabel = maxed ? 'Fully upgraded' : locked ? '🔒 Full game' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
++  const press = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: def.name }) : onBuy(btn));
+   return (
+     <div
+       className={`upgrade-row ${unveiling ? 'fx-unveiling' : ''}`}
+@@ -187,9 +192,9 @@ function VendorUpgradeRow({
+         </span>
+       </span>
+       <button
+-        className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
+-        disabled={maxed || !affordable}
+-        onClick={(e) => { e.stopPropagation(); onBuy(e.currentTarget); }}
++        className={`upgrade-buy-btn ${!maxed && !locked && affordable ? 'affordable' : ''} ${locked ? 'demo-locked' : ''}`}
++        disabled={maxed || (!affordable && !locked)}
++        onClick={(e) => { e.stopPropagation(); press(e.currentTarget); }}
+       >
+         {buyLabel}
+       </button>
+@@ -215,7 +220,7 @@ function VendorUpgradeRow({
+             )}
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setShowDetail(false)}>Close</button>
+-              <button className="btn-yellow" disabled={maxed || !affordable} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
++              <button className="btn-yellow" disabled={maxed || (!affordable && !locked)} onClick={(e) => press(e.currentTarget)}>{buyLabel}</button>
+             </div>
+           </div>
+         </div>
+@@ -466,6 +471,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+               onBuy={(btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id))}
+               unveiling={vendorBeat?.phase === 'levelup' && def.id === taughtId}
+               isNew={newlyTaught.has(def.id)}
++              demoLocked={demoRankLocked(def.id, upLevel)}
+             />
+           );
+         })}
+diff --git a/vite.config.ts b/vite.config.ts
+index 4503a12..ec2febf 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -2,29 +2,42 @@ import { defineConfig } from 'vite';
+ import react from '@vitejs/plugin-react';
+ import electron from 'vite-plugin-electron/simple';
+ 
+-export default defineConfig({
+-  base: './',
+-  plugins: [
+-    react(),
+-    electron({
+-      main: {
+-        entry: 'electron/main.ts',
+-        vite: {
+-          build: {
+-            // steamworks.js ships a platform-conditional `require()` of a
+-            // prebuilt native .node binary (see its own index.js) -- Rollup
+-            // tries to statically parse whichever binary that require()
+-            // resolves to as JS source and fails outright (hit this for
+-            // real running a production build: "Unexpected character").
+-            // Marking it external keeps the require() as a genuine runtime
+-            // call instead, which is required for any native addon in a
+-            // bundler, not something specific to this library.
+-            rollupOptions: { external: ['steamworks.js'] },
++/**
++ * Patch 0438 -- `--mode demo` (npm run dev:demo / build:demo /
++ * package:demo) compiles the Steam demo build: `__GUILDBOUND_DEMO__` is
++ * true in both the renderer and the Electron main process. Every other
++ * mode compiles it false. See src/game/demo.ts for what the flag gates.
++ */
++export default defineConfig(({ mode }) => {
++  const demoDefine = { __GUILDBOUND_DEMO__: JSON.stringify(mode === 'demo') };
++  return {
++    base: './',
++    define: demoDefine,
++    plugins: [
++      react(),
++      electron({
++        main: {
++          entry: 'electron/main.ts',
++          vite: {
++            // Main is built as its own Vite sub-build, which doesn't inherit
++            // the top-level `define` -- passed through explicitly.
++            define: demoDefine,
++            build: {
++              // steamworks.js ships a platform-conditional `require()` of a
++              // prebuilt native .node binary (see its own index.js) -- Rollup
++              // tries to statically parse whichever binary that require()
++              // resolves to as JS source and fails outright (hit this for
++              // real running a production build: "Unexpected character").
++              // Marking it external keeps the require() as a genuine runtime
++              // call instead, which is required for any native addon in a
++              // bundler, not something specific to this library.
++              rollupOptions: { external: ['steamworks.js'] },
++            },
+           },
+         },
+-      },
+-      preload: { input: 'electron/preload.ts' },
+-    }),
+-  ],
+-  build: { outDir: 'dist', emptyOutDir: true },
++        preload: { input: 'electron/preload.ts' },
++      }),
++    ],
++    build: { outDir: 'dist', emptyOutDir: true },
++  };
+ });
+diff --git a/vite.web.config.ts b/vite.web.config.ts
+index 02e9293..63b054b 100644
+--- a/vite.web.config.ts
++++ b/vite.web.config.ts
+@@ -12,8 +12,11 @@ import react from '@vitejs/plugin-react';
+  *
+  *   npm run dev:web
+  */
+-export default defineConfig({
++export default defineConfig(({ mode }) => ({
+   base: './',
++  // Patch 0438 -- `vite --config vite.web.config.ts --mode demo` for a
++  // browser demo build; see vite.config.ts / src/game/demo.ts.
++  define: { __GUILDBOUND_DEMO__: JSON.stringify(mode === 'demo') },
+   plugins: [react()],
+   server: { open: true },
+-});
++}));
