@@ -327,24 +327,28 @@ function encodeSaveEnvelope(json: string): string {
  * fall back accordingly (main save -> backup -> null, same shape the old
  * JSON.parse-can-throw path already had).
  *
- * One deliberate exception: a file that parses as JSON but does NOT have
- * the { v: 1, sig, data } shape is treated as a pre-0363 legacy save
- * (bare GameState JSON, unsigned) and returned as-is rather than rejected
- * -- so nobody's existing save gets nuked the first time this patch runs.
- * The very next autosave rewrites it in the new signed format, so this
- * branch only ever matters once per install.
+ * (Until patch 0437 an unsigned, plain-JSON file was accepted once as a
+ * pre-0363 legacy save. That doubled as a way round the signature, so it
+ * was removed -- see the comment inside the function.)
  */
 function verifyAndDecodeSaveEnvelope(raw: string): string {
+  // Patch 0437 -- the pre-0363 "unsigned legacy save" pass-through is
+  // gone. It meant anyone could skip the signature entirely: base64-decode
+  // `data`, edit it, and save the bare JSON -- it was waved through as
+  // "legacy" and re-signed on the next autosave. Every install that has
+  // launched any build since 0363 already writes signed saves, and the
+  // game hasn't shipped publicly, so an unsigned file is now treated like
+  // a tampered one: fall back to the backup.
   const envelope = JSON.parse(raw) as Record<string, unknown>;
   if (!envelope || typeof envelope !== 'object' || envelope.v !== 1) {
-    return raw; // legacy pre-0363 save -- accept once, re-signed on next write
+    throw new Error('unsigned save -- rejected');
   }
   const { sig, data } = envelope;
   if (typeof sig !== 'string' || typeof data !== 'string') {
-    return raw; // shape doesn't match ours either -- treat as legacy, same as above
+    throw new Error('malformed save envelope -- rejected');
   }
   const expected = crypto.createHmac('sha256', SAVE_SIGNING_SECRET).update(data).digest('hex');
-  if (sig !== expected) {
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
     throw new Error('save signature mismatch -- edited outside the game');
   }
   return Buffer.from(data, 'base64').toString('utf8');

@@ -35581,3 +35581,83 @@ stash); buy a listing with a bad connection (gold should return); run a
 5-quest Auto-Chain with a potion equipped and confirm the potion is used
 and refilled, not vanished; retire a throwaway hero and check
 Stats > Retirements and the Minotaur recruit card.
+
+### Minotaur unlock, decorations on ice, save import/export cut, unsigned-save bypass closed (patch 0437)
+```discord-update
+Dev Update | Patch 0437
+
+- Changed the Minotaur's early unlock to "Refine any piece of gear to +10" -- retiring a hero is just a way to free a slot now, not a sign of a strong guild
+- Changed the Prestige tab's description to match how Renown actually works now (earned from Mythic and Legendary clears, not retiring)
+- Removed Guild Hall decorations for now -- they're on ice until the feature is properly built
+- Fixed a way to sneak edited saves past the game's tamper protection
+```
+
+Follow-up to 0436, from direct review of its findings.
+
+**Auto-Chain consumables -- confirmed, no change.** Asked for: a
+consumable is used on one quest, then the slot pulls another from stock
+for the next quest, one per quest, and empties once stock runs out.
+That's exactly what 0436's fix does (`QuestManager.start` uses the
+reserved unit, then re-reserves a fresh one via `InventoryManager.
+remove`, clearing the slot if none is left). Checked with a script:
+2 potions equipped-and-stocked -> quest 1 uses one, quest 2 uses the
+second, quest 3 goes without and the slot is empty.
+
+**Minotaur milestone -> refine any item to +10.** Direct call (picked
+from four options): retirement is a roster-slot delete since 0317, not a
+power signal. `heroMilestones.ts` minotaur check now reads new optional
+`stats.highestRefine` (set in `EquipmentManager.upgrade`, lifetime, so
+selling the item doesn't revoke it) OR any +10 currently in the stash/
+on a hero, so existing saves qualify with no migration.
+`hero-classes.json` `milestoneUnlockDescription` updated. 0436's
+`prestigeCount += 1` in `earlyRetire` stays -- it's just the Retirements
+stat now. Also fixed the stale Prestige tab blurbs in `MenuWindow.tsx`/
+`OnboardingTour.tsx` ("Retire a hero for Renown" -- untrue since 0317).
+
+**Guild Hall decorations on ice.** New `GUILD_HALL_DECOR_ENABLED =
+false` in `data/guildHallDecor.ts`. While false: `GuildPanel` never
+opens the Customize scene (a stray `'customize'` sub-tab request is
+still consumed); `MenuWindow` draws no equipped decorations on the
+backdrop; every engine decoration action (`purchase`/`equip`/`unequip`/
+`purchaseAndEquip`/`setGuildHallSlotRect`/`resetGuildHallLayout`) and
+`testGrantAllGuildHallDecorations` return early; the Testing tab section
+is hidden. Confirmed nothing in the game ever granted a decoration
+outside the Testing button (no achievement, Grimsby, quest or raid
+drop), so there were no drops to remove. Ownership already in any save
+is kept untouched; flip the flag to bring it all back. The Dashboard
+Customize button was already commented out (patch 0305).
+
+**Save import/export removed.** `SaveManager.exportToClipboard`/
+`importFromString` deleted -- no UI ever called them, and Steam Cloud
+covers backup. An import path would also have been a way round save
+signing.
+
+**Save signing: unsigned-save bypass closed.** Asked whether the 0363
+tamper protection stops a player editing their way to AH-buyout money.
+Mostly, with one real hole: `verifyAndDecodeSaveEnvelope` accepted any
+file WITHOUT the `{ v: 1, sig, data }` envelope as a "pre-0363 legacy
+save" and re-signed it on the next autosave -- so base64-decoding
+`data`, editing it, and saving the plain JSON skipped the signature
+entirely. Unsigned/malformed files are now rejected like a bad
+signature (fall back to the backup). Signature compare switched to
+`crypto.timingSafeEqual`. Side effect: a tester who hasn't launched any
+build since 0363 (or a never-relaunched pre-0266 `little-knight` save)
+would start fresh -- acceptable pre-release.
+
+What the signing still can't do (unchanged, by design since 0363): the
+HMAC secret is a string inside the shipped `main.js`, so someone willing
+to dig it out can re-sign an edited save. And the AH server has no
+balance of its own -- it trusts the client's gold, so a determined
+cheater can still out-buy everyone. Server-side ideas if that ever
+matters: per-player daily buy caps, or flagging buyers whose spend jumps
+far past their account's history. Not built.
+
+**Release checklist reminder:** `TESTING_TOOLS_ENABLED` in
+`src/game/testingTools.ts` is still `true`. Its Add Gold/Scrap buttons
+would be a far easier "infinite gold" than any save edit -- flip it
+before the public build.
+
+**Not checked in the running game** -- worth: refine something to +10
+and look at the Minotaur recruit card; open Guild Hall and confirm no
+Customize scene/decorations appear; relaunch on an existing save to
+confirm it still loads (signed path).

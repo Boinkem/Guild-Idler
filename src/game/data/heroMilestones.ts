@@ -1,5 +1,6 @@
 import { GameState, HeroClass } from '../types';
 import { chainReplayBandComplete } from './chainReplay';
+import { MAX_PLUS } from '../managers/EquipmentManager';
 
 /**
  * Alternate unlock conditions for the four tier-4 heroes (patch 0251) --
@@ -28,10 +29,16 @@ const HERO_MILESTONE_CHECKS: Partial<Record<HeroClass, (state: GameState) => boo
   // Kobold's milestone is just "band1 legendary == 100%" read through
   // that same function, not a separate check.
   kobold: (state) => chainReplayBandComplete(state, 'band1', 'legendary'),
-  // Minotaur: retire a hero for the first time. stats.prestigeCount
-  // already exists and increments on every retirement (PrestigeManager.
-  // retire) -- also needed zero new state.
-  minotaur: (state) => state.stats.prestigeCount >= 1,
+  // Minotaur: refine any item to +10 (patch 0437, direct request).
+  // Was "retire a hero for the first time" -- retirement is just a way to
+  // free a roster slot since patch 0317, not a sign of guild power, so it
+  // made a poor gate. Reads the lifetime stats.highestRefine (set in
+  // EquipmentManager.upgrade) OR any +10 the guild owns right now, so a
+  // save that already has one qualifies without a migration.
+  minotaur: (state) =>
+    (state.stats.highestRefine ?? 0) >= MAX_PLUS
+    || state.stash.some((i) => i.plus >= MAX_PLUS)
+    || state.heroes.some((h) => Object.values(h.equipment).some((i) => (i?.plus ?? 0) >= MAX_PLUS)),
   // Werewolf: complete the new Kindred Moon chain (see quest-chains.json,
   // gated behind full_moon_over_ashvale). completedChains is the same
   // list every other "has this chain been finished" check in the game

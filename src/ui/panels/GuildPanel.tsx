@@ -14,6 +14,7 @@ import { buyWithFx, flyTokens, fxMs, LevelRoll, SealStamp, shownValue, usePurcha
 import type { Beat } from '../purchaseFx';
 import { UnlockFx, useJustUnlocked } from '../unlockFx';
 import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
+import { GUILD_HALL_DECOR_ENABLED } from '../../game/data/guildHallDecor';
 import { FundGuildModal } from '../FundGuildModal';
 import waxSealComplete from '../../assets/wax-seal-complete.png';
 
@@ -256,7 +257,9 @@ export function GuildPanel() {
 
   // Inline "Customize" mode -- unchanged by this patch, see its own
   // longer-standing comment history in guild-idler-status.md.
-  const [customizing, setCustomizing] = useState(() => engine.consumeRequestedSubTab() === 'customize');
+  // Patch 0437 -- decorations on ice: a stray 'customize' request is still
+  // consumed (so it can't leak into another tab) but never opens the scene.
+  const [customizing, setCustomizing] = useState(() => engine.consumeRequestedSubTab() === 'customize' && GUILD_HALL_DECOR_ENABLED);
 
   // "Fund the Guild" modal -- unchanged.
   const [fundingOpen, setFundingOpen] = useState(false);

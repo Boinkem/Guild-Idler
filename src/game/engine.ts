@@ -14,7 +14,7 @@ import { RecipeManager } from './managers/RecipeManager';
 import { RECIPE_SCROLL_BY_ID, RECIPE_SCROLLS } from './data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from './data/craftingRecipes';
 import { GuildHallDecorManager } from './managers/GuildHallDecorManager';
-import { GUILD_HALL_DECORATIONS } from './data/guildHallDecor';
+import { GUILD_HALL_DECORATIONS, GUILD_HALL_DECOR_ENABLED } from './data/guildHallDecor';
 import { DlcManager, FOUNDER_PACK_ID } from './managers/DlcManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
@@ -1826,6 +1826,7 @@ export class GameEngine {
    *  purposes we can have all items available"). */
   testGrantAllGuildHallDecorations() {
     if (!TESTING_TOOLS_ENABLED) return;
+    if (!GUILD_HALL_DECOR_ENABLED) return; // patch 0437 -- feature on ice
     for (const def of GUILD_HALL_DECORATIONS) {
       GuildHallDecorManager.grant(this.state, def.id);
     }
@@ -4261,6 +4262,7 @@ export class GameEngine {
   /** Buys a gold-kind decoration outright. Achievement/Grimsby decorations
    *  have no purchase path -- see GuildHallDecorManager.purchase. */
   purchaseGuildHallDecoration(decorationId: string) {
+    if (!GUILD_HALL_DECOR_ENABLED) return; // patch 0437 -- feature on ice
     const error = GuildHallDecorManager.purchase(this.state, decorationId);
     if (error) return this.say(error);
     playSound('purchase');
@@ -4271,6 +4273,7 @@ export class GameEngine {
   /** Places an owned decoration into a physical slot, displacing whatever
    *  was there before (still owned, just unequipped). */
   equipGuildHallDecoration(slotId: GuildHallSlotId, decorationId: string) {
+    if (!GUILD_HALL_DECOR_ENABLED) return; // patch 0437 -- feature on ice
     const error = GuildHallDecorManager.equip(this.state, slotId, decorationId);
     if (error) return this.say(error);
     playSound('equip');
@@ -4280,6 +4283,7 @@ export class GameEngine {
 
   /** Empties a slot. The decoration stays owned. */
   unequipGuildHallDecoration(slotId: GuildHallSlotId) {
+    if (!GUILD_HALL_DECOR_ENABLED) return; // patch 0437 -- feature on ice
     GuildHallDecorManager.unequip(this.state, slotId);
     playSound('unequip');
     this.notify();
@@ -4298,6 +4302,7 @@ export class GameEngine {
    *  surfaced rather than assumed away, in case a future change to
    *  either manager method's validation drifts the two apart. */
   purchaseAndEquipGuildHallDecoration(slotId: GuildHallSlotId, decorationId: string) {
+    if (!GUILD_HALL_DECOR_ENABLED) return; // patch 0437 -- feature on ice
     const purchaseError = GuildHallDecorManager.purchase(this.state, decorationId);
     if (purchaseError) return this.say(purchaseError);
     const equipError = GuildHallDecorManager.equip(this.state, slotId, decorationId);
@@ -4317,6 +4322,7 @@ export class GameEngine {
    *  -- a drag/resize is a continuous, silent adjustment, not a discrete
    *  purchase/equip moment. */
   setGuildHallSlotRect(slotId: GuildHallSlotId, rect: GuildHallSlotRect) {
+    if (!GUILD_HALL_DECOR_ENABLED) return; // patch 0437 -- feature on ice
     const clamped = GuildHallDecorManager.setSlotRect(this.state, slotId, rect);
     if (!clamped) return;
     this.notify();
@@ -4327,6 +4333,7 @@ export class GameEngine {
    *  the DevTool-authored default layout -- the Customize scene's own
    *  "Reset Layout" button. Placed decorations are untouched. */
   resetGuildHallLayout() {
+    if (!GUILD_HALL_DECOR_ENABLED) return; // patch 0437 -- feature on ice
     GuildHallDecorManager.resetLayout(this.state);
     this.notify();
     void this.saveNow();

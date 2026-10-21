@@ -2093,6 +2093,10 @@ export interface Statistics {
    *  target. Optional so no migration is needed (reads default to 0).
    *  Drives ON_A_ROLL now that the prestige streak is frozen. */
   bestAutoChainStreak?: number;
+  /** Patch 0437 -- highest refinement (+N) any item has ever reached.
+   *  Optional, no migration: the Minotaur milestone also checks gear the
+   *  guild owns right now, so an existing +10 counts immediately. */
+  highestRefine?: number;
   /** Lowest success chance a quest has ever WON at, or null if none yet. Powers the "Against the Odds" achievement, and lets it survive a save migration retroactively rather than only firing on the next lucky win. */
   lowestSuccessfulChance: number | null;
   blackMarketPurchases: number;

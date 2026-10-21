@@ -4,7 +4,7 @@ import { formatGold, formatDuration, RARITY_ORDER } from '../../game/util';
 import { DlcManager } from '../../game/managers/DlcManager';
 import { RAIDS } from '../../game/data/raids';
 import { PeddlerManager } from '../../game/managers/PeddlerManager';
-import { GUILD_HALL_DECORATIONS } from '../../game/data/guildHallDecor';
+import { GUILD_HALL_DECORATIONS, GUILD_HALL_DECOR_ENABLED } from '../../game/data/guildHallDecor';
 
 const HOUR = 3600000;
 
@@ -195,6 +195,8 @@ export function TestingPanel() {
       </p>
       <button onClick={() => engine.testForceGrimsbyArrival()}>Force Grimsby to arrive now</button>
 
+      {/* Patch 0437 -- hidden while decorations are on ice. */}
+      {GUILD_HALL_DECOR_ENABLED && (<>
       <div className="section-heading">Guild Hall Decorations</div>
       <p className="small muted" style={{ marginBottom: 8 }}>
         {GUILD_HALL_DECORATIONS.length === 0
@@ -209,6 +211,8 @@ export function TestingPanel() {
       >
         Grant all Guild Hall decorations ({GUILD_HALL_DECORATIONS.length})
       </button>
+
+      </>)}
 
       <div className="section-heading">Current state</div>
       <p className="small muted">

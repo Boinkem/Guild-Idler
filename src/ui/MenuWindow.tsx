@@ -10,6 +10,7 @@ import { formatGold, formatNumber } from '../game/util';
 import { attentionCounts, isNavTabUnread } from '../game/attention';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { GuildHallDecorManager } from '../game/managers/GuildHallDecorManager';
+import { GUILD_HALL_DECOR_ENABLED } from '../game/data/guildHallDecor';
 import { GUILD_HALL_THEME_BY_ID } from '../game/data/guildHallSlots';
 import { GuildHallMenuBackdrop } from './GuildHallMenuBackdrop';
 import { playSound } from '../game/sound';
@@ -220,7 +221,7 @@ const PANEL_BREAKDOWNS: Partial<Record<TabId, string[]>> = {
     'Also doubles as a quick reference for how the guild’s systems actually work.',
   ],
   prestige: [
-    'Retire a hero for Renown, spent on permanent guild-wide perks.',
+    'Spend Renown -- earned from Mythic and Legendary clears -- on permanent guild-wide and per-hero perks.',
     'Renown and its perks persist even through a full guild reset.',
   ],
   stats: [
@@ -423,7 +424,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   // shipping with zero themes at all, same defensive shape
   // `DEFAULT_GUILD_HALL_THEME_ID` itself already uses.
   const activeGuildHallTheme = GUILD_HALL_THEME_BY_ID[GuildHallDecorManager.activeThemeId(engine.state)];
-  const equippedGuildHallDecorations = GuildHallDecorManager.allEquipped(engine.state);
+  // Patch 0437 -- decorations on ice: draw none, even ones a save owns.
+  const equippedGuildHallDecorations = GUILD_HALL_DECOR_ENABLED ? GuildHallDecorManager.allEquipped(engine.state) : [];
 
   return (
     <div className="menu-root" style={{ position: 'relative' }}>

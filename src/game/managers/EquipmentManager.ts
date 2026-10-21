@@ -492,6 +492,9 @@ export const EquipmentManager = {
     state.scrap -= scrapCost;
     item.plus += 1;
     item.durability = EquipmentManager.maxDurability(item);
+    // Patch 0437 -- remembered for good, so selling the item afterwards
+    // doesn't take the Minotaur's milestone back.
+    state.stats.highestRefine = Math.max(state.stats.highestRefine ?? 0, item.plus);
     return null;
   },
 

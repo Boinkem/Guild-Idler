@@ -16,6 +16,16 @@ import { GuildHallDecorationDef } from '../types';
  * DevTool is the intended way to populate it, not hand-editing the JSON.
  */
 import guildHallDecorationsJson from './json/guild-hall-decorations.json';
+
+/**
+ * Patch 0437 -- Guild Hall decorations are ON ICE (direct call: a lot of
+ * work still to get going). While false: no Customize scene, no buying/
+ * placing/rearranging (engine methods refuse), nothing drawn on the Guild
+ * Hall backdrop, and the Testing grant is hidden. Any ownership already
+ * sitting in a save is left untouched, just unused, so flipping this back
+ * to true picks up exactly where things were.
+ */
+export const GUILD_HALL_DECOR_ENABLED = false;
 export const GUILD_HALL_DECORATIONS: GuildHallDecorationDef[] = guildHallDecorationsJson as GuildHallDecorationDef[];
 
 export const GUILD_HALL_DECORATION_BY_ID: Record<string, GuildHallDecorationDef> = Object.fromEntries(

@@ -1596,17 +1596,4 @@ export const SaveManager = {
       console.error('Save failed.', err);
     }
   },
-
-  exportToClipboard(state: GameState): string {
-    return btoa(unescape(encodeURIComponent(SaveManager.serialize(state))));
-  },
-
-  importFromString(encoded: string): GameState | null {
-    try {
-      const json = decodeURIComponent(escape(atob(encoded.trim())));
-      return SaveManager.migrate(JSON.parse(json) as Record<string, unknown>);
-    } catch {
-      return null;
-    }
-  },
 };

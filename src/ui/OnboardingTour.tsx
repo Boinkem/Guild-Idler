@@ -43,7 +43,7 @@ const STEP_DESCRIPTIONS: Record<string, string> = {
   raids: 'Multi-hero expeditions, once your guild is strong enough to field a whole party.',
   lore: "A record of every story your guild has lived through.",
   guide: "A running log of what's happened, plus a quick reference for how things work.",
-  prestige: 'Retire a hero for Renown, spent on permanent guild-wide perks.',
+  prestige: 'Spend Renown from Mythic and Legendary clears on permanent guild-wide and per-hero perks.',
   stats: 'Lifetime stats and achievements, if you like keeping score.',
   peddler: 'Grimsby, a travelling peddler with a cart full of maybes. Pay for a card and see what you get.',
   settings: 'Appearance, sound, and other preferences.',
