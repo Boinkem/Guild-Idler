@@ -2089,6 +2089,10 @@ export interface Statistics {
   offlineTimeMs: number;
   prestigeCount: number;
   bestPrestigeStreak: number;
+  /** Patch 0436 -- longest Auto-Chain bounty streak ever run to its
+   *  target. Optional so no migration is needed (reads default to 0).
+   *  Drives ON_A_ROLL now that the prestige streak is frozen. */
+  bestAutoChainStreak?: number;
   /** Lowest success chance a quest has ever WON at, or null if none yet. Powers the "Against the Odds" achievement, and lets it survive a save migration retroactively rather than only firing on the next lucky win. */
   lowestSuccessfulChance: number | null;
   blackMarketPurchases: number;

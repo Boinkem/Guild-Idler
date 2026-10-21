@@ -42,7 +42,7 @@
   {
     "id": "ON_A_ROLL",
     "name": "On a Roll",
-    "description": "Reach a prestige streak of 5.",
+    "description": "Run an Auto-Chain streak of 5 contracts to the end.",
     "hidden": false,
     "unlocksTrackId": "march_of_iron",
     "grantsGuildTitle": ""
@@ -241,8 +241,8 @@
   },
   {
     "id": "CHAIN_THIRD_CROWN",
-    "name": "Ridge-Watcher",
-    "description": "Complete \"The Third Crown.\"",
+    "name": "Horde-Breaker",
+    "description": "Complete \"The Gathering Horde.\"",
     "hidden": false,
     "unlocksTrackId": "",
     "grantsGuildTitle": ""

@@ -781,7 +781,21 @@ ipcMain.handle('save:read', async () => {
   }
 });
 
-ipcMain.handle('save:write', async (_e, json: string) => {
+/**
+ * Patch 0436 -- save writes are now strictly one at a time. The renderer
+ * fires saves from several independent places (every action's saveNow,
+ * the tick's change save, the 15s autosave), so two `save:write` calls
+ * regularly overlapped. Both wrote the SAME `.tmp` path at once -- two
+ * truncating writers on one file can leave it interleaved/torn -- and
+ * the loser's rename then failed. A torn file fails envelope
+ * verification on the next launch and silently falls back to the
+ * backup, losing recent progress. Writes now queue on one promise
+ * chain, so each runs start-to-finish before the next begins; the window
+ * close flush simply waits its turn.
+ */
+let saveWriteChain: Promise<unknown> = Promise.resolve();
+
+async function writeSaveFile(json: string): Promise<void> {
   // Write to a temp file, promote the old save to backup, then swap in.
   // The backup being promoted here is itself already a validly-signed
   // envelope from whenever IT was written as the current save, so the
@@ -794,7 +808,14 @@ ipcMain.handle('save:write', async (_e, json: string) => {
     /* first run: nothing to back up */
   }
   await fs.rename(tmp, savePath());
-  return true;
+}
+
+ipcMain.handle('save:write', (_e, json: string) => {
+  const run = saveWriteChain.then(() => writeSaveFile(json));
+  // Keep the chain alive past a failed write; the caller still sees
+  // the rejection (SaveManager.save logs it).
+  saveWriteChain = run.catch(() => undefined);
+  return run.then(() => true);
 });
 
 ipcMain.handle('save:reveal', () => userDataDir());

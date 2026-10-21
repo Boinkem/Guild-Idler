@@ -610,20 +610,39 @@ export class GameEngine {
    * the bard-track grant -- deliberately not its own separate archive
    * line, same "one moment" reasoning.
    */
+  /** Patch 0436 -- the per-achievement rewards (bard track, guild title),
+   *  pulled out so offline catch-up grants them too. Returns the archive
+   *  line. Before this, an achievement unlocked while the game was closed
+   *  only reached Steam: its track/title were never granted, and since
+   *  checkAll never returns an id twice, never would be. */
+  private grantAchievementRewards(id: string): string {
+    const def = ACHIEVEMENT_BY_ID[id];
+    let message = `Achievement unlocked: ${def?.name ?? id}`;
+    if (def?.unlocksTrackId && !this.state.unlockedBardTracks.includes(def.unlocksTrackId)) {
+      this.state.unlockedBardTracks.push(def.unlocksTrackId);
+      const track = BARD_TRACK_BY_ID[def.unlocksTrackId];
+      if (track) message += `. New track for the guild bard: "${track.name}."`;
+    }
+    if (def?.grantsGuildTitle && GuildTitleManager.grant(this.state, def.grantsGuildTitle)) {
+      message += ` The guild is now known as ${def.grantsGuildTitle}.`;
+    }
+    return message;
+  }
+
+  /** Offline counterpart of reportAchievements -- same rewards, archived
+   *  to the log, no popup or sound (patch 0436). */
+  private reportAchievementsQuietly(ids: string[]) {
+    for (const id of ids) {
+      this.archive(this.grantAchievementRewards(id));
+      void window.littleKnight?.unlockAchievement(id);
+    }
+  }
+
   private reportAchievements(ids: string[]) {
     if (ids.length === 0) return;
     for (const id of ids) {
-      const def = ACHIEVEMENT_BY_ID[id];
       playSound('achievement');
-      let message = `Achievement unlocked: ${def?.name ?? id}`;
-      if (def?.unlocksTrackId && !this.state.unlockedBardTracks.includes(def.unlocksTrackId)) {
-        this.state.unlockedBardTracks.push(def.unlocksTrackId);
-        const track = BARD_TRACK_BY_ID[def.unlocksTrackId];
-        if (track) message += `. New track for the guild bard: "${track.name}."`;
-      }
-      if (def?.grantsGuildTitle && GuildTitleManager.grant(this.state, def.grantsGuildTitle)) {
-        message += ` The guild is now known as ${def.grantsGuildTitle}.`;
-      }
+      const message = this.grantAchievementRewards(id);
       this.archive(message);
       this.achievementQueue.push(id);
       void window.littleKnight?.unlockAchievement(id);
@@ -727,7 +746,13 @@ export class GameEngine {
       if (chain && active && active.stage < chain.stages.length) {
         const rng = createRng(uid('autoAdvanceChain'));
         const offer = QuestManager.chainOffer(chain, active.stage, rng);
-        const { error } = QuestManager.start(this.state, hero, offer, [], now);
+        // Patch 0436 -- was `[]`, which QuestManager.start wrote straight
+        // back over hero.equippedConsumables. Since patch 0367 those units
+        // are already out of the inventory (reserved at equip time), so an
+        // auto-continued step silently destroyed the hero's whole loadout.
+        // Same loadout every other send path (manual, Send All, replay
+        // auto-pilot) already passes.
+        const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
         if (!error) {
           return { continued: true, completedCount: active.stage + 1, target: chain.stages.length, via: 'chain' };
         }
@@ -766,7 +791,9 @@ export class GameEngine {
     const offer = QuestManager.pickBestQuest(this.state, hero, now);
     if (!offer) return giveUp();
 
-    const { error } = QuestManager.start(this.state, hero, offer, [], now);
+    // Patch 0436 -- see the chain-stepping call above: `[]` here wiped a
+    // reserved loadout without ever using it.
+    const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
     if (error) return giveUp();
 
     hero.autoChainCount += 1;
@@ -1341,9 +1368,7 @@ export class GameEngine {
       // made while the app was closed — just quietly, without the toast/sound
       // treatment live play gets, since a barrage of those on launch would be
       // more annoying than celebratory.
-      for (const id of AchievementManager.checkAll(this.state, quest.endsAt)) {
-        void window.littleKnight?.unlockAchievement(id);
-      }
+      this.reportAchievementsQuietly(AchievementManager.checkAll(this.state, quest.endsAt));
       // Guidance topics still get marked seen and archived to the log for
       // progress made offline -- same "quietly, no toast" treatment as
       // achievements above, so reopening the app after a long stretch away
@@ -1433,9 +1458,7 @@ export class GameEngine {
         const verb = names.length === 1 ? 'has' : 'have';
         this.archive(`${who} ${verb} leveled up!`, 'heroes');
       }
-      for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
-        void window.littleKnight?.unlockAchievement(id);
-      }
+      this.reportAchievementsQuietly(AchievementManager.checkAll(this.state, raidEndsAt));
       for (const topic of GuidanceManager.checkAll(this.state)) {
         for (const message of topic.messages) this.archive(message, topic.targetTab);
       }
@@ -2269,6 +2292,11 @@ export class GameEngine {
     result.autoChainStreak = chainResult.stoppedByFailure
       ? { finished: Math.max(0, chainResult.completedCount - 1), target: chainResult.target, outcome: 'stopped' }
       : { finished: chainResult.completedCount, target: chainResult.target, outcome: 'complete' };
+    // Patch 0436 -- feeds ON_A_ROLL, which used to read the prestige
+    // streak patch 0317 removed (nothing has incremented it since).
+    if (result.autoChainStreak.outcome === 'complete') {
+      this.state.stats.bestAutoChainStreak = Math.max(this.state.stats.bestAutoChainStreak ?? 0, result.autoChainStreak.finished);
+    }
     result.autoChainStreak.totalGold = hero.autoChainGold;
     result.autoChainStreak.totalXp = hero.autoChainXp;
     hero.autoChainGold = 0;
@@ -3018,6 +3046,24 @@ export class GameEngine {
     }
   }
 
+  /** Patch 0436 -- hands back currency taken up front for a request that
+   *  then failed (or was charged a little over the server's own figure).
+   *  Deliberately ignores the Gold Storage Cap: this is the player's own
+   *  gold coming straight back, not new income. */
+  private refundCurrency(currency: 'gold' | 'scrap', amount: number) {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    if (currency === 'gold') this.state.gold += amount;
+    else this.state.scrap += amount;
+  }
+
+  /** Patch 0436 -- settles a deposit taken up front at the client's own
+   *  estimate against the exact figure the server reports back. */
+  private settleDeposit(currency: 'gold' | 'scrap', estimated: number, actual: number) {
+    if (!Number.isFinite(actual) || actual < 0) return;
+    if (actual > estimated) this.chargeDeposit(currency, actual - estimated);
+    else if (actual < estimated) this.refundCurrency(currency, estimated - actual);
+  }
+
   async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
     const item = this.state.stash.find((i) => i.uid === itemUid);
     if (!item) { this.say('That item is equipped or missing.'); return false; }
@@ -3030,18 +3076,31 @@ export class GameEngine {
     if (this.ahInFlight.has(key)) return false;
     const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
 
+    // Patch 0436 -- the item (and the estimated deposit) now leave local
+    // state the moment the request goes out, in memory only, and come
+    // straight back if the server refuses. Previously the item sat in the
+    // stash for the whole round trip, so equipping, selling or scrapping
+    // it mid-request still let the listing go through: one item, two
+    // copies. Nothing is SAVED until the server confirms, so the "never
+    // lose an item to a failed listing" guarantee the original no-
+    // optimistic-strip rule was protecting still holds.
     this.ahInFlight.add(key);
+    this.state.stash = this.state.stash.filter((i) => i.uid !== itemUid);
+    const estimated = this.estimateDeposit(whole);
+    this.chargeDeposit(currency, estimated);
+    this.notify();
     try {
       this.say('Listing...');
       const result = await createListing('equipment', item, currency, whole, duration);
-      if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
-
-      // Only now, confirmed by the server -- the same item, by uid, in
-      // case anything else changed the stash while this request was in
-      // flight.
-      this.state.stash = this.state.stash.filter((i) => i.uid !== itemUid);
-      const deposit = result.listing ? Number(result.listing.deposit_amount) : 0;
-      this.chargeDeposit(currency, deposit);
+      if (!result.ok) {
+        this.state.stash.push(item);
+        this.refundCurrency(currency, estimated);
+        this.notify();
+        this.say(`Could not list: ${result.error}`);
+        return false;
+      }
+      const deposit = result.listing ? Number(result.listing.deposit_amount) : estimated;
+      this.settleDeposit(currency, estimated, deposit);
       this.say(`Listed on the Auction House (${deposit} ${currency} deposit).`);
       this.notify();
       void this.saveNow();
@@ -3067,18 +3126,27 @@ export class GameEngine {
     if (this.ahInFlight.has(key)) return false;
     const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
 
+    // Patch 0436 -- same take-it-out-first shape as listEquipmentForSale:
+    // the unit is reserved before the request instead of decremented
+    // after it, so equipping the last one mid-request can't leave the
+    // guild with the potion AND the listing.
+    if (!InventoryManager.remove(this.state, consumableId)) { this.say("You don't have any of those."); return false; }
     this.ahInFlight.add(key);
+    const estimated = this.estimateDeposit(whole);
+    this.chargeDeposit(currency, estimated);
+    this.notify();
     try {
       this.say('Listing...');
       const result = await createListing('consumable', { defId: consumableId }, currency, whole, duration);
-      if (!result.ok) { this.say(`Could not list: ${result.error}`); return false; }
-
-      // Re-read the count AFTER the await (patch 0431) -- the old code
-      // wrote back a stale pre-request count, so anything spent or gained
-      // while the request was in flight was silently overwritten.
-      this.state.inventory[consumableId] = Math.max(0, (this.state.inventory[consumableId] ?? 0) - 1);
-      const deposit = result.listing ? Number(result.listing.deposit_amount) : 0;
-      this.chargeDeposit(currency, deposit);
+      if (!result.ok) {
+        InventoryManager.add(this.state, consumableId);
+        this.refundCurrency(currency, estimated);
+        this.notify();
+        this.say(`Could not list: ${result.error}`);
+        return false;
+      }
+      const deposit = result.listing ? Number(result.listing.deposit_amount) : estimated;
+      this.settleDeposit(currency, estimated, deposit);
       this.say(`Listed on the Auction House (${deposit} ${currency} deposit).`);
       this.notify();
       void this.saveNow();
@@ -3108,19 +3176,34 @@ export class GameEngine {
       this.say(`Not enough ${currency} for that.`);
       return false;
     }
+    // Patch 0436 -- the quoted price is now held back BEFORE the request
+    // and refunded if it fails. Charging only after the response let a
+    // player spend that same gold elsewhere during the round trip, and the
+    // post-response charge then clamped at 0: the listing came through
+    // part- or fully free.
     this.ahInFlight.add(key);
+    this.chargeDeposit(currency, quoted);
+    this.notify();
     try {
       this.say('Buying...');
       const result = await buyListingRequest(listingId);
-      if (!result.ok) { this.say(`Could not buy: ${result.error}`); return false; }
+      if (!result.ok) {
+        this.refundCurrency(currency, quoted);
+        this.notify();
+        this.say(`Could not buy: ${result.error}`);
+        return false;
+      }
       const paidCurrency = result.currency ?? currency;
       const paid = Math.max(0, Math.floor(result.price ?? quoted));
-      if (paidCurrency === 'gold') {
-        this.state.gold = Math.max(0, this.state.gold - paid);
-        this.state.stats.goldSpent += paid;
+      if (paidCurrency === currency) {
+        this.settleDeposit(currency, quoted, paid);
       } else {
-        this.state.scrap = Math.max(0, this.state.scrap - paid);
+        // Server sold it in a different currency than the card showed --
+        // undo the hold and charge what the server actually says.
+        this.refundCurrency(currency, quoted);
+        this.chargeDeposit(paidCurrency, paid);
       }
+      if (paidCurrency === 'gold') this.state.stats.goldSpent += paid;
       playSound('purchase');
       this.say('Purchased! Check your mailbox.');
       this.notify();

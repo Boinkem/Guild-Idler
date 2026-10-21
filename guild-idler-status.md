@@ -35462,3 +35462,122 @@ undo, copy that folder's contents back over `public/heroes/`.
 the Wardrobe and an idle-screen quest with each of the four,
 especially the samurai in the small companion window at the bigger
 displayScale.
+
+### Pre-release core systems audit: AH races, lost consumables, dead achievements, save writes (patch 0436)
+```discord-update
+Dev Update | Patch 0436
+
+- Fixed Auto-Chain streaks and auto-stepped story chains quietly deleting the consumables a hero had equipped -- they're now used on each quest like any other send, and refill from stock while it lasts
+- Fixed achievements earned while the game was closed never handing over their bard track or guild title
+- Fixed "Horde-Breaker" (formerly Ridge-Watcher) being impossible to earn -- it now unlocks for finishing The Gathering Horde
+- Changed "On a Roll" to unlock for running an Auto-Chain streak of 5 to the end -- the old prestige streak it needed no longer exists
+- Fixed retiring a hero not counting as a retirement: the Minotaur's "retire a hero" unlock now works, and the Retirements stat counts up
+- Fixed an Auction House trick where an item could be equipped, sold or scrapped while its listing was still sending, leaving you with both
+- Fixed Auction House purchases sometimes coming through cheaper (or free) if you spent gold while the purchase was sending
+- Fixed a rare save corruption when two saves happened at the same instant, which could roll you back a little on the next launch
+```
+
+Pre-release sanity pass over the core systems, prompted by the two
+"built but never tied in" finds just before it (gear re-level with no
+in-game hook, AH buys not charging -- both since fixed in 0426/0428).
+Read through engine.ts end to end plus every manager that moves gold,
+scrap, renown, items or consumables; diffed every engine method against
+its UI callers; diffed every `GameState` field against
+`createInitialState`/migrations; compared the live tick against
+`catchUpOffline`; and re-read the AH client against `server/src/
+listings.ts`. `tsc --noEmit` (client + server) and `vite build` both
+pass before and after.
+
+**What changed:**
+- `engine.ts` `tryContinueAutoChain`: the chain-stepping and Auto-Chain
+  streak continuations called `QuestManager.start(..., [], now)`.
+  `start` writes the passed list back over `hero.equippedConsumables`,
+  and since patch 0367 those units are already out of `inventory`
+  (reserved at equip time) -- so every auto-continued quest destroyed
+  the hero's loadout unused. Both now pass `hero.equippedConsumables`,
+  matching manual sends, Send All Idle and Replay auto-pilot. Design
+  call: streak steps now *use* the loadout (and re-reserve from stock
+  while it lasts) rather than skipping it -- consistent with every other
+  auto path. If streaks should run without consumables instead, restore
+  the reservation around the call rather than going back to `[]`.
+- `engine.ts` achievements: `reportAchievements`' reward half split out
+  into `grantAchievementRewards(id)`; new `reportAchievementsQuietly`
+  used by both offline loops in `catchUpOffline` (quests and raids).
+  Previously those loops only told Steam, so an offline unlock's
+  `unlocksTrackId`/`grantsGuildTitle` was skipped -- permanently, since
+  `checkAll` never returns an id twice. Saves that already lost one this
+  way are not retro-granted (no record of which).
+- `AchievementManager.ts`: `CHAIN_THIRD_CROWN` pointed at chain
+  `third_crown`, replaced wholesale by `the_gathering_horde` (same slot)
+  -- unearnable. Explicit check added mapping it to the new chain; Steam
+  API name kept, display name/description updated in
+  `achievements.json` to "Horde-Breaker" / the new chain.
+  `ON_A_ROLL` read `stats.bestPrestigeStreak`, frozen since 0317 (that
+  entry flagged this and it was never picked up) -- now also passes on
+  new optional `stats.bestAutoChainStreak >= 5`, set in
+  `noteStreakResult` when a streak reaches its target. Old saves that
+  met the old condition still qualify. No migration (optional field).
+- `PrestigeManager.earlyRetire`: increments `stats.prestigeCount`
+  (nothing had since 0317, so the Minotaur milestone "Retire a hero for
+  the first time" was unreachable and the Retirements stat was stuck at
+  0 -- the other half of the same 0317 flag). Also deletes the retired
+  hero's `questBoards`/`frozenQuestOffers` entries and
+  `activeChainReplays`, and moves `focusedHeroId` off them.
+- `engine.ts` AH `listEquipmentForSale`/`listConsumableForSale`: the
+  item/unit and the estimated deposit now leave local state before the
+  request (in memory only, nothing saved until the server confirms) and
+  are restored on failure; the deposit is then settled against the
+  server's `deposit_amount`. Before, the item sat in the stash for the
+  whole round trip, so equipping/selling/scrapping it mid-request still
+  let the listing land -- a duplicate. `ahInFlight` only blocked a
+  second *listing* of the same item, not other uses of it.
+- `engine.ts` `buyListing`: quoted price held back before the request,
+  refunded on failure, settled against the server's echoed price.
+  Previously charged after the response with a clamp at 0, so gold spent
+  elsewhere during the round trip made the purchase part- or fully free.
+- `electron/main.ts` `save:write`: writes now queue on one promise
+  chain. Overlapping saves (saveNow + tick change-save + autosave fire
+  independently) both wrote the same `.tmp` at once -- torn file, failed
+  envelope check next launch, silent fallback to the backup.
+
+**Audited and fine (no change):** every gold/scrap/renown deduction has
+an affordability check ahead of it; every gold income path respects the
+Gold Storage Cap (mailbox deliberately lets one oversized entry through,
+0431); server buyout/cancel/expiry are row-locked and write both mailbox
+rows in one transaction; mailbox double-claim is blocked by
+`claimedServerMailboxIds`; repair/refine/re-level/reroll/infuse all
+charge; consumable reservation round-trips through equip/unequip/
+retire; offline catch-up covers quests, raids, injuries, health, pets,
+auto-chain and Overseer harvest (board refresh and auto-repair run on
+the first live tick); save file is atomic temp+rename with backup and a
+close-flush handshake.
+
+**Found, not changed -- needs a call:**
+- `kindred_moon` and `the_gathering_horde` have no
+  `CHAIN_<ID>` achievement of their own (Horde-Breaker now covers the
+  latter). Adding one needs a Steamworks registration first.
+- Steamworks-side text for `CHAIN_THIRD_CROWN` and `ON_A_ROLL` still
+  shows the old name/description -- update in the Steam admin to match.
+- Only 1 Guild Hall decoration exists in content (gold kind); the
+  achievement/Grimsby acquisition kinds are displayed as "Locked" but
+  nothing grants them yet. Fine while no content uses them.
+- `GuildHallDecorManager.setActiveTheme` and `SaveManager.
+  exportToClipboard`/`importFromString` have no UI caller. Theme switching
+  and save export/import are therefore not reachable in-game.
+- `DlcManager.allHeroClasses`/`recruitCost` still unused (documented
+  scaffolding; Founder's Pack ships pets only).
+- `Hero.ascension` and `GameState.prestigeStreak` remain frozen (0317);
+  ascension still feeds Guild Power for legacy heroes only.
+- `stats.goldEarned` excludes raid, chain-completion, Grimsby, harvest
+  and mailbox gold (documented in StatsPanel); fine, just not a true
+  lifetime total.
+- `resetHeroStats` doesn't add to `stats.goldSpent` (stat only).
+- Two `0435-*.patch` files sit in the repo root (`champion-skins`,
+  never shipped per 0435's notes, and `hires-heroes`, the real 0435).
+
+**Not checked in the running game** -- worth: list an item and click
+Equip on it while "Listing..." shows (it should already be gone from the
+stash); buy a listing with a bad connection (gold should return); run a
+5-quest Auto-Chain with a potion equipped and confirm the potion is used
+and refilled, not vanished; retire a throwaway hero and check
+Stats > Retirements and the Minotaur recruit card.

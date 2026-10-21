@@ -54,6 +54,19 @@ export const PrestigeManager = {
     // first place, just relocated to a spot this patch newly introduced.
     for (const defId of hero.equippedConsumables ?? []) InventoryManager.add(state, defId);
     state.heroes = state.heroes.filter((h) => h.id !== hero.id);
+    // Patch 0436 -- leftovers keyed by this hero's id, previously left in
+    // the save forever (their board, frozen contract, in-progress Replay
+    // Memories) plus a focus pointer at a hero who no longer exists.
+    delete state.questBoards[hero.id];
+    delete state.frozenQuestOffers[hero.id];
+    state.activeChainReplays = state.activeChainReplays.filter((r) => r.heroId !== hero.id);
+    if (state.focusedHeroId === hero.id) state.focusedHeroId = state.heroes[0]?.id ?? null;
+    // Patch 0436 -- nothing has counted retirements since classic Retire
+    // was cut in patch 0317, which left the Minotaur's "retire a hero for
+    // the first time" milestone unreachable and the Stats/Dashboard
+    // "Retirements" figure stuck at 0. Early Retirement is the only
+    // retirement there is now, so it counts.
+    state.stats.prestigeCount += 1;
     return null;
   },
 

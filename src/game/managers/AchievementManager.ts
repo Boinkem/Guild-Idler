@@ -46,7 +46,13 @@ const CHECKS: Record<string, Check> = {
   // a raid in its own restructure, so this is the correct list to check now.
   LAST_GOD_DEFEATED: (state) => (state.completedRaids ?? []).includes('requiem_last_god'),
 
-  ON_A_ROLL: (state) => state.stats.bestPrestigeStreak >= STREAK_FOR_ON_A_ROLL,
+  // Patch 0436 -- the prestige streak this used to read was removed in
+  // patch 0317 and nothing increments it any more, so this had become
+  // unearnable. Repointed at a completed Auto-Chain streak of 5; a save
+  // that already hit the old condition still qualifies.
+  ON_A_ROLL: (state) =>
+    state.stats.bestPrestigeStreak >= STREAK_FOR_ON_A_ROLL
+    || (state.stats.bestAutoChainStreak ?? 0) >= STREAK_FOR_ON_A_ROLL,
 
   FULL_ROSTER: (state) => {
     const owned = new Set(state.roster ?? []);
@@ -181,6 +187,15 @@ for (const chain of QUEST_CHAINS) {
  * already establishes). `requiem_last_god` is skipped -- already covered
  * by the pre-existing, hidden LAST_GOD_DEFEATED achievement.
  */
+/**
+ * Patch 0436 -- CHAIN_THIRD_CROWN's chain (`third_crown`) was replaced
+ * wholesale by `the_gathering_horde` in the same slot, but the
+ * achievement id (already registered with Steam) kept pointing at a chain
+ * id that no longer exists, so it could never unlock. Kept the Steam API
+ * name and pointed it at the replacement chain instead of renaming.
+ */
+CHECKS.CHAIN_THIRD_CROWN = (state) => (state.completedChains ?? []).includes('the_gathering_horde');
+
 for (const raid of RAIDS) {
   if (raid.id === 'requiem_last_god') continue;
   CHECKS[`RAID_${raid.id.toUpperCase()}_CLEARED`] = (state) => (state.completedRaids ?? []).includes(raid.id);
