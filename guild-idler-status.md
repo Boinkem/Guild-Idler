@@ -36076,3 +36076,30 @@ for an unknown pet id stays in its nest, no pet created, toast shown.
 with Steam** -- worth one launch on a Steam account that owns the pack
 (card shows once) and one with Steam closed / the DLC unticked (nothing
 granted).
+
+### Testing tools switched off for the Steam build (patch 0443)
+```discord-update
+Dev Update | Patch 0443
+
+- Removed the developer Testing tab from the game ahead of the Steam release
+```
+
+Direct request before packaging and uploading the latest build to Steam:
+disable the in-game testing tools (only those -- Electron's own DevTools
+were not touched). `TESTING_TOOLS_ENABLED` in `src/game/testingTools.ts`
+goes from `!DEMO_BUILD` (on in the full game, off in the demo) to a flat
+`false`; the now-unused `DEMO_BUILD` import is dropped. Everything that
+reads the flag already handles `false` -- the demo build has shipped that
+way since 0438:
+- Settings no longer offers the Testing section (SettingsPanel gates both
+  the toggle and the panel on the flag), so the Testing tab can't be
+  reached at all;
+- every engine `test*` method returns early (`if (!TESTING_TOOLS_ENABLED)
+  return;`), so nothing can call them from the UI either;
+- the Auction House dev session-token shortcut (`setDevSessionToken`) is
+  inert, so the AH always goes through the real Steam sign-in.
+
+To get the Testing tab back for local work, set the flag to `true` again
+-- and back to `false` before the next Steam upload.
+
+`npx tsc --noEmit` and `npm run build` pass.

@@ -15,9 +15,9 @@
  * Everything testing-related lives inside that one fenced block; nothing
  * else in engine.ts references it.
  */
-import { DEMO_BUILD } from './demo';
-
 // Patch 0438 -- always off in the demo build: the demo is the first build
-// that goes out publicly, so it can never ship the Testing tab. The full
-// game's own value is unchanged (still flipped by hand before release).
-export const TESTING_TOOLS_ENABLED = !DEMO_BUILD;
+// that goes out publicly, so it can never ship the Testing tab.
+// Patch 0443 -- off in the full game too, for the first public Steam
+// build. Flip back to `true` locally when you need the Testing tab again
+// (and back to `false` before the next upload).
+export const TESTING_TOOLS_ENABLED = false;
