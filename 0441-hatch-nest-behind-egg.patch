@@ -1,0 +1,45 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index c3d96c1..04cdeb1 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -35950,3 +35950,27 @@ Guild tab and the Settings picker; swatch grid, markings and strength
+ all update live. **Not checked in Electron** -- worth a quick look that
+ `background-attachment: fixed` + the tiled SVG look right in the real
+ window and at the companion-to-menu size switch.
++
++### Hatch nest drawn behind the egg (patch 0441)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed the hatching nest drawing over the bottom of the egg -- the egg now sits in front of its nest while it wobbles, cracks and hatches
++```
++
++Reported while recording the Ruby Dragonling DLC clip: in the hatch
++reveal (HatchRevealModal) the striped nest covered the lower part of the
++egg, so the egg looked like it was sinking into it rather than sitting
++on it. Cause: `.hfx-nest` had `z-index: 3`, above `.hfx-egg` (2). Same
++on the Nests card's ready-to-hatch stage, where `.hfx-wobble` (2) sat
++under the shared `.hfx-nest`.
++
++**Fix (app.css only).** `.hfx-nest` drops to `z-index: 1`. Stacking is
++now nest (1) < egg / wobbling egg (2) < hatched pet (3) < flash (5).
++`.hfx-shadow`, `.hfx-halo` and `.hfx-rays` set no z-index, so they stay
++behind everything as before. The sparks share z 1 with the nest but
++float above it, so they don't overlap. No markup or timing changes.
++
++Checked in the web build: hatched a Common Ruby Dragonling egg. The egg
++stays in front of the nest through the drop, shake and crack, and the
++pet pops out in front of it.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 8a4a63a..432c6c1 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -7977,7 +7977,7 @@ button.harvest-item:hover {
+ }
+ @keyframes hfx-wob { 0%, 55%, 100% { transform: none; } 62% { transform: rotate(-9deg); } 70% { transform: rotate(8deg); } 78% { transform: rotate(-5deg); } 86% { transform: rotate(3deg); } }
+ .hfx-nest {
+-  position: absolute; z-index: 3; left: 50%; bottom: 4px; width: 130px; height: 34px; margin-left: -65px;
++  position: absolute; z-index: 1; left: 50%; bottom: 4px; width: 130px; height: 34px; margin-left: -65px;
+   border-radius: 0 0 65px 65px / 0 0 34px 34px;
+   background: repeating-linear-gradient(115deg, oklch(42% 0.06 70) 0 4px, oklch(34% 0.05 65) 4px 7px, oklch(48% 0.07 75) 7px 9px);
+   box-shadow: inset 0 6px 8px rgba(0, 0, 0, .45);

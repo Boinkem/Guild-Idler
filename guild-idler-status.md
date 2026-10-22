@@ -35950,3 +35950,38 @@ Guild tab and the Settings picker; swatch grid, markings and strength
 all update live. **Not checked in Electron** -- worth a quick look that
 `background-attachment: fixed` + the tiled SVG look right in the real
 window and at the companion-to-menu size switch.
+
+### Hatch nest drawn behind the egg; Ruby Dragonling facing (patch 0441)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the hatching nest drawing over the bottom of the egg -- the egg now sits in front of its nest while it wobbles, cracks and hatches
+- Fixed the Ruby Dragonling flying backwards beside your hero -- it now faces the same way as the hero it's paired with
+```
+
+Reported while recording the Ruby Dragonling DLC clip: in the hatch
+reveal (HatchRevealModal) the striped nest covered the lower part of the
+egg, so the egg looked like it was sinking into it rather than sitting
+on it. Cause: `.hfx-nest` had `z-index: 3`, above `.hfx-egg` (2). Same
+on the Nests card's ready-to-hatch stage, where `.hfx-wobble` (2) sat
+under the shared `.hfx-nest`.
+
+**Fix (app.css only).** `.hfx-nest` drops to `z-index: 1`. Stacking is
+now nest (1) < egg / wobbling egg (2) < hatched pet (3) < flash (5).
+`.hfx-shadow`, `.hfx-halo` and `.hfx-rays` set no z-index, so they stay
+behind everything as before. The sparks share z 1 with the nest but
+float above it, so they don't overlap. No markup or timing changes.
+
+Checked in the web build: hatched a Common Ruby Dragonling egg. The egg
+stays in front of the nest through the drop, shake and crack, and the
+pet pops out in front of it.
+
+**Ruby Dragonling facing (PetSprite.tsx).** Spotted on the desktop
+companion while taking the DLC store screenshot: paired with a hero, the
+Ruby Dragonling faced away from them. Its sheets are a recolour of the
+base Dragonling's, which has been in `PET_REVERSED_FACING` since that
+species shipped, but the DLC species id was never added. `ruby_dragonling:
+true` added beside `dragonling`, so it inverts its facing once the same way
+and every `flip` caller (companion, pairing scene, etc.) stays unchanged.
+Checked on the companion: paired with Sir Aldric mid-quest, the dragonling
+now faces the same way he walks.

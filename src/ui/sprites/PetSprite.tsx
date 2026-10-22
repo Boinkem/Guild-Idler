@@ -38,6 +38,9 @@ import { DlcManager } from '../../game/managers/DlcManager';
  */
 const PET_REVERSED_FACING: Partial<Record<string, true>> = {
   dragonling: true,
+  // Patch 0441 -- the Founder's Pack Ruby Dragonling is a recolour of the
+  // same Dragonling sheets, so it inherits the same reversed facing.
+  ruby_dragonling: true,
   gargoyle: true,
 };
 
