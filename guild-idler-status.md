@@ -36103,3 +36103,32 @@ To get the Testing tab back for local work, set the flag to `true` again
 -- and back to `false` before the next Steam upload.
 
 `npx tsc --noEmit` and `npm run build` pass.
+
+### Steam demo App ID filled in (patch 0444)
+```discord-update
+Dev Update | Patch 0444
+
+- Changed the demo to connect to its own Steam page, so it launches and runs through Steam like the full game
+```
+
+The demo app now exists in Steamworks: **App ID 5488030**, with its own
+depot **5488031 "GuildBound Demo Content"** (a demo is a separate app, so
+it can't upload into the full game's depot 5143491). `DEMO_STEAM_APP_ID`
+in `electron/main.ts` goes from the 0438 placeholder `0` -- which made a
+demo build skip Steam entirely -- to `5488030`, so a packaged demo now
+runs `restartAppIfNecessary(5488030)` and `steamworks.init(5488030)` the
+same way the full game does with 5143490. Nothing else in code changes:
+the demo's DLC table stays empty (`isDlcOwned` already returns false in
+the demo), the "Wishlist on Steam" button still opens the FULL game's
+store page (`demo.ts` `fullGameAppId: 5143490`, which is what should be
+wishlisted), and the demo has no achievements of its own, which
+`steam:unlockAchievement` already tolerates.
+
+**Upload side (not in git).** The DevTool's local, gitignored
+`tools/devtool/steam.config.json` gets `demoAppId: "5488030"` and
+`demoDepotId: "5488031"`, so "Generate demo build script" writes
+`app_build_5488030.vdf` / `depot_build_5488031.vdf` over
+`release-demo/win-unpacked/*`. Demo flow: Package demo -> Generate demo
+build script -> Upload.
+
+`npx tsc --noEmit` and the demo build pass.

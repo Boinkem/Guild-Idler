@@ -91,9 +91,10 @@ const FULL_GAME_STEAM_APP_ID = 5143490;
  * which case a demo build skips Steam entirely (no restart-through-Steam,
  * no achievements) rather than initializing against the full game's ID --
  * a demo running as 5143490 would show up in Steam as the full game.
- * Fill this in once Steamworks hands out the number.
+ * Patch 0444 -- registered: "GuildBound Demo", App ID 5488030 (depot
+ * 5488031 "GuildBound Demo Content").
  */
-const DEMO_STEAM_APP_ID = 0;
+const DEMO_STEAM_APP_ID = 5488030;
 
 const STEAM_APP_ID = IS_DEMO ? DEMO_STEAM_APP_ID : FULL_GAME_STEAM_APP_ID;
 
