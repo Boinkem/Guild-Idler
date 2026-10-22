@@ -5,6 +5,12 @@ import { useSettings } from '../useSettings';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { PetSprite } from '../sprites/PetSprite';
 import { Settings, THEMES, backgroundSrc } from '../../game/settings';
+import {
+  RUNECLOTH_COLOURS,
+  RUNECLOTH_MARKINGS,
+  RUNECLOTH_STRENGTHS,
+  runeclothBackground,
+} from '../../game/runecloth';
 import { previewSound } from '../../game/sound';
 import { BARD_TRACKS } from '../../game/data/bard';
 import { CREDITS } from '../../game/data/credits';
@@ -26,14 +32,16 @@ export function Row({ label, hint, children }: { label: string; hint?: string; c
 }
 
 function Segmented<T extends string | number>({
-  value, options, onChange,
+  value, options, onChange, wrap,
 }: {
   value: T;
   options: { label: string; value: T }[];
   onChange: (v: T) => void;
+  /** Lets a long option list (Runecloth's six markings) wrap to a second line. */
+  wrap?: boolean;
 }) {
   return (
-    <div className="segmented">
+    <div className={wrap ? 'segmented wrap' : 'segmented'}>
       {options.map((opt) => (
         <button
           key={String(opt.value)}
@@ -126,7 +134,63 @@ export function SettingsPanel() {
        *  in settings.ts do the actual resolution, this is just the third
        *  option that lets the raw setting be 'system' in the first
        *  place. */}
-      <Row label="Guild's Mood" hint="Moody is candlelit halls and torchlit chambers. Bright swaps in sunlit daytime art for the same rooms. System switches automatically between the two, 6am-6pm counting as day.">
+      {/* Backdrop (patch 0440) -- painted scene art or Runecloth, the
+       *  plain-colour-with-markings alternative (see runecloth.ts). Also
+       *  asked on the first-time vibe step; the colour/marking/strength
+       *  rows only show while Runecloth is picked. */}
+      <Row label="Backdrop" hint="Painted Scenes gives every tab its own illustrated room. Runecloth swaps them all for one plain colour with faint runes and etchings.">
+        <Segmented
+          value={settings.backdropStyle}
+          onChange={set('backdropStyle')}
+          options={[
+            { label: 'Painted Scenes', value: 'painted' },
+            { label: 'Runecloth', value: 'runecloth' },
+          ]}
+        />
+      </Row>
+
+      {settings.backdropStyle === 'runecloth' && (
+        <>
+          <Row label="Runecloth colour">
+            <div className="runecloth-swatches">
+              {RUNECLOTH_COLOURS.map((c) => (
+                <button
+                  key={c.id}
+                  className={`runecloth-swatch ${settings.runeclothColour === c.id ? 'on' : ''}`}
+                  onClick={() => update('runeclothColour', c.id)}
+                  aria-pressed={settings.runeclothColour === c.id}
+                >
+                  <span
+                    className="runecloth-swatch-tile"
+                    aria-hidden="true"
+                    style={runeclothBackground(c.id, settings.runeclothMarking, settings.runeclothStrength, { scale: 0.5 })}
+                  />
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </Row>
+
+          <Row label="Markings" hint="Signature uses whichever marking that colour was designed around.">
+            <Segmented
+              wrap
+              value={settings.runeclothMarking}
+              onChange={set('runeclothMarking')}
+              options={RUNECLOTH_MARKINGS.map((m) => ({ label: m.name, value: m.id }))}
+            />
+          </Row>
+
+          <Row label="Marking strength">
+            <Segmented
+              value={settings.runeclothStrength}
+              onChange={set('runeclothStrength')}
+              options={RUNECLOTH_STRENGTHS.map((s) => ({ label: s.name, value: s.id }))}
+            />
+          </Row>
+        </>
+      )}
+
+      <Row label="Guild's Mood" hint="Moody is candlelit halls and torchlit chambers. Bright swaps in sunlit daytime art for the same rooms. System switches automatically between the two, 6am-6pm counting as day. With Runecloth, Bright shows the colour as picked and Moody dims it for night.">
         <Segmented
           value={settings.backgroundMood}
           onChange={set('backgroundMood')}

@@ -35852,3 +35852,101 @@ no-ops.
 for a bit, quit, launch the full build on the same PC with no full save
 (rename yours aside first) and confirm the guild comes across; Generate
 demo scripts in the DevTool and check the VDF points at `release-demo`.
+
+### Runecloth backdrops: plain-colour backgrounds with faint runes, picked on the vibe card and in Settings (patch 0440)
+```discord-update
+Dev Update | Runecloth Backdrops
+
+- Added Runecloth: swap the painted tab backgrounds for one plain colour with faint runes and etchings
+- Added 12 colours to choose from, from Blossom Shrine pink to Moonwell midnight
+- Added 5 marking styles (Runes, Cross-hatch, Lattice, Starfield, Sigils) and three strengths, all in Settings > Backdrop
+- Added the Painted Scenes / Runecloth choice to the "What's your guild's vibe?" card when founding a new guild
+- Changed Guild's Mood to work with Runecloth too: Bright shows your colour as picked, Moody dims it for night, and the candle/sun button flips between them
+```
+
+Direct request: let players opt out of the per-tab painted art for a
+plain background that still isn't a flat block of colour. Designed on a
+Claude Design canvas first (Settings picker, palette gallery, vibe card,
+Moody dimmer -- all approved before building); this ships every colour
+and marking from that canvas, with the dimmer at the demo's picked
+values (veil strength 0.6, night-blue tint).
+
+**New `src/game/runecloth.ts`** -- self-contained (imports nothing from
+settings.ts, so settings.ts can import it with no cycle). 12 colours
+(`RUNECLOTH_COLOURS`: id, name, radial ground `base`->`deep`, marking
+`ink` as an r,g,b triple, per-colour `alpha` tuned so every marking
+reads equally faint on its own ground, and a `signature` motif), 5
+motifs (runes / hatch / lattice / stars / sigils) plus a `signature`
+marking that means "this colour's own motif", 3 strengths (Faint 0.55x,
+Etched 1x, Carved 1.6x). `runeclothBackground(colour, marking, strength,
+{ dim, scale })` returns a full layered CSS background (image/size/
+position/repeat/colour), memoized per argument set. Layers, top to
+bottom: Moody's veil (only when `dim`), one generated SVG glyph tile
+(320px, seeded per colour+motif so it's stable), the motif's gradient
+texture (cross-hatch lines, 60deg/-60deg/0deg lattice, star dots, sigil
+dot grid), then the colour's radial ground. **Runes and sigils are SVG
+stroke paths, not font glyphs** -- an SVG used as a CSS background can't
+load web fonts and the Runic Unicode block is missing from many system
+fonts, so text glyphs would have rendered as tofu boxes on some PCs.
+Strokes use `vector-effect: non-scaling-stroke` so a big lattice rune is
+as fine-lined as a small one. Nothing here is an image file -- no art to
+commission, nothing to load, sharp at any window size.
+
+**Settings (`settings.ts`)** -- four new fields, no version bump (the
+existing merge-over-defaults fills them for old settings files):
+`backdropStyle` ('painted' default, so nobody's look changes on update),
+`runeclothColour` ('blossom'), `runeclothMarking` ('signature'),
+`runeclothStrength` ('etched'). `SettingsStore.apply()` now sets
+`data-backdrop-style` on :root and, for Runecloth, publishes the whole
+background as `--rc-image/--rc-size/--rc-position/--rc-color`, using the
+RESOLVED mood so System's veil follows the clock. `useSettings.tsx`
+re-runs `apply()` on its existing System-mode minute tick (Runecloth
+only) since the veil lives in CSS variables, not a `backgroundSrc()` call
+a re-render would refresh.
+
+**`app.css`** -- `:root[data-backdrop-style='runecloth'] .tab-scene /
+.vendor-scene` swap the --rc-* background in with `!important`. That's
+deliberate: every panel sets its painted art as an INLINE
+background-image, which only an !important stylesheet rule beats, and
+the alternative was editing ~20 panels' JSX. `background-attachment:
+fixed` is inherited from the existing rules, so the markings hold still
+across tab changes. The existing 25% scrim on `-content` stays. `.panel
+h2` and `.section-heading` get a heavier text-shadow under Runecloth --
+the light grounds (Blossom, Parchment, Frost, Bone) are much brighter
+than any painted art was. Subtitles and cards already had their own
+backing. **Not applied to** `.craft-scene` stations, the Peddler table
+modals (dice/card/tab), or the egg-select scene -- those position
+clickable hit-targets on specific spots in their art, so they keep their
+painted scenes on purpose.
+
+**`MenuWindow.tsx`** -- the faint 35% ambient layer behind the whole menu
+(normally the Guild Hall painting) renders a `.runecloth-fill` instead
+while Runecloth is on, so the strip around tab content matches. The
+candle/sun quick-flip button is untouched -- it already just sets
+`backgroundMood`, which now drives the veil too.
+
+**`GuildNamingModal.tsx` (vibe step)** -- new "🖼️ Painted Scenes / 🧵
+Runecloth" pair above the Moody/Bright/System row, same
+`guild-naming-mood-btn` shape; picking Runecloth shows a row of 12 colour
+chips. All three previews (backdrop, colour, mood) cross-fade on the card
+through the existing `gnfx-bgout` layer, now carrying a full style
+object instead of an image src since a Runecloth preview is a layered
+background. Same preview-then-commit-on-Next rule as previewMood: Back
+without Next leaves real settings alone. Only colour is asked here --
+markings start on the colour's signature, marking/strength live in
+Settings. Subtitle shortened to make room on the fixed 3:2 card.
+
+**`SettingsPanel.tsx`** -- new Backdrop row (Painted Scenes / Runecloth)
+under Font; while Runecloth is on, a 4-wide grid of live swatch previews
+(each colour drawn with the current marking/strength at half scale), a
+Markings segmented row (wraps -- `Segmented` got an optional `wrap`
+prop), and Marking strength. Guild's Mood hint mentions the Runecloth
+behaviour.
+
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` pass.
+Checked in the browser build via Playwright: founding a new guild with
+Runecloth + Blossom + Bright, then Moonwell + Moody, both carry onto the
+Guild tab and the Settings picker; swatch grid, markings and strength
+all update live. **Not checked in Electron** -- worth a quick look that
+`background-attachment: fixed` + the tiled SVG look right in the real
+window and at the companion-to-menu size switch.

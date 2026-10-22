@@ -459,8 +459,13 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         bg.jpg is left on disk, unreferenced, same as lore/guild-hall-
         bg.jpg below.
       */}
+      {/* Runecloth (patch 0440): the same faint ambient layer, just the
+       *  player's cloth instead of the Guild Hall painting, so the strip
+       *  around the tab content matches the tabs themselves. */}
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', overflow: 'hidden' }}>
-        {activeGuildHallTheme ? (
+        {settings.backdropStyle === 'runecloth' ? (
+          <div className="runecloth-fill" />
+        ) : activeGuildHallTheme ? (
           <GuildHallMenuBackdrop theme={activeGuildHallTheme} equipped={equippedGuildHallDecorations} />
         ) : (
           <div

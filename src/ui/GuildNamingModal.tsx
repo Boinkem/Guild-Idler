@@ -1,8 +1,10 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { fxMs, fxSpeed, SealStamp } from './purchaseFx';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
-import { backgroundSrc, BackgroundMoodId } from '../game/settings';
+import { backgroundSrc, BackgroundMoodId, resolveBackgroundMood } from '../game/settings';
+import { BackdropStyleId, RUNECLOTH_COLOURS, RuneclothColourId, runeclothBackground } from '../game/runecloth';
 
 /**
  * Blocking, non-dismissible prompt asking the player to name their guild.
@@ -64,7 +66,14 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
   const [founding, setFounding] = useState<null | 'charter' | 'leave'>(null);
   // The art that was showing before a mood change, faded out over the new
   // one so picking a vibe cross-fades instead of swapping instantly.
-  const [prevBg, setPrevBg] = useState<{ src: string; key: number } | null>(null);
+  // Patch 0440 -- now carries a whole background style rather than just an
+  // image src, since a Runecloth preview is a layered CSS background.
+  const [prevBg, setPrevBg] = useState<{ style: CSSProperties; key: number } | null>(null);
+  // Runecloth (patch 0440): same preview-then-commit-on-Next shape as
+  // previewMood above. Only the colour is asked here (markings start on
+  // that colour's own signature); marking/strength live in Settings.
+  const [previewBackdrop, setPreviewBackdrop] = useState<BackdropStyleId>(settings.backdropStyle);
+  const [previewColour, setPreviewColour] = useState<RuneclothColourId>(settings.runeclothColour);
 
   // Forces full menu size before this modal has to render at all -- lives
   // here rather than in App.tsx specifically because this component
@@ -137,6 +146,8 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
   // picking it.
   const confirmVibe = () => {
     updateSettings('backgroundMood', previewMood);
+    updateSettings('backdropStyle', previewBackdrop);
+    updateSettings('runeclothColour', previewColour);
     setStep('guide');
   };
 
@@ -158,11 +169,27 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
     window.setTimeout(finish, fxMs(3150));
   };
 
-  const bgSrc = backgroundSrc('./lore/panels/guildhall.jpg', previewMood);
+  const bgStyle: CSSProperties = previewBackdrop === 'runecloth'
+    ? runeclothBackground(previewColour, settings.runeclothMarking, settings.runeclothStrength, {
+        dim: resolveBackgroundMood(previewMood) === 'dim',
+        scale: 0.85,
+      })
+    : { backgroundImage: `url(${backgroundSrc('./lore/panels/guildhall.jpg', previewMood)})` };
+  const fadeOut = () => setPrevBg({ style: bgStyle, key: Date.now() });
   const pickMood = (mood: BackgroundMoodId) => {
     if (mood === previewMood) return;
-    setPrevBg({ src: bgSrc, key: Date.now() });
+    fadeOut();
     setPreviewMood(mood);
+  };
+  const pickBackdrop = (style: BackdropStyleId) => {
+    if (style === previewBackdrop) return;
+    fadeOut();
+    setPreviewBackdrop(style);
+  };
+  const pickColour = (colour: RuneclothColourId) => {
+    if (colour === previewColour) return;
+    fadeOut();
+    setPreviewColour(colour);
   };
   const today = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -170,10 +197,10 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
     <div className="overlay">
       <div
         className={`guild-naming-card gnfx-card ${founding ? `gnfx-st-${founding}` : ''}`}
-        style={{ backgroundImage: `url(${bgSrc})` }}
+        style={bgStyle}
         onClick={(e) => e.stopPropagation()}
       >
-        {prevBg && <span key={prevBg.key} className="gnfx-bgout" style={{ backgroundImage: `url(${prevBg.src})` }} aria-hidden="true" />}
+        {prevBg && <span key={prevBg.key} className="gnfx-bgout" style={prevBg.style} aria-hidden="true" />}
         {founding && (
           <div className="gnfx-charter" aria-live="polite">
             <div className="gnfx-rod" />
@@ -234,9 +261,28 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
               </div>
               <div className="guild-naming-textbox guild-naming-textbox-sub">
                 <p className="small muted" style={{ margin: 0 }}>
-                  Sets the look of every hall and tab -- pick one to see it take effect right here.
-                  Changeable anytime later from Settings.
+                  Pick a backdrop and a mood to see it right here. Changeable anytime from Settings.
                 </p>
+              </div>
+
+              {/* Backdrop style (patch 0440) -- painted scene art or a plain
+               *  Runecloth colour. Same button shape as the mood row below
+               *  so the two read as one "how should it look" question. */}
+              <div className="guild-naming-backdrop-row">
+                <button
+                  className={`btn-primary guild-naming-mood-btn ${previewBackdrop === 'painted' ? 'selected' : ''}`}
+                  onClick={() => pickBackdrop('painted')}
+                  title="A painted scene behind every tab -- the Guild Hall, the quest board, the vendors' stalls"
+                >
+                  🖼️ Painted Scenes
+                </button>
+                <button
+                  className={`btn-primary guild-naming-mood-btn ${previewBackdrop === 'runecloth' ? 'selected' : ''}`}
+                  onClick={() => pickBackdrop('runecloth')}
+                  title="A plain colour with faint runes and etchings -- calmer behind busy screens"
+                >
+                  🧵 Runecloth
+                </button>
               </div>
 
               <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 4 }}>
@@ -269,6 +315,22 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
                   🕐<br />System
                 </button>
               </div>
+
+              {previewBackdrop === 'runecloth' && (
+                <div className="guild-naming-textbox guild-naming-chips" role="group" aria-label="Runecloth colour">
+                  {RUNECLOTH_COLOURS.map((c) => (
+                    <button
+                      key={c.id}
+                      className={`guild-naming-chip ${previewColour === c.id ? 'selected' : ''}`}
+                      onClick={() => pickColour(c.id)}
+                      title={c.name}
+                      aria-label={c.name}
+                      aria-pressed={previewColour === c.id}
+                      style={{ background: `radial-gradient(circle at 35% 30%, ${c.base}, ${c.deep})` }}
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="row" style={{ justifyContent: 'space-between', marginTop: 4 }}>
                 <button className="btn-ghost tiny" onClick={() => setStep('name')}>

@@ -10,6 +10,14 @@
  * settings file from an older build never crashes the UI.
  */
 
+import {
+  BackdropStyleId,
+  RuneclothColourId,
+  RuneclothMarkingId,
+  RuneclothStrengthId,
+  runeclothBackground,
+} from './runecloth';
+
 export const SETTINGS_VERSION = 1;
 
 export type ThemeId = 'candlelit' | 'midnight' | 'parchment' | 'forest' | 'high_contrast' | 'daylight';
@@ -137,6 +145,14 @@ export interface Settings {
    *  actually uses yet, but matches how every other cosmetic choice here
    *  behaves once picked. */
   backgroundMood: BackgroundMoodId;
+  /** Painted per-tab scene art, or a plain Runecloth colour with faint
+   *  markings (patch 0440) -- see runecloth.ts. Asked alongside
+   *  backgroundMood on the first-time vibe step, revisitable in Settings.
+   *  Mood still applies to Runecloth: Moody lays a night veil over it. */
+  backdropStyle: BackdropStyleId;
+  runeclothColour: RuneclothColourId;
+  runeclothMarking: RuneclothMarkingId;
+  runeclothStrength: RuneclothStrengthId;
   /** Optional backing plate behind the idle companion, for readability over busy wallpaper. */
   companionBackdrop: CompanionBackdropId;
   /**
@@ -263,6 +279,10 @@ export const DEFAULT_SETTINGS: Settings = {
   styleId: 'adventure',
   fontId: 'readable',
   backgroundMood: 'dim',
+  backdropStyle: 'painted',
+  runeclothColour: 'blossom',
+  runeclothMarking: 'signature',
+  runeclothStrength: 'etched',
   companionBackdrop: 'off',
   hideIdleInfo: false,
   hideHeroSprite: false,
@@ -513,6 +533,24 @@ export const SettingsStore = {
     root.dataset.font = settings.fontId;
     root.dataset.companionBackdrop = settings.companionBackdrop;
     root.dataset.backgroundMood = settings.backgroundMood;
+    // Runecloth (patch 0440): the whole layered background is published
+    // as CSS variables, and app.css swaps it in over every .tab-scene/
+    // .vendor-scene's inline painted art while data-backdrop-style is
+    // 'runecloth'. Uses the RESOLVED mood so System's veil follows the
+    // clock -- SettingsProvider re-runs apply() on its System-mode tick
+    // for exactly this.
+    root.dataset.backdropStyle = settings.backdropStyle;
+    if (settings.backdropStyle === 'runecloth') {
+      const bg = runeclothBackground(settings.runeclothColour, settings.runeclothMarking, settings.runeclothStrength, {
+        dim: resolveBackgroundMood(settings.backgroundMood) === 'dim',
+      });
+      root.style.setProperty('--rc-image', bg.backgroundImage);
+      root.style.setProperty('--rc-size', bg.backgroundSize);
+      root.style.setProperty('--rc-position', bg.backgroundPosition);
+      root.style.setProperty('--rc-color', bg.backgroundColor);
+    } else {
+      for (const v of ['--rc-image', '--rc-size', '--rc-position', '--rc-color']) root.style.removeProperty(v);
+    }
     root.dataset.motion = motion === 0 ? 'off' : 'on';
   },
 };

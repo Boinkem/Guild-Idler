@@ -44,6 +44,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const interval = window.setInterval(() => setTick((t) => t + 1), 60_000);
     return () => window.clearInterval(interval);
   }, [settings.backgroundMood]);
+  // Runecloth's Moody veil (patch 0440) lives in CSS variables apply()
+  // writes, not in a backgroundSrc() call a re-render would refresh -- so
+  // System mode also needs apply() re-run on the same tick to flip the
+  // veil at 6am/6pm. Skipped on tick 0 (the settings effect above already
+  // applied); no save, settings didn't change.
+  useEffect(() => {
+    if (tick > 0 && settings.backdropStyle === 'runecloth') SettingsStore.apply(settings);
+  }, [tick]);
 
   const update = useCallback(<K extends keyof Settings>(key: K, value: Settings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));

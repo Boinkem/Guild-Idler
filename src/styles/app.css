@@ -3629,6 +3629,107 @@ input[type='range'] {
   background: color-mix(in srgb, var(--scene-scrim) 25%, transparent);
 }
 
+/*
+ * Runecloth backdrops (patch 0440) -- the plain-colour alternative to the
+ * painted scene art. SettingsStore.apply() publishes the whole layered
+ * background (Moody veil, glyph tile, texture, colour ground) as --rc-*
+ * variables and sets data-backdrop-style on :root; these rules swap it in
+ * over every tab's painted art. !important is deliberate: each panel sets
+ * its painted art as an INLINE background-image, which only an
+ * !important stylesheet rule can override -- the alternative was touching
+ * all ~20 panels' JSX for a purely cosmetic switch. background-attachment
+ * stays `fixed` from .tab-scene/.vendor-scene, so the markings sit still
+ * across tab changes instead of jumping with each page's own height.
+ *
+ * Deliberately NOT applied to .craft-scene stations, the Peddler's table
+ * modals, or the egg-select scene -- those place clickable hit-targets
+ * on specific spots in their art, so they keep their painted scenes.
+ */
+:root[data-backdrop-style='runecloth'] .tab-scene,
+:root[data-backdrop-style='runecloth'] .vendor-scene,
+.runecloth-fill {
+  background-image: var(--rc-image) !important;
+  background-size: var(--rc-size) !important;
+  background-position: var(--rc-position) !important;
+  background-repeat: repeat !important;
+  background-color: var(--rc-color) !important;
+}
+.runecloth-fill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* The light grounds (Blossom, Parchment, Frost, Bone) sit far brighter
+   than any painted art did, so the bare page heading needs a heavier
+   shadow to stay readable on them. Subtitles already have their own
+   plaque (patch 0321/0393) and cards their own backing. */
+:root[data-backdrop-style='runecloth'] .panel h2,
+:root[data-backdrop-style='runecloth'] .panel .section-heading {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.6);
+}
+
+/* Settings > Backdrop colour picker (patch 0440). Each swatch is a small
+   live preview of that colour with the current marking/strength. */
+/* Fixed track widths rather than auto-fill: .setting-control is
+   `flex: none` (shrink-to-content), so an auto-fill grid inside it
+   collapses to a single column. */
+.runecloth-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 96px);
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .runecloth-swatches { grid-template-columns: repeat(3, 88px); }
+}
+.runecloth-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--parchment);
+  font-size: 0.6875rem;
+  text-align: left;
+}
+.runecloth-swatch-tile {
+  display: block;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid var(--edge);
+}
+.runecloth-swatch.on .runecloth-swatch-tile {
+  box-shadow: 0 0 0 2px var(--brass), 0 0 10px color-mix(in srgb, var(--brass) 50%, transparent);
+}
+.segmented.wrap { flex-wrap: wrap; }
+
+/* First-time vibe card (patch 0440): Painted/Runecloth pair and the
+   colour chip row, sized to sit between the mood buttons and Next on the
+   fixed 3:2 card. */
+.guild-naming-backdrop-row { display: flex; gap: 8px; justify-content: center; }
+.guild-naming-backdrop-row .guild-naming-mood-btn { max-width: 200px; padding: 8px; }
+.guild-naming-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+}
+.guild-naming-chip {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+}
+.guild-naming-content .guild-naming-chip { box-shadow: none; }
+.guild-naming-content .guild-naming-chip.selected {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
 /* Direct report (patch 0350): the Treasury's Gold-for-Renown Exchange card
  * ("very hard to read in any theme, it needs to match the other upgrade
  * cards") was fading its ENTIRE .card -- including .card's own 88%-opaque
