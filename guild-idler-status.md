@@ -36167,3 +36167,38 @@ Flows, all buttons now:
 Checked: both files pass `node --check`; the DevTool serves the new
 button in Build & Ship step 7. Not run end to end here (electron-builder
 targets Windows) -- first real click is on the dev PC.
+
+### DevTool: package buttons no longer hang on a failed request (patch 0446)
+```discord-update
+Dev Update | Patch 0446
+
+- Fixed our build tool getting stuck mid-build when a step failed to start (no change to the game itself)
+```
+
+Reported right after 0445: "Package demo" sat on "Packaging demo..."
+far longer than a full-game package. Nothing was building -- `dist/`
+was untouched since the previous full-game package and no
+`release-demo/` existed. Cause: the DevTool's page files are read fresh
+from disk on every refresh, so the new button showed up straight away,
+but the server was still the pre-0445 process in memory with no
+`/api/patches/package-demo` route. It answered 404, `api()` threw, and
+the click handler had no error handling, so the button never reset and
+nothing was reported. Run package had the same flaw for any request
+error (e.g. the DevTool server not running).
+
+**Fix (app.js only).** Both package buttons now share one runner
+(`runPackage`): it disables both while either runs, wraps the request in
+try/catch/finally, always resets the button, and on a thrown request
+shows a failed result block -- the error plus "Nothing was built. If
+you've just applied a patch that changed the DevTool, close and restart
+the DevTool so its server picks up the new step, then try again."
+Server unchanged.
+
+**Rule of thumb:** after applying any patch that touches
+`tools/devtool/server.mjs`, restart the DevTool. A page refresh alone
+picks up new buttons but not new server steps.
+
+Checked in the DevTool (Build & Ship, step 7) with the requests faked
+so nothing really ran: a 404 for Package demo now shows the failed block
+with that message and the button resets; a successful Run package
+response still renders as before. `node --check` passes.

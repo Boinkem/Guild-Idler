@@ -2999,34 +2999,40 @@ function renderPatches() {
     document.getElementById('buildResult').innerHTML = resultBlock(result, 'Build');
   };
 
+  // Both package buttons (full game + demo, patch 0445) share one runner.
+  // Patch 0446 -- a request that throws (the DevTool server returning 404
+  // for a step it doesn't know yet -- e.g. a patch added the step but the
+  // DevTool wasn't restarted -- or the server not running at all) used to
+  // leave the button stuck on "Packaging..." forever with nothing
+  // building. Now it always resets and shows what went wrong.
   const packageBtn = document.getElementById('packageBtn');
-  if (packageBtn) packageBtn.onclick = async () => {
-    packageBtn.disabled = true;
-    packageBtn.textContent = 'Packaging… (this can take several minutes)';
-    const result = await api('/api/patches/package', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-    });
-    packageBtn.disabled = false;
-    packageBtn.textContent = 'Run package';
-    document.getElementById('packageResult').innerHTML = resultBlock(result, 'Package');
-  };
-
-  // Patch 0445 -- the demo's own package step (npm run package:demo ->
-  // release-demo/), so the demo upload flow is all buttons, same as the
-  // full game's.
   const packageDemoBtn = document.getElementById('packageDemoBtn');
-  if (packageDemoBtn) packageDemoBtn.onclick = async () => {
-    packageDemoBtn.disabled = true;
-    if (packageBtn) packageBtn.disabled = true;
-    packageDemoBtn.textContent = 'Packaging demo… (this can take several minutes)';
-    const result = await api('/api/patches/package-demo', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-    });
-    packageDemoBtn.disabled = false;
-    if (packageBtn) packageBtn.disabled = false;
-    packageDemoBtn.textContent = 'Package demo';
-    document.getElementById('packageDemoResult').innerHTML = resultBlock(result, 'Package demo');
+  const runPackage = async (btn, endpoint, idleLabel, busyLabel, resultId, label) => {
+    const both = [packageBtn, packageDemoBtn].filter(Boolean);
+    both.forEach((b) => { b.disabled = true; });
+    btn.textContent = busyLabel;
+    let result;
+    try {
+      result = await api(endpoint, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+    } catch (err) {
+      result = {
+        ok: false,
+        stdout: '',
+        stderr: `${err.message || err}\n\nNothing was built. If you've just applied a patch that changed the DevTool, `
+          + 'close and restart the DevTool so its server picks up the new step, then try again.',
+      };
+    } finally {
+      both.forEach((b) => { b.disabled = false; });
+      btn.textContent = idleLabel;
+    }
+    document.getElementById(resultId).innerHTML = resultBlock(result, label);
   };
+  if (packageBtn) packageBtn.onclick = () => runPackage(
+    packageBtn, '/api/patches/package', 'Run package', 'Packaging… (this can take several minutes)', 'packageResult', 'Package');
+  if (packageDemoBtn) packageDemoBtn.onclick = () => runPackage(
+    packageDemoBtn, '/api/patches/package-demo', 'Package demo', 'Packaging demo… (this can take several minutes)', 'packageDemoResult', 'Package demo');
 
   const copyBuildBtn = document.getElementById('copyBuildBtn');
   if (copyBuildBtn) copyBuildBtn.onclick = async () => {
