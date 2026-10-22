@@ -2693,9 +2693,15 @@ function renderPatches() {
     <p class="tiny muted">
       Runs <code>npm run package</code> — produces installers/unpacked builds in <code>release/</code>.
       This is what you'd upload to Steam or hand to playtesters. Can take several minutes the first time.
+      <b>Package demo</b> runs <code>npm run package:demo</code> instead — the Steam demo build
+      ("Guildbound Demo"), written to its own <code>release-demo/</code> so it never touches the full game's.
     </p>
-    <button id="packageBtn">Run package</button>
+    <div class="row" style="gap:6px;">
+      <button id="packageBtn">Run package</button>
+      <button id="packageDemoBtn">Package demo</button>
+    </div>
     <div id="packageResult"></div>
+    <div id="packageDemoResult"></div>
 
     <p class="tiny muted" style="margin-top:10px;">
       Copies the newest <code>.exe</code> in <code>release/</code> to
@@ -2843,7 +2849,7 @@ function renderPatches() {
     <div id="steamUploadResult"></div>
     <p class="tiny muted" style="margin-top:10px;">
       <b>Demo</b> (patch 0439) — same steps for the demo's own app, from <code>release-demo/</code>.
-      Run <code>npm run package:demo</code> first (Package in step 7 only builds the full game), and fill
+      Run <b>Package demo</b> in step 7 first (Run package only builds the full game), and fill
       in the Demo App ID / Depot ID above. Uses the same branch selector.
     </p>
     <div class="row" style="gap:6px;">
@@ -3003,6 +3009,23 @@ function renderPatches() {
     packageBtn.disabled = false;
     packageBtn.textContent = 'Run package';
     document.getElementById('packageResult').innerHTML = resultBlock(result, 'Package');
+  };
+
+  // Patch 0445 -- the demo's own package step (npm run package:demo ->
+  // release-demo/), so the demo upload flow is all buttons, same as the
+  // full game's.
+  const packageDemoBtn = document.getElementById('packageDemoBtn');
+  if (packageDemoBtn) packageDemoBtn.onclick = async () => {
+    packageDemoBtn.disabled = true;
+    if (packageBtn) packageBtn.disabled = true;
+    packageDemoBtn.textContent = 'Packaging demo… (this can take several minutes)';
+    const result = await api('/api/patches/package-demo', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    packageDemoBtn.disabled = false;
+    if (packageBtn) packageBtn.disabled = false;
+    packageDemoBtn.textContent = 'Package demo';
+    document.getElementById('packageDemoResult').innerHTML = resultBlock(result, 'Package demo');
   };
 
   const copyBuildBtn = document.getElementById('copyBuildBtn');

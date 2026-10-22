@@ -2899,7 +2899,7 @@ async function findWinUnpackedBuild(target = 'full') {
   } catch {
     return {
       error: target === 'demo'
-        ? `${exePath} not found -- run \`npm run package:demo\` first.`
+        ? `${exePath} not found -- run Package demo (step 7) first.`
         : `${exePath} not found -- run Package (step 7) first.`,
     };
   }
@@ -3241,6 +3241,15 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/patches/package' && req.method === 'POST') {
     const result = await runNpm(['run', 'package'], PACKAGE_TIMEOUT_MS);
+    return json(res, 200, result);
+  }
+
+  // Patch 0445 -- the Steam demo build (package.json's package:demo:
+  // `vite build --mode demo` + electron-builder with the demo's appId/
+  // productName, output release-demo/), which "Generate demo build
+  // scripts" / "Upload demo to Steam" then read from.
+  if (url.pathname === '/api/patches/package-demo' && req.method === 'POST') {
+    const result = await runNpm(['run', 'package:demo'], PACKAGE_TIMEOUT_MS);
     return json(res, 200, result);
   }
 

@@ -36132,3 +36132,38 @@ wishlisted), and the demo has no achievements of its own, which
 build script -> Upload.
 
 `npx tsc --noEmit` and the demo build pass.
+
+### DevTool: Package demo button (patch 0445)
+```discord-update
+Dev Update | Patch 0445
+
+- Added one-click demo builds to our dev tools, so demo updates can ship as quickly as full-game ones (no change to the game itself)
+```
+
+Direct request: the DevTool should support both builds end to end. The
+Steam section (0439) already had "Generate demo build scripts" and
+"Upload demo to Steam", but packaging the demo still meant running
+`npm run package:demo` by hand -- step 7's Package button only ever built
+the full game.
+
+- **server.mjs:** new `POST /api/patches/package-demo` -> `runNpm(['run',
+  'package:demo'])`, same 10-minute PACKAGE_TIMEOUT_MS and result shape as
+  `/api/patches/package`. package:demo is unchanged (`vite build --mode
+  demo` + electron-builder with the demo appId/productName, output
+  `release-demo/`), so it never overwrites the full game's `release/`.
+  The demo Steam step's "not found" message now points at the button.
+- **app.js (Build & Ship, step 7):** "Package demo" beside "Run package",
+  with its own result block; both buttons disable while either is running
+  so two electron-builder runs can't overlap. Step 7's blurb and the
+  Steam section's demo note now name the button instead of the npm
+  command.
+
+Flows, all buttons now:
+- Full game: Run package -> Generate build scripts -> Upload to Steam
+  (App 5143490 / depot 5143491, from `release/win-unpacked`).
+- Demo: Package demo -> Generate demo build scripts -> Upload demo to
+  Steam (App 5488030 / depot 5488031, from `release-demo/win-unpacked`).
+
+Checked: both files pass `node --check`; the DevTool serves the new
+button in Build & Ship step 7. Not run end to end here (electron-builder
+targets Windows) -- first real click is on the dev PC.

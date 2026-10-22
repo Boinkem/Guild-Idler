@@ -1,0 +1,126 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0fbdce1..8f4abdc 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -36132,3 +36132,38 @@ wishlisted), and the demo has no achievements of its own, which
+ build script -> Upload.
+ 
+ `npx tsc --noEmit` and the demo build pass.
++
++### DevTool: Package demo button (patch 0445)
++```discord-update
++Dev Update | Patch 0445
++
++- Added one-click demo builds to our dev tools, so demo updates can ship as quickly as full-game ones (no change to the game itself)
++```
++
++Direct request: the DevTool should support both builds end to end. The
++Steam section (0439) already had "Generate demo build scripts" and
++"Upload demo to Steam", but packaging the demo still meant running
++`npm run package:demo` by hand -- step 7's Package button only ever built
++the full game.
++
++- **server.mjs:** new `POST /api/patches/package-demo` -> `runNpm(['run',
++  'package:demo'])`, same 10-minute PACKAGE_TIMEOUT_MS and result shape as
++  `/api/patches/package`. package:demo is unchanged (`vite build --mode
++  demo` + electron-builder with the demo appId/productName, output
++  `release-demo/`), so it never overwrites the full game's `release/`.
++  The demo Steam step's "not found" message now points at the button.
++- **app.js (Build & Ship, step 7):** "Package demo" beside "Run package",
++  with its own result block; both buttons disable while either is running
++  so two electron-builder runs can't overlap. Step 7's blurb and the
++  Steam section's demo note now name the button instead of the npm
++  command.
++
++Flows, all buttons now:
++- Full game: Run package -> Generate build scripts -> Upload to Steam
++  (App 5143490 / depot 5143491, from `release/win-unpacked`).
++- Demo: Package demo -> Generate demo build scripts -> Upload demo to
++  Steam (App 5488030 / depot 5488031, from `release-demo/win-unpacked`).
++
++Checked: both files pass `node --check`; the DevTool serves the new
++button in Build & Ship step 7. Not run end to end here (electron-builder
++targets Windows) -- first real click is on the dev PC.
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 4c1be2f..2e266da 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -2693,9 +2693,15 @@ function renderPatches() {
+     <p class="tiny muted">
+       Runs <code>npm run package</code> — produces installers/unpacked builds in <code>release/</code>.
+       This is what you'd upload to Steam or hand to playtesters. Can take several minutes the first time.
++      <b>Package demo</b> runs <code>npm run package:demo</code> instead — the Steam demo build
++      ("Guildbound Demo"), written to its own <code>release-demo/</code> so it never touches the full game's.
+     </p>
+-    <button id="packageBtn">Run package</button>
++    <div class="row" style="gap:6px;">
++      <button id="packageBtn">Run package</button>
++      <button id="packageDemoBtn">Package demo</button>
++    </div>
+     <div id="packageResult"></div>
++    <div id="packageDemoResult"></div>
+ 
+     <p class="tiny muted" style="margin-top:10px;">
+       Copies the newest <code>.exe</code> in <code>release/</code> to
+@@ -2843,7 +2849,7 @@ function renderPatches() {
+     <div id="steamUploadResult"></div>
+     <p class="tiny muted" style="margin-top:10px;">
+       <b>Demo</b> (patch 0439) — same steps for the demo's own app, from <code>release-demo/</code>.
+-      Run <code>npm run package:demo</code> first (Package in step 7 only builds the full game), and fill
++      Run <b>Package demo</b> in step 7 first (Run package only builds the full game), and fill
+       in the Demo App ID / Depot ID above. Uses the same branch selector.
+     </p>
+     <div class="row" style="gap:6px;">
+@@ -3005,6 +3011,23 @@ function renderPatches() {
+     document.getElementById('packageResult').innerHTML = resultBlock(result, 'Package');
+   };
+ 
++  // Patch 0445 -- the demo's own package step (npm run package:demo ->
++  // release-demo/), so the demo upload flow is all buttons, same as the
++  // full game's.
++  const packageDemoBtn = document.getElementById('packageDemoBtn');
++  if (packageDemoBtn) packageDemoBtn.onclick = async () => {
++    packageDemoBtn.disabled = true;
++    if (packageBtn) packageBtn.disabled = true;
++    packageDemoBtn.textContent = 'Packaging demo… (this can take several minutes)';
++    const result = await api('/api/patches/package-demo', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
++    });
++    packageDemoBtn.disabled = false;
++    if (packageBtn) packageBtn.disabled = false;
++    packageDemoBtn.textContent = 'Package demo';
++    document.getElementById('packageDemoResult').innerHTML = resultBlock(result, 'Package demo');
++  };
++
+   const copyBuildBtn = document.getElementById('copyBuildBtn');
+   if (copyBuildBtn) copyBuildBtn.onclick = async () => {
+     if (!confirm('Copy the newest release/ installer to C:\\Custom Apps\\GuildBound Executables? This overwrites whatever is already there.')) return;
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index c169fe0..7dcc9c0 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -2899,7 +2899,7 @@ async function findWinUnpackedBuild(target = 'full') {
+   } catch {
+     return {
+       error: target === 'demo'
+-        ? `${exePath} not found -- run \`npm run package:demo\` first.`
++        ? `${exePath} not found -- run Package demo (step 7) first.`
+         : `${exePath} not found -- run Package (step 7) first.`,
+     };
+   }
+@@ -3244,6 +3244,15 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, result);
+   }
+ 
++  // Patch 0445 -- the Steam demo build (package.json's package:demo:
++  // `vite build --mode demo` + electron-builder with the demo's appId/
++  // productName, output release-demo/), which "Generate demo build
++  // scripts" / "Upload demo to Steam" then read from.
++  if (url.pathname === '/api/patches/package-demo' && req.method === 'POST') {
++    const result = await runNpm(['run', 'package:demo'], PACKAGE_TIMEOUT_MS);
++    return json(res, 200, result);
++  }
++
+   if (url.pathname === '/api/patches/copy-build' && req.method === 'POST') {
+     return json(res, 200, await copyLatestBuild());
+   }
