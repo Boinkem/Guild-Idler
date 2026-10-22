@@ -9056,3 +9056,124 @@ button.harvest-item:hover {
   color: var(--violet);
 }
 .demo-wall-title { margin: 4px 0 8px; }
+
+/* ------------------------ DLC grant card (0442) ------------------------ */
+/* Thank-you card for a DLC pack's one-time grant (DlcGrantModal.tsx).
+   Every beat is a keyframe with `both` fill and an inline --fx-t delay
+   (resultFx `at()`); root classes contain "fx-", so Reduce motion shows
+   the final frame. Ruby accent comes from the Founder's Pack, the only
+   pack today -- a later pack can override --dlc-accent on the card. */
+.dlcfx-overlay { z-index: 44; }
+.modal.dlcfx-card {
+  --dlc-accent: oklch(62% 0.2 25);
+  --dlc-gold: oklch(84% 0.14 80);
+  position: relative; width: min(440px, 92vw); padding: 18px 20px 16px; text-align: center; overflow: hidden;
+  border: 2px solid var(--dlc-gold);
+  background: radial-gradient(120% 70% at 50% 0%, oklch(30% 0.07 30 / 0.55), transparent 60%), var(--panel);
+  box-shadow: 0 0 0 1px oklch(30% 0.06 60), 0 24px 60px rgba(0, 0, 0, .6), 0 0 40px oklch(60% 0.2 25 / 0.25);
+  animation: rfx-card-in calc(var(--fx-t) * 450) cubic-bezier(.3, 1.3, .5, 1) both;
+}
+.dlcfx-kicker {
+  font: 600 11px/1 var(--font-body); letter-spacing: 3px; text-transform: uppercase; color: var(--dlc-gold, oklch(84% 0.14 80));
+  animation: qfx-rise calc(var(--fx-t) * 350) ease-out both;
+}
+.dlcfx-ribbon {
+  position: relative; display: inline-block; margin: 8px auto 4px; padding: 6px 30px 7px;
+  font-family: var(--font-display); font-weight: 700; font-size: 26px; letter-spacing: 1px; color: oklch(97% 0.02 80);
+  text-shadow: 0 2px 0 oklch(28% 0.08 25);
+  background: linear-gradient(180deg, oklch(56% 0.19 25), oklch(42% 0.16 22));
+  box-shadow: inset 0 0 0 1px oklch(75% 0.12 40 / 0.5), 0 6px 14px rgba(0, 0, 0, .45);
+  clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%);
+  transform-origin: 50% 50%;
+  animation: dlcfx-unfurl calc(var(--fx-t) * 520) cubic-bezier(.2, 1.3, .4, 1) both;
+}
+@keyframes dlcfx-unfurl { 0% { opacity: 0; transform: scaleX(.05); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+
+.dlcfx-stage {
+  position: relative; height: 150px; margin: 8px -20px 4px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 72%, oklch(30% 0.06 35), transparent 70%);
+}
+.dlcfx-rays {
+  position: absolute; left: 50%; top: 62%; width: 420px; height: 420px; margin: -210px 0 0 -210px; border-radius: 50%;
+  background: repeating-conic-gradient(oklch(70% 0.17 30 / 0.5) 0 7deg, transparent 7deg 22deg);
+  -webkit-mask: radial-gradient(circle, #000 10%, transparent 60%); mask: radial-gradient(circle, #000 10%, transparent 60%);
+  animation: dlcfx-rays-in calc(var(--fx-t) * 700) ease-out both, lu-spin calc(var(--fx-t) * 22000) linear infinite;
+}
+@keyframes dlcfx-rays-in { from { opacity: 0; transform: scale(.3); } to { opacity: .45; transform: none; } }
+.dlcfx-glow {
+  position: absolute; left: 50%; bottom: 22px; width: 150px; height: 120px; margin-left: -75px; border-radius: 50%;
+  background: radial-gradient(closest-side, oklch(70% 0.2 30 / 0.55), transparent);
+  animation: qfx-fade calc(var(--fx-t) * 600) ease-out both;
+}
+.dlcfx-spark {
+  position: absolute; z-index: 2; width: 8px; height: 8px; margin: -4px; background: var(--dlc-gold);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: hfx-twinkle calc(var(--fx-t) * 1700) ease-in-out infinite both;
+}
+.dlcfx-spark.s1 { left: 34%; top: 30%; } .dlcfx-spark.s2 { left: 66%; top: 22%; } .dlcfx-spark.s3 { left: 58%; top: 52%; }
+.dlcfx-nest { bottom: 14px; width: 120px; height: 32px; margin-left: -60px; z-index: 1; }
+.dlcfx-egg {
+  position: absolute; z-index: 2; left: 50%; bottom: 30px; width: 76px; height: 76px; margin-left: -38px;
+  animation: hfx-eggdrop calc(var(--fx-t) * 420) cubic-bezier(.3, 1.5, .5, 1) both;
+}
+.dlcfx-egg-wob { display: block; transform-origin: 50% 90%; animation: hfx-wob calc(var(--fx-t) * 1800) ease-in-out infinite both; }
+.dlcfx-preview {
+  position: absolute; z-index: 2; left: calc(50% + 22px); bottom: 14px; opacity: .9;
+  filter: drop-shadow(0 0 8px oklch(70% 0.2 30 / 0.7));
+  animation: dlcfx-peek calc(var(--fx-t) * 600) cubic-bezier(.3, 1.6, .5, 1) both, dlcfx-hover calc(var(--fx-t) * 2400) ease-in-out infinite;
+}
+@keyframes dlcfx-peek { from { opacity: 0; transform: translateY(14px) scale(.6); } to { opacity: .9; transform: none; } }
+@keyframes dlcfx-hover { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+
+.dlcfx-items { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; text-align: left; }
+.dlcfx-item {
+  display: flex; gap: 12px; align-items: center; padding: 9px 12px; border-radius: 6px;
+  background: oklch(17% 0.02 50 / 0.9); box-shadow: inset 0 0 0 1px var(--brass-dim);
+  animation: dlcfx-slide calc(var(--fx-t) * 420) cubic-bezier(.2, .9, .3, 1) both;
+}
+@keyframes dlcfx-slide { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+.dlcfx-item-ico { flex: 0 0 34px; display: flex; justify-content: center; font-size: 24px; }
+.dlcfx-item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dlcfx-item-k { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.dlcfx-item-v { font-family: var(--font-display); font-weight: 700; font-size: 18px; color: oklch(72% 0.17 28); }
+.dlcfx-item-n { font-size: 12px; color: var(--muted); }
+.dlcfx-banner {
+  align-self: flex-start; margin: 2px 0 1px; padding: 3px 12px; border-radius: 3px;
+  font-family: var(--font-display); font-weight: 700; font-size: 17px; color: oklch(25% 0.05 60);
+  background: linear-gradient(180deg, oklch(88% 0.08 85), oklch(76% 0.1 75));
+  box-shadow: inset 0 0 0 1px oklch(55% 0.09 70), 0 3px 8px rgba(0, 0, 0, .35);
+  animation: qfx-critlbl calc(var(--fx-t) * 420) cubic-bezier(.3, 1.7, .5, 1) both;
+}
+.dlcfx-flame { animation: dlcfx-flicker calc(var(--fx-t) * 1200) ease-in-out infinite; }
+@keyframes dlcfx-flicker { 0%, 100% { transform: none; filter: none; } 50% { transform: scale(1.08) rotate(-4deg); filter: brightness(1.25); } }
+.dlcfx-thanks {
+  margin: 12px 0 0; font-family: var(--font-display); font-size: 16px; color: var(--dlc-gold);
+  animation: qfx-rise calc(var(--fx-t) * 380) ease-out both;
+}
+.dlcfx-actions {
+  display: flex; justify-content: center; gap: 8px; margin-top: 12px;
+  animation: qfx-rise calc(var(--fx-t) * 380) ease-out both;
+}
+
+/* compact: fills the idle companion window, like .lu-compact */
+.dlcfx-compact {
+  position: fixed; inset: 0; z-index: 45; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; padding-top: 12px; text-align: center;
+  color: var(--parchment);
+  background: linear-gradient(160deg, oklch(24% 0.05 30 / 0.97), oklch(14% 0.02 40 / 0.98));
+  animation: qfx-fade calc(var(--fx-t) * 220) ease-out both;
+}
+.dlcfx-compact .dlcfx-kicker { color: oklch(84% 0.14 80); }
+.dlcfx-c-rays { top: 120px; }
+.dlcfx-c-ribbon { font-size: 20px; padding: 5px 22px 6px; }
+.dlcfx-c-egg { position: relative; margin-top: 18px; animation: hfx-eggdrop calc(var(--fx-t) * 420) cubic-bezier(.3, 1.5, .5, 1) both; }
+.dlcfx-c-info {
+  position: relative; margin-top: auto; margin-bottom: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  animation: qfx-rise calc(var(--fx-t) * 380) ease-out both;
+}
+.dlcfx-c-chip {
+  padding: 5px 10px; border-radius: 4px; font-size: 13px;
+  background: oklch(15% 0.018 55 / 0.85); box-shadow: inset 0 0 0 1px var(--brass-dim);
+}
+.dlcfx-c-chip b { color: oklch(84% 0.14 80); }
+.dlcfx-c-actions { display: flex; gap: 6px; margin-top: 4px; }

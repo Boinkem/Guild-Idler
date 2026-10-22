@@ -1191,14 +1191,22 @@ ipcMain.handle('shell:openStore', async () => {
 
 ipcMain.handle('steam:isDlcOwned', (_e, packId: string) => {
   if (IS_DEMO) return false; // patch 0438 -- no DLC in the demo, not even by file presence
-  if (!steamClient) return null;
+  // Patch 0442 -- "couldn't check" only means "fall back to file presence"
+  // in dev. A packaged build ships every pack.json to every player, so
+  // there that fallback granted the DLC to anyone whose Steam failed to
+  // start or answer. Packaged: anything short of a real `true` is "not
+  // owned this session" -- an owner just gets the pack on their next
+  // launch with Steam working (the one-time grant only flags itself done
+  // once it actually runs).
+  const unknown = app.isPackaged ? false : null;
+  if (!steamClient) return unknown;
   const appId = DLC_APP_IDS[packId];
-  if (!appId) return null;
+  if (!appId) return unknown;
   try {
     return steamClient.apps.isDlcInstalled(appId);
   } catch (err) {
     console.log(`[steam] isDlcInstalled failed for ${packId} (app ${appId}):`, err);
-    return null;
+    return unknown;
   }
 });
 

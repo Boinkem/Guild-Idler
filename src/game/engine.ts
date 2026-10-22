@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
+import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DlcGrantNotice, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -319,6 +319,13 @@ export class GameEngine {
     this.state.founderPackGranted = true;
     PetManager.grantEgg(this.state, 'common', 'ruby_dragonling', Date.now());
     GuildTitleManager.grant(this.state, 'The Founding Flame');
+    // Patch 0442 -- the grant used to be silent; queue its thank-you card.
+    this.state.pendingDlcGrants = [...(this.state.pendingDlcGrants ?? []), {
+      packId: FOUNDER_PACK_ID,
+      packName: DlcManager.packName(FOUNDER_PACK_ID) ?? "Founder's Pack",
+      egg: { petId: 'ruby_dragonling', petName: DlcManager.petDef('ruby_dragonling')?.name ?? 'Ruby Dragonling', rarity: 'common' },
+      guildTitle: 'The Founding Flame',
+    }];
     this.notify();
     void this.saveNow();
   }
@@ -380,6 +387,16 @@ export class GameEngine {
    * Achievements are corner toasts, not blockers, so they can overlap.
    */
   get levelUpBlocked(): boolean {
+    return this.popupsBeforeDlcGrant || (this.state.pendingDlcGrants ?? []).length > 0;
+  }
+
+  /**
+   * Patch 0442 -- everything that should be dismissed before a DLC grant
+   * card shows: the same list the Level-Up card always waited on. The DLC
+   * card then slots in just before the Level-Up card (levelUpBlocked
+   * above also waits on it).
+   */
+  private get popupsBeforeDlcGrant(): boolean {
     const s = this.state;
     return this.lastResult !== null
       || this.queuedResults.length > 0
@@ -395,6 +412,20 @@ export class GameEngine {
       // explainer, so the explainer now waits on the level-up instead
       // (see MenuWindow's QuestBoardIntroModal gate).
       || s.guildName === '';
+  }
+
+  /** Patch 0442 -- the DLC thank-you card to show now, if any (see
+   *  popupsBeforeDlcGrant for what it waits behind). */
+  get currentDlcGrant(): DlcGrantNotice | null {
+    const pending = this.state.pendingDlcGrants ?? [];
+    if (pending.length === 0 || this.popupsBeforeDlcGrant) return null;
+    return pending[0];
+  }
+
+  dismissDlcGrant() {
+    this.state.pendingDlcGrants = (this.state.pendingDlcGrants ?? []).slice(1);
+    this.notify();
+    void this.saveNow();
   }
 
   /** Total cards in the current run, for the "2 of 3" dots. */
@@ -3785,6 +3816,12 @@ export class GameEngine {
    *  state, UI reads a transient field" shape every other action here
    *  uses (see lastResult/lastRaidResult). */
   hatchEgg(eggUid: string) {
+    const egg = this.state.incubatingEggs.find((e) => e.uid === eggUid);
+    if (egg && PetManager.isReady(egg) && !PetManager.canResolveSpecies(egg)) {
+      // Patch 0442 -- a DLC egg whose pack didn't load this session. Kept
+      // safe in its nest instead of hatching into a random base pet.
+      return this.say("This egg comes from a DLC pack that couldn't be checked this session. Make sure Steam is running, restart the game, and it'll be ready to hatch.", 'hatchery', true);
+    }
     const pet = PetManager.hatchReadyEgg(this.state, eggUid, Date.now());
     if (!pet) return this.say('That egg is not ready to hatch yet.');
     this.lastHatchedPet = pet;

@@ -15,6 +15,7 @@ import { HatchRevealModal } from './ui/HatchRevealModal';
 import { AchievementPopup } from './ui/AchievementPopup';
 import { HeroTierUpModal } from './ui/HeroTierUpModal';
 import { LevelUpModal } from './ui/LevelUpModal';
+import { DlcGrantModal } from './ui/DlcGrantModal';
 import { Toast } from './ui/Toast';
 import { NotificationBanner } from './ui/NotificationBanner';
 import { DemoWallHost } from './ui/DemoWall';
@@ -186,6 +187,10 @@ export function App() {
               has been dismissed, so the card always lands after the
               rewards that caused it. Compact layout in the idle window;
               "Open guild" there plays the full card in the menu. */}
+          {/* DLC grant thank-you card (patch 0442) -- self-gating on
+              engine.currentDlcGrant, which waits behind the same popups the
+              Level-Up card does; the Level-Up card in turn waits on it. */}
+          <DlcGrantModal active={mode === 'menu'} compact={mode === 'idle'} onOpenMenu={() => changeMode('menu')} />
           <LevelUpModal compact={mode === 'idle'} onOpenMenu={() => changeMode('menu')} />
           {/* Patch 0438 -- demo build's wishlist card. Renders nothing in
               the full game; menu-gated like the result modals above. */}

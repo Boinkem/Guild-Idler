@@ -94,8 +94,27 @@ export const PetManager = {
   hatchReadyEgg(state: GameState, eggUid: string, now = Date.now()): Pet | null {
     const egg = state.incubatingEggs.find((e) => e.uid === eggUid);
     if (!egg || !PetManager.isReady(egg)) return null;
+    // Patch 0442 -- never spend a dedicated egg whose species can't be
+    // found this session (a DLC pet whose pack didn't load). Before,
+    // pickHatchedPetDefId quietly fell back to a random base pet and the
+    // DLC egg was gone for good.
+    if (!PetManager.canResolveSpecies(egg)) return null;
     state.incubatingEggs = state.incubatingEggs.filter((e) => e.uid !== eggUid);
     return PetManager.hatch(state, egg, now);
+  },
+
+  /**
+   * Patch 0442 -- whether this egg can hatch into what it promises right
+   * now. Undedicated eggs always can (any base species will do). A
+   * dedicated egg needs its species in the base roster or in a DLC pack
+   * that actually loaded this session -- the Founder's Pack Ruby
+   * Dragonling egg sitting in a save on a launch where Steam couldn't
+   * confirm the pack is the case this exists for.
+   */
+  canResolveSpecies(egg: EggInstance): boolean {
+    if (!egg.dedicatedPetId) return true;
+    if (egg.dedicatedPetId in PET_BY_ID) return true;
+    return DlcManager.allPets().some((p) => p.id === egg.dedicatedPetId);
   },
 
   /** Rolls a species, a rarity-scaled bonus, and adds the resulting Pet to state.pets. */

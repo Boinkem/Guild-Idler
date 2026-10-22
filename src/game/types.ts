@@ -3193,6 +3193,27 @@ export interface GameState {
    * Hatchery through the real quest chain, same as any other egg.
    */
   founderPackGranted: boolean;
+  /**
+   * Patch 0442 -- DLC grants still waiting for their "thank you" card
+   * (DlcGrantModal). Pushed by the same one-time grant that sets
+   * founderPackGranted, removed when the player dismisses the card. Lives
+   * in the save, not as a transient engine field, because the grant
+   * happens at boot -- often while only the idle companion is showing --
+   * and the card should still be waiting the next time the guild menu
+   * opens, even across a restart. Optional and always read with `?? []`
+   * (same no-migration convention as classSkinsEarned).
+   */
+  pendingDlcGrants?: DlcGrantNotice[];
+}
+
+/** One DLC pack's grant, as shown on the DlcGrantModal card (patch 0442). */
+export interface DlcGrantNotice {
+  packId: string;
+  packName: string;
+  /** Dedicated pet egg the pack put into egg storage, if any. */
+  egg?: { petId: string; petName: string; rarity: Rarity };
+  /** Guild title the pack granted (and set active), if any. */
+  guildTitle?: string;
 }
 
 /**

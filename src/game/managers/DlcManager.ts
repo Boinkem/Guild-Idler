@@ -158,6 +158,13 @@ export const DlcManager = {
    * fall through to the pre-existing file-presence fetch, so local
    * dev/testing without Steam running keeps working exactly as it did
    * before this patch -- driven purely by whether the file exists.
+   *
+   * Patch 0442: a PACKAGED build never answers `null` any more -- every
+   * install ships every pack.json (they live in dist/, inside the one
+   * base depot), so file presence proved nothing there and "Steam
+   * couldn't answer" quietly handed the pack to everyone. The packaged
+   * handler (electron/main.ts) now says `false` instead; the null ->
+   * file-presence path is dev/browser only.
    */
   async loadInstalledPacks(): Promise<void> {
     if (loaded) return;
@@ -298,6 +305,12 @@ export const DlcManager = {
    *  just check ownership of one specific id. */
   knownPackIds(): string[] {
     return [...KNOWN_DLC_PACKS];
+  },
+
+  /** Display name from an installed pack's pack.json (patch 0442), or
+   *  undefined if that pack isn't loaded. */
+  packName(packId: string): string | undefined {
+    return installedPacks[packId]?.name;
   },
 
   /** Which packs were actually found this session -- for a Settings/About

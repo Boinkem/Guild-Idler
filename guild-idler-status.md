@@ -35985,3 +35985,94 @@ true` added beside `dragonling`, so it inverts its facing once the same way
 and every `flip` caller (companion, pairing scene, etc.) stays unchanged.
 Checked on the companion: paired with Sir Aldric mid-quest, the dragonling
 now faces the same way he walks.
+
+### DLC grant card; DLC ownership can't be granted by a failed Steam check; DLC eggs never hatch into the wrong pet (patch 0442)
+```discord-update
+Dev Update | Patch 0442
+
+- Added a thank-you card when a DLC pack unlocks: the pack's ribbon unfurls, your egg drops into its nest with a peek at what it'll hatch into, and each item it gave you slides in (for the Founder's Pack, the Ruby Dragonling egg and "The Founding Flame" guild title)
+- Fixed DLC content being handed out when Steam couldn't be reached at launch -- the pack now only unlocks once Steam confirms you own it, and owners get it on their next launch with Steam running
+- Fixed a DLC pet egg hatching into a random ordinary pet if its pack hadn't loaded -- the egg now waits safely in its nest until it can hatch into the right pet
+```
+
+Follow-up to an audit of the Founder's Pack path (asked to double-check
+the DLC ownership logic). The happy path was right: launched through
+Steam, `steam:isDlcOwned` -> `apps.isDlcInstalled(5256720)` -> true ->
+pack.json loads -> `grantFounderPackContentIfOwned` gives the Common Ruby
+Dragonling egg + "The Founding Flame" once (founderPackGranted), and a
+non-owner gets an explicit false. Three holes found, all fixed here, plus
+the requested card.
+
+**1. "Couldn't check" no longer means "owned" in a packaged build
+(electron/main.ts).** The handler returned `null` when Steam couldn't
+answer (no steamClient -- Steam failed to init -- no App ID, or the SDK
+call threw), and DlcManager treats `null` as "fall back to file
+presence". But every pack.json lives in `public/dlc/` -> `dist/` -> the
+one base depot, so every install has it: a failed Steam init handed the
+pack to anyone, permanently (the grant writes the egg/title into the
+save). Now `app.isPackaged ? false : null` in all three "can't answer"
+spots, so dev/browser keep the file-presence path and packaged builds
+only unlock on a real `true`. An owner whose Steam fails one launch just
+gets the grant next launch (founderPackGranted is only set when the grant
+actually runs). DlcManager's doc comment updated to match. Side effect
+worth knowing: on such a launch an already-hatched Ruby Dragonling's def
+(DlcManager.petDef) is unavailable for that session, same as any unloaded
+pack -- no data is lost, it's back next launch.
+
+**2. Dedicated eggs never resolve to the wrong species
+(PetManager/engine).** `pickHatchedPetDefId` falls back to a random base
+pet when the dedicated id isn't in the pool, and `hatchReadyEgg` removed
+the egg first -- so hatching the Founder's egg on a session where the
+pack hadn't loaded (fix 1 makes that more likely; also the instant after
+boot before loadInstalledPacks resolves) spent it on a random pet. New
+`PetManager.canResolveSpecies(egg)` (undedicated -> true; dedicated ->
+in PET_BY_ID or DlcManager.allPets()); `hatchReadyEgg` returns null
+without touching the egg when it's false, and `engine.hatchEgg` says why
+("This egg comes from a DLC pack that couldn't be checked this session.
+Make sure Steam is running, restart the game, and it'll be ready to
+hatch.") instead of "not ready".
+
+**3. DLC grant card (new `src/ui/DlcGrantModal.tsx`, `.dlcfx-*` in
+app.css).** The grant was silent. It now also pushes a
+`DlcGrantNotice` ({packId, packName, egg?: {petId, petName, rarity},
+guildTitle?}) onto new optional `GameState.pendingDlcGrants` -- in the
+save, not a transient engine field, because the grant runs at boot
+(often while only the companion is showing) and the card should survive
+a restart until seen. No migration (read with `?? []`). Pack name comes
+from the loaded pack.json via new `DlcManager.packName`.
+- Ordering: new `engine.currentDlcGrant` waits on the exact list the
+  Level-Up card used to (results, offline report, hatch, tier-up, chain
+  discovery, unnamed guild -- now the private `popupsBeforeDlcGrant`),
+  and `levelUpBlocked` additionally waits on pending DLC grants, so the
+  order is results -> DLC card -> Level-Up. `dismissDlcGrant()` pops one
+  and saves.
+- Full card (menu): "DLC UNLOCKED" kicker, ruby ribbon with the pack
+  name unfurls, the egg drops into a nest (shared `.hfx-nest`, egg in
+  front) under slow-spinning ruby rays and sparks, a glowing preview of
+  the pet it hatches into peeks in beside it, then an item row per grant
+  slides in -- "Pet egg / Ruby Dragonling / Waiting in your Hatchery
+  storage" (or "...ready the moment you unlock the Hatchery" if it's
+  still locked) and "Guild title" with the title stamped on a parchment
+  banner -- then "Thank you for supporting Guildbound!" and Wonderful! /
+  Go to Hatchery (only once the Hatchery is unlocked). ~2.3s at 1x,
+  `legendary_drop` sound, all beats on `--fx-t` so Animation speed scales
+  it and Reduce motion shows the final frame.
+- Compact (idle companion): kicker, ribbon, wobbling egg, two chips and
+  Open guild / Dismiss -- Open guild plays the full card in the menu,
+  same split as LevelUpModal.
+- Mounted in App.tsx just before LevelUpModal (active = menu, compact =
+  idle). Card generic over the notice's optional parts, so a later pack
+  only has to push a notice; ruby accent is a CSS var (`--dlc-accent`).
+
+**Tested** (web build; fresh copy of main + this patch, throwaway engine
+hook for setup): reset founderPackGranted on a mid-game save ->
+boot grant fired through the real dev path (no bridge -> file presence)
+-> egg in storage, title active, one pending notice -> compact card in
+the idle view, Open guild -> full card animates through -> Wonderful!
+clears it. Compact checked at the real 260x340 companion size; Reduce
+motion shows the settled card. Unresolvable dedicated egg: ready egg
+for an unknown pet id stays in its nest, no pet created, toast shown.
+`npx tsc --noEmit` and the web build pass. **Not tested in Electron
+with Steam** -- worth one launch on a Steam account that owns the pack
+(card shows once) and one with Steam closed / the DLC unticked (nothing
+granted).
