@@ -36535,3 +36535,66 @@ remote, stubbed package scripts, a fake steamcmd):
 server code. Applying 0451 itself through Ship it is fine: the old commit
 step still commits the 0451 file one last time, and the next commit, or a
 Tidy click, cleans everything up.
+
+### DevTool: Steam "Failed to commit build" is now a warning, demo gets its own set-live branch (patch 0452)
+```discord-update
+Dev Update | Patch 0452
+
+- Fixed our Steam upload tool reporting finished uploads as failed (no change to the game itself)
+```
+
+Direct report: every Steam upload ended in `ERROR! Failed to commit build
+for AppID 5143490 : Failure`, from Ship it and from the manual step 10
+buttons, even though the build was on Steam.
+
+**What the logs showed** (`ContentBuilder/output`):
+`depot_build_5143491.log` ends with `Success! New manifestID ... 324 new
+chunks uploaded`, so the files upload fine. Only the app-level commit
+after it fails, and `app_build_5488030.log` (the demo, 22 Oct) fails the
+same way. The app VDF had `"setlive" "internal"` for both apps, because
+there was one branch setting. When the upload succeeds but the commit
+fails, it almost always means Steam refused to set the build live on that
+branch: the app has no branch with exactly that name. Names are
+case-sensitive, and a new app (the demo) has only `default` until a build
+is live there. The build stays on Steam, live nowhere, which is why
+uploads "worked despite the error". Still to confirm for the full game:
+that 5143490 has a branch named exactly `internal`.
+
+**Changes (`tools/devtool/server.mjs`, `public/app.js`, `style.css`):**
+- **Separate demo branch.** New `demoBranch` in `steam.config.json`,
+  default `none`. `steamTargetIds` now returns each app's branch.
+  `setLiveBranch()` maps `none`/`default`/empty to `setlive ""` (steamcmd
+  can't set `default` live; Steamworks only allows that from its Builds
+  page). Existing configs pick up `none` for the demo automatically.
+- **Step 7.5:** both branches are now text fields with suggestions
+  (internal / beta / none / default), so a branch with a different exact
+  name can be typed, plus a note on case-sensitivity and per-app branches.
+  Generate build scripts says what it'll set live ("Set live on: internal"
+  or "nothing -- upload only").
+- **Partial success becomes a warning.** When steamcmd prints `Failed to
+  commit build` and this upload wrote a fresh `Success! New manifestID`
+  to the depot log, and a branch was being set live, `runSteamUpload`
+  returns `ok` with a `warning`. The warning names the manifest and the
+  branch, says why, and says where to set it live by hand. If no branch
+  was being set live, or no fresh manifest exists, it stays a failure with
+  a pointer to `builder\logs\stderr.txt`. Steam Guard detection is
+  unchanged.
+- **Ship it / Release:** a warned step shows ⚠ in amber with the
+  warning text, and the run **carries on** (demo upload, Discord) instead
+  of stopping. The header reads "Done -- with warnings". Pre-flight lists
+  what each target sets live ("game -> internal, demo -> upload only").
+  Step 10's result boxes show "succeeded, with a warning".
+
+**Tested** in a sandbox copy with a fake steamcmd that uploads, then fails
+the commit whenever `setlive` names a branch:
+- An old config with no `demoBranch`: Release both gave the game ⚠ and
+  the demo ✓ (`setlive ""`), and the run finished.
+- Game set to `none`: all ✓.
+- The manual Upload button with `internal`: ok, with the warning.
+- A commit failure with no branch and no fresh manifest stayed a failure,
+  with the new hint.
+
+The checklist rendered in headless Chromium with no page errors.
+`node --check` passes on all files.
+
+**Restart the DevTool after applying** (server code changed).

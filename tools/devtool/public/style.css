@@ -773,6 +773,7 @@ td.icon-cell { width: 1%; padding-right: 0; }
 }
 .patch-result.good { border-left-color: var(--good); }
 .patch-result.bad { border-left-color: var(--bad); }
+.patch-result.warn { border-left-color: var(--brass); } /* patch 0452 */
 .patch-result-label { font-weight: 500; margin-bottom: 4px; color: var(--text-bright); }
 
 /* Patch 0393 -- direct request: a plain-language "how does this whole
@@ -1085,6 +1086,8 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .ship-step { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 6px; font-size: 12px; }
 .ship-step.pending > span:nth-of-type(2) { color: var(--dim); }
 .ship-step.failed > span:nth-of-type(2) { color: var(--bad); }
+.ship-step.warn > span:nth-of-type(2) { color: var(--brass); } /* patch 0452 */
+.ship-step-warning { grid-column: 2 / -1; color: var(--brass); line-height: 1.4; }
 .ship-step > span:first-child { text-align: center; }
 .ship-step details { grid-column: 2 / -1; }
 .ship-step pre { max-height: 220px; overflow: auto; font-family: var(--mono); font-size: 11px; }

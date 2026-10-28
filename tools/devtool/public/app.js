@@ -2472,7 +2472,7 @@ init().catch((err) => setStatus(err.message, 'err'));
 const patchState = {
   files: [], gitStatus: null, selected: null, checked: false, applied: false,
   discordConfigured: false, discordPreview: '', discordDraft: '',
-  steam: { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal' },
+  steam: { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal', demoBranch: 'none' },
   // Patches tab now splits into two panes (patch 0331 redesign) -- Patch
   // flow (steps 1-5) and Build & Ship (steps 6-11), toggled by the two
   // nav buttons rendered in renderPatches. false = Patch flow shown,
@@ -2591,11 +2591,12 @@ async function refreshGitStatus() {
 
 function resultBlock(result, label) {
   if (!result) return '';
-  const cls = result.ok ? 'good' : 'bad';
+  const cls = result.ok ? (result.warning ? 'warn' : 'good') : 'bad';
   const text = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
   return `
     <div class="patch-result ${cls}">
-      <div class="patch-result-label">${label}: ${result.ok ? 'succeeded' : 'failed' + (result.timedOut ? ' (timed out)' : '')}</div>
+      <div class="patch-result-label">${label}: ${result.ok ? (result.warning ? 'succeeded, with a warning' : 'succeeded') : 'failed' + (result.timedOut ? ' (timed out)' : '')}</div>
+      ${result.warning ? `<div class="tiny" style="color: var(--brass); margin-bottom:6px;">⚠ ${escapeHtml(result.warning)}</div>` : ''}
       ${text ? `<pre>${escapeHtml(text)}</pre>` : '<div class="tiny muted">No output.</div>'}
     </div>`;
 }
@@ -2666,9 +2667,10 @@ function renderShipCycle() {
       </label>
       <div id="shipNotesPreview"></div>
       <p class="tiny ${branch === 'default' ? 'bad' : 'muted'}" style="margin:2px 0 0;">
-        Steam branch: <b>${escapeHtml(branch)}</b>${branch === 'default' ? ' -- LIVE STORE. Players get this build as soon as it uploads.' : ''}
-        ${branch === 'internal' ? ' -- players won\'t see this build until you promote it on Steamworks, but the Discord post goes out now.' : ''}
-        Change it in Build &amp; Ship, step 7.5.
+        Sets live on: game <b>${escapeHtml(branch)}</b>, demo <b>${escapeHtml(patchState.steam?.demoBranch || 'none')}</b>.
+        ${branch === 'default' || branch === 'none' ? ' Game uploads only -- set it live yourself in Steamworks (steamcmd can\'t set default live).' : ''}
+        ${branch === 'internal' ? ' Players won\'t see the game build until you promote it on Steamworks, but the Discord post goes out now.' : ''}
+        Change them in Build &amp; Ship, step 7.5.
       </p>
     </div>
 
@@ -2708,9 +2710,10 @@ function renderShipJob() {
   if (!job) return '';
   // Plain characters, not icon-font glyphs -- the checklist has to read
   // correctly even if the icon stylesheet didn't load.
-  const icon = { pending: '<span class="muted">○</span>', running: '<span class="ship-spin">◌</span>', ok: '<span class="good">✓</span>', failed: '<span class="bad">✗</span>' };
+  const icon = { pending: '<span class="muted">○</span>', running: '<span class="ship-spin">◌</span>', ok: '<span class="good">✓</span>', warn: '<span style="color: var(--brass);">⚠</span>', failed: '<span class="bad">✗</span>' };
+  const warned = job.steps.some((s) => s.state === 'warn');
   const target = { game: 'game', demo: 'demo', both: 'game + demo' }[job.opts.target];
-  const status = job.running ? 'Running…' : job.done ? 'Done -- everything shipped.' : `Stopped at: ${escapeHtml(job.steps.find((s) => s.id === job.failedStep)?.label || job.failedStep)}`;
+  const status = job.running ? 'Running…' : job.done ? (warned ? 'Done -- with warnings (see ⚠).' : 'Done -- everything shipped.') : `Stopped at: ${escapeHtml(job.steps.find((s) => s.id === job.failedStep)?.label || job.failedStep)}`;
   const failed = job.steps.find((s) => s.state === 'failed');
   return `
     <div class="ship-job ${job.done ? 'good' : job.failedStep ? 'bad' : ''}">
@@ -2719,7 +2722,8 @@ function renderShipJob() {
         ${job.steps.map((s) => `
           <li class="ship-step ${s.state}">
             ${icon[s.state] || ''}<span>${escapeHtml(s.label)}</span><span class="tiny muted">${formatStepTime(s)}</span>
-            ${s.state === 'ok' && s.result && (s.result.stdout || s.result.stderr) ? `<details><summary class="tiny muted">output</summary><pre>${escapeHtml([s.result.stdout, s.result.stderr].filter(Boolean).join('\n').trim())}</pre></details>` : ''}
+            ${s.state === 'warn' && s.result?.warning ? `<div class="tiny ship-step-warning">${escapeHtml(s.result.warning)}</div>` : ''}
+            ${(s.state === 'ok' || s.state === 'warn') && s.result && (s.result.stdout || s.result.stderr) ? `<details><summary class="tiny muted">output</summary><pre>${escapeHtml([s.result.stdout, s.result.stderr].filter(Boolean).join('\n').trim())}</pre></details>` : ''}
           </li>`).join('')}
       </ol>
       ${failed ? resultBlock(failed.result, failed.label) : ''}
@@ -3109,13 +3113,30 @@ function renderPatches() {
       <input type="text" id="steamContentBuilderInput" placeholder="Path to Steamworks SDK's ContentBuilder folder"
         value="${escapeHtml(patchState.steam.contentBuilderDir)}"
         style="flex: 2 1 320px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <select id="steamBranchInput" style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;">
-        <option value="internal" ${patchState.steam.branch === 'internal' ? 'selected' : ''}>Dev Comp — internal (safe default)</option>
-        <option value="beta" ${patchState.steam.branch === 'beta' ? 'selected' : ''}>Beta Testing — beta</option>
-        <option value="default" ${patchState.steam.branch === 'default' ? 'selected' : ''}>Store — default (live)</option>
-      </select>
-      <button id="steamConfigSaveBtn">Save Steam config</button>
     </div>
+    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap; align-items: center;">
+      <label class="tiny muted" style="display:flex; flex-direction:column; gap:3px; flex: 1 1 220px;">Game: set live on branch
+        <input type="text" id="steamBranchInput" list="steamBranchOptions" value="${escapeHtml(patchState.steam.branch || 'internal')}"
+          style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      </label>
+      <label class="tiny muted" style="display:flex; flex-direction:column; gap:3px; flex: 1 1 220px;">Demo: set live on branch
+        <input type="text" id="steamDemoBranchInput" list="steamBranchOptions" value="${escapeHtml(patchState.steam.demoBranch || 'none')}"
+          style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      </label>
+      <datalist id="steamBranchOptions">
+        <option value="internal">Dev Comp</option>
+        <option value="beta">Beta Testing</option>
+        <option value="none">Upload only -- set live yourself in Steamworks</option>
+        <option value="default">Store (steamcmd can't set this live -- same as none)</option>
+      </datalist>
+      <button id="steamConfigSaveBtn" style="align-self:flex-end;">Save Steam config</button>
+    </div>
+    <p class="tiny muted" style="margin:0 0 6px;">
+      Branch names must match Steamworks exactly (case-sensitive), per app -- the demo has its own branch list,
+      and a new app only has <code>default</code> until a build is live there. If Steam refuses to set a build live,
+      the upload still counts and you get a ⚠ warning instead of a failure. <code>none</code> or <code>default</code>
+      uploads only.
+    </p>
     <div id="steamConfigResult"></div>
 
     <div class="section-heading">8. Tag a release version</div>
@@ -3167,7 +3188,7 @@ function renderPatches() {
     <p class="tiny muted" style="margin-top:10px;">
       <b>Demo</b> (patch 0439) — same steps for the demo's own app, from <code>release-demo/</code>.
       Run <b>Package demo</b> in step 7 first (Run package only builds the full game), and fill
-      in the Demo App ID / Depot ID above. Uses the same branch selector.
+      in the Demo App ID / Depot ID above. Uses the demo's own branch setting (default: upload only).
     </p>
     <div class="row" style="gap:6px;">
       <button id="steamGenerateDemoBtn">Generate demo build scripts</button>
@@ -3398,14 +3419,15 @@ function renderPatches() {
       demoAppId: document.getElementById('steamDemoAppIdInput').value.trim(),
       demoDepotId: document.getElementById('steamDemoDepotIdInput').value.trim(),
       contentBuilderDir: document.getElementById('steamContentBuilderInput').value.trim(),
-      branch: document.getElementById('steamBranchInput').value,
+      branch: document.getElementById('steamBranchInput').value.trim(),
+      demoBranch: document.getElementById('steamDemoBranchInput').value.trim(),
     };
     try {
       const result = await api('/api/steam/config', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cfg),
       });
-      patchState.steam = { username: result.username, appId: result.appId, depotId: result.depotId, demoAppId: result.demoAppId, demoDepotId: result.demoDepotId, contentBuilderDir: result.contentBuilderDir, branch: result.branch };
+      patchState.steam = { username: result.username, appId: result.appId, depotId: result.depotId, demoAppId: result.demoAppId, demoDepotId: result.demoDepotId, contentBuilderDir: result.contentBuilderDir, branch: result.branch, demoBranch: result.demoBranch };
       document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: true, stdout: 'Saved.', stderr: '' }, 'Steam config');
     } catch (err) {
       document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: false, stdout: '', stderr: err.message || String(err) }, 'Steam config');
@@ -3479,7 +3501,7 @@ function renderPatches() {
   // -- makes it unmistakable which of the three Steam packages (Store,
   // Beta Testing, Dev Comp) an upload is actually reaching, especially for
   // "default", since that's the one that reaches every paying customer.
-  const STEAM_BRANCH_LABEL = { internal: 'Dev Comp (internal)', beta: 'Beta Testing (beta)', default: 'Store — LIVE (default)' };
+  const STEAM_BRANCH_LABEL = { internal: 'Dev Comp (internal)', beta: 'Beta Testing (beta)', default: 'Store (default) -- upload only, steamcmd can\'t set default live', none: 'no branch -- upload only' };
 
   const steamUploadBtn = document.getElementById('steamUploadBtn');
   if (steamUploadBtn) steamUploadBtn.onclick = async () => {
@@ -3511,7 +3533,7 @@ function renderPatches() {
 
   const steamUploadDemoBtn = document.getElementById('steamUploadDemoBtn');
   if (steamUploadDemoBtn) steamUploadDemoBtn.onclick = async () => {
-    const branch = patchState.steam.branch || 'internal';
+    const branch = patchState.steam.demoBranch || 'none';
     const label = STEAM_BRANCH_LABEL[branch] || branch;
     if (!confirm(`Upload the DEMO to Steam now, targeting ${label}? This actually sends the build.`)) return;
     steamUploadDemoBtn.disabled = true;

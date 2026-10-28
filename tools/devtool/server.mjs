@@ -2812,9 +2812,15 @@ async function readSteamConfig() {
       // reasoning as before, just one notch more cautious now that there's
       // a lower tier to land on first.
       branch: typeof parsed.branch === 'string' && parsed.branch ? parsed.branch : 'internal',
+      // Patch 0452 -- the demo is its own app with its own branch list. A
+      // new app has only `default` until a build is live there, so the
+      // game's `internal` doesn't exist on it and setlive "internal" made
+      // every demo upload end in "Failed to commit build". 'none' = upload
+      // only (set it live yourself on Steamworks).
+      demoBranch: typeof parsed.demoBranch === 'string' && parsed.demoBranch ? parsed.demoBranch : 'none',
     };
   } catch {
-    return { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal' };
+    return { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal', demoBranch: 'none' };
   }
 }
 
@@ -3044,8 +3050,31 @@ async function findWinUnpackedBuild(target = 'full') {
 /** Patch 0439 -- the app/depot pair a Steam upload targets. */
 function steamTargetIds(cfg, target) {
   return target === 'demo'
-    ? { appId: cfg.demoAppId, depotId: cfg.demoDepotId, label: 'Demo App ID', depotLabel: 'Demo Depot ID' }
-    : { appId: cfg.appId, depotId: cfg.depotId, label: 'App ID', depotLabel: 'Depot ID' };
+    ? { appId: cfg.demoAppId, depotId: cfg.demoDepotId, label: 'Demo App ID', depotLabel: 'Demo Depot ID', branch: cfg.demoBranch }
+    : { appId: cfg.appId, depotId: cfg.depotId, label: 'App ID', depotLabel: 'Depot ID', branch: cfg.branch };
+}
+
+/** Patch 0452 -- the VDF's "setlive" value for a configured branch.
+ *  steamcmd can't set `default` live (Steamworks only allows that from its
+ *  own Builds page), and 'none' means upload only -- both are empty. */
+function setLiveBranch(branch) {
+  return !branch || branch === 'none' || branch === 'default' ? '' : branch;
+}
+
+/** Patch 0452 -- the manifest ID steamcmd wrote to this depot's build log,
+ *  if the log was written by the upload that started at `sinceMs`. The
+ *  depot log is where "Success! New manifestID ..." lands, separately from
+ *  the app-level commit that can still fail afterwards. */
+async function uploadedManifestSince(cfg, depotId, sinceMs) {
+  const logPath = path.join(cfg.contentBuilderDir, 'output', `depot_build_${depotId}.log`);
+  try {
+    const stat = await fs.stat(logPath);
+    if (stat.mtimeMs < sinceMs - 5000) return null;
+    const matches = [...(await fs.readFile(logPath, 'utf8')).matchAll(/Success! New manifestID (\d+)/g)];
+    return matches.length ? matches[matches.length - 1][1] : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -3168,7 +3197,7 @@ async function generateSteamBuildScripts(target = 'full') {
     `\t"desc" "Guildbound${target === 'demo' ? ' Demo' : ''} -- v${version ?? '?'}"`,
     `\t"buildoutput" "${outputDir}"`,
     `\t"contentroot" "${build.releaseDir}"`,
-    `\t"setlive" "${cfg.branch === 'default' ? '' : cfg.branch}"`,
+    `\t"setlive" "${setLiveBranch(ids.branch)}"`,
     `\t"preview" "0"`,
     `\t"local" ""`,
     `\t"depots"`,
@@ -3185,7 +3214,7 @@ async function generateSteamBuildScripts(target = 'full') {
     await fs.writeFile(appVdfPath, appVdf, 'utf8');
     return {
       ok: true,
-      stdout: `Wrote ${depotVdfPath}\nWrote ${appVdfPath}\nContentRoot: ${build.releaseDir}\nUnpacked build: win-unpacked/${build.exeName}\nSteam Launch Options Executable should be: ${build.exeName}\nTarget branch: ${cfg.branch}`,
+      stdout: `Wrote ${depotVdfPath}\nWrote ${appVdfPath}\nContentRoot: ${build.releaseDir}\nUnpacked build: win-unpacked/${build.exeName}\nSteam Launch Options Executable should be: ${build.exeName}\nSet live on: ${setLiveBranch(ids.branch) || `nothing -- upload only (${ids.branch === 'default' ? 'steamcmd can\'t set default live' : 'branch set to none'}); set it live in Steamworks -> SteamPipe -> Builds`}`,
       stderr: '',
     };
   } catch (err) {
@@ -3254,6 +3283,7 @@ async function runSteamUpload(target = 'full') {
     };
   }
 
+  const startedAt = Date.now();
   const result = await run(
     steamcmdPath,
     ['+login', cfg.username, '+run_app_build', appVdfPath, '+quit'],
@@ -3271,6 +3301,34 @@ async function runSteamUpload(target = 'full') {
       ok: false,
       stdout: result.stdout,
       stderr: `steamcmd is waiting on a Steam Guard code, which this button can't supply. Run "${steamcmdPath} +login ${cfg.username}" once from a real terminal to cache a session, then try this button again.`,
+    };
+  }
+  // Patch 0452 -- "Failed to commit build ... Failure" after the depot
+  // upload succeeded. The files are on Steam; what failed is the app-level
+  // commit, almost always because "setlive" names a branch this app doesn't
+  // have (or spelled differently -- branch names are case-sensitive). That
+  // used to read as a failed upload and stop Ship it before the demo and
+  // Discord steps, even though the build was there to set live by hand.
+  if (/Failed to commit build/i.test(combined)) {
+    const manifest = await uploadedManifestSince(cfg, ids.depotId, startedAt);
+    const setlive = setLiveBranch(ids.branch);
+    const where = `Steamworks -> app ${ids.appId} -> SteamPipe -> Builds`;
+    if (manifest && setlive) {
+      return {
+        ok: true,
+        stdout: result.stdout,
+        stderr: '',
+        warning: `Uploaded (depot ${ids.depotId}, manifest ${manifest}), but Steam refused to set it live on branch "${setlive}". `
+          + `That almost always means app ${ids.appId} has no branch with exactly that name (names are case-sensitive, and a new app only has "default" until a build is live there). `
+          + `Set this build live by hand in ${where}, then either create a "${setlive}" branch there or change the ${ids.label === 'Demo App ID' ? 'demo ' : ''}branch in step 7.5 to one that exists (or "none" for upload only).`,
+      };
+    }
+    return {
+      ...result,
+      ok: false,
+      stderr: `${result.stderr ? result.stderr + '\n\n' : ''}Steam rejected the build commit${manifest ? ` after the files uploaded (manifest ${manifest})` : ''}. `
+        + `${setlive ? '' : 'No branch was being set live, so it isn\'t a missing-branch problem. '}`
+        + `steamcmd's own log is in the Steamworks builder\\logs folder (stderr.txt); also check ${where}.`,
     };
   }
   return result;
@@ -3533,7 +3591,8 @@ async function runShipStep(job, step) {
       }
       if (problems.length) return fail(problems.join('\n\n'));
       const shipping = o.mode === 'release' ? ` Releasing v${await readPackageVersion()} at ${gs.lastCommit}.` : '';
-      return { ok: true, stdout: `Branch ${gs.branch} -> ${gs.upstream}. Steam branch: ${cfg.branch}.${shipping} All checks passed.`, stderr: '' };
+      const liveOn = o.targets.map((t) => `${t === 'demo' ? 'demo' : 'game'} -> ${setLiveBranch(steamTargetIds(cfg, t).branch) || 'upload only'}`).join(', ');
+      return { ok: true, stdout: `Branch ${gs.branch} -> ${gs.upstream}. Set live on: ${liveOn}.${shipping} All checks passed.`, stderr: '' };
     }
     case 'apply': {
       const resolved = await resolvePatchPath(o.patch);
@@ -3608,7 +3667,9 @@ async function driveShipJob(job, fromIndex) {
     }
     step.result = result;
     step.endedAt = Date.now();
-    step.state = result.ok ? 'ok' : 'failed';
+    // Patch 0452 -- a step can succeed with a warning (e.g. uploaded but not
+    // set live); the run carries on and the checklist shows it in amber.
+    step.state = result.ok ? (result.warning ? 'warn' : 'ok') : 'failed';
     if (!result.ok) {
       job.failedStep = step.id;
       break;
@@ -3848,6 +3909,7 @@ const server = http.createServer(async (req, res) => {
       demoDepotId: typeof body.demoDepotId === 'string' ? body.demoDepotId.trim() : '',
       contentBuilderDir: typeof body.contentBuilderDir === 'string' ? body.contentBuilderDir.trim() : '',
       branch: typeof body.branch === 'string' && body.branch.trim() ? body.branch.trim() : 'internal',
+      demoBranch: typeof body.demoBranch === 'string' && body.demoBranch.trim() ? body.demoBranch.trim() : 'none',
     };
     await writeSteamConfig(cfg);
     return json(res, 200, { ok: true, ...cfg });
