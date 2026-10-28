@@ -866,9 +866,11 @@ export const QuestManager = {
 
     const levelGapBonus = (hero.level - successReqLevel) * Tuning.get('quest_reqlevel.levelGapSuccessCoefficient');
     const badLuck = QuestManager.badLuckBonus(hero.consecutiveQuestFails);
+    // Rookie's Resolve (patch 0447) -- see rookieFraction's own comment.
+    const rookie = QuestManager.rookieBonus(hero.level);
 
     return clamp(
-      offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus + badLuck,
+      offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus + badLuck + rookie,
       MIN_SUCCESS,
       MAX_SUCCESS,
     );
@@ -918,6 +920,40 @@ export const QuestManager = {
     const perFail = Tuning.get('quest.badLuckProtectionPerFail');
     const cap = Tuning.get('quest.badLuckProtectionCap');
     return Math.min(cap, (consecutiveFails - threshold) * perFail);
+  },
+
+  /**
+   * Rookie's Resolve (patch 0447). Post-launch feedback: "early failure
+   * rate makes me want to send the devs threats." A Monte Carlo of a fresh
+   * guild's first 12 board quests (real createInitialState/start/resolve)
+   * measured ~50% failure picking offers at random and ~33% even always
+   * taking the best-odds offer. Three things stacked: Hard/Epic offers are
+   * on a level-1 hero's board from the start (patch 0214), the tutorial's
+   * forced injury plus Health loss starts every hero 9-25 points down, and
+   * every failure rolls a 35-59% injury that knocks the next quest down
+   * further -- a spiral exactly when the player has no gear, gold or
+   * healing to climb out with.
+   *
+   * 1 at level 1, tapering linearly to 0 at `quest.rookieUntilLevel`, and
+   * 0 from there on, so nothing past the early game moves. Keyed off the
+   * hero's own level (not guild progress), so a late level-1 recruit gets
+   * the same short runway.
+   */
+  rookieFraction(level: number): number {
+    const until = Tuning.get('quest.rookieUntilLevel');
+    if (until <= 1 || level >= until) return 0;
+    return clamp((until - level) / (until - 1), 0, 1);
+  },
+
+  /** Flat success points Rookie's Resolve adds in previewSuccess. */
+  rookieBonus(level: number): number {
+    return QuestManager.rookieFraction(level) * Tuning.get('quest.rookieSuccessBonus');
+  },
+
+  /** Points taken off a failed quest's injury risk for a rookie hero, so
+   *  one bad roll doesn't snowball into the next. Same taper. */
+  rookieInjuryRelief(level: number): number {
+    return QuestManager.rookieFraction(level) * Tuning.get('quest.rookieInjuryRiskReduction');
   },
 
   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {
@@ -1293,7 +1329,14 @@ export const QuestManager = {
     let petFallen: QuestResult['petFallen'];
     const injuryRisk = success
       ? (events.forcedInjury ? 25 : 0)
-      : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, MIN_INJURY_RISK, 90);
+      : clamp(
+        35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist
+          // Rookie's Resolve (patch 0447). hero.level can't change between
+          // send and resolve (one quest per hero, XP lands below), so
+          // reading it here stays deterministic.
+          - (hero ? QuestManager.rookieInjuryRelief(hero.level) : 0),
+        MIN_INJURY_RISK, 90,
+      );
     // Tutorial quest: forces this branch regardless of injuryRisk/rng --
     // see tutorialQuestOffer's own doc comment in quests.ts for why a
     // guaranteed injury (and guaranteed broken gear, below) is the whole
@@ -1306,7 +1349,14 @@ export const QuestManager = {
     // success override just above the finalSuccess roll) -- reused here
     // unchanged, not recomputed.
     if (!quest.injuryImmune && (isTutorialQuest || rng.chance(injuryRisk))) {
-      injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
+      // Tutorial quest (patch 0447): always the mildest injury rather than
+      // a weighted roll -- the lesson is "injuries happen, here's how to
+      // heal", not a 10-hour Cracked Ribs (-18% success, 25% Health) on
+      // quest one. Falls back to the normal roll if 'bruised' is ever
+      // renamed out of injuries.json.
+      injury = isTutorialQuest && INJURY_BY_ID['bruised']
+        ? HeroManager.injuryFromDef(INJURY_BY_ID['bruised'])
+        : HeroManager.rollInjury(rng, quest.offer.difficulty);
       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
       // Health damage piggybacks directly on this same roll rather than a
       // separate trigger -- see items.ts's healthDamagePercentForInjuryDef

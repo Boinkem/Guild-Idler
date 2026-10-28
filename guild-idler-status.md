@@ -36202,3 +36202,64 @@ Checked in the DevTool (Build & Ship, step 7) with the requests faked
 so nothing really ran: a 404 for Package demo now shows the failed block
 with that message and the button resets; a successful Run package
 response still renders as before. `node --check` passes.
+
+### Early-game failure relief: Rookie's Resolve, gentler tutorial injury, faster bad luck protection (patch 0447)
+```discord-update
+Dev Update | Early-Game Balance
+
+- Added Rookie's Resolve: new heroes get up to +20% quest success and fewer injuries on failure, fading out by level 10 (look for the 🌱 on quest cards)
+- Changed bad luck protection to kick in sooner: after 2 failures in a row instead of 3, and it ramps up faster
+- Changed the tutorial quest's injury to always be a light Bruise instead of a random one that could take you out for 10 hours
+```
+
+Post-launch feedback: "early failure rate makes me want to send the devs
+threats." Measured it rather than guessing: a Monte Carlo of 400 fresh
+guilds (real `createInitialState` -> tutorial -> 12 board quests through
+`QuestManager.start`/`resolve`, no healing, no gear bought) came out at
+**~50% failure** picking offers at random and **~33%** even always taking
+the best-odds offer on the board.
+
+**Why it was that bad.** Three things stacked on a brand-new hero:
+1. Since patch 0214 Hard/Epic offers appear on a level-1 hero's board
+   (~38% of offers by weight), at 50/40 base success.
+2. The tutorial quest forced a *weighted random* injury -- could be
+   Cracked Ribs (-18% success, 10h, 25% Health) -- plus the Health
+   penalty (0.3/missing %) and the broken practice sword. Every hero
+   started quest two 9-25 points down.
+3. Every failure rolls a 35-59% injury, which lowers the next quest's
+   odds, which makes the next failure likelier. Bad luck protection only
+   started after a third straight loss and only gave +3 per fail.
+
+**Fix (all tunable, `quests` category):**
+- **Rookie's Resolve** -- `QuestManager.rookieFraction(level)`: 1 at
+  level 1, linear to 0 at `quest.rookieUntilLevel` (10). Feeds
+  `rookieBonus` (x `quest.rookieSuccessBonus`, 20) into `previewSuccess`
+  as a flat, uncurved term (so it's locked in at send like everything
+  else, and shown on the card), and `rookieInjuryRelief` (x
+  `quest.rookieInjuryRiskReduction`, 20) off the failed-quest injury risk
+  in `resolve`. Keyed off the hero's own level, so a late level-1 recruit
+  gets it too. Nothing at level 10+ changes. Set `rookieUntilLevel` to 1
+  to switch it off.
+- **Tutorial injury** is now always `bruised` (2h, -5%, 5% Health) via
+  the new `HeroManager.injuryFromDef` (split out of `rollInjury`). Still
+  forced, still teaches healing; still respects a Protection Charm. Falls
+  back to the normal roll if `bruised` is ever removed from injuries.json.
+- **Bad luck protection**: `badLuckProtectionThreshold` 2 -> 1,
+  `badLuckProtectionPerFail` 3 -> 5, cap unchanged at 15. Two straight
+  losses now give +5, three +10, four+ +15. This one is global, not
+  rookie-only.
+- **UI**: a 🌱 badge beside the success % on board cards and "🌱 rookie"
+  in the send panel while the bonus is active, with a tooltip giving the
+  exact amount -- same "no silent numbers" rule as the 🍀 badge.
+
+**Result, same simulation:**
+
+| Policy | Before | After |
+|---|---|---|
+| Random offer each time | 50% fail | 33% fail |
+| Best-odds offer each time | 33% fail | 15% fail |
+| Hero injured going into quests 3-12 (best-odds) | ~25% | ~9% |
+
+Random picking still trends back toward the normal rate as the hero
+levels out of the taper -- Epic/Hard remain real gambles by design.
+`tsc --noEmit` passes.

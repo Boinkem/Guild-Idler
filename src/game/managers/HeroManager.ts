@@ -1,5 +1,5 @@
 import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
-import { INJURIES } from '../data/items';
+import { INJURIES, InjuryDef } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
 import { demoLevelCap } from '../demo';
 import {
@@ -818,6 +818,12 @@ export const HeroManager = {
     });
     const pool = eligible.length > 0 ? eligible : INJURIES;
     const def = rng.weighted(pool.map((i) => ({ item: i, weight: i.weight })));
+    return HeroManager.injuryFromDef(def);
+  },
+
+  /** Builds a live Injury from its definition. Split out of rollInjury in
+   *  patch 0447 so the tutorial quest can hand out a specific one. */
+  injuryFromDef(def: InjuryDef): Injury {
     return {
       id: def.id,
       name: def.name,

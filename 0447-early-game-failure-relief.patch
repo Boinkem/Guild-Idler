@@ -1,0 +1,285 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 1048ddc..1854fd9 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -36202,3 +36202,64 @@ Checked in the DevTool (Build & Ship, step 7) with the requests faked
+ so nothing really ran: a 404 for Package demo now shows the failed block
+ with that message and the button resets; a successful Run package
+ response still renders as before. `node --check` passes.
++
++### Early-game failure relief: Rookie's Resolve, gentler tutorial injury, faster bad luck protection (patch 0447)
++```discord-update
++Dev Update | Early-Game Balance
++
++- Added Rookie's Resolve: new heroes get up to +20% quest success and fewer injuries on failure, fading out by level 10 (look for the 🌱 on quest cards)
++- Changed bad luck protection to kick in sooner: after 2 failures in a row instead of 3, and it ramps up faster
++- Changed the tutorial quest's injury to always be a light Bruise instead of a random one that could take you out for 10 hours
++```
++
++Post-launch feedback: "early failure rate makes me want to send the devs
++threats." Measured it rather than guessing: a Monte Carlo of 400 fresh
++guilds (real `createInitialState` -> tutorial -> 12 board quests through
++`QuestManager.start`/`resolve`, no healing, no gear bought) came out at
++**~50% failure** picking offers at random and **~33%** even always taking
++the best-odds offer on the board.
++
++**Why it was that bad.** Three things stacked on a brand-new hero:
++1. Since patch 0214 Hard/Epic offers appear on a level-1 hero's board
++   (~38% of offers by weight), at 50/40 base success.
++2. The tutorial quest forced a *weighted random* injury -- could be
++   Cracked Ribs (-18% success, 10h, 25% Health) -- plus the Health
++   penalty (0.3/missing %) and the broken practice sword. Every hero
++   started quest two 9-25 points down.
++3. Every failure rolls a 35-59% injury, which lowers the next quest's
++   odds, which makes the next failure likelier. Bad luck protection only
++   started after a third straight loss and only gave +3 per fail.
++
++**Fix (all tunable, `quests` category):**
++- **Rookie's Resolve** -- `QuestManager.rookieFraction(level)`: 1 at
++  level 1, linear to 0 at `quest.rookieUntilLevel` (10). Feeds
++  `rookieBonus` (x `quest.rookieSuccessBonus`, 20) into `previewSuccess`
++  as a flat, uncurved term (so it's locked in at send like everything
++  else, and shown on the card), and `rookieInjuryRelief` (x
++  `quest.rookieInjuryRiskReduction`, 20) off the failed-quest injury risk
++  in `resolve`. Keyed off the hero's own level, so a late level-1 recruit
++  gets it too. Nothing at level 10+ changes. Set `rookieUntilLevel` to 1
++  to switch it off.
++- **Tutorial injury** is now always `bruised` (2h, -5%, 5% Health) via
++  the new `HeroManager.injuryFromDef` (split out of `rollInjury`). Still
++  forced, still teaches healing; still respects a Protection Charm. Falls
++  back to the normal roll if `bruised` is ever removed from injuries.json.
++- **Bad luck protection**: `badLuckProtectionThreshold` 2 -> 1,
++  `badLuckProtectionPerFail` 3 -> 5, cap unchanged at 15. Two straight
++  losses now give +5, three +10, four+ +15. This one is global, not
++  rookie-only.
++- **UI**: a 🌱 badge beside the success % on board cards and "🌱 rookie"
++  in the send panel while the bonus is active, with a tooltip giving the
++  exact amount -- same "no silent numbers" rule as the 🍀 badge.
++
++**Result, same simulation:**
++
++| Policy | Before | After |
++|---|---|---|
++| Random offer each time | 50% fail | 33% fail |
++| Best-odds offer each time | 33% fail | 15% fail |
++| Hero injured going into quests 3-12 (best-odds) | ~25% | ~9% |
++
++Random picking still trends back toward the normal rate as the hero
++levels out of the taper -- Epic/Hard remain real gambles by design.
++`tsc --noEmit` passes.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 9d88937..08ececd 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -3294,8 +3294,8 @@
+     "id": "quest.badLuckProtectionThreshold",
+     "label": "Bad luck protection: fails before it starts",
+     "category": "quests",
+-    "value": 2,
+-    "default": 2,
++    "value": 1,
++    "default": 1,
+     "min": 0,
+     "description": "Consecutive quest failures (Hero.consecutiveQuestFails) a hero can rack up before previewSuccess starts adding a bonus. Ordinary variance up to this many fails in a row is left untouched -- only a genuinely long streak gets help."
+   },
+@@ -3303,8 +3303,8 @@
+     "id": "quest.badLuckProtectionPerFail",
+     "label": "Bad luck protection: bonus per fail past threshold",
+     "category": "quests",
+-    "value": 3,
+-    "default": 3,
++    "value": 5,
++    "default": 5,
+     "min": 0,
+     "description": "Flat success percentage points added per consecutive fail beyond quest.badLuckProtectionThreshold, up to quest.badLuckProtectionCap. Resets to 0 the instant any quest succeeds."
+   },
+@@ -3317,6 +3317,36 @@
+     "min": 0,
+     "description": "Ceiling on the total bad-luck-protection bonus previewSuccess can add, regardless of how long the fail streak runs."
+   },
++  {
++    "id": "quest.rookieSuccessBonus",
++    "label": "Rookie's Resolve: success bonus at level 1",
++    "category": "quests",
++    "value": 20,
++    "default": 20,
++    "min": 0,
++    "max": 50,
++    "description": "Flat success points a level-1 hero gets on every quest (patch 0447), tapering linearly to 0 at quest.rookieUntilLevel. Counters the early-game failure spiral: no gear, tutorial injury, Hard/Epic offers on the board from level 1."
++  },
++  {
++    "id": "quest.rookieInjuryRiskReduction",
++    "label": "Rookie's Resolve: injury risk cut at level 1",
++    "category": "quests",
++    "value": 20,
++    "default": 20,
++    "min": 0,
++    "max": 60,
++    "description": "Percentage points taken off a failed quest's injury risk for a level-1 hero (patch 0447), same taper as quest.rookieSuccessBonus. Stops one failure from snowballing into the next via injury and Health penalties."
++  },
++  {
++    "id": "quest.rookieUntilLevel",
++    "label": "Rookie's Resolve: ends at level",
++    "category": "quests",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 30,
++    "description": "Hero level at which Rookie's Resolve has fully tapered to 0 (patch 0447). Set to 1 to disable it."
++  },
+   {
+     "id": "upgrade.master_adventurer.blackMarketDiscountPerLevel",
+     "label": "Enchanted Seal: Black Market discount per level",
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 58dc093..e381ac0 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -1,5 +1,5 @@
+ import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
+-import { INJURIES } from '../data/items';
++import { INJURIES, InjuryDef } from '../data/items';
+ import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
+ import { demoLevelCap } from '../demo';
+ import {
+@@ -818,6 +818,12 @@ export const HeroManager = {
+     });
+     const pool = eligible.length > 0 ? eligible : INJURIES;
+     const def = rng.weighted(pool.map((i) => ({ item: i, weight: i.weight })));
++    return HeroManager.injuryFromDef(def);
++  },
++
++  /** Builds a live Injury from its definition. Split out of rollInjury in
++   *  patch 0447 so the tutorial quest can hand out a specific one. */
++  injuryFromDef(def: InjuryDef): Injury {
+     return {
+       id: def.id,
+       name: def.name,
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 62d5444..67ea49f 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -866,9 +866,11 @@ export const QuestManager = {
+ 
+     const levelGapBonus = (hero.level - successReqLevel) * Tuning.get('quest_reqlevel.levelGapSuccessCoefficient');
+     const badLuck = QuestManager.badLuckBonus(hero.consecutiveQuestFails);
++    // Rookie's Resolve (patch 0447) -- see rookieFraction's own comment.
++    const rookie = QuestManager.rookieBonus(hero.level);
+ 
+     return clamp(
+-      offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus + badLuck,
++      offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus + badLuck + rookie,
+       MIN_SUCCESS,
+       MAX_SUCCESS,
+     );
+@@ -920,6 +922,40 @@ export const QuestManager = {
+     return Math.min(cap, (consecutiveFails - threshold) * perFail);
+   },
+ 
++  /**
++   * Rookie's Resolve (patch 0447). Post-launch feedback: "early failure
++   * rate makes me want to send the devs threats." A Monte Carlo of a fresh
++   * guild's first 12 board quests (real createInitialState/start/resolve)
++   * measured ~50% failure picking offers at random and ~33% even always
++   * taking the best-odds offer. Three things stacked: Hard/Epic offers are
++   * on a level-1 hero's board from the start (patch 0214), the tutorial's
++   * forced injury plus Health loss starts every hero 9-25 points down, and
++   * every failure rolls a 35-59% injury that knocks the next quest down
++   * further -- a spiral exactly when the player has no gear, gold or
++   * healing to climb out with.
++   *
++   * 1 at level 1, tapering linearly to 0 at `quest.rookieUntilLevel`, and
++   * 0 from there on, so nothing past the early game moves. Keyed off the
++   * hero's own level (not guild progress), so a late level-1 recruit gets
++   * the same short runway.
++   */
++  rookieFraction(level: number): number {
++    const until = Tuning.get('quest.rookieUntilLevel');
++    if (until <= 1 || level >= until) return 0;
++    return clamp((until - level) / (until - 1), 0, 1);
++  },
++
++  /** Flat success points Rookie's Resolve adds in previewSuccess. */
++  rookieBonus(level: number): number {
++    return QuestManager.rookieFraction(level) * Tuning.get('quest.rookieSuccessBonus');
++  },
++
++  /** Points taken off a failed quest's injury risk for a rookie hero, so
++   *  one bad roll doesn't snowball into the next. Same taper. */
++  rookieInjuryRelief(level: number): number {
++    return QuestManager.rookieFraction(level) * Tuning.get('quest.rookieInjuryRiskReduction');
++  },
++
+   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {
+     const mods = sumMods(HeroManager.heroMods(state, hero, now), ModifierManager.global(state));
+     const factor = clamp(1 - mods.speed / 100, 0.25, 1.75);
+@@ -1293,7 +1329,14 @@ export const QuestManager = {
+     let petFallen: QuestResult['petFallen'];
+     const injuryRisk = success
+       ? (events.forcedInjury ? 25 : 0)
+-      : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, MIN_INJURY_RISK, 90);
++      : clamp(
++        35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist
++          // Rookie's Resolve (patch 0447). hero.level can't change between
++          // send and resolve (one quest per hero, XP lands below), so
++          // reading it here stays deterministic.
++          - (hero ? QuestManager.rookieInjuryRelief(hero.level) : 0),
++        MIN_INJURY_RISK, 90,
++      );
+     // Tutorial quest: forces this branch regardless of injuryRisk/rng --
+     // see tutorialQuestOffer's own doc comment in quests.ts for why a
+     // guaranteed injury (and guaranteed broken gear, below) is the whole
+@@ -1306,7 +1349,14 @@ export const QuestManager = {
+     // success override just above the finalSuccess roll) -- reused here
+     // unchanged, not recomputed.
+     if (!quest.injuryImmune && (isTutorialQuest || rng.chance(injuryRisk))) {
+-      injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
++      // Tutorial quest (patch 0447): always the mildest injury rather than
++      // a weighted roll -- the lesson is "injuries happen, here's how to
++      // heal", not a 10-hour Cracked Ribs (-18% success, 25% Health) on
++      // quest one. Falls back to the normal roll if 'bruised' is ever
++      // renamed out of injuries.json.
++      injury = isTutorialQuest && INJURY_BY_ID['bruised']
++        ? HeroManager.injuryFromDef(INJURY_BY_ID['bruised'])
++        : HeroManager.rollInjury(rng, quest.offer.difficulty);
+       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
+       // Health damage piggybacks directly on this same roll rather than a
+       // separate trigger -- see items.ts's healthDamagePercentForInjuryDef
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 9283f7f..5b9199b 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -9,6 +9,7 @@ import {
+   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
+ } from '../../game/data/quests';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
++import { Tuning } from '../../game/data/tuning';
+ import { QuestOffer, Hero, AutoChainWeightBy, ActiveQuest } from '../../game/types';
+ import { formatDuration, formatGold } from '../../game/util';
+ import { RarityPill } from '../RarityPill';
+@@ -212,6 +213,13 @@ export function QuestRow({
+                 title={`Steadied by bad luck protection: +${QuestManager.badLuckBonus(hero.consecutiveQuestFails).toFixed(0)}% after ${hero.consecutiveQuestFails} losses in a row`}
+               > 🍀</span>
+             )}
++            {/* Rookie's Resolve (patch 0447), same no-silent-numbers rule. */}
++            {QuestManager.rookieBonus(hero.level) > 0 && (
++              <span
++                className="good"
++                title={`Rookie's Resolve: +${QuestManager.rookieBonus(hero.level).toFixed(0)}% success and fewer injuries while ${hero.name} finds their feet (fades out by level ${Tuning.get('quest.rookieUntilLevel')})`}
++              > 🌱</span>
++            )}
+           </span>
+           <span className="tiny gold-text">{formatGold(offer.rewardGold)} gold</span>
+         </div>
+@@ -336,6 +344,12 @@ export function QuestDetailModal({
+                 title={`Steadied by bad luck protection: +${QuestManager.badLuckBonus(hero.consecutiveQuestFails).toFixed(0)}% after ${hero.consecutiveQuestFails} losses in a row`}
+               > 🍀 steadied</span>
+             )}
++            {QuestManager.rookieBonus(hero.level) > 0 && (
++              <span
++                className="tiny good"
++                title={`Rookie's Resolve: +${QuestManager.rookieBonus(hero.level).toFixed(0)}% success and fewer injuries while ${hero.name} finds their feet (fades out by level ${Tuning.get('quest.rookieUntilLevel')})`}
++              > 🌱 rookie</span>
++            )}
+           </span>
+           <span>Time <b>{formatDuration(duration)}</b></span>
+           <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>

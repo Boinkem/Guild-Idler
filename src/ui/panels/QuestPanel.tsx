@@ -9,6 +9,7 @@ import {
   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID, TUTORIAL_QUEST_ID,
 } from '../../game/data/quests';
 import { InventoryManager } from '../../game/managers/InventoryManager';
+import { Tuning } from '../../game/data/tuning';
 import { QuestOffer, Hero, AutoChainWeightBy, ActiveQuest } from '../../game/types';
 import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
@@ -212,6 +213,13 @@ export function QuestRow({
                 title={`Steadied by bad luck protection: +${QuestManager.badLuckBonus(hero.consecutiveQuestFails).toFixed(0)}% after ${hero.consecutiveQuestFails} losses in a row`}
               > 🍀</span>
             )}
+            {/* Rookie's Resolve (patch 0447), same no-silent-numbers rule. */}
+            {QuestManager.rookieBonus(hero.level) > 0 && (
+              <span
+                className="good"
+                title={`Rookie's Resolve: +${QuestManager.rookieBonus(hero.level).toFixed(0)}% success and fewer injuries while ${hero.name} finds their feet (fades out by level ${Tuning.get('quest.rookieUntilLevel')})`}
+              > 🌱</span>
+            )}
           </span>
           <span className="tiny gold-text">{formatGold(offer.rewardGold)} gold</span>
         </div>
@@ -335,6 +343,12 @@ export function QuestDetailModal({
                 className="tiny good"
                 title={`Steadied by bad luck protection: +${QuestManager.badLuckBonus(hero.consecutiveQuestFails).toFixed(0)}% after ${hero.consecutiveQuestFails} losses in a row`}
               > 🍀 steadied</span>
+            )}
+            {QuestManager.rookieBonus(hero.level) > 0 && (
+              <span
+                className="tiny good"
+                title={`Rookie's Resolve: +${QuestManager.rookieBonus(hero.level).toFixed(0)}% success and fewer injuries while ${hero.name} finds their feet (fades out by level ${Tuning.get('quest.rookieUntilLevel')})`}
+              > 🌱 rookie</span>
             )}
           </span>
           <span>Time <b>{formatDuration(duration)}</b></span>

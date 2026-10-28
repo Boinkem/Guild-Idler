@@ -3294,8 +3294,8 @@
     "id": "quest.badLuckProtectionThreshold",
     "label": "Bad luck protection: fails before it starts",
     "category": "quests",
-    "value": 2,
-    "default": 2,
+    "value": 1,
+    "default": 1,
     "min": 0,
     "description": "Consecutive quest failures (Hero.consecutiveQuestFails) a hero can rack up before previewSuccess starts adding a bonus. Ordinary variance up to this many fails in a row is left untouched -- only a genuinely long streak gets help."
   },
@@ -3303,8 +3303,8 @@
     "id": "quest.badLuckProtectionPerFail",
     "label": "Bad luck protection: bonus per fail past threshold",
     "category": "quests",
-    "value": 3,
-    "default": 3,
+    "value": 5,
+    "default": 5,
     "min": 0,
     "description": "Flat success percentage points added per consecutive fail beyond quest.badLuckProtectionThreshold, up to quest.badLuckProtectionCap. Resets to 0 the instant any quest succeeds."
   },
@@ -3316,6 +3316,36 @@
     "default": 15,
     "min": 0,
     "description": "Ceiling on the total bad-luck-protection bonus previewSuccess can add, regardless of how long the fail streak runs."
+  },
+  {
+    "id": "quest.rookieSuccessBonus",
+    "label": "Rookie's Resolve: success bonus at level 1",
+    "category": "quests",
+    "value": 20,
+    "default": 20,
+    "min": 0,
+    "max": 50,
+    "description": "Flat success points a level-1 hero gets on every quest (patch 0447), tapering linearly to 0 at quest.rookieUntilLevel. Counters the early-game failure spiral: no gear, tutorial injury, Hard/Epic offers on the board from level 1."
+  },
+  {
+    "id": "quest.rookieInjuryRiskReduction",
+    "label": "Rookie's Resolve: injury risk cut at level 1",
+    "category": "quests",
+    "value": 20,
+    "default": 20,
+    "min": 0,
+    "max": 60,
+    "description": "Percentage points taken off a failed quest's injury risk for a level-1 hero (patch 0447), same taper as quest.rookieSuccessBonus. Stops one failure from snowballing into the next via injury and Health penalties."
+  },
+  {
+    "id": "quest.rookieUntilLevel",
+    "label": "Rookie's Resolve: ends at level",
+    "category": "quests",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "max": 30,
+    "description": "Hero level at which Rookie's Resolve has fully tapered to 0 (patch 0447). Set to 1 to disable it."
   },
   {
     "id": "upgrade.master_adventurer.blackMarketDiscountPerLevel",
