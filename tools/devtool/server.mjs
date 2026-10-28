@@ -3142,6 +3142,345 @@ async function runSteamUpload(target = 'full') {
 
 
 
+/* ------------------------------------------------------------ ship it --- */
+// Patch 0448 -- one button that runs the whole patch -> Steam cycle in
+// order, reusing the exact same helpers every individual step button above
+// already calls (run/runNpm/generateSteamBuildScripts/runSteamUpload/
+// postDiscordUpdate), so the two paths can't drift apart.
+//
+// Order, and why it differs from "check, apply, commit, bump, push, build,
+// package, scripts, upload":
+//   - Build runs BEFORE commit, so a patch that breaks tsc/vite never gets
+//     committed or pushed. Failing there offers Revert (git apply -R),
+//     since nothing has been committed yet.
+//   - Bump runs BEFORE push, and push uses --follow-tags, so the version
+//     tag actually reaches the remote (the plain Push button's `git push`
+//     never sends tags).
+//   - Package runs AFTER bump so the exe carries the new version number.
+//
+// The job lives in memory on this server process only: it survives a page
+// refresh (the page just re-polls), not a DevTool restart. One job at a
+// time. Each step's full stdout/stderr is kept so the checklist can show
+// the output of whichever step failed, and Retry resumes from that step
+// rather than redoing everything before it.
+
+// Local-only, gitignored -- remembers the last patch number already
+// announced on Discord, so a ship after several back-to-back patches posts
+// ONE consolidated update covering everything since, not just the newest.
+const SHIP_STATE_PATH = path.join(__dirname, 'ship-state.json');
+
+async function readShipState() {
+  try {
+    const parsed = JSON.parse(await fs.readFile(SHIP_STATE_PATH, 'utf8'));
+    return { lastAnnouncedPatch: typeof parsed.lastAnnouncedPatch === 'string' ? parsed.lastAnnouncedPatch : null };
+  } catch {
+    return { lastAnnouncedPatch: null };
+  }
+}
+
+async function writeShipState(next) {
+  const current = await readShipState();
+  await fs.writeFile(SHIP_STATE_PATH, JSON.stringify({ ...current, ...next }, null, 2) + '\n', 'utf8');
+}
+
+/** Every `### ... (patch NNNN)` heading in the status doc with its section's
+ *  ```discord-update block (null when the entry predates that convention).
+ *  A number can appear twice (0435, 0441 both shipped as two patches) --
+ *  both are kept. */
+async function readPatchLogEntries() {
+  const markdown = await fs.readFile(STATUS_MD_PATH, 'utf8');
+  const headingRe = /^###.*\(patch (\d+)\)\s*$/gm;
+  const heads = [];
+  let m;
+  while ((m = headingRe.exec(markdown)) !== null) heads.push({ num: parseInt(m[1], 10), index: m.index });
+  // Any other ### heading also ends a section, not just a patch heading.
+  const anyHeadRe = /^###? /gm;
+  const allHeads = [];
+  while ((m = anyHeadRe.exec(markdown)) !== null) allHeads.push(m.index);
+  return heads.map((h) => {
+    const end = allHeads.find((i) => i > h.index) ?? markdown.length;
+    const section = markdown.slice(h.index, end);
+    const start = section.indexOf('```discord-update');
+    let block = null;
+    if (start !== -1) {
+      const after = start + '```discord-update'.length;
+      const close = section.indexOf('```', after);
+      if (close !== -1) block = section.slice(after, close).trim();
+    }
+    return { num: h.num, patch: String(h.num).padStart(4, '0'), block };
+  });
+}
+
+const NOTE_GROUPS = [
+  { key: 'added', label: 'Added', re: /^added\b/i },
+  { key: 'changed', label: 'Changed', re: /^(changed|updated|improved|reworked|rebalanced|adjusted|tweaked|moved|renamed)\b/i },
+  { key: 'fixed', label: 'Fixed', re: /^fixed\b/i },
+  { key: 'removed', label: 'Removed', re: /^removed\b/i },
+];
+
+/**
+ * Builds one Discord update from every logged patch AFTER `fromPatch`
+ * (exclusive) up to the newest one in the status doc. A single patch is
+ * passed through exactly as written. Several are merged: one header naming
+ * the range (and version, when given), a "Covers:" line listing each
+ * patch's own context, then every bullet grouped Added / Changed / Fixed /
+ * Removed / Other in patch order, exact duplicates dropped. Patches with
+ * no discord-update block are reported back in `missing`, not guessed at.
+ */
+async function consolidatePatchNotes(fromPatch, version) {
+  const entries = await readPatchLogEntries();
+  if (entries.length === 0) return { ok: false, error: 'No (patch NNNN) headings found in guild-idler-status.md.' };
+  const newest = Math.max(...entries.map((e) => e.num));
+  const from = fromPatch && /^\d+$/.test(String(fromPatch)) ? parseInt(fromPatch, 10) : newest - 1;
+  const picked = entries.filter((e) => e.num > from && e.num <= newest).sort((a, b) => a.num - b.num);
+  const throughPatch = String(newest).padStart(4, '0');
+  if (picked.length === 0) {
+    return { ok: false, error: `Nothing new to announce -- patch ${throughPatch} is the newest logged and it's already been announced.`, throughPatch };
+  }
+  const withBlocks = picked.filter((e) => e.block);
+  const missing = picked.filter((e) => !e.block).map((e) => e.patch);
+  const patches = [...new Set(picked.map((e) => e.patch))];
+  const range = patches.length === 1 ? `Patch ${patches[0]}` : `Patches ${patches[0]}–${patches[patches.length - 1]}`;
+
+  if (withBlocks.length === 1 && picked.length === 1) {
+    return { ok: true, title: range, text: withBlocks[0].block, patches, missing, throughPatch };
+  }
+
+  const contexts = [];
+  const groups = Object.fromEntries([...NOTE_GROUPS.map((g) => [g.key, []]), ['other', []]]);
+  const seen = new Set();
+  for (const e of withBlocks) {
+    const lines = e.block.split(/\r?\n/);
+    const header = lines.find((l) => l.trim());
+    const ctx = header && header.includes('|') ? header.split('|').slice(1).join('|').trim() : null;
+    if (ctx && !/^(patch \d+|bug fix(es)?|features|changes)$/i.test(ctx) && !contexts.includes(ctx)) contexts.push(ctx);
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!/^[-*•]\s+/.test(line)) continue;
+      const bullet = line.replace(/^[-*•]\s+/, '').trim();
+      const dedupeKey = bullet.toLowerCase();
+      if (!bullet || seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      const group = NOTE_GROUPS.find((g) => g.re.test(bullet));
+      groups[group ? group.key : 'other'].push(bullet);
+    }
+  }
+  const out = [`Dev Update | ${range}${version ? ` (v${version})` : ''}`, ''];
+  if (contexts.length) out.push(`Covers: ${contexts.join(', ')}`, '');
+  for (const g of [...NOTE_GROUPS, { key: 'other', label: 'Other' }]) {
+    if (!groups[g.key].length) continue;
+    out.push(`**${g.label}**`);
+    for (const b of groups[g.key]) out.push(`- ${b}`);
+    out.push('');
+  }
+  return { ok: true, title: range, text: out.join('\n').trim(), patches, missing, throughPatch };
+}
+
+/** Discord caps an embed description at 4096 chars; a big consolidated
+ *  update is split on line boundaries and sent as consecutive posts
+ *  rather than silently cut off (postDiscordUpdate's own slice(0, 4000)
+ *  would otherwise drop the tail). */
+async function postDiscordUpdateChunked(title, message) {
+  const LIMIT = 3900;
+  const chunks = [];
+  let current = '';
+  for (const line of String(message ?? '').split('\n')) {
+    const next = current ? `${current}\n${line}` : line;
+    if (next.length > LIMIT && current) { chunks.push(current); current = line.slice(0, LIMIT); } else current = next.slice(0, LIMIT);
+  }
+  if (current.trim()) chunks.push(current);
+  for (let i = 0; i < chunks.length; i++) {
+    const t = chunks.length > 1 ? `${title} (${i + 1}/${chunks.length})` : title;
+    const r = await postDiscordUpdate(t, chunks[i]);
+    if (!r.ok) return { ...r, error: `${r.error}${i > 0 ? ` (after ${i} of ${chunks.length} parts had already posted)` : ''}` };
+  }
+  return { ok: true, parts: chunks.length };
+}
+
+/** `git status --porcelain` lines that aren't just untracked .patch files
+ *  waiting to be applied (those are normal here -- the commit step
+ *  deliberately adds the applied one). */
+async function dirtyNonPatchLines() {
+  const status = await run('git', ['status', '--porcelain'], GIT_TIMEOUT_MS);
+  if (!status.ok) return { ok: false, lines: [], error: status.stderr };
+  const lines = status.stdout.split(/\r?\n/).filter((l) => l.trim() && !/^\?\? .*\.patch"?$/.test(l));
+  return { ok: true, lines };
+}
+
+const SHIP_TARGETS = { game: ['full'], demo: ['demo'], both: ['full', 'demo'] };
+const BUMP_LEVELS = ['patch', 'minor', 'major', 'none'];
+let shipJob = null;
+
+function shipStepDefs(opts) {
+  const steps = [{ id: 'preflight', label: 'Pre-flight checks' }];
+  if (opts.patch) steps.push({ id: 'apply', label: `Apply ${opts.patch}` });
+  steps.push({ id: 'build', label: 'Build (tsc + vite)' });
+  if (opts.patch) steps.push({ id: 'commit', label: 'Commit' });
+  if (opts.bump !== 'none') steps.push({ id: 'bump', label: `Bump version (${opts.bump})` });
+  steps.push({ id: 'push', label: 'Push (with tags)' });
+  for (const t of opts.targets) {
+    const name = t === 'demo' ? 'demo' : 'game';
+    steps.push({ id: `package:${t}`, label: `Package ${name}` });
+    steps.push({ id: `scripts:${t}`, label: `Generate ${name} build scripts` });
+    steps.push({ id: `upload:${t}`, label: `Upload ${name} to Steam` });
+  }
+  if (opts.discord) steps.push({ id: 'discord', label: 'Post Discord update' });
+  return steps.map((s) => ({ ...s, state: 'pending', result: null, startedAt: null, endedAt: null }));
+}
+
+const fail = (stderr, stdout = '') => ({ ok: false, stdout, stderr });
+
+async function runShipStep(job, step) {
+  const o = job.opts;
+  const [kind, target] = step.id.split(':');
+  switch (kind) {
+    case 'preflight': {
+      const problems = [];
+      const dirty = await dirtyNonPatchLines();
+      if (!dirty.ok) problems.push(`git status failed: ${dirty.error}`);
+      else if (dirty.lines.length) problems.push(`Working tree has uncommitted changes -- commit or discard them first:\n${dirty.lines.join('\n')}`);
+      const gs = await gitStatus();
+      if (!gs.upstream) problems.push(`Branch ${gs.branch} has no upstream -- run "git push -u origin ${gs.branch}" once from a terminal.`);
+      const cfg = await readSteamConfig();
+      if (!cfg.username) problems.push('No Steam username in the Steam config (step 7.5).');
+      if (!cfg.contentBuilderDir) problems.push('No ContentBuilder folder in the Steam config (step 7.5).');
+      else {
+        const steamcmdPath = path.join(cfg.contentBuilderDir, '..', 'builder', process.platform === 'win32' ? 'steamcmd.exe' : 'steamcmd.sh');
+        try { await fs.access(steamcmdPath); } catch { problems.push(`steamcmd not found at ${steamcmdPath}.`); }
+      }
+      for (const t of o.targets) {
+        const ids = steamTargetIds(cfg, t);
+        if (!ids.appId) problems.push(`No ${ids.label} in the Steam config.`);
+        if (!ids.depotId) problems.push(`No ${ids.depotLabel} in the Steam config.`);
+      }
+      if (o.discord) {
+        const { webhookUrl } = await readDiscordConfig();
+        if (!webhookUrl) problems.push('Discord post is ticked but no webhook is saved (step 11).');
+      }
+      if (o.patch) {
+        const resolved = await resolvePatchPath(o.patch);
+        if (!resolved) problems.push(`Patch file ${o.patch} not found.`);
+        else {
+          const check = await run('git', ['apply', '--check', resolved], GIT_TIMEOUT_MS);
+          if (!check.ok) problems.push(`git apply --check failed (already applied, or built against a different version?):\n${check.stderr || check.stdout}`);
+        }
+      }
+      return problems.length
+        ? fail(problems.join('\n\n'))
+        : { ok: true, stdout: `Branch ${gs.branch} -> ${gs.upstream}. Steam branch: ${cfg.branch}. All checks passed.`, stderr: '' };
+    }
+    case 'apply': {
+      const resolved = await resolvePatchPath(o.patch);
+      if (!resolved) return fail(`Patch file ${o.patch} not found.`);
+      const r = await run('git', ['apply', resolved], GIT_TIMEOUT_MS);
+      if (r.ok) job.applied = true;
+      return r;
+    }
+    case 'build':
+      return runNpm(['run', 'build'], BUILD_TIMEOUT_MS);
+    case 'commit': {
+      // Stages everything EXCEPT other untracked .patch files sitting in
+      // the folder (a queued 0450 shouldn't ride along in 0449's commit),
+      // then the applied patch file itself, matching the repo's history.
+      const resolved = await resolvePatchPath(o.patch);
+      const add = await run('git', ['add', '-A', '--', '.', ':(exclude)*.patch'], GIT_TIMEOUT_MS);
+      if (!add.ok) return add;
+      if (resolved) {
+        const addPatch = await run('git', ['add', '--', resolved], GIT_TIMEOUT_MS);
+        if (!addPatch.ok) return addPatch;
+      }
+      const r = await run('git', ['commit', '-m', o.commitMessage], GIT_TIMEOUT_MS);
+      if (r.ok) job.committed = true;
+      return r;
+    }
+    case 'bump': {
+      const r = await runNpm(['version', o.bump], GIT_TIMEOUT_MS);
+      if (r.ok) job.committed = true;
+      return r;
+    }
+    case 'push': {
+      const r = await run('git', ['push', '--follow-tags'], GIT_TIMEOUT_MS * 3);
+      if (r.ok) job.pushed = true;
+      return r;
+    }
+    case 'package':
+      return runNpm(['run', target === 'demo' ? 'package:demo' : 'package'], PACKAGE_TIMEOUT_MS);
+    case 'scripts':
+      return generateSteamBuildScripts(target);
+    case 'upload':
+      return runSteamUpload(target);
+    case 'discord': {
+      const version = await readPackageVersion();
+      const from = o.announceFrom ?? (await readShipState()).lastAnnouncedPatch;
+      const notes = await consolidatePatchNotes(from, o.bump !== 'none' ? version : null);
+      if (!notes.ok) return fail(notes.error);
+      const posted = await postDiscordUpdateChunked(notes.title, notes.text);
+      if (!posted.ok) return fail(posted.error, notes.text);
+      await writeShipState({ lastAnnouncedPatch: notes.throughPatch });
+      const warn = notes.missing.length ? `\n\n(No discord-update block for ${notes.missing.join(', ')} -- not included.)` : '';
+      return { ok: true, stdout: `Posted ${posted.parts > 1 ? `in ${posted.parts} parts ` : ''}covering ${notes.patches.join(', ')}:\n\n${notes.text}${warn}`, stderr: '' };
+    }
+    default:
+      return fail(`Unknown step ${step.id}`);
+  }
+}
+
+async function driveShipJob(job, fromIndex) {
+  job.running = true;
+  job.failedStep = null;
+  for (let i = fromIndex; i < job.steps.length; i++) {
+    const step = job.steps[i];
+    step.state = 'running';
+    step.startedAt = Date.now();
+    step.endedAt = null;
+    step.result = null;
+    let result;
+    try {
+      result = await runShipStep(job, step);
+    } catch (err) {
+      result = fail(`DevTool error in this step: ${err.message ?? err}`);
+    }
+    step.result = result;
+    step.endedAt = Date.now();
+    step.state = result.ok ? 'ok' : 'failed';
+    if (!result.ok) {
+      job.failedStep = step.id;
+      break;
+    }
+  }
+  job.running = false;
+  job.finishedAt = Date.now();
+  job.done = !job.failedStep;
+}
+
+function shipJobView() {
+  if (!shipJob) return { job: null };
+  const j = shipJob;
+  return {
+    job: {
+      id: j.id, opts: j.opts, startedAt: j.startedAt, finishedAt: j.finishedAt ?? null,
+      running: j.running, done: !!j.done, failedStep: j.failedStep,
+      applied: !!j.applied, committed: !!j.committed, pushed: !!j.pushed,
+      canRevert: !j.running && !!j.failedStep && !!j.applied && !j.committed,
+      steps: j.steps,
+    },
+  };
+}
+
+function parseShipOptions(body) {
+  const target = Object.keys(SHIP_TARGETS).includes(body.target) ? body.target : null;
+  if (!target) return { error: 'target must be game, demo, or both.' };
+  const bump = BUMP_LEVELS.includes(body.bump) ? body.bump : null;
+  if (!bump) return { error: 'bump must be patch, minor, major, or none.' };
+  const patch = typeof body.patch === 'string' && body.patch.trim() ? body.patch.trim() : null;
+  const commitMessage = typeof body.commitMessage === 'string' && body.commitMessage.trim()
+    ? body.commitMessage.trim()
+    : (patch ? `Apply ${patch.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')}` : '');
+  const announceFrom = typeof body.announceFrom === 'string' && /^\d{1,5}$/.test(body.announceFrom.trim()) ? body.announceFrom.trim() : null;
+  return { opts: { target, targets: SHIP_TARGETS[target], bump, patch, commitMessage, discord: !!body.discord, announceFrom } };
+}
+
+
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 
 async function serveStatic(req, res) {
@@ -3255,6 +3594,62 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/patches/copy-build' && req.method === 'POST') {
     return json(res, 200, await copyLatestBuild());
+  }
+
+  /* Patch 0448 -- one-click ship. See the "ship it" section above. */
+  if (url.pathname === '/api/ship/status' && req.method === 'GET') {
+    return json(res, 200, { ...shipJobView(), shipState: await readShipState() });
+  }
+
+  if (url.pathname === '/api/ship/start' && req.method === 'POST') {
+    if (shipJob?.running) return json(res, 409, { error: 'A ship run is already in progress.' });
+    const parsed = parseShipOptions(JSON.parse(await readBody(req) || '{}'));
+    if (parsed.error) return json(res, 400, { error: parsed.error });
+    shipJob = { id: Date.now(), opts: parsed.opts, steps: shipStepDefs(parsed.opts), startedAt: Date.now(), running: true };
+    driveShipJob(shipJob, 0);
+    return json(res, 200, shipJobView());
+  }
+
+  if (url.pathname === '/api/ship/retry' && req.method === 'POST') {
+    if (!shipJob || shipJob.running || !shipJob.failedStep) return json(res, 409, { error: 'Nothing to retry.' });
+    const from = shipJob.steps.findIndex((s) => s.id === shipJob.failedStep);
+    for (let i = from; i < shipJob.steps.length; i++) Object.assign(shipJob.steps[i], { state: 'pending', result: null, startedAt: null, endedAt: null });
+    driveShipJob(shipJob, from);
+    return json(res, 200, shipJobView());
+  }
+
+  if (url.pathname === '/api/ship/revert' && req.method === 'POST') {
+    if (!shipJob || shipJob.running || !shipJob.applied || shipJob.committed) {
+      return json(res, 409, { error: 'Revert is only available when the patch was applied but not yet committed.' });
+    }
+    const resolved = await resolvePatchPath(shipJob.opts.patch);
+    if (!resolved) return json(res, 404, { error: 'Patch file not found.' });
+    const result = await run('git', ['apply', '-R', resolved], GIT_TIMEOUT_MS);
+    if (result.ok) { shipJob.applied = false; shipJob.reverted = true; }
+    return json(res, 200, { result, ...shipJobView() });
+  }
+
+  if (url.pathname === '/api/ship/dismiss' && req.method === 'POST') {
+    if (shipJob?.running) return json(res, 409, { error: 'Still running.' });
+    shipJob = null;
+    return json(res, 200, { job: null });
+  }
+
+  if (url.pathname === '/api/ship/notes-preview' && req.method === 'GET') {
+    const from = url.searchParams.get('from') || (await readShipState()).lastAnnouncedPatch;
+    try {
+      return json(res, 200, await consolidatePatchNotes(from, null));
+    } catch (err) {
+      return json(res, 200, { ok: false, error: `Could not read guild-idler-status.md: ${err.message}` });
+    }
+  }
+
+  if (url.pathname === '/api/ship/mark-announced' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req) || '{}');
+    const patch = typeof body.patch === 'string' && /^\d{1,5}$/.test(body.patch) ? body.patch.padStart(4, '0') : null;
+    if (!patch) return json(res, 400, { error: 'patch must be a patch number.' });
+    await writeShipState({ lastAnnouncedPatch: patch });
+    return json(res, 200, { ok: true, lastAnnouncedPatch: patch });
   }
 
   if (url.pathname === '/api/steam/config' && req.method === 'GET') {

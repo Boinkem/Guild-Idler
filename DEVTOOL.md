@@ -129,6 +129,31 @@ just right after applying something.
   typically after applying several patches and confirming the build — not
   after every single patch.
 
+### Ship it — the whole cycle in one click (patch 0448)
+
+The third pane on the Patches tab runs every step above in order and stops at
+the first one that fails:
+
+1. **Pre-flight**: working tree clean (untracked `.patch` files are fine),
+   upstream set, Steam config filled in, steamcmd found, Discord webhook saved
+   if posting, and a dry-run `git apply --check` if a patch is picked.
+2. **Apply**, then **Build** (before commit, so a broken patch is never
+   committed). Failing here offers **Revert patch**.
+3. **Commit** (other queued `.patch` files are left out), **Bump version**
+   (patch / minor / major / skip), **Push** with `--follow-tags`.
+4. **Package**, **Generate build scripts**, **Upload to Steam**, for the game,
+   the demo, or both (**Ship both** does steps 1–3 once).
+5. **Discord** (optional): one post covering every patch since the last one
+   announced, merged and grouped Added / Changed / Fixed. The last-announced
+   patch number lives in `tools/devtool/ship-state.json` (gitignored), and
+   the manual Post to Discord button updates it too, so applying several
+   patches back to back and shipping once gives one consolidated post.
+
+Leave the patch on *None* to ship whatever is already committed. A failed
+step shows its output; **Retry from failed step** carries on without redoing
+the earlier steps. The run lives in the DevTool server's memory: refreshing
+the page is fine, closing the DevTool stops it.
+
 This is a convenience wrapper around the same commands, not a replacement for
 git — for anything beyond this (branches, resolving a real merge conflict,
 history surgery), use the terminal.

@@ -36263,3 +36263,76 @@ the best-odds offer on the board.
 Random picking still trends back toward the normal rate as the hero
 levels out of the taper -- Epic/Hard remain real gambles by design.
 `tsc --noEmit` passes.
+
+### DevTool: one-click "Ship it" cycle + consolidated Discord updates (patch 0448)
+```discord-update
+Dev Update | Patch 0448
+
+- Added a one-click release button to our dev tools, so updates reach Steam faster and more reliably (no change to the game itself)
+- Changed dev update posts so several patches shipped together arrive as one combined update instead of a pile of separate ones
+```
+
+Requested: a single button that does the whole patch -> Steam cycle, for the
+game and the demo, with a version picker and a Discord post at the end. Plus:
+when patching back to back and only uploading once at the end, post ONE
+combined update rather than one per patch.
+
+**New "Ship it" pane** (third nav button on the Patches tab, beside Patch
+flow / Build & Ship). Picks: patch to apply (or *None* -- ship what's
+already committed), commit message, version bump (patch / minor / major /
+skip, shown as `1.6.0 -> 1.6.1`), Discord on/off and "announce every patch
+after NNNN". Buttons: **Ship game**, **Ship demo**, **Ship both**. A confirm
+box lists patch, commit, version change, push target, Steam branch and
+Discord scope; a `default` (live store) branch gets a second confirm.
+
+**Order** (server-side, `tools/devtool/server.mjs` "ship it" section):
+pre-flight -> apply -> build -> commit -> bump -> push --follow-tags ->
+[package -> generate scripts -> upload] per target -> Discord. Differences
+from the order first suggested, and why:
+- Build before commit: a patch that fails tsc/vite never gets committed or
+  pushed; failing there offers **Revert patch** (`git apply -R`).
+- Bump before push, and push with `--follow-tags`: the plain Push button's
+  `git push` never sent version tags, so they stayed local.
+- Package after bump: the exe carries the new version.
+
+Pre-flight checks everything it can before touching anything: clean tree
+(untracked `.patch` files ignored), upstream set, Steam username /
+ContentBuilder / App+Depot IDs for each target, steamcmd present, Discord
+webhook if posting, `git apply --check` if a patch is picked -- and reports
+every problem at once rather than one per click. The pipeline's commit
+stages everything except other untracked `.patch` files
+(`:(exclude)*.patch`), then adds the applied patch file, so a queued 0450
+doesn't ride along in 0449's commit.
+
+Runs as an in-memory job on the DevTool server (`/api/ship/start|status|
+retry|revert|dismiss`); the page polls every 2s and shows a checklist with
+per-step time, collapsible output, and the failed step's full output.
+**Retry from failed step** resumes there (e.g. after re-caching a Steam
+Guard login). Once pushed, the panel says so plainly -- that part can't be
+undone from here. Survives a page refresh, not a DevTool restart.
+
+**Consolidated Discord notes.** `consolidatePatchNotes(from)` reads every
+`(patch NNNN)` entry after `from` up to the newest in this doc. One patch
+posts its block unchanged. Several merge into: `Dev Update | Patches
+0448–0451 (v1.6.2)`, a `Covers:` line of each patch's feature context
+(generic "Patch NNNN"/"Bug Fix" contexts skipped), then every bullet grouped
+Added / Changed / Fixed / Removed / Other by leading verb, in patch order,
+exact duplicates dropped. Entries without a discord-update block are listed
+as skipped, not guessed at. Posts over Discord's embed limit split into
+numbered parts instead of being cut off. The last announced patch is stored
+in `tools/devtool/ship-state.json` (gitignored); Ship it updates it after a
+successful post, and so does step 11's manual **Post to Discord** (which
+also gets a new **Fill since last announced** button using the same merge).
+First run: the field starts blank (posts just the newest patch) -- type
+the last patch you announced by hand once and it's tracked from then on.
+
+Tested in a sandbox copy of the repo with stubbed package scripts, a fake
+steamcmd and a local bare remote: full Ship both with a patch (all 12 steps,
+tag reached the remote, queued patch file left uncommitted); build failure ->
+Revert restored the tree; a Steam Guard upload failure after push -> Retry
+finished the run. Notes preview checked against the real doc (0443–0447
+merged correctly). `node --check` passes on both files.
+
+**After applying: close and restart the DevTool** -- this patch adds server
+routes, which a page refresh won't pick up (same rule as patch 0446). Until
+then the Ship it pane says so instead of erroring.

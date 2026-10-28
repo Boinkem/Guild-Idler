@@ -1070,3 +1070,26 @@ td.icon-cell { width: 1%; padding-right: 0; }
   body { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'side' 'main'; }
   .sidebar { position: static; height: auto; }
 }
+
+/* ------------------------------ ship it (0448) ---------------------------- */
+.ship-form { display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+.ship-form > label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.ship-form > label.ship-check { flex-direction: row; align-items: center; gap: 8px; }
+.ship-form select, .ship-form input[type="text"] {
+  background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;
+}
+.ship-job { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--panel3); border-left: 3px solid var(--brass-dim); border-radius: var(--radius-sm); background: var(--panel2); }
+.ship-job.good { border-left-color: var(--good); }
+.ship-job.bad { border-left-color: var(--bad); }
+.ship-steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ship-step { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 6px; font-size: 12px; }
+.ship-step.pending > span:nth-of-type(2) { color: var(--dim); }
+.ship-step.failed > span:nth-of-type(2) { color: var(--bad); }
+.ship-step > span:first-child { text-align: center; }
+.ship-step details { grid-column: 2 / -1; }
+.ship-step pre { max-height: 220px; overflow: auto; font-family: var(--mono); font-size: 11px; }
+.ship-step .good, .ship-job .good { color: var(--good); }
+.ship-step .bad { color: var(--bad); }
+.ship-spin { display: inline-block; animation: ship-spin 1s linear infinite; color: var(--brass); }
+@keyframes ship-spin { to { transform: rotate(360deg); } }
+.ship-form [hidden] { display: none !important; }

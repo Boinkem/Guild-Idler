@@ -43,3 +43,4 @@ src/game/data/json/*.bak
 tools/devtool/discord.config.json
 tools/devtool/steam.config.json
 tools/devtool/ah.config.json
+tools/devtool/ship-state.json
