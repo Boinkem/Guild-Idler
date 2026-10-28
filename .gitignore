@@ -44,3 +44,9 @@ tools/devtool/discord.config.json
 tools/devtool/steam.config.json
 tools/devtool/ah.config.json
 tools/devtool/ship-state.json
+
+# Patch files (patch 0451) -- each patch's changes live in its own commit,
+# so the .patch file is a duplicate. Queued patches sit in the root; the
+# DevTool moves applied ones to patches/applied/ after it commits.
+/*.patch
+/patches/
