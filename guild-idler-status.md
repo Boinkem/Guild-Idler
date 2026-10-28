@@ -36409,3 +36409,61 @@ tools 8/8, Warehouse 10, Overseer 3). The web build succeeds in both
 **Not checked in the running game** -- worth: in `npm run dev:demo`,
 buy a Harvest tool to 2 and a Renown perk to 2, then confirm the button
 flips to "🔒 Full game" and opens the wishlist card.
+
+### DevTool: "Release only" buttons -- package, scripts and Steam upload in one click (patch 0450)
+```discord-update
+Dev Update | Patch 0450
+
+- Added a one-click upload to Steam in our dev tools for patches that are already finished, so builds go out with fewer manual steps (no change to the game itself)
+```
+
+Direct request: when a patch is already applied and pushed through the
+Patch flow buttons, the rest (build, packaging, Steam scripts, upload)
+was still click-by-click. Ship it (0448) could already do this with the
+patch on *None* and the bump on *Skip*, but it also re-ran build and push,
+and that wasn't obvious from the pane.
+
+**New "Release only" row** in the Ship it pane, under the Ship buttons:
+**Release game / Release demo / Release both**. Steps: pre-flight ->
+[package -> generate build scripts -> upload] per target -> Discord (if
+ticked, using the same Discord settings and "announce every patch after"
+field as Ship it). No separate build step: `npm run package` /
+`package:demo` already run tsc + vite (demo in `--mode demo`) before
+electron-builder, so a build step would just build twice. The package
+step is labelled "(includes build)" to say so.
+
+Never applies, commits, bumps or pushes. The server forces that from
+`mode: 'release'` in `parseShipOptions`, whatever else the request body
+says. It ships the version currently in package.json. The confirm box
+shows that version, the last commit, the steps, the Steam branch (with the
+same second confirm for `default`) and the Discord scope. The Discord
+header carries the version (`Dev Update | Patches 0449–0450 (v1.6.1)`),
+same as a bumped Ship it run.
+
+**Pre-flight for a release** is the Ship it check list minus the patch
+check, plus one new one: no local commits ahead of the upstream
+(`git rev-list --count @{u}..HEAD`). The existing clean-tree check
+already blocks uncommitted changes. Together they mean what goes to
+Steam is exactly what's on GitHub. It compares against the last-fetched
+remote state and doesn't fetch. The failure message points to step 5
+(Push) or Ship it with *None*. The success line now names the version and
+commit being released.
+
+Same job machinery as Ship it (`/api/ship/start` with
+`{ mode: 'release', target, discord, announceFrom }`): same checklist,
+per-step output, **Retry from failed step** (e.g. after re-caching a
+Steam Guard login), survives a page refresh. The job header reads
+"Release game" instead of "Ship game".
+
+**Tested** in a sandbox copy of the repo (stubbed package scripts, a fake
+steamcmd, a local bare remote). Release both ran all 7 steps, wrote both
+apps' VDFs and called steamcmd with each app's `app_build_*.vdf`. No new
+commit or tag, even with `bump`/`patch` sent in the body. An unpushed local
+commit and a dirty tree each stopped at pre-flight with the right message.
+The pane and a finished Release game checklist rendered in headless
+Chromium with no page errors. `node --check` passes on both files. Not
+tested: the Discord post from a release (no webhook reachable in the
+sandbox). It's the same step code Ship it uses.
+
+**After applying: close and restart the DevTool.** This patch changes
+server code, which a page refresh won't pick up (same rule as 0446/0448).

@@ -2679,6 +2679,20 @@ function renderShipCycle() {
     </div>
     <p class="tiny muted" style="margin-top:4px;">Ship both applies, builds, commits, bumps and pushes once, then packages and uploads the game and the demo.</p>
 
+    <div class="section-heading" style="margin-top:16px;">Release only</div>
+    <p class="tiny muted">
+      Already applied, committed and pushed (Patch flow steps 1-5)? These do just the Steam half:
+      <b>pre-flight → package (includes the build) → generate build scripts → upload → Discord</b>.
+      Ships v${escapeHtml(patchState.version || '?')} exactly as it is -- no apply, commit, version bump or push.
+      Pre-flight stops if anything is uncommitted or not pushed yet, so what goes to Steam always matches GitHub.
+      Uses the Discord settings above.
+    </p>
+    <div class="row" style="gap:6px; margin-top:6px;">
+      <button class="primary" data-release-target="game" ${busy ? 'disabled' : ''}><i class="ph ph-cloud-arrow-up"></i> Release game</button>
+      <button class="primary" data-release-target="demo" ${busy ? 'disabled' : ''}><i class="ph ph-cloud-arrow-up"></i> Release demo</button>
+      <button class="primary" data-release-target="both" ${busy ? 'disabled' : ''}><i class="ph ph-cloud-arrow-up"></i> Release both</button>
+    </div>
+
     <div id="shipJob">${renderShipJob()}</div>`;
 }
 
@@ -2700,7 +2714,7 @@ function renderShipJob() {
   const failed = job.steps.find((s) => s.state === 'failed');
   return `
     <div class="ship-job ${job.done ? 'good' : job.failedStep ? 'bad' : ''}">
-      <div class="spread"><b>Ship ${escapeHtml(target)}${job.opts.patch ? ` -- ${escapeHtml(job.opts.patch)}` : ''}</b><span class="tiny">${status}</span></div>
+      <div class="spread"><b>${job.opts.mode === 'release' ? 'Release' : 'Ship'} ${escapeHtml(target)}${job.opts.patch ? ` -- ${escapeHtml(job.opts.patch)}` : ''}</b><span class="tiny">${status}</span></div>
       <ol class="ship-steps">
         ${job.steps.map((s) => `
           <li class="ship-step ${s.state}">
@@ -2726,7 +2740,7 @@ function refreshShipJobView() {
   wireShipJobButtons();
   // Ship buttons/inputs lock while running and unlock when it stops.
   const busy = !!patchState.ship.job?.running;
-  document.querySelectorAll('#cycleFlow [data-ship-target], #cycleFlow select, #cycleFlow input').forEach((e) => {
+  document.querySelectorAll('#cycleFlow [data-ship-target], #cycleFlow [data-release-target], #cycleFlow select, #cycleFlow input').forEach((e) => {
     if (e.id === 'shipDiscordCheck' && !patchState.discordConfigured) return;
     e.disabled = busy;
   });
@@ -2836,6 +2850,40 @@ function wireShipCycle() {
         const started = await api('/api/ship/start', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ target, patch, bump, discord, announceFrom, commitMessage }),
+        });
+        patchState.ship = { ...patchState.ship, ...started };
+      } catch (err) {
+        alert(err.message);
+        return;
+      }
+      refreshShipJobView();
+      startShipPolling();
+    };
+  });
+
+  // Patch 0450 -- Release only: same job/checklist/Retry as Ship it, but
+  // the server runs just package -> scripts -> upload (-> Discord).
+  document.querySelectorAll('#cycleFlow [data-release-target]').forEach((btn) => {
+    btn.onclick = async () => {
+      const target = btn.dataset.releaseTarget;
+      const discord = discordCheck.checked;
+      const announceFrom = document.getElementById('shipAnnounceFrom').value.trim();
+      const branch = patchState.steam?.branch || 'internal';
+      const lines = [
+        `Release ${{ game: 'the game', demo: 'the demo', both: 'the game AND the demo' }[target]} to Steam?`,
+        '',
+        `Version: ${patchState.version} (as committed -- no bump)`,
+        `Commit: ${patchState.gitStatus?.lastCommit || '?'}`,
+        `Steps: package -> build scripts -> upload${discord ? ' -> Discord' : ''}`,
+        `Steam branch: ${branch}${branch === 'default' ? '   <-- LIVE STORE' : ''}`,
+        `Discord: ${discord ? `post update for every patch after ${announceFrom || '(newest only)'}` : 'no post'}`,
+      ];
+      if (!confirm(lines.join('\n'))) return;
+      if (branch === 'default' && !confirm('This uploads straight to the LIVE store branch. Really continue?')) return;
+      try {
+        const started = await api('/api/ship/start', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'release', target, discord, announceFrom }),
         });
         patchState.ship = { ...patchState.ship, ...started };
       } catch (err) {

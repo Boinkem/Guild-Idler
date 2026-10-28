@@ -3313,6 +3313,20 @@ let shipJob = null;
 
 function shipStepDefs(opts) {
   const steps = [{ id: 'preflight', label: 'Pre-flight checks' }];
+  // Patch 0450 -- Release: the Steam half only, for when the patch is
+  // already applied, committed and pushed through the Patch flow buttons.
+  // No build step of its own -- `npm run package` / `package:demo` already
+  // run tsc + vite (in the right mode) before electron-builder.
+  if (opts.mode === 'release') {
+    for (const t of opts.targets) {
+      const name = t === 'demo' ? 'demo' : 'game';
+      steps.push({ id: `package:${t}`, label: `Package ${name} (includes build)` });
+      steps.push({ id: `scripts:${t}`, label: `Generate ${name} build scripts` });
+      steps.push({ id: `upload:${t}`, label: `Upload ${name} to Steam` });
+    }
+    if (opts.discord) steps.push({ id: 'discord', label: 'Post Discord update' });
+    return steps.map((s) => ({ ...s, state: 'pending', result: null, startedAt: null, endedAt: null }));
+  }
   if (opts.patch) steps.push({ id: 'apply', label: `Apply ${opts.patch}` });
   steps.push({ id: 'build', label: 'Build (tsc + vite)' });
   if (opts.patch) steps.push({ id: 'commit', label: 'Commit' });
@@ -3341,6 +3355,14 @@ async function runShipStep(job, step) {
       else if (dirty.lines.length) problems.push(`Working tree has uncommitted changes -- commit or discard them first:\n${dirty.lines.join('\n')}`);
       const gs = await gitStatus();
       if (!gs.upstream) problems.push(`Branch ${gs.branch} has no upstream -- run "git push -u origin ${gs.branch}" once from a terminal.`);
+      // Patch 0450 -- Release never pushes, so make sure what goes to Steam
+      // is exactly what's on GitHub: no local commits waiting to be pushed.
+      // (Compares against the last-fetched remote state; doesn't fetch.)
+      if (o.mode === 'release' && gs.upstream) {
+        const ahead = await run('git', ['rev-list', '--count', '@{u}..HEAD'], GIT_TIMEOUT_MS);
+        const n = ahead.ok ? parseInt(ahead.stdout.trim(), 10) || 0 : 0;
+        if (n > 0) problems.push(`${n} local commit${n === 1 ? ' is' : 's are'} not pushed yet -- push first (step 5), or use Ship it with the patch on None, which pushes for you.`);
+      }
       const cfg = await readSteamConfig();
       if (!cfg.username) problems.push('No Steam username in the Steam config (step 7.5).');
       if (!cfg.contentBuilderDir) problems.push('No ContentBuilder folder in the Steam config (step 7.5).');
@@ -3365,9 +3387,9 @@ async function runShipStep(job, step) {
           if (!check.ok) problems.push(`git apply --check failed (already applied, or built against a different version?):\n${check.stderr || check.stdout}`);
         }
       }
-      return problems.length
-        ? fail(problems.join('\n\n'))
-        : { ok: true, stdout: `Branch ${gs.branch} -> ${gs.upstream}. Steam branch: ${cfg.branch}. All checks passed.`, stderr: '' };
+      if (problems.length) return fail(problems.join('\n\n'));
+      const shipping = o.mode === 'release' ? ` Releasing v${await readPackageVersion()} at ${gs.lastCommit}.` : '';
+      return { ok: true, stdout: `Branch ${gs.branch} -> ${gs.upstream}. Steam branch: ${cfg.branch}.${shipping} All checks passed.`, stderr: '' };
     }
     case 'apply': {
       const resolved = await resolvePatchPath(o.patch);
@@ -3412,7 +3434,7 @@ async function runShipStep(job, step) {
     case 'discord': {
       const version = await readPackageVersion();
       const from = o.announceFrom ?? (await readShipState()).lastAnnouncedPatch;
-      const notes = await consolidatePatchNotes(from, o.bump !== 'none' ? version : null);
+      const notes = await consolidatePatchNotes(from, (o.bump !== 'none' || o.mode === 'release') ? version : null);
       if (!notes.ok) return fail(notes.error);
       const posted = await postDiscordUpdateChunked(notes.title, notes.text);
       if (!posted.ok) return fail(posted.error, notes.text);
@@ -3470,6 +3492,12 @@ function shipJobView() {
 function parseShipOptions(body) {
   const target = Object.keys(SHIP_TARGETS).includes(body.target) ? body.target : null;
   if (!target) return { error: 'target must be game, demo, or both.' };
+  // Patch 0450 -- Release: package + scripts + upload (+ Discord) only.
+  // Never applies, commits, bumps or pushes, whatever else the body says.
+  if (body.mode === 'release') {
+    const announceFrom = typeof body.announceFrom === 'string' && /^\d{1,5}$/.test(body.announceFrom.trim()) ? body.announceFrom.trim() : null;
+    return { opts: { mode: 'release', target, targets: SHIP_TARGETS[target], bump: 'none', patch: null, commitMessage: '', discord: !!body.discord, announceFrom } };
+  }
   const bump = BUMP_LEVELS.includes(body.bump) ? body.bump : null;
   if (!bump) return { error: 'bump must be patch, minor, major, or none.' };
   const patch = typeof body.patch === 'string' && body.patch.trim() ? body.patch.trim() : null;
