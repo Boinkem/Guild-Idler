@@ -3760,6 +3760,7 @@ export class GameEngine {
 
   upgradeHarvestTool(nodeId: MaterialId) {
     const error = HarvestManager.upgradeTool(this.state, nodeId);
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' }); // patch 0449
     if (error) return this.say(error);
     playSound('purchase');
     // ALL_TOOLS_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
@@ -3770,6 +3771,7 @@ export class GameEngine {
 
   upgradeWarehouse() {
     const error = HarvestManager.upgradeWarehouse(this.state);
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' }); // patch 0449
     if (error) return this.say(error);
     playSound('purchase');
     // WAREHOUSE_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
@@ -3780,6 +3782,7 @@ export class GameEngine {
 
   upgradeOverseer() {
     const error = HarvestManager.upgradeOverseer(this.state);
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' }); // patch 0449
     if (error) return this.say(error);
     playSound('purchase');
     const level = this.state.overseerLevel;
@@ -4007,6 +4010,7 @@ export class GameEngine {
 
   buyPerk(id: string) {
     const error = PrestigeManager.buyPerk(this.state, id);
+    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' }); // patch 0449
     if (error) return this.say(error);
     playSound('prestige_upgrade');
     this.notify();

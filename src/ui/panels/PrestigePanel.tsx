@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
+import { demoRankLocked, requestDemoWall } from '../../game/demo';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
 import { describeMods, formatNumber } from '../../game/util';
@@ -133,7 +134,10 @@ function RenownPerkRow({
   const effectText = entries.join(' · ');
   const description = justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description;
   const pctFill = Math.min(100, (level / cap) * 100);
-  const buyLabel = maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`;
+  // Patch 0449 -- demo build: next rank is full-game only (see demo.ts).
+  const locked = !maxed && demoRankLocked(def.id, level);
+  const buy = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: def.name }) : onBuy(btn));
+  const buyLabel = maxed ? 'Maxed' : locked ? '🔒 Full game' : `Buy · ✦ ${formatNumber(cost ?? 0)}`;
   return (
     <div
       ref={rowRef}
@@ -157,9 +161,9 @@ function RenownPerkRow({
         </span>
       </span>
       <button
-        className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
-        disabled={maxed || !affordable}
-        onClick={(e) => { e.stopPropagation(); onBuy(e.currentTarget); }}
+        className={`upgrade-buy-btn ${!maxed && !locked && affordable ? 'affordable' : ''}`}
+        disabled={maxed || (!locked && !affordable)}
+        onClick={(e) => { e.stopPropagation(); buy(e.currentTarget); }}
       >
         {buyLabel}
       </button>
@@ -182,7 +186,7 @@ function RenownPerkRow({
             )}
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || !affordable} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
+              <button className="btn-yellow" disabled={maxed || (!locked && !affordable)} onClick={(e) => buy(e.currentTarget)}>{buyLabel}</button>
             </div>
           </div>
         </div>

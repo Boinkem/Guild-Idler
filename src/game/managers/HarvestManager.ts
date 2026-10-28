@@ -1,6 +1,7 @@
 import { GameState, MaterialId } from '../types';
 import { NODE_ORDER } from '../data/materials';
 import { ModifierManager } from './ModifierManager';
+import { DEMO_LOCK_ERROR, demoRankLocked } from '../demo';
 import {
   HARVEST_TOOL_BY_NODE, OVERSEER_UPGRADE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseCapacity, warehouseUpgradeCost,
@@ -225,6 +226,10 @@ export const HarvestManager = {
     const level = state.harvestTools[nodeId] ?? 0;
     const cost = harvestToolCost(nodeId, level);
     if (cost === null) return 'Already at maximum level.';
+    // Patch 0449 -- demo rank cap (demo.ts), same check GuildManager's
+    // buy* functions make. Cost is untouched so the row still reads
+    // "more to buy" and shows its "Full game" button.
+    if (demoRankLocked(`harvest_tool_${nodeId}`, level)) return DEMO_LOCK_ERROR;
     if (state.gold < cost) return 'Not enough gold.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
@@ -235,6 +240,7 @@ export const HarvestManager = {
   upgradeWarehouse(state: GameState): string | null {
     const cost = warehouseUpgradeCost(state.warehouseLevel);
     if (cost === null) return 'Already at maximum level.';
+    if (demoRankLocked('warehouse', state.warehouseLevel)) return DEMO_LOCK_ERROR; // patch 0449, see upgradeTool
     if (state.gold < cost) return 'Not enough gold.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
@@ -245,6 +251,7 @@ export const HarvestManager = {
   upgradeOverseer(state: GameState): string | null {
     const cost = overseerUpgradeCost(state.overseerLevel);
     if (cost === null) return 'Already at maximum level.';
+    if (demoRankLocked('overseer', state.overseerLevel)) return DEMO_LOCK_ERROR; // patch 0449, see upgradeTool
     if (state.gold < cost) return 'Not enough gold.';
     state.gold -= cost;
     state.stats.goldSpent += cost;

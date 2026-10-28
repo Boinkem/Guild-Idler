@@ -5,6 +5,7 @@ import {
 import { GameState, Hero, HeroRenownPerkDef } from '../types';
 import { HeroManager } from './HeroManager';
 import { InventoryManager } from './InventoryManager';
+import { DEMO_LOCK_ERROR, demoRankLocked } from '../demo';
 
 /**
  * Prestige/Retirement Rework (patch 0317). Classic Retire -- level-cap
@@ -110,6 +111,10 @@ export const PrestigeManager = {
     const level = PrestigeManager.perkLevel(state, id);
     const cap = renownEffectiveMaxLevel(def);
     if (level >= cap) return 'Already at maximum.';
+    // Patch 0449 -- demo rank cap (demo.ts). The demo's four chains pay 4
+    // Renown and rank 3 of the 1-cost perks costs 1, so without this a
+    // first-evening demo player could already buy past rank 2.
+    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR;
     const cost = renownCost(def, level);
     if (state.renown < cost) return 'Not enough Heroic Renown.';
     state.renown -= cost;

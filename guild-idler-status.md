@@ -1145,8 +1145,6 @@ raid fight).
   `guildbound-demo` folder. Carrying them into the full game would mean
   main.ts reading that folder on first full-game launch, the same shape
   as `migrateLegacySaveFolder`.
-- **Harvest upgrades aren't rank-capped** -- harvest tools, Warehouse and
-  Overseer are separate trees and the 0438 cap doesn't cover them yet.
 - **Pacing check** -- confirm in a real demo run that The Miller's
   Problem and level 10 land inside a first evening. If not, either
   swap `DEMO.storyChainId` or add a demo XP boost.
@@ -36336,3 +36334,78 @@ merged correctly). `node --check` passes on both files.
 **After applying: close and restart the DevTool** -- this patch adds server
 routes, which a page refresh won't pick up (same rule as patch 0446). Until
 then the Ship it pane says so instead of erroring.
+
+### Demo cap audit: Harvest upgrades and guild Renown perks now stop at rank 2 (patch 0449)
+```discord-update
+Dev Update | Steam Demo
+
+- Fixed Harvest tools, the Warehouse and the Overseer going past rank 2 in the demo
+- Fixed guild-wide Renown perks going past rank 2 in the demo
+```
+
+Direct request: re-confirm the demo stops at its thresholds (rank 2
+upgrades, level 10 heroes, one story chain plus the three feature
+chains, Clearances/AH Charter/Replay Memories locked).
+
+**How it was checked.** A headless tsx script with
+`globalThis.__GUILDBOUND_DEMO__ = true` set before `demo.ts` loads (the
+same thing `vite --mode demo` compiles in), on a fresh
+`createInitialState()`. It refilled gold/renown/scrap and tried every buy
+80-200 times on every tree, then compared against the same run in
+full-game mode.
+
+**What already held (no change):**
+- Guild Hall facilities, general/vendor upgrades, raid upgrades and quest
+  fast-chance upgrades all stop at 2 and return `DEMO_LOCK_ERROR`.
+  1-rank unlocks (Guild Charter, Raid Charter, Training Grounds, etc.)
+  still buy. Heroic/Mythic Clearance and the AH Charter stay at 0.
+  `RaidManager` refuses Heroic/Mythic without them, and Legendary needs a
+  Mythic clear, so the demo's raid ceiling really is Normal.
+- Every Replay Memories tier is refused.
+- Heroes: every class, given 1e15 XP twice, stops at 10. Tier-3/4
+  recruits start at 10, not 15/24. Every XP source (quests, raids,
+  `engine` re-level) goes through `HeroManager.grantXp`. Per-hero Renown
+  perks need level 55, so they're unreachable in the demo.
+- Chain board with a level-10 hero: exactly Miller's Problem, First Haul,
+  Last Clutch, Man Who Sells Maybe. The full game shows all 19.
+
+**What leaked (fixed here):**
+- **Guild-wide Renown perks** (`PrestigeManager.buyPerk`) had no demo
+  check. This one was reachable in a normal first session. Each of the
+  four demo chains pays 1 Renown, and the 1-cost perks (Renowned Skill,
+  Legacy of Wealth, etc.) cost 1/1/1 for ranks 1-3. So 4 Renown already
+  bought rank 3. The Gold-for-Renown exchange (40k unlock, 50k/Renown) isn't
+  locked either, so a demo left idling could push perks, Extra Banner
+  included, to max. Now capped at 2 like everything else. Extra Banner
+  rank 2 means the demo tops out at Tavern 3 + 2 banner = 5 hero slots.
+  The exchange itself stays available, since spending is capped anyway.
+- **Harvest tools, Warehouse, Overseer** (`HarvestManager.upgradeTool/
+  upgradeWarehouse/upgradeOverseer`) -- the known 0438 backlog gap,
+  removed from the backlog. Ids passed to `demoRankLocked` are
+  `harvest_tool_<node>`, `warehouse`, `overseer`. None of these are in
+  `lockedUpgradeIds`, so they only hit the rank cap. Warehouse rank 2 =
+  400 storage. The largest crafting recipe needs 100 of one material, so
+  nothing in the demo becomes uncraftable.
+
+Each fix follows the 0438 shape. The manager returns `DEMO_LOCK_ERROR`,
+the cost function is untouched (the row still shows `Lv 2/8`), the engine
+handler opens the wishlist card on that error, and the row/modal button
+reads "🔒 Full game", stays clickable and opens the card
+(`HarvestPanel.tsx` tool rows, Warehouse button, Overseer row;
+`PrestigePanel.tsx` `RenownPerkRow`).
+
+**Deliberately left uncapped:** vendor levels (`levelUpVendor`). They
+self-limit at 3-4 ("nothing further to teach") and only decide which
+vendor upgrades get taught, and those upgrades are themselves capped at 2.
+Capping the vendor at 2 could hide a vendor upgrade the demo is meant to
+show. Hero Tier-Up is gated by quests completed and cost, not a rank, so
+it's not covered either. Say if either should be capped.
+
+**Verified here.** `tsc --noEmit` clean. The headless re-run hits zero
+over-cap results in demo mode, and full mode is unchanged (perks 25/25,
+tools 8/8, Warehouse 10, Overseer 3). The web build succeeds in both
+`--mode demo` and default.
+
+**Not checked in the running game** -- worth: in `npm run dev:demo`,
+buy a Harvest tool to 2 and a Renown perk to 2, then confirm the button
+flips to "🔒 Full game" and opens the wishlist card.

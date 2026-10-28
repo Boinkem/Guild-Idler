@@ -1,0 +1,352 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 66fb590..7a4c479 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1145,8 +1145,6 @@ raid fight).
+   `guildbound-demo` folder. Carrying them into the full game would mean
+   main.ts reading that folder on first full-game launch, the same shape
+   as `migrateLegacySaveFolder`.
+-- **Harvest upgrades aren't rank-capped** -- harvest tools, Warehouse and
+-  Overseer are separate trees and the 0438 cap doesn't cover them yet.
+ - **Pacing check** -- confirm in a real demo run that The Miller's
+   Problem and level 10 land inside a first evening. If not, either
+   swap `DEMO.storyChainId` or add a demo XP boost.
+@@ -36336,3 +36334,78 @@ merged correctly). `node --check` passes on both files.
+ **After applying: close and restart the DevTool** -- this patch adds server
+ routes, which a page refresh won't pick up (same rule as patch 0446). Until
+ then the Ship it pane says so instead of erroring.
++
++### Demo cap audit: Harvest upgrades and guild Renown perks now stop at rank 2 (patch 0449)
++```discord-update
++Dev Update | Steam Demo
++
++- Fixed Harvest tools, the Warehouse and the Overseer going past rank 2 in the demo
++- Fixed guild-wide Renown perks going past rank 2 in the demo
++```
++
++Direct request: re-confirm the demo stops at its thresholds (rank 2
++upgrades, level 10 heroes, one story chain plus the three feature
++chains, Clearances/AH Charter/Replay Memories locked).
++
++**How it was checked.** A headless tsx script with
++`globalThis.__GUILDBOUND_DEMO__ = true` set before `demo.ts` loads (the
++same thing `vite --mode demo` compiles in), on a fresh
++`createInitialState()`. It refilled gold/renown/scrap and tried every buy
++80-200 times on every tree, then compared against the same run in
++full-game mode.
++
++**What already held (no change):**
++- Guild Hall facilities, general/vendor upgrades, raid upgrades and quest
++  fast-chance upgrades all stop at 2 and return `DEMO_LOCK_ERROR`.
++  1-rank unlocks (Guild Charter, Raid Charter, Training Grounds, etc.)
++  still buy. Heroic/Mythic Clearance and the AH Charter stay at 0.
++  `RaidManager` refuses Heroic/Mythic without them, and Legendary needs a
++  Mythic clear, so the demo's raid ceiling really is Normal.
++- Every Replay Memories tier is refused.
++- Heroes: every class, given 1e15 XP twice, stops at 10. Tier-3/4
++  recruits start at 10, not 15/24. Every XP source (quests, raids,
++  `engine` re-level) goes through `HeroManager.grantXp`. Per-hero Renown
++  perks need level 55, so they're unreachable in the demo.
++- Chain board with a level-10 hero: exactly Miller's Problem, First Haul,
++  Last Clutch, Man Who Sells Maybe. The full game shows all 19.
++
++**What leaked (fixed here):**
++- **Guild-wide Renown perks** (`PrestigeManager.buyPerk`) had no demo
++  check. This one was reachable in a normal first session. Each of the
++  four demo chains pays 1 Renown, and the 1-cost perks (Renowned Skill,
++  Legacy of Wealth, etc.) cost 1/1/1 for ranks 1-3. So 4 Renown already
++  bought rank 3. The Gold-for-Renown exchange (40k unlock, 50k/Renown) isn't
++  locked either, so a demo left idling could push perks, Extra Banner
++  included, to max. Now capped at 2 like everything else. Extra Banner
++  rank 2 means the demo tops out at Tavern 3 + 2 banner = 5 hero slots.
++  The exchange itself stays available, since spending is capped anyway.
++- **Harvest tools, Warehouse, Overseer** (`HarvestManager.upgradeTool/
++  upgradeWarehouse/upgradeOverseer`) -- the known 0438 backlog gap,
++  removed from the backlog. Ids passed to `demoRankLocked` are
++  `harvest_tool_<node>`, `warehouse`, `overseer`. None of these are in
++  `lockedUpgradeIds`, so they only hit the rank cap. Warehouse rank 2 =
++  400 storage. The largest crafting recipe needs 100 of one material, so
++  nothing in the demo becomes uncraftable.
++
++Each fix follows the 0438 shape. The manager returns `DEMO_LOCK_ERROR`,
++the cost function is untouched (the row still shows `Lv 2/8`), the engine
++handler opens the wishlist card on that error, and the row/modal button
++reads "🔒 Full game", stays clickable and opens the card
++(`HarvestPanel.tsx` tool rows, Warehouse button, Overseer row;
++`PrestigePanel.tsx` `RenownPerkRow`).
++
++**Deliberately left uncapped:** vendor levels (`levelUpVendor`). They
++self-limit at 3-4 ("nothing further to teach") and only decide which
++vendor upgrades get taught, and those upgrades are themselves capped at 2.
++Capping the vendor at 2 could hide a vendor upgrade the demo is meant to
++show. Hero Tier-Up is gated by quests completed and cost, not a rank, so
++it's not covered either. Say if either should be capped.
++
++**Verified here.** `tsc --noEmit` clean. The headless re-run hits zero
++over-cap results in demo mode, and full mode is unchanged (perks 25/25,
++tools 8/8, Warehouse 10, Overseer 3). The web build succeeds in both
++`--mode demo` and default.
++
++**Not checked in the running game** -- worth: in `npm run dev:demo`,
++buy a Harvest tool to 2 and a Renown perk to 2, then confirm the button
++flips to "🔒 Full game" and opens the wishlist card.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 8a3fa57..cf01685 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -3760,6 +3760,7 @@ export class GameEngine {
+ 
+   upgradeHarvestTool(nodeId: MaterialId) {
+     const error = HarvestManager.upgradeTool(this.state, nodeId);
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' }); // patch 0449
+     if (error) return this.say(error);
+     playSound('purchase');
+     // ALL_TOOLS_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
+@@ -3770,6 +3771,7 @@ export class GameEngine {
+ 
+   upgradeWarehouse() {
+     const error = HarvestManager.upgradeWarehouse(this.state);
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' }); // patch 0449
+     if (error) return this.say(error);
+     playSound('purchase');
+     // WAREHOUSE_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
+@@ -3780,6 +3782,7 @@ export class GameEngine {
+ 
+   upgradeOverseer() {
+     const error = HarvestManager.upgradeOverseer(this.state);
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' }); // patch 0449
+     if (error) return this.say(error);
+     playSound('purchase');
+     const level = this.state.overseerLevel;
+@@ -4007,6 +4010,7 @@ export class GameEngine {
+ 
+   buyPerk(id: string) {
+     const error = PrestigeManager.buyPerk(this.state, id);
++    if (error === DEMO_LOCK_ERROR) return requestDemoWall({ kind: 'rank' }); // patch 0449
+     if (error) return this.say(error);
+     playSound('prestige_upgrade');
+     this.notify();
+diff --git a/src/game/managers/HarvestManager.ts b/src/game/managers/HarvestManager.ts
+index 49131e9..b3ed670 100644
+--- a/src/game/managers/HarvestManager.ts
++++ b/src/game/managers/HarvestManager.ts
+@@ -1,6 +1,7 @@
+ import { GameState, MaterialId } from '../types';
+ import { NODE_ORDER } from '../data/materials';
+ import { ModifierManager } from './ModifierManager';
++import { DEMO_LOCK_ERROR, demoRankLocked } from '../demo';
+ import {
+   HARVEST_TOOL_BY_NODE, OVERSEER_UPGRADE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
+   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseCapacity, warehouseUpgradeCost,
+@@ -225,6 +226,10 @@ export const HarvestManager = {
+     const level = state.harvestTools[nodeId] ?? 0;
+     const cost = harvestToolCost(nodeId, level);
+     if (cost === null) return 'Already at maximum level.';
++    // Patch 0449 -- demo rank cap (demo.ts), same check GuildManager's
++    // buy* functions make. Cost is untouched so the row still reads
++    // "more to buy" and shows its "Full game" button.
++    if (demoRankLocked(`harvest_tool_${nodeId}`, level)) return DEMO_LOCK_ERROR;
+     if (state.gold < cost) return 'Not enough gold.';
+     state.gold -= cost;
+     state.stats.goldSpent += cost;
+@@ -235,6 +240,7 @@ export const HarvestManager = {
+   upgradeWarehouse(state: GameState): string | null {
+     const cost = warehouseUpgradeCost(state.warehouseLevel);
+     if (cost === null) return 'Already at maximum level.';
++    if (demoRankLocked('warehouse', state.warehouseLevel)) return DEMO_LOCK_ERROR; // patch 0449, see upgradeTool
+     if (state.gold < cost) return 'Not enough gold.';
+     state.gold -= cost;
+     state.stats.goldSpent += cost;
+@@ -245,6 +251,7 @@ export const HarvestManager = {
+   upgradeOverseer(state: GameState): string | null {
+     const cost = overseerUpgradeCost(state.overseerLevel);
+     if (cost === null) return 'Already at maximum level.';
++    if (demoRankLocked('overseer', state.overseerLevel)) return DEMO_LOCK_ERROR; // patch 0449, see upgradeTool
+     if (state.gold < cost) return 'Not enough gold.';
+     state.gold -= cost;
+     state.stats.goldSpent += cost;
+diff --git a/src/game/managers/PrestigeManager.ts b/src/game/managers/PrestigeManager.ts
+index c32eac8..86d33d3 100644
+--- a/src/game/managers/PrestigeManager.ts
++++ b/src/game/managers/PrestigeManager.ts
+@@ -5,6 +5,7 @@ import {
+ import { GameState, Hero, HeroRenownPerkDef } from '../types';
+ import { HeroManager } from './HeroManager';
+ import { InventoryManager } from './InventoryManager';
++import { DEMO_LOCK_ERROR, demoRankLocked } from '../demo';
+ 
+ /**
+  * Prestige/Retirement Rework (patch 0317). Classic Retire -- level-cap
+@@ -110,6 +111,10 @@ export const PrestigeManager = {
+     const level = PrestigeManager.perkLevel(state, id);
+     const cap = renownEffectiveMaxLevel(def);
+     if (level >= cap) return 'Already at maximum.';
++    // Patch 0449 -- demo rank cap (demo.ts). The demo's four chains pay 4
++    // Renown and rank 3 of the 1-cost perks costs 1, so without this a
++    // first-evening demo player could already buy past rank 2.
++    if (demoRankLocked(id, level)) return DEMO_LOCK_ERROR;
+     const cost = renownCost(def, level);
+     if (state.renown < cost) return 'Not enough Heroic Renown.';
+     state.renown -= cost;
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index 275e1ac..e71576d 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -8,6 +8,7 @@ import {
+   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseUpgradeCost,
+ } from '../../game/data/harvestUpgrades';
+ import { HarvestManager } from '../../game/managers/HarvestManager';
++import { demoRankLocked, requestDemoWall } from '../../game/demo';
+ import { Tuning } from '../../game/data/tuning';
+ import { MaterialId } from '../../game/types';
+ import { formatDuration, formatGold, formatMaterial } from '../../game/util';
+@@ -487,12 +488,15 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
+   const level = state.harvestTools[nodeId] ?? 0;
+   const cost = harvestToolCost(nodeId, level);
+   const maxed = cost === null;
++  // Patch 0449 -- demo build: next rank is full-game only (see demo.ts).
++  const locked = !maxed && demoRankLocked(`harvest_tool_${nodeId}`, level);
++  const buy = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: tool.name }) : buyWithFx(engine, btn, () => engine.upgradeHarvestTool(nodeId)));
+   // Patch 0424 -- the 0420 row beats (coins into the button, level roll,
+   // shine; a wax seal on the last level) instead of the old pulse/max flash.
+   const beat = usePurchaseBeats([{ id: nodeId, value: level, max: tool.maxLevel }], STAY_BEATS)[nodeId];
+   const effectText = `+${tool.yieldBonusPerLevel} yield and a faster respawn per level`;
+   const pctFill = Math.min(100, (level / tool.maxLevel) * 100);
+-  const buyLabel = maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`;
++  const buyLabel = maxed ? 'Fully upgraded' : locked ? '🔒 Full game' : `Upgrade · ${formatGold(cost ?? 0)}`;
+   return (
+     <div
+       className={`upgrade-row ${rowBeatClass(beat)}`}
+@@ -512,9 +516,9 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
+         </span>
+       </span>
+       <button
+-        className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
+-        disabled={maxed || state.gold < (cost ?? 0)}
+-        onClick={(e) => { e.stopPropagation(); buyWithFx(engine, e.currentTarget, () => engine.upgradeHarvestTool(nodeId)); }}
++        className={`upgrade-buy-btn ${!maxed && !locked && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
++        disabled={maxed || (!locked && state.gold < (cost ?? 0))}
++        onClick={(e) => { e.stopPropagation(); buy(e.currentTarget); }}
+       >
+         {buyLabel}
+       </button>
+@@ -531,7 +535,7 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
+             </p>
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setShowDetail(false)}>Close</button>
+-              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeHarvestTool(nodeId))}>{buyLabel}</button>
++              <button className="btn-yellow" disabled={maxed || (!locked && state.gold < (cost ?? 0))} onClick={(e) => buy(e.currentTarget)}>{buyLabel}</button>
+             </div>
+           </div>
+         </div>
+@@ -546,6 +550,7 @@ function WarehouseTab() {
+   const cap = HarvestManager.capacity(state);
+   const warehouseCost = warehouseUpgradeCost(state.warehouseLevel);
+   const warehouseMaxed = warehouseCost === null;
++  const warehouseLocked = !warehouseMaxed && demoRankLocked('warehouse', state.warehouseLevel); // patch 0449
+   // Patch 0424 -- the Warehouse gets the row beats too, plus a crate per
+   // level that stacks onto the pile when it expands.
+   const whBeat = usePurchaseBeats([{ id: 'warehouse', value: state.warehouseLevel, max: WAREHOUSE_UPGRADE.maxLevel }], STAY_BEATS).warehouse;
+@@ -588,10 +593,12 @@ function WarehouseTab() {
+         <button
+           className="btn-yellow"
+           style={{ marginTop: 8 }}
+-          disabled={warehouseMaxed || state.gold < (warehouseCost ?? 0)}
+-          onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeWarehouse())}
++          disabled={warehouseMaxed || (!warehouseLocked && state.gold < (warehouseCost ?? 0))}
++          onClick={(e) => (warehouseLocked
++            ? requestDemoWall({ kind: 'rank', name: 'Warehouse' })
++            : buyWithFx(engine, e.currentTarget, () => engine.upgradeWarehouse()))}
+         >
+-          {warehouseMaxed ? 'Fully built' : `Expand · ${formatGold(warehouseCost ?? 0)}`}
++          {warehouseMaxed ? 'Fully built' : warehouseLocked ? '🔒 Full game' : `Expand · ${formatGold(warehouseCost ?? 0)}`}
+         </button>
+         {whBeat?.phase === 'stamp' && <SealStamp label="Fully built" className="upgrade-row-stamp" />}
+       </div>
+@@ -625,6 +632,9 @@ function OverseerRow() {
+   const level = state.overseerLevel;
+   const cost = overseerUpgradeCost(level);
+   const maxed = cost === null;
++  // Patch 0449 -- demo build: next rank is full-game only (see demo.ts).
++  const locked = !maxed && demoRankLocked('overseer', level);
++  const buy = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: 'Overseer' }) : buyWithFx(engine, btn, () => engine.upgradeOverseer()));
+   const chance = overseerRescueChancePercent(level);
+   const nextChance = overseerRescueChancePercent(level + 1);
+   const beat = usePurchaseBeats([{ id: 'overseer', value: level, max: OVERSEER_UPGRADE.maxLevel }], STAY_BEATS).overseer;
+@@ -633,7 +643,7 @@ function OverseerRow() {
+     : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`;
+   const effectText = level === 0 ? 'Catches missed spawns while you\u2019re away' : `Rescuing ${chance}% of misses \u2192 ${nextChance}% next level`;
+   const pctFill = Math.min(100, (level / OVERSEER_UPGRADE.maxLevel) * 100);
+-  const buyLabel = maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
++  const buyLabel = maxed ? 'Fully staffed' : locked ? '🔒 Full game' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
+   return (
+     <div
+       className={`upgrade-row ${rowBeatClass(beat)}`}
+@@ -653,9 +663,9 @@ function OverseerRow() {
+         </span>
+       </span>
+       <button
+-        className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
+-        disabled={maxed || state.gold < (cost ?? 0)}
+-        onClick={(e) => { e.stopPropagation(); buyWithFx(engine, e.currentTarget, () => engine.upgradeOverseer()); }}
++        className={`upgrade-buy-btn ${!maxed && !locked && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
++        disabled={maxed || (!locked && state.gold < (cost ?? 0))}
++        onClick={(e) => { e.stopPropagation(); buy(e.currentTarget); }}
+       >
+         {buyLabel}
+       </button>
+@@ -670,7 +680,7 @@ function OverseerRow() {
+             <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setShowDetail(false)}>Close</button>
+-              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeOverseer())}>{buyLabel}</button>
++              <button className="btn-yellow" disabled={maxed || (!locked && state.gold < (cost ?? 0))} onClick={(e) => buy(e.currentTarget)}>{buyLabel}</button>
+             </div>
+           </div>
+         </div>
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index 2e69758..1772593 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { PrestigeManager } from '../../game/managers/PrestigeManager';
++import { demoRankLocked, requestDemoWall } from '../../game/demo';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
+ import { describeMods, formatNumber } from '../../game/util';
+@@ -133,7 +134,10 @@ function RenownPerkRow({
+   const effectText = entries.join(' · ');
+   const description = justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description;
+   const pctFill = Math.min(100, (level / cap) * 100);
+-  const buyLabel = maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`;
++  // Patch 0449 -- demo build: next rank is full-game only (see demo.ts).
++  const locked = !maxed && demoRankLocked(def.id, level);
++  const buy = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: def.name }) : onBuy(btn));
++  const buyLabel = maxed ? 'Maxed' : locked ? '🔒 Full game' : `Buy · ✦ ${formatNumber(cost ?? 0)}`;
+   return (
+     <div
+       ref={rowRef}
+@@ -157,9 +161,9 @@ function RenownPerkRow({
+         </span>
+       </span>
+       <button
+-        className={`upgrade-buy-btn ${!maxed && affordable ? 'affordable' : ''}`}
+-        disabled={maxed || !affordable}
+-        onClick={(e) => { e.stopPropagation(); onBuy(e.currentTarget); }}
++        className={`upgrade-buy-btn ${!maxed && !locked && affordable ? 'affordable' : ''}`}
++        disabled={maxed || (!locked && !affordable)}
++        onClick={(e) => { e.stopPropagation(); buy(e.currentTarget); }}
+       >
+         {buyLabel}
+       </button>
+@@ -182,7 +186,7 @@ function RenownPerkRow({
+             )}
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setShowDetail(false)}>Close</button>
+-              <button className="btn-yellow" disabled={maxed || !affordable} onClick={(e) => onBuy(e.currentTarget)}>{buyLabel}</button>
++              <button className="btn-yellow" disabled={maxed || (!locked && !affordable)} onClick={(e) => buy(e.currentTarget)}>{buyLabel}</button>
+             </div>
+           </div>
+         </div>

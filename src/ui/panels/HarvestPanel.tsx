@@ -8,6 +8,7 @@ import {
   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseUpgradeCost,
 } from '../../game/data/harvestUpgrades';
 import { HarvestManager } from '../../game/managers/HarvestManager';
+import { demoRankLocked, requestDemoWall } from '../../game/demo';
 import { Tuning } from '../../game/data/tuning';
 import { MaterialId } from '../../game/types';
 import { formatDuration, formatGold, formatMaterial } from '../../game/util';
@@ -487,12 +488,15 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
   const level = state.harvestTools[nodeId] ?? 0;
   const cost = harvestToolCost(nodeId, level);
   const maxed = cost === null;
+  // Patch 0449 -- demo build: next rank is full-game only (see demo.ts).
+  const locked = !maxed && demoRankLocked(`harvest_tool_${nodeId}`, level);
+  const buy = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: tool.name }) : buyWithFx(engine, btn, () => engine.upgradeHarvestTool(nodeId)));
   // Patch 0424 -- the 0420 row beats (coins into the button, level roll,
   // shine; a wax seal on the last level) instead of the old pulse/max flash.
   const beat = usePurchaseBeats([{ id: nodeId, value: level, max: tool.maxLevel }], STAY_BEATS)[nodeId];
   const effectText = `+${tool.yieldBonusPerLevel} yield and a faster respawn per level`;
   const pctFill = Math.min(100, (level / tool.maxLevel) * 100);
-  const buyLabel = maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`;
+  const buyLabel = maxed ? 'Fully upgraded' : locked ? '🔒 Full game' : `Upgrade · ${formatGold(cost ?? 0)}`;
   return (
     <div
       className={`upgrade-row ${rowBeatClass(beat)}`}
@@ -512,9 +516,9 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
         </span>
       </span>
       <button
-        className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
-        disabled={maxed || state.gold < (cost ?? 0)}
-        onClick={(e) => { e.stopPropagation(); buyWithFx(engine, e.currentTarget, () => engine.upgradeHarvestTool(nodeId)); }}
+        className={`upgrade-buy-btn ${!maxed && !locked && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
+        disabled={maxed || (!locked && state.gold < (cost ?? 0))}
+        onClick={(e) => { e.stopPropagation(); buy(e.currentTarget); }}
       >
         {buyLabel}
       </button>
@@ -531,7 +535,7 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
             </p>
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeHarvestTool(nodeId))}>{buyLabel}</button>
+              <button className="btn-yellow" disabled={maxed || (!locked && state.gold < (cost ?? 0))} onClick={(e) => buy(e.currentTarget)}>{buyLabel}</button>
             </div>
           </div>
         </div>
@@ -546,6 +550,7 @@ function WarehouseTab() {
   const cap = HarvestManager.capacity(state);
   const warehouseCost = warehouseUpgradeCost(state.warehouseLevel);
   const warehouseMaxed = warehouseCost === null;
+  const warehouseLocked = !warehouseMaxed && demoRankLocked('warehouse', state.warehouseLevel); // patch 0449
   // Patch 0424 -- the Warehouse gets the row beats too, plus a crate per
   // level that stacks onto the pile when it expands.
   const whBeat = usePurchaseBeats([{ id: 'warehouse', value: state.warehouseLevel, max: WAREHOUSE_UPGRADE.maxLevel }], STAY_BEATS).warehouse;
@@ -588,10 +593,12 @@ function WarehouseTab() {
         <button
           className="btn-yellow"
           style={{ marginTop: 8 }}
-          disabled={warehouseMaxed || state.gold < (warehouseCost ?? 0)}
-          onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeWarehouse())}
+          disabled={warehouseMaxed || (!warehouseLocked && state.gold < (warehouseCost ?? 0))}
+          onClick={(e) => (warehouseLocked
+            ? requestDemoWall({ kind: 'rank', name: 'Warehouse' })
+            : buyWithFx(engine, e.currentTarget, () => engine.upgradeWarehouse()))}
         >
-          {warehouseMaxed ? 'Fully built' : `Expand · ${formatGold(warehouseCost ?? 0)}`}
+          {warehouseMaxed ? 'Fully built' : warehouseLocked ? '🔒 Full game' : `Expand · ${formatGold(warehouseCost ?? 0)}`}
         </button>
         {whBeat?.phase === 'stamp' && <SealStamp label="Fully built" className="upgrade-row-stamp" />}
       </div>
@@ -625,6 +632,9 @@ function OverseerRow() {
   const level = state.overseerLevel;
   const cost = overseerUpgradeCost(level);
   const maxed = cost === null;
+  // Patch 0449 -- demo build: next rank is full-game only (see demo.ts).
+  const locked = !maxed && demoRankLocked('overseer', level);
+  const buy = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: 'Overseer' }) : buyWithFx(engine, btn, () => engine.upgradeOverseer()));
   const chance = overseerRescueChancePercent(level);
   const nextChance = overseerRescueChancePercent(level + 1);
   const beat = usePurchaseBeats([{ id: 'overseer', value: level, max: OVERSEER_UPGRADE.maxLevel }], STAY_BEATS).overseer;
@@ -633,7 +643,7 @@ function OverseerRow() {
     : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`;
   const effectText = level === 0 ? 'Catches missed spawns while you\u2019re away' : `Rescuing ${chance}% of misses \u2192 ${nextChance}% next level`;
   const pctFill = Math.min(100, (level / OVERSEER_UPGRADE.maxLevel) * 100);
-  const buyLabel = maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
+  const buyLabel = maxed ? 'Fully staffed' : locked ? '🔒 Full game' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
   return (
     <div
       className={`upgrade-row ${rowBeatClass(beat)}`}
@@ -653,9 +663,9 @@ function OverseerRow() {
         </span>
       </span>
       <button
-        className={`upgrade-buy-btn ${!maxed && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
-        disabled={maxed || state.gold < (cost ?? 0)}
-        onClick={(e) => { e.stopPropagation(); buyWithFx(engine, e.currentTarget, () => engine.upgradeOverseer()); }}
+        className={`upgrade-buy-btn ${!maxed && !locked && state.gold >= (cost ?? 0) ? 'affordable' : ''}`}
+        disabled={maxed || (!locked && state.gold < (cost ?? 0))}
+        onClick={(e) => { e.stopPropagation(); buy(e.currentTarget); }}
       >
         {buyLabel}
       </button>
@@ -670,7 +680,7 @@ function OverseerRow() {
             <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setShowDetail(false)}>Close</button>
-              <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={(e) => buyWithFx(engine, e.currentTarget, () => engine.upgradeOverseer())}>{buyLabel}</button>
+              <button className="btn-yellow" disabled={maxed || (!locked && state.gold < (cost ?? 0))} onClick={(e) => buy(e.currentTarget)}>{buyLabel}</button>
             </div>
           </div>
         </div>
