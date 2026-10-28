@@ -2110,6 +2110,142 @@ async function resolvePatchPath(name) {
   return path.join(ROOT, match.dir, match.name);
 }
 
+/* ---------------------------------------------- patch file housekeeping --- */
+// Patch 0451. A .patch file is a duplicate of the commit it produced
+// (`git show <commit>` reproduces it), so patch files no longer go into git:
+//   - .gitignore gets /*.patch and /patches/ (added by ensurePatchIgnore the
+//     first time anything commits, rather than shipped in the patch itself,
+//     so applying 0451 through an older Ship it -- whose commit step
+//     `git add`s the patch file by name -- doesn't trip over an ignored
+//     path).
+//   - Every commit the DevTool makes first untracks any .patch files git
+//     still tracks (git rm --cached: the files stay on disk). The first
+//     commit after 0451 does the one-time cleanup of the old ones.
+//   - After a successful commit, every patch numbered at or below the
+//     newest "(patch NNNN)" heading in guild-idler-status.md (i.e. already
+//     applied -- every patch logs itself there) moves to patches/applied/.
+//     Higher numbers are queued, so they stay in the root for the picker.
+//     listPatchFiles only scans the root and patches/, never
+//     patches/applied/, so archived ones drop out of the picker.
+
+const PATCH_ARCHIVE_DIR = path.join(ROOT, 'patches', 'applied');
+const PATCH_IGNORE_LINES = [
+  '# Patch files (patch 0451) -- each patch\'s changes live in its own commit,',
+  '# so the .patch file is a duplicate. Queued patches sit in the root; the',
+  '# DevTool moves applied ones to patches/applied/ after it commits.',
+  '/*.patch',
+  '/patches/',
+];
+
+/** Adds the patch-file ignore rules to .gitignore if they aren't there yet.
+ *  Returns true when it changed the file. */
+async function ensurePatchIgnore() {
+  const file = path.join(ROOT, '.gitignore');
+  let text = '';
+  try { text = await fs.readFile(file, 'utf8'); } catch { /* no .gitignore yet */ }
+  if (/^\/\*\.patch\s*$/m.test(text)) return false;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const body = text.replace(/\s*$/, '');
+  await fs.writeFile(file, `${body}${body ? eol + eol : ''}${PATCH_IGNORE_LINES.join(eol)}${eol}`, 'utf8');
+  return true;
+}
+
+/** Root-level (or patches/) .patch files git still tracks. */
+async function trackedPatchFiles() {
+  const ls = await run('git', ['ls-files', '-z', '--', '*.patch'], GIT_TIMEOUT_MS);
+  if (!ls.ok) return [];
+  return ls.stdout.split('\0').filter((f) => f && (!f.includes('/') || f.startsWith('patches/')));
+}
+
+/** Stages the removal of every tracked .patch file from git without
+ *  touching the files on disk. Batched so a long list can't hit Windows'
+ *  command-line length limit. */
+async function untrackPatchFiles() {
+  const tracked = await trackedPatchFiles();
+  for (let i = 0; i < tracked.length; i += 40) {
+    const r = await run('git', ['rm', '--cached', '-q', '--ignore-unmatch', '--', ...tracked.slice(i, i + 40)], GIT_TIMEOUT_MS);
+    if (!r.ok) return { ...r, count: 0 };
+  }
+  return { ok: true, stdout: '', stderr: '', count: tracked.length };
+}
+
+/** Moves every already-applied patch (numbered <= the newest logged in the
+ *  status doc) out of the root / patches/ into patches/applied/. A name
+ *  clash gets a timestamp suffix rather than overwriting. */
+async function archiveAppliedPatches() {
+  const entries = await readPatchLogEntries().catch(() => []);
+  const newest = entries.length ? Math.max(...entries.map((e) => e.num)) : 0;
+  const moved = [];
+  const kept = [];
+  if (!newest) return { moved, kept, newest };
+  for (const f of await listPatchFiles()) {
+    const m = /^(\d{3,5})-/.exec(f.name);
+    if (!m || parseInt(m[1], 10) > newest) { kept.push(f.name); continue; }
+    await fs.mkdir(PATCH_ARCHIVE_DIR, { recursive: true });
+    let to = path.join(PATCH_ARCHIVE_DIR, f.name);
+    try { await fs.access(to); to = path.join(PATCH_ARCHIVE_DIR, f.name.replace(/\.patch$/, `-${Date.now()}.patch`)); } catch { /* free */ }
+    try {
+      await fs.rename(path.join(ROOT, f.dir, f.name), to);
+      moved.push(f.name);
+    } catch {
+      kept.push(f.name);
+    }
+  }
+  return { moved, kept, newest };
+}
+
+/** Runs right before every DevTool commit: ignore rules + untrack. The
+ *  returned note is appended to that step's output. */
+async function preparePatchHousekeeping() {
+  const ignoreAdded = await ensurePatchIgnore();
+  const untracked = await untrackPatchFiles();
+  if (!untracked.ok) return untracked;
+  const notes = [];
+  if (ignoreAdded) notes.push('Added /*.patch and /patches/ to .gitignore.');
+  if (untracked.count) notes.push(`Stopped tracking ${untracked.count} patch file${untracked.count === 1 ? '' : 's'} in git (still on disk).`);
+  return { ok: true, note: notes.join(' ') };
+}
+
+function archiveNote(a) {
+  return a.moved.length
+    ? `Moved ${a.moved.length} applied patch file${a.moved.length === 1 ? '' : 's'} to patches/applied/.${a.kept.length ? ` Left in place (not applied yet): ${a.kept.join(', ')}.` : ''}`
+    : '';
+}
+
+/**
+ * "Tidy patch files" button. Does the one-time cleanup straight away
+ * instead of waiting for the next patch's commit: ignore rules + untrack,
+ * committed and pushed on their own when anything changed, then archives.
+ * Refuses when anything other than patch files is uncommitted, so the
+ * tidy commit never sweeps up unrelated work.
+ */
+async function tidyPatchFiles() {
+  const needsCommit = (await trackedPatchFiles()).length > 0
+    || !/^\/\*\.patch\s*$/m.test(await fs.readFile(path.join(ROOT, '.gitignore'), 'utf8').catch(() => ''));
+  const out = [];
+  if (needsCommit) {
+    const dirty = await dirtyNonPatchLines();
+    if (!dirty.ok) return fail(`git status failed: ${dirty.error}`);
+    if (dirty.lines.length) return fail(`Commit or discard these first, so the tidy commit only contains patch housekeeping:\n${dirty.lines.join('\n')}`);
+    const prep = await preparePatchHousekeeping();
+    if (!prep.ok) return prep;
+    const add = await run('git', ['add', '--', '.gitignore'], GIT_TIMEOUT_MS);
+    if (!add.ok) return add;
+    const commit = await run('git', ['commit', '-m', 'Stop tracking patch files (DevTool tidy)'], GIT_TIMEOUT_MS);
+    if (!commit.ok) return commit;
+    out.push(prep.note, `Committed: "Stop tracking patch files (DevTool tidy)".`);
+    const gs = await gitStatus();
+    if (gs.upstream) {
+      const push = await run('git', ['push'], GIT_TIMEOUT_MS * 3);
+      if (!push.ok) return { ...push, stdout: `${out.join('\n')}\n\nCommitted, but the push failed -- use Push (step 5).\n${push.stdout}` };
+      out.push(`Pushed to ${gs.upstream}.`);
+    }
+  }
+  const archived = await archiveAppliedPatches();
+  out.push(archiveNote(archived) || 'No applied patch files left in the root.');
+  return { ok: true, stdout: out.filter(Boolean).join('\n'), stderr: '' };
+}
+
 async function gitStatus() {
   const status = await run('git', ['status', '--porcelain'], GIT_TIMEOUT_MS);
   const log = await run('git', ['log', '-1', '--oneline'], GIT_TIMEOUT_MS);
@@ -3303,7 +3439,15 @@ async function postDiscordUpdateChunked(title, message) {
 async function dirtyNonPatchLines() {
   const status = await run('git', ['status', '--porcelain'], GIT_TIMEOUT_MS);
   if (!status.ok) return { ok: false, lines: [], error: status.stderr };
-  const lines = status.stdout.split(/\r?\n/).filter((l) => l.trim() && !/^\?\? .*\.patch"?$/.test(l));
+  // Patch 0451 -- any change that's only patch files (untracked, deleted
+  // or moved into patches/) is ignored, not just untracked ones: before
+  // the first post-0451 commit, archiving a still-tracked patch shows up
+  // as a deletion, and that commit stages it anyway.
+  const isPatchPath = (p) => {
+    const clean = p.trim().replace(/^"|"$/g, '');
+    return /^[^/]*\.patch$/.test(clean) || clean.startsWith('patches/');
+  };
+  const lines = status.stdout.split(/\r?\n/).filter((l) => l.trim() && !l.slice(3).split(' -> ').every(isPatchPath));
   return { ok: true, lines };
 }
 
@@ -3401,19 +3545,19 @@ async function runShipStep(job, step) {
     case 'build':
       return runNpm(['run', 'build'], BUILD_TIMEOUT_MS);
     case 'commit': {
-      // Stages everything EXCEPT other untracked .patch files sitting in
-      // the folder (a queued 0450 shouldn't ride along in 0449's commit),
-      // then the applied patch file itself, matching the repo's history.
-      const resolved = await resolvePatchPath(o.patch);
+      // Patch 0451 -- patch files no longer go into git (see "patch file
+      // housekeeping"). Untrack any still tracked, stage everything else
+      // (ignored .patch files are skipped by git itself), commit, then move
+      // the applied patch out of the root into patches/applied/.
+      const prep = await preparePatchHousekeeping();
+      if (!prep.ok) return prep;
       const add = await run('git', ['add', '-A', '--', '.', ':(exclude)*.patch'], GIT_TIMEOUT_MS);
       if (!add.ok) return add;
-      if (resolved) {
-        const addPatch = await run('git', ['add', '--', resolved], GIT_TIMEOUT_MS);
-        if (!addPatch.ok) return addPatch;
-      }
       const r = await run('git', ['commit', '-m', o.commitMessage], GIT_TIMEOUT_MS);
-      if (r.ok) job.committed = true;
-      return r;
+      if (!r.ok) return r;
+      job.committed = true;
+      const archived = await archiveAppliedPatches();
+      return { ...r, stdout: [r.stdout, prep.note, archiveNote(archived)].filter(Boolean).join('\n') };
     }
     case 'bump': {
       const r = await runNpm(['version', o.bump], GIT_TIMEOUT_MS);
@@ -3581,13 +3725,23 @@ const server = http.createServer(async (req, res) => {
     const message = typeof body.message === 'string' && body.message.trim()
       ? body.message.trim()
       : 'Apply patch';
+    // Patch 0451 -- same patch housekeeping as Ship it's commit step.
+    const prep = await preparePatchHousekeeping();
+    if (!prep.ok) return json(res, 200, prep);
     const add = await run('git', ['add', '-A'], GIT_TIMEOUT_MS);
     if (!add.ok) return json(res, 200, add);
     // The commit message is passed as a single execFile argument, never
     // through a shell, so it can't be used to inject additional commands
     // regardless of what characters it contains.
     const commit = await run('git', ['commit', '-m', message], GIT_TIMEOUT_MS);
-    return json(res, 200, commit);
+    if (!commit.ok) return json(res, 200, commit);
+    const archived = await archiveAppliedPatches();
+    return json(res, 200, { ...commit, stdout: [commit.stdout, prep.note, archiveNote(archived)].filter(Boolean).join('\n') });
+  }
+
+  if (url.pathname === '/api/patches/tidy' && req.method === 'POST') {
+    if (shipJob?.running) return json(res, 409, { error: 'A ship run is in progress -- tidy once it finishes.' });
+    return json(res, 200, await tidyPatchFiles());
   }
 
   if (url.pathname === '/api/patches/push' && req.method === 'POST') {

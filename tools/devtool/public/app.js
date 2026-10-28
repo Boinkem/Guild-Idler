@@ -2925,8 +2925,12 @@ function renderPatches() {
     <div class="patch-git-status ${gs?.clean ? 'clean' : 'dirty'}" style="margin-top:10px;">
       <div class="spread">
         <span><b>Branch:</b> ${escapeHtml(gs?.branch || '?')} &nbsp; <b>Last commit:</b> ${escapeHtml(gs?.lastCommit || '?')}</span>
-        <button id="refreshStatusBtn">Refresh</button>
+        <span class="row" style="gap:6px;">
+          <button id="tidyPatchesBtn" title="Moves applied .patch files to patches/applied/ and stops git tracking patch files">Tidy patch files</button>
+          <button id="refreshStatusBtn">Refresh</button>
+        </span>
       </div>
+      <div id="tidyResult"></div>
       <div class="tiny muted" style="margin-top:4px;">
         ${gs?.upstream
           ? `Pushes to <b>${escapeHtml(gs.upstream)}</b>.`
@@ -2949,7 +2953,7 @@ function renderPatches() {
     <div id="patchFlow" ${patchState.cycleView || patchState.shipView ? 'hidden' : ''}>
     <div class="section-heading" style="margin-top:18px;">1. Select a patch</div>
     ${patchState.files.length === 0
-      ? '<p class="tiny muted">No .patch files found in the project root or a patches/ folder. Drop one in and hit Refresh.</p>'
+      ? '<p class="tiny muted">No .patch files waiting to be applied. Drop one in the project root and hit Refresh. (Applied ones live in patches/applied/.)</p>'
       : `<div class="patch-list">${patchState.files.map((f) => `
           <label class="patch-item ${sel === f.name ? 'selected' : ''}">
             <input type="radio" name="patchfile" value="${escapeHtml(f.name)}" ${sel === f.name ? 'checked' : ''} />
@@ -3217,6 +3221,23 @@ function renderPatches() {
   wireShipCycle();
 
   document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
+
+  // Patch 0451 -- one click instead of moving files by hand and committing.
+  // Every DevTool commit does the same housekeeping automatically; this is
+  // for doing it right now.
+  document.getElementById('tidyPatchesBtn').onclick = async (e) => {
+    if (!confirm('Tidy patch files?\n\nApplied .patch files move to patches/applied/. If git still tracks any patch files, that gets committed and pushed on its own ("Stop tracking patch files") -- the files stay on disk.')) return;
+    e.currentTarget.disabled = true;
+    let result;
+    try {
+      result = await api('/api/patches/tidy', { method: 'POST' });
+    } catch (err) {
+      result = { ok: false, stderr: err.message };
+    }
+    await selectPatchesTab();
+    const el = document.getElementById('tidyResult');
+    if (el) el.innerHTML = resultBlock(result, 'Tidy patch files');
+  };
 
   const simulateShortcutBtn = document.getElementById('simulateShortcutBtn');
   if (simulateShortcutBtn) simulateShortcutBtn.onclick = () => selectSandboxTab();

@@ -36467,3 +36467,71 @@ sandbox). It's the same step code Ship it uses.
 
 **After applying: close and restart the DevTool.** This patch changes
 server code, which a page refresh won't pick up (same rule as 0446/0448).
+
+### DevTool: patch files leave git, applied ones archive themselves (patch 0451)
+```discord-update
+Dev Update | Patch 0451
+
+- Changed our dev tools to tidy up finished patch files on their own (no change to the game itself)
+```
+
+Direct request: applied `.patch` files were piling up in the project root,
+and moving them to an archive folder by hand meant another commit every time.
+That's because they were tracked (Ship it's commit step `git add`ed each
+one on purpose), so moving them showed up as deletions, and those block
+Ship it/Release pre-flight.
+
+**Decision: patch files don't go into git anymore.** Each one duplicates
+the commit it produced (`git show <commit>` reproduces it), and the
+write-up lives here. A new "patch file housekeeping" section in
+`tools/devtool/server.mjs`:
+- `ensurePatchIgnore` adds `/*.patch` and `/patches/` to `.gitignore`.
+  The DevTool adds these lines the first time it commits, instead of this
+  patch shipping them. If the patch shipped them, applying 0451 through the
+  0450 Ship it would fail: that commit step `git add`s the patch file by
+  name, and git refuses to add an ignored path.
+- `untrackPatchFiles` runs `git rm --cached` on every tracked root/
+  `patches/` .patch file (files stay on disk), batched 40 per call for
+  Windows' command-line limit.
+- `archiveAppliedPatches` moves every patch numbered at or below the
+  newest `(patch NNNN)` heading in this doc into `patches/applied/`. Every
+  patch logs itself here, so that's "already applied". Higher numbers are
+  queued and stay in the root. A name clash gets a timestamp suffix instead
+  of overwriting. `listPatchFiles` only scans the root and `patches/`, so
+  archived ones drop out of the picker.
+
+**Where it runs:**
+- **Ship it's commit step** and **Patch flow's Commit button**: ignore
+  rules + untrack before staging, archive after a successful commit.
+  Ship it no longer adds the patch file to the commit. The first commit
+  after this patch does the one-time cleanup: the .gitignore change plus
+  ~63 removals ride along in that patch's own commit, and it's noted in
+  the step output.
+- **New "Tidy patch files" button** (git status box, beside Refresh) does
+  it right now instead of waiting for the next patch. When anything is
+  still tracked, it commits that on its own ("Stop tracking patch files
+  (DevTool tidy)") and pushes, then archives. It refuses if anything other
+  than patch files is uncommitted, so the tidy commit never sweeps up other
+  work. Once everything is untracked it just archives, with no commit.
+- `dirtyNonPatchLines` (Ship it/Release pre-flight) now ignores any status
+  line that's only patch files: untracked, deleted, or moved into
+  `patches/`. Before this it only ignored untracked ones. A patch moved by
+  hand no longer blocks a run.
+
+**Tested** in a sandbox copy of the repo (63 tracked patches, a local bare
+remote, stubbed package scripts, a fake steamcmd):
+- Ship it with a queued 0452: its commit carried the .gitignore change and
+  every patch removal. All patches up to 0452 went to `patches/applied/`,
+  a queued 0453 stayed in the root, and the tree was clean afterwards.
+- Tidy on a fresh copy: one commit, pushed, everything archived. A second
+  click archived with no commit. With an unrelated edit present, it
+  refused.
+- Release pre-flight passed with hand-moved patches showing as deletions.
+- The Patch flow Commit button did the same cleanup.
+
+`node --check` passes on both files.
+
+**After applying: close and restart the DevTool.** This patch changes
+server code. Applying 0451 itself through Ship it is fine: the old commit
+step still commits the 0451 file one last time, and the next commit, or a
+Tidy click, cleans everything up.
