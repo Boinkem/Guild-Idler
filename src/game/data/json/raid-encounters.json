@@ -2,7 +2,7 @@
   {
     "id": "bonewrought_outer_wardens",
     "name": "The Outer Wardens",
-    "flavour": "They were guards once, and they never stopped being guards. They are bound to the vault, and do not seem to know they are dead.",
+    "flavour": "They were guards in life and they are guards in death. They are bound to the vault, and they do not seem to know they are dead.",
     "baseSuccess": 70,
     "durationHours": 2,
     "rewardGold": 800,
@@ -15,7 +15,7 @@
   {
     "id": "bonewrought_choir_of_bones",
     "name": "The Choir of Bones",
-    "flavour": "Dozens of throats hold one single note far longer than any living lungs could manage, because none of these throats are breathing at all.",
+    "flavour": "Dozens of dead throats hold one note far longer than any living lungs could. The sound holds the vault's old wards together, and it has to be broken to get any deeper.",
     "baseSuccess": 60,
     "durationHours": 3,
     "rewardGold": 1400,
@@ -40,7 +40,7 @@
   {
     "id": "bonewrought_vault_keeper",
     "name": "The Vault-Keeper",
-    "flavour": "Still at its post after all this time, it keeps counting every soul that comes through the door. The count has been wrong for a very long time, and it does not seem to notice.",
+    "flavour": "A construct built to count everyone who enters the vault and stop anyone who should not. It has been counting wrong for centuries, and it treats every living thing as a thief.",
     "baseSuccess": 50,
     "durationHours": 4,
     "rewardGold": 2600,
@@ -54,7 +54,7 @@
   {
     "id": "blackford_outer_palisade",
     "name": "The Outer Palisade",
-    "flavour": "Sharpened stakes, a single rope bridge, and men who know exactly which gaps in the wall to defend. Someone with real training taught them this.",
+    "flavour": "Sharpened stakes, a single rope bridge, and Blackford's own soldiers, who know exactly which gaps in the wall to defend. They were trained well, by the man they are now defending.",
     "baseSuccess": 70,
     "durationHours": 2,
     "rewardGold": 400,
@@ -67,7 +67,7 @@
   {
     "id": "blackford_right_hand",
     "name": "The Uncrowned's Right Hand",
-    "flavour": "Not the one giving the big speeches out front, but the one those speeches are actually about. Calm, precise, and clearly used to being obeyed without question.",
+    "flavour": "Captain Dorran, Blackford's master-at-arms, gives the orders the soldiers actually follow. Calm, precise, and loyal to Blackford even now. He will not surrender the inner keep.",
     "baseSuccess": 60,
     "durationHours": 3,
     "rewardGold": 650,
@@ -80,7 +80,7 @@
   {
     "id": "blackford_tyrant",
     "name": "The Tyrant of Blackford",
-    "flavour": "He was a lawful lord once, sworn to hold this stretch of the border and nothing more. Whatever he has become no longer recognizes a border at all. He does not ask who the guild answers to. He has already stopped believing anyone outranks him.",
+    "flavour": "Lord Blackford was a good lord once. Grief made him a tyrant, and he no longer believes anyone has the right to judge him, not the Crown and not the guild.",
     "baseSuccess": 50,
     "durationHours": 4,
     "rewardGold": 1000,
@@ -112,7 +112,7 @@
   {
     "id": "last_god_field_of_failed_guilds",
     "name": "The Field of Failed Guilds",
-    "flavour": "None of these wrecks share a single route, and that is the closest thing to comfort this shore offers. Everyone who tried, tried differently, and everyone still ended up here. Waterlogged banners stand driven into the sand beside hulls that were never built to survive the crossing that brought them here. Centuries of failed pilgrimages litter this field, and not one banner belongs to a guild that walked away afterward.",
+    "flavour": "The shore at the end of the road is covered in the wreckage of guilds that tried this before: banners in the sand, broken boats, and no sign anyone walked away. Every one of them came a different way. Every one of them ended up here.",
     "baseSuccess": 70,
     "durationHours": 4,
     "rewardGold": 6000,
@@ -125,7 +125,7 @@
   {
     "id": "last_god_silence_where_prayer_used_to_work",
     "name": "The Silence Where Prayer Used to Work",
-    "flavour": "An altar older than any faith currently practiced stands at the center of a ring of kneeling dead. Every one is a pilgrim who came here on purpose in their final days, following the old rites exactly. Something did answer, in the end, faint and slow and barely enough of itself left to recognize. What remains of that answer no longer knows the difference between finishing the rite and simply not letting anyone leave.",
+    "flavour": "An ancient altar stands in a ring of kneeling dead: pilgrims who came here to die, as the old rites said to. The god's last power still answers the altar, but it no longer knows the difference between finishing the rite and refusing to let anyone leave.",
     "baseSuccess": 60,
     "durationHours": 5,
     "rewardGold": 9500,
@@ -139,7 +139,7 @@
   {
     "id": "last_god_what_is_left_of_it",
     "name": "What Is Left of It",
-    "flavour": "What remains of the Last God does not rise to meet the guild, and does not entirely need to. It is enormous, and has been dying since long before anything currently alive was born, slowly starving on belief nobody living remembers how to give it. It reaches for the guild anyway, the same way the shrine reached for strangers and the ring of pilgrims still kneels waiting, not out of malice but from no longer being able to tell who it is reaching for. There is no one left to walk it home. So the guild does, the only way anyone still can, once it finally, mercifully, stops fighting that.",
+    "flavour": "What remains of the Last God is enormous and very weak, starved for centuries. It reaches for the guild the way it reached for every pilgrim, not out of hate but because it no longer knows who it is reaching for. The guild has to hold on until it finally stops fighting, and then walk it the rest of the way.",
     "baseSuccess": 50,
     "durationHours": 6,
     "rewardGold": 15000,
@@ -152,7 +152,7 @@
   {
     "id": "wyrmkeep_hatchling_brood",
     "name": "The Hatchling Brood",
-    "flavour": "They are young, and young dragons make mistakes: flying too close, breathing fire too early, giving away a position a fully grown dragon never would. That is the only reason this fight is survivable at all. There are a lot of them, and not one fights like it is afraid.",
+    "flavour": "They are young, and young dragons make mistakes: flying too close, breathing fire too early, giving away their position. That is the only reason this fight is survivable. There are a lot of them.",
     "baseSuccess": 70,
     "durationHours": 2,
     "rewardGold": 550,
@@ -170,7 +170,7 @@
   {
     "id": "wyrmkeep_wyrm_keepers",
     "name": "The Wyrm Keepers",
-    "flavour": "Not cultists and not worshippers, but keepers in the plainest sense: people who found a brood too dangerous to kill and decided tending it was safer than the alternative. They have kept this brood fed and hidden for years, and have no intention of stopping now. They know exactly where every hatchling is.",
+    "flavour": "Not cultists, just locals who found a brood too dangerous to kill and decided feeding it was safer. They have kept it hidden for years, they know where every hatchling is, and they will not stop now.",
     "baseSuccess": 60,
     "durationHours": 3,
     "rewardGold": 950,
@@ -183,7 +183,7 @@
   {
     "id": "wyrmkeep_frozen_wyrm",
     "name": "The Frozen Wyrm",
-    "flavour": "Old enough to remember when this mountain had no brood at all, old enough, in fact, to have started the whole thing. Ice does not slow it down. It has had centuries to stop noticing the cold.",
+    "flavour": "The matriarch who laid the first clutch, centuries old and as big as a barn. The cold does not slow her down. She has lived up here long enough to stop noticing it.",
     "baseSuccess": 50,
     "durationHours": 4,
     "rewardGold": 1800,
@@ -205,7 +205,7 @@
   {
     "id": "gotout_trail_gone_cold",
     "name": "What Still Guards It",
-    "flavour": "Nobody left in this fortress answers to a demon lord anymore, but somebody still guards the halls anyway, paid, threatened, or promised something on the other side of a door none of them will ever open themselves.",
+    "flavour": "The halls are guarded by demons who answer to nobody now, held in line by promises of what is waiting on the other side of the breach.",
     "baseSuccess": 70,
     "durationHours": 3,
     "rewardGold": 1100,
@@ -217,7 +217,7 @@
   {
     "id": "gotout_the_last_loyal",
     "name": "The Council",
-    "flavour": "They do not agree on much: not the timing, not the cost, and not even what exactly is supposed to come through once the breach opens. What they do agree on is that an empty fortress with broken wards is the best chance any of them will get, and none of them are willing to wait for a better one.",
+    "flavour": "The lieutenants do not agree on much, including what exactly is supposed to come through the breach. They agree that this is their best chance to open it, and none of them will wait for a better one.",
     "baseSuccess": 60,
     "durationHours": 4,
     "rewardGold": 1900,
@@ -229,7 +229,7 @@
   {
     "id": "gotout_cornered",
     "name": "The Breach",
-    "flavour": "Whatever is coordinating this from the far side of the working has not fully arrived, not yet and not entirely, but it is close enough to reach through, and reaching is apparently all it needs. The breach does not have to finish opening to be a problem. It only has to open enough.",
+    "flavour": "On the far side of the half-open breach is something that has not fully arrived. It is close enough to reach through, and reaching through is all it needs to do to be a problem.",
     "baseSuccess": 50,
     "durationHours": 5,
     "rewardGold": 3400,
@@ -254,7 +254,7 @@
   {
     "id": "blackdragon_the_keepers",
     "name": "The Keepers",
-    "flavour": "They do not guard the nest so much as tend it: clearing debris, warming the eggs, and keeping predators, and the occasional guild, at a respectful distance with fire meant to warn first and kill second.",
+    "flavour": "They tend the nest: clearing debris, warming the eggs, and warning off anyone who comes close with fire meant to scare first and kill second.",
     "baseSuccess": 70,
     "durationHours": 3,
     "rewardGold": 1600,
@@ -273,7 +273,7 @@
   {
     "id": "blackdragon_the_hatchlings",
     "name": "The Hatchlings",
-    "flavour": "A whole clutch, already out of the shell and already breathing fire they have not learned to aim yet, which somehow makes wading through a dozen of them worse, not better.",
+    "flavour": "A whole clutch, already hatched and already breathing fire they cannot aim yet. Wading through a dozen of them is worse than fighting one that can.",
     "baseSuccess": 60,
     "durationHours": 4,
     "rewardGold": 2600,
@@ -292,7 +292,7 @@
   {
     "id": "blackdragon_the_brood_mother",
     "name": "The Brood Mother",
-    "flavour": "She is old enough to remember when this ridge had a different name, and far less patient about visitors than her keepers were trained to be. She remembers every hatchling the guild has already cleared, by weight.",
+    "flavour": "She is old, enormous, and far less patient than her keepers. She knows how many of her hatchlings the guild has already killed.",
     "baseSuccess": 50,
     "durationHours": 5,
     "rewardGold": 4400,
@@ -326,7 +326,7 @@
   {
     "id": "hob_the_marrow_eater",
     "name": "The Marrow Eater",
-    "flavour": "It was never one body. It is dozens, sewn and stitched into something with too many arms and not nearly enough of them matching, built by someone with a great deal of practice and no aesthetic sense whatsoever.",
+    "flavour": "Ostrel's guardian: dozens of bodies stitched together into one creature with far too many arms. Built by someone with a lot of practice and no sense of style.",
     "baseSuccess": 70,
     "durationHours": 3,
     "rewardGold": 2700,
@@ -339,7 +339,7 @@
   {
     "id": "hob_the_phylactery",
     "name": "The Phylactery",
-    "flavour": "It is hidden well, but not well enough. A small, unassuming box sits tucked into a hollow behind an ossuary wall, humming faintly with a heartbeat that is not its own. Finding it is the hard part. Destroying it is the easy part.",
+    "flavour": "A small box hidden behind an ossuary wall, beating faintly like a heart. It is what keeps Ostrel alive. Finding it is the hard part. Smashing it is easy.",
     "baseSuccess": 55,
     "durationHours": 4,
     "rewardGold": 4300,
@@ -352,7 +352,7 @@
   {
     "id": "hob_the_lich",
     "name": "The Lich",
-    "flavour": "With his phylactery gone, he is mortal again in every way that matters, but he does not fight like it. He fights like someone who was midway through a ritual to speak with something far older than himself, and very much resents the interruption.",
+    "flavour": "With his phylactery gone, Ostrel can die like anyone else, but he still fights like a lich who has had ninety years to practise. He is furious about the interruption.",
     "baseSuccess": 45,
     "durationHours": 5,
     "rewardGold": 7400,
@@ -377,7 +377,7 @@
   {
     "id": "loom_the_presiding_intelligence",
     "name": "The Presiding Intelligence",
-    "flavour": "It has no true mouth of its own, so it borrows every one nearby at once, arguing with itself in a dozen stolen voices right up until it stops arguing entirely and simply reaches for the guild the same way it reached for Millbrook.",
+    "flavour": "The Loom has no mouth of its own, so it speaks through every threaded person nearby at once, arguing with the guild in a dozen borrowed voices. When arguing stops working, it reaches for the guild with its threads, the same way it reached for Millbrook.",
     "baseSuccess": 65,
     "durationHours": 6,
     "rewardGold": 13000,

@@ -36817,3 +36817,41 @@ Verified: `tsc --noEmit` clean, web build OK, logic run through a script
 (every vendor at L1-4, same-day block, L4 odds over 10k rolls ~45/48/7,
 Shard costs: Legendary +4 to +10 = 5 Shards and Scrap for the +5 step
 only, re-level 3 levels = 3 Shards). Reveal checked in the built game.
+
+### Story rewrite: every quest chain and raid in a plain voice (patch 0456)
+```discord-update
+Dev Update | Story Rewrite
+
+- Changed every quest chain and raid story to tell it straight: who's involved, what happened, and why
+- Changed Grimsby's introduction: you now find out exactly how his card game was rigged and who he owes
+- Added names to the people you meet along the way, from the Pale Rider to the goblin chieftains
+- Changed endings to say clearly how each story wraps up
+```
+
+Direct request: the chain and raid text read as vague and "mystical", a
+style the game had already decided to move away from. Rewrote all 29
+quest chains (description, every stage name and flavour, epilogue) and
+all 8 raids (description, epilogue, every encounter name and flavour)
+with the same lens as the signed-off Grimsby rewrite: state who, what and
+why; resolve native-world mysteries instead of leaving them open for
+atmosphere; give people names; make epilogues say what changed.
+
+Kept as-is on purpose: chain and raid names, titles, rewards, ids, stage
+counts, tags, difficulty and timings (only prose fields changed, checked
+in the diff). The Old God rules in world-lore-pantheon.md still hold: the
+Harrower and the World-Ender stay unnamed, demons come through old
+wounds, the Watchers and the Vigil are unchanged, and the Harrower thread
+still points at the tomb and a future confrontation.
+
+world-lore-pantheon.md gains a **Story Record** section, the running
+reference to tie new stories back to: a timeline of every chain and raid
+in story order (what happened and what it leaves behind), a cast table
+(who, where, alive or dead, which stories), a places table, and an open
+threads list (the Harrower, whatever Ostrel was contacting, the empty
+fortress, Grimsby's debt, the Loom's spread, and more). Two older lines in
+the doc that quoted the old vague wording were updated. **Rule going
+forward:** any patch that adds or changes a chain or raid also updates the
+Story Record. "IronRest" is now spelled the same way everywhere.
+
+Files: `quest-chains.json`, `raids.json`, `raid-encounters.json`,
+`world-lore-pantheon.md`. No code changes.

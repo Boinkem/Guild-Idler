@@ -105,7 +105,7 @@ enjoy noticing, not a thread a future writer feels obligated to pay off.
 Two categories, deliberately not one:
 
 **Native.** Most of what the guild fights is simply from here — goblins,
-dragons, whatever was under the miller's cellar, raiders, corrupt
+dragons, the cave lizard under the miller's cellar, raiders, corrupt
 captains, rival guild leaders. No special origin needed; this is the
 default. Only reach for the second category when a chain specifically
 wants otherworldly flavor.
@@ -305,8 +305,8 @@ Already present by name across five existing chains (`crows_warning`,
 `harrowers_foot`, `demon_generals_ledger`, `what_the_culled_become`,
 `the_pale_rider`), spanning reqLevel 8 through 32 — but never once appears
 in person, and its actual goal was left deliberately unanswered
-(`harrowers_foot`: "whatever is directing these raids wants something
-specific, and it is getting closer to finding it"). This is the answer to
+(`harrowers_foot`: someone is sending the demons to search villages for
+one specific thing, and they have not found it yet). This is the answer to
 that open question, reserved for a future story pack rather than retconning
 anything already written.
 
@@ -367,3 +367,146 @@ closer, not as progress toward answering either open question itself.
   meant to connect to this — i.e., is the Harrower one of the fronts they're
   counting on? Not required, but available if useful.
 
+---
+
+# Story Record
+
+The running record of what has actually happened in the game's stories,
+who is involved, and what is still open. Use it to tie new chains back to
+old ones and to avoid contradicting them. **Keep it current:** any patch
+that adds or changes a quest chain or raid also updates the timeline, the
+cast, and the open threads below.
+
+Writing voice (since patch 0456): say who, what and why. Native-world
+problems get resolved and explained. Only the Old Gods keep their
+mystery, and only within the rules in the sections above.
+
+## Timeline
+
+In rough story order (by required level). "→" marks what the story leaves
+behind for later.
+
+| Lv | Chain / raid | What happened | → Leaves behind |
+|---|---|---|---|
+| 1 | `the_first_haul` | Old Bram, a retired quartermaster, teaches the guild to work the gathering grounds outside IronRest. | Harvest unlocked. |
+| 2 | `millers_problem` | The guild's first real job: kills a cave lizard living in a flooded drainage tunnel under the mill. | — |
+| 4 | `bandits_on_the_old_road` | Rook, a former caravan guard calling himself King of the Old Road, unites bandit crews; the guild kills him. | Caravans now pay the guild for escorts. |
+| 5 | `the_last_clutch` | The guild rebuilds the old hatchery and kills a wolf raiding it; the keeper hands over her last clutch. | Hatchery unlocked. |
+| 5 | `the_man_who_sells_maybe` | Grimsby's rigged card cart (shaved deck) is exposed. He owed the Vasse brothers for the cart; the guild stands between him and them. He burns the deck and plays fair. | Grimsby unlocked. He "owes the guild" and has promised to pay it back (planned: daily Instalments). The Vasse brothers still want their money. |
+| 6 | `goblin_warband` | Grukk unites three goblin warbands by beating their chiefs; the guild kills him. | His three cleavers hang in IronRest. |
+| 7 | `the_gathering_horde` | Grukk's lieutenant Skarn copies his method; the guild kills him before the horde re-forms. | Warbands scattered; another goblin may try again. |
+| 8 | `crows_warning` | Demons search Thornhollow house by house and leave biting victims turning into ghouls. The Greywick alchemist's messenger crow leads the guild to her; the cure saves the bitten. | First Harrower-thread chain. The guild keeps the crow. |
+| 8 | Raid: `blackford_keep` | Lord Blackford, grieving his son, burns border villages and defies the Crown; the guild storms the keep and kills him and Captain Dorran. | Keep returned to the Crown. |
+| 10 | `ancient_crown` | The guild recovers three fragments of the old coastal kings' crown for Lady Seren Ashcombe. | Ashcombe is pressing her claim in the capital. |
+| 11 | `harrowers_foot` | A second village searched and burned the same way; the raiding party dies without knowing who gives orders. | Someone is directing the demons. |
+| 12 | `something_big_in_the_foothills` | A hill giant warband raids the herds; the guild kills its leader and the rest scatter. | — |
+| 14 | `lost_kingdom` | Expedition for collector Master Orrin Hale to the lost kingdom of Caldra; the vault opens and its stone guardian stands down. | Caldra is back on the maps; its ruins are open to explore. |
+| 15 | `demon_generals_ledger` | The guild kills a demon general whose ledger lists every village searched, all reporting to "the Harrower". | The name Harrower is known at IronRest. |
+| 16 | `proving_the_bastion` | Captain Maeryn Thorne tests the guild; it kills a demon hound and a demon warlord and takes the north-west fort. | **The guild gets the Keep** and becomes IronRest's ally, not hired help. |
+| 17 | `full_moon_over_ashvale` | Werewolves in Ashvale; the guild kills the alpha and has to put down Holt, a bitten hunter who turned. | Edric Marsh also survived a bite (see `kindred_moon`). |
+| 18 | `dragon_hunt` | A dragon burning Emberfell's farms is killed at its lair above the Cinder Pass. | Its hoard rebuilt Emberfell. |
+| 18 | Raid: `frozen_wyrmkeep` | A dragon brood hidden and fed by local keepers is destroyed, with its matriarch, the Frozen Wyrm. | Keepers brought down to answer for it. |
+| 19 | `what_the_culled_become` | The dead of the culled villages rise and walk to the barrow-ground east of the villages; the guild destroys them at King Haldren's cracking tomb. | The Harrower raises the dead and is interested in that tomb. |
+| 20 | `granite_crossing` | Garrick's rival guild holds the Stone Masons Guild's quarry for ransom; the guild kills Garrick. | The Stone Masons Guild owes the guild. |
+| 22 | `demon_fortress` | The Crown's assault on a nine-year demon fortress; the guild leads the breach and kills the demon lord. | The warding choir escapes (see `hollow_choir`). The ruin is empty. |
+| 22 | Raid: `bonewrought_vault` | An old royal treasury vault's dead guards rise; the guild destroys the vault-keeper construct. | The undeath behind it is still spreading. |
+| 24 | `farm_at_the_edge` | IronRest's Captain Vayne deserts and tries to bargain with a demon for power, paying with lives; the guild kills her. | Thorne is checking on her other officers. |
+| 26 | `hollow_choir` | The escaped choir roots into a cathedral to build new wards; the guild kills it. | Cathedral reconsecrated. |
+| 26 | Raid: `what_got_out` | Surviving demon lieutenants try to open a breach in the empty fortress; the guild closes it. | First attempted crossing on record. The council scattered; the fortress may not stay empty. |
+| 29 | `body_snatcher_problem` | A skinweaver replaces the Pell household, one of IronRest's oldest families; the guild kills it. | The watch is checking other households. |
+| 30 | Raid: `black_dragon_nest` | The Brood Mother, a black dragon, spreads along the eastern ridge; the guild destroys the nest. | Why she chose that ridge is unknown. |
+| 32 | `the_pale_rider` | Ser Cael Morrow, the Ashen Hand's dead Lord-Commander, raised to guard Saint Aurlias' Rest; the guild puts him down. | The Ashen Hand are allies and report risen dead to the Keep. |
+| 34 | `world_ender` | A patron's sixth expedition; the guild walks the impossible road past the Watchers, the Unmade King and the failing Vigil, and kills the World-Ender. | Vigil at rest. The Watchers keep other tallies. |
+| 35 | `quiet_in_millbrook` | Millbrook's people all give the same answers; pale threads run from their necks underground. | The thing below knows the guild is coming. |
+| 37 | `hunt_a_lich` | The risen dead start acting like an army, commanded by Ostrel, a necromancer IronRest hanged ninety years ago, now a lich. | His ossuary is found (see `house_of_bones`). |
+| 39 | `the_loom_beneath` | The guild finds the Loom, a vast underground growth threaded into Millbrook. | Other towns on the same road show symptoms. |
+| 41 | Raid: `house_of_bones` | The guild destroys Ostrel's phylactery and kills him mid-ritual. | **Something was listening on the other end of his ritual.** |
+| 43 | Raid: `silence_the_loom` | The guild kills the Loom; Millbrook recovers with IronRest's healers. | — |
+| 44 | `last_pilgrimage` | An abandoned shrine forces funeral rites on travellers; its archive shows the god of the final mile was forgotten, not abandoned. | The road to the Last God opens. |
+| 45 | `hollow_king` | King Haldren rises from the barrow with his dead court and marches on his old capital; the guild buries him again. | IronRest keeps a permanent watch on the barrow. |
+| 46 | `kindred_moon` | Edric Marsh, bitten at Ashvale, attempts a hedge-witch's rite; he now controls his werewolf shape. | Ashvale hasn't decided how it feels about him. |
+| 55 | Raid: `requiem_last_god` | The guild finishes the last pilgrimage for the starving Last God and lays it to rest. | — |
+
+## Cast
+
+People the guild has met, by name. **Status** is as of the end of their
+latest story.
+
+| Name | Who they are | Where | Status | Appears in |
+|---|---|---|---|---|
+| Captain Maeryn Thorne | Commander of IronRest Bastion; gave the guild the Keep | IronRest | Alive, ally | `proving_the_bastion`, `granite_crossing`, `farm_at_the_edge` |
+| Grimsby | Card-game peddler, reformed cheat; says he owes the guild | Roads near IronRest / the guild hall | Alive, ally | `the_man_who_sells_maybe` |
+| The Vasse brothers | Dock-district moneylenders Grimsby owes for his cart | IronRest docks | Alive, unpaid | `the_man_who_sells_maybe` |
+| Old Bram | Retired quartermaster who taught the guild to gather | IronRest | Alive | `the_first_haul` |
+| The hatchery keeper | Elderly keeper of the old hatchery (unnamed) | Edge of town | Alive | `the_last_clutch` |
+| The Greywick alchemist | Made the ghoul cure; owner of the crow (unnamed) | Greywick | Alive, friendly | `crows_warning` |
+| The crow | The alchemist's messenger crow, now the guild's | The guild hall | Alive | `crows_warning` |
+| Lady Seren Ashcombe | Claims descent from the old coastal kings | The capital | Alive | `ancient_crown` |
+| Master Orrin Hale | Collector from the capital; funded the Caldra expedition | The capital | Alive | `lost_kingdom` |
+| Holt | Ashvale hunter who turned werewolf | Ashvale | Dead | `full_moon_over_ashvale` |
+| Edric Marsh | Ashvale hunter, bitten; now controls his werewolf form | Ashvale | Alive, ally | `kindred_moon` |
+| The hedge-witch | Knows old rites; charges for them (unnamed) | Near Ashvale | Alive | `kindred_moon` |
+| The Pell family | Old IronRest family replaced by a skinweaver | IronRest | Dead | `body_snatcher_problem` |
+| Paladins of the Ashen Hand | Holy order guarding Saint Aurlias' Rest | Saint Aurlias' Rest | Allies | `the_pale_rider` |
+| Ser Cael Morrow | Former Lord-Commander of the Ashen Hand; raised as the Pale Rider | Saint Aurlias' Rest | Dead (re-buried) | `the_pale_rider` |
+| Rook | Former caravan guard, "King of the Old Road" | Old trade road | Dead | `bandits_on_the_old_road` |
+| Grukk | Goblin chieftain who united three warbands | Hills | Dead | `goblin_warband` |
+| Skarn | Grukk's lieutenant who tried to repeat it | Hills | Dead | `the_gathering_horde` |
+| Garrick | Leader of a rival guild turned raider company | Granite Crossing | Dead | `granite_crossing` |
+| Captain Vayne | IronRest officer who deserted and bargained with a demon | Border farm | Dead | `farm_at_the_edge` |
+| Lord Blackford | Border lord turned tyrant after his son's death | Blackford Keep | Dead | Raid `blackford_keep` |
+| Captain Dorran | Blackford's master-at-arms | Blackford Keep | Dead | Raid `blackford_keep` |
+| Ostrel | Necromancer hanged ninety years ago; became a lich | Ossuary | Dead | `hunt_a_lich`, raid `house_of_bones` |
+| King Haldren | The Hollow King, three hundred years buried | Barrow-ground east of the culled villages | Dead (re-buried) | `what_the_culled_become`, `hollow_king` |
+| The World-Ender's patron | Funded five failed expeditions, then the guild's (unnamed) | Unknown | Alive | `world_ender` |
+
+**Creatures and powers with no personal name:** the demon warlord of the
+north-west fort, the demon lord of the fortress, the demon general, the
+warding choir, the Frozen Wyrm, the Brood Mother, the Emberfell dragon,
+the Ridgebreaker (hill giant), the skinweaver, the Loom, the Unmade King,
+the Watchers, the Vigil, and the Old Gods (the Harrower, the World-Ender).
+
+## Places
+
+| Place | What it is | Notes |
+|---|---|---|
+| IronRest | Town and Bastion on the Reach; the guild's home base | Spelled with a capital R everywhere |
+| The Keep | The guild's own fort, north-west of IronRest | Taken in `proving_the_bastion` |
+| Thornhollow | Village searched by demons | Its tavern is full again |
+| Greywick | Town north of Thornhollow; the alchemist's home | — |
+| Emberfell | Northernmost holdfast; the Cinder Pass above it | Rebuilt with the dragon's hoard |
+| Granite Crossing | West-coast town of the Stone Masons Guild | — |
+| Ashvale | Hunting-lodge town | Werewolf stories |
+| Millbrook | Town whose people the Loom threaded (exact location not set yet) | Recovering from the Loom |
+| Saint Aurlias' Rest | Old church guarded by the Ashen Hand | Ser Cael is buried under the floor |
+| The barrow-ground | Old royal burial ground east of the culled villages; King Haldren's tomb | Under permanent watch |
+| Caldra | Lost kingdom across the Grey Marches | Ruins open |
+| Blackford Keep | Border keep | Back with the Crown |
+| The capital | Seat of the (unnamed) Crown | Ashcombe and Hale live here |
+
+## Open threads
+
+Hooks the stories have deliberately left for later. Tie new chains to
+these where it fits, and update the list when one is used.
+
+- **The Harrower.** Still sending demons to search for components of a
+  crossing (see its section above). Known so far: it raises the dead, it
+  was interested in Haldren's tomb, and the empty fortress saw the first
+  attempted crossing (`what_got_out`). The altar dig is the planned next beat.
+- **Whatever Ostrel was contacting.** Something on the other end of his
+  ritual noticed the attempt (`house_of_bones`).
+- **The empty demon fortress.** Its council scattered; nobody expects it
+  to stay empty (`what_got_out`).
+- **Grimsby's debt.** He owes the guild and the Vasse brothers. The planned
+  daily crate ("Grimsby's Instalments") is his repayment; the brothers
+  could come back for theirs.
+- **The Loom's spread.** Other towns on Millbrook's road showed symptoms
+  before it died (`the_loom_beneath`).
+- **The Brood Mother's ridge.** Why she nested there is unknown.
+- **Skinweavers.** The watch is checking whether any other households were
+  replaced (`body_snatcher_problem`).
+- **Lady Ashcombe's claim** to the old coastal throne, pending at court.
+- **Thorne's officers.** After Vayne, she is checking the rest.
+- **The Watchers.** They keep other tallies; one running out somewhere is a
+  ready capstone hook.
+- **Goblins.** Another chieftain may try Grukk's method again.

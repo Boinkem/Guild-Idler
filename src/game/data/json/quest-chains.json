@@ -2,7 +2,7 @@
   {
     "id": "millers_problem",
     "name": "The Miller's Problem",
-    "description": "A miller reports strange noises and a foul smell coming from his locked cellar. He believes it's rats, but hasn't gone down in three days. The rats have started fleeing upward instead of hiding, a sign something worse is below. Something old and unidentifiable has lived under the mill for years, undisturbed until now. The guild must investigate the cellar, track the smell to its source, and confront whatever is waiting beneath the mill.",
+    "description": "The miller has heard scratching and smelled something rotten from his cellar for three days, and he has not been down there since it started. He says it is rats. The rats disagree: they have all moved upstairs. The guild has been hired to go down and find out what is actually there.",
     "reqLevel": 2,
     "rewardGold": 456,
     "rewardItems": [
@@ -10,7 +10,7 @@
     ],
     "rewardRenown": 1,
     "title": "First Real Job",
-    "epilogue": "Whatever lived beneath the mill was old, territorial, and unlike anything the guild has been able to identify since. It was driven out and will not be coming back. The miller still refuses to go near the cellar, but the smell and the noises have stopped. The guild's first real job ended in a clean, if unsettling, victory.",
+    "epilogue": "The lizard is dead and the tunnel is bricked up properly this time. The miller paid in full, kept one of its teeth as proof for the neighbours, and still sends someone else down for the flour. It was the guild's first real job, and it went well.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -26,15 +26,15 @@
     "stages": [
       {
         "name": "The Miller's Cellar",
-        "flavour": "The miller insists it's just rats, unusually large and loud ones. He hasn't gone down the cellar stairs in three days and has no plans to start today.",
+        "flavour": "The miller hands over the cellar key and stays at the top of the stairs. Halfway down, the smell gets much worse, and the back wall of the cellar has a hole in it that was not there when he bricked it up.",
         "tag": "explore",
         "difficulty": "easy",
         "durationMinutes": 45,
         "goldMultiplier": 1.2
       },
       {
-        "name": "Whatever the Rats Were Fleeing",
-        "flavour": "The rats are fleeing upward, into the mill and anywhere but down. Rats only run toward danger when what they left behind is worse.",
+        "name": "Where the Rats Went",
+        "flavour": "The hole opens into an old flooded drainage tunnel that runs under the mill. Something large has been dragging food back along it. The rats left because they were next on the menu.",
         "tag": "explore",
         "difficulty": "easy",
         "durationMinutes": 90,
@@ -42,7 +42,7 @@
       },
       {
         "name": "The Thing Under the Mill",
-        "flavour": "The creature has lived beneath this mill longer than the mill has stood. Twice it turns toward an empty corner of the cellar, as if something is there that cannot be seen.",
+        "flavour": "At the end of the tunnel is a cave lizard the size of a cart horse, fat on the miller's grain sacks and anything that wandered in after them. It has lived down here for years. It does not want to leave.",
         "tag": "combat",
         "difficulty": "normal",
         "durationMinutes": 150,
@@ -53,7 +53,7 @@
   {
     "id": "the_last_clutch",
     "name": "The Last Clutch",
-    "description": "The old hatchery at the edge of town has been failing for years. Its last keeper, too frail now to climb the coop ladder, has kept one final clutch of eggs alive through sheer stubbornness. The roof is failing and the fence is broken, and the clutch will not survive another storm without help.",
+    "description": "The old hatchery at the edge of town is falling apart. Its keeper is too old to climb the coop ladder anymore, but she has kept one last clutch of eggs alive on her own. The roof is caving in, the fence is down, and the next storm will finish the job unless someone helps.",
     "reqLevel": 5,
     "rewardGold": 406,
     "rewardItems": [
@@ -61,7 +61,7 @@
     ],
     "rewardRenown": 1,
     "title": "Keeper of the Clutch",
-    "epilogue": "The hatchery stands again, its old beams replaced with new timber. The keeper still visits most mornings to check the work, and so far has found nothing to complain about. The eggs are safe now, and whatever hatches from them belongs to the guild to raise.",
+    "epilogue": "The hatchery has a new roof and a fence that holds, and the wolf will not be back. The keeper still checks the work most mornings and has not found anything to complain about yet. She has handed the eggs to the guild to raise.",
     "grantsHatchery": true,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -81,15 +81,15 @@
     "stages": [
       {
         "name": "The Failing Coop",
-        "flavour": "Half the roof has already collapsed. The keeper refuses to leave the one nest she still trusts, even to eat. She does not want gold. She wants help carrying water and lumber faster than the weather can undo it.",
+        "flavour": "Half the roof is already gone. The keeper will not leave the one nest that is still dry, even to eat. She does not want gold. She wants water carried and timber hauled faster than the weather can undo it.",
         "tag": "escort",
         "difficulty": "easy",
         "durationMinutes": 60,
         "goldMultiplier": 1.2
       },
       {
-        "name": "What the Coop Was Guarding Against",
-        "flavour": "Something circles the hatchery at night, testing the same weak point in the fence each time. Ordinary vermin do not show this kind of patience. Whatever it wants, it has not given up.",
+        "name": "The Wolf at the Fence",
+        "flavour": "A lone wolf has been coming back every night, pushing at the same gap in the fence. It has worked out the coop is easy food, and it will keep coming until someone stops it.",
         "tag": "defense",
         "difficulty": "normal",
         "durationMinutes": 120,
@@ -100,7 +100,7 @@
   {
     "id": "crows_warning",
     "name": "The Crow's Warning",
-    "description": "Thornhollow was not burned. It was searched, room by room and drawer by drawer, as if something specific was being hunted and never found. Those bitten during the attack are slowly turning into ghouls, and no cure exists anywhere in the ruins. A crow has attached itself to the guild and refuses to leave. It may be the only reason a cure reaches Thornhollow in time.",
+    "description": "Demons came through Thornhollow and left it standing. They did not burn it or loot it. They searched it, house by house, and left. The people they bit are slowly turning into ghouls, and nobody in town knows how to stop it. The nearest alchemist good enough to try is days away.",
     "reqLevel": 8,
     "rewardGold": 2733,
     "rewardItems": [
@@ -108,7 +108,7 @@
     ],
     "rewardRenown": 1,
     "title": "Crow-Friend",
-    "epilogue": "The cure held. Those bitten by the demons stayed human instead of finishing their turn into ghouls, and the tavern is full again. The crow never explained itself and never truly left either. It is still around most days, watching from somewhere just out of reach.",
+    "epilogue": "The cure worked. Everyone who was bitten stayed human, and the tavern in Thornhollow is full again. The alchemist told the guild to keep the crow, since it clearly prefers them now. It still hangs around the guildhall most days.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -124,7 +124,7 @@
     "stages": [
       {
         "name": "Smoke Over Thornhollow",
-        "flavour": "The demons did not raze this town. They went through it door by door, overturning drawers and tearing up floorboards, searching for something specific and leaving everything else untouched. Raiding makes sense. This does not.",
+        "flavour": "Every drawer is pulled out and every floorboard pried up, but the money and silver are still there. The demons were looking for one specific thing and did not care about anything else. The bitten are getting worse by the hour.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 240,
@@ -132,7 +132,7 @@
       },
       {
         "name": "The Trail North",
-        "flavour": "A crow lands on the ruined gate and does not fly off. It leads the guild north through two towns and a river crossing, toward Greywick, the nearest town with an alchemist skilled enough to have any chance at a cure.",
+        "flavour": "A crow lands on the town gate and will not leave the guild alone. It has a message tube on its leg with Greywick's seal. It belongs to the alchemist there, and it is trained to fly home. The guild follows it north.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 300,
@@ -140,7 +140,7 @@
       },
       {
         "name": "Greywick's Alchemist",
-        "flavour": "The alchemist is already grinding spider venom before the explanation finishes, her hands moving faster than her questions. Speed is the only thing that matters. The bitten are still people right now, and every hour that passes shortens how long that stays true.",
+        "flavour": "The alchemist hears the symptoms and starts grinding spider venom before the explanation is finished. The cure exists. Making enough of it in time is the problem, and the guild works the mortar while she measures.",
         "tag": "arcane",
         "difficulty": "hard",
         "durationMinutes": 360,
@@ -148,7 +148,7 @@
       },
       {
         "name": "The Road Back to Thornhollow",
-        "flavour": "Four vials of cure, wrapped carefully and carried like something fragile and alive, are on the road back to Thornhollow. Every mile still ahead is an hour the bitten don't have to spare.",
+        "flavour": "Four vials of cure, wrapped in cloth and carried like eggs, on the road back to Thornhollow. Demons are still out there, and every hour on the road is an hour the bitten do not have.",
         "tag": "defense",
         "difficulty": "hard",
         "durationMinutes": 360,
@@ -159,7 +159,7 @@
   {
     "id": "harrowers_foot",
     "name": "The Harrower's Foot",
-    "description": "A second village has been culled the same way as the last one. It was not burned or looted, only searched, drawer by drawer and room by room. Whatever is directing these raids is hunting for something specific, and every emptied village brings it closer to finding it.",
+    "description": "A second village has been hit exactly like Thornhollow: searched house by house, then burned. Two attacks, the same method, weeks apart. Somebody is sending these demons out with a job to do, and they have not finished it yet.",
     "reqLevel": 11,
     "rewardGold": 1617,
     "rewardItems": [
@@ -167,7 +167,7 @@
     ],
     "rewardRenown": 1,
     "title": "Ash-Reader",
-    "epilogue": "The pattern held until the demons themselves could no longer explain it. Something, somewhere, gave every one of those orders. Nobody who fought today learned who.",
+    "epilogue": "The raiding party is dead, but none of them knew who gave the orders. They only knew to search, report, and move on. Someone above them is directing all of this, and the guild still does not know who.",
     "requiresChainId": "crows_warning",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -184,7 +184,7 @@
     "stages": [
       {
         "name": "The Pattern in the Ash",
-        "flavour": "Every burned house in this village was searched before it burned. Floorboards were pried up and cellars emptied, nothing left to chance. This is not how raiding works. This is how searching works, and it means whatever they wanted still has not been found.",
+        "flavour": "Every house was searched before it was burned. Cellars were emptied and floorboards pulled up, and the valuables were left behind. Whatever the demons are looking for, they did not find it here either.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 300,
@@ -192,7 +192,7 @@
       },
       {
         "name": "What the Foot Soldiers Take",
-        "flavour": "These demons do not fight like starving animals. They fight like soldiers who know they will be questioned afterward about exactly what they found and where. Whoever gives these orders expects a full report.",
+        "flavour": "These demons fight in pairs and fall back on command. They are not hungry animals. They are soldiers following orders, and they guard each other's backs like people who expect to report in afterwards.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 420,
@@ -203,7 +203,7 @@
   {
     "id": "demon_generals_ledger",
     "name": "A Demon General's Ledger",
-    "description": "The foot soldiers answer to something bigger than hunger. A column of demons moves with real discipline, boots landing in step, led by something that gives orders instead of chasing its next meal.",
+    "description": "Scouts have found a column of demons marching in formation through the Reach, led by a general. Demons do not usually march, and they do not usually take orders. If the guild wants to know who is behind the village raids, this general is the best lead it has had.",
     "reqLevel": 15,
     "rewardGold": 1950,
     "rewardItems": [
@@ -211,7 +211,7 @@
     ],
     "rewardRenown": 2,
     "title": "Tally-Breaker",
-    "epilogue": "The general kept meticulous records: names, dates, and places, tallied like a merchant's ledger rather than a monster's trophies. One word appears in the margins more than any other, written in handwriting that is not the general's own: the Harrower. Nobody at IronRest has heard the name before, but people have started asking around quietly, hoping it turns out to be nothing.",
+    "epilogue": "The general is dead and the ledger is at IronRest. The handwriting is the general's, but one name appears over and over as the one the reports are for: the Harrower. Nobody at IronRest has heard the name before. People have started asking around.",
     "requiresChainId": "harrowers_foot",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -228,7 +228,7 @@
     "stages": [
       {
         "name": "The General's Column",
-        "flavour": "The demons march in formation, ranks holding even across broken ground. Demons do not normally march. Something drilled this one the way a soldier is drilled, and that is more worrying than any set of teeth.",
+        "flavour": "The demons march in ranks and hold them across broken ground. Someone has drilled them like an army. Breaking the column is the only way to get to the general.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 540,
@@ -236,7 +236,7 @@
       },
       {
         "name": "The Ledger",
-        "flavour": "Names, dates, and places. Every village it emptied is tallied like inventory, in handwriting too neat for a demon to have written. It had already left space for the guild's name before they arrived.",
+        "flavour": "The general kept a ledger: every village searched, the date, and what was found, which in every case is nothing. Whatever they are looking for is still out there, and the list of places left to search is getting short.",
         "tag": "stealth",
         "difficulty": "epic",
         "durationMinutes": 720,
@@ -247,7 +247,7 @@
   {
     "id": "what_the_culled_become",
     "name": "What the Culled Become",
-    "description": "The Harrower's name still means nothing to anyone at IronRest, but the ledger's tally means everything. Every village it culled has since reported graves opening from the inside. The people it took did not stay taken. They came back, and they came back different.",
+    "description": "Every village on the general's list has now reported the same thing: the graves are empty. The people the demons killed did not stay dead. They got up, and they walked away together. IronRest wants to know where they went.",
     "reqLevel": 19,
     "rewardGold": 3675,
     "rewardItems": [
@@ -255,7 +255,7 @@
     ],
     "rewardRenown": 2,
     "title": "Grave-Watcher",
-    "epilogue": "Whatever the Harrower takes, it does not keep. It returns them as revenants, changed and obedient, still somehow counted in that ledger. The barrow-ground sits less than a day's walk from the nearest culled village. No report reaching Ironrest has put the two side by side yet.",
+    "epilogue": "The risen at the barrow are destroyed, but the tomb is cracked, and whatever started raising the dead in these villages is still doing it. The ledger called it the Harrower. The guild now knows two things about it: it raises the dead, and it is interested in that tomb.",
     "requiresChainId": "demon_generals_ledger",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -272,7 +272,7 @@
     "stages": [
       {
         "name": "The Empty Graves",
-        "flavour": "Every grave here has been dug open from beneath, dirt scattered outward in a ring. There are no tool marks and no footprints leading away, only dozens of footprints leading toward the old barrow-ground east of town, all walking in step toward the same destination.",
+        "flavour": "Every grave in the village has been dug open from below. There are no shovel marks. There is a trail of footprints, dozens of them, all heading east toward the old barrow-ground outside town.",
         "tag": "explore",
         "difficulty": "hard",
         "durationMinutes": 600,
@@ -280,7 +280,7 @@
       },
       {
         "name": "The Harvest",
-        "flavour": "They remember their own names and answer when spoken to. That is worse than if they had forgotten everything, because it means whatever they are now, they know exactly what they used to be.",
+        "flavour": "The risen dead are standing guard on the road to the barrow. They remember their own names and answer to them. They just do not stop when you tell them to, and they have to be put down one at a time.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 780,
@@ -288,7 +288,7 @@
       },
       {
         "name": "Something Older Stirs",
-        "flavour": "The old barrow-ground has sat quiet for three hundred years, moss grown thick over every stone marker. It is not quiet tonight. Something beneath it is moving for the first time in three centuries, and it is not moving slowly.",
+        "flavour": "The barrow-ground holds the tomb of a king buried three hundred years ago. It has been quiet that whole time. Tonight the stones over his tomb are cracking, and the risen are gathered around it like a guard of honour.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 900,
@@ -299,7 +299,7 @@
   {
     "id": "proving_the_bastion",
     "name": "Proving the Bastion",
-    "description": "The Thornhollow cure reached IronRest Bastion on schedule, carried the last leg by the guild that ran those vials there in the first place. Captain Maeryn Thorne does not forget a debt like that, and she has plenty of work that needs hands she can trust. Prove useful, and she has bigger plans in mind.",
+    "description": "The cure for Thornhollow reached IronRest Bastion because the guild carried it there. Captain Maeryn Thorne, who runs the Bastion, has not forgotten. She has work that needs doing and not enough people she trusts to do it. If the guild proves itself, she has something bigger in mind.",
     "reqLevel": 16,
     "rewardGold": 4067,
     "rewardItems": [
@@ -307,7 +307,7 @@
     ],
     "rewardRenown": 3,
     "title": "Lord of the Keep",
-    "epilogue": "Captain Thorne kept her word, which surprised no one who had dealt with her directly. The Keep changed hands quietly, the way most important things do. The guild has had a real home since, with walls, a gate, and a garrison that answers to them.",
+    "epilogue": "Captain Thorne kept her word. The fort, now the Keep, belongs to the guild: walls, a gate, and a garrison that answers to it. The guild stopped being hired help that day. It has territory of its own to defend now, and IronRest knows exactly who to call.",
     "requiresChainId": "demon_generals_ledger",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -324,7 +324,7 @@
     "stages": [
       {
         "name": "Officers of IronRest",
-        "flavour": "Captain Thorne does not say please, soften an order, or repeat herself. She has run this Bastion through worse than one guild's growing pains, and expects everyone to keep up without being told twice.",
+        "flavour": "Captain Thorne does not say please and does not repeat herself. The first job is simple: hold the Bastion's outer wall for a week while her own soldiers rest, and do not make her regret it.",
         "tag": "defense",
         "difficulty": "normal",
         "durationMinutes": 360,
@@ -332,7 +332,7 @@
       },
       {
         "name": "Beasts on the Border",
-        "flavour": "Something is thinning the border patrols one soldier at a time. It is not raiders. Raiders do not drag their kills forty feet into the treeline and leave the boots behind, still laced.",
+        "flavour": "Border patrols are going missing one soldier at a time. It is a demon hound, come through one of the old wounds in the world, dragging soldiers into the treeline. It has been doing this for a month.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 480,
@@ -340,7 +340,7 @@
       },
       {
         "name": "The Fort in the North-West",
-        "flavour": "Thorne's terms are simple. Take the fort back from whatever is squatting in it, and the Keep is theirs to call home, so long as IronRest can call on it when the debt comes due.",
+        "flavour": "Thorne's offer is plain: take back the abandoned fort in the north-west from the demons squatting in it, and it belongs to the guild. In return, IronRest gets to call on the guild when it needs help.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 840,
@@ -348,7 +348,7 @@
       },
       {
         "name": "The Demon Lord's Throne",
-        "flavour": "Whatever ruled this fort did not build a throne room for comfort. It built one to be seen from every angle at once, by anyone unlucky enough to be standing in it.",
+        "flavour": "A demon warlord has set itself up in the fort's great hall and built a throne out of the furniture. It is the reason the demons there hold together. Kill it and the rest will scatter.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1200,
@@ -359,7 +359,7 @@
   {
     "id": "granite_crossing",
     "name": "Granite Crossing",
-    "description": "The Keep is finally the guild's own, and the war table already carries a new name in Thorne's own hand: Granite Crossing, home of the west coast's Stone Masons Guild. IronRest has heard nothing from it in weeks, and silence from a place that busy is never good news.",
+    "description": "The first request from Captain Thorne since the Keep changed hands: Granite Crossing, home of the Stone Masons Guild, has gone silent for weeks. A rival guild under a man called Garrick has taken the town gate and is holding the masons' quarry for ransom.",
     "reqLevel": 20,
     "rewardGold": 2700,
     "rewardItems": [
@@ -367,7 +367,7 @@
     ],
     "rewardRenown": 2,
     "title": "Garrick's End",
-    "epilogue": "Garrick's raiders scattered the moment he stopped giving orders -- men who follow a man, not a cause, and never once pretended otherwise. The Stone Masons Guild has not forgotten who reopened their gate, and has made sure everyone downriver knows it too.",
+    "epilogue": "Garrick is dead and his company has scattered. They followed him for the pay, not for any cause, and there is no pay anymore. The Stone Masons Guild has made sure everyone downriver knows who reopened their gate.",
     "requiresChainId": "proving_the_bastion",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -384,7 +384,7 @@
     "stages": [
       {
         "name": "The Silent Quarry",
-        "flavour": "Garrick and his raiders have taken the town gate and dug in as if they mean to stay a season. The stonemasons still hold everything behind it, for now, and the longer this drags on the less certain that sounds.",
+        "flavour": "Garrick's company has the town gate and has dug in for a long stay. The stonemasons still hold the streets behind it, but they are running out of food, and Garrick knows it.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 480,
@@ -392,7 +392,7 @@
       },
       {
         "name": "Garrick's Reckoning",
-        "flavour": "Garrick pitched his camp inside the quarry itself, in the working pit, as if he wanted the masons to watch him do it. Stonemasons remember who does that to their livelihood, and they remember for a long time.",
+        "flavour": "Garrick has set up his camp in the middle of the working quarry, where the masons can watch from the walls. He used to run a guild like this one. Now he is just a man holding a town to ransom, and he wants to see if the guild will try him.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 720,
@@ -403,7 +403,7 @@
   {
     "id": "farm_at_the_edge",
     "name": "The Farm at the Edge",
-    "description": "No word has come from the border farm in ten days, and now IronRest's own riders have not returned either. Whatever is out there has stopped being a farmer's problem. The Keep is sending its own this time.",
+    "description": "There has been no word from the border farm in ten days, and the IronRest riders sent to check have not come back either. Captain Thorne wants the Keep to handle it. Her last report says one of her own officers, Captain Vayne, was stationed out there.",
     "reqLevel": 24,
     "rewardGold": 3733,
     "rewardItems": [
@@ -411,7 +411,7 @@
     ],
     "rewardRenown": 2,
     "title": "Farmwarden",
-    "epilogue": "Whatever Vayne was turning into never got to finish. The farmland recovered faster than the stories about what was found in that farmhouse basement. The two versions don't agree, and nobody who was in that basement has come forward to settle which one is.",
+    "epilogue": "Vayne is dead and the ritual circle in the cellar has been burned out. Her deserters have been taken back to IronRest to answer for it. The farm is being worked again. Captain Thorne has started checking on her other officers more closely.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -427,7 +427,7 @@
     "stages": [
       {
         "name": "No Word From the Farm",
-        "flavour": "The fields stand untouched, crops still ripening in neat rows. The farmhouse is another matter. Raiders have dug in around it as if they intend to winter there, not pass through.",
+        "flavour": "The crops are fine. The farmhouse is not. Deserters from IronRest's own garrison have fortified it and are turning away anyone who comes up the road. They are Vayne's soldiers.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 540,
@@ -435,7 +435,7 @@
       },
       {
         "name": "What Vayne Was Becoming",
-        "flavour": "Captain Vayne is mid-ritual when found, something dark being poured into her one measure at a time, paid for with more of herself than she has left to spend. Whatever this was meant to make her into is not finished yet. That may be the only reason there is still time to stop it.",
+        "flavour": "Vayne is in the cellar, halfway through a ritual to bargain with a demon for power, and she has been paying for it with the farmhands and the missing riders. The ritual is not finished. It has to be stopped before it is.",
         "tag": "arcane",
         "difficulty": "epic",
         "durationMinutes": 780,
@@ -447,7 +447,7 @@
   {
     "id": "the_pale_rider",
     "name": "The Pale Rider",
-    "description": "A squire is waiting at the Keep on return, sent ahead by the Paladins of the Ashen Hand. The paladins arrive not long after, asking for help they clearly hate needing. They call the threat the Pale Rider, and by their own account, they have been losing to it.",
+    "description": "The Paladins of the Ashen Hand have come to the Keep asking for help, which they clearly hate doing. A rider in pale armour has been killing their people on the road to Saint Aurlias' Rest, an old church they protect. They have lost three fights to him. They know who he is: their own former Lord-Commander, Ser Cael Morrow, who died five years ago.",
     "reqLevel": 32,
     "rewardGold": 12873,
     "rewardItems": [
@@ -456,7 +456,7 @@
     ],
     "rewardRenown": 5,
     "title": "Ashen-Sworn",
-    "epilogue": "He dismounted, in the end. The Paladins of the Ashen Hand will not say what that looked like, and nobody who was there has pushed them to.",
+    "epilogue": "Ser Cael is down and buried again, this time under the church floor with the paladins standing guard over him. The Ashen Hand will not talk about the fight. They do now count the guild as allies, and they have started sending their own reports on the risen dead to the Keep.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -472,15 +472,15 @@
     "stages": [
       {
         "name": "The Ashen Hand's Plea",
-        "flavour": "These paladins do not ask for help easily. Years of training see to that. That they are asking at all, standing here in armor that has seen real use, and none of them will meet the guild's eyes for longer than a breath.",
+        "flavour": "The paladins explain it once and do not want to explain it again. Ser Cael was buried with honours at Saint Aurlias' Rest. His grave is empty, and he is riding again in the same armour, against his own order.",
         "tag": "defense",
         "difficulty": "epic",
         "durationMinutes": 840,
         "goldMultiplier": 2.6
       },
       {
-        "name": "The Road to Saint Aurlias Rest",
-        "flavour": "An old war-cleric built a church out here, long before anyone needed protecting from whatever sleeps beneath it now. Hoofprints mark this road and only this road for eleven straight miles, evenly spaced and never breaking stride.",
+        "name": "The Road to Saint Aurlias' Rest",
+        "flavour": "Eleven miles of road to the church, and one set of hoofprints the whole way, evenly spaced. He rides it every night, back and forth. He is guarding it.",
         "tag": "explore",
         "difficulty": "epic",
         "durationMinutes": 960,
@@ -488,7 +488,7 @@
       },
       {
         "name": "The Dead of Saint Aurlias",
-        "flavour": "These graves emptied from the inside, the same as every other place the Harrower has passed through. Here, though, the dead walk toward the church, not away from it, as if something behind that door is calling them home by name.",
+        "flavour": "The graveyard around the church has emptied the same way as the culled villages: dug open from below. Here, the risen dead are walking toward the church, not away from it. They are gathering around Ser Cael.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 1080,
@@ -496,7 +496,7 @@
       },
       {
         "name": "The Rider in the Nave",
-        "flavour": "He waits behind the doors the dead were so eager to reach, seated and unmoving. He does not dismount. He has not needed to in longer than anyone currently breathing has been alive.",
+        "flavour": "Ser Cael is waiting inside the church, still mounted. He was the best fighter the Ashen Hand ever had, and dying has not made him any worse at it. The same thing raising the dead in the Reach is holding him up.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1440,
@@ -508,7 +508,7 @@
   {
     "id": "dragon_hunt",
     "name": "The Dragon Hunt",
-    "description": "Something is burning Emberfell, northernmost of the holdfasts, one farmstead at a time. The trail leads several days north, ending in a threat larger than anything the guild has faced so far.",
+    "description": "A dragon is burning Emberfell, the northernmost holdfast in the Reach, one farmstead at a time. It comes down from the mountains, burns, and goes back up. The holdfast elders have pooled everything they have to pay the guild to end it.",
     "reqLevel": 18,
     "rewardGold": 4400,
     "rewardItems": [
@@ -517,7 +517,7 @@
     ],
     "rewardRenown": 2,
     "title": "Dragonbane",
-    "epilogue": "Emberfell does not burn anymore. The dragon's hoard more than covered the cost of rebuilding every farmstead it touched, enough to rebuild every farmstead twice over -- the holdfast elders have started calling it the dragon's one honest debt.",
+    "epilogue": "Emberfell does not burn anymore. The dragon's hoard was enough to rebuild every farmstead it destroyed twice over, and the elders made sure every family got its share. They call it the dragon's one honest debt.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -533,7 +533,7 @@
     "stages": [
       {
         "name": "Follow the Ash Trail",
-        "flavour": "The ash here is cold, but the scorched ground beneath it is still warm. Whatever did this passed through recently, recently enough that it might still be close.",
+        "flavour": "The ash is cold but the ground underneath it is still warm. The dragon was here a day ago at most, and it always flies off in the same direction afterwards: north, toward the Cinder Pass.",
         "tag": "explore",
         "difficulty": "hard",
         "durationMinutes": 480,
@@ -541,7 +541,7 @@
       },
       {
         "name": "Question the Survivors",
-        "flavour": "Every survivor tells the same story, wide-eyed with disbelief: wings spanning the width of the valley, blotting out the sky before the fire even started falling.",
+        "flavour": "The survivors all describe the same dragon: red-black, wings as wide as the valley, and it always attacks at dusk. It is not hunting for food. It burns the farm and leaves the cattle.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 360,
@@ -549,7 +549,7 @@
       },
       {
         "name": "Scale the Cinder Pass",
-        "flavour": "The only way up this mountain is the same route the dragon uses to come down. It is a narrow, ash-choked pass with no cover and no second path if something goes wrong halfway.",
+        "flavour": "The only way up the mountain is the pass the dragon uses to come down. It is narrow and choked with ash, with no cover and no second route if anything goes wrong.",
         "tag": "explore",
         "difficulty": "epic",
         "durationMinutes": 840,
@@ -557,7 +557,7 @@
       },
       {
         "name": "The Dragon of Emberfell",
-        "flavour": "There is no retreat from this ledge and no fallback position. Bring everything the guild has, because everything is exactly what this fight will take.",
+        "flavour": "The dragon's lair is a ledge near the summit, and there is nowhere to retreat to. It has been burning Emberfell because Emberfell is built on what it considers its land. It will not be talked out of that.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1200,
@@ -568,7 +568,7 @@
   {
     "id": "lost_kingdom",
     "name": "Lost Kingdom Expedition",
-    "description": "A kingdom that every map somehow forgot to mention has surfaced in old records. The road there is long, the ruins are older than anyone can date, and at the center of it all waits a living stone guardian nobody has gotten past yet. The patron funding the expedition has paid three times what an expedition like this should cost, and has never once explained why.",
+    "description": "Master Orrin Hale, a collector from the capital, has found records of a kingdom called Caldra that dropped off every map centuries ago. He is paying three times the usual rate for an expedition to its ruins. He wants one thing from the royal vault, and he says a stone guardian built to protect it is still standing.",
     "reqLevel": 14,
     "rewardGold": 2800,
     "rewardItems": [
@@ -576,7 +576,7 @@
     ],
     "rewardRenown": 1,
     "title": "Kingdom-Finder",
-    "epilogue": "The living stone guardian went still the moment the vault finally opened, as if its only purpose had been fulfilled. The kingdom that built it remains exactly as lost as it was before anyone found this place. Some things were never meant to be found twice, and this one is going straight back to being a rumor.",
+    "epilogue": "With the vault open, the guardian stood down: that was the condition it was built to wait for. Inside was Caldra's crown, which Hale paid for and let the guild keep a share of. He got the records and the proof his family's old stories were true. Caldra is still a ruin, but it is on the maps again.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -592,7 +592,7 @@
     "stages": [
       {
         "name": "Chart the Grey Marches",
-        "flavour": "Six straight days of featureless grey terrain end without warning at a stone road that has no business existing this far from any charted place.",
+        "flavour": "Six days across empty grey moorland, following Hale's old maps, until a paved stone road appears out of nowhere. Caldra's roads were built to last, and this one has.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 600,
@@ -600,7 +600,7 @@
       },
       {
         "name": "Cross the Silent Bridge",
-        "flavour": "The bridge holds without so much as a creak, which is the most unsettling part of a structure that should not still be standing at all.",
+        "flavour": "The bridge into Caldra is three hundred years old and still perfectly solid. Caldra's masons were very good. Its guards were too, and the gatehouse on the far side is still armed with working traps.",
         "tag": "explore",
         "difficulty": "hard",
         "durationMinutes": 720,
@@ -608,7 +608,7 @@
       },
       {
         "name": "Open the Sunken Vault",
-        "flavour": "Whatever this lost kingdom locked away down here, it locked away thoroughly. Layers of stone, then steel, then something that is neither, all sealed around a living stone guardian that has never once stopped watching the center of the vault.",
+        "flavour": "The royal vault is sealed with stone, then steel, then old wards. The stone guardian at its centre was built to stop anyone without the king's seal. Hale's records include a drawing of the seal. It is not enough on its own, but it is a start.",
         "tag": "arcane",
         "difficulty": "epic",
         "durationMinutes": 960,
@@ -619,7 +619,7 @@
   {
     "id": "demon_fortress",
     "name": "Demon Fortress Assault",
-    "description": "The guild is gathering every banner it can call on for an assault on a demon fortress. Whoever leads the breach has been asked personally, and there will be no second attempt if this one fails.",
+    "description": "A demon fortress has stood in the Reach for nine years, held by a demon lord and sealed by wards nobody has broken. The Crown is finally assaulting it, and the guild has been asked to lead the breach. There will not be a second attempt.",
     "reqLevel": 22,
     "rewardGold": 6400,
     "rewardItems": [
@@ -628,7 +628,7 @@
     ],
     "rewardRenown": 3,
     "title": "Hellgate Breaker",
-    "epilogue": "The demon lord who held that throne is dead, cut down before he reached the gate. Whatever was singing behind the wards is not so easily accounted for -- it escaped in the confusion, and where it went is still unknown.",
+    "epilogue": "The demon lord is dead and the fortress has fallen. The choir did not stay to be counted. In the confusion of the final fight it pulled itself out of the walls and got away. Nobody knows where it went yet.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -642,7 +642,7 @@
     "stages": [
       {
         "name": "Break the Outer Siege",
-        "flavour": "Ladders against the wall, fire in the ditch, and a night that refuses to end. This is the easy part, and it still costs plenty.",
+        "flavour": "Ladders on the walls, fire in the ditch, and a long night of fighting to reach the main gate. This is the easy part, and it still costs plenty.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 600,
@@ -650,7 +650,7 @@
       },
       {
         "name": "Break the Warding Choir",
-        "flavour": "The warding choir has held unbroken for nine years, strong enough to seal a whole fortress from the inside. The goal is not to silence it for good, only to disrupt it long enough to get past the gate it guards.",
+        "flavour": "The fortress wards are powered by a choir: a demonic construct of many mouths that sings the wards in place. It does not have to be destroyed, only interrupted long enough for the gate to come down.",
         "tag": "arcane",
         "difficulty": "epic",
         "durationMinutes": 840,
@@ -658,7 +658,7 @@
       },
       {
         "name": "The Iron Gate",
-        "flavour": "Whatever holds this gate remembers the last siege in detail, and has had years to prepare for the next one.",
+        "flavour": "The gate is held by the demon lord's personal guard. They held it through the last siege nine years ago and have been preparing for this one ever since.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 1080,
@@ -666,7 +666,7 @@
       },
       {
         "name": "Descend to the Throne",
-        "flavour": "One door remains between the guild and whatever has been ruling behind it. It stands open already, which is worse than finding it locked.",
+        "flavour": "The throne room door is already open. The demon lord is waiting inside, and it knows the fortress is lost. It intends to take as many of the guild with it as it can.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1440,
@@ -677,7 +677,7 @@
   {
     "id": "ancient_crown",
     "name": "Search for the Ancient Crown",
-    "description": "Three crown fragments are scattered across three regions, tied together by a rumor persistent enough that half the taverns on the coast now tell their own version of it. One fragment, hidden in a fen, is said to still be guarded by a suit of ancient armor with no one inside.",
+    "description": "Lady Seren Ashcombe claims descent from the old coastal kings, and to prove it she needs their crown, which was broken into three pieces and hidden when the line ended. She has tracked down all three. One is in a fen, one is in a banker's vault, and one is in a smith's forge. She is paying the guild to collect them.",
     "reqLevel": 10,
     "rewardGold": 2300,
     "rewardItems": [
@@ -685,7 +685,7 @@
     ],
     "rewardRenown": 1,
     "title": "Crownbearer",
-    "epilogue": "Nobody involved has explained why the crown was worth hiding in three separate corners of the world. The patron paid in full anyway, and left before the fragments had even finished fitting together.",
+    "epilogue": "Lady Ashcombe has her crown, reforged in one piece, and is pressing her claim in the capital. Whether the court accepts it is her problem. She paid in full and threw in a ring from the old royal collection for the trouble.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -700,7 +700,7 @@
     "stages": [
       {
         "name": "The Fragment in the Fen",
-        "flavour": "Cold water to the knees, colder mud underneath, and a suit of ancient armor, empty inside, still standing guard over this fragment since long before the fen had a name.",
+        "flavour": "Knee-deep in cold water, an old suit of enchanted armour stands guard over the first fragment. There is nobody inside it. It was set there to guard the piece and it is still doing its job.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 480,
@@ -708,7 +708,7 @@
       },
       {
         "name": "The Fragment in the Vault",
-        "flavour": "The banker insists, with a completely straight face, that it is just a paperweight. That is exactly the kind of thing someone says about an object they know is worth killing over.",
+        "flavour": "The banker insists the second fragment is just a paperweight and will not sell it. He knows exactly what it is worth, and he has hired guards to prove it. The guild will have to take it quietly.",
         "tag": "stealth",
         "difficulty": "hard",
         "durationMinutes": 600,
@@ -716,7 +716,7 @@
       },
       {
         "name": "The Fragment in the Fire",
-        "flavour": "The fragment was last seen inside an active forge, sitting in coals hot enough to melt steel.",
+        "flavour": "The last fragment was hidden inside a working forge, sitting in coals hot enough to melt steel. The smith who owns it does not know it is there. Getting it out without wrecking the forge, or the smith, is the job.",
         "tag": "explore",
         "difficulty": "epic",
         "durationMinutes": 720,
@@ -727,7 +727,7 @@
   {
     "id": "goblin_warband",
     "name": "The Goblin King's Warband",
-    "description": "Three goblin warbands used to raid alone, tripping over each other's territory as often as they hit anything useful. Not anymore. A chieftain with more ambition than sense has welded them into one horde by beating every rival who challenged him and taking their weapons as proof. He carries three now, strapped across his back, and the horde follows whoever can carry that many blades and still win.",
+    "description": "Three goblin warbands used to raid separately and get in each other's way. A chieftain named Grukk has beaten each of their leaders in single combat and taken their cleavers, and now all three follow him. One horde is a much bigger problem than three small ones.",
     "reqLevel": 6,
     "rewardGold": 440,
     "rewardItems": [
@@ -735,7 +735,7 @@
     ],
     "rewardRenown": 1,
     "title": "Warband-Breaker",
-    "epilogue": "Three warbands, no chieftain, and a confused horde left leaderless in the hills. The three cleavers he carried are recovered along with the rest of his hoard -- mismatched, dulled, and worth exactly what looted weapons are worth once the goblin who won them is dead. IronRest keeps them as a reminder of a horde that almost held together, and nothing more.",
+    "epilogue": "Grukk is dead, and without him the horde has split back into three warbands squabbling over the hills. His three cleavers hang in IronRest now, a reminder of how close the goblins came to being a real army.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -750,7 +750,7 @@
     "stages": [
       {
         "name": "Scatter the Outriders",
-        "flavour": "The outriders always give themselves away, mismatched armor clattering and torches lit hours before dark, laughing about a raid that has not happened yet. Cut them down before they reach camp, and the warband rides in blind.",
+        "flavour": "Grukk's outriders are loud and careless: clattering armour, torches lit before dark, boasting about the next raid. Cut them down before they get back to camp, and Grukk will not see the guild coming.",
         "tag": "combat",
         "difficulty": "normal",
         "durationMinutes": 180,
@@ -758,7 +758,7 @@
       },
       {
         "name": "The Chieftain's Camp",
-        "flavour": "The chieftain holds court with three rival chieftains' cleavers lashed across his back, trophies from three duels he wasn't supposed to win. He didn't take the horde by scheming. He took it by beating every goblin who challenged him and making sure the rest were watching when he did. He's about to lose that argument to someone bigger.",
+        "flavour": "Grukk carries all three cleavers strapped across his back. The horde follows him because he won every fight, and he made sure they were all watching. He has never fought anyone bigger than a goblin.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 300,
@@ -769,7 +769,7 @@
   {
     "id": "the_gathering_horde",
     "name": "The Gathering Horde",
-    "description": "The chieftain's horde came apart the moment he died, but a horde that broke once already knows how it's done, and it doesn't take much to try again. One of his old lieutenants has started calling the scattered warbands back in, promising the same deal that worked once: follow the goblin who can out-fight everyone else, and win. If he finishes what he started, IronRest will be facing the same horde all over again -- bigger, angrier, and led by someone who watched exactly how the last one fell.",
+    "description": "Grukk's horde fell apart when he died, but one of his lieutenants, Skarn, saw how Grukk did it and is trying to do it again. He is calling the warbands back together with the same offer: follow whoever wins every fight. If he finishes, IronRest will face the same horde again, led by someone who watched how the last one fell.",
     "reqLevel": 7,
     "rewardGold": 711,
     "rewardItems": [
@@ -777,7 +777,7 @@
     ],
     "rewardRenown": 1,
     "title": "Horde-Breaker",
-    "epilogue": "The would-be chieftain is dead before the horde he was building ever finished forming, and the warbands that had started listening to him have gone back to raiding each other instead of anyone else. IronRest doubts this is the last goblin who'll try to repeat what worked once. For now, though, there's no horde left to worry about -- just scattered warbands, same as always.",
+    "epilogue": "Skarn is dead before his horde was finished, and the warbands have gone back to fighting each other. IronRest expects another goblin to try this one day. For now, there is no horde.",
     "requiresChainId": "goblin_warband",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -794,7 +794,7 @@
     "stages": [
       {
         "name": "Scattered, Not Gone",
-        "flavour": "The scattered warbands should be raiding on their own again by now, tripping over each other's territory the way they always used to. Instead, goblin messengers keep crossing between old camps, carrying the same offer to every warlord too proud to admit he's listening.",
+        "flavour": "The warbands should be raiding each other by now. Instead, goblin messengers are running between the camps, all carrying the same offer from Skarn. Some of the warlords are already listening.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 180,
@@ -802,7 +802,7 @@
       },
       {
         "name": "The New Court",
-        "flavour": "Whoever is doing the recruiting has set up camp in the wreckage of the old chieftain's court, and has already started collecting cleavers off of goblins who challenged him and lost. He's kept just enough of the old ritual to make the offer look inherited rather than invented.",
+        "flavour": "Skarn has set up in the ruins of Grukk's old camp and is collecting cleavers from every goblin who challenges him and loses. He is copying Grukk exactly, because he knows it worked.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 240,
@@ -810,7 +810,7 @@
       },
       {
         "name": "Snuff the Ember",
-        "flavour": "He hasn't finished uniting the warbands, not yet, but he's close enough that half of them already answer to him without being asked twice. Cutting him down now costs far less than fighting what he's about to become in a season.",
+        "flavour": "Skarn has half the warbands already. Stopping him now is a hard fight. Stopping him in a season, when he has all of them, would be a war.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 300,
@@ -821,7 +821,7 @@
   {
     "id": "hollow_choir",
     "name": "The Hollow Choir",
-    "description": "The guild broke a choir like this one before, at the demon fortress. They cracked its wards, cut down the demon lord keeping it caged, and left the voices behind since silencing them was never the job. It did not stay put for long. Something has settled into the old cathedral now, singing as if it means to make the place its home. It never once pauses to breathe.",
+    "description": "The choir that powered the demon fortress's wards got away when the fortress fell. It has turned up again in an old cathedral in the Reach, rooted itself into the building, and started singing new wards around it. Nobody who has gone in to look has come back out.",
     "reqLevel": 26,
     "rewardGold": 6400,
     "rewardItems": [
@@ -830,7 +830,7 @@
     ],
     "rewardRenown": 2,
     "title": "Choir-Silencer",
-    "epilogue": "The demonic choir-construct is silent this time, torn from the rafters and left in pieces on the cathedral floor. Most people have stopped flinching at an unexpected cathedral bell. Most people.",
+    "epilogue": "The choir is dead this time, torn out of the rafters and burned on the cathedral floor. Its wards went with it. The cathedral has been reconsecrated and the bells ring again. Most people have stopped flinching when they do.",
     "requiresChainId": "demon_fortress",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -845,7 +845,7 @@
     "stages": [
       {
         "name": "Follow the Hymn",
-        "flavour": "The hymn carries for miles and never repeats a single verse. The melody is new, but the wards woven underneath it are familiar. Whatever escaped the demon fortress has made a new home in these cathedral walls. Not for much longer.",
+        "flavour": "The singing carries for miles and never stops for breath. The wards woven into it are the same ones the guild broke at the fortress. The choir is making the cathedral its new fortress.",
         "tag": "explore",
         "difficulty": "hard",
         "durationMinutes": 600,
@@ -853,7 +853,7 @@
       },
       {
         "name": "The Choir Loft",
-        "flavour": "There are no singers in the loft, only a demonic choir-construct fused into the rafters in wet coils of flesh. Dozens of mouths open and close in careful sequence so the note never has to stop. It sings beautifully, which is the most disturbing part of all.",
+        "flavour": "There are no singers in the loft. The choir is a single demonic creature fused into the rafters, dozens of mouths taking turns so the note never stops. It is what kept the fortress sealed for nine years.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 840,
@@ -861,7 +861,7 @@
       },
       {
         "name": "Silence the Chord",
-        "flavour": "Whatever this creature has been building toward is nearly finished. Finished is not something the guild came here to allow.",
+        "flavour": "The choir is close to finishing its new wards. Once they are done, the cathedral will be as hard to break as the fortress was. It has to be stopped while it is still building them.",
         "tag": "arcane",
         "difficulty": "epic",
         "durationMinutes": 1080,
@@ -872,7 +872,7 @@
   {
     "id": "world_ender",
     "name": "The World-Ender's Vigil",
-    "description": "Every culture that has kept records describes some version of the same ending, though never with the same name twice: something patient that waits beyond the edge of every map, not born but always waiting. Sailors marked the same blank stretch of ocean on unrelated charts a century apart, warning that the world stops arguing there. Scholars dismissed it as superstition until it appeared on land instead. It has no fixed location. It finds guilds that get close enough to matter. The guild's patron has funded five prior expeditions and none returned. He will not say what he sent them to find, only that this time he is not sending strangers. Five stages, and no easy ones.",
+    "description": "Every culture with written records describes the same thing: something at the edge of the world that ends places, slowly, from the outside in. It has no name that any two of them agree on. A patron has funded five expeditions to find it, and none came back. He has now asked the guild, because he no longer wants to send strangers. Five stages, and no easy ones.",
     "reqLevel": 34,
     "rewardGold": 17848,
     "rewardItems": [
@@ -883,7 +883,7 @@
     ],
     "rewardRenown": 6,
     "title": "World's End",
-    "epilogue": "It had no name when this began, and it has none now. What it had, it no longer has. That will have to be enough of an ending.",
+    "epilogue": "The thing at the edge of the world is dead. It never had a name, and it still does not. The Vigil can rest now, and the road has gone back to being hillside. The patron has stopped funding expeditions.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -901,7 +901,7 @@
     "stages": [
       {
         "name": "The Road That Should Not Exist",
-        "flavour": "Three nights ago, a caravan guard swore the ground opened under a full moon and a new road appeared, cutting straight into unmapped hill country. By morning, cartographers in three separate towns had drawn the same route without comparing notes, each certain they had surveyed it decades ago. The guild's advance rider stands at its entrance now, torch raised, looking down stone paved smoother and older than anyone alive could have laid it. The road did not need a ship or an army to arrive. It only needed the guild close enough to notice.",
+        "flavour": "Three nights ago, a road appeared in the hills that was not there before. By morning, mapmakers in three towns had drawn it onto their maps without speaking to each other, each sure they had always known it was there. The patron says this is how it starts: the world rearranges itself around the thing, and the road leads to it.",
         "tag": "explore",
         "difficulty": "epic",
         "durationMinutes": 960,
@@ -909,7 +909,7 @@
       },
       {
         "name": "The Watchers in the Dark Between Stars",
-        "flavour": "The road climbs past the treeline and past any charted sky, under stars that answer to no known constellation. Six shapes stand at the road's end, tall as siege engines and thin as famine, marking something on the empty air that leaves no visible trace. They do not turn as the guild approaches. They are not servants of the World-Ender. If anything, it answers to them. Whatever they are counting down here is only one of several debts they track, on fronts this guild has never heard of.",
+        "flavour": "Past the treeline, the stars overhead are ones nobody has charted. Six tall, thin figures stand at the end of the road, keeping a count of something. They do not serve the thing at the end of the road. If anything, it answers to them, and it is not the only thing they are counting. They let the guild pass.",
         "tag": "arcane",
         "difficulty": "legendary",
         "durationMinutes": 1200,
@@ -917,7 +917,7 @@
       },
       {
         "name": "The Court of the Unmade King",
-        "flavour": "Past the Watchers, the road becomes a hall that cannot decide on a shape, its pillars flickering between marble, bone, and nothing at all. The floor layers over itself with every battlefield it has ever hosted. On a throne built from the wreckage of every crown it has replaced sits something that at least eight vanished empires once called the first mistake. It watches the guild arrive with the boredom of something that has outlasted every guild before them.",
+        "flavour": "Beyond the Watchers is a hall full of broken crowns, ruled by a demon that calls itself a king. It feeds on the wreckage the thing at the end of the road leaves behind, and it does not want anyone getting close enough to stop the feeding.",
         "tag": "explore",
         "difficulty": "legendary",
         "durationMinutes": 1440,
@@ -925,7 +925,7 @@
       },
       {
         "name": "The Breaking of the Vigil",
-        "flavour": "Below the throne room, a wall of pale and thinning light holds a line that has not moved since before movement had a word for it, tended by beings too worn down to have kept their faces. Whatever has held this post can no longer pretend it does not need help. The guild braces the failing wall alongside things that stopped being anything nameable long ago. It will not be enough on its own. It has to be enough anyway.",
+        "flavour": "Below the hall is a wall of pale light, held up by worn-out beings who have been holding back the rot since before anyone kept records. The wall is failing. The guild has to help hold it long enough to reach the other side.",
         "tag": "defense",
         "difficulty": "legendary",
         "durationMinutes": 1680,
@@ -933,7 +933,7 @@
       },
       {
         "name": "The World-Ender",
-        "flavour": "Past the breaking vigil there is no more road, no more sky, only a shape the size of a held breath, waiting exactly where it has always waited. It does not introduce itself. It has never needed to. Whatever happens next will be the last thing every one of the five prior expeditions ever saw, or the first thing one of them survived, with someone left to write down the difference.",
+        "flavour": "On the other side of the wall is the thing itself: a shape that barely holds together, and is slowly eating the world from the edges inward. This is what the five expeditions found, and none of them survived it.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1920,
@@ -944,7 +944,7 @@
   {
     "id": "last_pilgrimage",
     "name": "The Last Pilgrimage",
-    "description": "Travelers along an old, unofficial road have gone missing near a waystone shrine and returned changed. They were not robbed or killed. They were claimed, made to kneel through unknown rites they never agreed to before being released. Every map marks the shrine as abandoned, and has for longer than anyone can say. Whatever is using it now is not abandoned at all.",
+    "description": "Travellers on an old pilgrim road have been disappearing near an abandoned shrine and coming back days later, unharmed but shaken. They all say the same thing: something at the shrine made them kneel and walked them through a funeral rite, their own, even though they were not dying. The shrine belongs to a god of death nobody has worshipped in centuries.",
     "reqLevel": 44,
     "rewardGold": 23800,
     "rewardItems": [
@@ -952,7 +952,7 @@
     ],
     "rewardRenown": 8,
     "title": "Pilgrim's Herald",
-    "epilogue": "There is a name for what the guild found beneath that archive, and it is not a monster's name. It once mattered enormously to people who no longer exist to say so. It is still down there, waiting for a pilgrimage that stopped coming centuries before anyone alive could feel guilty about it.",
+    "epilogue": "The guild now knows what is at the end of the road: the Last God, the god of the final mile, starving because nobody walks to it anymore. It is still down there, still trying to do its job for people who stopped coming centuries ago.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -968,7 +968,7 @@
     "stages": [
       {
         "name": "The Waystone",
-        "flavour": "What the survivors describe is not a monster in the usual sense. There are no claws, no roar, nothing that wants a fight. Only something old and confused, pressing strangers through the motions of a rite it still believes someone is meant to receive. It does not attack so much as insist. That is somehow worse.",
+        "flavour": "The shrine marks the start of the old pilgrim road. Whatever is here is not a monster. It is the god's last remaining power, still trying to perform the rite it was built for on anyone who walks past. It does not fight. It insists.",
         "tag": "arcane",
         "difficulty": "epic",
         "durationMinutes": 1080,
@@ -976,7 +976,7 @@
       },
       {
         "name": "The Scribes' Silence",
-        "flavour": "An order once kept the records here, every pilgrim's name and every final rite, generation after generation, until one day nobody wrote another entry and nobody came back to ask why. The building still stands locked exactly as its last scribe left it. Whatever moves inside is not guarding treasure. It is guarding an unfinished ledger, the same way the shrine outside is still trying to finish a rite.",
+        "flavour": "Behind the shrine is the archive of the order that kept the pilgrimage records. It was locked up when the last scribe died and has not been opened since. The records inside should explain what happened.",
         "tag": "explore",
         "difficulty": "epic",
         "durationMinutes": 1200,
@@ -984,7 +984,7 @@
       },
       {
         "name": "What the Archive Remembers",
-        "flavour": "Half the pages have turned to dust, and the surviving half do not agree with each other. Names are spelled three different ways, dates contradict, and a century of scribes each half-finished what the last one started. Pieced together, the shape that emerges is not abandonment or betrayal. It is a custom that quietly stopped, one skipped generation at a time, until nobody left alive remembered why the walk had mattered.",
+        "flavour": "The records are half rotted, but the story is clear enough. Pilgrims used to walk this road in their last days, and the god walked them peacefully into death. Over a century, fewer and fewer came, until none did. The god was never abandoned on purpose. People just forgot.",
         "tag": "arcane",
         "difficulty": "legendary",
         "durationMinutes": 1320,
@@ -992,7 +992,7 @@
       },
       {
         "name": "The Road That Still Opens",
-        "flavour": "Beneath the archive's last sealed room, a second road begins, the real one that the shrine outside was only ever an echo of. It leads nowhere on any chart and never was going to, but it remembers one condition for opening: someone willing to walk it in the missing pilgrims' place. The guild did not come here to volunteer for that. It seems the road does not care.",
+        "flavour": "Under the archive is the real pilgrim road. It opens for one reason only: someone willing to walk it in place of the pilgrims who never came. The guild did not come here to do that. The road has opened anyway.",
         "tag": "arcane",
         "difficulty": "legendary",
         "durationMinutes": 1440,
@@ -1003,7 +1003,7 @@
   {
     "id": "hollow_king",
     "name": "The Hollow King's Return",
-    "description": "For guilds a run or two into prestige. The barrow-ground that has been stirring quietly for months has stopped being quiet at all. The king everyone assumed was safely buried is not staying that way, and whatever is escorting him back out is worse company than he ever was.",
+    "description": "For guilds a run or two into prestige. The barrow-ground east of the culled villages has finally broken open. King Haldren, buried there three hundred years ago, has risen, and his dead court has risen with him. He is marching back toward the capital he once ruled, to take his crown again.",
     "reqLevel": 45,
     "rewardGold": 25333,
     "rewardItems": [
@@ -1013,7 +1013,7 @@
     ],
     "rewardRenown": 10,
     "title": "Kingslayer Twice Over",
-    "epilogue": "He is buried again, properly this time, under considerably more stone than the last attempt managed. The court that followed him has not been seen since. Whatever bound them to him died when he did.",
+    "epilogue": "Haldren is buried again, under far more stone than last time, and his court with him. The magic that raised them died when he did. The barrow-ground is quiet, and IronRest has posted a permanent watch on it anyway.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1029,7 +1029,7 @@
     "stages": [
       {
         "name": "The Grave Reopens",
-        "flavour": "The seal held for three hundred years, stone unmoved and wards unbroken. It held for exactly one night less than it needed to.",
+        "flavour": "The tomb seal held for three hundred years and gave way last night. Haldren's guards came out first, and they are holding the barrow while the rest of his court climbs out.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 1080,
@@ -1037,7 +1037,7 @@
       },
       {
         "name": "The Procession of the Dead Court",
-        "flavour": "Every advisor he ever had executed now walks behind him in perfect procession -- obedient in death in a way none of them ever managed while they were alive to refuse him.",
+        "flavour": "Every advisor Haldren had executed in life walks behind him now, perfectly obedient. They never obeyed him this well while they were alive. They have to be cut down before the procession reaches the road.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1320,
@@ -1045,7 +1045,7 @@
       },
       {
         "name": "The Bridge of Forgotten Oaths",
-        "flavour": "This bridge bears the weight only of those who never once broke a promise in their lives. Cross carefully.",
+        "flavour": "Haldren's route crosses an old royal bridge enchanted to collapse under anyone who has broken a sworn oath. His court crosses it easily. The guild has to cross it too.",
         "tag": "arcane",
         "difficulty": "legendary",
         "durationMinutes": 1560,
@@ -1053,7 +1053,7 @@
       },
       {
         "name": "The Second Coronation",
-        "flavour": "He is nearly home. The crown still remembers the shape of his head, even though the kingdom beneath it forgot his name long ago.",
+        "flavour": "Haldren has reached the ruins of his old throne room and put his crown back on. The kingdom forgot his name long ago. He has not forgotten it, and he will fight for it.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1800,
@@ -1064,7 +1064,7 @@
   {
     "id": "the_man_who_sells_maybe",
     "name": "The Man Who Sells Maybe",
-    "description": "A cart has been working the roads outside town for a week, selling something described only as a chance. Three separate people have already asked the guild to look into it, each for a different reason, and none of them flattering.",
+    "description": "A man named Grimsby has parked a card cart on the road outside town and spent the week taking people's money. Pay a coin, flip three cards, win if they match. Nobody wins. Three townsfolk have come to the guild separately, a farmer, a tavern keeper and a guard's wife, all asking for the same thing: find out how he's doing it.",
     "reqLevel": 5,
     "rewardGold": 609,
     "rewardItems": [
@@ -1072,7 +1072,7 @@
     ],
     "rewardRenown": 1,
     "title": "The One He Doesn't Cheat",
-    "epilogue": "Grimsby never gave a straight answer about where the cart came from or where the coin under the floorboard was headed. What he did give, once he stopped talking his way out of it, was his word, worth exactly as much as anyone's word is worth once it has been checked. He still turns up unannounced and still charges for the privilege, but the deck is real now, and everyone involved knows it. That may be the most honest thing Grimsby has ever agreed to.",
+    "epilogue": "The Vasse brothers left without the cart and without their money. They still want both, but collecting now means going through the guild. In return, Grimsby threw the shaved deck in the fire in front of everyone and handed over the loaded coin he'd been using for side bets. He plays a fair game now and still charges for it. He also says he owes the guild, and has promised to pay it back. Nobody has seen how yet.",
     "grantsHatchery": false,
     "grantsPeddler": true,
     "grantsHarvest": false,
@@ -1087,24 +1087,24 @@
     },
     "stages": [
       {
-        "name": "A Cart That Wasn't There Yesterday",
-        "flavour": "The wheel ruts run in a perfect circle and go nowhere. Whoever owns this cart never actually left. A hand-lettered sign promises a fair chance for a fair price, the kind of phrase that usually means the opposite of both halves. Three townsfolk are already lined up, each certain they are about to win big.",
+        "name": "A Cart on the Old Road",
+        "flavour": "The cart is easy to find. Grimsby has been working the same stretch of road all week and makes no effort to hide. The guild talks to the people who lost money. The stories match: the game looks fair, the cards look fair, and Grimsby is friendly the whole time he takes your coin. He has lost exactly once all week, and the man who won was seen drinking with him later.",
         "tag": "explore",
         "difficulty": "easy",
         "durationMinutes": 60,
         "goldMultiplier": 1.2
       },
       {
-        "name": "The Deck Has an Opinion",
-        "flavour": "A little patience is all it takes. The same three cards come up jackpot for the man running the table, and only for him, four times running. He is good enough that nobody else has caught it, but not good enough to fool someone actually watching for it. He notices the exact moment he is made, and does not look surprised.",
+        "name": "The Marked Deck",
+        "flavour": "Someone from the guild plays a few rounds while another watches from the crowd. The trick is simple once you see it: the winning cards are shaved a hair thinner, and Grimsby can feel them as he deals. He only lets the matches land when the bet is too small to matter. He spots the watcher halfway through, finishes the hand anyway, and asks if they'd like to talk somewhere quieter.",
         "tag": "stealth",
         "difficulty": "normal",
         "durationMinutes": 90,
         "goldMultiplier": 1.4
       },
       {
-        "name": "What Grimsby Actually Owes",
-        "flavour": "Caught cold, Grimsby neither runs nor grovels. He negotiates, as if getting caught was always step two of the plan. The real trouble is not the rigged table. It is the two far less patient men he still owes for the cart itself, and they have just watched the same show everyone else did. A fair chance was never the actual pitch. Buying enough goodwill to still be standing tomorrow is.",
+        "name": "What Grimsby Owes",
+        "flavour": "Grimsby doesn't deny any of it. He borrowed the money for the cart from the Vasse brothers, two lenders out of the dock district, and the rigged game was how he planned to pay them back on time. He's late. The brothers turn up that evening to take the cart and whatever else he has. The guild is standing next to him when they do. Grimsby asks, very politely, if that could stay the case.",
         "tag": "defense",
         "difficulty": "normal",
         "durationMinutes": 120,
@@ -1115,7 +1115,7 @@
   {
     "id": "bandits_on_the_old_road",
     "name": "Bandits on the Old Road",
-    "description": "Every caravan coming up the old trade road tells the same story: a toll demanded at knifepoint, sometimes by a different crew than the week before. There are too many bandits, too well coordinated, for this to be a handful of desperate strangers acting alone.",
+    "description": "Every caravan on the old trade road is being stopped and charged a toll at knifepoint, sometimes by a different crew each week. There are too many bandits working too well together for this to be chance. Someone is organising them.",
     "reqLevel": 4,
     "rewardGold": 558,
     "rewardItems": [
@@ -1123,7 +1123,7 @@
     ],
     "rewardRenown": 1,
     "title": "Roadwarden",
-    "epilogue": "The self-styled king of the old road answered for every toll he ever collected, all at once. The road is clear again, for now. Someone always notices an unguarded stretch of road eventually, but that is a problem for whoever is watching next season.",
+    "epilogue": "Rook is dead and his crews have scattered. The road is clear again, and the caravans are paying the guild's escort rates instead of tolls. Someone will try it again eventually. That is a problem for next season.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1139,15 +1139,15 @@
     "stages": [
       {
         "name": "The Toll Nobody Asked For",
-        "flavour": "A merchant's convoy limps into town short two wagons and a good deal of coin, describing the same crew that has hit half a dozen others this month. They were organized, patient, and unsettlingly polite about the robbing.",
+        "flavour": "A merchant convoy limps into town two wagons short. The crew that robbed them was organised, patient, and polite about it. Half a dozen other convoys have the same story this month.",
         "tag": "combat",
         "difficulty": "easy",
         "durationMinutes": 60,
         "goldMultiplier": 1.2
       },
       {
-        "name": "Whose Colors Are These",
-        "flavour": "A torn banner left at the ambush site does not match any crew the guild has dealt with before. Asking around turns up three other independent bandit gangs flying the same colors, as if someone has been recruiting rather than competing.",
+        "name": "Whose Colours Are These",
+        "flavour": "A torn banner from the ambush site belongs to no crew the guild knows. Asking around turns up three other bandit gangs flying the same colours. Someone has been recruiting them.",
         "tag": "explore",
         "difficulty": "easy",
         "durationMinutes": 90,
@@ -1155,7 +1155,7 @@
       },
       {
         "name": "The Self-Crowned King of the Old Road",
-        "flavour": "He has built himself a proper little court out of a collapsed watchtower, complete with a title nobody gave him and a small army of bandits who apparently had no better offer. Someone should tell him how this usually ends.",
+        "flavour": "The recruiter is a former caravan guard called Rook, who has set himself up in a ruined watchtower and calls himself King of the Old Road. Nobody gave him the title. He has a small army of bandits who had no better offer.",
         "tag": "combat",
         "difficulty": "normal",
         "durationMinutes": 150,
@@ -1166,7 +1166,7 @@
   {
     "id": "something_big_in_the_foothills",
     "name": "Something Big in the Foothills",
-    "description": "Herders in the foothills keep losing whole flocks overnight to hill giants. What is left behind is not the tidy work of wolves or the opportunistic mess of bears. Fence posts are uprooted rather than chewed through, and the tracks in the mud are the wrong size and shape for any known predator.",
+    "description": "Herders in the foothills are losing whole flocks overnight. Fence posts are being pulled out of the ground, not broken, and the footprints in the mud are bigger than a man is tall. It is hill giants, and there is more than one.",
     "reqLevel": 12,
     "rewardGold": 2550,
     "rewardItems": [
@@ -1174,7 +1174,7 @@
     ],
     "rewardRenown": 1,
     "title": "Ridgebreaker",
-    "epilogue": "The warband has broken up and scattered back up the ridge, minus its biggest member. The foothills will probably see another band of hill giants eventually, since they rarely get wiped out so much as get bored and move on. That is a problem for a different season.",
+    "epilogue": "With their leader dead, the rest of the warband scattered back up the ridge. Hill giants tend to wander off rather than come back for revenge. The herders have rebuilt their fences, and the foothills should stay quiet for a while.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1190,7 +1190,7 @@
     "stages": [
       {
         "name": "Torn Fences, Missing Herds",
-        "flavour": "The fence was not broken so much as removed, posts and all. The drag marks leading up into the hills are wide enough for two grown men to walk side by side without touching the edges.",
+        "flavour": "The fence was pulled up, posts and all. The drag marks leading up into the hills are wide enough for two people to walk side by side. The flocks went that way.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 480,
@@ -1198,7 +1198,7 @@
       },
       {
         "name": "The Ridge Warband",
-        "flavour": "This is not one hungry animal passing through. It is a hill giant warband, half a dozen strong, with a crude but functional camp built from stolen timber and whatever livestock they have not already eaten.",
+        "flavour": "It is a hill giant warband, six of them, camped on the ridge in shelters built from stolen timber, eating their way through the herders' sheep. They will not leave while there is food.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 600,
@@ -1206,7 +1206,7 @@
       },
       {
         "name": "The Ridgebreaker",
-        "flavour": "The warband's biggest hill giant earned that name honestly. There is a boulder near the camp with a deliberate, deep dent in it, apparently left just to make a point to the rest of the group.",
+        "flavour": "The biggest of them leads the others by being the biggest. There is a boulder by the camp with a dent in it the size of a fist, and he likes to point at it when anyone argues.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 780,
@@ -1217,7 +1217,7 @@
   {
     "id": "full_moon_over_ashvale",
     "name": "Full Moon Over Ashvale",
-    "description": "The hunting lodge town of Ashvale wants a wolf problem solved before the next full moon. The tracks are shaped wrong, the attacks escalate on a fixed schedule, and at least one survivor has started acting like they are waiting for something.",
+    "description": "Ashvale, a hunting-lodge town, wants its wolf problem solved before the next full moon. The tracks are the wrong shape for wolves, the attacks follow the moon's phases, and a hunter who survived a bite has started acting strangely. Ashvale has werewolves, and the guild has a week.",
     "reqLevel": 17,
     "rewardGold": 3175,
     "rewardItems": [
@@ -1225,7 +1225,7 @@
     ],
     "rewardRenown": 2,
     "title": "Moonhunter",
-    "epilogue": "The werewolf pack has gone quiet, its alpha put down before the moon finished rising. Ashvale is grateful, if rattled. One of the people the guild was sent to protect did not make it through the last stage of this. Ashvale is still deciding how to grieve someone the guild had to be the one to put down.",
+    "epilogue": "The alpha is dead and the pack is broken. Ashvale is grateful, and shaken. Holt was one of their own, and the guild was the one that had to put him down. Ashvale is still working out how to mourn him.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1241,15 +1241,15 @@
     "stages": [
       {
         "name": "Not Wolves",
-        "flavour": "The bite radius is wrong for a wolf, and the kills are too organized for a pack of animals. Every attack so far has landed within a day of the moon's phase, and nothing about a wolf's hunting habits explains a schedule.",
+        "flavour": "The bite marks are too wide for a wolf and every attack has landed within a day of the moon. The pack is people for most of the month. They live in or near Ashvale.",
         "tag": "explore",
         "difficulty": "normal",
         "durationMinutes": 420,
         "goldMultiplier": 1.5
       },
       {
-        "name": "The Turned Neighbor",
-        "flavour": "One of the survivors the guild was sent to protect stopped answering to their own name three nights ago. By the time anyone noticed, it was already too late to do anything gentle about it.",
+        "name": "The Turned Neighbour",
+        "flavour": "One of the bitten hunters, a man named Holt, stopped answering to his own name three nights ago. He has already turned, and he is with the pack now. There is no way left to bring him back.",
         "tag": "combat",
         "difficulty": "hard",
         "durationMinutes": 600,
@@ -1257,7 +1257,7 @@
       },
       {
         "name": "Under a Full Moon",
-        "flavour": "The pack has run wild under a full sky before, and it will happen again unless the guild reaches the alpha before moonrise finishes. After that, there is no version of this fight anyone walks away from clean.",
+        "flavour": "The pack runs under the full moon tonight. The alpha has to die before moonrise is finished, or the guild will be fighting the whole pack at full strength in the dark.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 900,
@@ -1268,7 +1268,7 @@
   {
     "id": "body_snatcher_problem",
     "name": "The Body Snatcher Problem",
-    "description": "A prominent Ironrest household has started acting subtly wrong. The words are right, but the rhythm is off, and every laugh lands a half second late. Nobody can point to exactly what has changed. Everyone agrees that something has.",
+    "description": "The Pell household, one of IronRest's oldest families, has started acting wrong. They say the right things but at the wrong pace, and their laughter comes a half second late. Their neighbours are worried. The watch has quietly asked the guild to look into it.",
     "reqLevel": 29,
     "rewardGold": 8050,
     "rewardItems": [
@@ -1276,7 +1276,7 @@
     ],
     "rewardRenown": 3,
     "title": "Unmasker",
-    "epilogue": "The body-thief that had been wearing that household is gone now, and so is whatever it was actually made of underneath. Ironrest's watch has opened an inquiry into how many other households it may have reached first, and how long it had been walking among them before anyone noticed. The guild will hear about it the moment there's something worth acting on.",
+    "epilogue": "The skinweaver is dead. The real Pells were among the bodies in its lair. The watch has opened an inquiry into how many other households it may have reached before this one, and the guild will hear the moment they find anything.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1292,7 +1292,7 @@
     "stages": [
       {
         "name": "Wrong Rhythm",
-        "flavour": "Every answer the family gives is technically correct and somehow still feels rehearsed, as if something learned the shape of a normal household by watching it rather than living in it.",
+        "flavour": "Every answer the Pells give is correct and sounds rehearsed, as if someone learned how a normal family talks by watching one. None of the servants have been seen in a week.",
         "tag": "explore",
         "difficulty": "hard",
         "durationMinutes": 660,
@@ -1300,7 +1300,7 @@
       },
       {
         "name": "The Grave-Robbers' Trail",
-        "flavour": "A disturbed plot in the family crypt leads to a much larger operation than one household's worth of graves. Someone, or something, has been quietly harvesting bodies for far longer than anyone has noticed.",
+        "flavour": "A disturbed grave in the Pell family crypt leads to a tunnel, and the tunnel leads to a lair full of bodies, some of them the missing servants. Something has been taking people and studying them.",
         "tag": "stealth",
         "difficulty": "epic",
         "durationMinutes": 900,
@@ -1308,7 +1308,7 @@
       },
       {
         "name": "What Wears Them Now",
-        "flavour": "It is not undead, and it is not wearing a stolen face the way a shapeshifter would. It is copying, methodically, from the inside out, and it does not want to be interrupted.",
+        "flavour": "It is a skinweaver: a creature that takes a person, copies them from the inside out, and replaces them. It has replaced every Pell in the house. It is not going to let itself be found out without a fight.",
         "tag": "combat",
         "difficulty": "epic",
         "durationMinutes": 1080,
@@ -1319,7 +1319,7 @@
   {
     "id": "hunt_a_lich",
     "name": "Hunt-a-Lich",
-    "description": "Raised dead have been getting bolder and far better organized than any ordinary wight problem. Someone, or something, is directing them with real intent, and the pattern only makes sense as the early moves of a much longer game.",
+    "description": "The risen dead in the Reach have started acting like an army: taking positions, retreating, and regrouping. Something intelligent is commanding them. IronRest wants to know who before the next attack.",
     "reqLevel": 37,
     "rewardGold": 12291,
     "rewardItems": [
@@ -1327,7 +1327,7 @@
     ],
     "rewardRenown": 5,
     "title": "Grave-Marked",
-    "epilogue": "The guild found where the lich is holed up, an old ossuary nobody has bothered mapping in decades, but not what he is actually planning underneath it. He is confident enough in it to have stopped hiding, and nobody at Ironrest has explained why a man that confident stopped hiding.",
+    "epilogue": "The guild knows where Ostrel is and what he is: a lich, in an old ossuary nobody had mapped in decades. What he is working on down there is still unknown. He has stopped hiding, which means he thinks he is nearly finished.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1343,7 +1343,7 @@
     "stages": [
       {
         "name": "The Dead Don't Usually Plan",
-        "flavour": "These are not the shambling, purposeless dead the guild has cleared out before. They take positions, fall back when overwhelmed, and regroup somewhere the guild has not found yet. Something is thinking for them.",
+        "flavour": "These dead hold positions, fall back when they are losing, and regroup somewhere the guild has not found. Someone is giving them orders, and is close enough to watch.",
         "tag": "explore",
         "difficulty": "epic",
         "durationMinutes": 1140,
@@ -1351,7 +1351,7 @@
       },
       {
         "name": "A Name in the Dark",
-        "flavour": "A captured ritual circlet, still warm, carries the same signature over and over. It is a name half-erased by time and deliberately obscured the rest of the way, belonging to someone who was supposed to have died a very long time ago.",
+        "flavour": "A ritual circlet taken from one of the commanding dead carries a maker's mark: Ostrel, a necromancer IronRest hanged ninety years ago. He did not stay dead. He made himself a lich.",
         "tag": "arcane",
         "difficulty": "epic",
         "durationMinutes": 1320,
@@ -1359,7 +1359,7 @@
       },
       {
         "name": "The Door He Didn't Bother Locking",
-        "flavour": "The ossuary door is not warded, guarded, or hidden. Either he does not know the guild is close, or he wants them to walk in exactly like this, on his schedule instead of theirs.",
+        "flavour": "Ostrel's ossuary is not hidden or guarded. He knows the guild is coming and he does not care. He is busy with something, and he does not plan to stop for visitors.",
         "tag": "stealth",
         "difficulty": "legendary",
         "durationMinutes": 1560,
@@ -1370,7 +1370,7 @@
   {
     "id": "quiet_in_millbrook",
     "name": "Quiet in Millbrook",
-    "description": "Every report out of Millbrook says the same unsettling thing in a different way: the town looks fine and sounds fine, but is not. Residents show flat affect and give identical answers despite never having met, and a whole community has suddenly started agreeing on everything a little too easily.",
+    "description": "Every report from Millbrook says the same thing: the town looks fine and sounds fine, but it is not. Everyone in town gives the same answers to questions, word for word, even people who have never met. A whole town has started agreeing on everything, and nobody there thinks it is strange.",
     "reqLevel": 35,
     "rewardGold": 7491,
     "rewardItems": [
@@ -1378,7 +1378,7 @@
     ],
     "rewardRenown": 4,
     "title": "Watcher of Millbrook",
-    "epilogue": "Nobody in Millbrook is exactly lying. They answer every question truthfully, and every answer arrives at the same conclusion no matter what was actually asked. The guild traced the compulsion to something underneath the town before the trail went dark. Whatever it is, it noticed them looking.",
+    "epilogue": "The threads lead under Millbrook to something that controls the townsfolk through them. The townsfolk are not lying. They believe what it tells them. The guild has traced it as far as the tunnels under the town. It knows the guild is coming.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
@@ -1392,7 +1392,7 @@
     "stages": [
       {
         "name": "Flat Answers",
-        "flavour": "Every resident gives the same measured, faintly rehearsed answer to a completely different question, down to the same half second pause before speaking, as if they are all listening to something before they respond.",
+        "flavour": "Every resident gives the same calm answer to completely different questions, with the same pause first, as if they are listening to someone before they speak. They are. Each of them has a thin pale thread under the skin at the back of the neck.",
         "tag": "explore",
         "difficulty": "epic",
         "durationMinutes": 1080,
@@ -1400,7 +1400,7 @@
       },
       {
         "name": "The Trail Goes Quiet",
-        "flavour": "Whatever is directing Millbrook does not panic when it is noticed. It simply goes quieter, tightening its grip rather than loosening it, until every lead the guild had goes suddenly and deliberately cold.",
+        "flavour": "The threads all run into the ground. When the guild starts following them, the town closes ranks: every lead goes cold at once, every resident forgets what they said the day before. Whatever is on the other end of the threads knows it is being followed.",
         "tag": "arcane",
         "difficulty": "epic",
         "durationMinutes": 1320,
@@ -1411,7 +1411,7 @@
   {
     "id": "the_loom_beneath",
     "name": "The Loom Beneath",
-    "description": "Whatever went quiet under Millbrook has not stopped. It has simply stopped being subtle about it. Tracing the compulsion to its root leads underground, to something that was never a person and has apparently been weaving many of them together for longer than anyone in Millbrook has been alive.",
+    "description": "The thing under Millbrook has stopped hiding. Its threads are spreading to the farms around the town, and anyone who sleeps near them wakes up agreeing with everyone else. The guild is going down into the tunnels to find it.",
     "reqLevel": 39,
     "rewardGold": 8897,
     "rewardItems": [
@@ -1419,7 +1419,7 @@
     ],
     "rewardRenown": 6,
     "title": "Thread-Walker",
-    "epilogue": "The guild has a name for it now, the Loom, for lack of anything it has ever called itself. They have a location, and a fairly complete picture of what it has been doing to Millbrook -- and reports are already coming in from towns along the same road, waiting on someone to compare notes. What the guild does not have is any plan that avoids someone going down there to end it directly.",
+    "epilogue": "The guild calls it the Loom. It has no name for itself. They know where it is, how it controls people, and that towns further along the road are starting to report the same symptoms. Ending it means going down there and cutting it out at the root.",
     "requiresChainId": "quiet_in_millbrook",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -1434,7 +1434,7 @@
     "stages": [
       {
         "name": "Underneath",
-        "flavour": "The tunnels beneath Millbrook were not dug by anything with hands. The walls are smooth in a way that looks grown rather than carved, and every thread of pale fiber running through the stone pulls faintly toward the same direction.",
+        "flavour": "The tunnels under Millbrook were not dug. They were grown, smooth-walled and lined with pale threads, all pulling toward the same point. The deeper the guild goes, the thicker they get.",
         "tag": "explore",
         "difficulty": "legendary",
         "durationMinutes": 1440,
@@ -1442,7 +1442,7 @@
       },
       {
         "name": "One Voice, Too Many Mouths",
-        "flavour": "It does not attack. It talks calmly through every captured townsperson at once, in perfect unison, asking in a dozen borrowed voices why the guild would want to unravel something that finally made everyone agree.",
+        "flavour": "At the centre is a vast growth, part fungus and part something else, with threads running into every person in Millbrook. It speaks through all of them at once, calmly asking why anyone would want to undo the first time the whole town has ever agreed.",
         "tag": "arcane",
         "difficulty": "legendary",
         "durationMinutes": 1560,
@@ -1453,7 +1453,7 @@
   {
     "id": "the_first_haul",
     "name": "The First Haul",
-    "description": "A grizzled old quartermaster corners the guild before their first real job is even finished. He insists that buying every scrap of ore and timber from the shop is money any guild worth the name should be keeping for itself, if someone is willing to clear the bramble off the old gathering grounds first.",
+    "description": "Old Bram, a retired quartermaster, corners the guild before its first job is even finished. Buying every scrap of ore and timber from the shop is money a guild should keep for itself, he says. The old gathering grounds outside town are still there. Someone just has to clear them.",
     "reqLevel": 1,
     "rewardGold": 270,
     "rewardItems": [
@@ -1461,7 +1461,7 @@
     ],
     "rewardRenown": 1,
     "title": "Provisioner",
-    "epilogue": "The quartermaster has shown the guild everything they know about coaxing ore, timber, herbs, and fish out of the land around Ironrest. The rest is just standing at a node and paying attention. The supply room already looks less bare, and the shop counter is bleeding a lot less gold.",
+    "epilogue": "Bram has taught the guild everything he knows about getting ore, timber, herbs and fish out of the land around IronRest. The rest is practice. The supply room is filling up, and the guild is spending a lot less at the shop.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": true,
@@ -1477,7 +1477,7 @@
     "stages": [
       {
         "name": "Clearing the Old Grounds",
-        "flavour": "The gathering grounds have not been touched in years. Brambles cover the quarry mouth, the woodyard has not been swept, and the herb garden has gone to weed. None of it is dangerous. All of it needs clearing before anyone can use it again.",
+        "flavour": "The gathering grounds have not been used in years. Brambles cover the quarry, the woodyard is overgrown, and the herb garden is all weeds. None of it is dangerous. All of it needs clearing.",
         "tag": "explore",
         "difficulty": "easy",
         "durationMinutes": 30,
@@ -1485,7 +1485,7 @@
       },
       {
         "name": "A Lesson in the Old Ways",
-        "flavour": "The quartermaster walks the guild through every node personally: when to strike, when to wait, and which glints are worth rushing for. It is less a lesson than a demonstration of forty years spent never once paying for a single nail.",
+        "flavour": "Bram walks the guild round every node himself: when to strike, when to wait, and which glints are worth running for. Forty years of never paying for a nail, and he is happy to share all of it.",
         "tag": "explore",
         "difficulty": "easy",
         "durationMinutes": 45,
@@ -1496,7 +1496,7 @@
   {
     "id": "kindred_moon",
     "name": "The Kindred Moon",
-    "description": "A letter reaches the guild from Ashvale, addressed by name and asking, carefully, not to be read aloud to anyone else. The man who wrote it survived the pack the guild put down there -- survived the bite, too, and has spent every month since hiding what that actually means. The next full moon is close enough to count in days.",
+    "description": "A letter reaches the guild from Ashvale, addressed by name and marked private. It is from Edric Marsh, a hunter who survived the werewolf pack the guild broke there. He survived the bite too, and he has been hiding what that means ever since. The next full moon is days away, and he is asking for help before it comes.",
     "reqLevel": 46,
     "rewardGold": 26867,
     "rewardItems": [
@@ -1504,7 +1504,7 @@
     ],
     "rewardRenown": 11,
     "title": "Kindred",
-    "epilogue": "He is still standing when the moon finishes rising, which was never the safe assumption. What walked out of that circle remembers Ashvale, remembers the letter, remembers exactly who he is -- the shape changed permanently; nothing underneath it did. Ashvale does not know what to do with that, and hasn't decided whether it's grateful. The guild has already made up its mind.",
+    "epilogue": "It worked, in a way. Edric is still himself, with his own memories and his own mind, but the shape he takes at the full moon is now permanent and under his control. Ashvale knows now and has not decided how it feels. The guild has already decided.",
     "requiresChainId": "full_moon_over_ashvale",
     "grantsHatchery": false,
     "grantsPeddler": false,
@@ -1521,7 +1521,7 @@
     "stages": [
       {
         "name": "A Name From Ashvale",
-        "flavour": "The letter doesn't ask for a cure, not in so many words -- it asks for privacy first, help second, and mentions, almost as an afterthought, that the wound from that night never fully closed. Ashvale doesn't know. He'd like to keep it that way for as long as possible.",
+        "flavour": "Edric asks for privacy first and help second. The bite never fully healed, and every full moon he has to lock himself in a cellar. Ashvale does not know, and he would like to keep it that way.",
         "tag": "explore",
         "difficulty": "epic",
         "durationMinutes": 1100,
@@ -1529,7 +1529,7 @@
       },
       {
         "name": "What the Hedge-Witch Wants",
-        "flavour": "The old woman who might know a rite worth trying does not do anything for free, and what she wants this time is already dangerous before anyone factors in that she wants it fetched during the wrong week of the month. She's not unsympathetic. She's just not going to pretend this is simple.",
+        "flavour": "An old hedge-witch near Ashvale knows a rite that might work. Her price is a moonsilver bloom that only grows on a ridge full of wolves, and it has to be picked during the full moon week. She is sympathetic. She is not doing it for free.",
         "tag": "arcane",
         "difficulty": "legendary",
         "durationMinutes": 1350,
@@ -1537,7 +1537,7 @@
       },
       {
         "name": "The Rite at Ashvale",
-        "flavour": "The circle only has to hold until the moon finishes rising, which is exactly the part nobody can promise. He's already changing by the time the first attempt goes wrong -- not the pack's kind of wrong, something older and less patient, drawn by the same working that's supposed to be helping him.",
+        "flavour": "The circle only has to hold until the moon has fully risen. It does not. Edric starts to turn halfway through, and the rite draws something else in with him: a wild spirit drawn by the magic, which tries to take him over.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1650,
@@ -1545,7 +1545,7 @@
       },
       {
         "name": "What Walked Out of the Circle",
-        "flavour": "Something is standing where he was, and for one very long moment nobody, including him, is certain which parts of him made it through. Then he says the guild's name, correctly, and asks if it worked.",
+        "flavour": "When the moon is up, something is standing where Edric was, and for a long moment nobody, Edric included, knows how much of him is left. Then he says the guild's name, correctly, and asks if it worked.",
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1850,
