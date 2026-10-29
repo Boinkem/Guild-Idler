@@ -34,7 +34,7 @@ import { DashboardPanel } from './panels/DashboardPanel';
 import { StatsPanel } from './panels/StatsPanel';
 import { PrestigePanel } from './panels/PrestigePanel';
 import { SettingsPanel } from './panels/SettingsPanel';
-import { SHARD_GLYPH } from '../game/data/shards';
+import { ShardMark } from './icons';
 
 /**
  * Grouped rather than one flat 13-entry list -- the nav had grown past the
@@ -496,7 +496,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
               early-game header stays uncluttered. */}
           {(engine.state.legendaryShards ?? 0) > 0 && (
             <span className="shards" title="Legendary Shards -- repair Legendaries cheaply, or trade them on the Auction House">
-              {SHARD_GLYPH} {formatNumber(engine.state.legendaryShards)}
+              <ShardMark /> {formatNumber(engine.state.legendaryShards)}
             </span>
           )}
           <span ref={renownRef} className="renown">✦ {formatNumber(displayRenown)} renown</span>

@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DlcGrantNotice, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
+import { ActiveQuest, AutoChainTactics, CommissionReward, ChainReplayDifficulty, DiceFace, DlcGrantNotice, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -9,6 +9,7 @@ import { ShopManager } from './managers/ShopManager';
 import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
 import { EquipmentManager, MAX_PLUS, RepairMode } from './managers/EquipmentManager';
 import { MAX_SHARDS_PER_LISTING, SHARD_DEF_ID, shardLabel } from './data/shards';
+import { CommissionManager } from './managers/CommissionManager';
 import { InventoryManager } from './managers/InventoryManager';
 import { CurioManager } from './managers/CurioManager';
 import { RecipeManager } from './managers/RecipeManager';
@@ -139,6 +140,10 @@ export class GameEngine {
    * safely in state.pets either way, this is only the one-shot reveal.
    */
   lastHatchedPet: Pet | null = null;
+  /** Patch 0455 -- the commission just handed in, for CommissionRevealModal.
+   *  Set by completeCommission, cleared by dismissCommission; same
+   *  transient read-then-cleared shape as lastHatchedPet. Never saved. */
+  lastCommission: CommissionReward | null = null;
   /** Set by pickPeddlerCard, cleared by dismissGrimsbyResult -- same
    *  transient (unsaved), read-then-cleared shape as lastResult/
    *  lastHatchedPet. Feeds PeddlerPanel's three-card reveal. */
@@ -405,6 +410,7 @@ export class GameEngine {
       || this.completedChainCelebration !== null
       || this.offlineReport !== null
       || this.lastHatchedPet !== null
+      || this.lastCommission !== null
       || !!s.pendingHatchReadyNotice
       || !!s.pendingHeroTierUpId
       || !!s.pendingChainDiscovery
@@ -2752,6 +2758,7 @@ export class GameEngine {
     const bill = EquipmentManager.upgradeCostTo(item, to, workshop);
     if (this.state.gold < bill.gold) { this.say('Not enough gold for the upgrade.'); return 0; }
     if (this.state.scrap < bill.scrap) { this.say('Not enough scrap for the upgrade.'); return 0; }
+    if ((this.state.legendaryShards ?? 0) < bill.shards) { this.say('Not enough Legendary Shards for the upgrade.'); return 0; }
     const from = item.plus;
     while (item.plus < to) {
       const error = EquipmentManager.upgrade(this.state, item, workshop);
@@ -3892,6 +3899,22 @@ export class GameEngine {
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();
+  }
+
+  /** Patch 0455 -- hands in today's commission at `vendorId`. */
+  completeCommission(vendorId: VendorId) {
+    const now = Date.now();
+    const result = CommissionManager.complete(this.state, vendorId, now, createRng(`commission:${vendorId}:${now}`));
+    if (typeof result === 'string') return this.say(result);
+    this.lastCommission = result;
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  dismissCommission() {
+    this.lastCommission = null;
+    this.notify();
   }
 
   dismissHatchedPet() {

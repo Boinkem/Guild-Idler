@@ -1205,10 +1205,10 @@ Resolved by rarity rather than item level: Common repairs now cost no
 Scrap at all (starter gear is Common), Uncommon is a flat 1 Scrap, Rare
 and up keep the gold-derived scale. See the patch 0453 entry.
 
-### Legendary Shards (Legendary repair currency, auction-house tradable) -- built, patch 0454
-See the patch 0454 entry. Still open: Legendary Enhance / re-levelling as
-further Shard uses, and real Shard icon art (`public/item-icons/
-legendary-shard.png`; the glyph shows until it exists).
+### Legendary Shards (Legendary repair currency, auction-house tradable) -- built, patches 0454 + 0455
+See the patch 0454 and 0455 entries. Enhance and re-level uses shipped in
+0455. Still open: real Shard icon art -- pick it in the DevTool's new
+Currencies tab (the glyph shows until one is set).
 
 ### On The Road quest cards should use the artwork shown after clicking in
 Direct report (patch 0305 session, not yet built): the collapsed quest
@@ -36733,3 +36733,87 @@ fallback so a Legendary is never stuck broken.
 `tsc --noEmit` clean (client and server). Repair quotes checked with a
 quick script: Shard route 1484g + 1 Shard, fallback 4452g + 318 Scrap,
 Repair Everything with 2 Legendaries and 1 Shard bills one of each.
+
+### Vendor Commissions, Shard Enhance/Re-level, Shard in the DevTool (patch 0455)
+```discord-update
+Dev Update | Vendor Commissions
+
+- Added Vendor Commissions -- each vendor posts one order a day for Scrap and a material, and pays Vendor Rep plus a reward roll
+- Added a reward reveal for commissions: the order gets stamped, a crate bursts open and your reward card spins out
+- Added better commission rewards as vendors level up -- Uncommon at level 1, Rare at 2, Epic at 3, and a small Legendary chance at 4
+- Added commission rewards by vendor: gear from the Blacksmith, potion and charm stacks from the Alchemist, elemental gems from the Enchanter
+- Changed Legendary Enhance: +6 to +10 now cost a Legendary Shard per step instead of Scrap
+- Changed Legendary re-levelling: costs a Legendary Shard per level instead of Scrap
+```
+
+Design agreed in discussion (patch 0453/0454 sessions): a fun place to
+dump surplus Scrap, scaled to the vendor's level so a young guild's
+level-1 vendors ask for what it actually has. No Guild Power, and vendor
+levels themselves are untouched. The reveal was signed off as an
+interactive demo before building (crate + spinning reward card; first
+drafts tuned: "more flashy", then a stuck shine fixed).
+
+**Commissions**
+- `GameState.commissionDay: Record<VendorId, number>` (rerollDay of the
+  last hand-in, -1 = never). Default in createInitialState; the load
+  merge fills it for older saves, no migration step needed.
+- `src/game/data/commissions.ts`: order per vendor level (capped at 4),
+  odds, stack sizes, vendor material (Blacksmith Ore, Alchemist Herbs,
+  Enchanter Timber), titles/flavour/crate mark/card sigil.
+- 42 tuning entries, new category `commissions`: `commission.scrapL1-4`
+  (60/180/450/1000), `materialL1-4` (20/45/90/160), `repL1-4`
+  (120/300/700/1500), `oddsL{1-4}.{rarity}` (L1 60/40, L2 20/50/30,
+  L3 0/30/45/25, L4 0/0/45/47/8), `alchemistQty.*` (4/3/3/2/1),
+  `enchanterQty.*` (2/2/1/1/1).
+- `CommissionManager` (new): `order`, `doneToday`, `blocker` (vendor
+  level 0, already done today, short on Scrap/material, full stash for
+  gear), `rollRarity`, `complete`, `grant`. Rewards: Blacksmith gear of
+  the rolled rarity from the Blacksmith's own stock pool, instantiated at
+  the top hero's level (falls back to the lowest-level items of that
+  rarity if none fit yet); Alchemist a stack of one non-craftable
+  consumable; Enchanter elemental gems (weapon or resistance, random
+  element, tier = rarity). The reward is granted before anything is
+  spent, so a failed grant costs nothing.
+- Rep: added to `vendorGoldSpent[vendor]`, the counter Vendor Rep is
+  derived from (a commission counts as patronage), so the rep ring,
+  discount and rep level-up beat all react with no extra wiring.
+- `engine.completeCommission(vendorId)` / `dismissCommission()`;
+  transient `engine.lastCommission` (CommissionReward type), added to
+  the popups-before-DLC-grant check.
+- UI: `CommissionCard` on each vendor page under the vendor card (order,
+  have/need with short amounts in red, odds pills, Hand in button,
+  reason when blocked, hours until tomorrow's order). New
+  `CommissionRevealModal` mounted next to HatchRevealModal in App.tsx;
+  `cmfx-*` CSS block in app.css on the same --fx-t / at() timeline as
+  the egg hatch, so Animation speed and Reduce motion apply. Two jolts
+  run on a wrapper (`cmfx-joltbox`) so the card's entrance never replays.
+  The looping shine has `both` fill so it stays off-card during its delay.
+
+**Legendary Shards: Enhance and Re-level**
+- `EquipmentManager.upgradeShardCost`: refining a Legendary to
+  +`economy.legendaryEnhanceShardFromPlus` (6) or higher costs
+  `legendaryEnhanceShardsPerStep` (1); that step's Scrap is 0.
+  `upgradeCostTo` returns `shards`; `upgrade` and `engine.upgradeItemTo`
+  check them.
+- `relevelCost` returns `shards`: a Legendary pays
+  `legendaryRelevelShardsPerLevel` (1) per level and no Scrap; `relevel`
+  checks them.
+- No gold/Scrap fallback on either (refining is optional, unlike repairs).
+- EnhanceStation / RelevelPanel bills show "+ N Legendary Shards" and hide
+  a zero Scrap part.
+
+**Shard in the DevTool**
+- New `src/game/data/json/currencies.json` (one entry,
+  `legendary_shard`: name, description, glyph, icon) and a DevTool
+  **Currencies** tab (Items & Crafting) using the shared item-icons
+  picker. `shards.ts` reads name/glyph/icon from it (`SHARD_ICON`).
+- New `ShardMark` (icons.tsx) for inline use: icon when set, glyph
+  otherwise or if the file 404s. Used in the header counter and the
+  Legendary repair buttons; mailbox and Auction House cards use
+  `SHARD_ICON` via ConsumableIcon.
+- **Restart the DevTool after applying** (server.mjs changed).
+
+Verified: `tsc --noEmit` clean, web build OK, logic run through a script
+(every vendor at L1-4, same-day block, L4 odds over 10k rolls ~45/48/7,
+Shard costs: Legendary +4 to +10 = 5 Shards and Scrap for the +5 step
+only, re-level 3 levels = 3 Shards). Reveal checked in the built game.

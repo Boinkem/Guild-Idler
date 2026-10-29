@@ -9,14 +9,15 @@ import { EquipmentManager, RepairMode } from '../../game/managers/EquipmentManag
 import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../../game/data/equipment';
-import { rerollsUsedToday } from '../../game/data/reroll';
+import { rerollDay, rerollsUsedToday } from '../../game/data/reroll';
+import { MATERIAL_BY_ID } from '../../game/data/materials';
 import { isProceduralTemplate } from '../../game/data/proceduralLoot';
 import { scrapIconFor } from '../../game/data/elements';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
 import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity, Stats } from '../../game/types';
 import {
-  describeMods, describeStats, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER,
+  describeMods, describeStats, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, DAY, HOUR
 } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
 import { ItemIcon, ConsumableIcon } from '../icons';
@@ -38,6 +39,8 @@ import { ConfirmModal } from '../ConfirmModal';
 import { RewardGlowParticle } from '../RewardGlowParticle';
 import { getFlyTargetCenter } from '../flyTarget';
 import { backgroundSrc } from '../../game/settings';
+import { CommissionManager } from '../../game/managers/CommissionManager';
+import { COMMISSION_FLAVOUR, COMMISSION_TITLE, commissionOdds } from '../../game/data/commissions';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -444,6 +447,9 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
           : maxed && !vendorBeat && <SealStamp label="MASTERED" className="vendor-card-stamp fx-settled" />}
       </div>
 
+      {/* Patch 0455 -- the vendor's daily commission. */}
+      <CommissionCard vendorId={vendorId} vendorName={vendorDef.name} now={now} />
+
       <div className="section-heading">Upgrades</div>
       <div className="upgrade-row-list">
         {upgradeList.map((def, index) => {
@@ -503,6 +509,72 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
  * Blacksmith gear and Alchemist supplies together. See
  * ShopManager.rerollBlacksmith/rerollAlchemist/rerollEnchanter.
  */
+/**
+ * Patch 0455 -- Vendor Commissions. One order a day per vendor: Scrap plus
+ * a Harvest material, sized by the vendor's level, for Vendor Rep and one
+ * reward roll (CommissionRevealModal plays the hand-in). Shows the order,
+ * what the guild has toward it, and this level's reward odds.
+ */
+function CommissionCard({ vendorId, vendorName, now }: { vendorId: VendorId; vendorName: string; now: number }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const order = CommissionManager.order(state, vendorId);
+  if (!order) {
+    return (
+      <div className="card commission-card">
+        <span className="card-title">Commissions</span>
+        <p className="tiny muted" style={{ margin: 0 }}>
+          Level up {vendorName} once and they'll post a daily commission: hand in Scrap and materials for Rep and a reward.
+        </p>
+      </div>
+    );
+  }
+  const done = CommissionManager.doneToday(state, vendorId, now);
+  const blocker = CommissionManager.blocker(state, vendorId, now);
+  const odds = commissionOdds(order.level);
+  const material = MATERIAL_BY_ID[order.materialId];
+  const haveMat = state.materials[order.materialId] ?? 0;
+  const msLeft = (rerollDay(now) + 1) * DAY - now;
+  const hoursLeft = Math.max(1, Math.ceil(msLeft / HOUR));
+  return (
+    <div className={`card commission-card ${done ? 'done' : ''}`}>
+      <div className="commission-head">
+        <span className="card-title">{COMMISSION_TITLE[vendorId]}</span>
+        <span className="tiny muted">Level {order.level} commission</span>
+      </div>
+      <p className="tiny muted" style={{ margin: 0 }}>{COMMISSION_FLAVOUR[vendorId]} Pays +{order.rep.toLocaleString()} Rep and one reward roll.</p>
+      <div className="commission-costs small">
+        <span className={state.scrap < order.scrap ? 'short' : ''} style={{ color: state.scrap < order.scrap ? undefined : 'var(--silver)' }}>
+          ⚙ {state.scrap.toLocaleString()} / {order.scrap.toLocaleString()} Scrap
+        </span>
+        <span className={haveMat < order.material ? 'short' : ''}>
+          {haveMat.toLocaleString()} / {order.material.toLocaleString()} {material?.name ?? order.materialId}
+        </span>
+      </div>
+      <div className="commission-odds">
+        {RARITY_ORDER.filter((r) => odds[r] > 0).map((r) => (
+          <span key={r} className="rarity-pill" style={{ color: RARITY_COLOR[r], borderColor: RARITY_COLOR[r] }}>
+            {r} {odds[r]}%
+          </span>
+        ))}
+      </div>
+      <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          className="btn-primary"
+          disabled={!!blocker}
+          title={blocker ?? undefined}
+          onClick={() => engine.completeCommission(vendorId)}
+        >
+          {done ? 'Handed in today' : 'Hand in commission'}
+        </button>
+        {done
+          ? <span className="tiny muted">New order in {hoursLeft}h</span>
+          : blocker && <span className="tiny muted">{blocker}</span>}
+      </div>
+    </div>
+  );
+}
+
 function ShopRerollButton({ vendorId }: { vendorId: VendorId }) {
   const engine = useEngine();
   const state = engine.state;

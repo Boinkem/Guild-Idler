@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { EquipSlot, Stats } from '../game/types';
 import { STAT_GLYPH } from '../game/util';
+import { SHARD_GLYPH, SHARD_ICON, SHARD_NAME } from '../game/data/shards';
 
 /**
  * Emoji placeholder per slot, shown whenever an item has no icon assigned
@@ -108,4 +109,20 @@ export function MaterialIcon({ icon, glyph, size = 40 }: { icon?: string; glyph:
  *  Grimsby's own PeddlerOutcomeIcon for kind: 'curio'. */
 export function CurioIcon({ icon, glyph, size = 40 }: { icon?: string; glyph: string; size?: number }) {
   return <IconBox icon={icon} size={size} fallback={glyph} />;
+}
+
+/** Patch 0455 -- the Legendary Shard as an inline mark for running text
+ *  and buttons (header counter, repair buttons): its DevTool-picked icon
+ *  when one is set, the glyph otherwise or if the file is missing. */
+export function ShardMark({ size = 14 }: { size?: number }) {
+  const [failed, setFailed] = useState(false);
+  if (SHARD_ICON && !failed) {
+    return (
+      <img
+        src={`./item-icons/${SHARD_ICON}`} alt={SHARD_NAME} title={SHARD_NAME} onError={() => setFailed(true)}
+        style={{ width: size, height: size, imageRendering: 'pixelated', verticalAlign: 'middle' }}
+      />
+    );
+  }
+  return <span aria-label={SHARD_NAME} title={SHARD_NAME}>{SHARD_GLYPH}</span>;
 }

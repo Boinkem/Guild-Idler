@@ -13,6 +13,7 @@ import { at } from './resultFx';
 import { useSettings } from './useSettings';
 import { backgroundSrc } from '../game/settings';
 import { TransformHover, strengthColor } from './transformHover';
+import { shardLabel } from '../game/data/shards';
 
 /**
  * Patch 0426 -- the Enhance station's second tab: Blacksmith re-leveling.
@@ -97,8 +98,9 @@ export function RelevelPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) 
   const full = !!hero && shownLv >= heroLv;
   const goal = !item || !hero ? 0 : run ? run.to : Math.min(heroLv, aim && aim > realLv ? aim : heroLv);
   const stopShort = !run && !!aim && aim > realLv && aim < heroLv;
-  const bill = item && hero && !run ? EquipmentManager.relevelCost(item, Math.max(0, goal - realLv)) : { gold: 0, scrap: 0 };
-  const canAfford = state.gold >= bill.gold && state.scrap >= bill.scrap;
+  const bill = item && hero && !run ? EquipmentManager.relevelCost(item, Math.max(0, goal - realLv)) : { gold: 0, scrap: 0, shards: 0 };
+  const canAfford = state.gold >= bill.gold && state.scrap >= bill.scrap
+    && (state.legendaryShards ?? 0) >= bill.shards;
   const relNow = hero ? HeroManager.gearRelevance(shownLv, heroLv) : 1;
   const relGoal = hero ? HeroManager.gearRelevance(goal, heroLv) : 1;
   const nowLines = item && hero ? linesAt(item, shownLv, heroLv) : [];
@@ -316,7 +318,7 @@ export function RelevelPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) 
         onClick={(e) => handleRelevel(e.currentTarget)}
       >
         {!item ? 'Re-level' : busy ? `Re-leveling… Lv ${shownLv}` : !hero ? 'Equip it first' : full ? 'Already full strength' : (
-          <>Re-level to {goal} {'·'} <span className="gold-text">{'◆'} {formatGold(bill.gold)}</span> + {formatGold(bill.scrap)} Scrap</>
+          <>Re-level to {goal} {'·'} <span className="gold-text">{'◆'} {formatGold(bill.gold)}</span> {bill.scrap > 0 && <> + {formatGold(bill.scrap)} Scrap</>}{bill.shards > 0 && <> + {shardLabel(bill.shards)}</>}</>
         )}
       </button>
 

@@ -13,6 +13,7 @@ import { at } from './resultFx';
 import { RelevelPanel } from './RelevelPanel';
 import { TransformHover } from './transformHover';
 import type { TransformRow } from './transformHover';
+import { shardLabel } from '../game/data/shards';
 
 /**
  * Two slots now (patch 0360, direct design request, with commissioned
@@ -138,8 +139,9 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   const maxed = item ? basePlus >= MAX_PLUS : false;
   const goal = !item ? 0 : run ? run.to : Math.min(MAX_PLUS, aim && aim > item.plus ? aim : item.plus + 1);
   const multi = !!item && !run && goal > item.plus + 1;
-  const bill = item && !run ? EquipmentManager.upgradeCostTo(item, goal, workshop) : { gold: 0, scrap: 0 };
-  const canAfford = state.gold >= bill.gold && state.scrap >= bill.scrap;
+  const bill = item && !run ? EquipmentManager.upgradeCostTo(item, goal, workshop) : { gold: 0, scrap: 0, shards: 0 };
+  const canAfford = state.gold >= bill.gold && state.scrap >= bill.scrap
+    && (state.legendaryShards ?? 0) >= bill.shards;
   const durAt = (p: number) => (def ? Math.floor(def.maxDurability * (1 + p * 0.1)) : 0);
 
   // The item's own base mods/stats, unscaled -- see scaleStats' own
@@ -411,7 +413,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
           onClick={(e) => handleEnhance(e.currentTarget)}
         >
           {!item ? 'Enhance' : busy ? `Refining… +${basePlus}` : maxed ? 'Max refinement' : (
-            <>{multi ? `Enhance to +${goal}` : 'Enhance'} {'·'} <span className="gold-text">{'◆'} {formatGold(bill.gold)}</span> + {formatGold(bill.scrap)} Scrap</>
+            <>{multi ? `Enhance to +${goal}` : 'Enhance'} {'·'} <span className="gold-text">{'◆'} {formatGold(bill.gold)}</span> {bill.scrap > 0 && <> + {formatGold(bill.scrap)} Scrap</>}{bill.shards > 0 && <> + {shardLabel(bill.shards)}</>}</>
           )}
         </button>
         </>)}

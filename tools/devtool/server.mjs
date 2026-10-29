@@ -853,6 +853,24 @@ const SCHEMAS = {
       icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
     },
   },
+  'currencies': {
+    file: 'currencies.json',
+    label: 'Currencies',
+    group: 'Items & Crafting',
+    idField: 'id',
+    // Patch 0455. Display data for currencies that aren't items -- only
+    // the Legendary Shard so far. The game looks entries up by id
+    // (src/game/data/shards.ts reads 'legendary_shard'), so edit an entry
+    // rather than adding or renaming one. `icon` uses the shared
+    // item-icons picker; the glyph shows wherever no icon is set yet.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      glyph: { type: 'string', required: true },
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+    },
+  },
   'materials': {
     file: 'materials.json',
     label: 'Materials',

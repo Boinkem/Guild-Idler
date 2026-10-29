@@ -265,7 +265,24 @@ export const EquipmentManager = {
 
   /** Scrap component of a +N refinement, patch 0298 (Scrap economy rework) -- the shared `economy.scrapToGoldRatio` off this same gold cost. */
   upgradeScrapCost(item: EquipmentItem, workshopLevel: number): number {
+    // Patch 0455 -- a Legendary's top refinement steps cost a Shard
+    // instead of Scrap (see upgradeShardCost).
+    if (EquipmentManager.upgradeShardCost(item) > 0) return 0;
     return scrapCostFromGold(EquipmentManager.upgradeCost(item, workshopLevel));
+  },
+
+  /**
+   * Patch 0455 -- Legendary Shards on the Enhance path. Refining a
+   * Legendary TO +economy.legendaryEnhanceShardFromPlus (6) or higher costs
+   * economy.legendaryEnhanceShardsPerStep (1) per step, and that step's
+   * Scrap is dropped (the same swap a Shard repair makes). +1 to +5 and
+   * every non-Legendary are unchanged. No gold/Scrap fallback: refining
+   * is optional, so Shards are a hard gate here, unlike repairs.
+   */
+  upgradeShardCost(item: EquipmentItem): number {
+    if (!EquipmentManager.isLegendary(item)) return 0;
+    if (item.plus + 1 < Tuning.get('economy.legendaryEnhanceShardFromPlus')) return 0;
+    return Tuning.get('economy.legendaryEnhanceShardsPerStep');
   },
 
   /**
@@ -538,27 +555,32 @@ export const EquipmentManager = {
    * step's own +level, so buying +3 -> +7 at once costs the same as four
    * separate clicks.
    */
-  upgradeCostTo(item: EquipmentItem, targetPlus: number, workshopLevel: number): { gold: number; scrap: number } {
+  upgradeCostTo(item: EquipmentItem, targetPlus: number, workshopLevel: number): { gold: number; scrap: number; shards: number } {
     let gold = 0;
     let scrap = 0;
+    let shards = 0;
     const to = Math.min(MAX_PLUS, targetPlus);
     for (let p = item.plus; p < to; p++) {
       const step = { ...item, plus: p };
       gold += EquipmentManager.upgradeCost(step, workshopLevel);
       scrap += EquipmentManager.upgradeScrapCost(step, workshopLevel);
+      shards += EquipmentManager.upgradeShardCost(step);
     }
-    return { gold, scrap };
+    return { gold, scrap, shards };
   },
 
   upgrade(state: GameState, item: EquipmentItem, workshopLevel: number): string | null {
     if (item.plus >= MAX_PLUS) return 'Already at maximum refinement.';
     const cost = EquipmentManager.upgradeCost(item, workshopLevel);
     const scrapCost = EquipmentManager.upgradeScrapCost(item, workshopLevel);
+    const shardCost = EquipmentManager.upgradeShardCost(item);
     if (state.gold < cost) return 'Not enough gold for the upgrade.';
     if (state.scrap < scrapCost) return 'Not enough scrap for the upgrade.';
+    if ((state.legendaryShards ?? 0) < shardCost) return 'Not enough Legendary Shards for the upgrade.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
     state.scrap -= scrapCost;
+    state.legendaryShards = (state.legendaryShards ?? 0) - shardCost;
     item.plus += 1;
     item.durability = EquipmentManager.maxDurability(item);
     // Patch 0437 -- remembered for good, so selling the item afterwards
@@ -588,9 +610,9 @@ export const EquipmentManager = {
    * lets the caller quote (or pay for) raising several levels in one
    * action.
    */
-  relevelCost(item: EquipmentItem, levelsToRaise: number): { gold: number; scrap: number } {
+  relevelCost(item: EquipmentItem, levelsToRaise: number): { gold: number; scrap: number; shards: number } {
     const def = EQUIPMENT_BY_ID[item.defId];
-    if (!def || levelsToRaise <= 0) return { gold: 0, scrap: 0 };
+    if (!def || levelsToRaise <= 0) return { gold: 0, scrap: 0, shards: 0 };
     const gold = Math.ceil(def.value * 0.5 * levelsToRaise);
     // Patch 0298 (Scrap economy rework): was a flat `2 * levelsToRaise`,
     // trivial next to what testers were sitting on (1000+ scrap). Retuned
@@ -598,7 +620,12 @@ export const EquipmentManager = {
     // re-leveling a high-rarity item actually draws down the scrap pile
     // the way every other vendor spend now does.
     const scrap = scrapCostFromGold(gold);
-    return { gold, scrap };
+    // Patch 0455 -- a Legendary pays Shards per level instead of Scrap
+    // (economy.legendaryRelevelShardsPerLevel), no fallback.
+    if (def.rarity === 'legendary') {
+      return { gold, scrap: 0, shards: levelsToRaise * Tuning.get('economy.legendaryRelevelShardsPerLevel') };
+    }
+    return { gold, scrap, shards: 0 };
   },
 
   /**
@@ -639,9 +666,11 @@ export const EquipmentManager = {
     const cost = EquipmentManager.relevelCost(item, levelsToRaise);
     if (state.gold < cost.gold) return 'Not enough gold for re-leveling.';
     if (state.scrap < cost.scrap) return 'Not enough scrap for re-leveling.';
+    if ((state.legendaryShards ?? 0) < cost.shards) return 'Not enough Legendary Shards for re-leveling.';
     state.gold -= cost.gold;
     state.stats.goldSpent += cost.gold;
     state.scrap -= cost.scrap;
+    state.legendaryShards = (state.legendaryShards ?? 0) - cost.shards;
     item.rolledItemLevel = clampedTarget;
     return null;
   },

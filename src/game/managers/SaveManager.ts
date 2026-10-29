@@ -202,6 +202,7 @@ export function createInitialState(now = Date.now()): GameState {
     unlockedBardTracks: [],
     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
     vendorGoldSpent: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+    commissionDay: { blacksmith: -1, alchemist: -1, enchanter: -1 },
     hasSeenAlchemist: false,
     hasSeenEnchanter: false,
     hasCompletedFirstQuest: false,

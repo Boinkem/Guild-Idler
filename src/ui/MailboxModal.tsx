@@ -6,7 +6,7 @@ import { RARITY_BANNER, RARITY_COLOR, formatGold } from '../game/util';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { ItemIcon, ConsumableIcon } from './icons';
-import { SHARD_GLYPH, shardLabel } from '../game/data/shards';
+import { SHARD_GLYPH, SHARD_ICON, shardLabel } from '../game/data/shards';
 
 /**
  * Gold has no rarity of its own to key a banner lookup on -- per direct
@@ -31,9 +31,6 @@ const GOLD_ICON = 'gold.png';
  *  real art exists. Drop the real art at public/item-icons/scrap.png. */
 const SCRAP_ICON = 'scrap.png';
 
-/** Patch 0454 -- no Legendary Shard art yet; the glyph shows until
- *  public/item-icons/legendary-shard.png exists. */
-const SHARD_ICON = 'legendary-shard.png';
 
 /**
  * Auction House mailbox -- build-order item from guild-idler-status.md's

@@ -4362,6 +4362,36 @@
     "description": "Percent chance a successful Legendary quest drops 1 Legendary Shard (patch 0454)."
   },
   {
+    "id": "economy.legendaryEnhanceShardFromPlus",
+    "label": "Legendary Enhance: Shards from +N",
+    "category": "economy",
+    "value": 6,
+    "default": 6,
+    "min": 1,
+    "max": 10,
+    "description": "Refining a Legendary to this +level or higher costs Shards instead of Scrap (patch 0455). 6 = the +6 to +10 steps."
+  },
+  {
+    "id": "economy.legendaryEnhanceShardsPerStep",
+    "label": "Legendary Enhance: Shards per step",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 10,
+    "description": "Legendary Shards per refinement step at or above economy.legendaryEnhanceShardFromPlus (patch 0455). That step costs no Scrap."
+  },
+  {
+    "id": "economy.legendaryRelevelShardsPerLevel",
+    "label": "Legendary Re-level: Shards per level",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 10,
+    "description": "Legendary Shards per level raised when re-levelling a Legendary (patch 0455). Replaces its Scrap cost."
+  },
+  {
     "id": "economy.chainCompletionQuestMultiplier",
     "label": "Chain completion bonus: quest-tier multiplier",
     "category": "economy",
@@ -5582,5 +5612,425 @@
     "min": 0,
     "max": 100,
     "description": "See raid.recipeDropChance.normal's own description -- same mechanic, Legendary-tier rate."
+  },
+  {
+    "id": "commission.scrapL1",
+    "label": "Commission L1: Scrap",
+    "category": "commissions",
+    "value": 60,
+    "default": 60,
+    "min": 0,
+    "max": 100000,
+    "description": "Scrap a level-1 vendor's daily commission asks for (patch 0455)."
+  },
+  {
+    "id": "commission.materialL1",
+    "label": "Commission L1: material",
+    "category": "commissions",
+    "value": 20,
+    "default": 20,
+    "min": 0,
+    "max": 100000,
+    "description": "Harvest material (Ore / Herbs / Timber by vendor) a level-1 commission asks for (patch 0455)."
+  },
+  {
+    "id": "commission.repL1",
+    "label": "Commission L1: Vendor Rep",
+    "category": "commissions",
+    "value": 120,
+    "default": 120,
+    "min": 0,
+    "max": 100000,
+    "description": "Vendor Rep paid by a level-1 commission, in the gold-spent units Vendor Rep is measured in (patch 0455)."
+  },
+  {
+    "id": "commission.scrapL2",
+    "label": "Commission L2: Scrap",
+    "category": "commissions",
+    "value": 180,
+    "default": 180,
+    "min": 0,
+    "max": 100000,
+    "description": "Scrap a level-2 vendor's daily commission asks for (patch 0455)."
+  },
+  {
+    "id": "commission.materialL2",
+    "label": "Commission L2: material",
+    "category": "commissions",
+    "value": 45,
+    "default": 45,
+    "min": 0,
+    "max": 100000,
+    "description": "Harvest material (Ore / Herbs / Timber by vendor) a level-2 commission asks for (patch 0455)."
+  },
+  {
+    "id": "commission.repL2",
+    "label": "Commission L2: Vendor Rep",
+    "category": "commissions",
+    "value": 300,
+    "default": 300,
+    "min": 0,
+    "max": 100000,
+    "description": "Vendor Rep paid by a level-2 commission, in the gold-spent units Vendor Rep is measured in (patch 0455)."
+  },
+  {
+    "id": "commission.scrapL3",
+    "label": "Commission L3: Scrap",
+    "category": "commissions",
+    "value": 450,
+    "default": 450,
+    "min": 0,
+    "max": 100000,
+    "description": "Scrap a level-3 vendor's daily commission asks for (patch 0455)."
+  },
+  {
+    "id": "commission.materialL3",
+    "label": "Commission L3: material",
+    "category": "commissions",
+    "value": 90,
+    "default": 90,
+    "min": 0,
+    "max": 100000,
+    "description": "Harvest material (Ore / Herbs / Timber by vendor) a level-3 commission asks for (patch 0455)."
+  },
+  {
+    "id": "commission.repL3",
+    "label": "Commission L3: Vendor Rep",
+    "category": "commissions",
+    "value": 700,
+    "default": 700,
+    "min": 0,
+    "max": 100000,
+    "description": "Vendor Rep paid by a level-3 commission, in the gold-spent units Vendor Rep is measured in (patch 0455)."
+  },
+  {
+    "id": "commission.scrapL4",
+    "label": "Commission L4: Scrap",
+    "category": "commissions",
+    "value": 1000,
+    "default": 1000,
+    "min": 0,
+    "max": 100000,
+    "description": "Scrap a level-4 vendor's daily commission asks for (patch 0455)."
+  },
+  {
+    "id": "commission.materialL4",
+    "label": "Commission L4: material",
+    "category": "commissions",
+    "value": 160,
+    "default": 160,
+    "min": 0,
+    "max": 100000,
+    "description": "Harvest material (Ore / Herbs / Timber by vendor) a level-4 commission asks for (patch 0455)."
+  },
+  {
+    "id": "commission.repL4",
+    "label": "Commission L4: Vendor Rep",
+    "category": "commissions",
+    "value": 1500,
+    "default": 1500,
+    "min": 0,
+    "max": 100000,
+    "description": "Vendor Rep paid by a level-4 commission, in the gold-spent units Vendor Rep is measured in (patch 0455)."
+  },
+  {
+    "id": "commission.oddsL1.common",
+    "label": "Commission L1: common weight",
+    "category": "commissions",
+    "value": 60,
+    "default": 60,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a common reward from a level-1 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL1.uncommon",
+    "label": "Commission L1: uncommon weight",
+    "category": "commissions",
+    "value": 40,
+    "default": 40,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a uncommon reward from a level-1 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL1.rare",
+    "label": "Commission L1: rare weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a rare reward from a level-1 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL1.epic",
+    "label": "Commission L1: epic weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a epic reward from a level-1 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL1.legendary",
+    "label": "Commission L1: legendary weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a legendary reward from a level-1 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL2.common",
+    "label": "Commission L2: common weight",
+    "category": "commissions",
+    "value": 20,
+    "default": 20,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a common reward from a level-2 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL2.uncommon",
+    "label": "Commission L2: uncommon weight",
+    "category": "commissions",
+    "value": 50,
+    "default": 50,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a uncommon reward from a level-2 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL2.rare",
+    "label": "Commission L2: rare weight",
+    "category": "commissions",
+    "value": 30,
+    "default": 30,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a rare reward from a level-2 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL2.epic",
+    "label": "Commission L2: epic weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a epic reward from a level-2 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL2.legendary",
+    "label": "Commission L2: legendary weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a legendary reward from a level-2 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL3.common",
+    "label": "Commission L3: common weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a common reward from a level-3 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL3.uncommon",
+    "label": "Commission L3: uncommon weight",
+    "category": "commissions",
+    "value": 30,
+    "default": 30,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a uncommon reward from a level-3 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL3.rare",
+    "label": "Commission L3: rare weight",
+    "category": "commissions",
+    "value": 45,
+    "default": 45,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a rare reward from a level-3 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL3.epic",
+    "label": "Commission L3: epic weight",
+    "category": "commissions",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a epic reward from a level-3 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL3.legendary",
+    "label": "Commission L3: legendary weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a legendary reward from a level-3 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL4.common",
+    "label": "Commission L4: common weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a common reward from a level-4 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL4.uncommon",
+    "label": "Commission L4: uncommon weight",
+    "category": "commissions",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a uncommon reward from a level-4 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL4.rare",
+    "label": "Commission L4: rare weight",
+    "category": "commissions",
+    "value": 45,
+    "default": 45,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a rare reward from a level-4 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL4.epic",
+    "label": "Commission L4: epic weight",
+    "category": "commissions",
+    "value": 47,
+    "default": 47,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a epic reward from a level-4 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.oddsL4.legendary",
+    "label": "Commission L4: legendary weight",
+    "category": "commissions",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "max": 100,
+    "description": "Weight of a legendary reward from a level-4 commission (patch 0455). Weights in a level are relative; 0 = can't roll."
+  },
+  {
+    "id": "commission.alchemistQty.common",
+    "label": "Commission: Alchemist common stack",
+    "category": "commissions",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "max": 20,
+    "description": "How many of the rolled common consumable an Alchemist commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.alchemistQty.uncommon",
+    "label": "Commission: Alchemist uncommon stack",
+    "category": "commissions",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 20,
+    "description": "How many of the rolled uncommon consumable an Alchemist commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.alchemistQty.rare",
+    "label": "Commission: Alchemist rare stack",
+    "category": "commissions",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 20,
+    "description": "How many of the rolled rare consumable an Alchemist commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.alchemistQty.epic",
+    "label": "Commission: Alchemist epic stack",
+    "category": "commissions",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 20,
+    "description": "How many of the rolled epic consumable an Alchemist commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.alchemistQty.legendary",
+    "label": "Commission: Alchemist legendary stack",
+    "category": "commissions",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "How many of the rolled legendary consumable an Alchemist commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.enchanterQty.common",
+    "label": "Commission: Enchanter common gems",
+    "category": "commissions",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 20,
+    "description": "How many common gems an Enchanter commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.enchanterQty.uncommon",
+    "label": "Commission: Enchanter uncommon gems",
+    "category": "commissions",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 20,
+    "description": "How many uncommon gems an Enchanter commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.enchanterQty.rare",
+    "label": "Commission: Enchanter rare gems",
+    "category": "commissions",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "How many rare gems an Enchanter commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.enchanterQty.epic",
+    "label": "Commission: Enchanter epic gems",
+    "category": "commissions",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "How many epic gems an Enchanter commission gives (patch 0455)."
+  },
+  {
+    "id": "commission.enchanterQty.legendary",
+    "label": "Commission: Enchanter legendary gems",
+    "category": "commissions",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "How many legendary gems an Enchanter commission gives (patch 0455)."
   }
 ]

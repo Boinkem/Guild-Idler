@@ -1078,6 +1078,23 @@ export interface QuestEventResult {
   kind: 'positive' | 'neutral' | 'negative';
 }
 
+/** Patch 0455 -- what a handed-in commission paid out. Transient (lives
+ *  on engine.lastCommission for the reveal card), never saved. */
+export interface CommissionReward {
+  vendorId: VendorId;
+  level: number;
+  rarity: Rarity;
+  kind: 'equipment' | 'consumable' | 'gem';
+  name: string;
+  /** Path under public/item-icons/ when the reward has art. */
+  icon?: string;
+  glyph: string;
+  qty: number;
+  rep: number;
+  scrapSpent: number;
+  materialSpent: number;
+}
+
 export interface QuestResult {
   questId: string;
   heroId: string;
@@ -2566,6 +2583,13 @@ export interface GameState {
    * a separate spent-to-unlock-upgrades track, not a loyalty measure.
    */
   vendorGoldSpent: Record<VendorId, number>;
+  /**
+   * Patch 0455 -- Vendor Commissions. The day (rerollDay, UTC-epoch day)
+   * each vendor's commission was last handed in; -1 = never. One per
+   * vendor per day. Missing on older saves: createInitialState's default
+   * fills it in at load.
+   */
+  commissionDay: Record<VendorId, number>;
   /**
    * Patch 0291. True once the player has ever opened the Alchemist's own
    * sub-tab page (VendorsPanel) -- while false, that sub-tab button gets

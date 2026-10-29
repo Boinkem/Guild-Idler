@@ -1,7 +1,8 @@
 import { useEngine } from './useEngine';
 import { EquipmentItem } from '../game/types';
 import { EquipmentManager, RepairMode } from '../game/managers/EquipmentManager';
-import { SHARD_GLYPH, shardLabel } from '../game/data/shards';
+import { shardLabel } from '../game/data/shards';
+import { ShardMark } from './icons';
 import { formatGold } from '../game/util';
 
 /**
@@ -38,7 +39,7 @@ export function LegendaryRepairButtons({
           : `Spends ${shardLabel(shard.shards)} -- no Scrap needed`}
         onClick={(e) => onRepair('shard', e.currentTarget)}
       >
-        {'⚒'} Repair{compact ? '' : ' with Shard'} · {formatGold(shard.gold)} + {shard.shards} {SHARD_GLYPH}
+        {'⚒'} Repair{compact ? '' : ' with Shard'} · {formatGold(shard.gold)} + {shard.shards} <ShardMark />
       </button>
       <button
         className="btn-primary"

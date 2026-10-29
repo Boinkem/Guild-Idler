@@ -14,9 +14,18 @@
  */
 import { RaidDifficulty, Difficulty } from '../types';
 import { Tuning } from './tuning';
+import currenciesJson from './json/currencies.json';
 
-export const SHARD_NAME = 'Legendary Shard';
-export const SHARD_GLYPH = '💠'; // diamond with a dot
+/** Patch 0455 -- name/glyph/icon now come from json/currencies.json so
+ *  the DevTool's Currencies tab can set the Shard's art. */
+interface CurrencyDef { id: string; name: string; description: string; glyph: string; icon?: string }
+const SHARD_DEF = (currenciesJson as CurrencyDef[]).find((c) => c.id === 'legendary_shard');
+
+export const SHARD_NAME = SHARD_DEF?.name || 'Legendary Shard';
+export const SHARD_GLYPH = SHARD_DEF?.glyph || '\u{1F4A0}'; // diamond with a dot
+export const SHARD_DESCRIPTION = SHARD_DEF?.description ?? '';
+/** Path under public/item-icons/, or undefined until art is picked. */
+export const SHARD_ICON: string | undefined = SHARD_DEF?.icon || undefined;
 /** The `defId` an Auction House shard listing carries in its payload --
  *  the server's payload check requires a defId on every listing. */
 export const SHARD_DEF_ID = 'legendary_shard';

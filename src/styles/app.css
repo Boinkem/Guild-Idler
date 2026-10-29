@@ -9179,3 +9179,152 @@ button.harvest-item:hover {
 }
 .dlcfx-c-chip b { color: oklch(84% 0.14 80); }
 .dlcfx-c-actions { display: flex; gap: 6px; margin-top: 4px; }
+
+
+/* ---- vendor commission reveal (patch 0455) ----
+   Signed off as an interactive demo first. Same --fx-t / at() timeline as
+   the egg hatch (hfx-) above; every class contains "fx-" so Reduce motion
+   lands on the final frame. Colour is the rolled rarity, via currentColor. */
+.cmfx-joltbox { width: 100%; max-width: 460px; }
+.cmfx-joltbox.cmfx-jolt { animation: cmfx-jolt calc(var(--fx-t) * 360) linear both; }
+@keyframes cmfx-jolt { 0%, 100% { transform: none; } 20% { transform: translate(-4px, 2px); } 40% { transform: translate(4px, -2px); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(2px, -1px); } }
+.modal.cmfx-reveal { padding-top: 0; text-align: center; border-width: 2px; border-color: currentColor; perspective: 900px; overflow: hidden; }
+.modal.cmfx-reveal:not(.dismissing) { animation: rfx-card-in calc(var(--fx-t) * 450) cubic-bezier(.3, 1.3, .5, 1) both; }
+.cmfx-stage { position: relative; height: 330px; margin: 0 -16px 10px; overflow: hidden; background: var(--panel); }
+.cmfx-bg { position: absolute; inset: 0; background-size: cover; background-position: center 40%; filter: saturate(.8) brightness(.42); }
+.cmfx-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 72%, transparent 20%, var(--panel) 78%); }
+.cmfx-rays {
+  position: absolute; left: 50%; top: 62%; width: 560px; height: 560px; margin: -280px 0 0 -280px; border-radius: 50%;
+  background: repeating-conic-gradient(currentColor 0 7deg, transparent 7deg 22deg);
+  -webkit-mask: radial-gradient(circle, #000 8%, transparent 58%); mask: radial-gradient(circle, #000 8%, transparent 58%);
+  animation: hfx-rays calc(var(--fx-t) * 3200) linear both;
+}
+.cmfx-slip {
+  position: absolute; z-index: 6; left: 50%; top: 24px; width: 230px; margin-left: -115px; padding: 12px 14px 14px;
+  background: linear-gradient(90deg, oklch(78% 0.05 74), oklch(86% 0.045 78) 10%, oklch(86% 0.045 78) 90%, oklch(78% 0.05 74));
+  color: var(--ink); text-align: left; border-radius: 2px; box-shadow: 0 8px 18px rgba(0, 0, 0, .55);
+  animation: cmfx-slip calc(var(--fx-t) * 1650) cubic-bezier(.3, 1, .4, 1) both;
+}
+@keyframes cmfx-slip {
+  0% { opacity: 0; transform: translateY(-60px) rotate(-4deg); }
+  18% { opacity: 1; transform: rotate(-2deg); }
+  78% { opacity: 1; transform: rotate(-2deg); }
+  100% { opacity: 0; transform: translateY(-150px) rotate(-10deg); }
+}
+.cmfx-slip-k { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; opacity: .7; }
+.cmfx-slip-t { font-family: var(--font-display); font-size: 15px; margin: 2px 0 6px; }
+.cmfx-slip-line { font-size: 11px; display: flex; justify-content: space-between; border-top: 1px dashed color-mix(in srgb, var(--ink) 35%, transparent); padding-top: 3px; margin-top: 3px; }
+.cmfx-stamp {
+  position: absolute; right: 10px; bottom: 12px; padding: 2px 8px; font-family: var(--font-display); font-size: 13px; letter-spacing: .1em;
+  color: var(--blood); border: 2px solid currentColor; border-radius: 4px; transform: rotate(-8deg);
+  animation: qfx-stamp calc(var(--fx-t) * 380) cubic-bezier(.3, 1.7, .5, 1) both;
+}
+.cmfx-shadow { position: absolute; left: 50%; bottom: 26px; width: 120px; height: 12px; margin-left: -60px; border-radius: 50%; background: rgba(0, 0, 0, .55); animation: qfx-fade calc(var(--fx-t) * 300) both; }
+.cmfx-crate { position: absolute; z-index: 2; left: 50%; bottom: 30px; width: 108px; height: 84px; margin-left: -54px; animation: cmfx-drop calc(var(--fx-t) * 440) cubic-bezier(.3, 1.5, .5, 1) both; }
+@keyframes cmfx-drop { 0% { opacity: 0; transform: translateY(-170px); } 100% { opacity: 1; transform: none; } }
+.cmfx-crate-shake { position: absolute; inset: 0; transform-origin: 50% 100%; animation: cmfx-shake var(--cmfx-shake, calc(var(--fx-t) * 1100)) linear both; }
+@keyframes cmfx-shake {
+  0%, 8% { transform: none; } 12% { transform: rotate(-4deg); } 16% { transform: rotate(4deg); } 20%, 38% { transform: none; }
+  42% { transform: rotate(-6deg) translateY(-3px); } 46% { transform: rotate(5deg); } 50% { transform: rotate(-2deg); } 54%, 70% { transform: none; }
+  73% { transform: rotate(-7deg) scale(1.03); } 76% { transform: rotate(7deg) scale(1.05); } 79% { transform: rotate(-6deg) scale(1.07); }
+  82% { transform: rotate(5deg) scale(1.08); } 86%, 100% { transform: scale(1.1); }
+}
+.cmfx-crate-gone { position: absolute; inset: 0; animation: cmfx-gone calc(var(--fx-t) * 500) ease-in both; }
+@keyframes cmfx-gone { 0% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(26px) scaleY(.6); } }
+.cmfx-crate-box {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 66px; border: 2px solid var(--edge); border-radius: 3px;
+  background:
+    linear-gradient(90deg, oklch(30% 0.045 55) 0 8px, transparent 8px calc(100% - 8px), oklch(30% 0.045 55) calc(100% - 8px)),
+    repeating-linear-gradient(180deg, oklch(42% 0.06 58) 0 20px, oklch(30% 0.045 55) 20px 22px);
+  box-shadow: inset 0 2px 0 oklch(52% 0.07 60);
+}
+.cmfx-crate-box::before { content: ''; position: absolute; inset: 6px 10px; background: linear-gradient(32deg, transparent 46%, oklch(52% 0.07 60) 46% 54%, transparent 54%); opacity: .8; }
+.cmfx-crate-box::after { content: attr(data-mark); position: absolute; left: 0; right: 0; top: 22px; text-align: center; font-family: var(--font-display); font-size: 12px; letter-spacing: .12em; color: color-mix(in srgb, var(--ink) 70%, transparent); }
+.cmfx-crate-lid {
+  position: absolute; left: -5px; right: -5px; top: 4px; height: 18px; z-index: 2; border: 2px solid var(--edge); border-radius: 3px;
+  background: linear-gradient(180deg, oklch(52% 0.07 60), oklch(42% 0.06 58));
+  animation: cmfx-lid calc(var(--fx-t) * 700) cubic-bezier(.2, .7, .4, 1) both;
+}
+@keyframes cmfx-lid { 0% { transform: none; opacity: 1; } 100% { transform: translate(90px, -170px) rotate(64deg); opacity: 0; } }
+.cmfx-splinter {
+  position: absolute; left: 50%; bottom: 90px; width: 16px; height: 5px; margin-left: -8px; background: oklch(52% 0.07 60); border-radius: 1px;
+  animation-duration: calc(var(--fx-t) * 750); animation-timing-function: cubic-bezier(.15, .6, .4, 1); animation-fill-mode: both;
+}
+@keyframes cmfx-sp-0 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(40px, -110px) rotate(120deg); } }
+.cmfx-splinter.s0 { animation-name: cmfx-sp-0; }
+@keyframes cmfx-sp-1 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(120px, -60px) rotate(200deg); } }
+.cmfx-splinter.s1 { animation-name: cmfx-sp-1; }
+@keyframes cmfx-sp-2 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(140px, 10px) rotate(320deg); } }
+.cmfx-splinter.s2 { animation-name: cmfx-sp-2; }
+@keyframes cmfx-sp-3 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(44px, 40px) rotate(60deg); } }
+.cmfx-splinter.s3 { animation-name: cmfx-sp-3; }
+@keyframes cmfx-sp-4 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-50px, 60px) rotate(260deg); } }
+.cmfx-splinter.s4 { animation-name: cmfx-sp-4; }
+@keyframes cmfx-sp-5 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-140px, 20px) rotate(150deg); } }
+.cmfx-splinter.s5 { animation-name: cmfx-sp-5; }
+@keyframes cmfx-sp-6 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-100px, -70px) rotate(300deg); } }
+.cmfx-splinter.s6 { animation-name: cmfx-sp-6; }
+@keyframes cmfx-sp-7 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-36px, -120px) rotate(40deg); } }
+.cmfx-splinter.s7 { animation-name: cmfx-sp-7; }
+@keyframes cmfx-sp-8 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(80px, -140px) rotate(90deg); } }
+.cmfx-splinter.s8 { animation-name: cmfx-sp-8; }
+@keyframes cmfx-sp-9 { 0% { opacity: 0; } 1% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(-120px, -110px) rotate(230deg); } }
+.cmfx-splinter.s9 { animation-name: cmfx-sp-9; }
+.cmfx-glow { position: absolute; z-index: 3; left: 50%; bottom: 90px; width: 190px; height: 190px; margin-left: -95px; border-radius: 50%; background: radial-gradient(circle, currentColor, transparent 66%); animation: cmfx-glow calc(var(--fx-t) * 1400) ease-out both; }
+@keyframes cmfx-glow { 0% { opacity: 0; transform: scale(.3); } 25% { opacity: .75; } 100% { opacity: .35; transform: scale(1); } }
+.cmfx-rise { position: absolute; z-index: 4; left: 50%; bottom: 46px; width: 150px; height: 206px; margin-left: -75px; animation: cmfx-rise calc(var(--fx-t) * 1150) cubic-bezier(.25, .9, .3, 1) both; }
+@keyframes cmfx-rise { 0% { opacity: 0; transform: translateY(70px) scale(.25); } 12% { opacity: 1; } 55% { transform: translateY(-34px) scale(1.12); } 100% { opacity: 1; transform: translateY(-16px) scale(1); } }
+.cmfx-float { position: absolute; inset: 0; perspective: 700px; animation: cmfx-bob calc(var(--fx-t) * 3000) ease-in-out infinite both; }
+@keyframes cmfx-bob { 0%, 100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-6px) rotate(1deg); } }
+.cmfx-spin { position: absolute; inset: 0; transform-style: preserve-3d; animation: cmfx-spin calc(var(--fx-t) * 1150) cubic-bezier(.2, .75, .25, 1) both; }
+@keyframes cmfx-spin { 0% { transform: rotateY(-900deg); } 100% { transform: rotateY(0deg); } }
+.cmfx-face, .cmfx-back {
+  position: absolute; inset: 0; border-radius: 10px; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  border: 3px solid currentColor; box-shadow: 0 10px 24px rgba(0, 0, 0, .6), 0 0 0 1px var(--edge);
+}
+.cmfx-back {
+  transform: rotateY(180deg); border-color: var(--brass);
+  background: radial-gradient(circle at 50% 50%, transparent 26px, var(--brass-dim) 27px 29px, transparent 30px), repeating-linear-gradient(45deg, var(--panel-2) 0 8px, var(--panel-3) 8px 16px);
+}
+.cmfx-back::after { content: attr(data-sigil); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 30px; color: var(--brass); }
+.cmfx-face { background: linear-gradient(180deg, var(--panel-2), var(--panel) 70%); display: flex; flex-direction: column; align-items: center; }
+.cmfx-banner { width: 100%; height: 34px; background-size: cover; background-position: center; border-bottom: 2px solid currentColor; }
+.cmfx-art { position: relative; width: 100%; flex: 1; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 55%, color-mix(in srgb, currentColor 45%, transparent), transparent 62%); }
+.cmfx-art img { width: 84px; height: 84px; image-rendering: pixelated; filter: drop-shadow(0 4px 2px rgba(0, 0, 0, .6)); }
+.cmfx-glyph { font-size: 52px; line-height: 1; filter: drop-shadow(0 4px 2px rgba(0, 0, 0, .6)); }
+.cmfx-qty { position: absolute; right: 18px; bottom: 6px; font-family: var(--font-display); font-size: 18px; color: var(--parchment); text-shadow: 0 2px 0 var(--edge); }
+.cmfx-name { font-family: var(--font-display); font-size: 13px; line-height: 1.15; color: var(--parchment); padding: 0 8px; min-height: 30px; display: flex; align-items: center; justify-content: center; text-wrap: balance; }
+.cmfx-pill { margin: 4px 0 9px; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; padding: 1px 7px; border: 1px solid currentColor; border-radius: 4px; }
+/* Both shines rest fully off the card (and hidden) between passes; the
+   loop's own fill mode must be set or it sits mid-card during its delay. */
+.cmfx-shine { position: absolute; inset: -20% -60%; pointer-events: none; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .7) 50%, transparent 60%); animation: cmfx-shine calc(var(--fx-t) * 900) ease-in-out both; }
+@keyframes cmfx-shine { 0% { transform: translateX(-100%); opacity: 0; } 1% { opacity: 1; } 99% { opacity: 1; } 100% { transform: translateX(100%); opacity: 0; } }
+.cmfx-shine.again { animation: cmfx-shine-loop calc(var(--fx-t) * 3400) ease-in-out infinite both; }
+@keyframes cmfx-shine-loop { 0%, 70% { transform: translateX(-100%); opacity: 0; } 71% { opacity: 1; } 99% { opacity: 1; } 100% { transform: translateX(100%); opacity: 0; } }
+.cmfx-foil { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: color-dodge; opacity: .2; background: linear-gradient(125deg, #ff6a6a, #ffd36a, #7dff9a, #6ad8ff, #b06aff, #ff6a6a); background-size: 300% 300%; animation: cmfx-foil calc(var(--fx-t) * 4000) linear infinite; }
+@keyframes cmfx-foil { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+.cmfx-aura { position: absolute; inset: -8px; border-radius: 16px; pointer-events: none; box-shadow: 0 0 18px 4px currentColor; animation: cmfx-aura calc(var(--fx-t) * 1600) ease-in-out infinite both; }
+@keyframes cmfx-aura { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+.cmfx-shock { position: absolute; z-index: 3; left: 50%; bottom: 145px; width: 40px; height: 40px; margin-left: -20px; border-radius: 50%; border: 3px solid currentColor; animation: cmfx-shock calc(var(--fx-t) * 700) cubic-bezier(.1, .7, .3, 1) both; }
+@keyframes cmfx-shock { 0% { opacity: 0; transform: scale(.2); } 10% { opacity: 1; } 100% { opacity: 0; transform: scale(9); border-width: 1px; } }
+.cmfx-orbit { position: absolute; z-index: 5; left: 50%; bottom: 165px; width: 0; height: 0; animation: cmfx-orbit calc(var(--fx-t) * 5200) linear infinite; }
+@keyframes cmfx-orbit { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.cmfx-orbit i { position: absolute; width: 7px; height: 7px; margin: -3px; background: currentColor; border-radius: 1px; box-shadow: 0 0 8px currentColor; animation: qfx-fade calc(var(--fx-t) * 400) both; }
+.cmfx-glint { position: absolute; z-index: 5; width: 9px; height: 9px; margin: -4px; background: currentColor; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: hfx-glint calc(var(--fx-t) * 900) ease-out both; }
+.cmfx-coin { position: absolute; z-index: 6; top: -12px; width: 7px; height: 9px; background: var(--brass); animation: cmfx-coin calc(var(--fx-t) * 2200) linear both; }
+@keyframes cmfx-coin { 0% { opacity: 0; transform: translateY(0) rotate(0); } 8% { opacity: 1; } 100% { opacity: 0; transform: translateY(360px) rotate(720deg); } }
+.cmfx-flash { position: absolute; inset: 0; z-index: 7; background: #fff; pointer-events: none; animation: hfx-flash calc(var(--fx-t) * 420) ease-out both; }
+.cmfx-kick { font-size: 10px; letter-spacing: .24em; text-transform: uppercase; color: var(--brass); }
+.modal.cmfx-reveal h3.cmfx-title { color: var(--parchment); margin: 2px 0 4px; animation: qfx-critlbl calc(var(--fx-t) * 420) cubic-bezier(.3, 1.7, .5, 1) both; }
+.cmfx-late { animation: qfx-rise calc(var(--fx-t) * 350) ease-out both; }
+.cmfx-rep { display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px; border-radius: 20px; background: var(--panel-2); border: 1px solid var(--panel-3); color: var(--parchment); }
+.cmfx-rep b { color: var(--moss); }
+
+/* Commission card on each vendor page */
+.commission-card { margin-bottom: 12px; display: grid; gap: 8px; }
+.commission-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.commission-costs { display: flex; gap: 14px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.commission-costs .short { color: var(--blood); }
+.commission-odds { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.commission-odds .rarity-pill { font-variant-numeric: tabular-nums; }
+.commission-card.done { opacity: .75; }

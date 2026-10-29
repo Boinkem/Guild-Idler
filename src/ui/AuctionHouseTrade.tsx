@@ -6,7 +6,7 @@ import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { ItemIcon, ConsumableIcon } from './icons';
 import { AhItemType, ServerListingRow } from '../game/auctionHouse';
-import { MAX_SHARDS_PER_LISTING, SHARD_GLYPH, SHARD_NAME, shardLabel } from '../game/data/shards';
+import { MAX_SHARDS_PER_LISTING, SHARD_GLYPH, SHARD_ICON, SHARD_NAME, shardLabel } from '../game/data/shards';
 import { GuildManager } from '../game/managers/GuildManager';
 import { flyIcon, flyTokens, fxMs, fxSpeed } from './purchaseFx';
 
@@ -47,7 +47,7 @@ function ShardListingSummary({ row }: { row: ServerListingRow }) {
     <>
       <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER.legendary})` }} />
       <div className="item-card-summary">
-        <ConsumableIcon icon="legendary-shard.png" glyph={SHARD_GLYPH} size={48} />
+        <ConsumableIcon icon={SHARD_ICON} glyph={SHARD_GLYPH} size={48} />
         <div className="item-card-body">
           <div className="item-card-name" style={{ color: RARITY_COLOR.legendary }}>{shardLabel(amount)}</div>
           <div className="tiny muted">
@@ -270,7 +270,7 @@ function SellTab() {
             <div className="item-card rarity-card">
               <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER.legendary})` }} />
               <div className="item-card-summary">
-                <ConsumableIcon icon="legendary-shard.png" glyph={SHARD_GLYPH} size={48} />
+                <ConsumableIcon icon={SHARD_ICON} glyph={SHARD_GLYPH} size={48} />
                 <div className="item-card-body">
                   <div className="item-card-name" style={{ color: RARITY_COLOR.legendary }}>{SHARD_NAME} ×{state.legendaryShards}</div>
                   <div className="tiny muted">Lists as a stack</div>

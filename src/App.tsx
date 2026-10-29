@@ -12,6 +12,7 @@ import { ChainCompleteModal } from './ui/ChainCompleteModal';
 import { RaidResultModal } from './ui/RaidResultModal';
 import { HatchReadyModal } from './ui/HatchReadyModal';
 import { HatchRevealModal } from './ui/HatchRevealModal';
+import { CommissionRevealModal } from './ui/CommissionRevealModal';
 import { AchievementPopup } from './ui/AchievementPopup';
 import { HeroTierUpModal } from './ui/HeroTierUpModal';
 import { LevelUpModal } from './ui/LevelUpModal';
@@ -176,6 +177,9 @@ export function App() {
               (which can happen mid-quest while the companion window is all
               that's showing). */}
           <HatchRevealModal />
+          {/* Patch 0455 -- Vendor Commission hand-in; same not-active-gated
+              reasoning (only ever triggered by a click on a vendor page). */}
+          <CommissionRevealModal />
           {/* Not active-gated either, same reasoning as HatchRevealModal
               just above -- Hero Tier-Up can only ever be triggered by a
               click already happening inside the Training panel, which
