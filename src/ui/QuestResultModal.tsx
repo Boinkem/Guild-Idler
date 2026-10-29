@@ -262,9 +262,12 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
             alongside curioGained rather than leaving two of three
             "purely informational for the result modal" fields silently
             broken right next to the one that's now wired up correctly. */}
-        {(result.materialGained || result.eggDropped || result.curioGained || result.recipeScrollGained) && (
+        {(result.materialGained || result.scrapGained || result.eggDropped || result.curioGained || result.recipeScrollGained) && (
           <>
             <div className="section-heading">Also found</div>
+            {result.scrapGained ? (
+              <div className="small" style={{ marginBottom: 2 }}>+{result.scrapGained} Scrap</div>
+            ) : null}
             {result.materialGained && result.materialGained.amount > 0 && (
               <div className="small" style={{ marginBottom: 2 }}>
                 +{result.materialGained.amount} {MATERIAL_BY_ID[result.materialGained.materialId]?.name ?? result.materialGained.materialId}

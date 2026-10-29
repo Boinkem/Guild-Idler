@@ -226,6 +226,15 @@ export const EquipmentManager = {
   repairScrapCost(item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): number {
     const goldCost = EquipmentManager.repairCost(item, workshopLevel, vendorDiscountPercent);
     if (goldCost === 0) return 0;
+    // Patch 0453 -- rarity tiers, tester feedback ("shouldn't have scrap
+    // as repair... or have it cost scrap for like blue onwards"). Common
+    // repairs are gold-only, Uncommon is a flat token amount
+    // (economy.repairScrapUncommonFlat), Rare and up keep the existing
+    // gold-derived scale. Also closes the backlog's "Level 1 gear should
+    // not cost Scrap to repair" item, since starter gear is Common.
+    const rarity = EQUIPMENT_BY_ID[item.defId]?.rarity;
+    if (rarity === 'common') return 0;
+    if (rarity === 'uncommon') return Tuning.get('economy.repairScrapUncommonFlat');
     return repairScrapCostFromGold(goldCost);
   },
 

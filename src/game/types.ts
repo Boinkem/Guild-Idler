@@ -1010,6 +1010,26 @@ export interface QuestOffer {
    * description for the exact math.
    */
   materialReward?: { materialId: MaterialId; amount: number };
+  /**
+   * Patch 0453 -- over-level reward premium. How many percent extra gold
+   * this offer's rewardGold already has baked in for sitting above the
+   * hero it was rolled for (reqLevel - hero.level, times
+   * quest.overLevelGoldPremiumPct). Purely informational for the board
+   * card / detail modal ("+30% gold") -- rewardGold is already the final
+   * number. Undefined on an at-or-under-level offer and on chain offers
+   * (fixed chain.reqLevel, never rolled against a hero).
+   */
+  overLevelGoldPct?: number;
+  /**
+   * Patch 0453 -- Scrap paid on success for taking an over-level offer
+   * (levels over x quest.overLevelScrapPerLevel x difficulty tier step,
+   * scaled down on a Fast roll the same way gold/xp are). XP is
+   * deliberately NOT given an over-level premium: the existing XP curve
+   * already roughly offsets the success penalty, so levelling pace stays
+   * the same whichever level of offer a player picks. The premium rides
+   * on gold and Scrap only. Undefined when there's nothing to pay.
+   */
+  scrapReward?: number;
 }
 
 export interface ActiveQuest {
@@ -1117,6 +1137,10 @@ export interface QuestResult {
    *  informational for the result modal; the actual materials mutation
    *  already happened in QuestManager.resolve by the time this is read. */
   materialGained?: { materialId: MaterialId; amount: number };
+  /** Patch 0453 -- Scrap credited from QuestOffer.scrapReward (full on
+   *  success, 15% consolation on failure, same shape as materialGained).
+   *  Informational; state.scrap was already credited in resolve(). */
+  scrapGained?: number;
   /** Set to the chain's title text if this quest's chain just completed
    *  and HeroManager.grantTitle actually granted it (i.e. the hero didn't
    *  already hold it) -- purely informational, the grant itself already

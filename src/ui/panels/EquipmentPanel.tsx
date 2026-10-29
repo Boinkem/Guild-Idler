@@ -919,7 +919,7 @@ function SlotCard({
                   disabled={EquipmentManager.repairCost(item, workshop, repairDiscount) === 0}
                   onClick={() => { if (onRepair) onRepair(item.uid); else engine.repair(item.uid); setOpen(false); }}
                 >
-                  {`Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))} + ${EquipmentManager.repairScrapCost(item, workshop, repairDiscount)} Scrap`}
+                  {`Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))}${EquipmentManager.repairScrapCost(item, workshop, repairDiscount) > 0 ? ` + ${EquipmentManager.repairScrapCost(item, workshop, repairDiscount)} Scrap` : ''}`}
                 </button>
                 {/* Secondary Free Repair button, patch 0300 -- split out
                     from the single button above, which used to swap its

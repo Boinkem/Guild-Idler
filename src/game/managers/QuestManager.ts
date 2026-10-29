@@ -449,8 +449,23 @@ export const QuestManager = {
     // quest a standard offer would have been, just compressed in time,
     // not a separate hand-tuned mini-economy the way the old burst/
     // medium reward tables were.
-    const goldBaseline = questGoldBaseline(reqLevel) * cfg.rewardMultiplier;
+    // Patch 0453 -- over-level premium. Tester report: a quest 3 levels
+    // above the hero paid barely more than an on-level one (the gold
+    // curve is shallow early, ~+12% for 3 levels) while costing -6%
+    // success, so picking it up felt like a mistake. Each level over now
+    // adds quest.overLevelGoldPremiumPct to GOLD only, uncapped (the
+    // board's own offset table never rolls past +4 anyway, and a
+    // percentage keeps pace with the level curve on its own). XP is left
+    // alone on purpose -- see QuestOffer.scrapReward's comment -- so the
+    // premium never speeds up levelling.
+    const levelsOver = Math.max(0, reqLevel - topLevel);
+    const overLevelGoldPct = levelsOver * Tuning.get('quest.overLevelGoldPremiumPct');
+    const goldBaseline = questGoldBaseline(reqLevel) * cfg.rewardMultiplier * (1 + overLevelGoldPct / 100);
     const xpBaseline = questXpBaseline(reqLevel) * cfg.rewardMultiplier;
+    // Scrap for the risk: levels over x per-level amount x tier step
+    // (Easy 1, Normal 2 ... Legendary 5). Early Scrap otherwise only comes
+    // from breaking down gear, the "scrap starving" half of the report.
+    const scrapBaseline = levelsOver * Tuning.get('quest.overLevelScrapPerLevel') * (tierIndex + 1);
 
     // One roll, one chance, every tier (not Easy-only) -- see
     // DifficultyConfig.fastChance's own comment in quests.ts for the
@@ -463,6 +478,7 @@ export const QuestManager = {
     let duration: number;
     let rewardGold: number;
     let rewardXp: number;
+    let rewardScrap: number;
     if (useFast) {
       // Percentage of THIS tier's own normal range, not an absolute
       // duration -- see DifficultyConfig.fastMinDurationPct's own
@@ -486,6 +502,7 @@ export const QuestManager = {
       const payoutFraction = Math.max(Tuning.get('quest.fastRewardFloorFraction'), timeFraction);
       rewardGold = Math.max(1, Math.round(goldBaseline * payoutFraction));
       rewardXp = Math.max(1, Math.round(xpBaseline * payoutFraction));
+      rewardScrap = scrapBaseline > 0 ? Math.max(1, Math.round(scrapBaseline * payoutFraction)) : 0;
     } else {
       duration = rng.int(cfg.minDuration, cfg.maxDuration);
       const span = cfg.maxDuration - cfg.minDuration;
@@ -495,6 +512,7 @@ export const QuestManager = {
       const factor = bandLow + t * (bandHigh - bandLow);
       rewardGold = Math.max(1, Math.round(goldBaseline * factor));
       rewardXp = Math.max(1, Math.round(xpBaseline * factor));
+      rewardScrap = scrapBaseline;
     }
 
     return {
@@ -526,6 +544,8 @@ export const QuestManager = {
       vulnerableTo: rollElementTags(rng, difficulty),
       dealsElement: rollElementTags(rng, difficulty),
       ...(useFast ? { fast: true } : {}),
+      ...(overLevelGoldPct > 0 ? { overLevelGoldPct } : {}),
+      ...(rewardScrap > 0 ? { scrapReward: rewardScrap } : {}),
     };
   },
 
@@ -1273,6 +1293,19 @@ export const QuestManager = {
       }
     }
 
+    /* ---------------------------- over-level scrap ---------------------------- */
+    // Patch 0453 -- same full-on-success / 15%-on-failure shape as the
+    // gathering bounty above. Not touched by crit or the daily burst
+    // below, which stay gold/xp only.
+    let scrapGained: number | undefined;
+    if (quest.offer.scrapReward) {
+      const amount = success ? quest.offer.scrapReward : Math.floor(quest.offer.scrapReward * 0.15);
+      if (amount > 0) {
+        state.scrap += amount;
+        scrapGained = amount;
+      }
+    }
+
     // Critical Burst -- a rare, purely random spike on top of the normal
     // reward roll, independent of the daily first-burst floor below (both
     // can fire on the same quest, on a very good day -- that's intended,
@@ -1752,6 +1785,7 @@ export const QuestManager = {
       chainReplayAdvanced,
       eggDropped,
       materialGained,
+      scrapGained,
       curioGained,
       recipeScrollGained,
       dailyBurstBonus: dailyBurstBonus || undefined,

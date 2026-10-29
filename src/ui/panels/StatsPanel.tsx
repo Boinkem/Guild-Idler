@@ -97,9 +97,12 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
           </>
         )}
 
-        {quest && (quest.materialGained || quest.eggDropped || quest.curioGained) && (
+        {quest && (quest.materialGained || quest.scrapGained || quest.eggDropped || quest.curioGained) && (
           <>
             <div className="section-heading">Also found</div>
+            {quest.scrapGained ? (
+              <div className="small" style={{ marginBottom: 2 }}>+{quest.scrapGained} Scrap</div>
+            ) : null}
             {quest.materialGained && quest.materialGained.amount > 0 && (
               <div className="small" style={{ marginBottom: 2 }}>
                 +{quest.materialGained.amount} {MATERIAL_BY_ID[quest.materialGained.materialId]?.name ?? quest.materialGained.materialId}

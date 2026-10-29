@@ -1075,7 +1075,7 @@ function ArmourStashCard({
                     : stashFreeRepairAvailable ? 'Free, from today\'s guild-wide allowance' : undefined}
                   onClick={(e) => doRepair(centerOf(e.currentTarget))}
                 >
-                  {'\u2692'} Repair{repairCost === 0 ? '' : ` · ${stashFreeRepairAvailable ? 'Free' : `${formatGold(repairCost)} +${repairScrapCost}`}`}
+                  {'\u2692'} Repair{repairCost === 0 ? '' : ` · ${stashFreeRepairAvailable ? 'Free' : `${formatGold(repairCost)}${repairScrapCost > 0 ? ` +${repairScrapCost}` : ''}`}`}
                 </button>
               </div>
               <div className="row end" style={{ marginTop: 12 }}>

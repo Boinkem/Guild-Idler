@@ -3348,6 +3348,26 @@
     "description": "Hero level at which Rookie's Resolve has fully tapered to 0 (patch 0447). Set to 1 to disable it."
   },
   {
+    "id": "quest.overLevelGoldPremiumPct",
+    "label": "Over-level quests: gold premium % per level over",
+    "category": "quests",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 50,
+    "description": "Extra gold (percent of the offer's normal gold) per level an offer sits above the hero it was rolled for (patch 0453). Uncapped -- the board never rolls more than +4. Gold only; XP gets no premium so levelling pace is unchanged."
+  },
+  {
+    "id": "quest.overLevelScrapPerLevel",
+    "label": "Over-level quests: Scrap per level over",
+    "category": "quests",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "Scrap paid on success per level an offer sits above its hero (patch 0453), multiplied by difficulty step (Easy 1 ... Legendary 5) and scaled down on a Fast roll like gold/xp. 15% on failure."
+  },
+  {
     "id": "upgrade.master_adventurer.blackMarketDiscountPerLevel",
     "label": "Enchanted Seal: Black Market discount per level",
     "category": "vendor_upgrades",
@@ -4250,6 +4270,16 @@
     "min": 5,
     "max": 30,
     "description": "Separate, gentler conversion rate for Repair's scrap cost (scrapCost = round(goldCost / ratio), floored at 1) -- repairs happen far more often than vendor purchases, so they lean less on scrap than the shared ratio."
+  },
+  {
+    "id": "economy.repairScrapUncommonFlat",
+    "label": "Repair cost: flat Scrap for Uncommon gear",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "Flat Scrap cost to repair an Uncommon item (patch 0453). Common repairs cost no Scrap; Rare and above keep the gold-derived scale via economy.repairScrapToGoldRatio."
   },
   {
     "id": "economy.chainCompletionQuestMultiplier",

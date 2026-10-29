@@ -339,6 +339,15 @@ function ChainDetailModal({
         {levelGap > 0 && (
           <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>
             {levelGap} level{levelGap === 1 ? '' : 's'} under -- reduced success chance
+            {/* Patch 0453 -- show the other side of the trade, not just the penalty. */}
+            {!!(offer.overLevelGoldPct || offer.scrapReward) && (
+              <span className="good">
+                {' '}· worth it: {[
+                  offer.overLevelGoldPct ? `+${offer.overLevelGoldPct}% gold` : '',
+                  offer.scrapReward ? `+${offer.scrapReward} Scrap` : '',
+                ].filter(Boolean).join(', ')}
+              </span>
+            )}
           </p>
         )}
         <div className="stat-row" style={{ margin: '6px 0' }}>
@@ -346,6 +355,7 @@ function ChainDetailModal({
           <span>Time <b>{formatDuration(duration)}</b></span>
           <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>
           <span>XP <b>{offer.rewardXp}</b></span>
+          {offer.scrapReward ? <span>Scrap <b>{offer.scrapReward}</b></span> : null}
         </div>
 
         {loot.length > 0 && (

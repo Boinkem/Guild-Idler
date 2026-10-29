@@ -1200,11 +1200,24 @@ EquipmentManager's repair path and whatever currently gates
 healing/injury-clearing to find the actual over-broad check before
 narrowing it.
 
-### Level 1 gear should not cost Scrap to repair
-Direct report (patch 0305 session, not yet built). Presumably a floor/
-scaling issue in whatever repair-cost formula EquipmentManager uses --
-a Level 1 item's own low value should round down to zero Scrap rather
-than the current non-zero cost. Not yet investigated.
+### Level 1 gear should not cost Scrap to repair -- built, patch 0453
+Resolved by rarity rather than item level: Common repairs now cost no
+Scrap at all (starter gear is Common), Uncommon is a flat 1 Scrap, Rare
+and up keep the gold-derived scale. See the patch 0453 entry.
+
+### Legendary Shards (Legendary repair currency, auction-house tradable) -- planned, next patch after 0453
+Agreed in the patch 0453 discussion. A new currency, **Legendary Shard**,
+meant as the high-end material rather than a repair-only tax.
+- **Legendary Repair:** the player picks either 1 Shard + the normal gold
+  cost (no Scrap -- the clearly better deal), or a fallback of 3x gold and
+  3x Scrap, so a Legendary is never stuck broken for lack of Shards.
+- **Sources:** Hard and Legendary raids (main source), a low chance from
+  Epic/Legendary quests, and scrapping a Legendary returns some.
+- **Auction house:** sellable/tradable there (`src/game/auctionHouse.ts`).
+- **Later uses** (not in the first cut): Legendary Enhance / re-levelling.
+- Touches: GameState (+ save migration default 0), RaidManager/QuestManager
+  loot, ScrapStation, EquipmentManager repair + Blacksmith UI, currency
+  counter, auction house listing types.
 
 ### On The Road quest cards should use the artwork shown after clicking in
 Direct report (patch 0305 session, not yet built): the collapsed quest
@@ -36598,3 +36611,57 @@ The checklist rendered in headless Chromium with no page errors.
 `node --check` passes on all files.
 
 **Restart the DevTool after applying** (server code changed).
+
+### Over-level quest rewards + rarity-tiered repair Scrap (patch 0453)
+```discord-update
+Dev Update | Quest Rewards & Repairs
+
+- Changed quests above your hero's level to pay +10% gold for every level over, so taking on a tougher contract is actually worth the lower success chance
+- Added Scrap rewards to quests above your hero's level -- more for each level over and for harder difficulties
+- Added a "worth it" line on over-level contracts showing the bonus gold and Scrap next to the success penalty
+- Changed repairs: Common gear no longer costs Scrap, Uncommon costs just 1 Scrap, Rare and above are unchanged
+- Kept XP the same on over-level quests, so levelling speed doesn't change
+```
+
+Tester feedback (Discord): a quest 3 levels above the hero paid 8 gold /
+7 XP, barely more than an on-level one, and early levels are "scrap
+starving"; second tester suggested repairs only cost Scrap from Rare up.
+
+**Why it felt bad (measured, not guessed):** rewards come from the
+offer's own reqLevel, but the gold curve is shallow early (15 at L1 -> 32
+at L10), so +3 levels was only ~+12% reward against -6% success
+(`quest_reqlevel.levelGapSuccessCoefficient` 2/level) -- roughly +3%
+expected value before failure injuries, i.e. a net loss in practice.
+
+**Changes:**
+- `QuestManager.generateOffer`: `levelsOver = max(0, reqLevel -
+  topLevel)` (offers are per-hero, so topLevel is the hero the offer was
+  rolled for). Gold baseline multiplied by `1 + levelsOver *
+  quest.overLevelGoldPremiumPct / 100` (new tuning, 10). **Uncapped by
+  design** -- the board's offset table already tops out at +4 and a
+  percentage keeps pace with the level curve. **XP gets no premium**:
+  the existing XP curve already roughly offsets the success penalty, so
+  levelling pace is unchanged whichever level of offer is picked.
+- Same function: `scrapReward = levelsOver * quest.overLevelScrapPerLevel
+  (new tuning, 1) * (tierIndex + 1)` (Easy 1 ... Legendary 5), scaled by
+  the Fast roll's own payoutFraction (min 1). Gathering bounties inherit
+  both via generateOffer. Chain offers are untouched (fixed reqLevel).
+- New optional `QuestOffer.overLevelGoldPct` / `scrapReward` (display +
+  payout) and `QuestResult.scrapGained`. Absent on old saved offers, so
+  no migration needed.
+- `QuestManager.resolve`: credits `state.scrap` -- full on success, 15%
+  consolation on failure (same shape as the gathering bounty). Not
+  affected by crit / daily burst, which stay gold/XP only.
+- `EquipmentManager.repairScrapCost`: Common -> 0, Uncommon -> flat
+  `economy.repairScrapUncommonFlat` (new tuning, 1), Rare+ unchanged.
+  Closes the "Level 1 gear should not cost Scrap to repair" backlog item.
+- UI: QuestDetailModal (QuestPanel.tsx) and ChainDetailModal
+  (DiscoveredQuestsPanel.tsx) append "worth it: +N% gold, +M Scrap" to the
+  red "levels under" line and show a Scrap stat; the board card shows
+  "· N scrap"; QuestResultModal and StatsPanel list "+N Scrap" under Also
+  found. Repair buttons (EquipmentPanel, VendorsPanel) drop the "+ 0
+  Scrap" text when the Scrap part is free.
+
+**Not in this patch:** Legendary Shards (see Backlog -- next patch).
+Existing board offers keep their old rewards until the next refresh/
+reroll. `tsc --noEmit` clean.

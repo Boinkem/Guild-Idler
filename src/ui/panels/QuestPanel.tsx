@@ -221,7 +221,10 @@ export function QuestRow({
               > 🌱</span>
             )}
           </span>
-          <span className="tiny gold-text">{formatGold(offer.rewardGold)} gold</span>
+          <span className="tiny gold-text">
+            {formatGold(offer.rewardGold)} gold
+            {offer.scrapReward ? <span className="muted"> · {offer.scrapReward} scrap</span> : null}
+          </span>
         </div>
       </div>
       <span className="raid-card-chevron" aria-hidden="true">›</span>
@@ -333,6 +336,15 @@ export function QuestDetailModal({
         {levelGap > 0 && (
           <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>
             {levelGap} level{levelGap === 1 ? '' : 's'} under -- reduced success chance
+            {/* Patch 0453 -- show the other side of the trade, not just the penalty. */}
+            {!!(offer.overLevelGoldPct || offer.scrapReward) && (
+              <span className="good">
+                {' '}· worth it: {[
+                  offer.overLevelGoldPct ? `+${offer.overLevelGoldPct}% gold` : '',
+                  offer.scrapReward ? `+${offer.scrapReward} Scrap` : '',
+                ].filter(Boolean).join(', ')}
+              </span>
+            )}
           </p>
         )}
         <div className="stat-row" style={{ margin: '6px 0' }}>
@@ -354,6 +366,7 @@ export function QuestDetailModal({
           <span>Time <b>{formatDuration(duration)}</b></span>
           <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>
           <span>XP <b>{offer.rewardXp}</b></span>
+          {offer.scrapReward ? <span>Scrap <b>{offer.scrapReward}</b></span> : null}
         </div>
 
         {/* Patch 0330, direct tester feedback -- a walkthrough of what
