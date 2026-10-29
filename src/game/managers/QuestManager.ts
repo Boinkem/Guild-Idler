@@ -5,6 +5,7 @@ import {
 import { QUEST_FAST_UPGRADE_BY_ID } from '../data/questFastUpgrades';
 import { HERO_CLASSES, questGoldBaseline, questXpBaseline, renownForChainReplayClear } from '../data/progression';
 import { rewardPayoutFloor } from '../data/balance';
+import { questShardChance } from '../data/shards';
 import { questEggDropChance } from '../data/pets';
 import { CURIOS, questCurioDropChance } from '../data/curios';
 import { RecipeManager } from './RecipeManager';
@@ -1306,6 +1307,14 @@ export const QuestManager = {
       }
     }
 
+    // Patch 0454 -- Legendary Shard, a small chance on a successful Epic
+    // or Legendary quest (see questShardChance). Raids are the main source.
+    let shardsGained: number | undefined;
+    if (success && rng.chance(questShardChance(quest.offer.difficulty))) {
+      state.legendaryShards = (state.legendaryShards ?? 0) + 1;
+      shardsGained = 1;
+    }
+
     // Critical Burst -- a rare, purely random spike on top of the normal
     // reward roll, independent of the daily first-burst floor below (both
     // can fire on the same quest, on a very good day -- that's intended,
@@ -1786,6 +1795,7 @@ export const QuestManager = {
       eggDropped,
       materialGained,
       scrapGained,
+      shardsGained,
       curioGained,
       recipeScrollGained,
       dailyBurstBonus: dailyBurstBonus || undefined,

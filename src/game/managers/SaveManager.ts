@@ -262,6 +262,7 @@ export function createInitialState(now = Date.now()): GameState {
     harvestTraderGold: 0,
     harvestTraderGoldAt: now,
     scrap: 0,
+    legendaryShards: 0,
     gems: {},
     resistGems: {},
     hatcheryUnlocked: false,
@@ -590,6 +591,8 @@ const MIGRATIONS: Record<number, Migration> = {
     // equipment items simply have no elementalDamage/elementalResist yet
     // (both optional fields, no migration needed on the items themselves).
     scrap: (save.scrap as number | undefined) ?? 0,
+    // Patch 0454 -- Legendary Shards, 0 for any save that predates them.
+    legendaryShards: (save.legendaryShards as number | undefined) ?? 0,
     gems: (save.gems as GameState['gems'] | undefined) ?? {},
     resistGems: (save.resistGems as GameState['resistGems'] | undefined) ?? {},
   }),

@@ -18,6 +18,7 @@ import { MATERIAL_BY_ID } from '../game/data/materials';
 import { CURIO_BY_ID } from '../game/data/curios';
 import { RECIPE_SCROLL_BY_ID } from '../game/data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from '../game/data/craftingRecipes';
+import { shardLabel } from '../game/data/shards';
 
 /** How long the pop-out + coin/XP burst plays before the modal actually
  * unmounts. Matches the CSS: modal-pop-out is 320ms, collect-fly is 750ms
@@ -262,9 +263,12 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
             alongside curioGained rather than leaving two of three
             "purely informational for the result modal" fields silently
             broken right next to the one that's now wired up correctly. */}
-        {(result.materialGained || result.scrapGained || result.eggDropped || result.curioGained || result.recipeScrollGained) && (
+        {(result.materialGained || result.scrapGained || result.shardsGained || result.eggDropped || result.curioGained || result.recipeScrollGained) && (
           <>
             <div className="section-heading">Also found</div>
+            {result.shardsGained ? (
+              <div className="small" style={{ marginBottom: 2, color: '#d9a441' }}>+{shardLabel(result.shardsGained)}</div>
+            ) : null}
             {result.scrapGained ? (
               <div className="small" style={{ marginBottom: 2 }}>+{result.scrapGained} Scrap</div>
             ) : null}

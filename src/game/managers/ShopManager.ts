@@ -532,6 +532,11 @@ export const ShopManager = {
     const value = EquipmentManager.scrapValue(item, bonus);
     state.stash = state.stash.filter((i) => i.uid !== itemUid);
     state.scrap += value;
+    // Patch 0454 -- a Legendary also gives back Legendary Shards, so
+    // outgrown Legendaries feed the ones still being worn.
+    if (EquipmentManager.isLegendary(item)) {
+      state.legendaryShards = (state.legendaryShards ?? 0) + Tuning.get('economy.legendaryShardsFromScrap');
+    }
     return null;
   },
 };

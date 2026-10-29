@@ -14,6 +14,7 @@ import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
 import { elementalBonusForHero } from '../data/elements';
 import { createRng } from '../rng';
+import { raidShardReward } from '../data/shards';
 import { earnFromRaidClear } from '../classSkins';
 import { clamp, sumMods, MINUTE, softCap } from '../util';
 import { RecipeManager } from './RecipeManager';
@@ -555,6 +556,16 @@ export const RaidManager = {
       }
     }
 
+    // Patch 0454 -- Legendary Shards, the main source: a flat amount per
+    // FULL clear at Heroic and above (raidShardReward). Partial clears
+    // earn nothing, same as every other raid reward.
+    let shardsGained: number | undefined;
+    const shardReward = fullClear ? raidShardReward(active.difficulty) : 0;
+    if (shardReward > 0) {
+      state.legendaryShards = (state.legendaryShards ?? 0) + shardReward;
+      shardsGained = shardReward;
+    }
+
     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
       state.completedRaids.push(raid.id);
     }
@@ -686,6 +697,7 @@ export const RaidManager = {
       totalEncounters: encounterIds.length,
       fullClear,
       recipeScrollGained,
+      shardsGained,
       gold,
       xp,
       loot,

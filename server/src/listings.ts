@@ -61,10 +61,27 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *  actually sends for that item type, else null. Shape only -- the server
  *  still has no source of truth to check the stats against (see the trust
  *  note on POST /listings). */
-function validatePayload(itemType: 'equipment' | 'consumable', payload: unknown): string | null {
+/** Patch 0454 -- what a listing can hold. 'shard' is a stack of Legendary
+ *  Shards (needs migration 002_legendary_shards.sql). */
+type ItemType = 'equipment' | 'consumable' | 'shard';
+const ITEM_TYPES: readonly ItemType[] = ['equipment', 'consumable', 'shard'];
+function isItemType(value: unknown): value is ItemType {
+  return typeof value === 'string' && (ITEM_TYPES as readonly string[]).includes(value);
+}
+/** Must match the client's MAX_SHARDS_PER_LISTING (src/game/data/shards.ts). */
+const MAX_SHARDS_PER_LISTING = 999;
+
+function validatePayload(itemType: ItemType, payload: unknown): string | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'itemPayload must be an object.';
   if (JSON.stringify(payload).length > MAX_PAYLOAD_JSON_CHARS) return 'itemPayload is too large.';
   const p = payload as Record<string, unknown>;
+  if (itemType === 'shard') {
+    if (p.defId !== 'legendary_shard') return 'Shard payload needs defId "legendary_shard".';
+    if (typeof p.amount !== 'number' || !Number.isSafeInteger(p.amount) || p.amount < 1 || p.amount > MAX_SHARDS_PER_LISTING) {
+      return `Shard payload amount must be a whole number between 1 and ${MAX_SHARDS_PER_LISTING}.`;
+    }
+    return null;
+  }
   if (typeof p.defId !== 'string' || p.defId.length === 0 || p.defId.length > 80) return 'itemPayload.defId is required.';
   if (itemType === 'equipment' && (typeof p.uid !== 'string' || p.uid.length === 0)) return 'Equipment payload needs a uid.';
   return null;
@@ -143,7 +160,7 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
     const conditions = [`status = 'active'`, `expires_at > now()`];
     const params: string[] = [];
 
-    if (itemType === 'equipment' || itemType === 'consumable') {
+    if (isItemType(itemType)) {
       params.push(itemType);
       conditions.push(`item_type = $${params.length}`);
     }
@@ -197,9 +214,9 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
       const { itemType, itemPayload, currency, price, durationHours } = request.body ?? {};
       const steamId = (request as FastifyRequest & { steamId: string }).steamId;
 
-      if (itemType !== 'equipment' && itemType !== 'consumable') {
+      if (!isItemType(itemType)) {
         reply.code(400);
-        return { error: 'itemType must be "equipment" or "consumable".' };
+        return { error: 'itemType must be "equipment", "consumable" or "shard".' };
       }
       if (currency !== 'gold' && currency !== 'scrap') {
         reply.code(400);

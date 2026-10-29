@@ -4,7 +4,9 @@ import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 import { GameEngine } from '../../game/engine';
-import { EquipmentManager } from '../../game/managers/EquipmentManager';
+import { EquipmentManager, RepairMode } from '../../game/managers/EquipmentManager';
+import { shardLabel } from '../../game/data/shards';
+import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance, itemDisplayName } from '../../game/data/equipment';
@@ -778,7 +780,7 @@ function SlotCard({
   slot, item, workshop, hero, engine, fxClass = '', deltas, repairFx, onRepair,
 }: {
   slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine;
-  repairFx?: CardRepairFx; onRepair?: (uid: string) => void;
+  repairFx?: CardRepairFx; onRepair?: (uid: string, mode?: RepairMode) => void;
   /** Patch 0425 -- equip replay state ('eqx-wait' / 'eqx-land'), and the
    *  stat changes to float over the card after a single equip. */
   fxClass?: string; deltas?: string[];
@@ -914,6 +916,14 @@ function SlotCard({
               </div>
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+                {EquipmentManager.isLegendary(item) && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 ? (
+                  // Patch 0454 -- a Legendary shows both routes and the
+                  // player picks: a Shard (cheap) or the no-Shard markup.
+                  <LegendaryRepairButtons
+                    item={item} workshop={workshop} repairDiscount={repairDiscount}
+                    onRepair={(mode) => { if (onRepair) onRepair(item.uid, mode); else engine.repair(item.uid, mode); setOpen(false); }}
+                  />
+                ) : (
                 <button
                   className="btn-primary"
                   disabled={EquipmentManager.repairCost(item, workshop, repairDiscount) === 0}
@@ -921,6 +931,7 @@ function SlotCard({
                 >
                   {`Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))}${EquipmentManager.repairScrapCost(item, workshop, repairDiscount) > 0 ? ` + ${EquipmentManager.repairScrapCost(item, workshop, repairDiscount)} Scrap` : ''}`}
                 </button>
+                )}
                 {/* Secondary Free Repair button, patch 0300 -- split out
                     from the single button above, which used to swap its
                     own label to "Repair · Free" whenever a free repair was
@@ -1120,10 +1131,10 @@ export function EquipmentPanel() {
   };
 
   const repairDiscountForBill = ModifierManager.global(state).repairDiscount ?? 0;
-  const repairBill = EquipmentManager.allItems(state)
-    .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop, repairDiscountForBill), 0);
-  const repairScrapBill = EquipmentManager.allItems(state)
-    .reduce((sum, e) => sum + EquipmentManager.repairScrapCost(e.item, workshop, repairDiscountForBill), 0);
+  // Patch 0454 -- repairBill walks a running Shard budget the same way
+  // Repair Everything spends it (Legendaries take a Shard while any last).
+  const { gold: repairBill, scrap: repairScrapBill, shards: repairShardBill } =
+    EquipmentManager.repairBill(state, workshop, repairDiscountForBill);
 
   const curiosOwned = CurioManager.owned(state);
   const recipesOwned = RecipeManager.owned(state);
@@ -1284,7 +1295,7 @@ export function EquipmentPanel() {
           {eqFx?.summary && <span className="eqx-sum" key={eqFx.key}>{eqFx.summary}</span>}
         </span>
         <button className="btn-primary" onClick={(e) => runRepair(() => engine.repairAll(), e.currentTarget)} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
-          Repair everything · {formatGold(repairBill)} + {repairScrapBill} Scrap
+          Repair everything · {formatGold(repairBill)} + {repairScrapBill} Scrap{repairShardBill > 0 ? ` + ${shardLabel(repairShardBill)}` : ''}
         </button>
       </div>
 
@@ -1333,7 +1344,7 @@ export function EquipmentPanel() {
             fxClass={eqFx?.wait.includes(slot) ? 'eqx-wait' : eqFx?.land.includes(slot) ? 'eqx-land' : ''}
             deltas={eqFx?.deltas[slot]}
             repairFx={hero.equipment[slot] ? cardRepairFx(hero.equipment[slot]!.uid) : undefined}
-            onRepair={(uid) => runRepair(() => engine.repair(uid))}
+            onRepair={(uid, mode) => runRepair(() => engine.repair(uid, mode))}
           />
         ))}
       </div>

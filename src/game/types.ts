@@ -558,8 +558,8 @@ export interface BuybackEntry {
  */
 export interface MailboxEntry {
   id: string;
-  type: 'gold' | 'scrap' | 'equipment' | 'consumable';
-  /** Gold/Scrap amount (type: 'gold'/'scrap') or consumable quantity (type: 'consumable'). Unused for 'equipment'. */
+  type: 'gold' | 'scrap' | 'equipment' | 'consumable' | 'shard';
+  /** Gold/Scrap/Shard amount (type: 'gold'/'scrap'/'shard') or consumable quantity (type: 'consumable'). Unused for 'equipment'. */
   amount?: number;
   /** type: 'equipment' only -- the exact item, full roll intact. */
   item?: EquipmentItem;
@@ -1141,6 +1141,9 @@ export interface QuestResult {
    *  success, 15% consolation on failure, same shape as materialGained).
    *  Informational; state.scrap was already credited in resolve(). */
   scrapGained?: number;
+  /** Patch 0454 -- Legendary Shards dropped by this quest (Epic/Legendary
+   *  success only). Already credited by resolve(). */
+  shardsGained?: number;
   /** Set to the chain's title text if this quest's chain just completed
    *  and HeroManager.grantTitle actually granted it (i.e. the hero didn't
    *  already hold it) -- purely informational, the grant itself already
@@ -1752,6 +1755,9 @@ export interface RaidResult {
    *  `state.recipeScrolls` mutation already happened in
    *  RaidManager.resolve by the time this is read. */
   recipeScrollGained?: { scrollId: string };
+  /** Patch 0454 -- Legendary Shards paid for a full Heroic/Mythic/
+   *  Legendary clear. Already credited by RaidManager.resolve(). */
+  shardsGained?: number;
   injuries: { heroId: string; heroName: string; injury: Injury }[];
   resolvedAt: number;
   /** Set if this was a full clear and the raid carries a title that at
@@ -3027,6 +3033,12 @@ export interface GameState {
    * state (harvestNodes/harvestTools) the way ore/timber/herbs/food do.
    */
   scrap: number;
+  /**
+   * Legendary Shards (patch 0454) -- the high-end currency. See
+   * data/shards.ts for sources and uses. Plain uncapped counter, same as
+   * scrap. Old saves migrate to 0 (SaveManager).
+   */
+  legendaryShards: number;
   /**
    * Elemental Gems, one counter per element PER TIER -- crafted at the
    * Enchanter, spent at the Blacksmith's Infuse station on a weapon's

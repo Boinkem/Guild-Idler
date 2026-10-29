@@ -5,7 +5,8 @@ import { RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, formatGold } from '../game/u
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { ItemIcon, ConsumableIcon } from './icons';
-import { ServerListingRow } from '../game/auctionHouse';
+import { AhItemType, ServerListingRow } from '../game/auctionHouse';
+import { MAX_SHARDS_PER_LISTING, SHARD_GLYPH, SHARD_NAME, shardLabel } from '../game/data/shards';
 import { GuildManager } from '../game/managers/GuildManager';
 import { flyIcon, flyTokens, fxMs, fxSpeed } from './purchaseFx';
 
@@ -32,7 +33,36 @@ export function AuctionHouseTrade() {
   );
 }
 
+/** Patch 0454 -- a shard listing's stack size, from its payload. */
+function shardAmountOf(row: ServerListingRow): number {
+  return Math.max(0, Math.floor(Number((row.item_payload as { amount?: number })?.amount) || 0));
+}
+
+/** Patch 0454 -- one card body for a stack of Legendary Shards, shared by
+ *  Browse and My Listings. Price per Shard shown so stacks compare. */
+function ShardListingSummary({ row }: { row: ServerListingRow }) {
+  const amount = shardAmountOf(row);
+  const price = Number(row.price);
+  return (
+    <>
+      <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER.legendary})` }} />
+      <div className="item-card-summary">
+        <ConsumableIcon icon="legendary-shard.png" glyph={SHARD_GLYPH} size={48} />
+        <div className="item-card-body">
+          <div className="item-card-name" style={{ color: RARITY_COLOR.legendary }}>{shardLabel(amount)}</div>
+          <div className="tiny muted">
+            {formatGold(price)} {row.currency}
+            {amount > 1 && ` (${formatGold(Math.ceil(price / amount))} each)`}
+          </div>
+          {row.deposit_amount && <div className="tiny muted">Deposit: {row.deposit_amount} {row.currency}</div>}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function rarityOf(row: ServerListingRow): Rarity | null {
+  if (row.item_type === 'shard') return 'legendary';
   if (row.item_type === 'equipment') {
     const item = row.item_payload as EquipmentItem;
     return EQUIPMENT_BY_ID[item.defId]?.rarity ?? null;
@@ -47,7 +77,7 @@ function BrowseTab() {
   const [listings, setListings] = useState<ServerListingRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [buyingId, setBuyingId] = useState<string | null>(null);
-  const [itemTypeFilter, setItemTypeFilter] = useState<'' | 'equipment' | 'consumable'>('');
+  const [itemTypeFilter, setItemTypeFilter] = useState<'' | AhItemType>('');
   const [rarityFilter, setRarityFilter] = useState<'' | Rarity>('');
 
   const refresh = () => {
@@ -89,6 +119,7 @@ function BrowseTab() {
           <option value="">All types</option>
           <option value="equipment">Gear</option>
           <option value="consumable">Consumables</option>
+          <option value="shard">Legendary Shards</option>
         </select>
         <select value={rarityFilter} onChange={(e) => setRarityFilter(e.target.value as typeof rarityFilter)}
           style={{ background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--text)', padding: '6px 8px' }}>
@@ -121,6 +152,18 @@ function BrowseTab() {
 }
 
 function ListingCard({ row, buying, bought = false, onBuy }: { row: ServerListingRow; buying: boolean; bought?: boolean; onBuy: (btn: HTMLElement | null) => void }) {
+  if (row.item_type === 'shard') {
+    if (shardAmountOf(row) < 1) return null;
+    return (
+      <div className={`item-card rarity-card ${bought ? 'ahx-bought fx-ah' : ''}`}>
+        <ShardListingSummary row={row} />
+        <button className="btn-primary item-card-action" disabled={buying || bought} onClick={(e) => onBuy(e.currentTarget)}>
+          {buying ? 'Buying...' : bought ? 'Bought' : 'Buy'}
+        </button>
+        {bought && <span className="ahx-stamp">Yours</span>}
+      </div>
+    );
+  }
   if (row.item_type === 'equipment') {
     const item = row.item_payload as EquipmentItem;
     const def = EQUIPMENT_BY_ID[item.defId];
@@ -168,7 +211,8 @@ function ListingCard({ row, buying, bought = false, onBuy }: { row: ServerListin
 
 type SellDraft =
   | { kind: 'equipment'; item: EquipmentItem }
-  | { kind: 'consumable'; consumableId: string };
+  | { kind: 'consumable'; consumableId: string }
+  | { kind: 'shard' };
 
 function SellTab() {
   const engine = useEngine();
@@ -218,6 +262,28 @@ function SellTab() {
         </div>
       )}
 
+      {/* Patch 0454 -- Legendary Shards list as a stack (choose how many in the form). */}
+      {(state.legendaryShards ?? 0) > 0 && (
+        <>
+          <div className="section-heading" style={{ marginTop: 14 }}>Legendary Shards</div>
+          <div className="item-card-grid">
+            <div className="item-card rarity-card">
+              <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER.legendary})` }} />
+              <div className="item-card-summary">
+                <ConsumableIcon icon="legendary-shard.png" glyph={SHARD_GLYPH} size={48} />
+                <div className="item-card-body">
+                  <div className="item-card-name" style={{ color: RARITY_COLOR.legendary }}>{SHARD_NAME} ×{state.legendaryShards}</div>
+                  <div className="tiny muted">Lists as a stack</div>
+                </div>
+              </div>
+              <button className="btn-primary item-card-action" onClick={() => setDraft({ kind: 'shard' })}>
+                List for sale →
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="section-heading" style={{ marginTop: 14 }}>Consumables</div>
       {ownedConsumables.length === 0 ? (
         <p className="tiny muted">Nothing to list.</p>
@@ -254,6 +320,9 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
   const [price, setPrice] = useState('');
   const [duration, setDuration] = useState<24 | 48>(24);
   const [submitting, setSubmitting] = useState(false);
+  // Patch 0454 -- stack size, shard drafts only.
+  const shardsOwned = engine.state.legendaryShards ?? 0;
+  const [shardQty, setShardQty] = useState('1');
 
   const has48h = GuildManager.upgradeLevel(engine.state, 'auction_house_charter') >= 2;
   const priceNum = Number(price) || 0;
@@ -264,7 +333,9 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
         const def = EQUIPMENT_BY_ID[draft.item.defId];
         return def ? itemDisplayName(draft.item, def) : draft.item.defId;
       })()
-    : CONSUMABLE_BY_ID[draft.consumableId]?.name ?? draft.consumableId;
+    : draft.kind === 'shard'
+      ? SHARD_NAME + 's'
+      : CONSUMABLE_BY_ID[draft.consumableId]?.name ?? draft.consumableId;
 
   // Patch 0428 -- the listing moment: the deposit flies in, the item is
   // wrapped in paper, tied and sealed, then posted off to My Listings.
@@ -278,7 +349,9 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
     const before = currency === 'gold' ? engine.state.gold : engine.state.scrap;
     const ok = draft.kind === 'equipment'
       ? await engine.listEquipmentForSale(draft.item.uid, currency, value, duration)
-      : await engine.listConsumableForSale(draft.consumableId, currency, value, duration);
+      : draft.kind === 'shard'
+        ? await engine.listShardsForSale(Number(shardQty), currency, value, duration)
+        : await engine.listConsumableForSale(draft.consumableId, currency, value, duration);
     setSubmitting(false);
     if (!ok) return;
     if (fxSpeed() <= 0) { onDone(); return; }
@@ -310,8 +383,18 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
         <button className={currency === 'gold' ? 'btn-primary' : 'btn-ghost'} onClick={() => setCurrency('gold')}>Gold</button>
         <button className={currency === 'scrap' ? 'btn-primary' : 'btn-ghost'} onClick={() => setCurrency('scrap')}>Scrap</button>
       </div>
+      {draft.kind === 'shard' && (
+        <label className="tiny muted" style={{ display: 'block', marginBottom: 10 }}>
+          How many (you have {shardsOwned}, max {Math.min(shardsOwned, MAX_SHARDS_PER_LISTING)} per listing)
+          <input
+            type="number" min="1" max={Math.min(shardsOwned, MAX_SHARDS_PER_LISTING)} value={shardQty}
+            onChange={(e) => setShardQty(e.target.value)}
+            style={{ width: '100%', background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--text)', padding: '7px 8px', marginTop: 4 }}
+          />
+        </label>
+      )}
       <input
-        type="number" min="1" placeholder="Price" value={price}
+        type="number" min="1" placeholder={draft.kind === 'shard' ? 'Price for the whole stack' : 'Price'} value={price}
         onChange={(e) => setPrice(e.target.value)}
         style={{ width: '100%', background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--text)', padding: '7px 8px', marginBottom: 10 }}
       />
@@ -388,6 +471,15 @@ function MyListingCard({ row, cancelling, onCancel }: { row: ServerListingRow; c
       {cancelling ? 'Cancelling...' : 'Cancel listing'}
     </button>
   );
+
+  if (row.item_type === 'shard') {
+    return (
+      <div className="item-card rarity-card">
+        <ShardListingSummary row={row} />
+        {cancelButton}
+      </div>
+    );
+  }
 
   if (row.item_type === 'equipment') {
     const item = row.item_payload as EquipmentItem;

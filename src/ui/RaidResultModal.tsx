@@ -14,6 +14,7 @@ import { formatGold, RARITY_COLOR } from '../game/util';
 import { measureFlyOffset } from './flyTarget';
 import { RECIPE_SCROLL_BY_ID } from '../game/data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from '../game/data/craftingRecipes';
+import { shardLabel } from '../game/data/shards';
 
 const DISMISS_DELAY_MS = 640;
 /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
@@ -133,7 +134,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
   t += 400;
   const T_DMG = t;
   const dmgCount = (result.heroesFallen?.length ?? 0) + (result.petsFallen?.length ?? 0) + result.injuries.length;
-  if (dmgCount > 0 || result.eggsFound?.length || result.recipeScrollGained) t += 160 * Math.min(dmgCount, 4) + 240;
+  if (dmgCount > 0 || result.eggsFound?.length || result.recipeScrollGained || result.shardsGained) t += 160 * Math.min(dmgCount, 4) + 240;
   const T_DONE = t + 300;
 
   const displayGold = useDelayedCount(result.gold, T_PAY, 800);
@@ -277,9 +278,12 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
 
         {/* Also-found extras -- same shape QuestResultModal's own
             "Also found" section already uses. */}
-        {(result.eggsFound?.length || result.recipeScrollGained) && (
+        {!!(result.eggsFound?.length || result.recipeScrollGained || result.shardsGained) && (
           <div className="rfx-late" style={at(T_DMG)}>
             <div className="section-heading">Also found</div>
+            {result.shardsGained ? (
+              <div className="small" style={{ marginBottom: 2, color: '#d9a441' }}>+{shardLabel(result.shardsGained)}</div>
+            ) : null}
             {result.eggsFound?.map((egg, i) => (
               <div key={i} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
                 <span className="small" style={{ color: RARITY_COLOR[egg.rarity] }}>A {egg.rarity} egg</span>

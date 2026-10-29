@@ -1,5 +1,10 @@
 import { TESTING_TOOLS_ENABLED } from './testingTools';
 
+/** What a listing can hold. 'shard' (patch 0454) is a stack of Legendary
+ *  Shards: payload { defId: 'legendary_shard', amount }. Needs server
+ *  migration 002 -- see server/db/migrations/002_legendary_shards.sql. */
+export type AhItemType = 'equipment' | 'consumable' | 'shard';
+
 export type AhConnectionStatus = 'offline' | 'checking' | 'online' | 'unreachable';
 
 /**
@@ -248,7 +253,7 @@ export async function claimServerMailboxEntry(entryId: string): Promise<boolean>
 export interface ServerListingRow {
   id: string;
   seller_steam_id: string | null;
-  item_type: 'equipment' | 'consumable';
+  item_type: AhItemType;
   item_payload: unknown;
   currency: 'gold' | 'scrap';
   price: string;
@@ -258,7 +263,7 @@ export interface ServerListingRow {
 }
 
 export interface ListingFilters {
-  itemType?: 'equipment' | 'consumable';
+  itemType?: AhItemType;
   currency?: 'gold' | 'scrap';
 }
 
@@ -323,7 +328,7 @@ export interface CreateListingResult {
  * value at face value regardless.
  */
 export async function createListing(
-  itemType: 'equipment' | 'consumable',
+  itemType: AhItemType,
   itemPayload: unknown,
   currency: 'gold' | 'scrap',
   price: number,

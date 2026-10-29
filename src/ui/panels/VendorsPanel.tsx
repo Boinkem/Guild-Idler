@@ -5,7 +5,8 @@ import { useSettings } from '../useSettings';
 import { ShopManager } from '../../game/managers/ShopManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { GuildManager } from '../../game/managers/GuildManager';
-import { EquipmentManager } from '../../game/managers/EquipmentManager';
+import { EquipmentManager, RepairMode } from '../../game/managers/EquipmentManager';
+import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../../game/data/equipment';
 import { rerollsUsedToday } from '../../game/data/reroll';
@@ -986,9 +987,9 @@ function ArmourStashCard({
     setPendingScrap(null);
     setOpen(false);
   };
-  const doRepair = (pos: { x: number; y: number }) => {
+  const doRepair = (pos: { x: number; y: number }, mode: RepairMode = 'auto') => {
     onRepair(pos.x, pos.y, stashFreeRepairAvailable);
-    engine.repair(item.uid);
+    engine.repair(item.uid, mode);
   };
 
   return (
@@ -1067,6 +1068,14 @@ function ArmourStashCard({
                 >
                   {'\u2699'} Scrap · {scrapValue}
                 </button>
+                {/* Patch 0454 -- a Legendary picks its route (Shard or
+                    no-Shard markup) unless today's free repair covers it. */}
+                {EquipmentManager.isLegendary(item) && repairCost > 0 && !stashFreeRepairAvailable ? (
+                  <LegendaryRepairButtons
+                    item={item} workshop={workshop} repairDiscount={repairDiscount} compact
+                    onRepair={(mode, el) => doRepair(centerOf(el), mode)}
+                  />
+                ) : (
                 <button
                   className="btn-teal"
                   disabled={repairCost === 0}
@@ -1077,6 +1086,7 @@ function ArmourStashCard({
                 >
                   {'\u2692'} Repair{repairCost === 0 ? '' : ` · ${stashFreeRepairAvailable ? 'Free' : `${formatGold(repairCost)}${repairScrapCost > 0 ? ` +${repairScrapCost}` : ''}`}`}
                 </button>
+                )}
               </div>
               <div className="row end" style={{ marginTop: 12 }}>
                 <button onClick={() => setOpen(false)}>Close</button>

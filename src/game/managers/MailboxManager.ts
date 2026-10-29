@@ -53,6 +53,9 @@ export const MailboxManager = {
       // No Scrap Storage Cap exists (checked directly, not assumed) --
       // unlike gold, this is a plain uncapped add.
       state.scrap += entry.amount ?? 0;
+    } else if (entry.type === 'shard') {
+      // Patch 0454 -- Legendary Shards, uncapped like Scrap.
+      state.legendaryShards = (state.legendaryShards ?? 0) + (entry.amount ?? 0);
     } else if (entry.type === 'equipment') {
       if (!entry.item) return 'That mailbox entry is malformed -- nothing to claim.';
       state.stash.push(entry.item);

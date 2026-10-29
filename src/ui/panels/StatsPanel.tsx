@@ -16,6 +16,7 @@ import { ConfirmModal } from '../ConfirmModal';
 import { RarityPill } from '../RarityPill';
 import { MATERIAL_BY_ID } from '../../game/data/materials';
 import { CURIO_BY_ID } from '../../game/data/curios';
+import { shardLabel } from '../../game/data/shards';
 
 /** Same rarity-parallel palette RaidsPanel/OfflineReportModal already use
  *  for Normal/Heroic/Legendary -- kept local rather than shared, matching
@@ -97,9 +98,12 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
           </>
         )}
 
-        {quest && (quest.materialGained || quest.scrapGained || quest.eggDropped || quest.curioGained) && (
+        {quest && (quest.materialGained || quest.scrapGained || quest.shardsGained || quest.eggDropped || quest.curioGained) && (
           <>
             <div className="section-heading">Also found</div>
+            {quest.shardsGained ? (
+              <div className="small" style={{ marginBottom: 2, color: '#d9a441' }}>+{shardLabel(quest.shardsGained)}</div>
+            ) : null}
             {quest.scrapGained ? (
               <div className="small" style={{ marginBottom: 2 }}>+{quest.scrapGained} Scrap</div>
             ) : null}

@@ -7,7 +7,8 @@ import { CHAIN_REPLAY_TIER_BY_ID } from './data/chainReplay';
 import { RaidManager } from './managers/RaidManager';
 import { ShopManager } from './managers/ShopManager';
 import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
-import { EquipmentManager, MAX_PLUS } from './managers/EquipmentManager';
+import { EquipmentManager, MAX_PLUS, RepairMode } from './managers/EquipmentManager';
+import { MAX_SHARDS_PER_LISTING, SHARD_DEF_ID, shardLabel } from './data/shards';
 import { InventoryManager } from './managers/InventoryManager';
 import { CurioManager } from './managers/CurioManager';
 import { RecipeManager } from './managers/RecipeManager';
@@ -1344,9 +1345,10 @@ export class GameEngine {
       for (const { item } of EquipmentManager.allItems(this.state)) {
         const max = EquipmentManager.maxDurability(item);
         if (max <= 0 || item.durability / max > threshold) continue;
-        const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
-        const scrapCost = EquipmentManager.repairScrapCost(item, workshop, repairDiscount);
-        if (cost > 0 && this.state.gold >= cost && this.state.scrap >= scrapCost) {
+        // Patch 0454 -- repairQuote picks a Legendary's route ('auto':
+        // a Shard when the guild has one, else the fallback markup).
+        const quote = EquipmentManager.repairQuote(this.state, item, workshop, repairDiscount);
+        if (quote.gold > 0 && EquipmentManager.canAffordRepair(this.state, quote)) {
           const err = EquipmentManager.repair(this.state, item, workshop, repairDiscount);
           if (!err) changed = true;
         }
@@ -2645,21 +2647,27 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  repair(itemUid: string) {
+  /** `mode` (patch 0454) only matters for a Legendary: 'shard' or
+   *  'standard' is the route the player picked, 'auto' (default) uses a
+   *  Shard when one is available. A free repair still wins over both. */
+  repair(itemUid: string, mode: RepairMode = 'auto') {
     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
     if (!found) return;
     const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
     const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0, repairDiscount);
     if (cost === 0) return this.say('Already in perfect condition.');
     const free = this.consumeFreeRepair(found.heroId, Date.now());
+    let usedShard = false;
     if (free) {
       found.item.durability = EquipmentManager.maxDurability(found.item);
     } else {
-      const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0, repairDiscount);
+      const workshop = this.state.guild.workshop ?? 0;
+      usedShard = EquipmentManager.repairQuote(this.state, found.item, workshop, repairDiscount, mode).shards > 0;
+      const error = EquipmentManager.repair(this.state, found.item, workshop, repairDiscount, mode);
       if (error) return this.say(error);
     }
     playSound('repair');
-    this.say(free ? 'Repaired, on the house.' : 'Repaired.');
+    this.say(free ? 'Repaired, on the house.' : usedShard ? 'Repaired with a Legendary Shard.' : 'Repaired.');
     void this.saveNow();
   }
 
@@ -2669,6 +2677,7 @@ export class GameEngine {
     const now = Date.now();
     let spent = 0;
     let scrapSpent = 0;
+    let shardsSpent = 0;
     let freeCount = 0;
     for (const { item, heroId } of EquipmentManager.allItems(this.state)) {
       const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
@@ -2678,12 +2687,15 @@ export class GameEngine {
         item.durability = EquipmentManager.maxDurability(item);
         freeCount += 1;
       } else {
-        const scrapCost = EquipmentManager.repairScrapCost(item, workshop, repairDiscount);
-        if (this.state.gold >= cost && this.state.scrap >= scrapCost) {
+        // Patch 0454 -- 'auto' route: Legendaries use a Shard when one is
+        // available, else the fallback markup.
+        const quote = EquipmentManager.repairQuote(this.state, item, workshop, repairDiscount);
+        if (EquipmentManager.canAffordRepair(this.state, quote)) {
           const err = EquipmentManager.repair(this.state, item, workshop, repairDiscount);
           if (!err) {
-            spent += cost;
-            scrapSpent += scrapCost;
+            spent += quote.gold;
+            scrapSpent += quote.scrap;
+            shardsSpent += quote.shards;
           }
         }
       }
@@ -2693,10 +2705,10 @@ export class GameEngine {
       this.say('Nothing needed repairing.');
     } else if (freeCount > 0 && spent === 0) {
       this.say(freeCount === 1 ? 'Repaired one item, on the house.' : `Repaired ${freeCount} items, on the house.`);
-    } else if (freeCount > 0) {
-      this.say(`Repaired everything for ${spent} gold + ${scrapSpent} scrap (${freeCount} free).`);
     } else {
-      this.say(`Repaired everything for ${spent} gold + ${scrapSpent} scrap.`);
+      const shardText = shardsSpent > 0 ? ` + ${shardLabel(shardsSpent)}` : '';
+      const freeText = freeCount > 0 ? ` (${freeCount} free)` : '';
+      this.say(`Repaired everything for ${spent} gold + ${scrapSpent} scrap${shardText}${freeText}.`);
     }
     void this.saveNow();
   }
@@ -2991,7 +3003,12 @@ export class GameEngine {
       const entry: MailboxEntry = {
         id: row.id,
         type: row.type as MailboxEntry['type'],
-        amount: row.amount !== null ? Number(row.amount) : undefined,
+        // Patch 0454 -- a shard row carries its stack size in the payload
+        // (an AH purchase/return copies the listing's payload, which has
+        // no separate amount column).
+        amount: row.amount !== null
+          ? Number(row.amount)
+          : row.type === 'shard' ? Math.max(0, Math.floor(Number((row.item_payload as { amount?: number })?.amount) || 0)) : undefined,
         item: row.type === 'equipment' ? (row.item_payload as EquipmentItem) : undefined,
         consumableId: row.type === 'consumable' ? (row.item_payload as { defId?: string })?.defId : undefined,
         note: row.note ?? undefined,
@@ -3182,6 +3199,46 @@ export class GameEngine {
       const deposit = result.listing ? Number(result.listing.deposit_amount) : estimated;
       this.settleDeposit(currency, estimated, deposit);
       this.say(`Listed on the Auction House (${deposit} ${currency} deposit).`);
+      this.notify();
+      void this.saveNow();
+      return true;
+    } finally {
+      this.ahInFlight.delete(key);
+    }
+  }
+
+  /** Patch 0454 -- lists a stack of Legendary Shards. Same take-it-out-
+   *  first, refund-on-failure shape as listConsumableForSale. */
+  async listShardsForSale(amount: number, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
+    const qty = Math.floor(amount);
+    if (!Number.isFinite(qty) || qty < 1 || qty > MAX_SHARDS_PER_LISTING) { this.say(`List between 1 and ${MAX_SHARDS_PER_LISTING} Shards.`); return false; }
+    if ((this.state.legendaryShards ?? 0) < qty) { this.say("You don't have that many Legendary Shards."); return false; }
+    if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
+    const whole = Math.floor(price);
+    if (whole < 1) { this.say('Enter a valid price.'); return false; }
+    if (!this.canAffordDeposit(currency, whole)) return false;
+    const key = 'shards';
+    if (this.ahInFlight.has(key)) return false;
+    const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
+
+    this.ahInFlight.add(key);
+    this.state.legendaryShards -= qty;
+    const estimated = this.estimateDeposit(whole);
+    this.chargeDeposit(currency, estimated);
+    this.notify();
+    try {
+      this.say('Listing...');
+      const result = await createListing('shard', { defId: SHARD_DEF_ID, amount: qty }, currency, whole, duration);
+      if (!result.ok) {
+        this.state.legendaryShards += qty;
+        this.refundCurrency(currency, estimated);
+        this.notify();
+        this.say(`Could not list: ${result.error}`);
+        return false;
+      }
+      const deposit = result.listing ? Number(result.listing.deposit_amount) : estimated;
+      this.settleDeposit(currency, estimated, deposit);
+      this.say(`Listed ${shardLabel(qty)} on the Auction House (${deposit} ${currency} deposit).`);
       this.notify();
       void this.saveNow();
       return true;
@@ -3966,10 +4023,12 @@ export class GameEngine {
   /** Breaks a stash item down into Scrap instead of selling it for gold --
    *  see EquipmentManager.scrapValue/ShopManager.scrapItem. */
   scrapItem(itemUid: string) {
+    const shardsBefore = this.state.legendaryShards ?? 0;
     const error = ShopManager.scrapItem(this.state, itemUid);
     if (error) return this.say(error);
     playSound('scrap');
-    this.say('Broken down into scrap.', 'vendors');
+    const shards = (this.state.legendaryShards ?? 0) - shardsBefore;
+    this.say(shards > 0 ? `Broken down into scrap, and ${shardLabel(shards)}.` : 'Broken down into scrap.', 'vendors');
     void this.saveNow();
   }
 

@@ -4282,6 +4282,86 @@
     "description": "Flat Scrap cost to repair an Uncommon item (patch 0453). Common repairs cost no Scrap; Rare and above keep the gold-derived scale via economy.repairScrapToGoldRatio."
   },
   {
+    "id": "economy.legendaryRepairShardCost",
+    "label": "Legendary repair: Shards per repair",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 10,
+    "description": "Legendary Shards spent by the Shard route of a Legendary repair (patch 0454). That route also pays the normal gold cost but no Scrap."
+  },
+  {
+    "id": "economy.legendaryRepairFallbackMultiplier",
+    "label": "Legendary repair: no-Shard fallback multiplier",
+    "category": "economy",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 10,
+    "description": "Gold and Scrap multiplier for repairing a Legendary WITHOUT a Shard (patch 0454). Keeps a Legendary repairable when out of Shards, at a steep markup."
+  },
+  {
+    "id": "economy.legendaryShardsFromScrap",
+    "label": "Legendary Shards from scrapping a Legendary",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 10,
+    "description": "Shards returned when a Legendary item is scrapped (patch 0454), on top of its normal Scrap."
+  },
+  {
+    "id": "economy.legendaryShardsRaidHeroic",
+    "label": "Legendary Shards: Heroic raid full clear",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "Shards for a full Heroic raid clear (patch 0454). Normal raids pay none."
+  },
+  {
+    "id": "economy.legendaryShardsRaidMythic",
+    "label": "Legendary Shards: Mythic raid full clear",
+    "category": "economy",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 20,
+    "description": "Shards for a full Mythic raid clear (patch 0454)."
+  },
+  {
+    "id": "economy.legendaryShardsRaidLegendary",
+    "label": "Legendary Shards: Legendary raid full clear",
+    "category": "economy",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 20,
+    "description": "Shards for a full Legendary raid clear (patch 0454)."
+  },
+  {
+    "id": "economy.legendaryShardQuestChanceEpic",
+    "label": "Legendary Shards: Epic quest drop chance %",
+    "category": "economy",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 100,
+    "description": "Percent chance a successful Epic quest drops 1 Legendary Shard (patch 0454)."
+  },
+  {
+    "id": "economy.legendaryShardQuestChanceLegendary",
+    "label": "Legendary Shards: Legendary quest drop chance %",
+    "category": "economy",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 100,
+    "description": "Percent chance a successful Legendary quest drops 1 Legendary Shard (patch 0454)."
+  },
+  {
     "id": "economy.chainCompletionQuestMultiplier",
     "label": "Chain completion bonus: quest-tier multiplier",
     "category": "economy",

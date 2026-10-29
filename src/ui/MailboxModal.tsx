@@ -6,6 +6,7 @@ import { RARITY_BANNER, RARITY_COLOR, formatGold } from '../game/util';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { ItemIcon, ConsumableIcon } from './icons';
+import { SHARD_GLYPH, shardLabel } from '../game/data/shards';
 
 /**
  * Gold has no rarity of its own to key a banner lookup on -- per direct
@@ -29,6 +30,10 @@ const GOLD_ICON = 'gold.png';
  *  mailbox art yet, same Common-banner/glyph-fallback treatment until
  *  real art exists. Drop the real art at public/item-icons/scrap.png. */
 const SCRAP_ICON = 'scrap.png';
+
+/** Patch 0454 -- no Legendary Shard art yet; the glyph shows until
+ *  public/item-icons/legendary-shard.png exists. */
+const SHARD_ICON = 'legendary-shard.png';
 
 /**
  * Auction House mailbox -- build-order item from guild-idler-status.md's
@@ -145,6 +150,25 @@ function MailboxCard({ entry, onClaim }: { entry: MailboxEntry; onClaim: () => v
           <ConsumableIcon icon={SCRAP_ICON} glyph="🔩" size={48} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR.common }}>{(entry.amount ?? 0).toLocaleString()} scrap</div>
+            {entry.note && <div className="tiny muted">{entry.note}</div>}
+          </div>
+        </div>
+        <button className="btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={onClaim}>Claim</button>
+      </div>
+    );
+  }
+
+  if (entry.type === 'shard') {
+    // Patch 0454 -- Legendary Shards (AH purchase, or a shard listing
+    // coming back from cancel/expiry). Legendary banner, glyph icon until
+    // real art exists.
+    return (
+      <div className="item-card rarity-card">
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER.legendary})` }} />
+        <div className="item-card-summary">
+          <ConsumableIcon icon={SHARD_ICON} glyph={SHARD_GLYPH} size={48} />
+          <div className="item-card-body">
+            <div className="item-card-name" style={{ color: RARITY_COLOR.legendary }}>{shardLabel(entry.amount ?? 0)}</div>
             {entry.note && <div className="tiny muted">{entry.note}</div>}
           </div>
         </div>

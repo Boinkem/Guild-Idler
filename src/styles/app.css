@@ -1604,6 +1604,8 @@ button:focus-visible, [tabindex]:focus-visible {
 .resources { display: flex; gap: 12px; font-size: 0.6875rem; -webkit-app-region: no-drag; align-items: center; }
 .resources .gold { color: var(--brass); }
 .resources .scrap { color: var(--silver); }
+/* Patch 0454 -- Legendary Shards, legendary-tier gold. */
+.resources .shards { color: #d9a441; }
 .resources .renown { color: var(--violet); }
 
 /* Window controls cluster (Minimise / Windowed / Close) -- patch 0213.

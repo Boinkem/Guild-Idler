@@ -1205,19 +1205,10 @@ Resolved by rarity rather than item level: Common repairs now cost no
 Scrap at all (starter gear is Common), Uncommon is a flat 1 Scrap, Rare
 and up keep the gold-derived scale. See the patch 0453 entry.
 
-### Legendary Shards (Legendary repair currency, auction-house tradable) -- planned, next patch after 0453
-Agreed in the patch 0453 discussion. A new currency, **Legendary Shard**,
-meant as the high-end material rather than a repair-only tax.
-- **Legendary Repair:** the player picks either 1 Shard + the normal gold
-  cost (no Scrap -- the clearly better deal), or a fallback of 3x gold and
-  3x Scrap, so a Legendary is never stuck broken for lack of Shards.
-- **Sources:** Hard and Legendary raids (main source), a low chance from
-  Epic/Legendary quests, and scrapping a Legendary returns some.
-- **Auction house:** sellable/tradable there (`src/game/auctionHouse.ts`).
-- **Later uses** (not in the first cut): Legendary Enhance / re-levelling.
-- Touches: GameState (+ save migration default 0), RaidManager/QuestManager
-  loot, ScrapStation, EquipmentManager repair + Blacksmith UI, currency
-  counter, auction house listing types.
+### Legendary Shards (Legendary repair currency, auction-house tradable) -- built, patch 0454
+See the patch 0454 entry. Still open: Legendary Enhance / re-levelling as
+further Shard uses, and real Shard icon art (`public/item-icons/
+legendary-shard.png`; the glyph shows until it exists).
 
 ### On The Road quest cards should use the artwork shown after clicking in
 Direct report (patch 0305 session, not yet built): the collapsed quest
@@ -36665,3 +36656,80 @@ expected value before failure injuries, i.e. a net loss in practice.
 **Not in this patch:** Legendary Shards (see Backlog -- next patch).
 Existing board offers keep their old rewards until the next refresh/
 reroll. `tsc --noEmit` clean.
+
+### Legendary Shards (patch 0454)
+```discord-update
+Dev Update | Legendary Shards
+
+- Added Legendary Shards, a new high-end currency
+- Added Shard rewards for fully clearing Heroic (1), Mythic (2) and Legendary (3) raids
+- Added a small chance for successful Epic and Legendary quests to drop a Shard
+- Added Shards from scrapping a Legendary item, so gear you've outgrown helps keep your best gear running
+- Changed Legendary repairs: pay with a Shard plus the normal gold (no Scrap), or skip the Shard and pay triple gold and Scrap
+- Added Legendary Shards to the Auction House -- sell them in stacks for gold or Scrap
+```
+
+Agreed design (patch 0453 discussion): a dedicated currency for the best
+gear, but not a repair-only tax -- it's the high-end material, with a
+fallback so a Legendary is never stuck broken.
+
+**State & data**
+- `GameState.legendaryShards` (SaveManager: 0 default, `?? 0` migration).
+- New `src/game/data/shards.ts`: name/glyph, `SHARD_DEF_ID`
+  ('legendary_shard'), `MAX_SHARDS_PER_LISTING` (999, mirrored on the
+  server), `raidShardReward`, `questShardChance`, `shardLabel`.
+- 8 new `economy.*` tuning entries: `legendaryRepairShardCost` (1),
+  `legendaryRepairFallbackMultiplier` (3), `legendaryShardsFromScrap` (1),
+  `legendaryShardsRaidHeroic/Mythic/Legendary` (1/2/3, Normal pays 0),
+  `legendaryShardQuestChanceEpic/Legendary` (3% / 10%).
+
+**Sources**
+- `RaidManager.resolve`: full clear only -> `raidShardReward(difficulty)`,
+  `RaidResult.shardsGained`, shown under Also found in RaidResultModal.
+- `QuestManager.resolve`: success only, `questShardChance` roll -> 1 Shard,
+  `QuestResult.shardsGained` (QuestResultModal + StatsPanel).
+- `ShopManager.scrapItem`: a Legendary also returns
+  `legendaryShardsFromScrap`. Every scrap path (ScrapStation, Scrap All,
+  stash card) goes through it; `engine.scrapItem` toast mentions it.
+
+**Repairs** (`EquipmentManager`)
+- New `RepairMode` ('auto' | 'shard' | 'standard') and `repairQuote()` ->
+  { gold, scrap, shards, route }. Non-Legendary = unchanged
+  repairCost/repairScrapCost. Legendary 'shard' = 1 Shard + normal gold,
+  0 Scrap; 'standard' = gold and Scrap x3. 'auto' takes the Shard route
+  when the guild has enough Shards.
+- `repair()` takes a mode and charges the quote; `canAffordRepair()`;
+  `repairBill()` walks a running Shard budget so Repair Everything's
+  button total matches what it actually spends.
+- `engine.repair(uid, mode)`; Repair Everything and auto-repair use
+  'auto' (Shard first -- it's the cheaper route). Free repairs (Smith's
+  Charity / hero freebie) still win over both and cost nothing.
+- New `src/ui/LegendaryRepairButtons.tsx`: both routes side by side with
+  affordability + tooltips. Used in the hero equipment modal
+  (EquipmentPanel, through the existing onRepair animation hook) and the
+  Blacksmith stash card (VendorsPanel; hidden while today's free repair
+  is available, which the normal Free button already covers).
+
+**Auction House**
+- Listing/mailbox type `'shard'`, payload
+  `{ defId: 'legendary_shard', amount }` -- a stack, priced as a whole.
+- Server: `listings.ts` accepts `shard` on create and browse filter;
+  `validatePayload` checks defId and amount 1..999. Migration
+  `002_legendary_shards.sql` recreates the `listings.item_type` and
+  `mailbox.type` CHECK constraints with 'shard' added.
+- Client: `AhItemType`; `engine.listShardsForSale(amount, currency, price,
+  duration)` (same reserve-then-refund-on-failure shape as consumables);
+  mailbox sync reads a shard row's amount from its payload;
+  `MailboxManager.claim` credits Shards. AuctionHouseTrade: Browse filter
+  "Legendary Shards", shard cards with per-Shard price, Sell section with
+  a quantity field, My Listings card. MailboxModal shard card.
+- **Deploy order:** run `npm run migrate` and restart the AH server
+  BEFORE shipping the client build. An old server answers a shard
+  listing with a 400 ("itemType must be..."), so nothing is lost (the
+  client refunds), but listing won't work until the server is updated.
+
+**UI**: header shows the Shard count once the guild has any.
+
+`tsc --noEmit` clean (client and server). Repair quotes checked with a
+quick script: Shard route 1484g + 1 Shard, fallback 4452g + 318 Scrap,
+Repair Everything with 2 Legendaries and 1 Shard bills one of each.

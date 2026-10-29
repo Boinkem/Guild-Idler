@@ -34,6 +34,7 @@ import { DashboardPanel } from './panels/DashboardPanel';
 import { StatsPanel } from './panels/StatsPanel';
 import { PrestigePanel } from './panels/PrestigePanel';
 import { SettingsPanel } from './panels/SettingsPanel';
+import { SHARD_GLYPH } from '../game/data/shards';
 
 /**
  * Grouped rather than one flat 13-entry list -- the nav had grown past the
@@ -491,6 +492,13 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <div className="resources">
           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>
+          {/* Patch 0454 -- only once the guild has had a Shard, so the
+              early-game header stays uncluttered. */}
+          {(engine.state.legendaryShards ?? 0) > 0 && (
+            <span className="shards" title="Legendary Shards -- repair Legendaries cheaply, or trade them on the Auction House">
+              {SHARD_GLYPH} {formatNumber(engine.state.legendaryShards)}
+            </span>
+          )}
           <span ref={renownRef} className="renown">✦ {formatNumber(displayRenown)} renown</span>
           <button
             className={`header-notif-icon ${unreadCount > 0 ? 'header-notif-unread' : ''}`}

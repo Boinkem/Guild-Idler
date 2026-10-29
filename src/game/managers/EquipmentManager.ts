@@ -7,6 +7,10 @@ import { matchBonusForTier } from '../data/elements';
 import { isProceduralTemplate, rollProceduralItem, scaleDedicatedItem, LootSourceTag } from '../data/proceduralLoot';
 import { scrapCostFromGold, repairScrapCost as repairScrapCostFromGold } from '../data/progression';
 
+/** Patch 0454 -- which route a Legendary repair takes. See repairQuote. */
+export type RepairMode = 'auto' | 'shard' | 'standard';
+export interface RepairQuote { gold: number; scrap: number; shards: number; route: 'shard' | 'standard' }
+
 export const MAX_PLUS = 10;
 
 /**
@@ -458,17 +462,73 @@ export const EquipmentManager = {
     return broken;
   },
 
-  repair(state: GameState, item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): string | null {
-    const cost = EquipmentManager.repairCost(item, workshopLevel, vendorDiscountPercent);
-    if (cost === 0) return 'Already in perfect condition.';
-    const scrapCost = EquipmentManager.repairScrapCost(item, workshopLevel, vendorDiscountPercent);
-    if (state.gold < cost) return 'Not enough gold for the repair.';
-    if (state.scrap < scrapCost) return 'Not enough scrap for the repair.';
-    state.gold -= cost;
-    state.stats.goldSpent += cost;
-    state.scrap -= scrapCost;
+  /**
+   * Patch 0454 -- the full price of one repair, Legendary Shards included.
+   * Every non-Legendary item is exactly repairCost + repairScrapCost, as
+   * before. A Legendary has two routes, and the player picks:
+   *  - 'shard': economy.legendaryRepairShardCost Shards + the normal gold,
+   *    no Scrap (the cheap route).
+   *  - 'standard': gold and Scrap both x economy.legendaryRepairFallbackMultiplier
+   *    (the fallback, so a Legendary is never stuck broken).
+   * 'auto' (Repair All, auto-repair, and any caller that doesn't choose)
+   * takes the Shard route whenever the guild has enough Shards.
+   */
+  repairQuote(
+    state: GameState, item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0, mode: RepairMode = 'auto',
+  ): RepairQuote {
+    const gold = EquipmentManager.repairCost(item, workshopLevel, vendorDiscountPercent);
+    if (gold === 0) return { gold: 0, scrap: 0, shards: 0, route: 'standard' };
+    const scrap = EquipmentManager.repairScrapCost(item, workshopLevel, vendorDiscountPercent);
+    if (!EquipmentManager.isLegendary(item)) return { gold, scrap, shards: 0, route: 'standard' };
+    const shardCost = Tuning.get('economy.legendaryRepairShardCost');
+    const useShard = mode === 'shard' || (mode === 'auto' && (state.legendaryShards ?? 0) >= shardCost);
+    if (useShard) return { gold, scrap: 0, shards: shardCost, route: 'shard' };
+    const mult = Tuning.get('economy.legendaryRepairFallbackMultiplier');
+    return { gold: Math.ceil(gold * mult), scrap: Math.ceil(scrap * mult), shards: 0, route: 'standard' };
+  },
+
+  isLegendary(item: EquipmentItem): boolean {
+    return EQUIPMENT_BY_ID[item.defId]?.rarity === 'legendary';
+  },
+
+  repair(
+    state: GameState, item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0, mode: RepairMode = 'auto',
+  ): string | null {
+    const quote = EquipmentManager.repairQuote(state, item, workshopLevel, vendorDiscountPercent, mode);
+    if (quote.gold === 0) return 'Already in perfect condition.';
+    if ((state.legendaryShards ?? 0) < quote.shards) return 'Not enough Legendary Shards for the repair.';
+    if (state.gold < quote.gold) return 'Not enough gold for the repair.';
+    if (state.scrap < quote.scrap) return 'Not enough scrap for the repair.';
+    state.gold -= quote.gold;
+    state.stats.goldSpent += quote.gold;
+    state.scrap -= quote.scrap;
+    state.legendaryShards = (state.legendaryShards ?? 0) - quote.shards;
     item.durability = EquipmentManager.maxDurability(item);
     return null;
+  },
+
+  /** Patch 0454 -- Repair Everything's total, Shards included. Walks the
+   *  same items repairAll does and spends a running Shard budget, so the
+   *  bill matches what 'auto' actually does when there are more broken
+   *  Legendaries than Shards. Ignores free repairs, like the old bill. */
+  repairBill(state: GameState, workshopLevel: number, vendorDiscountPercent = 0): { gold: number; scrap: number; shards: number } {
+    const bill = { gold: 0, scrap: 0, shards: 0 };
+    let shardsLeft = state.legendaryShards ?? 0;
+    for (const { item } of EquipmentManager.allItems(state)) {
+      const quote = EquipmentManager.repairQuote(
+        { ...state, legendaryShards: shardsLeft }, item, workshopLevel, vendorDiscountPercent,
+      );
+      bill.gold += quote.gold;
+      bill.scrap += quote.scrap;
+      bill.shards += quote.shards;
+      shardsLeft -= quote.shards;
+    }
+    return bill;
+  },
+
+  /** Patch 0454 -- whether `quote` is affordable right now. */
+  canAffordRepair(state: GameState, quote: RepairQuote): boolean {
+    return state.gold >= quote.gold && state.scrap >= quote.scrap && (state.legendaryShards ?? 0) >= quote.shards;
   },
 
   /**
