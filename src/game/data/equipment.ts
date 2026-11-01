@@ -182,6 +182,13 @@ export const EQUIPMENT_BY_ID: Record<string, EquipmentDef> = Object.fromEntries(
   EQUIPMENT.map((e) => [e.id, e]),
 );
 
+/**
+ * Patch 0457 -- each tier's numbers are the set's TOTAL at that piece
+ * count; only the highest met tier applies (HeroManager.equipmentMods).
+ * Early sets (Leather, Steel, Blackford, Thief) were also cut to single-
+ * digit success, since one uncommon set used to carry a level-5 hero to
+ * 95% on Easy and 70% on Epic.
+ */
 export const ITEM_SETS: ItemSet[] = [
   {
     id: 'dragon_slayer',
@@ -267,9 +274,9 @@ export const ITEM_SETS: ItemSet[] = [
       'leather_gloves', 'leather_boots', 'leather_cord_ring', 'leather_talisman', 'leather_cloak',
     ],
     bonuses: [
-      { count: 3, mods: { success: 3, injuryResist: 3 }, label: 'Well-Worn' },
-      { count: 6, mods: { success: 6, injuryResist: 6, gold: 5 }, label: 'Broken In' },
-      { count: 9, mods: { success: 10, injuryResist: 10, gold: 8, speed: 8 }, label: 'Head to Toe in Leather' },
+      { count: 3, mods: { success: 2, injuryResist: 3 }, label: 'Well-Worn' },
+      { count: 6, mods: { success: 4, injuryResist: 6, gold: 5 }, label: 'Broken In' },
+      { count: 9, mods: { success: 6, injuryResist: 10, gold: 8, speed: 8 }, label: 'Head to Toe in Leather' },
     ],
   },
   {
@@ -280,9 +287,9 @@ export const ITEM_SETS: ItemSet[] = [
       'gauntlets', 'steel_greaves', 'steel_band', 'steel_locket', 'steel_clasped_cloak',
     ],
     bonuses: [
-      { count: 3, mods: { success: 5, injuryResist: 6 }, label: 'Standard Issue' },
-      { count: 6, mods: { success: 10, injuryResist: 12, gold: 8 }, label: "Smith's Pride" },
-      { count: 9, mods: { success: 16, injuryResist: 18, gold: 12, speed: 10 }, label: 'Head to Toe in Steel' },
+      { count: 3, mods: { success: 3, injuryResist: 6 }, label: 'Standard Issue' },
+      { count: 6, mods: { success: 6, injuryResist: 12, gold: 8 }, label: "Smith's Pride" },
+      { count: 9, mods: { success: 9, injuryResist: 18, gold: 12, speed: 10 }, label: 'Head to Toe in Steel' },
     ],
   },
   {
@@ -294,8 +301,8 @@ export const ITEM_SETS: ItemSet[] = [
     ],
     bonuses: [
       { count: 3, mods: { gold: 10, loot: 4, speed: 5 }, label: 'Light Fingers' },
-      { count: 6, mods: { gold: 20, loot: 10, speed: 10, success: 6 }, label: "Guild of Cutpurses" },
-      { count: 9, mods: { gold: 32, loot: 16, speed: 16, success: 10, injuryResist: 8 }, label: 'Nobody Saw a Thing' },
+      { count: 6, mods: { gold: 20, loot: 10, speed: 10, success: 4 }, label: "Guild of Cutpurses" },
+      { count: 9, mods: { gold: 32, loot: 16, speed: 16, success: 7, injuryResist: 8 }, label: 'Nobody Saw a Thing' },
     ],
   },
   // One set per raid, assembled entirely from that raid's own existing
@@ -320,9 +327,9 @@ export const ITEM_SETS: ItemSet[] = [
     name: 'Blackford Garrison Set',
     pieces: ['knights_blade', 'iron_helm', 'chainmail', 'work_gloves', 'ranger_boots', 'tollkeepers_signet'],
     bonuses: [
-      { count: 2, mods: { success: 5, injuryResist: 6 }, label: 'Garrison Standard' },
-      { count: 4, mods: { success: 10, injuryResist: 12, gold: 6 }, label: 'Held the Wall' },
-      { count: 6, mods: { success: 16, injuryResist: 18, gold: 10, speed: 8 }, label: 'Siege Veteran' },
+      { count: 2, mods: { success: 3, injuryResist: 6 }, label: 'Garrison Standard' },
+      { count: 4, mods: { success: 6, injuryResist: 12, gold: 6 }, label: 'Held the Wall' },
+      { count: 6, mods: { success: 9, injuryResist: 18, gold: 10, speed: 8 }, label: 'Siege Veteran' },
     ],
   },
   {

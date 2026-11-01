@@ -36855,3 +36855,79 @@ Story Record. "IronRest" is now spelled the same way everywhere.
 
 Files: `quest-chains.json`, `raids.json`, `raid-encounters.json`,
 `world-lore-pantheon.md`. No code changes.
+
+### Success inflation fix: set tiers no longer stack, early ceiling, Rookie's Resolve tops up (patch 0457)
+```discord-update
+Dev Update | Quest Balance
+
+- Fixed set bonuses stacking: each set now gives the bonus for the most pieces you're wearing, not every tier added together
+- Changed the Leather, Steel, Blackford and Thief set bonuses to smaller, single-digit success bonuses
+- Changed how much success gear can add at low levels -- the cap now grows as your heroes level up
+- Changed Rookie's Resolve to top up new heroes instead of stacking on top of their gear, so it helps heroes who need it
+```
+
+Tester report (Discord, after 0453): "now it's too easy and rewarding" --
+a screenshot of nine straight successes, Hard/Epic paying +132 to +201,
+by level-5 heroes in Steel gear. Measured with the real quest code, not
+guessed. **0453 was not the cause**: its over-level premium moved gold
+per hour by ~8-10% and never touched success. Three things stacked:
+
+1. **Set bonus tiers stacked.** `HeroManager.equipmentMods` applied every
+   met tier, so a full Steel set paid 5 + 10 + 16 = **31** success, while
+   SetInfoBlock shows each tier as the total ("(9) +16%"). Four Steel
+   pieces added ~4 points; the ninth added ~25.
+2. **One investment ceiling at every level.** All invested success (gear,
+   sets, stat points, class/preferred bonus, potions, pets, facilities)
+   goes through `curveInvestment`: 8 points 1:1, then approaching +30
+   more. That +38 ceiling was the same at level 5 as at level 50, so one
+   uncommon set bought late-game odds.
+3. **Rookie's Resolve (0447) stacked on gear.** +11 at level 5 on top of
+   everything, even for a fully geared hero.
+
+**Changes**
+- `HeroManager.equipmentMods`: only the **highest met tier** of a set
+  applies (tiers are totals, matching the tooltip).
+- `ITEM_SETS` (equipment.ts): early sets cut to single digits --
+  Leather 3/6/9pc 2/4/6, Steel 3/6/9, Blackford 2/4/6pc 3/6/9, Thief
+  6/9pc 4/7. Other success-free stats on those tiers unchanged.
+- `QuestManager.curveInvestment(raw, heroLevel)` + `investmentCapScale`:
+  the diminishing part of the curve now ramps from
+  `quest.investmentCapMinFraction` (0.2, new) at level 1 to full at
+  `quest.investmentCapFullLevel` (30, new). The first 8 linear points are
+  unchanged.
+- `QuestManager.rookieBonus(level, investment)`: tops up instead of
+  stacking -- `max(0, rookieAmount - max(0, investment))`. Ungeared rookies
+  keep the full help; geared ones stop double-dipping; gear can never make
+  a rookie's odds worse; injury penalties don't inflate it. (A first draft
+  that faded Rookie out by gear made a full-Leather level-1 hero worse
+  off than an ungeared one -- caught in the simulation and replaced.)
+- `QuestManager.successBreakdown` (new; `previewSuccess` wraps it) returns
+  the applied Rookie amount, so the 🌱 badge and tooltip on the quest card
+  and detail modal show the real number.
+
+**Measured** (real `previewSuccess`, at-level offers, hero stats at
+baseline + spent points; Easy/Normal/Hard/Epic/Legendary):
+
+| Hero | Before | After |
+|---|---|---|
+| L1, no gear | 88/78/68/59/49 | 87/77/67/58/48 |
+| L1, full Leather | 95/93/84/74/64 | 89/79/69/59/49 |
+| L5, no gear | 77/67/57/48/38 | 77/67/57/48/38 |
+| L5, full Steel | 95/91/81/72/62 | 81/71/61/51/41 |
+| L10, full Thief | 78/68/58/48/38 | 69/59/49/40/29 |
+| L20, Wyrmkeep 4pc | 95/89/79/69/59 | 84/74/64/54/44 |
+| L30, Cinderfang 6pc | 95/92/82/72/62 | 92/82/72/63/53 |
+| L45, Empyrean 5pc | 95/95/87/77/67 | 95/89/79/69/59 |
+| L55, Requiem 7pc | 95/95/87/77/67 | 95/92/82/72/62 |
+
+Ungeared heroes are unchanged at every level. Late-game sets lose ~5-8
+points from the stacking fix alone (their tiers were authored as totals
+too); bump individual late tiers if that's felt.
+
+**Still double-digit, not changed (flagged for a follow-up):** class
+`preferredBonus` 6-18 on matching quest tags (e.g. Minotaur 18,
+Pyromancer 16), Samurai's flat +7 class success, and Phoenix Draught
+(+12) / Phoenix Ember (+9) potions. All go through the same (now
+level-scaled) investment curve.
+
+`tsc --noEmit` clean.

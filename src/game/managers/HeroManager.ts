@@ -736,9 +736,14 @@ export const HeroManager = {
       // usually acquired together so this rarely diverges much from any
       // one piece's own factor.
       const avgRelevance = setRelevance[setId].reduce((a, b) => a + b, 0) / setRelevance[setId].length;
-      for (const bonus of set.bonuses) {
-        if (count >= bonus.count) sources.push(scaleMods(bonus.mods, avgRelevance));
-      }
+      // Patch 0457 -- only the HIGHEST met tier applies. Tiers are authored
+      // (and shown in SetInfoBlock) as totals -- "(9) +16% success" -- but
+      // every met tier used to be summed, so a full Steel set paid
+      // 5 + 10 + 16 = 31 success, nearly the whole investment ceiling at
+      // level 5. Each tier's numbers are the set's total at that count now.
+      const met = set.bonuses.filter((b) => count >= b.count);
+      const top = met.length > 0 ? met.reduce((a, b) => (b.count > a.count ? b : a)) : null;
+      if (top) sources.push(scaleMods(top.mods, avgRelevance));
     }
     return sumMods(...sources);
   },

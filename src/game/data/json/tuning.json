@@ -3291,6 +3291,26 @@
     "description": "Decay constant for the same curve as quest.investmentDiminishingCapExtra -- kept equal to it by default so the curve's slope is exactly 1 right at the threshold (no discontinuous jump). Lower values saturate faster (diminishing returns bite sooner)."
   },
   {
+    "id": "quest.investmentCapFullLevel",
+    "label": "Investment ceiling: full at hero level",
+    "category": "quests",
+    "value": 30,
+    "default": 30,
+    "min": 2,
+    "max": 55,
+    "description": "Hero level at which the diminishing part of the invested-success curve (quest.investmentDiminishingCapExtra) is fully available (patch 0457). Below it the ceiling ramps up from quest.investmentCapMinFraction, so early gear can't buy late-game odds."
+  },
+  {
+    "id": "quest.investmentCapMinFraction",
+    "label": "Investment ceiling: fraction at level 1",
+    "category": "quests",
+    "value": 0.2,
+    "default": 0.2,
+    "min": 0,
+    "max": 1,
+    "description": "Fraction of quest.investmentDiminishingCapExtra a level-1 hero can reach (patch 0457), ramping to 1 at quest.investmentCapFullLevel. 0.2 of 30 = +6 above the first linear 8 points."
+  },
+  {
     "id": "quest.badLuckProtectionThreshold",
     "label": "Bad luck protection: fails before it starts",
     "category": "quests",
@@ -3325,7 +3345,7 @@
     "default": 20,
     "min": 0,
     "max": 50,
-    "description": "Flat success points a level-1 hero gets on every quest (patch 0447), tapering linearly to 0 at quest.rookieUntilLevel. Counters the early-game failure spiral: no gear, tutorial injury, Hard/Epic offers on the board from level 1."
+    "description": "Rookie's Resolve at level 1, tapering linearly to 0 at quest.rookieUntilLevel (patch 0447). Since patch 0457 it tops up rather than stacks: a hero's own invested success (gear, sets, class bonus, potions) counts toward this amount first, and Rookie's Resolve only fills the gap."
   },
   {
     "id": "quest.rookieInjuryRiskReduction",

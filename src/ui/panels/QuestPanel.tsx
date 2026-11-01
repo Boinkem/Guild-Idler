@@ -128,7 +128,9 @@ export function QuestRow({
   const state = engine.state;
   const cfg = DIFFICULTIES[offer.difficulty];
   const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
-  const chance = QuestManager.previewSuccess(state, hero, offer, hero.equippedConsumables ?? [], now);
+  // Patch 0457 -- one call for both: the 🌱 badge shows the Rookie amount
+  // actually applied, which now depends on the hero's gear.
+  const { success: chance, rookie: rookieShown } = QuestManager.successBreakdown(state, hero, offer, hero.equippedConsumables ?? [], now);
   const thumbSrc = offer.chain
     ? chainIconSrc(offer.chain.chainId, chain?.icon, chain?.banner)
     : questTagIconSrc(offer.tag);
@@ -214,10 +216,10 @@ export function QuestRow({
               > 🍀</span>
             )}
             {/* Rookie's Resolve (patch 0447), same no-silent-numbers rule. */}
-            {QuestManager.rookieBonus(hero.level) > 0 && (
+            {rookieShown > 0 && (
               <span
                 className="good"
-                title={`Rookie's Resolve: +${QuestManager.rookieBonus(hero.level).toFixed(0)}% success and fewer injuries while ${hero.name} finds their feet (fades out by level ${Tuning.get('quest.rookieUntilLevel')})`}
+                title={`Rookie's Resolve: +${rookieShown.toFixed(0)}% success and fewer injuries while ${hero.name} finds their feet (fades out by level ${Tuning.get('quest.rookieUntilLevel')})`}
               > 🌱</span>
             )}
           </span>
@@ -262,7 +264,9 @@ export function QuestDetailModal({
   const engine = useEngine();
   const state = engine.state;
   const cfg = DIFFICULTIES[offer.difficulty];
-  const chance = QuestManager.previewSuccess(state, hero, offer, hero.equippedConsumables ?? [], now);
+  // Patch 0457 -- one call for both: the 🌱 badge shows the Rookie amount
+  // actually applied, which now depends on the hero's gear.
+  const { success: chance, rookie: rookieShown } = QuestManager.successBreakdown(state, hero, offer, hero.equippedConsumables ?? [], now);
   const duration = QuestManager.previewDuration(state, hero, offer, now);
   const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
   const levelGap = Math.max(0, offer.reqLevel - hero.level);
@@ -356,10 +360,10 @@ export function QuestDetailModal({
                 title={`Steadied by bad luck protection: +${QuestManager.badLuckBonus(hero.consecutiveQuestFails).toFixed(0)}% after ${hero.consecutiveQuestFails} losses in a row`}
               > 🍀 steadied</span>
             )}
-            {QuestManager.rookieBonus(hero.level) > 0 && (
+            {rookieShown > 0 && (
               <span
                 className="tiny good"
-                title={`Rookie's Resolve: +${QuestManager.rookieBonus(hero.level).toFixed(0)}% success and fewer injuries while ${hero.name} finds their feet (fades out by level ${Tuning.get('quest.rookieUntilLevel')})`}
+                title={`Rookie's Resolve: +${rookieShown.toFixed(0)}% success and fewer injuries while ${hero.name} finds their feet (fades out by level ${Tuning.get('quest.rookieUntilLevel')})`}
               > 🌱 rookie</span>
             )}
           </span>

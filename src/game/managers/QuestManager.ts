@@ -838,6 +838,17 @@ export const QuestManager = {
    * for a first-clear stage, it's the actual fix.
    */
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
+    return QuestManager.successBreakdown(state, hero, offer, consumables, now).success;
+  },
+
+  /**
+   * Patch 0457 -- previewSuccess's body, also returning the Rookie's
+   * Resolve share so the quest card's 🌱 badge shows the amount actually
+   * applied (it now depends on the hero's gear, not just level).
+   */
+  successBreakdown(
+    state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
+  ): { success: number; rookie: number } {
     const loadout = InventoryManager.loadoutEffects(state, consumables);
     const classDef = HERO_CLASSES[hero.heroClass];
     // Every chain stage now carries its own authored tag (see
@@ -883,18 +894,19 @@ export const QuestManager = {
     );
     const elemental = elementalBonusForHero(hero, offer);
     const investmentRaw = investedStatSuccess + (investedMods.success ?? 0) + elemental;
-    const investmentCurved = QuestManager.curveInvestment(investmentRaw);
+    const investmentCurved = QuestManager.curveInvestment(investmentRaw, hero.level);
 
     const levelGapBonus = (hero.level - successReqLevel) * Tuning.get('quest_reqlevel.levelGapSuccessCoefficient');
     const badLuck = QuestManager.badLuckBonus(hero.consecutiveQuestFails);
     // Rookie's Resolve (patch 0447) -- see rookieFraction's own comment.
-    const rookie = QuestManager.rookieBonus(hero.level);
+    const rookie = QuestManager.rookieBonus(hero.level, investmentCurved);
 
-    return clamp(
+    const success = clamp(
       offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus + badLuck + rookie,
       MIN_SUCCESS,
       MAX_SUCCESS,
     );
+    return { success, rookie };
   },
 
   /**
@@ -912,10 +924,10 @@ export const QuestManager = {
    * Negative input (an injury, missing Health) passes through unchanged
    * below the threshold -- penalties should never be softened by this.
    */
-  curveInvestment(raw: number): number {
+  curveInvestment(raw: number, heroLevel = Infinity): number {
     const threshold = Tuning.get('quest.investmentLinearThreshold');
     if (raw <= threshold) return raw;
-    const capExtra = Tuning.get('quest.investmentDiminishingCapExtra');
+    const capExtra = Tuning.get('quest.investmentDiminishingCapExtra') * QuestManager.investmentCapScale(heroLevel);
     const decay = Tuning.get('quest.investmentDiminishingDecay');
     const excess = raw - threshold;
     return threshold + capExtra * (1 - Math.exp(-excess / decay));
@@ -966,9 +978,36 @@ export const QuestManager = {
     return clamp((until - level) / (until - 1), 0, 1);
   },
 
-  /** Flat success points Rookie's Resolve adds in previewSuccess. */
-  rookieBonus(level: number): number {
-    return QuestManager.rookieFraction(level) * Tuning.get('quest.rookieSuccessBonus');
+  /**
+   * Patch 0457 -- how much of the diminishing part of the investment curve
+   * a hero of this level can reach. Was a flat +30 above the first 8 points
+   * at every level, so one uncommon set at level 5 could buy most of what a
+   * level-50 hero's whole build could. Now ramps linearly from
+   * quest.investmentCapMinFraction at level 1 to the full value at
+   * quest.investmentCapFullLevel. Callers without a level (none in game
+   * code today) get the full curve.
+   */
+  investmentCapScale(heroLevel: number): number {
+    if (!Number.isFinite(heroLevel)) return 1;
+    const full = Math.max(2, Tuning.get('quest.investmentCapFullLevel'));
+    const min = clamp(Tuning.get('quest.investmentCapMinFraction'), 0, 1);
+    const t = clamp((heroLevel - 1) / (full - 1), 0, 1);
+    return min + (1 - min) * t;
+  },
+
+  /**
+   * Flat success points Rookie's Resolve adds in previewSuccess. Patch
+   * 0457: it now TOPS UP rather than stacks. A rookie gets at least the
+   * level's Rookie amount from gear (sets, class bonus, potions...) plus
+   * Rookie's Resolve combined: positive investment counts toward it first
+   * and Rookie only fills the gap. A fresh, ungeared hero keeps the full
+   * help; a geared one stops double-dipping; and gearing up can never
+   * make a rookie's odds worse. Injury/Health penalties don't raise it
+   * (investment is floored at 0). `investment` omitted = ungeared.
+   */
+  rookieBonus(level: number, investment = 0): number {
+    const full = QuestManager.rookieFraction(level) * Tuning.get('quest.rookieSuccessBonus');
+    return Math.max(0, full - Math.max(0, investment));
   },
 
   /** Points taken off a failed quest's injury risk for a rookie hero, so
