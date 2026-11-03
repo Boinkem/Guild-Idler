@@ -1096,3 +1096,24 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .ship-spin { display: inline-block; animation: ship-spin 1s linear infinite; color: var(--brass); }
 @keyframes ship-spin { to { transform: rotate(360deg); } }
 .ship-form [hidden] { display: none !important; }
+
+
+/* Patch 0459 -- Auction House usage dashboard (renderAuctionHouse's
+   ahUsageHtml). Tiles, the activity table and a 30-day bar chart. */
+.ahu-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 8px 0 4px; }
+.ahu-tile { border: 1px solid var(--panel3); border-radius: var(--radius); background: var(--panel); padding: 8px 10px; min-width: 0; }
+.ahu-tile-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.11em; color: var(--dim); }
+.ahu-tile-value { font-size: 18px; color: var(--text-bright); margin-top: 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ahu-tile-sub { font-size: 10.5px; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.ahu-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.ahu-table th, .ahu-table td { padding: 5px 8px; border-bottom: 1px solid var(--panel3); text-align: left; }
+.ahu-table th { position: static; }
+.ahu-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ahu-table td:first-child { color: var(--text-bright); }
+.ahu-table a { color: var(--blue); }
+.ahu-chart { display: flex; gap: 3px; height: 120px; align-items: stretch; }
+.ahu-day { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ahu-bar-wrap { flex: 1; display: flex; align-items: flex-end; border-bottom: 1px solid var(--panel3); }
+.ahu-bar { display: block; width: 100%; min-height: 1px; background: var(--brass); border-radius: 2px 2px 0 0; }
+.ahu-day:hover .ahu-bar { background: #b5abfc; }
+.ahu-day-label { font-size: 9.5px; color: var(--dim); text-align: center; height: 14px; margin-top: 2px; }

@@ -1134,15 +1134,11 @@ raid fight).
 
 ## Backlog
 
-### Auction House usage stats in DevTools (admin) -- requested, next up
-Direct request alongside patch 0458's player-side My Ledger: an admin
-view in the DevTool's existing Auction House tab (patch 0402) to see how
-much the Auction House actually gets used -- active listings, sales and
-gold/scrap volume over time, sell-through, unique buyers/sellers, most
-traded items. Should sit behind the backend's `/admin/*` + admin-token
-pattern the design entry already calls for, not a public route. A
-rejected first pass at a public market-stats tab (not applied) proved the
-aggregate queries against real Postgres; they can be reused here.
+### Auction House usage stats in DevTools (admin) -- built, patch 0459
+Read-only usage dashboard in the DevTool's Auction House tab. Still not
+built (each needs its own `/admin/*` route behind the same token):
+force-rotation of system-seeded stock, transaction search/audit lookup,
+manual trade reversal, per-Steam-ID suspension.
 
 ### Steam demo follow-ups (from patch 0438)
 - **Demo App ID** -- create the demo in Steamworks (base game admin ->
@@ -7848,6 +7844,11 @@ pass (same caveat as the two entries above).
   sell, best sale, biggest purchase, a 14-day earned-vs-spent chart and
   recent trades. `GET /ledger` (auth) in `server/src/ledger.ts`, no
   migration. See that patch's own log entry.
+  **Admin usage dashboard -- built (patch 0459).** DevTool > Auction
+  House > Usage, from `GET /admin/stats` behind `AH_ADMIN_TOKEN`. First
+  real `/admin/*` route; the AH Admin tab's other planned tools
+  (force-rotation, transaction search, reversal, suspension) still need
+  their own. See that patch's own log entry.
   **Mailbox UI -- built (patch 0403).** `MailboxModal.tsx`, item cards
   per entry (gold/equipment/consumable), Claim + Claim All, a Mailbox
   button with a live count badge next to the Auction House header --
@@ -37033,3 +37034,98 @@ and `server/`.
 **Deploy:** restart the AH backend so `/ledger` registers. No
 `npm run migrate` needed. Until the backend restarts, the tab shows its
 "couldn't open your ledger" message; nothing else is affected.
+
+### Auction House usage dashboard in the DevTool (patch 0459)
+```discord-update
+Dev Update | Auction House
+
+- Added behind-the-scenes tracking of how the Auction House is used, so we can tune it (nothing changes in the game)
+```
+
+Direct request: "admin side, on the Devtools likely, to track the
+Auction House stats to see how used it is." Lives in **DevTool >
+Auction House**, a new **Usage** section at the top of the tab, above
+the existing connection/health monitor and server launcher.
+
+**What it shows** (all read-only):
+- **Tiles:** listings up now (gear / consumables / shard stacks, with
+  shard count), distinct sellers listing (+ broker listings), total
+  asking value in gold and scrap, listings ending within 1h, and the
+  **unclaimed server mailbox** (entries, players, gold, scrap, items, age
+  of the oldest -- items and sale money sitting uncollected).
+- **Activity table**, columns 24h / 7 days / 30 days / All time: active
+  players (anyone who listed or bought), sales, buyers, gold traded,
+  scrap traded, new listings (with broker count), sellers, sell-through,
+  average time to sell, sold / expired / cancelled / still up, deposits
+  forfeited.
+- **Daily bars, last 30 days** (UTC), switchable between sales,
+  listings, players, gold and scrap; hover a bar for that day's full
+  numbers.
+- **Most traded items, 30 days** (top 10): name in rarity colour, type,
+  currency, sales, units, average / lowest / highest price **per unit**
+  (per Shard for shard stacks).
+- **Busiest traders, 30 days** (top 10 by trades either side): SteamID
+  (linked to the Steam profile when it's a real 17-digit ID), sold,
+  bought, gold in/out, scrap in/out, listings up now. For spotting who
+  carries the market and anything that looks off.
+
+**Backend -- new `server/src/admin.ts`, `GET /admin/stats`.**
+- Auth: `Authorization: Bearer <AH_ADMIN_TOKEN>`, compared with
+  `timingSafeEqual`. New `adminToken` in `config.ts` from
+  `AH_ADMIN_TOKEN` (documented in `.env.example` and a new "Admin usage
+  dashboard" section in `server/README.md`). Registered only when both
+  `DATABASE_URL` and `AH_ADMIN_TOKEN` are set; otherwise the route
+  doesn't exist (404).
+- `index.ts`'s `AH_ENABLED` gate now lets `/admin/*` through (it has its
+  own token check), so usage can be read while the AH is switched off.
+  `/health` gains an `adminConfigured` boolean, and the DevTool's status
+  line now names a missing `AH_ADMIN_TOKEN`.
+- **No migration.** Same counting rules as My Ledger (0458): sales,
+  buyers and volume by sale time; listing outcomes, sell-through and
+  forfeited deposits as a **cohort** of listings posted in the window
+  (a cancel has no timestamp); an unswept `active` row past expiry
+  counts as expired. Broker listings (NULL seller) never count as a
+  player. BIGINTs become JS numbers server-side.
+
+**DevTool.**
+- `server.mjs`: `ah.config.json` (already gitignored) now also holds
+  `adminToken`. GET/POST `/api/auction-house/config` only ever return
+  `adminTokenSet: true/false`, never the token, and each field only
+  changes when sent (saving the URL can't wipe the token; an empty token
+  clears it). New `GET /api/auction-house/usage?target=public|local`
+  proxies `/admin/stats` with the saved token and adds item display
+  names and rarities from `equipment.json` / `consumables.json`. 401 and
+  404 come back as plain-language fixes (token mismatch / backend
+  missing 0459, DATABASE_URL or AH_ADMIN_TOKEN).
+- `app.js`: `ahUsageHtml()` inside `renderAuctionHouse()`; target picker
+  (public ah.guildbound.dev or the local URL), Load/Refresh, an Admin
+  token box (password field, Save / Clear; open while no token is saved
+  or the last load was rejected). Usage loads alongside the health check
+  when the tab opens, if a token is saved. Styles: `.ahu-*` at the end
+  of `style.css`.
+
+**Verified.**
+- `/admin/stats` against real Postgres 16 (migrations 001 + 002) with a
+  hand-built seed covering every case -- active, unswept-stale, expired,
+  cancelled at 3h and 21d, broker listings, sales at 30m to 39d in gold
+  and scrap, claimed vs unclaimed mailbox. Every number checked by hand:
+  live tiles, mailbox, all-time, each window's counts / volume /
+  cohort / sell-through / average time / forfeits / active players, the
+  daily buckets, top items (per-Shard pricing) and top traders.
+- Auth: no header, wrong token, a longer token, and a token without
+  `Bearer ` all give 401.
+- The real backend run with `AH_ENABLED=false`: `/listings` 503,
+  `/admin/stats` 401 without the token and 200 with it; `/health`
+  shows `adminConfigured: true`.
+- The real DevTool driven in a browser against that backend and a
+  generated month of trading (38 players, ~340 listings): saving a
+  wrong token shows the mismatch message with the token box still open;
+  saving the right one loads the dashboard; the browser's view of the
+  config is `{"url":...,"adminTokenSet":true}` only; metric switching
+  redraws the chart.
+- `tsc --noEmit` clean for `server/`; `node --check` clean for the
+  DevTool's `server.mjs` and `app.js`. No game-client code changed.
+
+**To turn it on:** add `AH_ADMIN_TOKEN` to `server/.env`, restart the AH
+server, then paste the same token into DevTool > Auction House > Usage >
+Admin token. Steps are in `server/README.md`.

@@ -42,6 +42,21 @@ npm run dev
 `GET http://localhost:4000/health` should return
 `{"status":"ok","ahEnabled":false,"mode":"offline"}`.
 
+## Admin usage dashboard (patch 0459)
+
+The DevTool's Auction House tab shows how much the AH gets used, read
+from `GET /admin/stats`. To turn it on:
+
+1. Generate a token:
+   `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+2. Add `AH_ADMIN_TOKEN=<token>` to this folder's `.env` and restart the
+   server. `/health` then reports `"adminConfigured":true`.
+3. In the DevTool (`npm run devtool`), open Auction House > Usage >
+   Admin token, paste the same value, and click Save token.
+
+The route exists only when both `DATABASE_URL` and `AH_ADMIN_TOKEN` are
+set. It is read-only and works with `AH_ENABLED=false`.
+
 ## Deploying
 
 1. `npm run build` (compiles to `dist/`).

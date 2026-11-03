@@ -2874,10 +2874,20 @@ async function readAhConfig() {
   try {
     const raw = await fs.readFile(AH_CONFIG_PATH, 'utf8');
     const parsed = JSON.parse(raw);
-    return { url: typeof parsed.url === 'string' && parsed.url ? parsed.url : AH_DEFAULT_URL };
+    return {
+      url: typeof parsed.url === 'string' && parsed.url ? parsed.url : AH_DEFAULT_URL,
+      // Patch 0459 -- the backend's AH_ADMIN_TOKEN, for the usage panel.
+      adminToken: typeof parsed.adminToken === 'string' ? parsed.adminToken : '',
+    };
   } catch {
-    return { url: AH_DEFAULT_URL };
+    return { url: AH_DEFAULT_URL, adminToken: '' };
   }
+}
+
+/** What the browser gets back from GET/POST config: the URL, and only
+ *  whether an admin token is saved -- never the token itself. */
+function publicAhConfig(cfg) {
+  return { url: cfg.url, adminTokenSet: !!cfg.adminToken };
 }
 
 async function writeAhConfig(cfg) {
@@ -2908,6 +2918,8 @@ async function checkAhBackend(url) {
       // so the UI can tell "not reported" apart from "not configured".
       dbConfigured: body.dbConfigured,
       sessionSecretConfigured: body.sessionSecretConfigured,
+      // Patch 0459 -- undefined from a server older than 0459.
+      adminConfigured: body.adminConfigured,
     };
   } catch (err) {
     return { reachable: false, error: err.message || String(err) };
@@ -2933,6 +2945,53 @@ async function testAhAuth(url) {
     return { reachable: true, status: res.status, body };
   } catch (err) {
     return { reachable: false, error: err.message || String(err) };
+  }
+}
+
+/* -------------------------------------------- auction house: usage --- */
+// Patch 0459 -- the admin usage dashboard. Proxies the backend's
+// GET /admin/stats with the saved admin token (the browser never sees the
+// token), and adds display names for item defIds from the same JSON files
+// this DevTool edits, so the UI doesn't need its own copy of the content.
+
+const AH_USAGE_TIMEOUT_MS = 15000;
+
+async function ahItemNames() {
+  const names = {};
+  for (const [file, kind] of [['equipment.json', 'equipment'], ['consumables.json', 'consumable']]) {
+    try {
+      const rows = JSON.parse(await fs.readFile(path.join(DATA_DIR, file), 'utf8'));
+      for (const row of Array.isArray(rows) ? rows : []) {
+        if (row && typeof row.id === 'string') names[`${kind}:${row.id}`] = { name: row.name ?? row.id, rarity: row.rarity ?? null };
+      }
+    } catch {
+      // Missing/broken file -- items just show their raw id.
+    }
+  }
+  names['shard:legendary_shard'] = { name: 'Legendary Shard', rarity: 'legendary' };
+  return names;
+}
+
+async function fetchAhUsage(baseUrl, adminToken) {
+  if (!adminToken) return { ok: false, error: 'No admin token saved -- paste AH_ADMIN_TOKEN from server/.env into the Admin token box.' };
+  try {
+    const res = await fetch(`${baseUrl}/admin/stats`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      signal: AbortSignal.timeout(AH_USAGE_TIMEOUT_MS),
+    });
+    const body = await res.json().catch(() => null);
+    if (res.status === 401) return { ok: false, status: 401, error: 'Admin token rejected -- it must match AH_ADMIN_TOKEN in server/.env (restart the server after changing it).' };
+    if (res.status === 404) return { ok: false, status: 404, error: 'No /admin/stats on this backend -- it needs patch 0459, DATABASE_URL and AH_ADMIN_TOKEN set, then a restart.' };
+    if (!res.ok || !body?.stats) return { ok: false, status: res.status, error: body?.error || body?.message || `HTTP ${res.status}` };
+    const names = await ahItemNames();
+    for (const item of body.stats.topItems ?? []) {
+      const hit = names[`${item.itemType}:${item.defId}`];
+      item.name = hit?.name ?? item.defId ?? 'Unknown item';
+      item.rarity = hit?.rarity ?? null;
+    }
+    return { ok: true, stats: body.stats };
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
   }
 }
 
@@ -3934,14 +3993,27 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/auction-house/config' && req.method === 'GET') {
-    return json(res, 200, await readAhConfig());
+    return json(res, 200, publicAhConfig(await readAhConfig()));
   }
 
   if (url.pathname === '/api/auction-house/config' && req.method === 'POST') {
     const body = JSON.parse(await readBody(req));
-    const cfg = { url: typeof body.url === 'string' && body.url.trim() ? body.url.trim() : AH_DEFAULT_URL };
+    const current = await readAhConfig();
+    // Each field only changes when sent, so saving the URL never wipes the
+    // admin token and vice versa. An empty adminToken string clears it.
+    const cfg = {
+      url: typeof body.url === 'string' ? (body.url.trim() || AH_DEFAULT_URL) : current.url,
+      adminToken: typeof body.adminToken === 'string' ? body.adminToken.trim() : current.adminToken,
+    };
     await writeAhConfig(cfg);
-    return json(res, 200, { ok: true, ...cfg });
+    return json(res, 200, { ok: true, ...publicAhConfig(cfg) });
+  }
+
+  if (url.pathname === '/api/auction-house/usage' && req.method === 'GET') {
+    const cfg = await readAhConfig();
+    const target = url.searchParams.get('target') === 'local' ? 'local' : 'public';
+    const base = target === 'local' ? cfg.url : AH_PUBLIC_URL;
+    return json(res, 200, { target, url: base, fetchedAt: Date.now(), ...(await fetchAhUsage(base, cfg.adminToken)) });
   }
 
   if (url.pathname === '/api/auction-house/status' && req.method === 'GET') {

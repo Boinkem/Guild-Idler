@@ -29,6 +29,11 @@ export interface AppConfig {
    *  sign-in would have failed. Only override if the client's constant
    *  ever changes. */
   steamTicketIdentity: string;
+  /** Patch 0459 -- bearer token for the `/admin/*` routes (admin.ts),
+   *  used only by the DevTool's Auction House tab. Empty = the admin
+   *  routes don't register at all. A real secret -- lives in server/.env
+   *  and the DevTool's local, gitignored ah.config.json, nowhere else. */
+  adminToken: string;
 }
 
 export const STEAM_APP_ID_DEFAULT = '5143490';
@@ -59,5 +64,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databaseUrl: env.DATABASE_URL?.trim() ?? '',
     sessionSecret: env.SESSION_SECRET?.trim() ?? '',
     steamTicketIdentity: env.STEAM_TICKET_IDENTITY?.trim() || STEAM_TICKET_IDENTITY_DEFAULT,
+    adminToken: env.AH_ADMIN_TOKEN?.trim() ?? '',
   };
 }

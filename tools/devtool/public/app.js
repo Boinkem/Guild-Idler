@@ -2508,10 +2508,10 @@ const sandboxState = {
 };
 
 /* --------------------------------- auction house --------------------------------- */
-// Connection/health monitor only, build-order item 3 from guild-idler-status.md's
-// Auction House entry -- pings server/'s real /health route. No force-rotation,
-// transaction search, trade reversal, or suspension yet -- those need real
-// /admin/* routes the backend doesn't have yet.
+// Connection/health monitor, build-order item 3 from guild-idler-status.md's
+// Auction House entry -- pings server/'s real /health route. Patch 0459 adds
+// the read-only usage dashboard (GET /admin/stats via the DevTool server).
+// No force-rotation, transaction search, trade reversal or suspension yet.
 
 const ahState = {
   url: '',
@@ -2525,6 +2525,14 @@ const ahState = {
   launching: false,
   stopping: false,
   launchMessage: null, // { text, cls } | null
+  // Patch 0459 -- the admin usage dashboard.
+  adminTokenSet: false,
+  tokenDraft: '',
+  savingToken: false,
+  usageTarget: 'public', // 'public' | 'local'
+  usage: null, // { ok, target, url, fetchedAt, stats?, error? } | null
+  loadingUsage: false,
+  usageMetric: 'sales', // daily chart: sales | listed | goldVolume | scrapVolume | players
 };
 
 
@@ -4645,10 +4653,12 @@ async function selectAuctionHouseTab() {
   try {
     const cfg = await api('/api/auction-house/config');
     ahState.url = cfg.url;
+    ahState.adminTokenSet = !!cfg.adminTokenSet;
     ahState.proc = await api('/api/auction-house/server').catch(() => null);
     setStatus('');
     renderAuctionHouse();
-    await checkAhNow();
+    // Health and usage load side by side -- neither waits on the other.
+    await Promise.all([checkAhNow(), ahState.adminTokenSet ? loadAhUsageNow() : null]);
   } catch (err) {
     setStatus(err.message, 'err');
   }
@@ -4744,6 +4754,183 @@ async function testAhAuthNow() {
   renderAuctionHouse();
 }
 
+/* ---- patch 0459: usage dashboard ---- */
+
+async function loadAhUsageNow() {
+  ahState.loadingUsage = true;
+  renderAuctionHouse();
+  try {
+    ahState.usage = await api(`/api/auction-house/usage?target=${ahState.usageTarget}`);
+  } catch (err) {
+    ahState.usage = { ok: false, error: err.message || String(err), fetchedAt: Date.now() };
+  }
+  ahState.loadingUsage = false;
+  renderAuctionHouse();
+}
+
+async function saveAhAdminToken(token) {
+  ahState.savingToken = true;
+  renderAuctionHouse();
+  try {
+    const result = await api('/api/auction-house/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminToken: token }),
+    });
+    ahState.adminTokenSet = !!result.adminTokenSet;
+    ahState.tokenDraft = '';
+  } catch (err) {
+    setStatus(err.message, 'err');
+  }
+  ahState.savingToken = false;
+  renderAuctionHouse();
+  if (ahState.adminTokenSet) await loadAhUsageNow();
+  else { ahState.usage = null; renderAuctionHouse(); }
+}
+
+const AH_RARITY_COLOR = { common: '#c9cbd6', uncommon: '#7fc98f', rare: '#7fa9e8', epic: '#b48ae0', legendary: '#e0b45a' };
+const ahN = (n) => Number(n || 0).toLocaleString();
+const ahPct = (r) => (r == null ? '--' : `${Math.round(r * 100)}%`);
+function ahDuration(min) {
+  if (min == null) return '--';
+  if (min < 60) return `${Math.max(1, Math.round(min))}m`;
+  const h = Math.floor(min / 60);
+  return h < 24 ? `${h}h ${Math.round(min % 60)}m` : `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+function ahAgo(iso) {
+  if (!iso) return '--';
+  return `${ahDuration((Date.now() - new Date(iso).getTime()) / 60000)} ago`;
+}
+function ahMoney(gold, scrap) {
+  const parts = [];
+  if (gold || !scrap) parts.push(`${ahN(gold)} gold`);
+  if (scrap) parts.push(`${ahN(scrap)} scrap`);
+  return parts.join(' · ');
+}
+function ahTile(label, value, sub) {
+  return `<div class="ahu-tile"><div class="ahu-tile-label">${label}</div><div class="ahu-tile-value">${value}</div>${sub ? `<div class="ahu-tile-sub">${sub}</div>` : ''}</div>`;
+}
+
+function ahUsageHtml() {
+  const u = ahState.usage;
+  const tokenRow = `
+    <div class="row" style="gap: 8px; margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
+      <select id="ahUsageTarget" style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 6px 8px;">
+        <option value="public" ${ahState.usageTarget === 'public' ? 'selected' : ''}>Public -- ah.guildbound.dev</option>
+        <option value="local" ${ahState.usageTarget === 'local' ? 'selected' : ''}>Local -- ${escapeHtml(ahState.url || 'http://localhost:4000')}</option>
+      </select>
+      <button id="ahUsageBtn" class="primary" ${ahState.loadingUsage || !ahState.adminTokenSet ? 'disabled' : ''}>${ahState.loadingUsage ? 'Loading…' : (u?.ok ? 'Refresh' : 'Load usage')}</button>
+      ${u?.ok ? `<span class="tiny muted">Updated ${new Date(u.fetchedAt).toLocaleTimeString()} from ${escapeHtml(u.url)}</span>` : ''}
+    </div>
+    <details ${!ahState.adminTokenSet || u?.status === 401 ? 'open' : ''} style="margin-bottom: 8px;">
+      <summary class="tiny muted">Admin token ${ahState.adminTokenSet ? '(saved)' : '(not set)'}</summary>
+      <div class="devtool-note">
+        Paste the value of <code>AH_ADMIN_TOKEN</code> from <code>server/.env</code>. Saved to
+        <code>tools/devtool/ah.config.json</code> (gitignored) and only ever sent to the AH backend --
+        the browser never gets it back. The server needs a restart after you add or change it there.
+      </div>
+      <div class="row" style="gap: 8px; flex-wrap: wrap;">
+        <input type="password" id="ahTokenInput" autocomplete="off" placeholder="${ahState.adminTokenSet ? '•••••••• (saved -- paste to replace)' : 'AH_ADMIN_TOKEN'}"
+          value="${escapeHtml(ahState.tokenDraft)}"
+          style="flex: 1 1 260px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+        <button id="ahTokenSaveBtn" ${ahState.savingToken ? 'disabled' : ''}>${ahState.savingToken ? 'Saving…' : 'Save token'}</button>
+        ${ahState.adminTokenSet ? `<button id="ahTokenClearBtn" class="danger" ${ahState.savingToken ? 'disabled' : ''}>Clear</button>` : ''}
+      </div>
+    </details>`;
+
+  if (!u) return tokenRow + (ahState.adminTokenSet ? '' : '<p class="tiny muted">Save the admin token to load usage.</p>');
+  if (!u.ok) {
+    return tokenRow + `<div class="patch-result bad"><div class="patch-result-label">Couldn't load usage -- ${escapeHtml(u.error || 'unknown error')}</div></div>`;
+  }
+
+  const S = u.stats;
+  const L = S.live;
+  const M = S.mailbox;
+  const W = [['24h', S.windows.day], ['7 days', S.windows.week], ['30 days', S.windows.month]];
+  const types = [
+    L.byType.equipment && `${L.byType.equipment} gear`,
+    L.byType.consumable && `${L.byType.consumable} consumables`,
+    L.byType.shard && `${L.byType.shard} shard stacks (${ahN(L.shardsListed)})`,
+  ].filter(Boolean).join(' · ') || 'nothing listed';
+
+  const row = (label, fn, all = '') => `<tr><td>${label}</td>${W.map(([, w]) => `<td class="num">${fn(w)}</td>`).join('')}<td class="num">${all}</td></tr>`;
+  const table = `
+    <table class="ahu-table">
+      <thead><tr><th></th>${W.map(([l]) => `<th class="num">${l}</th>`).join('')}<th class="num">All time</th></tr></thead>
+      <tbody>
+        ${row('Active players', (w) => ahN(w.activePlayers), ahN(S.allTime.players))}
+        ${row('Sales', (w) => ahN(w.sales), ahN(S.allTime.sales))}
+        ${row('Buyers', (w) => ahN(w.buyers))}
+        ${row('Gold traded', (w) => ahN(w.goldVolume), ahN(S.allTime.goldVolume))}
+        ${row('Scrap traded', (w) => ahN(w.scrapVolume), ahN(S.allTime.scrapVolume))}
+        ${row('New listings', (w) => ahN(w.listed) + (w.brokerListed ? ` <span class="muted">(${w.brokerListed} broker)</span>` : ''), ahN(S.allTime.listings))}
+        ${row('Sellers', (w) => ahN(w.sellers))}
+        ${row('Sell-through', (w) => ahPct(w.sellThrough))}
+        ${row('Avg time to sell', (w) => ahDuration(w.avgMinutesToSell))}
+        ${row('Sold / expired / cancelled / up', (w) => `${w.outcome.sold} / ${w.outcome.expired} / ${w.outcome.cancelled} / ${w.outcome.active}`)}
+        ${row('Deposits forfeited', (w) => ahMoney(w.depositsForfeited.gold, w.depositsForfeited.scrap))}
+      </tbody>
+    </table>
+    <p class="tiny muted" style="margin: 4px 0 0;">Listing rows (new listings to deposits) count listings <b>posted</b> in the window and how they've ended so far.
+      Sales, buyers and volume go by sale time. Players = anyone who listed or bought.
+      ${S.allTime.firstListing ? `First listing ever: ${new Date(S.allTime.firstListing).toLocaleDateString()}.` : ''}</p>`;
+
+  const metrics = [['sales', 'Sales'], ['listed', 'Listings'], ['players', 'Players'], ['goldVolume', 'Gold'], ['scrapVolume', 'Scrap']];
+  const metric = ahState.usageMetric;
+  const max = Math.max(1, ...S.daily.map((d) => d[metric] || 0));
+  const chart = `
+    <div class="row" style="gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
+      ${metrics.map(([k, l]) => `<button class="ahu-metric ${k === metric ? 'primary' : ''}" data-metric="${k}">${l}</button>`).join('')}
+    </div>
+    <div class="ahu-chart">
+      ${S.daily.map((d, i) => {
+        const [y, mo, da] = d.day.split('-').map(Number);
+        const label = new Date(y, mo - 1, da).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        return `<div class="ahu-day" title="${label}: ${d.sales} sales, ${d.listed} listed, ${d.players} players, ${ahMoney(d.goldVolume, d.scrapVolume)}">
+          <div class="ahu-bar-wrap"><span class="ahu-bar" style="height: ${((d[metric] || 0) / max) * 100}%"></span></div>
+          <span class="ahu-day-label">${i % 5 === 0 || i === S.daily.length - 1 ? da : ''}</span></div>`;
+      }).join('')}
+    </div>
+    <p class="tiny muted" style="margin: 4px 0 0;">Last 30 days (UTC). Peak: ${ahN(max)}. Hover a bar for the full day.</p>`;
+
+  const items = S.topItems.length === 0 ? '<p class="tiny muted">No sales in the last 30 days.</p>' : `
+    <table class="ahu-table">
+      <thead><tr><th>Item</th><th>Cur.</th><th class="num">Sales</th><th class="num">Units</th><th class="num">Avg each</th><th class="num">Low</th><th class="num">High</th></tr></thead>
+      <tbody>${S.topItems.map((t) => `<tr>
+        <td><span style="color: ${AH_RARITY_COLOR[t.rarity] || 'inherit'}">${escapeHtml(t.name)}</span> <span class="muted tiny">${escapeHtml(t.itemType)}</span></td>
+        <td>${escapeHtml(t.currency)}</td><td class="num">${ahN(t.sales)}</td><td class="num">${ahN(t.units)}</td>
+        <td class="num">${ahN(t.avgEach)}</td><td class="num">${ahN(t.lowestEach)}</td><td class="num">${ahN(t.highestEach)}</td></tr>`).join('')}</tbody>
+    </table>`;
+
+  const traders = S.topTraders.length === 0 ? '<p class="tiny muted">No trades in the last 30 days.</p>' : `
+    <table class="ahu-table">
+      <thead><tr><th>SteamID</th><th class="num">Sold</th><th class="num">Bought</th><th class="num">Gold in</th><th class="num">Gold out</th><th class="num">Scrap in</th><th class="num">Scrap out</th><th class="num">Listed now</th></tr></thead>
+      <tbody>${S.topTraders.map((t) => {
+        const id = escapeHtml(t.steamId);
+        const link = /^\d{17}$/.test(t.steamId) ? `<a href="https://steamcommunity.com/profiles/${id}" target="_blank" rel="noopener">${id}</a>` : id;
+        return `<tr><td><code>${link}</code></td><td class="num">${ahN(t.sold)}</td><td class="num">${ahN(t.bought)}</td>
+          <td class="num">${ahN(t.goldIn)}</td><td class="num">${ahN(t.goldOut)}</td><td class="num">${ahN(t.scrapIn)}</td><td class="num">${ahN(t.scrapOut)}</td>
+          <td class="num">${ahN(t.activeListings)}</td></tr>`;
+      }).join('')}</tbody>
+    </table>`;
+
+  return tokenRow + `
+    <div class="ahu-tiles">
+      ${ahTile('Listed now', ahN(L.active), types)}
+      ${ahTile('Sellers listing', ahN(L.sellers), L.brokerListings ? `+ ${L.brokerListings} broker listings` : '')}
+      ${ahTile('Asking value', ahMoney(L.goldValue, L.scrapValue), `${L.byCurrency.gold} gold · ${L.byCurrency.scrap} scrap listings`)}
+      ${ahTile('Ending within 1h', ahN(L.expiringWithinHour))}
+      ${ahTile('Unclaimed mail', ahN(M.entries), M.entries ? `${M.players} players · ${ahMoney(M.gold, M.scrap)} · ${M.items} items · oldest ${ahAgo(M.oldest)}` : 'all collected')}
+    </div>
+    <div class="section-heading">Activity</div>
+    ${table}
+    <div class="section-heading">Daily, last 30 days</div>
+    ${chart}
+    <div class="section-heading">Most traded items, 30 days</div>
+    ${items}
+    <div class="section-heading">Busiest traders, 30 days</div>
+    ${traders}`;
+}
+
 /** Colour/label for one target's status card -- three states, same
  *  "reachable/unreachable/checking" shape the client's own auctionHouse.ts
  *  checks against, just from this DevTool's own point of view (always
@@ -4761,6 +4948,7 @@ function ahStatusLine(target) {
   if (target.steamKeyConfigured === false) missing.push('Steam key');
   if (target.dbConfigured === false) missing.push('DATABASE_URL -- listings/mailbox/buyout are OFF');
   if (target.sessionSecretConfigured === false) missing.push('SESSION_SECRET -- no sign-ins');
+  if (target.adminConfigured === false) missing.push('AH_ADMIN_TOKEN -- no usage dashboard');
   const keyNote = missing.length ? `, NOT configured: ${missing.join('; ')}` : '';
   const dbNote = target.dbConfigured === true ? ', database configured' : '';
   const mode = target.ahEnabled ? `online (AH_ENABLED=true${dbNote}${keyNote})` : `reachable, but off (AH_ENABLED=false${keyNote})`;
@@ -4794,11 +4982,13 @@ function renderAuctionHouse() {
   appEl.innerHTML = `
     <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Auction House</h2>
     <p class="tiny muted" style="margin: 0 0 12px;">
-      Connection/health monitor (and, since patch 0416, launcher) for the AH backend (server/). Build-order item 3 from
-      guild-idler-status.md's Auction House entry -- nothing else here yet on purpose:
-      force-rotation, transaction search, trade reversal, and suspension all need real
-      <code>/admin/*</code> routes the backend doesn't have yet.
+      Usage dashboard (patch 0459), then the connection/health monitor and launcher for the AH backend (server/).
+      Read-only: force-rotation, transaction search, trade reversal and suspension still need their own
+      <code>/admin/*</code> routes.
     </p>
+
+    <div class="section-heading">Usage</div>
+    ${ahUsageHtml()}
 
     <div class="section-heading">Local backend URL</div>
     <div class="devtool-note">
@@ -4882,6 +5072,27 @@ function renderAuctionHouse() {
 
   const ahAuthTestBtn = document.getElementById('ahAuthTestBtn');
   if (ahAuthTestBtn) ahAuthTestBtn.onclick = () => testAhAuthNow();
+
+  // Patch 0459 -- usage dashboard controls.
+  const ahUsageBtn = document.getElementById('ahUsageBtn');
+  if (ahUsageBtn) ahUsageBtn.onclick = () => loadAhUsageNow();
+  const ahUsageTarget = document.getElementById('ahUsageTarget');
+  if (ahUsageTarget) ahUsageTarget.onchange = () => { ahState.usageTarget = ahUsageTarget.value; loadAhUsageNow(); };
+  const ahTokenInput = document.getElementById('ahTokenInput');
+  if (ahTokenInput) {
+    ahTokenInput.oninput = () => { ahState.tokenDraft = ahTokenInput.value; };
+    ahTokenInput.onkeydown = (e) => { if (e.key === 'Enter' && ahTokenInput.value.trim()) saveAhAdminToken(ahTokenInput.value.trim()); };
+  }
+  const ahTokenSaveBtn = document.getElementById('ahTokenSaveBtn');
+  if (ahTokenSaveBtn) ahTokenSaveBtn.onclick = () => {
+    const value = document.getElementById('ahTokenInput').value.trim();
+    if (value) saveAhAdminToken(value);
+  };
+  const ahTokenClearBtn = document.getElementById('ahTokenClearBtn');
+  if (ahTokenClearBtn) ahTokenClearBtn.onclick = () => saveAhAdminToken('');
+  for (const btn of document.querySelectorAll('.ahu-metric')) {
+    btn.onclick = () => { ahState.usageMetric = btn.dataset.metric; renderAuctionHouse(); };
+  }
 
   const ahStartBtn = document.getElementById('ahStartBtn');
   if (ahStartBtn) ahStartBtn.onclick = () => startAhServerNow();

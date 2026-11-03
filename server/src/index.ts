@@ -20,6 +20,7 @@ import { verifySteamTicket } from './steamAuth.js';
 import { issueSessionToken } from './sessions.js';
 import { registerListingsRoutes, sweepExpiredListings } from './listings.js';
 import { registerLedgerRoutes } from './ledger.js';
+import { registerAdminRoutes } from './admin.js';
 
 const config = loadConfig();
 const app = Fastify({ logger: true });
@@ -50,6 +51,8 @@ app.get('/health', async () => ({
   // said "online" -- the DevTool now shows both.
   dbConfigured: !!config.databaseUrl,
   sessionSecretConfigured: !!config.sessionSecret,
+  // Patch 0459 -- boolean only, same rule as the two above.
+  adminConfigured: !!config.adminToken,
 }));
 
 /**
@@ -95,6 +98,8 @@ if (config.databaseUrl) {
   registerListingsRoutes(app, config);
   // My Ledger (patch 0458) -- the player's own Auction House dashboard.
   registerLedgerRoutes(app, config);
+  // Admin usage stats (patch 0459) -- only when AH_ADMIN_TOKEN is set.
+  if (config.adminToken) registerAdminRoutes(app, config);
   // Expiry sweep (patch 0431): expired listings return their item to the
   // seller's mailbox. Also runs lazily on /mailbox and /listings/mine, so
   // a seller never waits on this timer to see their item.
@@ -119,6 +124,9 @@ if (config.databaseUrl) {
 app.addHook('onRequest', async (request, reply) => {
   if (config.ahEnabled) return;
   if (request.raw.url === '/health') return;
+  // Patch 0459 -- /admin/* has its own token check (admin.ts), so usage
+  // stats stay readable while the Auction House is switched off.
+  if (request.raw.url?.startsWith('/admin/')) return;
 
   reply.code(503).send({
     error: 'auction_house_offline',
