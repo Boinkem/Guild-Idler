@@ -270,7 +270,11 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
               <div className="small" style={{ marginBottom: 2, color: '#d9a441' }}>+{shardLabel(result.shardsGained)}</div>
             ) : null}
             {result.scrapGained ? (
-              <div className="small" style={{ marginBottom: 2 }}>+{result.scrapGained} Scrap</div>
+              <div className="small" style={{ marginBottom: 2 }}>
+                +{result.scrapGained} Scrap
+                {/* Patch 0460 */}
+                {result.salvageCache ? <span className="good"> (Salvage Cache! +{result.salvageCache})</span> : null}
+              </div>
             ) : null}
             {result.materialGained && result.materialGained.amount > 0 && (
               <div className="small" style={{ marginBottom: 2 }}>

@@ -105,7 +105,11 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
               <div className="small" style={{ marginBottom: 2, color: '#d9a441' }}>+{shardLabel(quest.shardsGained)}</div>
             ) : null}
             {quest.scrapGained ? (
-              <div className="small" style={{ marginBottom: 2 }}>+{quest.scrapGained} Scrap</div>
+              <div className="small" style={{ marginBottom: 2 }}>
+                +{quest.scrapGained} Scrap
+                {/* Patch 0460 */}
+                {quest.salvageCache ? <span className="good"> (Salvage Cache! +{quest.salvageCache})</span> : null}
+              </div>
             ) : null}
             {quest.materialGained && quest.materialGained.amount > 0 && (
               <div className="small" style={{ marginBottom: 2 }}>

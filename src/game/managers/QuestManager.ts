@@ -49,6 +49,21 @@ export const MIN_INJURY_RISK = 3;
 
 export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CHAINS.map((c) => [c.id, c]));
 
+/**
+ * Patch 0460 -- base Scrap every quest pays on success, on top of any
+ * over-level Scrap (patch 0453). Before this, early Scrap came almost only
+ * from breaking down gear: measured at ~0.6-1.4 Scrap per hero-hour, far
+ * short of a level-1 Vendor Commission's daily order. Per-tier amounts are
+ * sized so longer tiers pay roughly in step with their duration, and grow
+ * quest.baseScrapPerLevelPct per level of the quest above 1.
+ */
+export function questBaseScrap(difficulty: Difficulty, level: number): number {
+  const base = Tuning.get(`quest.baseScrap.${difficulty}`);
+  if (!base) return 0;
+  const scale = 1 + Math.max(0, level - 1) * (Tuning.get('quest.baseScrapPerLevelPct') / 100);
+  return Math.max(1, Math.round(base * scale));
+}
+
 function lootTableFor(difficulty: Difficulty, rng: Rng): { defId: string; chance: number }[] {
   const rarities = LOOT_RARITY_BY_DIFFICULTY[difficulty] ?? ['common'];
   // raidExclusive (Heroic/Legendary tiered raid variants) filtered out here too
@@ -466,7 +481,10 @@ export const QuestManager = {
     // Scrap for the risk: levels over x per-level amount x tier step
     // (Easy 1, Normal 2 ... Legendary 5). Early Scrap otherwise only comes
     // from breaking down gear, the "scrap starving" half of the report.
-    const scrapBaseline = levelsOver * Tuning.get('quest.overLevelScrapPerLevel') * (tierIndex + 1);
+    const overLevelScrap = levelsOver * Tuning.get('quest.overLevelScrapPerLevel') * (tierIndex + 1);
+    // Patch 0460 -- plus the base Scrap every quest now pays.
+    const baseScrapBaseline = questBaseScrap(difficulty, reqLevel);
+    const scrapBaseline = overLevelScrap + baseScrapBaseline;
 
     // One roll, one chance, every tier (not Easy-only) -- see
     // DifficultyConfig.fastChance's own comment in quests.ts for the
@@ -480,6 +498,7 @@ export const QuestManager = {
     let rewardGold: number;
     let rewardXp: number;
     let rewardScrap: number;
+    let baseScrap: number;
     if (useFast) {
       // Percentage of THIS tier's own normal range, not an absolute
       // duration -- see DifficultyConfig.fastMinDurationPct's own
@@ -504,6 +523,7 @@ export const QuestManager = {
       rewardGold = Math.max(1, Math.round(goldBaseline * payoutFraction));
       rewardXp = Math.max(1, Math.round(xpBaseline * payoutFraction));
       rewardScrap = scrapBaseline > 0 ? Math.max(1, Math.round(scrapBaseline * payoutFraction)) : 0;
+      baseScrap = baseScrapBaseline > 0 ? Math.min(rewardScrap, Math.max(1, Math.round(baseScrapBaseline * payoutFraction))) : 0;
     } else {
       duration = rng.int(cfg.minDuration, cfg.maxDuration);
       const span = cfg.maxDuration - cfg.minDuration;
@@ -514,6 +534,7 @@ export const QuestManager = {
       rewardGold = Math.max(1, Math.round(goldBaseline * factor));
       rewardXp = Math.max(1, Math.round(xpBaseline * factor));
       rewardScrap = scrapBaseline;
+      baseScrap = baseScrapBaseline;
     }
 
     return {
@@ -547,6 +568,7 @@ export const QuestManager = {
       ...(useFast ? { fast: true } : {}),
       ...(overLevelGoldPct > 0 ? { overLevelGoldPct } : {}),
       ...(rewardScrap > 0 ? { scrapReward: rewardScrap } : {}),
+      ...(baseScrap > 0 ? { baseScrap } : {}),
     };
   },
 
@@ -620,6 +642,11 @@ export const QuestManager = {
       loot: lootTableFor(stageDef.difficulty, rng),
       reqLevel: chain.reqLevel,
       chain: { chainId: chain.id, stage, totalStages: chain.stages.length },
+      // Patch 0460 -- story stages pay the same base Scrap as contracts.
+      ...(() => {
+        const scrap = questBaseScrap(stageDef.difficulty, chain.reqLevel);
+        return scrap > 0 ? { scrapReward: scrap, baseScrap: scrap } : {};
+      })(),
     };
   },
 
@@ -689,6 +716,11 @@ export const QuestManager = {
       loot: lootTableFor(stageDef.difficulty, rng),
       reqLevel: Math.max(chain.reqLevel, heroLevel),
       chain: { chainId: chain.id, stage, totalStages: chain.stages.length, replay: difficulty },
+      // Patch 0460 -- base Scrap, at the chain's own level like the gold above.
+      ...(() => {
+        const scrap = questBaseScrap(stageDef.difficulty, chain.reqLevel);
+        return scrap > 0 ? { scrapReward: scrap, baseScrap: scrap } : {};
+      })(),
     };
   },
 
@@ -1333,13 +1365,22 @@ export const QuestManager = {
       }
     }
 
-    /* ---------------------------- over-level scrap ---------------------------- */
+    /* --------------------------------- scrap --------------------------------- */
     // Patch 0453 -- same full-on-success / 15%-on-failure shape as the
     // gathering bounty above. Not touched by crit or the daily burst
-    // below, which stay gold/xp only.
+    // below, which stay gold/xp only. Patch 0460: scrapReward now also
+    // carries the base Scrap every quest pays (offer.baseScrap), and a
+    // success can turn up a Salvage Cache -- extra Scrap worth
+    // (quest.salvageCacheMultiplier - 1) x the base part.
     let scrapGained: number | undefined;
+    let salvageCache: number | undefined;
     if (quest.offer.scrapReward) {
-      const amount = success ? quest.offer.scrapReward : Math.floor(quest.offer.scrapReward * 0.15);
+      let amount = success ? quest.offer.scrapReward : Math.floor(quest.offer.scrapReward * 0.15);
+      const base = quest.offer.baseScrap ?? 0;
+      if (success && base > 0 && rng.chance(Tuning.get('quest.salvageCacheChance'))) {
+        salvageCache = Math.max(1, Math.round(base * (Tuning.get('quest.salvageCacheMultiplier') - 1)));
+        amount += salvageCache;
+      }
       if (amount > 0) {
         state.scrap += amount;
         scrapGained = amount;
@@ -1834,6 +1875,7 @@ export const QuestManager = {
       eggDropped,
       materialGained,
       scrapGained,
+      salvageCache,
       shardsGained,
       curioGained,
       recipeScrollGained,

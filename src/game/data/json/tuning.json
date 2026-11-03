@@ -3388,6 +3388,86 @@
     "description": "Scrap paid on success per level an offer sits above its hero (patch 0453), multiplied by difficulty step (Easy 1 ... Legendary 5) and scaled down on a Fast roll like gold/xp. 15% on failure."
   },
   {
+    "id": "quest.baseScrap.easy",
+    "label": "Base Scrap: Easy quest",
+    "category": "quests",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 1000,
+    "description": "Scrap every Easy quest pays on success before level scaling (patch 0460); 15% on failure. Grows by quest.baseScrapPerLevelPct per quest level above 1. Story-chain stages pay it too. 0 turns it off for this tier."
+  },
+  {
+    "id": "quest.baseScrap.normal",
+    "label": "Base Scrap: Normal quest",
+    "category": "quests",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "max": 1000,
+    "description": "Scrap every Normal quest pays on success before level scaling (patch 0460); 15% on failure. Grows by quest.baseScrapPerLevelPct per quest level above 1. Story-chain stages pay it too. 0 turns it off for this tier."
+  },
+  {
+    "id": "quest.baseScrap.hard",
+    "label": "Base Scrap: Hard quest",
+    "category": "quests",
+    "value": 7,
+    "default": 7,
+    "min": 0,
+    "max": 1000,
+    "description": "Scrap every Hard quest pays on success before level scaling (patch 0460); 15% on failure. Grows by quest.baseScrapPerLevelPct per quest level above 1. Story-chain stages pay it too. 0 turns it off for this tier."
+  },
+  {
+    "id": "quest.baseScrap.epic",
+    "label": "Base Scrap: Epic quest",
+    "category": "quests",
+    "value": 12,
+    "default": 12,
+    "min": 0,
+    "max": 1000,
+    "description": "Scrap every Epic quest pays on success before level scaling (patch 0460); 15% on failure. Grows by quest.baseScrapPerLevelPct per quest level above 1. Story-chain stages pay it too. 0 turns it off for this tier."
+  },
+  {
+    "id": "quest.baseScrap.legendary",
+    "label": "Base Scrap: Legendary quest",
+    "category": "quests",
+    "value": 24,
+    "default": 24,
+    "min": 0,
+    "max": 1000,
+    "description": "Scrap every Legendary quest pays on success before level scaling (patch 0460); 15% on failure. Grows by quest.baseScrapPerLevelPct per quest level above 1. Story-chain stages pay it too. 0 turns it off for this tier."
+  },
+  {
+    "id": "quest.baseScrapPerLevelPct",
+    "label": "Base Scrap: % more per quest level",
+    "category": "quests",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "max": 100,
+    "description": "How much a quest's base Scrap grows per level of the quest above 1, in percent (patch 0460). At 4: level 5 pays 1.16x, level 20 1.76x, level 50 2.96x."
+  },
+  {
+    "id": "quest.salvageCacheChance",
+    "label": "Salvage Cache: chance on success (%)",
+    "category": "quests",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 100,
+    "description": "Chance a successful quest turns up a Salvage Cache (patch 0460), paying extra Scrap on top of its base Scrap. Over-level Scrap isn't multiplied."
+  },
+  {
+    "id": "quest.salvageCacheMultiplier",
+    "label": "Salvage Cache: base Scrap multiplier",
+    "category": "quests",
+    "value": 3,
+    "default": 3,
+    "min": 1,
+    "max": 20,
+    "description": "A Salvage Cache pays this many times the quest's base Scrap in total (patch 0460) -- 3 means +2x base on top of the normal payout."
+  },
+  {
     "id": "upgrade.master_adventurer.blackMarketDiscountPerLevel",
     "label": "Enchanted Seal: Black Market discount per level",
     "category": "vendor_upgrades",
@@ -5637,11 +5717,11 @@
     "id": "commission.scrapL1",
     "label": "Commission L1: Scrap",
     "category": "commissions",
-    "value": 60,
-    "default": 60,
+    "value": 25,
+    "default": 25,
     "min": 0,
     "max": 100000,
-    "description": "Scrap a level-1 vendor's daily commission asks for (patch 0455)."
+    "description": "Scrap a level-1 vendor's daily commission asks for (patch 0455; cut from 60 in patch 0460 -- early Scrap couldn't cover it)."
   },
   {
     "id": "commission.materialL1",
@@ -5667,11 +5747,11 @@
     "id": "commission.scrapL2",
     "label": "Commission L2: Scrap",
     "category": "commissions",
-    "value": 180,
-    "default": 180,
+    "value": 110,
+    "default": 110,
     "min": 0,
     "max": 100000,
-    "description": "Scrap a level-2 vendor's daily commission asks for (patch 0455)."
+    "description": "Scrap a level-2 vendor's daily commission asks for (patch 0455; cut from 180 in patch 0460)."
   },
   {
     "id": "commission.materialL2",

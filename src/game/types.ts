@@ -1030,6 +1030,15 @@ export interface QuestOffer {
    * on gold and Scrap only. Undefined when there's nothing to pay.
    */
   scrapReward?: number;
+  /**
+   * Patch 0460 -- the part of scrapReward that is the base Scrap every
+   * quest pays (QuestManager.questBaseScrap), as opposed to the over-level
+   * premium above. scrapReward is still the full amount paid. The
+   * "worth it" note on an over-level offer shows scrapReward - baseScrap.
+   * A Salvage Cache roll multiplies only this part. Undefined on offers
+   * rolled before 0460 (their scrapReward is all over-level Scrap).
+   */
+  baseScrap?: number;
 }
 
 export interface ActiveQuest {
@@ -1158,6 +1167,9 @@ export interface QuestResult {
    *  success, 15% consolation on failure, same shape as materialGained).
    *  Informational; state.scrap was already credited in resolve(). */
   scrapGained?: number;
+  /** Patch 0460 -- extra Scrap from a Salvage Cache, already included in
+   *  scrapGained. Shown as its own line in the result modal. */
+  salvageCache?: number;
   /** Patch 0454 -- Legendary Shards dropped by this quest (Epic/Legendary
    *  success only). Already credited by resolve(). */
   shardsGained?: number;

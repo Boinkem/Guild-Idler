@@ -1134,6 +1134,26 @@ raid fight).
 
 ## Backlog
 
+### Auction House Broker (NPC listings + buyouts) -- in design, not built
+From playtest feedback after 0459: unsure about the AH overall, likely
+because with no players there's nothing to buy and no one to sell to.
+Direction so far (being talked through, nothing locked):
+- **Supply:** the server posts a trickle of NPC listings through the day
+  (gear, consumables, the odd Shard stack) at levels matching real
+  players, priced near item value with variance. Uses the existing
+  NULL-seller "system-seeded" listing shape.
+- **Demand:** the Broker buys real players' listings priced at or below
+  a fair price, over hours not instantly; overpriced items sit. Pays
+  below shop price, per-player daily cap, never buys its own listings.
+  Every Broker buyout is a gold faucet, hence the caps.
+- **Smarts:** each tick, compare real 24h activity to a target (e.g.
+  ~40 listings up, ~15 sales/day) and fill only the gap, so the Broker
+  fades out on its own as real trading grows.
+- Recommended: named NPC merchants (lore names) rather than disguising
+  them as players. Possibly a "recently sold" ticker on Browse.
+- Needs a migration so a sale can have a Broker buyer
+  (`transactions.buyer_steam_id` is NOT NULL today).
+
 ### Auction House usage stats in DevTools (admin) -- built, patch 0459
 Read-only usage dashboard in the DevTool's Auction House tab. Still not
 built (each needs its own `/admin/*` route behind the same token):
@@ -37129,3 +37149,77 @@ the existing connection/health monitor and server launcher.
 **To turn it on:** add `AH_ADMIN_TOKEN` to `server/.env`, restart the AH
 server, then paste the same token into DevTool > Auction House > Usage >
 Admin token. Steps are in `server/README.md`.
+
+### Scrap rebalance: every quest pays Scrap, Salvage Caches, cheaper early commissions (patch 0460)
+```discord-update
+Dev Update | Scrap Rebalance
+
+- Added Scrap to every successful quest, including story quests and replays, scaling up with the quest's difficulty and level
+- Added Salvage Caches: a successful quest sometimes turns up extra Scrap
+- Changed Vendor Commissions to ask for less Scrap at levels 1 and 2 (60 down to 25, and 180 down to 110)
+```
+
+Feedback (tester, and direct): still Scrap-starved early, and Vendor
+Commissions get skipped because of it.
+
+**Measured first** with the real quest code (`generateOffer`, real loot
+tables and scrap values, 0457's ungeared at-level success rates, every
+drop assumed scrapped -- the best case). Early Scrap came only from
+breaking down gear plus 0453's over-level bonus: about **0.6-1.4 Scrap
+per hero-hour** (Easy ~1.4, Normal ~0.6-0.7, Hard and up under 0.5).
+A hero questing most of the day made ~10-20 Scrap, against **60** for
+one level-1 commission (180 for all three vendors) -- whose reward, a
+Common/Uncommon item, scraps back for 2-4. Skipping them was correct.
+
+**Changes**
+- **Base Scrap on every quest.** New `questBaseScrap(difficulty,
+  level)` (QuestManager.ts): `quest.baseScrap.<tier>` x
+  (1 + `quest.baseScrapPerLevelPct`% per quest level above 1), at least
+  1. Tiers: Easy 2, Normal 4, Hard 7, Epic 12, Legendary 24; 4% per
+  level (x1.16 at level 5, x1.76 at 20, x2.96 at 50). Same rules as the
+  existing over-level Scrap: full on success, 15% on failure, scaled
+  down on a Fast roll like gold/xp. Contracts and gathering bounties get
+  it via `generateOffer`; story-chain stages (`chainOffer`) and replays
+  (`chainReplayOffer`) get it at the chain's own `reqLevel`, matching
+  how their gold is levelled.
+- **Salvage Cache.** On success, a `quest.salvageCacheChance` (10%)
+  roll pays extra Scrap: base Scrap x (`quest.salvageCacheMultiplier`
+  - 1), i.e. +2x base at the default 3. Only the base part is
+  multiplied, never the over-level part. Shown in the result modal and
+  Statistics' quest log as "+N Scrap (Salvage Cache! +M)".
+- **Cheaper early commissions:** `commission.scrapL1` 60 -> 25,
+  `commission.scrapL2` 180 -> 110. L3/L4 (450 / 1000) unchanged, since
+  late Scrap income is much higher. Material costs unchanged.
+- **Offer data.** `scrapReward` is still the full amount paid; new
+  optional `QuestOffer.baseScrap` records the base part, so the
+  over-level "worth it: +N Scrap" note on the board and detail modal
+  shows only `scrapReward - baseScrap` (and is hidden when there is no
+  over-level part). Offers rolled before 0460 have no `baseScrap`, so
+  their whole `scrapReward` still reads as over-level -- correct for
+  them. New `QuestResult.salvageCache`. No save migration needed.
+- All six new/changed values are in tuning.json and editable in the
+  DevTool (quests / commissions categories).
+
+**Measured after** (same method), Scrap per hero-hour, level 1 / 5 / 8:
+Easy 2.8 / 2.8 / 3.0, Normal 1.8 / 2.1 / 2.1, Hard 1.5 / 1.7 / 1.7,
+Epic 1.1 / 1.2 / 1.3, Legendary 0.9 / 1.0 / 1.0 -- roughly 2-3x before.
+One hero questing most of a day now makes ~30-45 Scrap: one 25-Scrap
+commission a day with Scrap left over for repairs, and all three
+vendors' commissions within reach with two or three heroes. Longer
+tiers still pay a bit less Scrap per hour than short ones (as gold
+already does); raise `quest.baseScrap.epic/legendary` if AFK players
+still feel starved.
+
+**Verified** through the real `QuestManager.resolve` over 3,000
+Normal quests on fresh game states: Salvage Caches landed 10.1% of
+successes (target 10%); every success paid exactly `scrapReward` +
+cache, every failure exactly 15% of `scrapReward`, never a cache; the
+Scrap added to state matched `scrapGained` every time. 4,000 Hard
+offers: `baseScrap` never exceeds `scrapReward`, and an at-or-under-level
+non-Fast offer's `scrapReward` equals its `baseScrap` exactly. Chain
+offers carry base Scrap. `tsc --noEmit` clean.
+
+Note: the extra Salvage Cache roll uses the quest's seeded RNG only on a
+success with base Scrap, so later rolls in the same resolve (Shard
+drop, crit) can come out differently from before 0460 for the same
+quest -- not a problem (nothing replays a resolve), just noting it.

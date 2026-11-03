@@ -341,11 +341,12 @@ export function QuestDetailModal({
           <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>
             {levelGap} level{levelGap === 1 ? '' : 's'} under -- reduced success chance
             {/* Patch 0453 -- show the other side of the trade, not just the penalty. */}
-            {!!(offer.overLevelGoldPct || offer.scrapReward) && (
+            {!!(offer.overLevelGoldPct || (offer.scrapReward ?? 0) > (offer.baseScrap ?? 0)) && (
               <span className="good">
                 {' '}· worth it: {[
                   offer.overLevelGoldPct ? `+${offer.overLevelGoldPct}% gold` : '',
-                  offer.scrapReward ? `+${offer.scrapReward} Scrap` : '',
+                  // Patch 0460 -- only the over-level part; base Scrap is paid either way.
+                  offer.scrapReward && offer.scrapReward - (offer.baseScrap ?? 0) > 0 ? `+${offer.scrapReward - (offer.baseScrap ?? 0)} Scrap` : '',
                 ].filter(Boolean).join(', ')}
               </span>
             )}
