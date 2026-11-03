@@ -36,6 +36,7 @@ import {
   fetchActiveListings, createListing, buyListing as buyListingRequest, ServerListingRow,
   setDevSessionToken, fetchMyListings, cancelListing as cancelListingRequest, ListingFilters,
   fetchMyLedger, AhLedger, AhLedgerPeriod,
+  LISTING_HOURS_BASE, LISTING_HOURS_EXTENDED, ListingHours,
 } from './auctionHouse';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
@@ -3075,10 +3076,10 @@ export class GameEngine {
    * own guess at the percentage; if that math ever drifts between
    * client and server, the server's number is the one that's actually
    * refunded on sale (listings.ts), so it's the one the client should
-   * trust here too. `durationHours` only ever 48 if the caller actually
-   * has Charter level 2 -- checked here again, not just trusted from
-   * the UI, so a stale button state can't request 48h the player hasn't
-   * paid for.
+   * trust here too. `durationHours` is only ever the extended (14-day,
+   * patch 0461) duration if the caller actually has Charter level 2 --
+   * checked here again, not just trusted from the UI, so a stale button
+   * state can't request a duration the player hasn't paid for.
    */
   /** Patch 0431 -- uids / consumable ids / listing ids with an AH request
    *  currently in flight. A double-click (or two quick clicks on different
@@ -3128,7 +3129,7 @@ export class GameEngine {
     else if (actual < estimated) this.refundCurrency(currency, estimated - actual);
   }
 
-  async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
+  async listEquipmentForSale(itemUid: string, currency: 'gold' | 'scrap', price: number, durationHours: ListingHours = LISTING_HOURS_BASE): Promise<boolean> {
     const item = this.state.stash.find((i) => i.uid === itemUid);
     if (!item) { this.say('That item is equipped or missing.'); return false; }
     if (item.locked) { this.say('That item is locked in the Vault.'); return false; }
@@ -3138,7 +3139,7 @@ export class GameEngine {
     if (!this.canAffordDeposit(currency, whole)) return false;
     const key = `item:${itemUid}`;
     if (this.ahInFlight.has(key)) return false;
-    const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
+    const duration: ListingHours = durationHours === LISTING_HOURS_EXTENDED && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? LISTING_HOURS_EXTENDED : LISTING_HOURS_BASE;
 
     // Patch 0436 -- the item (and the estimated deposit) now leave local
     // state the moment the request goes out, in memory only, and come
@@ -3180,7 +3181,7 @@ export class GameEngine {
    *  now (no quantity field on a listing yet) -- see
    *  server/db/migrations/001_init.sql's own comment on what's still
    *  open. */
-  async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
+  async listConsumableForSale(consumableId: string, currency: 'gold' | 'scrap', price: number, durationHours: ListingHours = LISTING_HOURS_BASE): Promise<boolean> {
     if ((this.state.inventory[consumableId] ?? 0) < 1) { this.say("You don't have any of those."); return false; }
     if (!Number.isFinite(price) || price <= 0) { this.say('Enter a valid price.'); return false; }
     const whole = Math.floor(price);
@@ -3188,7 +3189,7 @@ export class GameEngine {
     if (!this.canAffordDeposit(currency, whole)) return false;
     const key = `cons:${consumableId}`;
     if (this.ahInFlight.has(key)) return false;
-    const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
+    const duration: ListingHours = durationHours === LISTING_HOURS_EXTENDED && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? LISTING_HOURS_EXTENDED : LISTING_HOURS_BASE;
 
     // Patch 0436 -- same take-it-out-first shape as listEquipmentForSale:
     // the unit is reserved before the request instead of decremented
@@ -3222,7 +3223,7 @@ export class GameEngine {
 
   /** Patch 0454 -- lists a stack of Legendary Shards. Same take-it-out-
    *  first, refund-on-failure shape as listConsumableForSale. */
-  async listShardsForSale(amount: number, currency: 'gold' | 'scrap', price: number, durationHours: 24 | 48 = 24): Promise<boolean> {
+  async listShardsForSale(amount: number, currency: 'gold' | 'scrap', price: number, durationHours: ListingHours = LISTING_HOURS_BASE): Promise<boolean> {
     const qty = Math.floor(amount);
     if (!Number.isFinite(qty) || qty < 1 || qty > MAX_SHARDS_PER_LISTING) { this.say(`List between 1 and ${MAX_SHARDS_PER_LISTING} Shards.`); return false; }
     if ((this.state.legendaryShards ?? 0) < qty) { this.say("You don't have that many Legendary Shards."); return false; }
@@ -3232,7 +3233,7 @@ export class GameEngine {
     if (!this.canAffordDeposit(currency, whole)) return false;
     const key = 'shards';
     if (this.ahInFlight.has(key)) return false;
-    const duration = durationHours === 48 && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? 48 : 24;
+    const duration: ListingHours = durationHours === LISTING_HOURS_EXTENDED && GuildManager.upgradeLevel(this.state, 'auction_house_charter') >= 2 ? LISTING_HOURS_EXTENDED : LISTING_HOURS_BASE;
 
     this.ahInFlight.add(key);
     this.state.legendaryShards -= qty;

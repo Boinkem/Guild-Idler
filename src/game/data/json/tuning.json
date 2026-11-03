@@ -2112,9 +2112,9 @@
     "id": "upgrade.auction_house_charter.baseCost",
     "label": "Auction House Charter: base cost",
     "category": "vendor_upgrades",
-    "value": 3000,
-    "default": 3000,
-    "description": "Gold cost of Auction House Charter's level 1. Cut from an initial 15000 (patch 0400) to 3000 (patch 0401) -- easy entry, direct request, now that the client panel actually exists to unlock (see guild-idler-status.md's Auction House entry).",
+    "value": 334,
+    "default": 334,
+    "description": "Full (pre-discount) gold cost of Auction House Charter's level 1. 15000 (patch 0400) -> 3000 (0401) -> 334 (patch 0461, direct request: a basic feature should be cheap to open). With the early-tier discount (15% on a first purchase) level 1 actually costs 50g; level 2 (x costGrowth, 35% discount) costs 292g.",
     "min": 0
   },
   {
@@ -2123,7 +2123,7 @@
     "category": "vendor_upgrades",
     "value": 2.5,
     "default": 2.5,
-    "description": "Multiplier applied per level. Bumped 1 -> 2.5 (patch 0413, maxLevel extended to 2) so level 2 (7500g raw, before any early-tier discount) reads as a real follow-on purchase for the 48h listing tier, not a second copy of level 1 at the same price. A real number, tunable, not locked in.",
+    "description": "Multiplier applied per level. 1 -> 2.5 (patch 0413, maxLevel extended to 2) so level 2 costs more than level 1. Since patch 0461 that's 292g for level 2 (14-day listings) after the early-tier discount -- deliberately cheap, direct request.",
     "min": 1
   },
   {
@@ -2132,7 +2132,7 @@
     "category": "vendor_upgrades",
     "value": 2,
     "default": 2,
-    "description": "Level cap for Auction House Charter. Extended 1 -> 2 (patch 0413) -- level 1 unlocks the Auction House itself, level 2 unlocks 48h listings (up from the 24h base), resolving the 'is 48h its own upgrade or folded into this one' question in guild-idler-status.md by folding it in.",
+    "description": "Level cap for Auction House Charter. Level 1 unlocks the Auction House (7-day listings), level 2 unlocks 14-day listings (patch 0461; was 24h / 48h, patch 0413).",
     "min": 0
   },
   {

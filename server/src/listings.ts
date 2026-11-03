@@ -20,8 +20,13 @@ import { AppConfig } from './config.js';
  * :id route.
  */
 
-const LISTING_DURATION_HOURS = 24;
-const LISTING_DURATION_HOURS_EXTENDED = 48;
+/** Patch 0461 -- 7 days, or 14 with Auction House Charter level 2 (were
+ *  24h / 48h). Must match src/game/auctionHouse.ts's LISTING_HOURS_*. */
+const LISTING_DURATION_HOURS = 168;
+const LISTING_DURATION_HOURS_EXTENDED = 336;
+/** What a pre-0461 game client sends for the extended tier -- still
+ *  honoured (as 14 days) so an older build keeps working. */
+const LEGACY_EXTENDED_HOURS = 48;
 
 /**
  * Deposit, patch 0413 -- real number, not a placeholder, but a
@@ -231,7 +236,7 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
         reply.code(400);
         return { error: payloadError };
       }
-      const duration = durationHours === LISTING_DURATION_HOURS_EXTENDED
+      const duration = durationHours === LISTING_DURATION_HOURS_EXTENDED || durationHours === LEGACY_EXTENDED_HOURS
         ? LISTING_DURATION_HOURS_EXTENDED
         : LISTING_DURATION_HOURS;
       const depositAmount = computeDeposit(price);

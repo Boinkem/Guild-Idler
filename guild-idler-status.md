@@ -1134,25 +1134,49 @@ raid fight).
 
 ## Backlog
 
-### Auction House Broker (NPC listings + buyouts) -- in design, not built
+### Auction House Broker (NPC listings + buyouts) -- designed, next to build
 From playtest feedback after 0459: unsure about the AH overall, likely
 because with no players there's nothing to buy and no one to sell to.
-Direction so far (being talked through, nothing locked):
-- **Supply:** the server posts a trickle of NPC listings through the day
-  (gear, consumables, the odd Shard stack) at levels matching real
-  players, priced near item value with variance. Uses the existing
-  NULL-seller "system-seeded" listing shape.
-- **Demand:** the Broker buys real players' listings priced at or below
-  a fair price, over hours not instantly; overpriced items sit. Pays
-  below shop price, per-player daily cap, never buys its own listings.
-  Every Broker buyout is a gold faucet, hence the caps.
-- **Smarts:** each tick, compare real 24h activity to a target (e.g.
-  ~40 listings up, ~15 sales/day) and fill only the gap, so the Broker
-  fades out on its own as real trading grows.
-- Recommended: named NPC merchants (lore names) rather than disguising
-  them as players. Possibly a "recently sold" ticker on Browse.
-- Needs a migration so a sale can have a Broker buyer
-  (`transactions.buyer_steam_id` is NOT NULL today).
+Talked through with the developer (after patch 0460); decisions:
+- **Invisible.** Broker listings and buyouts look exactly like player
+  activity (developer's call: it should feel player-driven). To stay
+  convincing: non-round prices, listings posted staggered through the
+  day, some left to expire unsold, buyouts after a realistic delay, real
+  rolled gear from the game's own item code (server imports it from
+  src/). Only the admin dashboard tells Broker and real activity apart.
+- **Prices anchored to shop value.** Going rate is 75-95% of the item's
+  shop price (a 50g shop potion lists for ~45g, like a real player
+  would). Vendor sell-back is only ~35% (EquipmentManager.sellValue), so
+  Broker buyouts pay far more than vendoring -- hence the caps below.
+- **Supply by level bracket, no player tracking.** Brackets 1-5, 6-10,
+  11-15, 16-20, 21-30, 31-40, 41-55, ~10 Broker listings each (~70 with
+  an empty market). Real listings in a bracket count against its target,
+  so the Broker fades out where players keep it stocked; brackets with
+  real activity get a little extra. Mix ~60% gear / 40% consumables,
+  mostly Common/Uncommon, some Rare, Epic rarely. About 1 in 5 priced in
+  scrap (shop gold value / economy.scrapToGoldRatio, 9). No Shard stacks
+  for now. Since 0461 the Charter costs 50g, so players arrive early --
+  the 1-5 and 6-10 brackets matter most.
+- **Demand (Broker buyouts of player listings), by price vs shop value:**
+  up to 75% sells fast (1-3h); 75-95% normally sells within the listing;
+  95-100% slow (~1 in 3 over a day); over 100% never. Cap: 3 Broker
+  buyouts per player per day (gold- or scrap-priced). Never buys a Broker
+  listing. Buy chance scales down as real buyers appear.
+- **Economy:** Broker buyouts are a gold (and scrap) faucet; players
+  buying Broker listings is a sink. Admin dashboard gets a Broker section
+  (paid out vs taken in, listings, buyouts) to watch the net.
+- **Client:** a "Near my level" Browse filter (within 3 levels of the
+  top hero, on by default) so a bracket-wide market isn't noise.
+- **Server:** a Broker tick every few minutes; every number above in
+  server config, tunable without a game update. Needs a migration so a
+  sale can have a Broker buyer (`transactions.buyer_steam_id` is NOT
+  NULL today).
+- **Decided against (for now): scrap as a listable item / scrap-for-gold
+  trading.** Thin markets would make the Broker the de facto exchange
+  rate, it would undo 0460's scrap pacing, and it's the easiest path for
+  save-edited currency. Scrap stays a price only. Revisit if the admin
+  dashboard shows heavy scrap-priced trading. If scrap is still short, a
+  capped NPC money-changer at a poor rate is the preferred valve.
 
 ### Auction House usage stats in DevTools (admin) -- built, patch 0459
 Read-only usage dashboard in the DevTool's Auction House tab. Still not
@@ -7771,7 +7795,9 @@ pass (same caveat as the two entries above).
     play pattern (no need for two players online at once).
   - **Undercut visibility on** -- players can see current listings/
     lowest price for an item before pricing their own.
-  - **Duration: 24h base, up to 48h via a Guild upgrade**, same
+  - **Duration -- revised, patch 0461: 7 days base, 14 days with
+    Auction House Charter level 2** (was 24h / 48h). Originally: **24h
+    base, up to 48h via a Guild upgrade**, same
     cost-curve shape as Barracks/Treasury/etc. Whether the same upgrade
     that gates access also unlocks 48h, or a separate follow-on tier
     does, isn't decided.
@@ -37223,3 +37249,43 @@ Note: the extra Salvage Cache roll uses the quest's seeded RNG only on a
 success with base Scrap, so later rolls in the same resolve (Shard
 drop, crit) can come out differently from before 0460 for the same
 quest -- not a problem (nothing replays a resolve), just noting it.
+
+### Auction House Charter down to 50g, listings now last 7 / 14 days (patch 0461)
+```discord-update
+Dev Update | Auction House
+
+- Changed the Auction House Charter to cost 50 gold, so the Auction House opens up early in a new guild
+- Changed the Charter's second level to 292 gold
+- Changed Auction House listings to last 7 days, or 14 days with the Charter's second level (was 24 and 48 hours)
+```
+
+Direct request, during the Broker design talk: the Auction House is a
+basic feature and should be cheap to open, and listings should run much
+longer.
+
+**Price.** The 450g players saw was 3,000 base x the 15% early-tier
+discount on a first purchase. `upgrade.auction_house_charter.baseCost`
+3000 -> 334, so level 1 costs **50g** and level 2 (x2.5 costGrowth,
+35% discount) **292g** -- cheap on purpose, direct call. Checked through
+the real `upgradeCost`. maxLevel unchanged (2). Charter description
+updated: no more "gold for gold" or Black Market Contact; now says
+listings are priced in gold or scrap and run 7 days, 14 with level 2.
+
+**Duration.** 24h / 48h -> **7 days / 14 days**.
+- Client: `LISTING_HOURS_BASE` (168) / `LISTING_HOURS_EXTENDED` (336) /
+  `ListingHours` in `auctionHouse.ts`, used by `createListing`, the three
+  `engine.list*ForSale` methods (still re-checking Charter level 2
+  before allowing the extended one) and the Sell form's buttons, now
+  "7 days" / "14 days".
+- Server (`listings.ts`): `LISTING_DURATION_HOURS` 168 /
+  `_EXTENDED` 336. A pre-0461 client sending 48 still gets 14 days
+  (`LEGACY_EXTENDED_HOURS`); anything else gets 7. Verified against real
+  Postgres: 168 -> 7d, 336 -> 14d, 48 -> 14d, 24 / missing / 999 -> 7d.
+- Existing listings keep the expiry they were created with.
+- Knock-on to watch: listings now stay up 7x longer, so sellers reach
+  the 25-active-listing cap (`MAX_ACTIVE_LISTINGS_PER_SELLER`) sooner,
+  and the market holds more stock between visits. The 5% deposit is
+  unchanged.
+
+**Deploy:** restart the AH backend (server change) as well as shipping
+the game update. `tsc --noEmit` clean for the client and `server/`.

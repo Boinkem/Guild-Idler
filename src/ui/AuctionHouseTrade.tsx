@@ -5,7 +5,7 @@ import { RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, formatGold } from '../game/u
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { ItemIcon, ConsumableIcon } from './icons';
-import { AhItemType, ServerListingRow } from '../game/auctionHouse';
+import { AhItemType, LISTING_HOURS_BASE, LISTING_HOURS_EXTENDED, ListingHours, ServerListingRow } from '../game/auctionHouse';
 import { MAX_SHARDS_PER_LISTING, SHARD_GLYPH, SHARD_ICON, SHARD_NAME, shardLabel } from '../game/data/shards';
 import { GuildManager } from '../game/managers/GuildManager';
 import { flyIcon, flyTokens, fxMs, fxSpeed } from './purchaseFx';
@@ -321,13 +321,13 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
   const engine = useEngine();
   const [currency, setCurrency] = useState<'gold' | 'scrap'>('gold');
   const [price, setPrice] = useState('');
-  const [duration, setDuration] = useState<24 | 48>(24);
+  const [duration, setDuration] = useState<ListingHours>(LISTING_HOURS_BASE);
   const [submitting, setSubmitting] = useState(false);
   // Patch 0454 -- stack size, shard drafts only.
   const shardsOwned = engine.state.legendaryShards ?? 0;
   const [shardQty, setShardQty] = useState('1');
 
-  const has48h = GuildManager.upgradeLevel(engine.state, 'auction_house_charter') >= 2;
+  const hasExtended = GuildManager.upgradeLevel(engine.state, 'auction_house_charter') >= 2;
   const priceNum = Number(price) || 0;
   const estDeposit = priceNum > 0 ? Math.max(1, Math.ceil(priceNum * 0.05)) : 0;
 
@@ -402,9 +402,10 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
         style={{ width: '100%', background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--text)', padding: '7px 8px', marginBottom: 10 }}
       />
       <div className="row" style={{ gap: 8, marginBottom: 10, alignItems: 'center' }}>
-        <button className={duration === 24 ? 'btn-primary' : 'btn-ghost'} onClick={() => setDuration(24)}>24h</button>
-        <button className={duration === 48 ? 'btn-primary' : 'btn-ghost'} disabled={!has48h} onClick={() => setDuration(48)}>48h</button>
-        {!has48h && <span className="tiny muted">Auction House Charter level 2 unlocks 48h listings</span>}
+        {/* Patch 0461 -- 7 / 14 days (were 24h / 48h). */}
+        <button className={duration === LISTING_HOURS_BASE ? 'btn-primary' : 'btn-ghost'} onClick={() => setDuration(LISTING_HOURS_BASE)}>7 days</button>
+        <button className={duration === LISTING_HOURS_EXTENDED ? 'btn-primary' : 'btn-ghost'} disabled={!hasExtended} onClick={() => setDuration(LISTING_HOURS_EXTENDED)}>14 days</button>
+        {!hasExtended && <span className="tiny muted">Auction House Charter level 2 unlocks 14-day listings</span>}
       </div>
       {priceNum > 0 && (
         <p className="tiny muted" style={{ marginBottom: 10 }}>

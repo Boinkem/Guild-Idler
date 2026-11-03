@@ -1,5 +1,12 @@
 import { TESTING_TOOLS_ENABLED } from './testingTools';
 
+/** Listing durations in hours (patch 0461; were 24 / 48). Level 2 of the
+ *  Auction House Charter unlocks the extended one. Must match
+ *  server/src/listings.ts's LISTING_DURATION_HOURS(_EXTENDED). */
+export const LISTING_HOURS_BASE = 168;
+export const LISTING_HOURS_EXTENDED = 336;
+export type ListingHours = typeof LISTING_HOURS_BASE | typeof LISTING_HOURS_EXTENDED;
+
 /** What a listing can hold. 'shard' (patch 0454) is a stack of Legendary
  *  Shards: payload { defId: 'legendary_shard', amount }. Needs server
  *  migration 002 -- see server/db/migrations/002_legendary_shards.sql. */
@@ -332,7 +339,7 @@ export async function createListing(
   itemPayload: unknown,
   currency: 'gold' | 'scrap',
   price: number,
-  durationHours: 24 | 48 = 24
+  durationHours: ListingHours = LISTING_HOURS_BASE
 ): Promise<CreateListingResult> {
   if (!AH_READY || !AH_BACKEND_URL) return { ok: false, error: 'AH_BACKEND_URL is not configured on this build.' };
 
