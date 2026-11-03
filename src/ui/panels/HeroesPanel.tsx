@@ -22,6 +22,8 @@ import { useReviveBeats } from '../reviveFlash';
 import { HeroBlock } from '../HeroBlock';
 import { Wardrobe } from '../Wardrobe';
 import { useFirstSeen } from '../firstSeen';
+import { ambPhase } from '../ambient';
+import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { DyeFx } from '../dyeFx';
 import { usePulsesOnChange } from '../maxFlash';
 import { buyWithFx, flyCard, fxMs, fxSpeed, LevelRoll, usePurchaseBeats, useRecentIncrease } from '../purchaseFx';
@@ -45,7 +47,7 @@ export function heroPortraitSrc(heroId: string, portrait?: HeroClassDef['portrai
 /** Shared backgroundPosition/backgroundSize for a portrait div, same
  *  conditional-scale convention as LorePanel's ChainBanner -- cover
  *  (the CSS class default) unless a custom zoom was set in DevTools. */
-function heroPortraitStyle(portrait?: HeroClassDef['portrait']): CSSProperties {
+export function heroPortraitStyle(portrait?: HeroClassDef['portrait']): CSSProperties {
   return {
     backgroundPosition: `${portrait?.focusX ?? 50}% ${portrait?.focusY ?? 50}%`,
     ...(portrait?.scale && portrait.scale !== 100 ? { backgroundSize: `${portrait.scale}%` } : {}),
@@ -298,6 +300,20 @@ function HeroesRosterView() {
   const state = engine.state;
   const slots = engine.heroSlots;
   const recruitable = GuildManager.recruitableClasses(state);
+  // Patch 0466 -- ambient recruit hints. The cheapest class you could
+  // recruit right now (unlocked, not yet in the roster, affordable, a
+  // free slot): open slots breathe and name it, and every affordable
+  // chip glows. A class that became recruitable since you last looked
+  // gets a NEW tag and a purple glow until you open it.
+  const recruitStatuses = (Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => ({ id, ...recruitStatusFor(engine, id, recruitable, slots) }));
+  const canRecruitNow = (r: (typeof recruitStatuses)[number]) => r.unlocked && !r.alreadyRecruited && !r.slotsFull && state.gold >= r.cost;
+  const tavernCost = GuildManager.nextCost(state, 'tavern');
+  const tavernAffordable = tavernCost !== null && state.gold >= tavernCost;
+  const bannerCost = PrestigeManager.nextPerkCost(state, 'extra_banner');
+  const bannerAffordable = bannerCost !== null && state.renown >= bannerCost;
+  const cheapestRecruit = recruitStatuses.filter(canRecruitNow).sort((a, b) => a.cost - b.cost)[0];
+  // Tier 0 classes are open from the start, so they never count as "new".
+  const recruitSeen = useFirstSeen('recruit-unlock', recruitStatuses.filter((r) => r.unlocked && !r.alreadyRecruited && r.def.tier > 0).map((r) => r.id));
 
   // Condensed by default -- a guild of even three or four heroes used to eat
   // almost the whole screen. Each card opens on click for the full stat
@@ -463,7 +479,20 @@ function HeroesRosterView() {
           recruit visibly lands somewhere and the roster's spare capacity
           reads at a glance. */}
       {Array.from({ length: Math.max(0, slots - state.heroes.length) }, (_, i) => (
-        <div key={`open-${i}`} className="hero-open-slot">Open slot</div>
+        cheapestRecruit ? (
+          <button
+            key={`open-${i}`}
+            type="button"
+            className="hero-open-slot amb-open-slot"
+            onClick={() => setSelectedRecruitId(cheapestRecruit.id)}
+          >
+            <span className="amb-open-plus" aria-hidden="true">+</span>
+            <span>Recruit a hero</span>
+            <span className="tiny muted">{cheapestRecruit.def.name} · {formatGold(cheapestRecruit.cost)}</span>
+          </button>
+        ) : (
+          <div key={`open-${i}`} className="hero-open-slot">Open slot</div>
+        )
       ))}
       </>
       )}
@@ -489,10 +518,17 @@ function HeroesRosterView() {
               button's colour already means "that destination" elsewhere
               in the game. */}
           <div className="row" style={{ gap: 8, marginBottom: 10 }}>
-            <button className="btn-primary" onClick={() => engine.requestTab('guild', 'tavern')}>
+            {/* Patch 0466 -- each glows only while its upgrade is affordable. */}
+            <button
+              className={`btn-primary ${tavernAffordable ? 'amb-warm' : ''}`}
+              onClick={() => engine.requestTab('guild', 'tavern')}
+            >
               Go to Tavern →
             </button>
-            <button className="btn-purple" onClick={() => engine.requestTab('prestige', 'extra_banner')}>
+            <button
+              className={`btn-purple ${bannerAffordable ? 'amb-warm-violet' : ''}`}
+              onClick={() => engine.requestTab('prestige', 'extra_banner')}
+            >
               Go to Prestige →
             </button>
           </div>
@@ -523,18 +559,28 @@ function HeroesRosterView() {
                 const { def, unlocked, cost, alreadyRecruited } = recruitStatusFor(engine, id, recruitable, slots);
                 const badgeText = alreadyRecruited ? 'Recruited' : !unlocked ? 'Locked' : formatGold(cost);
                 const badgeClass = alreadyRecruited ? 'good' : !unlocked ? 'locked' : 'view';
+                const affordNow = unlocked && !alreadyRecruited && state.heroes.length < slots && state.gold >= cost;
+                const isNew = recruitSeen.isNew(id);
                 return (
                   <button
                     key={id}
                     type="button"
                     ref={(el) => { chipRefs.current[id] = el; }}
-                    className={`recruit-chip ${alreadyRecruited ? 'recruited' : ''} ${recruitedFlips[id] ? 'fx-just' : ''}`}
-                    onClick={() => setSelectedRecruitId(id)}
+                    className={`recruit-chip ${alreadyRecruited ? 'recruited' : ''} ${!unlocked ? 'locked' : ''} ${recruitedFlips[id] ? 'fx-just' : ''} ${isNew ? 'amb-recruit-new' : affordNow ? 'amb-recruit' : ''}`}
+                    style={affordNow || isNew ? ambPhase(id, 4) : undefined}
+                    onClick={() => { setSelectedRecruitId(id); recruitSeen.open(id); }}
                   >
+                    {isNew && <span className="new-tab">New</span>}
                     <span
                       className="chip-icon-frame"
                       style={{ backgroundImage: `url(${heroPortraitSrc(id, def.portrait)})`, ...heroPortraitStyle(def.portrait) }}
                     />
+                    {!unlocked && !alreadyRecruited && (
+                      <svg className="chip-lock" viewBox="0 0 16 18" aria-hidden="true">
+                        <path d="M4 8V5.5a4 4 0 0 1 8 0V8" fill="none" stroke="currentColor" strokeWidth="2" />
+                        <rect x="2" y="8" width="12" height="9" rx="2" fill="currentColor" />
+                      </svg>
+                    )}
                     <span className="chip-name">{def.name}</span>
                     <span className={`chip-badge ${badgeClass}`}>{badgeText}</span>
                   </button>

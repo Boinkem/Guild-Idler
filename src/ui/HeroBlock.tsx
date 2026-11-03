@@ -175,7 +175,7 @@ export function HeroBlock({
 
   if (collapsed) {
     return (
-      <div className={`card hero-block hero-block-summary ${fallen ? 'fallen' : ''} ${injured ? 'injured' : ''} ${revivePhase === 'rise' ? 'fx-revive-glow' : ''}`}>
+      <div className={`card hero-block hero-block-summary ${fallen ? 'fallen' : ''} ${injured ? 'injured amb-hurt' : ''} ${hero.status === 'questing' ? 'amb-away' : ''} ${revivePhase === 'rise' ? 'fx-revive-glow' : ''}`}>
         {children}
         <div
           className="hero-block-summary-row"
@@ -224,7 +224,9 @@ export function HeroBlock({
   }
 
   return (
-    <div className={`card hero-block ${fallen ? 'fallen' : ''} ${injured ? 'injured' : ''} ${revivePhase === 'rise' ? 'fx-revive-glow' : ''}`}>
+    // Patch 0466 -- ambient state: an injured card breathes red at the
+    // edge, a hero out on a quest gets a slow travelling sheen.
+    <div className={`card hero-block ${fallen ? 'fallen' : ''} ${injured ? 'injured amb-hurt' : ''} ${hero.status === 'questing' ? 'amb-away' : ''} ${revivePhase === 'rise' ? 'fx-revive-glow' : ''}`}>
       {children}
       <div className="hero-block-grid">
 
@@ -403,7 +405,7 @@ export function HeroBlock({
 
           <div className="hero-block-rule">
             <span className="hero-block-rule-label">ATTRIBUTES</span>
-            {hero.statPoints > 0 && <span className="hero-block-points">{hero.statPoints} training points</span>}
+            {hero.statPoints > 0 && <span className="hero-block-points amb-points">{hero.statPoints} training points</span>}
             {/* Stat reset (patch 0295), direct request: no way to walk back
                 a mis-allocated point before this. Only offered once a
                 hero's past level 1 -- a level-1 hero has never had a point

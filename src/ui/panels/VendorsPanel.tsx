@@ -22,6 +22,7 @@ import {
 import { isTabUnread } from '../../game/attention';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
+import { ambPhase } from '../ambient';
 import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, shownValue, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
 import type { BeatTiming } from '../purchaseFx';
 import { CraftingStation } from '../CraftingStation';
@@ -181,7 +182,8 @@ function VendorUpgradeRow({
   const press = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: def.name }) : onBuy(btn));
   return (
     <div
-      className={`upgrade-row vendor-upgrade-row ${unveiling ? 'fx-unveiling' : ''} ${rowBeatClass(beat)}`}
+      className={`upgrade-row vendor-upgrade-row ${unveiling ? 'fx-unveiling' : ''} ${rowBeatClass(beat)} ${!maxed && !locked && affordable && !beat ? 'amb-afford' : ''}`}
+      style={!maxed && !locked && affordable && !beat ? ambPhase(def.id, 4) : undefined}
       onClick={() => setShowDetail(true)}
       role="button"
       tabIndex={0}

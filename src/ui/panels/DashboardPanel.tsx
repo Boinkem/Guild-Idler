@@ -169,7 +169,8 @@ function AttentionDigest() {
   if (items.length === 0) return null;
 
   return (
-    <div className="card">
+    // Patch 0466 -- edge breathes while there's anything listed.
+    <div className="card amb-attention">
       <div className="card-title" style={{ marginBottom: 4 }}>Needs attention</div>
       {items.map((item) => (
         <div key={item.key} className="spread" style={{ alignItems: 'center', marginTop: 4 }}>

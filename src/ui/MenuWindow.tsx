@@ -351,6 +351,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const Panel = activeTabDef.Panel;
   const panelBreakdown = PANEL_BREAKDOWNS[tab];
   const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
+  const navHasTodo = (id: string) => (id === 'quests' && idleHeroes > 0) || (id === 'hatchery' && eggsReady > 0)
+    || (id === 'equipment' && brokenGear > 0) || (id === 'harvest' && harvestReady > 0);
   // Acknowledges the bare (no-sub-tab) key for whichever top-level tab is
   // currently active, every time it changes -- clears the nav shimmer for
   // any banner-worthy notification targeting this tab's main content
@@ -490,7 +492,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         {/* Patch 0438 -- demo build only; renders nothing in the full game. */}
         <DemoBadge />
         <div className="resources">
-          <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+          {/* Patch 0466 -- warms up within 10% of the storage cap. */}
+          <span
+            ref={goldRef}
+            className={`gold ${engine.state.gold >= engine.goldStorage * 0.9 ? 'amb-near-cap' : ''}`}
+            title={engine.state.gold >= engine.goldStorage * 0.9 ? 'Nearly at your gold storage cap -- spend some, or raise the cap with the Treasury' : undefined}
+          >◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>
           {/* Patch 0454 -- only once the guild has had a Shard, so the
               early-game header stays uncluttered. */}
@@ -673,6 +680,10 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     className={[
                       isNavTabUnread(engine.state, t.id) ? 'nav-tab-unread' : '',
                       t.id === unlockingTab ? 'navfx-unlock' : '',
+                      // Patch 0466 -- a tab with something waiting (it has
+                      // a count badge) and not open gets a faint shimmer
+                      // on its label and a breathing edge pip.
+                      t.id !== tab && navHasTodo(t.id) ? 'amb-todo' : '',
                     ].filter(Boolean).join(' ') || undefined}
                   >
                     {t.id === unlockingTab && (
@@ -686,7 +697,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                         <span className="navfx-sweep" />
                       </span>
                     )}
-                    {t.label}
+                    <span className="nav-label">{t.label}</span>
                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
                     {t.id === 'hatchery' && eggsReady > 0 ? <span className="tab-badge">{eggsReady}</span> : null}
                     {t.id === 'equipment' && brokenGear > 0 ? <span className="tab-badge broken">{brokenGear}</span> : null}

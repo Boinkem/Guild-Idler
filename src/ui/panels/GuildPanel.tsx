@@ -18,6 +18,7 @@ import { GUILD_HALL_DECOR_ENABLED } from '../../game/data/guildHallDecor';
 import { FundGuildModal } from '../FundGuildModal';
 import waxSealComplete from '../../assets/wax-seal-complete.png';
 import { demoLockKind, demoReplayLocked, requestDemoWall } from '../../game/demo';
+import { ambPhase } from '../ambient';
 
 function chainRangeText(level: number): string {
   const range = AUTO_CHAIN_RANGES[level];
@@ -197,13 +198,18 @@ function GuildUpgradeRow({
   useEffect(() => {
     if (highlighted) rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [highlighted]);
+  // Patch 0466 -- an upgrade you can buy right now: the Build button
+  // breathes brass and a light sweep crosses it now and then (staggered
+  // down the list). Rows you can't afford stay flat.
+  const canBuyNow = row.affordable && !row.buyDisabled && !row.demoLocked && !beat;
   const beatClass = beat?.phase === 'levelup' ? 'fx-levelup'
     : beat?.phase === 'stamp' ? 'fx-stamped'
     : beat?.phase === 'file' ? 'fx-stamped fx-filing' : '';
   return (
     <div
       ref={rowRef}
-      className={`guild-upgrade-row ${beatClass} ${highlighted ? 'card requirement-highlight' : ''}`}
+      className={`guild-upgrade-row ${beatClass} ${highlighted ? 'card requirement-highlight' : ''} ${canBuyNow ? 'amb-afford' : ''}`}
+      style={canBuyNow ? ambPhase(row.name, 4) : undefined}
       onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
       role="button"
       tabIndex={0}

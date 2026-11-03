@@ -32,6 +32,9 @@ import { RecipeLearnFx } from '../recipeFx';
 import { fxSpeed } from '../purchaseFx';
 import { useRepairFx } from '../repairFx';
 import { useRecentIncrease } from '../purchaseFx';
+import { HeroPowerPortrait } from '../heroAura';
+import { HERO_CLASSES } from '../../game/data/progression';
+import { heroPortraitSrc, heroPortraitStyle } from './HeroesPanel';
 
 const SLOTS = EQUIP_SLOTS;
 
@@ -688,7 +691,8 @@ function ConsumableSlotCard({
 
   return (
     <>
-      <div className="item-card empty clickable consumable-empty">
+      {/* Patch 0466 -- breathes only while something in stock fits. */}
+      <div className={`item-card empty clickable consumable-empty ${available.length > 0 && !deployed ? 'amb-slot-wait' : ''}`}>
         <div className="rarity-banner" style={{ backgroundImage: `url(${EMPTY_SLOT_BANNER})` }} />
         <div
           className="item-card-summary"
@@ -697,10 +701,10 @@ function ConsumableSlotCard({
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
         >
-          <div className="item-icon" style={{ width: 40, height: 40, fontSize: 18, display: 'grid', placeItems: 'center' }}>+</div>
+          <div className="item-icon amb-slot-plus" style={{ width: 40, height: 40, fontSize: 18, display: 'grid', placeItems: 'center' }}>+</div>
           <div className="item-card-body">
             <div className="slot-name">consumable</div>
-            <div className="tiny muted">Empty</div>
+            <div className="tiny muted">{available.length > 0 && !deployed ? 'Empty · tap to fill' : 'Empty'}</div>
           </div>
         </div>
       </div>
@@ -836,11 +840,15 @@ function SlotCard({
   const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
   const itemFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) || !hero.usedFreeRepair;
   const repairDiscount = ModifierManager.global(engine.state).repairDiscount ?? 0;
+  // Patch 0466 -- ambient condition: worn (50% or less) breathes amber at
+  // the edge, broken breathes red. Off during a repair replay.
+  const wear = repairFx ? '' : EquipmentManager.isBroken(item) ? 'amb-broken'
+    : item.durability / EquipmentManager.maxDurability(item) <= 0.5 ? 'amb-worn' : '';
 
   return (
     <>
       <div
-        className={`item-card rarity-card ${hasActiveSetBonus ? 'set-active' : ''} ${fxClass} ${repairFx?.clank ? 'rpx-clank' : ''}`}
+        className={`item-card rarity-card ${hasActiveSetBonus ? 'set-active' : ''} ${fxClass} ${repairFx?.clank ? 'rpx-clank' : ''} ${wear}`}
         data-eq-slot={slot}
         data-dura-uid={item.uid}
         onClick={() => setOpen(true)}
@@ -1011,7 +1019,7 @@ function StashCard({
   return (
     <>
       <div
-        className={`item-card rarity-card ${back ? `eqx-${back}` : ''} ${repairFx?.clank ? 'rpx-clank' : ''}`}
+        className={`item-card rarity-card ${back ? `eqx-${back}` : ''} ${repairFx?.clank ? 'rpx-clank' : ''} ${isUpgrade && !back ? 'amb-upgrade' : ''}`}
         data-eq-uid={item.uid}
         data-dura-uid={item.uid}
         onClick={() => setOpen(true)}
@@ -1135,6 +1143,12 @@ export function EquipmentPanel() {
     EquipmentManager.allItems(state).map((e) => ({ id: e.item.uid, value: e.item.durability })), 900,
   );
   const autoActive = !rpFx && Object.keys(autoUp).length > 0;
+  // Patch 0466 -- ambient hints on the two bulk buttons.
+  const stashHasUpgrade = state.stash.some((it) => {
+    const d = EQUIPMENT_BY_ID[it.defId];
+    return !!d && isGearUpgrade(hero, it, d);
+  });
+  const anyBroken = state.heroes.some((h) => Object.values(h.equipment).some((it) => !!it && EquipmentManager.isBroken(it)));
   // Patch 0465 -- a set reaching a new bonus tier on this hero (the piece
   // that tips it over was just equipped): the tier's pip lights and its
   // bonus line flashes in on the Active Set Bonuses card. Tracked per
@@ -1252,6 +1266,11 @@ export function EquipmentPanel() {
   return (
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/inventory.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
+      {/* Patch 0466 -- header split: the hero's portrait with their
+          power aura (heroAura.tsx) sits to the right of the intro and
+          the automation settings. */}
+      <div className="inv-head">
+      <div className="inv-head-main">
       <h2>Inventory</h2>
       <div className="card">
         <p className="small muted" style={{ margin: 0 }}>
@@ -1299,11 +1318,22 @@ export function EquipmentPanel() {
           <Toggle value={state.autoEquipConsumablesOnSend} onChange={(v) => engine.setAutoEquipConsumablesOnSend(v)} />
         </Row>
       </div>
+      </div>
+      <HeroPowerPortrait hero={hero} />
+      </div>
 
       <div className="row wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
         {state.heroes.map((h) => (
-          <button key={h.id} className={`hero-tab-chip ${h.id === hero.id ? 'on' : ''}`} onClick={() => setHeroId(h.id)}>
-            {h.name}
+          <button key={h.id} className={`hero-tab-chip has-portrait ${h.id === hero.id ? 'on' : ''}`} onClick={() => setHeroId(h.id)}>
+            {/* Patch 0466 -- class portrait in each tab; the selected one
+                breathes, a hurt or fallen hero gets a red dot. */}
+            <span
+              className="hero-tab-portrait"
+              aria-hidden="true"
+              style={{ backgroundImage: `url(${heroPortraitSrc(h.heroClass, HERO_CLASSES[h.heroClass]?.portrait)})`, ...heroPortraitStyle(HERO_CLASSES[h.heroClass]?.portrait) }}
+            />
+            {(h.injuries.length > 0 || h.status === 'fallen') && <span className="amb-hurt-dot" aria-label="Injured" />}
+            <span>{h.name}</span>
           </button>
         ))}
         <div style={{ flex: 1 }} />
@@ -1312,7 +1342,7 @@ export function EquipmentPanel() {
         </span>
         <span className="eqx-anchor" style={{ marginLeft: 10 }}>
           <button
-            className="btn-green"
+            className={`btn-green ${stashHasUpgrade && !eqFx ? 'amb-glint' : ''}`}
             onClick={(e) => runEquip(() => engine.equipBestGear(hero.id), 'best', e.currentTarget)}
             title="Equip the highest Gear Score item in the stash for each slot, wherever it beats what's already worn"
           >
@@ -1320,7 +1350,7 @@ export function EquipmentPanel() {
           </button>
           {eqFx?.summary && <span className="eqx-sum" key={eqFx.key}>{eqFx.summary}</span>}
         </span>
-        <button className="btn-primary" onClick={(e) => runRepair(() => engine.repairAll(), e.currentTarget)} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
+        <button className={`btn-primary ${anyBroken && !rpFx ? 'amb-warm' : ''}`} onClick={(e) => runRepair(() => engine.repairAll(), e.currentTarget)} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
           Repair everything · {formatGold(repairBill)} + {repairScrapBill} Scrap{repairShardBill > 0 ? ` + ${shardLabel(repairShardBill)}` : ''}
         </button>
       </div>

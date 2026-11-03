@@ -37742,3 +37742,103 @@ stamps, the set pip and tier line show, contracts flip in, the retire
 plaque stamps and the card leaves, stock drops and FULL shows. Not
 checked in the Electron app. One fix came out of testing: the vendor
 row's rule turned green before the level rolled.
+
+### Ambient motion: gear condition, power aura, difficulty glow, affordable upgrades, living raids, hero and recruit hints (patch 0466)
+```discord-update
+Dev Update | Ambient Motion
+
+- Added a portrait of the selected hero to the Inventory, wrapped in a glow in their power tier's colour, with lightning crackling round the frame from Rare up (bigger and wilder at Epic and Legendary)
+- Added class portraits to the hero tabs in the Inventory, with a red dot on anyone injured
+- Added a slow amber glow to worn gear and a red one to broken gear, and the Repair everything button now warms up while anything is broken
+- Added a green shimmer to stash items that would be an upgrade, and a glint on Equip best from stash while one exists
+- Added a gentle pulse to an empty consumable slot when you have something that fits it
+- Added a soft glow behind each contract on the Quest Board in its difficulty colour, stronger for Epic and Legendary, and a spark on the FAST tag
+- Added a glow and light sweep to every upgrade you can afford right now: Guild Hall, vendor upgrades, Harvest tools and Overseer, and Renown perks
+- Added slow drifting art and rising embers to open raids, a breathing border on a raid you could start right now, and a moving sheen on a raid in progress
+- Added a shimmer to tabs that have something waiting for you, a glowing edge on Needs attention, and a warm glow on your gold when it's close to the storage cap
+- Added hero card hints: injured heroes glow red, heroes on a quest shimmer, and unspent Training points bob for attention
+- Changed open hero slots to show the cheapest hero you can afford and recruit them in one click
+- Added a glow to recruit chips you can afford, darker locked portraits with a padlock, and a NEW tag on classes that just became available
+- Changed all of these to stop with Reduce motion and pause while the game window is hidden or minimised
+```
+
+Direct request: the static pages should feel alive. Mocked up on the
+Design canvas "Guildbound Ambient Motion" (boards A-I, plus the Legendary
+aura revised to a bigger rectangular glow) and signed off as a whole.
+
+**Rules.** Every ambient class starts `amb-`. Two rules at the top of
+the new app.css block switch them all at once: `:root[data-motion='off']`
+sets `animation: none` (the hero aura keeps a static glow), and
+`:root[data-hidden='1']` pauses them. `src/ui/ambient.ts` (new) mirrors
+`document.hidden` onto `<html data-hidden>` (installed in main.tsx) and
+exports `ambPhase(id, period)`, a stable negative animation-delay from
+an id so lists breathe out of phase. Loops are 3-9s, colour/shadow only,
+no layout changes.
+
+**Inventory (`EquipmentPanel.tsx`, new `heroAura.tsx`).**
+- Header split (`.inv-head`): the selected hero's class portrait at the
+  right, `HeroPowerPortrait`. Tier = `levelTierName(hero.level)` (same
+  bands as The Guild's rings). Common/Uncommon glow only; Rare 2 arcs,
+  Epic 4 arcs + shimmer, Legendary 6 large arcs, orbiting sparks, a
+  three-layer rectangular glow and two outlines rippling outward. Arcs
+  are SVG zigzags with two shapes swapping every 60ms while they flicker,
+  each on its own timing. `heroPortraitSrc` / `heroPortraitStyle`
+  (now exported) from HeroesPanel supply the art.
+- Hero tabs: class portrait in each chip; selected one breathes a violet
+  rim; injured or fallen heroes get a pulsing red dot.
+- Worn gear (50% or less) `amb-worn` amber; broken `amb-broken` red.
+  Skipped during a repair replay. Repair everything warms (`amb-warm`)
+  while any hero has broken gear.
+- Stash cards that `isGearUpgrade` get a green sweep; Equip best from
+  stash glints while one exists (not during an equip replay).
+- Empty consumable slot breathes and bobs its + only while a fitting
+  consumable is in stock and the hero isn't away; label reads "Empty ·
+  tap to fill".
+
+**Quests (`QuestPanel.tsx`).** `QuestRow` gets `amb-diff` with
+`--amb-c` = the difficulty's own colour, phase from the offer id;
+Epic/Legendary use a stronger loop. The tutorial quest keeps its own
+spotlight instead. FAST tag gets a periodic spark.
+
+**Upgrades you can afford.** `amb-afford` on Guild Hall rows
+(`row.affordable`, not demo-locked, no purchase beat running), vendor
+upgrade rows, Harvest tool and Overseer rows, and Renown perk rows
+(violet there). The buy button breathes brass and a light sweep crosses
+it, staggered by id. Unaffordable rows unchanged.
+
+**Raids (`RaidsPanel.tsx`).** Every open raid card's thumbnail slowly
+pans and zooms with three rising embers (`.amb-embers`); a raid you
+could start now (no raid running, at least a Normal party of idle heroes
+at its level) breathes its border. Not while its 0465 opening plays.
+The in-progress card's bar gets a moving sheen.
+
+**Extras.** Nav (`MenuWindow.tsx`): a tab with a count badge (idle
+heroes, eggs ready, broken gear, harvest ready) that isn't open gets a
+label shimmer and a breathing green edge pip; the label is now wrapped
+in `.nav-label`. Header gold gets `amb-near-cap` at 90%+ of storage,
+with a tooltip. The Guild's Needs attention card breathes its edge.
+
+**Heroes (`HeroBlock.tsx`, `HeroesPanel.tsx`).**
+- Injured cards breathe red (`amb-hurt`), questing cards get a slow
+  sheen (`amb-away`), unspent Training points bob (`amb-points`).
+- Open slots: while some class is recruitable and affordable with a
+  free slot, the slot becomes a button ("Recruit a hero", cheapest class
+  and price) that opens that class's recruit modal, and breathes.
+  Otherwise unchanged.
+- Recruit chips: affordable ones glow (`amb-recruit`); locked ones get a
+  darkened portrait and padlock; a class above tier 0 that became
+  recruitable since you last looked gets a NEW tab and violet glow until
+  its chip is opened (`useFirstSeen('recruit-unlock')`, new entry scope;
+  old saves adopt silently). Slots full: Go to Tavern / Go to Prestige
+  glow only when that upgrade is affordable.
+
+Verified: `tsc --noEmit` and `npm run build` clean. Drove a web build in
+headless Chromium with seeded states and checked the Inventory (broken
+and worn gear, upgrade in stash, Legendary aura with arcs firing, tab
+portraits, consumable slot), Quest Board glows by difficulty (computed
+box-shadow per card, out of phase), Guild Hall with everything
+affordable, Raids, Heroes (injured / questing cards, open-slot button,
+affordable / NEW / locked chips, Tavern button glowing) and The Guild
+(Needs attention, nav pip, gold near cap). Not checked in the Electron
+app, and not checked for frame cost on a low-end machine -- worth a look
+with several tabs' worth of glows on screen.

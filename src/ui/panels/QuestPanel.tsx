@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { ambPhase } from '../ambient';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -146,10 +147,16 @@ export function QuestRow({
   // all (the old pendingBurstQuestSpotlight this replaced did).
   const isSpotlighted = offer.id === TUTORIAL_QUEST_ID;
   const isFast = QuestManager.isFastOffer(offer);
+  // Patch 0466 -- a soft glow behind the card in its difficulty colour,
+  // phase-offset per offer (from its id) so a board doesn't pulse in
+  // sync. Epic and Legendary glow a touch stronger.
+  const strong = offer.difficulty === 'epic' || offer.difficulty === 'legendary';
+  const ambStyle = { '--amb-c': cfg.color, ...ambPhase(offer.id) } as CSSProperties;
 
   return (
     <div
-      className={`card raid-card${isSpotlighted ? ' quest-card-spotlight' : ''}`}
+      className={`card raid-card amb-diff ${strong ? 'amb-diff-strong' : ''}${isSpotlighted ? ' quest-card-spotlight' : ''}`}
+      style={isSpotlighted ? undefined : ambStyle}
       data-tour={isSpotlighted ? 'tutorial-quest' : undefined}
       onClick={onOpen}
       role="button"
@@ -185,7 +192,7 @@ export function QuestRow({
           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
           {isFast && (
             <span
-              className="tag"
+              className="tag amb-spark"
               style={{ color: 'var(--brass)' }}
               title="A rare fast roll -- shorter than usual for its difficulty, reward scaled to match but never below half of the full-length version. Success chance takes a hit in exchange."
             >

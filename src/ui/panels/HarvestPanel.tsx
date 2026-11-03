@@ -17,6 +17,7 @@ import { Ring } from './DashboardPanel';
 import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
 import { backgroundSrc } from '../../game/settings';
 import { UnlockFx, useJustUnlocked } from '../unlockFx';
+import { ambPhase } from '../ambient';
 import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats, useRecentIncrease } from '../purchaseFx';
 
 type SubTab = 'warehouse' | 'fields';
@@ -499,7 +500,8 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
   const buyLabel = maxed ? 'Fully upgraded' : locked ? '🔒 Full game' : `Upgrade · ${formatGold(cost ?? 0)}`;
   return (
     <div
-      className={`upgrade-row ${rowBeatClass(beat)}`}
+      className={`upgrade-row ${rowBeatClass(beat)} ${!maxed && !locked && engine.state.gold >= (cost ?? Infinity) && !beat ? 'amb-afford' : ''}`}
+      style={ambPhase(nodeId, 4)}
       onClick={() => setShowDetail(true)}
       role="button"
       tabIndex={0}
@@ -667,7 +669,8 @@ function OverseerRow() {
   const buyLabel = maxed ? 'Fully staffed' : locked ? '🔒 Full game' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)}`;
   return (
     <div
-      className={`upgrade-row ${rowBeatClass(beat)}`}
+      className={`upgrade-row ${rowBeatClass(beat)} ${!maxed && !locked && engine.state.gold >= (cost ?? Infinity) && !beat ? 'amb-afford' : ''}`}
+      style={ambPhase('overseer', 4)}
       onClick={() => setShowDetail(true)}
       role="button"
       tabIndex={0}

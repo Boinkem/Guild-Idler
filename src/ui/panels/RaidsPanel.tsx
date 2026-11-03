@@ -19,6 +19,7 @@ import { RaidPartySprites } from '../sprites/RaidPartySprites';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { fxMs } from '../purchaseFx';
 import { useFirstSeen } from '../firstSeen';
+import { ambPhase } from '../ambient';
 import { at } from '../resultFx';
 import { formatDuration, describeMods, describeStats, RARITY_COLOR } from '../../game/util';
 
@@ -783,11 +784,16 @@ function RaidCard({
 
   const open = () => { setShowModal(true); onOpened?.(); };
   const opens = opening >= 0;
+  // Patch 0466 -- ambient: an open raid's art drifts with a few embers
+  // rising; one you could start right now (no raid running, enough idle
+  // heroes at its level for a Normal party) also breathes its border.
+  const ready = !state.activeRaid && state.heroes.filter((h) => h.status === 'idle' && h.level >= raid.reqLevel).length
+    >= RAID_DIFFICULTIES.normal.partySize;
   return (
     <>
       <div
-        className={`card raid-card ${opens ? 'fx-raid-open' : ''} ${isNew ? 'rfo-new' : ''}`}
-        style={opens ? ({ '--rfo-d': `calc(var(--fx-t) * ${opening * 700})` } as CSSProperties) : undefined}
+        className={`card raid-card amb-raid ${ready && !opens ? 'amb-raid-ready' : ''} ${opens ? 'fx-raid-open' : ''} ${isNew ? 'rfo-new' : ''}`}
+        style={opens ? ({ '--rfo-d': `calc(var(--fx-t) * ${opening * 700})` } as CSSProperties) : ambPhase(raid.id, 9)}
         onClick={open}
         role="button"
         tabIndex={0}
@@ -798,6 +804,9 @@ function RaidCard({
          *  apart and the art floods with colour. See .fx-raid-open. */}
         <span className="rfo-thumb">
           <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
+          {!opens && (
+            <span className="amb-embers" aria-hidden="true"><i /><i /><i /></span>
+          )}
           {opens && (
             <span className="rfo-gate" aria-hidden="true">
               <span className="rfo-door l" /><span className="rfo-door r" />
@@ -893,7 +902,7 @@ function ActiveRaidCard() {
           any other flex content if a Legendary-sized party runs wide. */}
       <RaidPartySprites heroes={partyHeroes} height={56} className="raid-active-party-sprites" />
       <p className="raid-active-party">{party}</p>
-      <div className="bar" style={{ marginTop: 6 }}><span style={{ width: `${progress}%` }} /></div>
+      <div className="bar amb-sheen-bar" style={{ marginTop: 6 }}><span style={{ width: `${progress}%` }} /></div>
       <p className="raid-active-eta">
         {formatDuration(Math.max(0, active.endsAt - now))} remaining -- committed, no early retreat.
       </p>

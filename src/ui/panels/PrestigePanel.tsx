@@ -6,6 +6,7 @@ import { demoRankLocked, requestDemoWall } from '../../game/demo';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
 import { describeMods, formatNumber } from '../../game/util';
+import { ambPhase } from '../ambient';
 import { buyWithFx, fxMs, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
 import type { Beat } from '../purchaseFx';
 import { Hero } from '../../game/types';
@@ -155,7 +156,8 @@ function RenownPerkRow({
   return (
     <div
       ref={rowRef}
-      className={`upgrade-row fx-renown ${rowBeatClass(beat)} ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'card requirement-highlight' : ''}`}
+      className={`upgrade-row fx-renown ${rowBeatClass(beat)} ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'card requirement-highlight' : ''} ${!maxed && !locked && affordable && !beat ? 'amb-afford' : ''}`}
+      style={ambPhase(def.id, 4)}
       onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
       role="button"
       tabIndex={0}
