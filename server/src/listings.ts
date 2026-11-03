@@ -128,7 +128,7 @@ export async function sweepExpiredListings(): Promise<number> {
  * asking" uses this as a preHandler rather than duplicating the header
  * parsing per route.
  */
-function requireAuth(config: AppConfig) {
+export function requireAuth(config: AppConfig) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const header = request.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;

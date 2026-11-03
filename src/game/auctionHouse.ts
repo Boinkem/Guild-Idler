@@ -413,3 +413,56 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
   }
 }
 
+
+/** Ledger period for My Ledger (patch 0458). */
+export type AhLedgerPeriod = '7d' | '30d' | 'all';
+
+/** One finished trade the player was part of -- newest first. */
+export interface AhLedgerTrade {
+  side: 'sold' | 'bought';
+  itemType: AhItemType;
+  itemPayload: unknown;
+  currency: 'gold' | 'scrap';
+  price: number;
+  at: string;
+  /** Minutes from listing to sale -- only on 'sold' rows. */
+  minutesToSell?: number;
+}
+
+/** GET /ledger?period=&tzOffset= (patch 0458) -- the player's own Auction
+ *  House dashboard. See server/src/ledger.ts. */
+export interface AhLedger {
+  period: AhLedgerPeriod;
+  gold: { earned: number; spent: number; depositsLost: number };
+  scrap: { earned: number; spent: number; depositsLost: number };
+  sold: number;
+  bought: number;
+  listed: number;
+  expired: number;
+  cancelled: number;
+  sellThrough: number | null;
+  avgMinutesToSell: number | null;
+  active: number;
+  activeCap: number;
+  bestSale: AhLedgerTrade | null;
+  biggestBuy: AhLedgerTrade | null;
+  /** Last 14 of the player's local days, oldest first. `day` is 'YYYY-MM-DD'. */
+  daily: { day: string; goldEarned: number; goldSpent: number; scrapEarned: number; scrapSpent: number }[];
+  recent: AhLedgerTrade[];
+}
+
+/** The player's own trading ledger. `null` on any failure (no session,
+ *  offline, an older backend without the route). */
+export async function fetchMyLedger(period: AhLedgerPeriod): Promise<AhLedger | null> {
+  if (!AH_READY || !AH_BACKEND_URL) return null;
+  try {
+    // tzOffset so the 14-day chart splits days on the player's own midnight.
+    const tzOffset = new Date().getTimezoneOffset();
+    const response = await authedFetch(`${AH_BACKEND_URL}/ledger?period=${period}&tzOffset=${tzOffset}`);
+    if (!response || !response.ok) return null;
+    const body = await response.json();
+    return body?.ledger && typeof body.ledger === 'object' ? (body.ledger as AhLedger) : null;
+  } catch {
+    return null;
+  }
+}

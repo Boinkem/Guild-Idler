@@ -9,6 +9,7 @@ import { AhItemType, ServerListingRow } from '../game/auctionHouse';
 import { MAX_SHARDS_PER_LISTING, SHARD_GLYPH, SHARD_ICON, SHARD_NAME, shardLabel } from '../game/data/shards';
 import { GuildManager } from '../game/managers/GuildManager';
 import { flyIcon, flyTokens, fxMs, fxSpeed } from './purchaseFx';
+import { AuctionLedger } from './AuctionLedger';
 
 /**
  * Real Auction House browse/sell UI, patch 0411, extended patch 0413 to
@@ -17,18 +18,20 @@ import { flyIcon, flyTokens, fxMs, fxSpeed } from './purchaseFx';
  * listings.ts's own header comment (server) for the two genuinely
  * economic calls made there (deposit percentage, the 48h gate).
  *
- * Three tabs now: Browse, Sell, My Listings.
+ * Four tabs now: Browse, Sell, My Listings, My Ledger (patch 0458 --
+ * the player's own trading dashboard, AuctionLedger.tsx).
  */
 export function AuctionHouseTrade() {
-  const [tab, setTab] = useState<'browse' | 'sell' | 'mine'>('browse');
+  const [tab, setTab] = useState<'browse' | 'sell' | 'mine' | 'ledger'>('browse');
   return (
     <div>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <button className={tab === 'browse' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('browse')}>Browse</button>
         <button className={tab === 'sell' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('sell')}>Sell</button>
         <button className={tab === 'mine' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('mine')} data-ah-mine="">My Listings</button>
+        <button className={tab === 'ledger' ? 'btn-primary' : 'btn-ghost'} onClick={() => setTab('ledger')}>My Ledger</button>
       </div>
-      {tab === 'browse' ? <BrowseTab /> : tab === 'sell' ? <SellTab /> : <MyListingsTab />}
+      {tab === 'browse' ? <BrowseTab /> : tab === 'sell' ? <SellTab /> : tab === 'mine' ? <MyListingsTab /> : <AuctionLedger />}
     </div>
   );
 }

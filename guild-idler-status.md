@@ -1134,6 +1134,16 @@ raid fight).
 
 ## Backlog
 
+### Auction House usage stats in DevTools (admin) -- requested, next up
+Direct request alongside patch 0458's player-side My Ledger: an admin
+view in the DevTool's existing Auction House tab (patch 0402) to see how
+much the Auction House actually gets used -- active listings, sales and
+gold/scrap volume over time, sell-through, unique buyers/sellers, most
+traded items. Should sit behind the backend's `/admin/*` + admin-token
+pattern the design entry already calls for, not a public route. A
+rejected first pass at a public market-stats tab (not applied) proved the
+aggregate queries against real Postgres; they can be reused here.
+
 ### Steam demo follow-ups (from patch 0438)
 - **Demo App ID** -- create the demo in Steamworks (base game admin ->
   "Create new demo"), then set `DEMO_STEAM_APP_ID` in `electron/main.ts`.
@@ -7832,6 +7842,12 @@ pass (same caveat as the two entries above).
   network call succeeds. Buy flow: item AND seller's gold both to the
   mailbox now (revised, see the Delivery bullet above). System-seeded
   listings render identically to real ones (same underlying data shape).
+  **My Ledger (player trading dashboard) -- built (patch 0458).** Fifth
+  tab after Browse/Sell/My Listings: the player's own gold and scrap
+  earned/spent/net, sold/bought counts, sell-through, average time to
+  sell, best sale, biggest purchase, a 14-day earned-vs-spent chart and
+  recent trades. `GET /ledger` (auth) in `server/src/ledger.ts`, no
+  migration. See that patch's own log entry.
   **Mailbox UI -- built (patch 0403).** `MailboxModal.tsx`, item cards
   per entry (gold/equipment/consumable), Claim + Claim All, a Mailbox
   button with a live count badge next to the Auction House header --
@@ -36931,3 +36947,89 @@ Pyromancer 16), Samurai's flat +7 class success, and Phoenix Draught
 level-scaled) investment curve.
 
 `tsc --noEmit` clean.
+
+### My Ledger: the player's own Auction House dashboard (patch 0458)
+```discord-update
+Dev Update | Auction House Ledger
+
+- Added My Ledger, a new tab in the Auction House that tracks your own trading
+- Added gold and scrap totals for the last 7 days, 30 days or all time: earned, spent, deposits lost and your net result
+- Added your sold and bought counts, how often your listings sell, how long they usually take, and how many you have up right now
+- Added your best sale and biggest purchase
+- Added a 14-day chart of what you earned against what you spent, in gold or scrap
+- Added a list of your recent trades showing what sold or was bought, for how much, and how fast it sold
+```
+
+Direct request: "a personalised player Auction Dashboard, showing their
+own bought/sold/scrap and gold earned stats." Demoed in-game first with
+mock data and approved, then built for real. The admin-side usage view
+(DevTools) is a separate request, now in the Backlog above.
+
+**Client.** New `src/ui/AuctionLedger.tsx`, opened by a **My Ledger**
+button after My Listings in `AuctionHouseTrade.tsx`. Top to bottom:
+- Period buttons: 7 days / 30 days / All time, plus Refresh.
+- Gold and Scrap cards: the net result (earned - spent - deposits lost)
+  in large type, green/red, with earned / spent / deposits lost beneath.
+- Tiles: Sold (with how many were listed), Bought, Sell-through (with
+  expired / cancelled), Avg time to sell, Listed now (x / 25).
+- Best sale and Biggest purchase, with item icon and rarity colour.
+- "Earned vs spent": the last 14 days as paired daily bars, Gold/Scrap
+  switch. Always 14 days, whatever period is picked.
+- "Recent trades": the last 10 in the period, each with a Sold/Bought
+  badge, item, +/- price, how long ago, and how long it took to sell.
+- An empty period shows one line pointing at Sell/Browse. A failed load
+  (no Steam session, offline, an older backend without the route) shows
+  a retry message; the rest of the panel is unaffected.
+Item names come from the same tables Browse uses (`EQUIPMENT_BY_ID` with
+`itemDisplayName` and `+N`, `CONSUMABLE_BY_ID`, `shardLabel` for Shard
+stacks). `auctionHouse.ts`: `AhLedger`/`AhLedgerTrade`/`AhLedgerPeriod`
+and `fetchMyLedger(period)` via `authedFetch`, so it gets the 401 retry
+for free. Engine pass-through `fetchAuctionLedger`.
+
+**Styles** (`.ahl-*`, end of `app.css`). The ledger is capped at 720px,
+the same cap `.card` already has, so the hall art stays visible. Earned
+is moss, spent is blood. Recent-trade rows are a CSS grid; a container
+query below 460px restacks each row (icon left, name on its own line,
+then badge + price, then time), checked at a 430px-wide window.
+
+**Server -- new `server/src/ledger.ts`**, registered in `index.ts` in the
+existing `DATABASE_URL` block (so it's behind the `AH_ENABLED` gate
+too). `requireAuth` is now exported from `listings.ts` to share it.
+- `GET /ledger?period=7d|30d|all&tzOffset=<minutes>` -- auth required,
+  everything scoped to the caller's SteamID. Unknown `period` falls back
+  to `7d`.
+- **No migration.** Earned, spent, sold, bought, average time to sell,
+  best sale, biggest purchase and recent trades go by **sale time**
+  (`transactions.created_at`). A cancel has no timestamp of its own, so
+  listed / expired / cancelled / sell-through / deposits lost are a
+  **cohort**: listings the player *posted* in the period, and how each
+  has ended so far. Sell-through = sold / (sold + expired + cancelled);
+  listings still up don't count either way. An `active` row past its
+  expiry that the sweep hasn't reached yet counts as expired, deposit
+  lost.
+- Best sale / biggest purchase: gold and scrap aren't comparable, so a
+  gold trade wins when there is one in the period, otherwise the
+  highest scrap one.
+- `tzOffset` is the client's `getTimezoneOffset()` so the 14-day chart
+  splits days on the player's own midnight. Bounded to +-14h; anything
+  else falls back to UTC. Days come back as `YYYY-MM-DD` and the client
+  parses them as local dates (not `new Date(str)`, which is UTC).
+- BIGINT/numeric values are converted to JS numbers on the server.
+
+**Verified.** Real Postgres 16, migrations 001 + 002, one player's
+listings and trades seeded across every case: active, unswept-stale,
+expired, cancelled (inside 7d, and at 21 days), sold in gold and scrap at
+1h-15d, bought in gold, scrap and at 59 days, plus another player's
+listing that must not count. Every field checked by hand for 7d, 30d and
+all: totals, cohort counts, sell-through, deposits lost, average time to
+sell, active count, best/biggest picks, recent order and minutes-to-sell,
+and the daily buckets under both UTC and Adelaide (+10:30). Also
+checked: a bogus period/offset falls back cleanly, no token gives 401,
+and a player with no history gets zeros, empty lists and 14 empty days.
+The tab was rendered in the running web build against mocked `/ledger`
+responses at 1280px and 430px wide. `tsc --noEmit` clean for the client
+and `server/`.
+
+**Deploy:** restart the AH backend so `/ledger` registers. No
+`npm run migrate` needed. Until the backend restarts, the tab shows its
+"couldn't open your ledger" message; nothing else is affected.

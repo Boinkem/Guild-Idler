@@ -35,6 +35,7 @@ import {
   verifyAuctionHouseAuth, fetchServerMailbox, claimServerMailboxEntry,
   fetchActiveListings, createListing, buyListing as buyListingRequest, ServerListingRow,
   setDevSessionToken, fetchMyListings, cancelListing as cancelListingRequest, ListingFilters,
+  fetchMyLedger, AhLedger, AhLedgerPeriod,
 } from './auctionHouse';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
@@ -3051,6 +3052,11 @@ export class GameEngine {
    *  failure, array-otherwise contract as fetchAuctionListings. */
   async fetchMyAuctionListings(): Promise<ServerListingRow[] | null> {
     return fetchMyListings();
+  }
+
+  /** The player's own Auction House ledger (My Ledger tab) -- null on failure. */
+  async fetchAuctionLedger(period: AhLedgerPeriod): Promise<AhLedger | null> {
+    return fetchMyLedger(period);
   }
 
   /**

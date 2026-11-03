@@ -19,6 +19,7 @@ import { loadConfig } from './config.js';
 import { verifySteamTicket } from './steamAuth.js';
 import { issueSessionToken } from './sessions.js';
 import { registerListingsRoutes, sweepExpiredListings } from './listings.js';
+import { registerLedgerRoutes } from './ledger.js';
 
 const config = loadConfig();
 const app = Fastify({ logger: true });
@@ -92,6 +93,8 @@ app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) =
  */
 if (config.databaseUrl) {
   registerListingsRoutes(app, config);
+  // My Ledger (patch 0458) -- the player's own Auction House dashboard.
+  registerLedgerRoutes(app, config);
   // Expiry sweep (patch 0431): expired listings return their item to the
   // seller's mailbox. Also runs lazily on /mailbox and /listings/mine, so
   // a seller never waits on this timer to see their item.
