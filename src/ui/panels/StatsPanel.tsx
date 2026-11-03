@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import { useFirstSeen, useSinceLastVisit } from '../firstSeen';
+import { useCountUp } from '../useCountUp';
 import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -200,6 +203,9 @@ export function StatsPanel() {
   // request ("recent results new tab next to achievements") rather than
   // adding a 4th stacked section.
   const [subTab, setSubTab] = useState<'overview' | 'achievements' | 'results'>('overview');
+  // Patch 0465 -- the count rolls up from the last visit's number.
+  const sinceAch = useSinceLastVisit({ statsAch: achProgress.unlocked });
+  const shownAch = useCountUp(achProgress.unlocked, { from: sinceAch.statsAch ?? achProgress.unlocked, durationMs: 700 });
 
   // Deep-link support for a notification's "Go to" button targeting a
   // specific Statistics sub-tab -- same consume-once shape every other
@@ -326,7 +332,7 @@ export function StatsPanel() {
           className={`btn-subtab ${subTab === 'achievements' ? 'on' : ''} ${isTabUnread(state, 'stats', 'achievements') ? 'subtab-unread' : ''}`}
           onClick={() => setSubTab('achievements')}
         >
-          Achievements ({achProgress.unlocked}/{achProgress.total})
+          Achievements ({Math.round(shownAch)}/{achProgress.total})
         </button>
         <button
           className={`btn-subtab ${subTab === 'results' ? 'on' : ''} ${isTabUnread(state, 'stats', 'results') ? 'subtab-unread' : ''}`}
@@ -347,30 +353,7 @@ export function StatsPanel() {
         </div>
       )}
 
-      {subTab === 'achievements' && (
-        <div className="grid three" style={{ marginBottom: 8 }}>
-          {AchievementManager.list().map((def) => {
-            const unlockedAt = engine.state.unlockedAchievements[def.id];
-            const unlocked = unlockedAt !== undefined;
-            const showHidden = def.hidden && !unlocked;
-            return (
-              <div key={def.id} className={`card achievement-card ${unlocked ? 'unlocked' : ''}`} style={{ marginBottom: 0 }}>
-                <div className="card-title" style={{ fontSize: 11 }}>
-                  {unlocked ? '🏆' : '🔒'} {showHidden ? '???' : def.name}
-                </div>
-                <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-                  {showHidden ? 'Hidden until unlocked.' : def.description}
-                </p>
-                {unlocked && (
-                  <p className="tiny" style={{ margin: '4px 0 0', color: 'var(--brass)' }}>
-                    {new Date(unlockedAt).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {subTab === 'achievements' && <AchievementsGrid />}
 
       {/* Recent Results -- merged state.log/state.raidLog (see
           resultEntries above), newest first. Cards are deliberately
@@ -465,6 +448,62 @@ export function StatsPanel() {
         />
       )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Patch 0465 -- the achievement grid, split out so its first-seen marks
+ * only count while it's actually on screen. A card unlocked since you
+ * last looked flips over from its locked face, takes the brass border,
+ * glints, and keeps a NEW tab until you leave the grid.
+ */
+function AchievementsGrid() {
+  const engine = useEngine();
+  const state = engine.state;
+  const unlockedIds = AchievementManager.list().filter((d) => state.unlockedAchievements[d.id] !== undefined).map((d) => d.id);
+  const seen = useFirstSeen('achievements', unlockedIds);
+  const seenRef = useRef(seen);
+  seenRef.current = seen;
+  const idsRef = useRef(unlockedIds);
+  idsRef.current = unlockedIds;
+  useEffect(() => () => {
+    for (const id of idsRef.current) seenRef.current.open(id);
+  }, []);
+  return (
+    <div className="grid three" style={{ marginBottom: 8 }}>
+      {AchievementManager.list().map((def) => {
+        const unlockedAt = state.unlockedAchievements[def.id];
+        const unlocked = unlockedAt !== undefined;
+        const showHidden = def.hidden && !unlocked;
+        const order = seen.order(def.id);
+        return (
+          <div
+            key={def.id}
+            className={`card achievement-card ${unlocked ? 'unlocked' : ''} ${order >= 0 ? 'fx-ach-flip' : ''}`}
+            style={{ marginBottom: 0, ...(order >= 0 ? { '--ach-d': `calc(var(--fx-t) * ${200 + order * 450})` } : {}) } as CSSProperties}
+          >
+            <div className="card-title" style={{ fontSize: 11 }}>
+              {unlocked ? '🏆' : '🔒'} {showHidden ? '???' : def.name}
+            </div>
+            <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+              {showHidden ? 'Hidden until unlocked.' : def.description}
+            </p>
+            {unlocked && (
+              <p className="tiny" style={{ margin: '4px 0 0', color: 'var(--brass)' }}>
+                {new Date(unlockedAt).toLocaleDateString()}
+              </p>
+            )}
+            {order >= 0 && (
+              <span className="ach-lockface" aria-hidden="true">
+                <span className="card-title" style={{ fontSize: 11 }}>🔒 {def.hidden ? '???' : def.name}</span>
+              </span>
+            )}
+            {order >= 0 && <span className="ach-glint" aria-hidden="true" />}
+            {seen.isNew(def.id) && <span className="new-tab">New</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -17,7 +17,7 @@ import { Ring } from './DashboardPanel';
 import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
 import { backgroundSrc } from '../../game/settings';
 import { UnlockFx, useJustUnlocked } from '../unlockFx';
-import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
+import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats, useRecentIncrease } from '../purchaseFx';
 
 type SubTab = 'warehouse' | 'fields';
 
@@ -555,6 +555,11 @@ function WarehouseTab() {
   // level that stacks onto the pile when it expands.
   const whBeat = usePurchaseBeats([{ id: 'warehouse', value: state.warehouseLevel, max: WAREHOUSE_UPGRADE.maxLevel }], STAY_BEATS).warehouse;
   const crates = Math.min(12, state.warehouseLevel + 1);
+  // Patch 0465 -- stock arriving while this tab is open: the material's
+  // icon drops into its bar and the count bumps. A bar that just hit the
+  // cap pulses and a "Full" tag shakes in (it stays while full).
+  const stockUp = useRecentIncrease(MATERIALS.map((m) => ({ id: m.id, value: Math.floor(state.materials[m.id]) })), 1100);
+  const fullUp = useRecentIncrease(MATERIALS.map((m) => ({ id: m.id, value: state.materials[m.id] >= cap ? 1 : 0 })), 1600);
 
   return (
     <>
@@ -579,17 +584,33 @@ function WarehouseTab() {
           ))}
           <span className={`tiny muted wfx-cap ${whBeat?.phase === 'levelup' ? 'fx-bump' : ''}`}>{cap} cap</span>
         </div>
-        {MATERIALS.map((m) => (
-          <div key={m.id} className="harvest-stock-row" style={{ marginBottom: 4 }}>
-            <span className="tiny muted" style={{ width: 70 }}>{m.name}</span>
-            <div className="harvest-stock-bar">
-              <span style={{ width: `${Math.min(100, (state.materials[m.id] / cap) * 100)}%` }} />
+        {MATERIALS.map((m) => {
+          const full = state.materials[m.id] >= cap;
+          const dropIcon = MATERIAL_BY_ID[m.id].icons?.[0];
+          return (
+            <div
+              key={m.id}
+              className={`harvest-stock-row ${full ? 'is-full' : ''} ${fullUp[m.id] ? 'fx-stock-full' : ''}`}
+              style={{ marginBottom: 4 }}
+            >
+              <span className="tiny muted" style={{ width: 70 }}>{m.name}</span>
+              <div className={`harvest-stock-bar ${stockUp[m.id] ? 'fx-stock-in' : ''}`} key={stockUp[m.id] ?? 'bar'}>
+                <span style={{ width: `${Math.min(100, (state.materials[m.id] / cap) * 100)}%` }} />
+              </div>
+              {stockUp[m.id] && dropIcon && (
+                <img key={stockUp[m.id]} className="stock-drop" src={`./harvest-icons/${dropIcon}`} alt="" aria-hidden="true" />
+              )}
+              <span
+                className={`tiny ${full ? '' : 'muted'} ${stockUp[m.id] ? 'fx-num-pop' : ''}`}
+                key={`n${stockUp[m.id] ?? ''}`}
+                style={{ width: 60, textAlign: 'right', color: full ? 'color-mix(in srgb, var(--blood) 55%, white)' : undefined }}
+              >
+                {formatMaterial(state.materials[m.id])}/{cap}
+              </span>
+              {full && <span className="stock-full-tag">Full</span>}
             </div>
-            <span className="tiny muted" style={{ width: 60, textAlign: 'right' }}>
-              {formatMaterial(state.materials[m.id])}/{cap}
-            </span>
-          </div>
-        ))}
+          );
+        })}
         <button
           className="btn-yellow"
           style={{ marginTop: 8 }}

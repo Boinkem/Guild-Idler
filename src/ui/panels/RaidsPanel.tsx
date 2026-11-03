@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -18,6 +18,7 @@ import { RarityPill } from '../RarityPill';
 import { RaidPartySprites } from '../sprites/RaidPartySprites';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { fxMs } from '../purchaseFx';
+import { useFirstSeen } from '../firstSeen';
 import { at } from '../resultFx';
 import { formatDuration, describeMods, describeStats, RARITY_COLOR } from '../../game/util';
 
@@ -248,14 +249,17 @@ function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => v
 }
 
 function DifficultyCircle({
-  difficulty, active, unlocked, cleared, onClick,
-}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; cleared?: boolean; onClick: () => void }) {
+  difficulty, active, unlocked, cleared, opening = false, onClick,
+}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; cleared?: boolean; opening?: boolean; onClick: () => void }) {
   const engine = useEngine();
   const color = DIFFICULTY_COLOR[difficulty];
   const [imgFailed, setImgFailed] = useState(false);
   const iconDef = RAID_DIFFICULTY_ICON_DEFS[difficulty];
   return (
-    <div className="raid-diff-circle-wrap">
+    <div
+      className={`raid-diff-circle-wrap ${opening ? 'fx-diff-open' : ''}`}
+      style={opening ? ({ '--rdo-c': color } as CSSProperties) : undefined}
+    >
       {/* Own position:relative wrapper, not the shared .raid-diff-circle-wrap
        *  (that also holds the label/unlock-link below, which shouldn't be
        *  where an edge-anchored badge measures from) -- same reasoning
@@ -311,6 +315,18 @@ function DifficultyCircle({
           DIFFICULTY_LABEL[difficulty]
         )}
         </button>
+        {/* Patch 0465 -- first view after this tier became available:
+         *  the padlock rattles and pops off, the ring ignites in the
+         *  tier's colour and sparks fly. See .fx-diff-open in app.css. */}
+        {opening && (
+          <span className="rdo-fx" aria-hidden="true">
+            <span className="rdo-halo" />
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <span key={i} className="rdo-spark" style={{ transform: `rotate(${i * 60}deg)` }}><i /></span>
+            ))}
+            <span className="rdo-lock"><span className="rdo-shackle" /><span className="rdo-body" /></span>
+          </span>
+        )}
         {/* Cleared-before tracker (patch 0303) -- same green check
          *  overlay treatment RoleRequirementCircle uses for "this slot is
          *  met," answering a different question here: has this raid been
@@ -448,6 +464,12 @@ function RaidDetailModal({
 
   const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
   const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
+  const difficultyUnlocked = (d: RaidDifficulty) => (d === 'legendary'
+    ? state.completedRaidDifficulties.includes('mythic')
+    : ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d]));
+  // Patch 0465 -- difficulty tiers are guild-wide, so the opening plays
+  // in whichever raid's detail is opened first after the unlock.
+  const diffSeen = useFirstSeen('raid-diff', RAID_DIFFICULTY_ORDER.filter(difficultyUnlocked));
 
   const previewHeroIds = selectedHeroIds.length > 0
     ? selectedHeroIds
@@ -584,10 +606,9 @@ function RaidDetailModal({
                     key={d}
                     difficulty={d}
                     active={difficulty === d}
-                    unlocked={d === 'legendary'
-                      ? state.completedRaidDifficulties.includes('mythic')
-                      : ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
+                    unlocked={difficultyUnlocked(d)}
                     cleared={(state.raidClearsByDifficulty[raid.id] ?? []).includes(d)}
+                    opening={diffSeen.fresh(d)}
                     onClick={() => pickDifficulty(d)}
                   />
                 ))}
@@ -732,7 +753,13 @@ function RaidDetailModal({
  * Collapsed summary only -- clicking opens RaidDetailModal rather than
  * expanding inline. Locked raids stay a plain, non-interactive card.
  */
-function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: string) => void }) {
+function RaidCard({
+  raidId, onShowItem, opening = -1, isNew = false, onOpened, freshClears = [],
+}: {
+  raidId: string; onShowItem: (defId: string) => void;
+  /** Patch 0465 -- stagger slot of this card's first-seen opening, -1 for none. */
+  opening?: number; isNew?: boolean; onOpened?: () => void; freshClears?: RaidDifficulty[];
+}) {
   const state = useEngine().state;
   const raid = RAIDS.find((r) => r.id === raidId)!;
   const unlocked = isRaidUnlocked(raidId, state.completedRaids, state.completedChains);
@@ -754,25 +781,42 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
     );
   }
 
+  const open = () => { setShowModal(true); onOpened?.(); };
+  const opens = opening >= 0;
   return (
     <>
       <div
-        className="card raid-card"
-        onClick={() => setShowModal(true)}
+        className={`card raid-card ${opens ? 'fx-raid-open' : ''} ${isNew ? 'rfo-new' : ''}`}
+        style={opens ? ({ '--rfo-d': `calc(var(--fx-t) * ${opening * 700})` } as CSSProperties) : undefined}
+        onClick={open}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}
       >
-        <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
+        {/* Patch 0465 -- the first time this raid shows as open: the
+         *  padlock rattles and drops, the chains snap, iron doors slide
+         *  apart and the art floods with colour. See .fx-raid-open. */}
+        <span className="rfo-thumb">
+          <RaidBanner raidId={raid.id} banner={raid.banner} icon={raid.icon} useIcon className="raid-card-thumb" />
+          {opens && (
+            <span className="rfo-gate" aria-hidden="true">
+              <span className="rfo-door l" /><span className="rfo-door r" />
+              <span className="rfo-chain a" /><span className="rfo-chain b" />
+              <span className="rfo-lock"><span className="rfo-shackle" /><span className="rfo-body" /></span>
+              <span className="rfo-sweep" />
+            </span>
+          )}
+        </span>
         <div className="raid-card-body">
           <div className="raid-card-name">{raid.name}</div>
           <div className="raid-card-meta">
             <span className="tiny gold-text">Lv {raid.reqLevel}</span>
-            <RaidClearBadges raidId={raid.id} />
+            <RaidClearBadges raidId={raid.id} fresh={freshClears} />
           </div>
           <SetProgressLine raidId={raid.id} compact />
         </div>
         <span className="raid-card-chevron" aria-hidden="true">›</span>
+        {isNew && <span className="rfo-ribbon">New raid</span>}
       </div>
       {showModal && (
         <RaidDetailModal raidId={raidId} onClose={() => setShowModal(false)} onShowItem={onShowItem} />
@@ -791,7 +835,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
  * it needs to read at a glance rather than repeat the detail modal's own
  * full circles.
  */
-function RaidClearBadges({ raidId }: { raidId: string }) {
+function RaidClearBadges({ raidId, fresh = [] }: { raidId: string; fresh?: RaidDifficulty[] }) {
   const state = useEngine().state;
   const cleared = state.raidClearsByDifficulty[raidId] ?? [];
   if (cleared.length === 0) return null;
@@ -800,7 +844,8 @@ function RaidClearBadges({ raidId }: { raidId: string }) {
       {RAID_DIFFICULTY_ORDER.map((d) => (
         <span
           key={d}
-          className="tiny"
+          // Patch 0465 -- a first full clear at this difficulty stamps in.
+          className={`tiny ${fresh.includes(d) ? 'fx-clear-stamp' : ''}`}
           style={{
             fontWeight: 700,
             color: cleared.includes(d) ? DIFFICULTY_COLOR[d] : 'var(--muted)',
@@ -884,6 +929,15 @@ export function RaidsPanel() {
   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
   const [itemDetail, setItemDetail] = useState<string | null>(null);
   const setTotals = useRaidSetTotals(state);
+  // Patch 0465 -- first-seen moments for the list. Nothing counts as
+  // "seen" until the Raid Charter's bought and the list actually shows.
+  const unlockedRaidIds = hasRaids
+    ? RAIDS.filter((r) => isRaidUnlocked(r.id, state.completedRaids, state.completedChains)).map((r) => r.id)
+    : [];
+  const raidSeen = useFirstSeen('raid-unlock', unlockedRaidIds);
+  const clearSeen = useFirstSeen('raid-clear', hasRaids
+    ? RAIDS.flatMap((r) => (state.raidClearsByDifficulty[r.id] ?? []).map((d) => `${r.id}|${d}`))
+    : []);
 
   // Acknowledges the tab on mount -- clears the nav shimmer for a
   // banner-worthy notification targeting Raids (patch 0191). Simplified
@@ -937,7 +991,15 @@ export function RaidsPanel() {
       <div className="raid-list">
         {state.activeRaid && <ActiveRaidCard />}
         {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
-          <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
+          <RaidCard
+            key={r.id}
+            raidId={r.id}
+            onShowItem={setItemDetail}
+            opening={raidSeen.order(r.id)}
+            isNew={raidSeen.isNew(r.id)}
+            onOpened={() => raidSeen.open(r.id)}
+            freshClears={RAID_DIFFICULTY_ORDER.filter((d) => clearSeen.fresh(`${r.id}|${d}`))}
+          />
         ))}
       </div>
 

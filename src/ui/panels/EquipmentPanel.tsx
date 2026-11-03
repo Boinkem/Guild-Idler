@@ -266,7 +266,7 @@ export function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: str
  * own component (own `open` state) rather than folded into the summary's
  * render loop, so each set in the list can be expanded independently.
  */
-function SetBonusCard({ hero, setId }: { hero: Hero; setId: string }) {
+function SetBonusCard({ hero, setId, tierUp }: { hero: Hero; setId: string; tierUp?: number }) {
   const [open, setOpen] = useState(false);
   const info = setInfoFor(hero, setId);
   if (!info) return null;
@@ -276,21 +276,34 @@ function SetBonusCard({ hero, setId }: { hero: Hero; setId: string }) {
       .filter((item): item is EquipmentItem => !!item && item.durability > 0)
       .map((item) => item.defId),
   );
+  const newest = info.active[info.active.length - 1];
   return (
-    <div style={{ marginBottom: 6 }}>
+    <div className={`set-bonus-entry ${tierUp ? 'fx-set-tier' : ''}`} key={tierUp ?? 'set'} style={{ marginBottom: 6 }}>
       <div
         role="button"
         tabIndex={0}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => e.key === 'Enter' && setOpen((v) => !v)}
         className="tiny"
-        style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', color: 'var(--teal)' }}
+        style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, color: 'var(--teal)' }}
       >
         <span>
           {set.name} ({count}/{set.pieces.length})
         </span>
-        <span className="muted">{open ? '▲' : '▼'}</span>
+        {/* Patch 0465 -- one pip per piece; the one that just tipped a
+         *  tier over lights up when tierUp plays. */}
+        <span className="set-pips" aria-hidden="true">
+          {set.pieces.map((_, i) => (
+            <i key={i} className={`${i < count ? 'on' : ''} ${tierUp && i === count - 1 ? 'fx-pip-on' : ''}`} />
+          ))}
+        </span>
+        <span className="muted" style={{ marginLeft: 'auto' }}>{open ? '▲' : '▼'}</span>
       </div>
+      {tierUp && newest && (
+        <div className="set-tier-new tiny" aria-live="polite">
+          ({newest.count}) {newest.label}: {describeMods(newest.mods).join(', ')}
+        </div>
+      )}
       {open && (
         <div className="tiny" style={{ marginTop: 4, marginLeft: 4 }}>
           <div className="muted">Pieces:</div>
@@ -1122,6 +1135,19 @@ export function EquipmentPanel() {
     EquipmentManager.allItems(state).map((e) => ({ id: e.item.uid, value: e.item.durability })), 900,
   );
   const autoActive = !rpFx && Object.keys(autoUp).length > 0;
+  // Patch 0465 -- a set reaching a new bonus tier on this hero (the piece
+  // that tips it over was just equipped): the tier's pip lights and its
+  // bonus line flashes in on the Active Set Bonuses card. Tracked per
+  // hero+set, so switching heroes never looks like a tier-up.
+  const setTierUp = useRecentIncrease(
+    Array.from(new Set(
+      Object.values(hero.equipment)
+        .filter((item): item is EquipmentItem => !!item && item.durability > 0)
+        .map((item) => EQUIPMENT_BY_ID[item.defId]?.setId)
+        .filter((id): id is string => !!id),
+    )).map((setId) => ({ id: `${hero.id}:${setId}`, value: setInfoFor(hero, setId)?.active.length ?? 0 })),
+    2600,
+  );
   const cardRepairFx = (uid: string): CardRepairFx | undefined => {
     if (rpFx) {
       if (!(uid in rpFx.shown)) return undefined;
@@ -1331,7 +1357,7 @@ export function EquipmentPanel() {
               Active Set Bonuses
             </div>
             {activeSetIds.map((setId) => (
-              <SetBonusCard key={setId} hero={hero} setId={setId} />
+              <SetBonusCard key={setId} hero={hero} setId={setId} tierUp={setTierUp[`${hero.id}:${setId}`]} />
             ))}
           </div>
         );

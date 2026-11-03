@@ -6,7 +6,7 @@ import { demoRankLocked, requestDemoWall } from '../../game/demo';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
 import { describeMods, formatNumber } from '../../game/util';
-import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
+import { buyWithFx, fxMs, LevelRoll, rowBeatClass, SealStamp, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
 import type { Beat } from '../purchaseFx';
 import { Hero } from '../../game/types';
 import { backgroundSrc } from '../../game/settings';
@@ -64,10 +64,23 @@ function HeroRetireCard({
   const [confirming, setConfirming] = useState(false);
   const rank = PrestigeManager.rankFor(hero);
 
-  const doEarlyRetire = () => { setConfirming(false); onEarlyRetire(hero.id); };
+  // Patch 0465 -- send-off: the card drains to sepia inside a gilt frame,
+  // a RETIRED plaque stamps on, then it shrinks away -- and only then does
+  // the engine actually retire the hero. Instant with Reduce motion on.
+  const [retiring, setRetiring] = useState(false);
+  const retireTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(retireTimer.current), []);
+  const doEarlyRetire = () => {
+    setConfirming(false);
+    const wait = fxMs(1900);
+    if (wait <= 0) { onEarlyRetire(hero.id); return; }
+    setRetiring(true);
+    retireTimer.current = window.setTimeout(() => onEarlyRetire(hero.id), wait);
+  };
 
   return (
-    <div className="spread card">
+    <div className={`spread card ${retiring ? 'fx-retiring' : ''}`}>
+      {retiring && <span className="retire-plaque" aria-hidden="true">Retired</span>}
       <div>
         <div className="card-title">
           {rank && <span className="hero-rank-badge">{rank}</span>}
@@ -82,6 +95,7 @@ function HeroRetireCard({
         {PrestigeManager.canEarlyRetire(hero) && (
           <button
             className="btn-ghost"
+            disabled={retiring}
             onClick={() => { if (confirmRetire) setConfirming(true); else doEarlyRetire(); }}
           >
             Early Retire

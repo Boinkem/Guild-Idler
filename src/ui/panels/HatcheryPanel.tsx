@@ -18,7 +18,7 @@ import { EggIcon } from '../EggIcon';
 import { EggSelectModal } from '../EggSelectModal';
 import { useReviveBeats } from '../reviveFlash';
 import type { RevivePhase } from '../reviveFlash';
-import { buyWithFx, flyIcon, fxMs, fxSpeed } from '../purchaseFx';
+import { buyWithFx, flyIcon, fxMs, fxSpeed, useRecentIncrease } from '../purchaseFx';
 import { MATERIAL_BY_ID } from '../../game/data/materials';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { PairStage, pairFxDuration } from '../pairFx';
@@ -160,6 +160,11 @@ function EggCard({ egg, onUnequip, onHatch }: { egg: EggInstance; onUnequip: () 
   const threshold = hatchXpThreshold(egg.rarity);
   const pct = Math.min(100, (egg.hatchXp / threshold) * 100);
   const ready = PetManager.isReady(egg);
+  // Patch 0465 -- the last stretch of incubation: the egg wobbles more
+  // often and harder as it gets close, a warm glow builds under it, and
+  // "Ready to Hatch!" pops in if it finishes while you're watching.
+  const stage = ready ? 'ready' : pct >= 95 ? '3' : pct >= 85 ? '2' : pct >= 70 ? '1' : '';
+  const justReady = !!useRecentIncrease([{ id: egg.uid, value: ready ? 1 : 0 }], 1200)[egg.uid];
 
   return (
     <div
@@ -170,7 +175,9 @@ function EggCard({ egg, onUnequip, onHatch }: { egg: EggInstance; onUnequip: () 
       tabIndex={ready ? 0 : undefined}
     >
       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <EggIcon rarity={egg.rarity} size={40} />
+        <span className={`egg-nest-wrap ${stage ? `egg-stage-${stage}` : ''}`}>
+          <EggIcon rarity={egg.rarity} size={40} />
+        </span>
         <div style={{ flex: 1 }}>
           <div className="spread">
             <span className="card-title">Egg</span>
@@ -186,7 +193,7 @@ function EggCard({ egg, onUnequip, onHatch }: { egg: EggInstance; onUnequip: () 
         </div>
       </div>
       {ready ? (
-        <p className="good" style={{ margin: '8px 0 4px', fontWeight: 600 }}>Ready to Hatch!</p>
+        <p className={`good ${justReady ? 'fx-ready-pop' : ''}`} style={{ margin: '8px 0 4px', fontWeight: 600 }}>Ready to Hatch!</p>
       ) : (
         <div className="harvest-stock-bar" style={{ margin: '8px 0 4px' }}>
           <span style={{ width: `${pct}%` }} />

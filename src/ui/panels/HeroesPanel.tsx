@@ -21,6 +21,7 @@ import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
 import { useReviveBeats } from '../reviveFlash';
 import { HeroBlock } from '../HeroBlock';
 import { Wardrobe } from '../Wardrobe';
+import { useFirstSeen } from '../firstSeen';
 import { DyeFx } from '../dyeFx';
 import { usePulsesOnChange } from '../maxFlash';
 import { buyWithFx, flyCard, fxMs, fxSpeed, LevelRoll, usePurchaseBeats, useRecentIncrease } from '../purchaseFx';
@@ -127,12 +128,30 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
   const unlockedTombstoneStyles = state.unlockedTombstoneStyles ?? ['plain'];
   const selectedId = state.selectedTombstoneStyle ?? 'plain';
   const selected = TOMBSTONE_STYLE_BY_ID[selectedId];
+  // Patch 0465 -- a style you own but haven't looked at yet (earned from
+  // a first raid clear) puts a NEW dot on the button. Opening the list
+  // clears it; the rows that were new keep a small tag while it's open.
+  // Anything bought from inside the open list counts as seen at once.
+  const ownedIds = unlockedTombstoneStyles.filter((id) => id !== 'plain');
+  const seen = useFirstSeen('tombstones', ownedIds);
+  const [newWhileOpen, setNewWhileOpen] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    const fresh = ownedIds.filter((id) => seen.isNew(id));
+    if (fresh.length === 0) return;
+    for (const id of fresh) seen.open(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ownedIds.join('|')]);
+  const toggle = () => {
+    if (!open) setNewWhileOpen(ownedIds.filter((id) => seen.isNew(id)));
+    setOpen((v) => !v);
+  };
   return (
     <div style={{ position: 'relative', marginBottom: 12 }}>
       <button
         className="btn-ghost tombstone-style-toggle"
-        style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-        onClick={() => setOpen((v) => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}
+        onClick={toggle}
         aria-expanded={open}
       >
         <img
@@ -144,9 +163,10 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
         <span className="tiny muted">Tombstone style:</span>
         <span className="small">{selected?.name ?? 'Plain Marker'}</span>
         <span aria-hidden="true">▾</span>
+        {seen.anyNew && !open && <span className="new-dot" aria-label="New style">New</span>}
       </button>
       {open && (
-        <div className="card" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: 380, maxWidth: '90vw', zIndex: 6 }}>
+        <div className="card" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: 380, maxWidth: '90vw', zIndex: 6, background: 'var(--panel)' }}>
           <div className="spread">
             <span className="card-title">Tombstone Style</span>
             <button className="btn-ghost" onClick={() => setOpen(false)} aria-label="Close">×</button>
@@ -183,7 +203,10 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span className="small" style={{ display: 'block', color: owned ? undefined : 'var(--muted)' }}>{style.name}</span>
+                    <span className="small" style={{ display: 'block', color: owned ? undefined : 'var(--muted)' }}>
+                      {style.name}
+                      {newWhileOpen.includes(style.id) && <span className="new-tag">New</span>}
+                    </span>
                     <span className="tiny muted tombstone-style-desc" title={raidLocked ? undefined : style.description}>
                       {raidLocked
                         ? `Clear a ${RAID_DIFFICULTY_LABEL[style.unlockRaidDifficulty!]} raid to unlock`

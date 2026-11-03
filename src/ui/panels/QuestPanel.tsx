@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
@@ -747,6 +747,29 @@ export function QuestPanel() {
     rerollTimer.current = window.setTimeout(() => setRerollFx(0), fxMs(1400));
   };
 
+  // Patch 0465 -- the same flip-in for a board that refreshes on its own
+  // while you're looking at it (the timed restock). Only contracts that
+  // actually arrived flip, and only when at least two did -- sending a
+  // hero off (one contract leaves, maybe one replaces it) stays quiet.
+  // A manual reroll keeps its own moment above.
+  const boardSig = contractOffers.map((o) => o.id).join('|');
+  const prevBoard = useRef<{ hero: string; ids: string[] } | null>(null);
+  const [arrived, setArrived] = useState<string[] | null>(null);
+  const arrivedTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(arrivedTimer.current), []);
+  useLayoutEffect(() => {
+    const ids = contractOffers.map((o) => o.id);
+    const prev = prevBoard.current;
+    prevBoard.current = { hero: selectedHero.id, ids };
+    if (!prev || prev.hero !== selectedHero.id || rerollFx || fxSpeed() <= 0) return;
+    const added = ids.filter((id) => !prev.ids.includes(id));
+    if (added.length < 2) return;
+    window.clearTimeout(arrivedTimer.current);
+    setArrived(added);
+    arrivedTimer.current = window.setTimeout(() => setArrived(null), fxMs(1600));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedHero.id, boardSig]);
+
   // Patch 0334, direct report: a guided-onboarding player could reroll
   // away the scripted tutorial quest before ever sending it -- the
   // toolbar above only hides itself while a hero is actively
@@ -897,7 +920,7 @@ export function QuestPanel() {
                 <option value="reward">Sort: Best reward</option>
               </select>
               <button
-                className={`btn-primary quest-reroll-btn ${rerollFx ? 'fx-rolling' : ''}`}
+                className={`btn-primary quest-reroll-btn ${rerollFx || arrived ? 'fx-rolling' : ''}`}
                 style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
                 onClick={(e) => reroll(e.currentTarget)}
                 disabled={tutorialQuestPending || rerollCost > state.gold}
@@ -940,11 +963,19 @@ export function QuestPanel() {
           </div>
           {contractOffers.length === 0 && <p className="small muted">Nothing open right now. New contracts arrive within the half hour.</p>}
           <div className="raid-list">
-            {contractOffers.map((offer, i) => (
+            {contractOffers.map((offer, i) => {
+              const arrivedAt = arrived ? arrived.indexOf(offer.id) : -1;
+              const cls = rerollFx
+                ? (frozenOfferId === offer.id ? 'fx-reroll-hold' : 'fx-reroll-in')
+                : arrived
+                  ? (arrivedAt >= 0 ? 'fx-reroll-in' : frozenOfferId === offer.id ? 'fx-reroll-hold' : undefined)
+                  : undefined;
+              const delay = rerollFx ? 150 + i * 110 : arrivedAt >= 0 ? 350 + arrivedAt * 110 : 0;
+              return (
               <div
                 key={offer.id}
-                className={rerollFx ? (frozenOfferId === offer.id ? 'fx-reroll-hold' : 'fx-reroll-in') : undefined}
-                style={rerollFx ? { animationDelay: `${fxMs(150 + i * 110)}ms` } : undefined}
+                className={cls}
+                style={cls ? { animationDelay: `${fxMs(delay)}ms` } : undefined}
               >
                 <QuestRow
                   offer={offer}
@@ -954,7 +985,8 @@ export function QuestPanel() {
                   onOpen={() => setOpenOfferId(offer.id)}
                 />
               </div>
-            ))}
+              );
+            })}
           </div>
           {openContractOffer && (
             <QuestDetailModal

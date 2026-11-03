@@ -22,8 +22,7 @@ import {
 import { isTabUnread } from '../../game/attention';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
-import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
-import { buyWithFx, LevelRoll, SealStamp, shownValue, usePurchaseBeats } from '../purchaseFx';
+import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, shownValue, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
 import type { BeatTiming } from '../purchaseFx';
 import { CraftingStation } from '../CraftingStation';
 import { EnhanceStation } from '../EnhanceStation';
@@ -151,12 +150,11 @@ export function VendorsPanel() {
  * that entirely, each instance owning its own hook call.
  */
 function VendorUpgradeRow({
-  def, level, cost, scrapCost, maxed, affordable, flash, pulsing, onDismissFlash, onBuy, unveiling, isNew, demoLocked,
+  def, level, cost, scrapCost, maxed, affordable, onBuy, unveiling, isNew, demoLocked,
 }: {
   def: UpgradeDef; level: number; cost: number | null; scrapCost: number; maxed: boolean; affordable: boolean;
   /** Patch 0438 -- demo build: next rank is full-game only (see demo.ts). */
   demoLocked?: boolean;
-  flash?: { key: number; name: string }; pulsing?: boolean; onDismissFlash: () => void;
   /** Gets the clicked button so the gold + Scrap can fly into it (patch 0422). */
   onBuy: (btn: HTMLElement) => void;
   /** Patch 0420 -- this row was just taught by a vendor level-up: the
@@ -166,19 +164,24 @@ function VendorUpgradeRow({
   isNew?: boolean;
 }) {
   const [showDetail, setShowDetail] = useState(false);
+  // Patch 0465 -- the upgrade rows join every other upgrade list's
+  // purchase beat (0420/0424): light sweep and level roll with a +1
+  // ember, a wax seal at the last level. Replaces the old MaxFlash star
+  // burst and level pulse. Rows stay put once maxed (no file-away here).
+  const beat = usePurchaseBeats([{ id: def.id, value: level, max: def.maxLevel }], STAY_BEATS)[def.id];
   const entries = [
     ...describeMods(def.modsPerLevel).map((line) => `${line} per level`),
     ...(def.unlocks === 'legendaryQuests' ? ['Unlocks Legendary quests'] : []),
     ...(def.unlocks === 'blackMarket' ? ['Unlocks the Black Market'] : []),
   ];
   const effectText = entries.join(' · ');
-  const pctFill = Math.min(100, (level / def.maxLevel) * 100);
+  const pctFill = Math.min(100, (shownValue(beat, level) / def.maxLevel) * 100);
   const locked = !maxed && !!demoLocked;
   const buyLabel = maxed ? 'Fully upgraded' : locked ? '🔒 Full game' : `Buy · ◆ ${formatGold(cost ?? 0)} + ${scrapCost} Scrap`;
   const press = (btn: HTMLElement) => (locked ? requestDemoWall({ kind: 'rank', name: def.name }) : onBuy(btn));
   return (
     <div
-      className={`upgrade-row ${unveiling ? 'fx-unveiling' : ''}`}
+      className={`upgrade-row vendor-upgrade-row ${unveiling ? 'fx-unveiling' : ''} ${rowBeatClass(beat)}`}
       onClick={() => setShowDetail(true)}
       role="button"
       tabIndex={0}
@@ -188,11 +191,11 @@ function VendorUpgradeRow({
         <span className="upgrade-row-head">
           <span className="upgrade-row-name">{def.name}</span>
           {isNew && <span className="fx-new-tag">NEW</span>}
-          <span className={`upgrade-row-level ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+          <span className="upgrade-row-level"><LevelRoll beat={beat} value={level} render={(v) => `${v}/${def.maxLevel}`} /></span>
         </span>
         <span className="upgrade-row-effect">{effectText}</span>
         <span className="upgrade-row-rule">
-          <span style={{ width: `${pctFill}%`, background: maxed ? 'var(--moss)' : 'var(--brass)' }} />
+          <span style={{ width: `${pctFill}%`, background: shownValue(beat, level) >= def.maxLevel ? 'var(--moss)' : 'var(--brass)' }} />
         </span>
       </span>
       <button
@@ -202,7 +205,7 @@ function VendorUpgradeRow({
       >
         {buyLabel}
       </button>
-      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
+      {beat?.phase === 'stamp' && <SealStamp label="Fully upgraded" className="upgrade-row-stamp" />}
       {unveiling && (
         <span className="upgrade-unveil" aria-hidden="true">
           <PadlockIcon />
@@ -305,7 +308,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   // (coins + Scrap in, sprite hop, speech bubble, level roll, the newly
   // taught upgrade unlocking, MASTERED stamp at the cap) instead of the
   // MaxFlash star burst / level pulse it used to share with the upgrade
-  // rows below. Those rows keep their existing MaxFlash/pulse.
+  // rows below. Those rows got their own beats in patch 0465 (VendorUpgradeRow).
   const vendorBeat = usePurchaseBeats(
     [{ id: 'vendor', value: level, max: upgradeList.length }], VENDOR_BEATS,
   ).vendor;
@@ -327,19 +330,6 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
     ? VENDOR_LEVEL_LINES[vendorId][level]
     : repUp ? REP_LINES[repUp % REP_LINES.length] : undefined;
 
-  const { flashes, dismiss } = useMaxFlash([
-    ...upgradeList.map((def) => ({
-      id: def.id, name: def.name, level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
-    })),
-  ]);
-  // Same combined vendor-level+upgrades list useMaxFlash above already
-  // builds, tracking every change for the "Level N/M" pulse -- see
-  // usePulsesOnChange's own doc comment (maxFlash.tsx) for why a plain
-  // key={level} remount trick isn't enough: it replays on every ordinary
-  // tab switch, not just an actual purchase.
-  const levelPulses = usePulsesOnChange([
-    ...upgradeList.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
-  ]);
 
   return (
     <>
@@ -472,9 +462,6 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               scrapCost={upScrapCost}
               maxed={upMaxed}
               affordable={upAffordable}
-              flash={flashes[def.id]}
-              pulsing={levelPulses[def.id]}
-              onDismissFlash={() => dismiss(def.id)}
               onBuy={(btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id))}
               unveiling={vendorBeat?.phase === 'levelup' && def.id === taughtId}
               isNew={newlyTaught.has(def.id)}

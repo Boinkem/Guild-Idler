@@ -1134,10 +1134,11 @@ raid fight).
 
 ## Backlog
 
-### Animation pass, round 3: static spots audit (logged patch 0464, not built)
-Direct request: after 0420-0428 most purchase and result moments animate,
-but a tab-by-tab sweep found these still static. Ordered by how much a
-player would notice. Nothing here is built yet -- pick from the list.
+### Animation pass, round 3: static spots audit -- built, patch 0465
+Logged in patch 0464, mocked up on the Design canvas "Guildbound
+Animation Round 3", signed off and built in 0465 -- see that patch's
+log entry for what each one does in the game and what changed from the
+notes below. Kept here as the original brief.
 
 1. **Raids: new raid unlocks (the headline ask).** The first time the
    Raids tab renders a raid whose `isRaidUnlocked` has flipped, the
@@ -37594,3 +37595,150 @@ Backlog as "Animation pass, round 3"; none of it is built yet.
 Verified: `tsc --noEmit` clean. Rendered the new list markup against
 the real `app.css` in headless Chromium: rows sit at full height, text
 clamps to two lines, the list scrolls. Not checked in the Electron app.
+
+### Animation pass round 3: raids opening up, rank-up, achievements, vendor rows, set tiers, retire, harvest, eggs (patch 0465)
+```discord-update
+Dev Update | Patch 0465
+
+- Added a raid opening moment: the first time you see a newly unlocked raid, its padlock drops, the chains snap, iron doors slide open and the art floods with colour, with a NEW RAID ribbon until you open it
+- Added a difficulty unlock moment: a newly available Heroic, Mythic or Legendary tier pops its padlock and lights up the next time you open a raid
+- Added a stamp on the raid list when you fully clear a raid at a difficulty for the first time
+- Added the tombstone style you earn from a first clear to the raid result card, plus a NEW marker on the Tombstone style button until you look
+- Added a rank-up moment on The Guild tab: your guild's rank is shown under Guild Power, and reaching a new one flips the crest, unfurls the new name and stamps RANK UP
+- Changed The Guild tab so hero and vendor rings, Guild Power and the guild record count up from where they were on your last visit
+- Added a flip on the Achievements grid: a newly earned card turns over from locked to unlocked, glints, and keeps a NEW tab until you leave
+- Changed vendor upgrade rows to use the same buy animation as the Guild Hall: level roll, light sweep, and a wax seal on the last level
+- Added set bonus pips to the Active Set Bonuses card, and a moment when equipping a piece reaches a new set tier
+- Added the quest board flip-in for contracts that arrive on their own while you're watching, not only on a reroll
+- Added an Early Retirement send-off: the hero's card turns sepia in a gilt frame, a RETIRED plaque stamps on, then it leaves
+- Added stock arriving in the Warehouse: materials drop into their bars, and a bar that hits the cap pulses with a FULL tag
+- Added eggs getting restless near the end of incubation: they wobble harder as they get close, glow, and Ready to Hatch pops in
+```
+
+Direct request: build all twelve "round 3" moments from the 0464 audit,
+after they were mocked up on the Design canvas ("Guildbound Animation
+Round 3") and signed off. Same rules as the 0420-0428 passes: timing
+runs on `--fx-t` / `fxMs` (Settings > Animation speed), Reduce motion
+snaps everything to its end state, and nothing plays on a plain tab
+switch unless it's a real change.
+
+**New shared piece: `src/ui/firstSeen.ts`.**
+- `useFirstSeen(scope, ids)` -- the "first time you see it" half of
+  0428's `useEntryInk`, without the quill. Same `GameState.entryMarks`
+  storage (shown = 1, opened = 2) and the same old-save rule: a scope
+  an existing save has never seen is adopted silently. An id the scope
+  hasn't shown before is `fresh` for that mount and marked shown at
+  once, so the moment plays exactly once even across a reload and even
+  if the change happened offline. It stays `isNew` until `open(id)`.
+  Must be called once per scope per screen with every id (the panel,
+  not each card), or the first card to mount would adopt the scope
+  with only its own ids. Six new scopes in `ENTRY_SCOPES`:
+  `raid-unlock`, `raid-diff`, `raid-clear`, `achievements`,
+  `tombstones`, `guild-rank`. New saves start with them adopted, so a
+  new guild sees every moment; existing saves don't replay history.
+- `useSinceLastVisit(values)` -- module memory (not the save) of what a
+  set of numbers showed the last time a screen was open this session;
+  returns the old value for anything that moved. Drives The Guild's
+  ring sweeps and count-ups and the Achievements header count.
+
+**1. Raid opens up (`RaidsPanel.tsx`).** Panel-level
+`useFirstSeen('raid-unlock', unlocked raid ids)` (empty until the Raid
+Charter's bought, so nothing is "seen" behind the locked screen). A
+fresh card's thumb is wrapped in `.rfo-thumb` with a gate overlay: the
+padlock rattles and drops, two chains snap away, iron doors slide apart,
+the art goes from greyscale to colour, a light sweeps and the card
+glows. Several raids opening at once stagger 700ms apart (`--rfo-d`).
+A NEW RAID ribbon stays (`.rfo-new`) until the card is opened.
+
+**2. Difficulty unlock.** `RaidDetailModal` calls
+`useFirstSeen('raid-diff', unlocked difficulties)`. Tiers are
+guild-wide, so it plays in whichever raid's detail is opened first
+after the unlock: the padlock pops off the circle, the ring ignites in
+the tier's colour with a halo and sparks, the label goes from grey to
+colour. The unlock predicate moved into a local `difficultyUnlocked`
+(same logic as before).
+
+**3. First clear.** `useFirstSeen('raid-clear', 'raidId|difficulty')`
+on the list: that difficulty's letter in `RaidClearBadges` stamps in.
+`RaidResultModal` now shows `tombstoneStyleUnlocked` (previously a
+notification only) as an "Also found" row with the style's art, sliding
+in with a frost glint; the card's end time allows for it. The Heroes
+tab's Tombstone style button carries a NEW dot while any owned style
+(other than Plain) hasn't been looked at (`useFirstSeen('tombstones')`).
+Opening the list clears it; rows that were new keep a small New tag
+while it stays open, and a style bought from inside the open list counts
+as seen at once. The popover background is now solid `--panel` (it was
+the see-through card fill, so the roster showed through).
+
+**4. Guild rank-up (`DashboardPanel.tsx`).** The power card gains a
+rank line under Guild Power: a crest in the rank's colour and the rank
+name (blurb on hover). `useFirstSeen('guild-rank', ranks reached
+excluding the first)`: the next time The Guild opens after a new rank,
+the old name slides away, the crest flips, the new name unfurls on a
+ribbon, RANK UP stamps on and embers rise. A rank that drops and is
+reached again doesn't replay.
+
+**5. Rings and record catch up.** `Ring` takes `fromProgress` and
+draws its fill from a registered `--rp` property, so `.fx-ring-catch`
+can sweep it. Hero rings sweep from last visit's XP (a level gained
+sweeps from empty and the number pops), vendor rings sweep from their
+old level, and Guild Power / Stories / Achievements / Retirements count
+up via `useCountUp`. First visit of a session never animates.
+
+**6. Achievements grid (`StatsPanel.tsx`).** The grid moved into its
+own `AchievementsGrid` so its marks only count while it's on screen.
+`useFirstSeen('achievements')`: a card unlocked since you last looked
+flips over from a locked face, takes the brass glow and glints
+(staggered 450ms). NEW tab until you leave the grid. The sub-tab's
+"(N/70)" count rolls up from the last visit.
+
+**7. Vendor upgrade rows (`VendorsPanel.tsx`).** `VendorUpgradeRow`
+owns a `usePurchaseBeats(..., STAY_BEATS)` like Harvest's rows: coins
+in (unchanged `buyWithFx`), light sweep, `LevelRoll` with +1 ember,
+the rule fills with the shown level, and a Fully upgraded wax seal on
+the last level. The old `useMaxFlash` / `usePulsesOnChange` in
+`VendorPage` and their props are gone. Rows stay put once maxed (vendor
+rows have no "fully built" strip to file into, unlike the mock).
+
+**8. Set bonus tier (`EquipmentPanel.tsx`).** `useRecentIncrease` over
+each worn set's met-tier count, keyed hero+set so switching heroes never
+plays. Every Active Set Bonuses entry now shows one pip per piece. When
+a tier is reached the newest pip lights, the entry glows teal and the
+new tier's bonus line shows under it for ~2.6s. A set's FIRST tier
+isn't animated: the entry only appears once a tier is met, so there's
+nothing on screen to animate from (same limitation as before).
+
+**9. Quest board refresh (`QuestPanel.tsx`).** A layout effect watches
+the current hero's offer ids: two or more new ids arriving without a
+reroll plays the reroll flip-in on just those contracts (frozen one
+shivers), and spins the die on the Reroll button. A send (one leaves)
+stays quiet; switching heroes never plays.
+
+**10. Early Retirement (`PrestigePanel.tsx`).** The engine call now
+waits for the send-off (~1.9s at 1x): sepia, gilt frame, RETIRED
+plaque, shrink and fade; then `engine.earlyRetire`. Instant with
+Reduce motion. The button disables during it.
+
+**11. Harvest stock (`HarvestPanel.tsx`).** Warehouse rows:
+`useRecentIncrease` on each material's whole count drops that
+material's icon into its bar, flashes the bar and pops the count. A bar
+reaching the cap pulses three times and shows a FULL tag (kept while
+full, count in light red).
+
+**12. Eggs near done (`HatcheryPanel.tsx`).** The egg icon gets a
+stage class by progress: 70%+ an occasional wobble, 85%+ more often and
+harder with a faint glow, 95%+ near-constant with a strong glow, ready
+a gentle bob. "Ready to Hatch!" pops in if it finishes while you watch.
+
+CSS for all of it is one block at the end of `app.css` (patch 0465
+header). Verified: `tsc --noEmit` and `npm run build` clean. Drove a
+web build in headless Chromium with seeded states and checked frames
+of 1-6, 7 (a normal and a final-level buy), 8 (third Voidforged piece),
+9 (simulated restock), 10, 11 and 12: the doors, chains and padlock open
+in order with the stagger, difficulty padlocks pop and rings ignite,
+the tombstone row lands on the raid card, the NEW dot shows and clears,
+rank-up plays end to end, achievement cards flip, the vendor seal
+stamps, the set pip and tier line show, contracts flip in, the retire
+plaque stamps and the card leaves, stock drops and FULL shows. Not
+checked in the Electron app. One fix came out of testing: the vendor
+row's rule turned green before the level rolled.

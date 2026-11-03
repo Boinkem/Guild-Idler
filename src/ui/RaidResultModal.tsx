@@ -15,6 +15,7 @@ import { measureFlyOffset } from './flyTarget';
 import { RECIPE_SCROLL_BY_ID } from '../game/data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from '../game/data/craftingRecipes';
 import { shardLabel } from '../game/data/shards';
+import { TOMBSTONE_STYLES } from '../game/data/progression';
 
 const DISMISS_DELAY_MS = 640;
 /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
@@ -134,7 +135,8 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
   t += 400;
   const T_DMG = t;
   const dmgCount = (result.heroesFallen?.length ?? 0) + (result.petsFallen?.length ?? 0) + result.injuries.length;
-  if (dmgCount > 0 || result.eggsFound?.length || result.recipeScrollGained || result.shardsGained) t += 160 * Math.min(dmgCount, 4) + 240;
+  if (dmgCount > 0 || result.eggsFound?.length || result.recipeScrollGained || result.shardsGained || result.tombstoneStyleUnlocked) t += 160 * Math.min(dmgCount, 4) + 240;
+  if (result.tombstoneStyleUnlocked) t += 600;
   const T_DONE = t + 300;
 
   const displayGold = useDelayedCount(result.gold, T_PAY, 800);
@@ -278,9 +280,25 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
 
         {/* Also-found extras -- same shape QuestResultModal's own
             "Also found" section already uses. */}
-        {!!(result.eggsFound?.length || result.recipeScrollGained || result.shardsGained) && (
+        {!!(result.eggsFound?.length || result.recipeScrollGained || result.shardsGained || result.tombstoneStyleUnlocked) && (
           <div className="rfx-late" style={at(T_DMG)}>
             <div className="section-heading">Also found</div>
+            {/* Patch 0465 -- the first-clear tombstone style used to be a
+             *  notification only; it now gets its own line on the card,
+             *  sliding in with its art and a frost glint. */}
+            {result.tombstoneStyleUnlocked && (() => {
+              const style = TOMBSTONE_STYLES.find((st) => st.name === result.tombstoneStyleUnlocked);
+              return (
+                <div className="rfx-tomb" style={{ '--tomb-d': `calc(var(--fx-t) * ${T_DMG + 120})` } as CSSProperties}>
+                  {style && <img src={`./hero-status/${style.icon}`} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+                  <span className="rfx-tomb-text">
+                    <span className="tiny muted">New tombstone style</span>
+                    <span className="small">{result.tombstoneStyleUnlocked}</span>
+                  </span>
+                  <span className="rfx-tomb-glint" aria-hidden="true" />
+                </div>
+              );
+            })()}
             {result.shardsGained ? (
               <div className="small" style={{ marginBottom: 2, color: '#d9a441' }}>+{shardLabel(result.shardsGained)}</div>
             ) : null}

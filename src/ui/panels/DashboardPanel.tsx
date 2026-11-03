@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -9,7 +9,9 @@ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression
 import { AchievementManager } from '../../game/managers/AchievementManager';
 import { attentionCounts } from '../../game/attention';
 import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
-import { nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+import { useFirstSeen, useSinceLastVisit } from '../firstSeen';
+import { useCountUp } from '../useCountUp';
 import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { formatGold, formatNumber } from '../../game/util';
 import { LeaderboardModal } from '../LeaderboardModal';
@@ -186,20 +188,26 @@ function AttentionDigest() {
 }
 
 export function Ring({
-  progress, color, size, children, title,
+  progress, color, size, children, title, fromProgress,
 }: {
   progress: number; color: string; size: number; children: ReactNode; title?: string;
+  /** Patch 0465 -- sweep from this fill (0-1) to `progress` on mount. */
+  fromProgress?: number | null;
 }) {
-  const pct = Math.max(0, Math.min(1, progress)) * 100;
+  const clamp = (v: number) => Math.max(0, Math.min(1, v)) * 100;
+  const pct = clamp(progress);
+  const catching = fromProgress !== undefined && fromProgress !== null;
   return (
     <div
-      className="progress-ring"
+      className={`progress-ring ${catching ? 'fx-ring-catch' : ''}`}
       title={title}
       style={{
         width: size, height: size,
-        background: `conic-gradient(${color} ${pct}%, var(--panel-3) 0)`,
+        '--rp': pct,
+        '--rp-from': catching ? clamp(fromProgress) : pct,
+        background: `conic-gradient(${color} calc(var(--rp) * 1%), var(--panel-3) 0)`,
         boxShadow: `0 0 10px ${color}66`,
-      }}
+      } as CSSProperties}
     >
       <div className="progress-ring-inner">{children}</div>
     </div>
@@ -218,6 +226,33 @@ export function DashboardPanel() {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const achProgress = AchievementManager.progress(state);
   const guildAgeDays = Math.max(0, Math.floor((Date.now() - state.createdAt) / (24 * 3600000)));
+
+  // Patch 0465 -- rank-up moment, played the next time this tab opens
+  // after the guild reaches a new rank (the starting rank never plays).
+  const rank = currentGuildRank(state);
+  const rankIndex = GUILD_RANK_TIERS.findIndex((t) => t.id === rank.id);
+  const rankSeen = useFirstSeen('guild-rank', GUILD_RANK_TIERS.slice(1, rankIndex + 1).map((t) => t.id));
+  const rankUp = rankSeen.fresh(rank.id);
+  const prevRank = rankIndex > 0 ? GUILD_RANK_TIERS[rankIndex - 1] : null;
+
+  // Patch 0465 -- rings and the record catch up from what they showed on
+  // the last visit this session, instead of already sitting at the new value.
+  const since = useSinceLastVisit({
+    power,
+    stories: state.completedChains.length,
+    achievements: achProgress.unlocked,
+    retirements: state.stats.prestigeCount,
+    ...Object.fromEntries(state.heroes.map((h) => {
+      const needed = xpForLevel(h.level);
+      const frac = HeroManager.isMaxLevel(h) ? 0.999 : needed > 0 ? Math.min(0.999, h.xp / needed) : 0;
+      return [`hero:${h.id}`, h.level + frac];
+    })),
+    ...Object.fromEntries(VENDORS.map((v) => [`vendor:${v.id}`, GuildManager.vendorLevel(state, v.id)])),
+  });
+  const shownPower = useCountUp(power, { from: since.power ?? power, durationMs: 900 });
+  const shownStories = useCountUp(state.completedChains.length, { from: since.stories ?? state.completedChains.length, durationMs: 700 });
+  const shownAch = useCountUp(achProgress.unlocked, { from: since.achievements ?? achProgress.unlocked, durationMs: 700 });
+  const shownRetire = useCountUp(state.stats.prestigeCount, { from: since.retirements ?? state.stats.prestigeCount, durationMs: 700 });
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(state.guildName);
@@ -328,7 +363,29 @@ export function DashboardPanel() {
             🏆 Leaderboard
           </button>
         </div>
-        <div className="power-number">{power.toLocaleString()}</div>
+        <div className={`power-number ${since.power !== undefined ? 'fx-num-catch' : ''}`}>{Math.round(shownPower).toLocaleString()}</div>
+        <div
+          className={`guild-rank-line ${rankUp ? 'fx-rank-up' : ''}`}
+          style={{ '--grk-c': rank.color } as CSSProperties}
+          title={rank.blurb}
+        >
+          <svg className="grk-crest" viewBox="0 0 70 80" aria-hidden="true">
+            <path d="M35 3L64 13v24c0 20-13 33-29 40C19 70 6 57 6 37V13z" className="grk-shield" />
+            <path d="M35 18l5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1z" className="grk-star" />
+          </svg>
+          <span className="grk-names">
+            {rankUp && prevRank && <span className="grk-old">{prevRank.name}</span>}
+            <span className="grk-name">{rank.name}</span>
+          </span>
+          {rankUp && (
+            <>
+              <span className="grk-stamp" aria-hidden="true">Rank up</span>
+              <span className="grk-embers" aria-hidden="true">
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} style={{ left: `${8 + i * 13}%`, animationDelay: `calc(var(--fx-t) * ${700 + (i * 137) % 500})` }} />)}
+              </span>
+            </>
+          )}
+        </div>
         <div className="stat-row" style={{ marginTop: 6 }}>
           <span className="gold-text">◆ {formatGold(state.gold)}</span>
           <span style={{ color: 'var(--violet)' }}>✦ {formatNumber(state.renown)} renown</span>
@@ -360,6 +417,12 @@ export function DashboardPanel() {
           // ring without this, rather than the "done" a capped hero
           // actually is. A full ring communicates that correctly instead.
           const maxed = HeroManager.isMaxLevel(hero);
+          // Patch 0465 -- a level gained since the last visit sweeps up
+          // from empty with the number popping; XP alone sweeps from
+          // where the ring was.
+          const before = since[`hero:${hero.id}`];
+          const levelled = before !== undefined && Math.floor(before) < hero.level;
+          const fromProgress = before === undefined ? null : levelled ? 0 : before - Math.floor(before);
           return (
             <div key={hero.id} className="dashboard-item">
               <Ring
@@ -367,8 +430,9 @@ export function DashboardPanel() {
                 color={color}
                 size={64}
                 title={maxed ? 'Max level' : `${levelTierName(hero.level)} tier`}
+                fromProgress={fromProgress}
               >
-                <span style={{ color }}>{hero.level}</span>
+                <span className={levelled ? 'fx-num-pop' : undefined} style={{ color }}>{hero.level}</span>
               </Ring>
               <div className="tiny" style={{ marginTop: 4, textAlign: 'center' }}>{hero.name}</div>
               {hero.ascension > 0 && <div className="tiny muted">ascended ×{hero.ascension}</div>}
@@ -384,8 +448,13 @@ export function DashboardPanel() {
           const cap = vendorUpgrades(vendor.id).length;
           return (
             <div key={vendor.id} className="dashboard-item">
-              <Ring progress={cap > 0 ? level / cap : 0} color="var(--brass)" size={56}>
-                <span style={{ color: 'var(--brass)', fontSize: '0.75rem' }}>{level}/{cap}</span>
+              <Ring
+                progress={cap > 0 ? level / cap : 0}
+                color="var(--brass)"
+                size={56}
+                fromProgress={since[`vendor:${vendor.id}`] !== undefined && cap > 0 ? since[`vendor:${vendor.id}`] / cap : null}
+              >
+                <span className={since[`vendor:${vendor.id}`] !== undefined ? 'fx-num-pop' : undefined} style={{ color: 'var(--brass)', fontSize: '0.75rem' }}>{level}/{cap}</span>
               </Ring>
               <div className="tiny" style={{ marginTop: 4, textAlign: 'center' }}>{vendor.name}</div>
             </div>
@@ -396,15 +465,15 @@ export function DashboardPanel() {
       <div className="section-heading">Guild record</div>
       <div className="grid three">
         <div className="card" style={{ marginBottom: 0, textAlign: 'center' }}>
-          <div className="dashboard-stat-number">{state.completedChains.length}</div>
+          <div className={`dashboard-stat-number ${since.stories !== undefined ? 'fx-num-catch' : ''}`}>{Math.round(shownStories)}</div>
           <div className="tiny muted">Stories completed</div>
         </div>
         <div className="card" style={{ marginBottom: 0, textAlign: 'center' }}>
-          <div className="dashboard-stat-number">{achProgress.unlocked}/{achProgress.total}</div>
+          <div className={`dashboard-stat-number ${since.achievements !== undefined ? 'fx-num-catch' : ''}`}>{Math.round(shownAch)}/{achProgress.total}</div>
           <div className="tiny muted">Achievements</div>
         </div>
         <div className="card" style={{ marginBottom: 0, textAlign: 'center' }}>
-          <div className="dashboard-stat-number">{state.stats.prestigeCount}</div>
+          <div className={`dashboard-stat-number ${since.retirements !== undefined ? 'fx-num-catch' : ''}`}>{Math.round(shownRetire)}</div>
           <div className="tiny muted">Retirements</div>
         </div>
       </div>
