@@ -37842,3 +37842,63 @@ affordable / NEW / locked chips, Tavern button glowing) and The Guild
 (Needs attention, nav pip, gold near cap). Not checked in the Electron
 app, and not checked for frame cost on a low-end machine -- worth a look
 with several tabs' worth of glows on screen.
+
+### Quest Board split into Overview and Contracts; Quick Send (patch 0467)
+```discord-update
+Dev Update | Quest Board Overview
+
+- Added an Overview tab to the Quest Board: one row per hero showing what they're up to, so no quest shows up twice any more
+- Added a summary at the top of Overview: who's on the road, who's ready, who's recovering, who's back next, and the gold and Scrap on the way home
+- Added Quick Send: each ready hero shows the contract with their best chance of success, sent in one click, or Pick another to choose from their board
+- Added Treat right on the Overview for injured heroes, and a shortcut to the Heroes tab for anyone fallen
+- Added a Just back row with your last three quest results
+- Changed the Contracts tab's hero buttons to show each hero's portrait and what they're doing
+- Changed a hero who's already out to show their quest once, with the contracts waiting for them dimmed underneath
+- Fixed an active quest appearing twice on the Quest Board
+```
+
+Direct report, with a screenshot: sending a hero showed their quest twice,
+once in the selected hero's slot and again in the "On the road" list
+under it. Mocked up on the Design canvas "Guildbound Quest Board Rework"
+(options A lanes / B cards for an Overview); A signed off, with Quick
+Send picking the contract with the highest success chance.
+
+**`QuestPanel.tsx`.** New `subTab` ('overview' | 'contracts'), reachable
+by `requestTab('quests', _, 'overview' | 'contracts')`. Opens on Overview,
+except while the scripted tutorial quest is still on a board (the
+first-run tour points at it on Contracts). The bottom "On the road" list
+is gone. Contracts hero tabs are now `QuestHeroTab`: class portrait plus
+a status line (on the road and time left / hurt and time to heal /
+fallen / N contracts); `HeroTab` stays as it was for Story Quests. A
+hero who's out shows their road card once, then "Waiting for X's return"
+with their board shown dimmed and read-only, time until back, and a link
+to Overview.
+
+**`QuestOverview.tsx` (new).**
+- Strip: on the road / ready (idle, not hurt) / recovering (hurt or
+  fallen, not out) counts, next back (earliest `endsAt`), gold
+  (`rewardGold x goldMultiplier`) and `scrapReward` on the way home, Send
+  All Idle.
+- One lane per hero. On the road: band art (chain banner or tag banner),
+  difficulty, odds, reward, consumables used, the 0425 walking track with
+  the 0466 sheen, time left, Recall (through the existing confirm).
+  Auto-Chain streaks show pips. Ready: `quickSendPick` -- the board offer
+  with the highest `QuestManager.successBreakdown(...).success` (ties ->
+  higher gold) -- with Quick Send (`engine.startQuest(hero, offer, [],
+  false, true)`, same as a normal send) and Pick another (switches to
+  Contracts on that hero). No offers: says so. Hurt: longest injury's heal
+  time, Treat (free-treat logic matches HeroBlock), Contracts. Fallen:
+  Go to Heroes.
+- Just back: last three entries of `state.log`.
+
+CSS: `.qov-*`, `.quest-hero-tab*`, `.link-btn` at the end of app.css
+(patch 0467 header); lanes stack under 720px container width.
+
+Verified: `tsc --noEmit` and `npm run build` clean. Drove a web build in
+headless Chromium with four heroes (two out, one ready, one injured):
+each hero appears once on Overview with the right lane, counts and next
+back are right, Quick Send sends the ready hero and the lane flips to On
+the road, Contracts shows a questing hero's card once with their dimmed
+board below, and Treat shows Free. Hero sprites aren't in the repo, so
+the walking rider showed its text fallback. Just back wasn't exercised
+(no finished quests in the seeded save). Not checked in the Electron app.

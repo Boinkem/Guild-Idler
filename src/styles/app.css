@@ -10145,3 +10145,70 @@ button.harvest-item:hover {
 }
 @keyframes amb-glint-diag { 0%, 55% { background-position: 120% 120%; } 85%, 100% { background-position: -20% -20%; } }
 .recruit-chip .new-tab { border-radius: 0 0 6px 6px; right: 18px; padding: 1px 7px; }
+
+/* =====================================================================
+   Patch 0467 -- Quest Board Overview sub-tab (QuestOverview.tsx) and the
+   Contracts sub-tab's portrait hero tabs. Design canvas "Guildbound Quest
+   Board Rework", option A (hero lanes).
+   ===================================================================== */
+.qov { display: flex; flex-direction: column; gap: 10px; }
+.qov-strip { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-bottom: 0; }
+.qov-k { display: flex; flex-direction: column; gap: 1px; }
+.qov-k b { font-size: 1.05rem; color: var(--parchment); font-variant-numeric: tabular-nums; }
+.qov-k span { font-size: .625rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.qov-scrap { font-size: .8125rem; color: var(--muted); font-weight: 600; }
+.qov-lane {
+  display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: center;
+  margin-bottom: 0; border-left-width: 3px;
+}
+.qov-lane.road { border-left-color: var(--brass); }
+.qov-lane.ready { border-left-color: var(--moss); }
+.qov-lane.hurt, .qov-lane.fallen { border-left-color: var(--blood); }
+.qov-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.qov-portrait {
+  width: 48px; height: 36px; flex: none; border-radius: 6px;
+  background-color: var(--panel-2); background-size: cover; background-repeat: no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6);
+}
+.qov-portrait.dim { filter: saturate(.5) brightness(.85); }
+.qov-name { font-weight: 800; font-size: .875rem; color: var(--parchment); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qov-name span { font-weight: 400; font-size: .6875rem; color: var(--muted); }
+.qov-state { font-size: .6875rem; margin-top: 2px; }
+.qov-job { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-width: 0; }
+.qov-band {
+  height: 46px; border-radius: 5px; background-color: var(--panel-2);
+  background-size: cover; background-position: center; opacity: .9;
+}
+.qov-band.dim { opacity: .55; }
+.qov-band-empty {
+  display: grid; place-items: center; text-align: center; padding: 0 6px; font-size: .6875rem;
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent); opacity: 1;
+}
+.qov-band-empty.bad { background: color-mix(in srgb, var(--blood) 18%, var(--panel)); }
+.qov-job-main { min-width: 0; }
+.qov-eyebrow { font-size: .625rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.qov-job-title { font-weight: 800; font-size: .875rem; color: var(--parchment); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qov-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: .6875rem; margin-top: 3px; }
+.qov-track { padding-top: 18px; margin-top: -4px; }
+.qov-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; justify-content: center; min-width: 96px; }
+.qov-actions.col { align-items: flex-end; }
+.qov-eta { font-weight: 700; font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.qov-pips { display: inline-flex; gap: 3px; vertical-align: middle; }
+.qov-pips i { width: 7px; height: 7px; border-radius: 2px; border: 1px solid var(--moss); }
+.qov-pips i.on { background: var(--moss); }
+.qov-justback { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.qov-result {
+  display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--panel-3); font-size: .6875rem;
+}
+.qov-result > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qov-waiting { opacity: .55; pointer-events: none; filter: saturate(.7); }
+.quest-hero-tab { padding-right: 12px; }
+.quest-hero-tab-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; }
+.link-btn { background: none; border: none; padding: 0; min-height: 0; color: var(--brass); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+@container (max-width: 720px) {
+  .qov-lane { grid-template-columns: minmax(0, 1fr); }
+  .qov-job { grid-template-columns: 90px minmax(0, 1fr); }
+  .qov-actions { grid-column: 1 / -1; }
+  .qov-justback { grid-template-columns: minmax(0, 1fr); }
+}

@@ -19,6 +19,9 @@ import { ConfirmModal } from '../ConfirmModal';
 import { buyWithFx, fxMs, fxSpeed } from '../purchaseFx';
 import { at } from '../resultFx';
 import { HeroSprite } from '../sprites/HeroSprite';
+import { QuestOverview } from './QuestOverview';
+import { HERO_CLASSES } from '../../game/data/progression';
+import { heroPortraitSrc, heroPortraitStyle } from './HeroesPanel';
 
 export type Offer = QuestOffer;
 
@@ -546,6 +549,39 @@ export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: bo
 }
 
 /**
+ * Patch 0467 -- the Contracts sub-tab's hero tabs: class portrait plus a
+ * one-line status (on the road and for how long, hurt and for how long,
+ * fallen, or how many contracts are waiting). HeroTab above stays as it
+ * was for the Story Quests tab.
+ */
+function QuestHeroTab({ hero, now, selected, onSelect }: { hero: Hero; now: number; selected: boolean; onSelect: () => void }) {
+  const state = useEngine().state;
+  const cls = HERO_CLASSES[hero.heroClass];
+  const quest = state.activeQuests.find((q) => q.heroId === hero.id);
+  const hurt = hero.injuries.length > 0 || hero.status === 'fallen';
+  const healAt = hero.injuries.reduce((m, i) => Math.max(m, i.healsAt), 0);
+  const count = (state.questBoards[hero.id] ?? []).length;
+  const status = quest ? { text: `on the road · ${formatDuration(quest.endsAt - now)}`, cls: 'gold-text' }
+    : hero.status === 'fallen' ? { text: 'fallen', cls: 'bad' }
+    : hurt ? { text: `hurt · ${formatDuration(healAt - now)}`, cls: 'bad' }
+    : { text: `${count} contract${count === 1 ? '' : 's'}`, cls: 'good' };
+  return (
+    <button className={`hero-tab-chip has-portrait quest-hero-tab ${selected ? 'on' : ''}`} onClick={onSelect}>
+      <span
+        className="hero-tab-portrait"
+        aria-hidden="true"
+        style={{ backgroundImage: `url(${heroPortraitSrc(hero.heroClass, cls?.portrait)})`, ...heroPortraitStyle(cls?.portrait), ...(hurt ? { filter: 'saturate(.55)' } : {}) }}
+      />
+      {hurt && <span className="amb-hurt-dot" aria-label="Injured" />}
+      <span className="quest-hero-tab-text">
+        <span>{hero.name} · Lv {hero.level}</span>
+        <span className={`tiny ${status.cls}`}>{status.text}</span>
+      </span>
+    </button>
+  );
+}
+
+/**
  * One "on the road" card -- pulled out of QuestPanel's own render (patch
  * 0353, page reorder) so the same card can be used two places: the full
  * "On the road" list at the bottom of the page (every active quest,
@@ -644,6 +680,16 @@ export function QuestPanel() {
     }
   }, [state.heroes, selectedHeroId]);
   const selectedHero = state.heroes.find((h) => h.id === selectedHeroId) ?? state.heroes[0];
+
+  // Patch 0467 -- opens on Overview, except while the scripted tutorial
+  // quest is still waiting to be sent (the first-run tour points at it on
+  // the Contracts board). A "Go to" link can ask for either.
+  const tutorialOnABoard = Object.values(state.questBoards).some((b) => (b ?? []).some((o) => o.id === TUTORIAL_QUEST_ID));
+  const [subTab, setSubTab] = useState<'overview' | 'contracts'>(() => (tutorialOnABoard ? 'contracts' : 'overview'));
+  useEffect(() => {
+    const requested = engine.consumeRequestedSubTab();
+    if (requested === 'overview' || requested === 'contracts') setSubTab(requested);
+  }, [engine, engine.requestedSubTab]);
 
   // How the contract board is currently ordered -- tier ascending was
   // always the only option; once the freeze slot and reroll put more
@@ -809,6 +855,32 @@ export function QuestPanel() {
         </p>
       </div>
 
+      {/* Patch 0467 -- Overview / Contracts sub-tabs (Design canvas "Guildbound
+          Quest Board Rework", option A signed off). Overview is the
+          dashboard: one lane per hero, so nobody appears twice (the old
+          bottom "On the road" list repeated the selected hero's own quest
+          right under the copy in the Contracts slot). Contracts is the
+          per-hero board, minus that list. */}
+      <div className="row" style={{ gap: 8, margin: '4px 0 12px' }}>
+        <button className={`btn-subtab ${subTab === 'overview' ? 'on' : ''}`} onClick={() => setSubTab('overview')}>
+          Overview
+        </button>
+        <button className={`btn-subtab ${subTab === 'contracts' ? 'on' : ''}`} onClick={() => setSubTab('contracts')}>
+          Contracts
+        </button>
+      </div>
+
+      {subTab === 'overview' && (
+        <QuestOverview
+          now={now}
+          onPickAnother={(heroId) => { setSelectedHeroId(heroId); setSubTab('contracts'); }}
+          onRecall={recall}
+          onQuickSend={(hero, offer) => engine.startQuest(hero.id, offer, [], false, true)}
+        />
+      )}
+
+      {subTab === 'contracts' && (
+      <>
       {/* ------------------------------- hero tabs ------------------------------- */}
       {/* Page reorder (patch 0353, direct request): Heroes moved to the top of
           the page, Chain Tactics under that, then the contract cards --
@@ -832,7 +904,7 @@ export function QuestPanel() {
       </div>
       <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
         {state.heroes.map((h) => (
-          <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />
+          <QuestHeroTab key={h.id} hero={h} now={now} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />
         ))}
       </div>
 
@@ -904,6 +976,31 @@ export function QuestPanel() {
                   onRecall={() => recall(selectedHero.id)}
                   fresh={justSent === selectedHero.id}
                 />
+                {/* Patch 0467 -- their waiting contracts, read-only and
+                    dimmed, so the next job can be planned while they're out. */}
+                {contractOffers.length > 0 && (
+                  <>
+                    <div className="spread" style={{ alignItems: 'baseline', marginTop: 6 }}>
+                      <div className="section-heading" style={{ marginBottom: 0 }}>Waiting for {selectedHero.name}'s return</div>
+                      <span className="tiny muted">
+                        Back in {formatDuration(ownActiveQuest.endsAt - now)} ·{' '}
+                        <button type="button" className="link-btn" onClick={() => setSubTab('overview')}>everyone else is on Overview →</button>
+                      </span>
+                    </div>
+                    <div className="raid-list qov-waiting" aria-disabled="true">
+                      {contractOffers.map((offer) => (
+                        <QuestRow
+                          key={offer.id}
+                          offer={offer}
+                          hero={selectedHero}
+                          now={now}
+                          isFrozen={frozenOfferId === offer.id}
+                          onOpen={() => {}}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             )
             : <p className="small muted">{selectedHero.name} is already out.</p>;
@@ -1014,26 +1111,7 @@ export function QuestPanel() {
         </>
       )}
 
-      {/* --------------------------- active quests --------------------------- */}
-      {/* Every active quest, every hero -- moved to the bottom of the page
-          (patch 0353, direct request). The selected hero's own quest (if
-          any) already shows above in the Contracts slot; it's not excluded
-          from this list too, so this stays the one complete "everyone
-          currently out" overview regardless of which tab happens to be
-          open. */}
-      {state.activeQuests.length > 0 && (
-        <>
-          <div className="section-heading">On the road</div>
-          {state.activeQuests.map((quest) => (
-            <ActiveQuestCard
-              key={quest.id}
-              quest={quest}
-              questHero={state.heroes.find((h) => h.id === quest.heroId)}
-              now={now}
-              onRecall={() => recall(quest.heroId)}
-            />
-          ))}
-        </>
+      </>
       )}
 
       {pendingRecallHeroId && (
