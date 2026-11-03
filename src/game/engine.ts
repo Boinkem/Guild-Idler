@@ -21,6 +21,8 @@ import { DlcManager, FOUNDER_PACK_ID } from './managers/DlcManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
+import { auctionItemName } from './ahItems';
+import { formatGold } from './util';
 import { AchievementManager } from './managers/AchievementManager';
 import { GuildTitleManager } from './managers/GuildTitleManager';
 import { uploadGuildPowerScore } from './leaderboard';
@@ -52,6 +54,8 @@ import { TESTING_TOOLS_ENABLED } from './testingTools';
 import { DEMO_LOCK_ERROR, requestDemoWall } from './demo';
 
 const TICK_MS = 1000;
+/** Patch 0463 -- how often to check for Auction House sales (see checkAuctionSales). */
+const AH_SALE_CHECK_MS = 10 * 60 * 1000;
 const AUTOSAVE_MS = 15_000;
 
 export interface OfflineReport {
@@ -1129,6 +1133,7 @@ export class GameEngine {
 
     this.state.stats.playTimeMs += Math.max(0, Math.min(delta, TICK_MS * 5));
     this.state.lastSeen = now;
+    this.maybeCheckAuctionSales(now);
 
     let changed = false;
     const infirmaryLevel = this.state.guild.infirmary ?? 0;
@@ -1765,6 +1770,63 @@ export class GameEngine {
     MailboxManager.grantTestEntry(this.state, { type: 'scrap', amount, note });
     this.notify();
     void this.saveNow();
+  }
+
+  /* ---------------------- patch 0463: "your item sold" ---------------------- */
+
+  private lastSaleCheckAt = 0;
+  private saleCheckInFlight = false;
+
+  /** Turns sale alerts on the first time the player lists something. */
+  private startSaleWatch() {
+    if (!this.state.ahSaleWatch) this.state.ahSaleWatch = { lastSeenAt: Date.now() };
+  }
+
+  /** Called from tick(): checks for new sales every AH_SALE_CHECK_MS (and
+   *  right away on startup), only for players who have listed something
+   *  and still have the Auction House. */
+  private maybeCheckAuctionSales(now: number) {
+    if (!this.state.ahSaleWatch || this.saleCheckInFlight) return;
+    if (now - this.lastSaleCheckAt < AH_SALE_CHECK_MS) return;
+    if (!ModifierManager.hasUnlock(this.state, 'auctionHouse')) return;
+    this.lastSaleCheckAt = now;
+    this.saleCheckInFlight = true;
+    void this.checkAuctionSales().finally(() => { this.saleCheckInFlight = false; });
+  }
+
+  /**
+   * Announces Auction House sales since the last check -- one toast per
+   * sale (rolled into one line past 3), each archived in the notification
+   * log with a link to the Auction House -- then pulls the sale money into
+   * the local mailbox so the badge is right. Reads the player's own
+   * /ledger (patch 0458), which already knows item, price and time. Silent
+   * on any failure (offline, no Steam): it simply tries again next time.
+   * Returns how many sales it announced.
+   */
+  async checkAuctionSales(): Promise<number> {
+    const watch = this.state.ahSaleWatch;
+    if (!watch) return 0;
+    const ledger = await fetchMyLedger('30d');
+    if (!ledger) return 0;
+    const fresh = ledger.recent
+      .filter((t) => t.side === 'sold' && new Date(t.at).getTime() > watch.lastSeenAt)
+      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    if (fresh.length === 0) return 0;
+    if (fresh.length > 3) {
+      const gold = fresh.filter((t) => t.currency === 'gold').reduce((sum, t) => sum + t.price, 0);
+      const scrap = fresh.filter((t) => t.currency === 'scrap').reduce((sum, t) => sum + t.price, 0);
+      const total = [gold ? `${formatGold(gold)} gold` : '', scrap ? `${formatGold(scrap)} scrap` : ''].filter(Boolean).join(' and ');
+      this.say(`${fresh.length} of your Auction House listings sold, for ${total}. Collect it from the Mailbox.`, 'auction_house', true);
+    } else {
+      for (const t of fresh) {
+        this.say(`Sold on the Auction House: ${auctionItemName(t.itemType, t.itemPayload)} for ${formatGold(t.price)} ${t.currency}. Collect it from the Mailbox.`, 'auction_house', true);
+      }
+    }
+    watch.lastSeenAt = Math.max(watch.lastSeenAt, ...fresh.map((t) => new Date(t.at).getTime()));
+    await this.syncMailboxFromServer();
+    this.notify();
+    void this.saveNow();
+    return fresh.length;
   }
 
   /** Testing-only manual trigger for syncMailboxFromServer -- normally
@@ -3166,6 +3228,7 @@ export class GameEngine {
       }
       const deposit = result.listing ? Number(result.listing.deposit_amount) : estimated;
       this.settleDeposit(currency, estimated, deposit);
+      this.startSaleWatch();
       this.say(`Listed on the Auction House (${deposit} ${currency} deposit).`);
       this.notify();
       void this.saveNow();
@@ -3212,6 +3275,7 @@ export class GameEngine {
       }
       const deposit = result.listing ? Number(result.listing.deposit_amount) : estimated;
       this.settleDeposit(currency, estimated, deposit);
+      this.startSaleWatch();
       this.say(`Listed on the Auction House (${deposit} ${currency} deposit).`);
       this.notify();
       void this.saveNow();
@@ -3252,6 +3316,7 @@ export class GameEngine {
       }
       const deposit = result.listing ? Number(result.listing.deposit_amount) : estimated;
       this.settleDeposit(currency, estimated, deposit);
+      this.startSaleWatch();
       this.say(`Listed ${shardLabel(qty)} on the Auction House (${deposit} ${currency} deposit).`);
       this.notify();
       void this.saveNow();

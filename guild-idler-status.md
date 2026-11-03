@@ -37410,3 +37410,95 @@ optional.
 **Deploy:** in `server/`: `npm install` (nothing new, but safe),
 `npm run migrate`, `npm run build`, add `AH_BROKER_ENABLED=true` to
 `.env`, restart. Ship the game update for the Browse filter.
+
+### Auction House: inspect before buying, search, sort and slot filter, upgrade hints, pricing help, sale alerts (patch 0463)
+```discord-update
+Dev Update | Auction House
+
+- Added item inspecting to the Auction House: click any listing to see its full stats, which heroes it would upgrade, and how its price compares to the shop
+- Added a search bar to the Auction House
+- Added sorting (price, newest, level, ending soon) and a gear slot filter to the Auction House
+- Added "Upgrade for" tags on Auction House gear that beats what one of your heroes has equipped, with a dropdown to show them for all heroes, one hero, or turn them off
+- Added pricing help when you list an item: the shop price, the cheapest similar listing, and quick buttons to undercut or price just under shop
+- Added a notification when one of your Auction House listings sells
+```
+
+Direct request (inspect + search), plus four extras the developer picked
+from suggestions. Game client only -- no server change, no redeploy.
+
+**New `src/game/ahItems.ts`** -- shared listing helpers: name
+(`auctionItemName`), rarity, item level, and **shop value**
+(`auctionShopValue`: the game shop's price for that exact item, +25% per
+enhancement level, scaled by wear like the vendor sell price -- the same
+rule the server's Broker uses in `server/items/gameItems.ts`), plus
+`goldToScrap` / `priceInGold` (economy.scrapToGoldRatio).
+
+**Browse (`AuctionHouseTrade.tsx`).**
+- **Search bar** above the filters: case-insensitive match on the
+  listing's display name (procedural names, "+N", consumable and Shard
+  names). Client-side over the fetched listings.
+- **Slot filter** (shown for All types / Gear; any slot hides non-gear)
+  and **sort**: Newest (server order), Price low/high (scrap compared at
+  9 gold each), Level high-low, Ending soon.
+- "N of M listings · click one to inspect it" line; empty-state text
+  names the search and suggests unticking "Near my level".
+- **Upgrade tags:** gear cards show "▲ Upgrade for <hero> (+N)" using
+  the Inventory's own `isGearUpgrade` (gear score vs what's equipped,
+  hero level high enough). The hero named is the one with the biggest
+  gear-score gain (ties keep roster order); hovering lists them all. An
+  **"Upgrade tags" dropdown** in the filter row (direct request) picks
+  Off / All heroes (default) / one specific hero ("Name (Lv N)") --
+  remembered in localStorage (`guildbound-ah-upgrade-tags`, wrapped in
+  try/catch), falling back to All heroes if that hero is gone. The
+  inspect window always lists every hero it upgrades.
+- **Clickable cards** (`.ah-listing`, keyboard Enter/Space too) open
+  **`ListingInspectModal`**: the same detail as the Inventory's item
+  window (slot, item level, required level, rarity/set pills, stat lines
+  from mods + def stats + rolled stats, enchantments, elements, set bonus
+  for the best-fit hero, durability), which heroes it upgrades (or "none
+  of your heroes can wear this yet"), and a price box: price, the shop
+  price in the listing's currency with "N% under/over", and time left.
+  Buy from the window (no fly animation; the list refreshes). The card's
+  own Buy button still buys straight away without opening it.
+- `EquipmentPanel.tsx` now exports `RarityPill`, `SetPill`,
+  `isGearUpgrade`, `SetInfoBlock`, `ElementalInfoLine` for reuse.
+
+**Sell form pricing help.** Shows the shop price in the chosen currency
+and the cheapest similar listing up now in that currency (same item,
+within 3 levels for gear; Shard stacks compared per Shard and scaled to
+the stack size being listed), with one-tap fills: "Undercut: cheapest -
+1" and "A bit under shop: 90% of shop". Plus a one-line tip that
+listings a little under shop price tend to sell well (true of player
+buyers and the Broker's bands alike).
+
+**"Your item sold" alerts (`engine.ts`).** New optional
+`GameState.ahSaleWatch { lastSeenAt }`, set the first time the player
+lists anything (all three list paths), so non-sellers never poll. The
+engine tick checks every 10 minutes (`AH_SALE_CHECK_MS`, and right away
+on startup) while the Auction House is unlocked: `checkAuctionSales`
+reads the player's own `/ledger` (30 days, recent trades), announces
+every sale newer than `lastSeenAt` as a toast + notification-log entry
+linking to the Auction House ("Sold on the Auction House: <item> for
+<price>. Collect it from the Mailbox."; more than 3 at once roll into one
+line with totals), moves `lastSeenAt` forward, and syncs the server
+mailbox so the badge is right. Silent on failure (offline, no Steam) --
+it tries again next time. Broker buyouts alert exactly like player
+purchases (invisible by design). Limitation: the ledger returns the 10
+most recent trades, so more than ~10 sales between checks would only
+announce the newest.
+
+**Verified** in the web build against the real compiled AH server
+(patch 0462's test market: Broker + 12 test players, level-12 hero):
+search "potion" -> 14 results, all matching; Price low-high verified
+ascending across gold and scrap; Ring slot (all levels) -> 15 rings;
+13 upgrade hints on the near-level page; Upgrade tags dropdown with
+two heroes (level 12 + an ungeared level 7): all heroes 25 tags, each
+hero alone 25 / 24, off 0, the ungeared hero named first where he gains
+more, and the chosen hero still selected after a reload; inspect window opened from a
+card with stats, upgrade line and shop comparison; Sell -> Healing
+Potion showed "Shop price: 25 gold", "Cheapest similar up now: 21 gold
+(1 listed)", and "A bit under shop" filled 23. Sale alerts through the
+real engine with a real session for a test seller with 2 sales: 2
+alerts naming the items and prices, linked to the Auction House; a
+second check announced nothing; mailbox synced (4 entries). `tsc
+--noEmit` clean; production build clean.

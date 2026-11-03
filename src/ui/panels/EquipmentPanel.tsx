@@ -35,7 +35,7 @@ import { useRecentIncrease } from '../purchaseFx';
 
 const SLOTS = EQUIP_SLOTS;
 
-function RarityPill({ rarity }: { rarity: Rarity }) {
+export function RarityPill({ rarity }: { rarity: Rarity }) {
   return (
     <span className="rarity-pill" style={{ color: RARITY_COLOR[rarity], borderColor: RARITY_COLOR[rarity] }}>
       {rarity}
@@ -82,7 +82,7 @@ function CraftedPill() {
  *  set at all", visible on the card itself before opening anything. Teal
  *  to match the existing set-active language (.item-card.set-active's own
  *  border/glow, and SetInfoBlock's met-tier text already use this token). */
-function SetPill() {
+export function SetPill() {
   return (
     <span className="rarity-pill" style={{ color: 'var(--teal)', borderColor: 'var(--teal)' }}>
       set
@@ -116,7 +116,7 @@ function LockedPill() {
  * gearScoreForItem's other three call sites did; see that function's
  * own comment in data/equipment.ts for the shared bug and fix).
  */
-function isGearUpgrade(hero: Hero, item: EquipmentItem, def: EquipmentDef): boolean {
+export function isGearUpgrade(hero: Hero, item: EquipmentItem, def: EquipmentDef): boolean {
   if (hero.level < def.reqLevel) return false;
   const equipped = hero.equipment[def.slot];
   const equippedDef = equipped ? EQUIPMENT_BY_ID[equipped.defId] : undefined;
@@ -235,7 +235,7 @@ function setInfoFor(hero: Hero, setId: string) {
  *  behind a hover title. Met tiers render in `--teal` (the same colour the
  *  gear card itself outlines in once a bonus goes active); unmet tiers
  *  stay `.muted` so the two read apart at a glance. */
-function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; equipped: boolean }) {
+export function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; equipped: boolean }) {
   const info = setInfoFor(hero, setId);
   if (!info) return null;
   const { set, count } = info;
@@ -746,7 +746,7 @@ function ConsumableSlotCard({
  * `enchantStats` already established, distinct colour (--sky, matching
  * WeaponEnchantStation's own accent) so the two don't blur together.
  */
-function ElementalInfoLine({ item }: { item: EquipmentItem }) {
+export function ElementalInfoLine({ item }: { item: EquipmentItem }) {
   const resistEntries = (Object.entries(item.elementalResist ?? {}) as [ElementType, number][])
     .filter(([, value]) => value > 0);
   if (!item.elementalDamage && resistEntries.length === 0) return null;

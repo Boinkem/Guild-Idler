@@ -2685,6 +2685,13 @@ export interface GameState {
   /** Every toast ever fired, newest first, capped at 100. */
   notifications: NotificationEntry[];
   /**
+   * Patch 0463 -- "your item sold" alerts. Set the first time the player
+   * lists something on the Auction House (so non-sellers never poll).
+   * engine.checkAuctionSales announces every sale newer than lastSeenAt
+   * (from the server's /ledger) and moves it forward.
+   */
+  ahSaleWatch?: { lastSeenAt: number };
+  /**
    * Id of the newest notification the player has actually acknowledged --
    * by opening the Guide tab's Notifications list, clicking the header
    * notification icon, or clicking through a banner (see
