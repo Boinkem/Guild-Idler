@@ -1134,6 +1134,62 @@ raid fight).
 
 ## Backlog
 
+### Animation pass, round 3: static spots audit (logged patch 0464, not built)
+Direct request: after 0420-0428 most purchase and result moments animate,
+but a tab-by-tab sweep found these still static. Ordered by how much a
+player would notice. Nothing here is built yet -- pick from the list.
+
+1. **Raids: new raid unlocks (the headline ask).** The first time the
+   Raids tab renders a raid whose `isRaidUnlocked` has flipped, the
+   locked card plays an opening: chains across the banner snap, the
+   greyscale thumb floods to colour left-to-right, the banner slides
+   open like a gate, a NEW RAID ribbon drops and stays until the card is
+   opened. Persist "seen" through `entryMarks` with a new scope (e.g.
+   `raidUnlock`) -- the same once-only, survives-reload machinery
+   `useEntryInk` already uses -- so it plays on first visit even if the
+   unlock happened offline or on another tab. Older saves adopt silently.
+2. **Raids: difficulty tier unlock.** When Heroic / Mythic / Legendary
+   becomes available, that difficulty circle's padlock pops (reuse
+   `UnlockFx`'s padlock), the ring ignites in `DIFFICULTY_COLOR`, and
+   the icon lights up from 40% opacity. Same `entryMarks` gate.
+3. **Raids: first clear at a difficulty.** The ✓ under the circle stamps
+   in, and the free tombstone style it awards gets a line on the raid
+   result card ("New tombstone style: Frostbound Marker") plus a NEW dot
+   on the Heroes tab's Tombstone style toggle until it's opened. Today
+   that reward is silent.
+4. **The Guild: Guild Rank-up.** Nothing marks reaching a new guild rank.
+   A crest/banner moment on the dashboard (rank name ribbons in, the
+   power ring flares), shown the next time the tab is opened after the
+   rank changes.
+5. **The Guild: rings and record.** Hero XP rings, vendor rings and the
+   Guild record numbers jump straight to new values. Hold the old value
+   on tab open and sweep the conic ring / `useCountUp` the numbers to
+   the current value when they've changed since the last visit.
+6. **Statistics > Achievements.** The medal popup plays (0424), but the
+   grid itself just swaps 🔒 for 🏆. First view of a newly unlocked card:
+   flip 🔒 -> 🏆 with a glint and a NEW tab (entryMarks scope
+   `achievements`), and the "N/M" header rolls up.
+7. **Vendors: upgrade rows.** Still on the old `useMaxFlash` / pulse;
+   move them to `usePurchaseBeats` + `LevelRoll` / `SealStamp` like
+   every other upgrade list (open since 0420's follow-ups).
+8. **Inventory: set bonus tier reached.** Equipping the piece that
+   completes a set tier should light that tier's pip and glow the Set
+   Bonuses card, not just change the numbers.
+9. **Quests: board refresh.** The reroll flip-in (0421) only plays on a
+   manual reroll; a timed board refresh while the player is watching
+   could reuse `RerollFx`'s staggered flip.
+10. **Prestige: Early Retirement.** The hero card just disappears.
+    A farewell beat: the card greys to a framed portrait, a RETIRED
+    plaque stamps, then it files away.
+11. **Harvest: stock arriving.** When a harvest tick lands while the tab
+    is open, material icons drop into the stock bar and it ticks up;
+    the bar pulses when the Warehouse is full.
+12. **Hatchery: egg nearly ready.** Eggs could wobble more as
+    incubation nears done, ahead of the existing hatch moment.
+
+Deliberately left static: Settings, Guide (notification log) and the
+Auction House panel shell (its trades already animate, 0428).
+
 ### Auction House Broker (NPC listings + buyouts) -- built, patch 0462
 Built as designed below; see patch 0462's log entry for what changed in
 the build (consumables as one pool, bundling the game's item code, how
@@ -37502,3 +37558,39 @@ real engine with a real session for a test seller with 2 sales: 2
 alerts naming the items and prices, linked to the Auction House; a
 second check announced nothing; mailbox synced (4 entries). `tsc
 --noEmit` clean; production build clean.
+
+### Tombstone Style list no longer squashes its rows; static-spots animation audit logged (patch 0464)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the Tombstone Style list squeezing every style into a tiny row, with descriptions overlapping the next style
+- Changed long tombstone descriptions to show two lines, with the full text when you hover
+```
+
+Direct report, with a screenshot: the Heroes tab's Tombstone Style
+dropdown had every row crushed together and the two-line descriptions
+running over the row below.
+
+**Cause.** The list was a column flex box capped at `max-height: 320px`.
+Flex items shrink by default, and each row carries `overflow: hidden`
+(needed so the 0421 dye-wash stays inside the row), which drops a flex
+item's automatic minimum height to 0. So instead of scrolling, all 12
+rows shrank to fit 320px, and their text painted over each other.
+
+**Fix (`HeroesPanel.tsx`, `app.css`).** Row and list styling moved out
+of inline styles into `.tombstone-style-list` / `.tombstone-style-row`
+/ `.tombstone-style-desc`. Rows are `flex: none` with a 48px minimum,
+so the list scrolls instead of squashing; the list is 340px tall and
+the popover 380px wide (was 340). Descriptions clamp to two lines with
+the full text in a `title` tooltip. The selected row gets a brass
+border, and rows get a faint divider. The dye-wash purchase moment,
+Select/Buy/Locked buttons and raid-locked wording are unchanged.
+
+**Also in this patch: animation audit.** Went tab by tab looking for
+spots that are still static after the 0420-0428 animation passes. The
+findings, including the requested raid-unlock reveal, are logged in
+Backlog as "Animation pass, round 3"; none of it is built yet.
+
+Verified: `tsc --noEmit` clean. Rendered the new list markup against
+the real `app.css` in headless Chromium: rows sit at full height, text
+clamps to two lines, the list scrolls. Not checked in the Electron app.

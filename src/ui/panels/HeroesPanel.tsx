@@ -146,7 +146,7 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
         <span aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="card" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: 340, maxWidth: '90vw', zIndex: 6 }}>
+        <div className="card" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: 380, maxWidth: '90vw', zIndex: 6 }}>
           <div className="spread">
             <span className="card-title">Tombstone Style</span>
             <button className="btn-ghost" onClick={() => setOpen(false)} aria-label="Close">×</button>
@@ -156,7 +156,12 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
             The marker shown if a hero ever falls in the field -- purely cosmetic, doesn't affect anything else.
             Buy new styles with gold, or clear a raid at a new difficulty for the first time to earn one for free.
           </p>
-          <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Patch 0464: rows are .tombstone-style-row (flex: none). In a
+           *  max-height column flex list every row was allowed to shrink,
+           *  and the row's own overflow:hidden (needed for the dye-wash)
+           *  drops its min-height to 0 -- so 12 rows squeezed into 320px
+           *  and their two-line text spilled over the next row. */}
+          <div className="tombstone-style-list">
             {TOMBSTONE_STYLES.map((style) => {
               const owned = style.id === 'plain' || unlockedTombstoneStyles.includes(style.id);
               const active = selectedId === style.id;
@@ -165,11 +170,8 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
               return (
                 <div
                   key={style.id}
-                  className={`row ${justBought[style.id] ? 'fx-dyed fx-dyed-row' : ''}`}
+                  className={`row tombstone-style-row ${active ? 'active' : ''} ${justBought[style.id] ? 'fx-dyed fx-dyed-row' : ''}`}
                   style={{
-                    alignItems: 'center', gap: 8, padding: '4px 6px', borderRadius: 4,
-                    background: active ? 'var(--panel-3)' : 'transparent',
-                    position: 'relative', overflow: 'hidden',
                     '--dye-a': 'var(--muted)', '--dye-b': 'var(--brass-dim)',
                   } as CSSProperties}
                 >
@@ -182,7 +184,7 @@ function TombstoneStyleDropdown({ engine, state }: { engine: GameEngine; state: 
                   />
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span className="small" style={{ display: 'block', color: owned ? undefined : 'var(--muted)' }}>{style.name}</span>
-                    <span className="tiny muted" style={{ display: 'block' }}>
+                    <span className="tiny muted tombstone-style-desc" title={raidLocked ? undefined : style.description}>
                       {raidLocked
                         ? `Clear a ${RAID_DIFFICULTY_LABEL[style.unlockRaidDifficulty!]} raid to unlock`
                         : style.description}
