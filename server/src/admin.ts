@@ -2,6 +2,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPool } from './db.js';
 import { AppConfig } from './config.js';
+import { bracketTarget, readBrokerConfig, recentPlayerGearLevels } from './broker.js';
+import { loadGameItems } from './gameItems.js';
 
 /**
  * Admin usage stats (patch 0459) -- how much the Auction House actually
@@ -47,7 +49,7 @@ function requireAdmin(config: AppConfig) {
 
 async function windowStats(interval: string) {
   const pool = getPool();
-  const [sales, cohort, traders] = await Promise.all([
+  const [sales, cohort, traders, broker] = await Promise.all([
     pool.query(
       `SELECT count(*)::int AS sales,
               count(DISTINCT buyer_steam_id)::int AS buyers,
@@ -83,7 +85,22 @@ async function windowStats(interval: string) {
        ) x WHERE id IS NOT NULL`,
       [interval]
     ),
+    // Patch 0462 -- Broker flows. Broker buyout = NULL buyer (gold/scrap
+    // paid OUT to players, a faucet); a player buying a Broker listing =
+    // NULL seller (taken IN, a sink); real = both sides are players.
+    pool.query(
+      `SELECT count(*) FILTER (WHERE buyer_steam_id IS NULL)::int AS buyouts,
+              coalesce(sum(price) FILTER (WHERE buyer_steam_id IS NULL AND currency = 'gold'), 0) AS gold_out,
+              coalesce(sum(price) FILTER (WHERE buyer_steam_id IS NULL AND currency = 'scrap'), 0) AS scrap_out,
+              count(*) FILTER (WHERE seller_steam_id IS NULL)::int AS sold_to_players,
+              coalesce(sum(price) FILTER (WHERE seller_steam_id IS NULL AND currency = 'gold'), 0) AS gold_in,
+              coalesce(sum(price) FILTER (WHERE seller_steam_id IS NULL AND currency = 'scrap'), 0) AS scrap_in,
+              count(*) FILTER (WHERE seller_steam_id IS NOT NULL AND buyer_steam_id IS NOT NULL)::int AS real_sales
+       FROM transactions WHERE created_at > now() - $1::interval`,
+      [interval]
+    ),
   ]);
+  const k = broker.rows[0];
   const s = sales.rows[0];
   const c = cohort.rows[0];
   const resolved = c.sold + c.expired + c.cancelled;
@@ -102,12 +119,44 @@ async function windowStats(interval: string) {
     sellThrough: resolved > 0 ? c.sold / resolved : null,
     avgMinutesToSell: c.avg_minutes == null ? null : Math.round(num(c.avg_minutes)),
     depositsForfeited: { gold: num(c.gold_forfeit), scrap: num(c.scrap_forfeit) },
+    realSales: k.real_sales as number,
+    broker: {
+      listed: c.broker,
+      buyouts: k.buyouts as number,
+      paidOut: { gold: num(k.gold_out), scrap: num(k.scrap_out) },
+      soldToPlayers: k.sold_to_players as number,
+      takenIn: { gold: num(k.gold_in), scrap: num(k.scrap_in) },
+    },
   };
 }
 
-export async function computeAdminStats() {
+/** Patch 0462 -- active gear listings per Broker bracket, real vs Broker,
+ *  against each bracket's target, plus the consumable pool. Null when the
+ *  game item code or broker.config.json isn't available. */
+async function bracketStats() {
+  const items = await loadGameItems(() => undefined);
+  let cfg;
+  try { cfg = readBrokerConfig(); } catch { return null; }
+  if (!items) return null;
+  const { rows } = await getPool().query(
+    `SELECT seller_steam_id IS NULL AS broker, item_type, item_payload FROM listings
+     WHERE status = 'active' AND expires_at > now() AND item_type IN ('equipment', 'consumable')`
+  );
+  const recentLevels = await recentPlayerGearLevels(items);
+  const brackets = cfg.gearBrackets.map((b) => ({ min: b.min, max: b.max, target: bracketTarget(b, cfg, recentLevels), boosted: bracketTarget(b, cfg, recentLevels) > b.target, real: 0, broker: 0 }));
+  const consumables = { target: cfg.consumables.target, real: 0, broker: 0 };
+  for (const r of rows) {
+    if (r.item_type === 'consumable') { consumables[r.broker ? 'broker' : 'real']++; continue; }
+    const lvl = items.listingInfo('equipment', r.item_payload)?.level;
+    const b = lvl == null ? undefined : brackets.find((x) => lvl >= x.min && lvl <= x.max);
+    if (b) b[r.broker ? 'broker' : 'real']++;
+  }
+  return { brackets, consumables, activeBracketBonus: cfg.activeBracketBonus, dailyCapPerSeller: cfg.buyout.dailyCapPerSeller };
+}
+
+export async function computeAdminStats(brokerEnabled = false) {
   const pool = getPool();
-  const [live, mailbox, allTime, day, week, month, daily, topItems, topTraders] = await Promise.all([
+  const [live, mailbox, allTime, day, week, month, daily, topItems, topTraders, brackets] = await Promise.all([
     pool.query(
       `SELECT count(*)::int AS active,
               count(*) FILTER (WHERE item_type = 'equipment')::int AS equipment,
@@ -151,6 +200,8 @@ export async function computeAdminStats() {
          SELECT generate_series((now() AT TIME ZONE 'UTC')::date - ${DAILY_DAYS - 1}, (now() AT TIME ZONE 'UTC')::date, interval '1 day')::date AS day
        ), s AS (
          SELECT (created_at AT TIME ZONE 'UTC')::date AS day, count(*)::int AS sales,
+                count(*) FILTER (WHERE buyer_steam_id IS NULL)::int AS broker_buyouts,
+                count(*) FILTER (WHERE seller_steam_id IS NOT NULL AND buyer_steam_id IS NOT NULL)::int AS real_sales,
                 coalesce(sum(price) FILTER (WHERE currency = 'gold'), 0) AS gold,
                 coalesce(sum(price) FILTER (WHERE currency = 'scrap'), 0) AS scrap
          FROM transactions WHERE created_at > now() - interval '${DAILY_DAYS + 1} days' GROUP BY 1
@@ -167,6 +218,7 @@ export async function computeAdminStats() {
        )
        SELECT to_char(days.day, 'YYYY-MM-DD') AS day,
               coalesce(s.sales, 0) AS sales, coalesce(s.gold, 0) AS gold, coalesce(s.scrap, 0) AS scrap,
+              coalesce(s.broker_buyouts, 0) AS broker_buyouts, coalesce(s.real_sales, 0) AS real_sales,
               coalesce(l.listed, 0) AS listed, coalesce(p.players, 0) AS players
        FROM days LEFT JOIN s USING (day) LEFT JOIN l USING (day) LEFT JOIN p USING (day)
        ORDER BY days.day`
@@ -195,7 +247,7 @@ export async function computeAdminStats() {
          UNION ALL
          SELECT buyer_steam_id, 0, 1, 0, CASE WHEN currency = 'gold' THEN price ELSE 0 END,
                 0, CASE WHEN currency = 'scrap' THEN price ELSE 0 END
-         FROM transactions WHERE created_at > now() - interval '30 days'
+         FROM transactions WHERE created_at > now() - interval '30 days' AND buyer_steam_id IS NOT NULL
        ), active AS (
          SELECT seller_steam_id AS id, count(*)::int AS n FROM listings
          WHERE status = 'active' AND expires_at > now() AND seller_steam_id IS NOT NULL GROUP BY 1
@@ -209,6 +261,7 @@ export async function computeAdminStats() {
        ORDER BY sum(sold) + sum(bought) DESC, sum(gold_in) + sum(gold_out) DESC
        LIMIT ${TOP_LIMIT}`
     ),
+    bracketStats(),
   ]);
 
   const v = live.rows[0];
@@ -247,6 +300,8 @@ export async function computeAdminStats() {
     daily: daily.rows.map((r) => ({
       day: r.day as string,
       sales: num(r.sales),
+      realSales: num(r.real_sales),
+      brokerBuyouts: num(r.broker_buyouts),
       goldVolume: num(r.gold),
       scrapVolume: num(r.scrap),
       listed: num(r.listed),
@@ -265,6 +320,8 @@ export async function computeAdminStats() {
         highestEach: Math.round(num(r.highest)),
       };
     }),
+    // Patch 0462 -- Broker on/off comes from the server's own config.
+    broker: { enabled: brokerEnabled, brackets },
     topTraders: topTraders.rows.map((r) => ({
       steamId: r.id as string,
       sold: r.sold as number,
@@ -280,5 +337,5 @@ export async function computeAdminStats() {
 
 export function registerAdminRoutes(app: FastifyInstance, config: AppConfig) {
   const admin = requireAdmin(config);
-  app.get('/admin/stats', { preHandler: admin }, async () => ({ stats: await computeAdminStats() }));
+  app.get('/admin/stats', { preHandler: admin }, async () => ({ stats: await computeAdminStats(config.brokerEnabled) }));
 }

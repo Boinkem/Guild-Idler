@@ -64,6 +64,24 @@ function ShardListingSummary({ row }: { row: ServerListingRow }) {
   );
 }
 
+/** Patch 0462 -- a gear listing's item level (rolled level, else the
+ *  item's own required level). Null for consumables and Shard stacks,
+ *  which have no level and always pass the "Near my level" filter. */
+function listingLevel(row: ServerListingRow): number | null {
+  if (row.item_type !== 'equipment') return null;
+  const item = row.item_payload as EquipmentItem;
+  const def = EQUIPMENT_BY_ID[item?.defId];
+  return def ? item.rolledItemLevel ?? def.reqLevel : null;
+}
+
+/** Patch 0462 -- "Near my level": from 3 below the guild's lowest hero to
+ *  3 above its highest, so gear for any hero on the roster shows. */
+const NEAR_LEVEL_MARGIN = 3;
+function nearLevelRange(heroLevels: number[]): { min: number; max: number } {
+  if (heroLevels.length === 0) return { min: 1, max: 1 + NEAR_LEVEL_MARGIN };
+  return { min: Math.max(1, Math.min(...heroLevels) - NEAR_LEVEL_MARGIN), max: Math.max(...heroLevels) + NEAR_LEVEL_MARGIN };
+}
+
 function rarityOf(row: ServerListingRow): Rarity | null {
   if (row.item_type === 'shard') return 'legendary';
   if (row.item_type === 'equipment') {
@@ -82,6 +100,8 @@ function BrowseTab() {
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [itemTypeFilter, setItemTypeFilter] = useState<'' | AhItemType>('');
   const [rarityFilter, setRarityFilter] = useState<'' | Rarity>('');
+  const [nearLevel, setNearLevel] = useState(true);
+  const range = nearLevelRange(engine.state.heroes.map((h) => h.level));
 
   const refresh = () => {
     setLoading(true);
@@ -112,7 +132,12 @@ function BrowseTab() {
     window.setTimeout(() => { setBoughtId(null); refresh(); }, fxMs(1750));
   };
 
-  const visible = (listings ?? []).filter((row) => !rarityFilter || rarityOf(row) === rarityFilter);
+  const visible = (listings ?? []).filter((row) => {
+    if (rarityFilter && rarityOf(row) !== rarityFilter) return false;
+    if (!nearLevel) return true;
+    const lvl = listingLevel(row);
+    return lvl == null || (lvl >= range.min && lvl <= range.max);
+  });
 
   return (
     <>
@@ -129,6 +154,11 @@ function BrowseTab() {
           <option value="">All rarities</option>
           {RARITY_ORDER.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
+        <label className="tiny" style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+          title={`Gear from level ${range.min} to ${range.max} -- 3 levels either side of your heroes. Consumables always show.`}>
+          <input type="checkbox" checked={nearLevel} onChange={(e) => setNearLevel(e.target.checked)} />
+          Near my level ({range.min}-{range.max})
+        </label>
         <div style={{ flex: 1 }} />
         <button className="btn-ghost" onClick={refresh}>Refresh</button>
       </div>
@@ -140,7 +170,8 @@ function BrowseTab() {
       ) : visible.length === 0 ? (
         <div className="card">
           <p className="tiny muted" style={{ margin: 0 }}>
-            {listings.length === 0 ? 'Nothing listed right now -- check back later, or list something yourself.' : 'Nothing matches those filters.'}
+            {listings.length === 0 ? 'Nothing listed right now -- check back later, or list something yourself.'
+              : nearLevel ? 'Nothing near your heroes\' levels right now -- untick "Near my level" to see everything.' : 'Nothing matches those filters.'}
           </p>
         </div>
       ) : (
@@ -180,7 +211,7 @@ function ListingCard({ row, buying, bought = false, onBuy }: { row: ServerListin
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>
               {itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}
             </div>
-            <div className="tiny muted">{formatGold(Number(row.price))} {row.currency}</div>
+            <div className="tiny muted">Lv {item.rolledItemLevel ?? def.reqLevel} · {formatGold(Number(row.price))} {row.currency}</div>
           </div>
         </div>
         <button className="btn-primary item-card-action" disabled={buying || bought} onClick={(e) => onBuy(e.currentTarget)}>

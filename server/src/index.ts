@@ -21,6 +21,7 @@ import { issueSessionToken } from './sessions.js';
 import { registerListingsRoutes, sweepExpiredListings } from './listings.js';
 import { registerLedgerRoutes } from './ledger.js';
 import { registerAdminRoutes } from './admin.js';
+import { startBroker } from './broker.js';
 
 const config = loadConfig();
 const app = Fastify({ logger: true });
@@ -53,6 +54,8 @@ app.get('/health', async () => ({
   sessionSecretConfigured: !!config.sessionSecret,
   // Patch 0459 -- boolean only, same rule as the two above.
   adminConfigured: !!config.adminToken,
+  // Patch 0462 -- whether the Broker is switched on (AH_BROKER_ENABLED).
+  brokerEnabled: config.brokerEnabled,
 }));
 
 /**
@@ -109,6 +112,10 @@ if (config.databaseUrl) {
     };
     setInterval(sweep, 60_000).unref();
     sweep();
+    // Auction House Broker (patch 0462) -- see broker.ts.
+    if (config.brokerEnabled) {
+      void startBroker(app.log).then((ok) => app.log.info(ok ? 'Broker running.' : 'Broker NOT running -- see the warning above.'));
+    }
   }
 } else {
   app.log.warn('DATABASE_URL not set -- listings/mailbox/buyout routes are not registered.');

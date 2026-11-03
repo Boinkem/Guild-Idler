@@ -28,7 +28,8 @@ harmless until you mean to turn it on:
 3. **Every route except `/health` 503s while disabled** (`src/index.ts`'s
    `onRequest` hook). `/health` itself still reports
    `{ ahEnabled: false, mode: "offline" }` so you can confirm the deploy
-   plumbing works without exposing anything else.
+   plumbing works without exposing anything else. (Since patch 0459,
+   `/admin/*` is also let through -- it has its own token check.)
 
 ## Local dev
 
@@ -41,6 +42,32 @@ npm run dev
 
 `GET http://localhost:4000/health` should return
 `{"status":"ok","ahEnabled":false,"mode":"offline"}`.
+
+## Auction House Broker (patch 0462)
+
+Quietly keeps the market alive while there are few players: it posts
+listings (gear by level bracket, plus consumables) and buys fairly priced
+player listings, at most 3 per player per day. It fades out by itself as
+real players list and buy. Players can't tell Broker activity from real;
+the DevTool's Auction House > Usage > Broker section can.
+
+To turn it on:
+
+1. `npm run migrate` (adds migration 003).
+2. `npm run build` -- besides compiling, this now bundles the game's own
+   item code into `dist-items/gameItems.mjs` (`scripts/bundle-game-items.mjs`),
+   so Broker items are rolled and priced exactly like the game's shop.
+   **Rebuild after any change to the game's equipment / consumables /
+   tuning data**, or the Broker keeps using the old numbers.
+3. Add `AH_BROKER_ENABLED=true` to `.env` (needs `AH_ENABLED=true` and
+   `DATABASE_URL`) and restart. The log says `Broker running.` -- or why
+   not; the rest of the server runs either way.
+
+Tune it in `broker.config.json` (targets per level bracket, price range,
+scrap share, buyout bands and daily cap). It's re-read every tick, so
+edits apply within a few minutes without a restart. Under `npm run dev`
+(tsx) the Broker reads the game's item code straight from `src/` instead
+of the bundle.
 
 ## Admin usage dashboard (patch 0459)
 

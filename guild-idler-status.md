@@ -1134,7 +1134,13 @@ raid fight).
 
 ## Backlog
 
-### Auction House Broker (NPC listings + buyouts) -- designed, next to build
+### Auction House Broker (NPC listings + buyouts) -- built, patch 0462
+Built as designed below; see patch 0462's log entry for what changed in
+the build (consumables as one pool, bundling the game's item code, how
+invisibility is kept). Possible follow-ups: Shard stacks, a DevTool
+"run a Broker tick now" button, price anchoring on real sale history
+once there's enough of it.
+
 From playtest feedback after 0459: unsure about the AH overall, likely
 because with no players there's nothing to buy and no one to sell to.
 Talked through with the developer (after patch 0460); decisions:
@@ -37289,3 +37295,118 @@ listings are priced in gold or scrap and run 7 days, 14 with level 2.
 
 **Deploy:** restart the AH backend (server change) as well as shipping
 the game update. `tsc --noEmit` clean for the client and `server/`.
+
+### Auction House Broker, "Near my level" filter on Browse (patch 0462)
+```discord-update
+Dev Update | Auction House
+
+- Added a "Near my level" filter to the Auction House, on by default, so you see gear your heroes can actually use
+- Added item levels to gear listings in the Auction House
+```
+
+The Broker, designed with the developer across the 0460/0461 sessions
+(full spec in the Backlog's "Auction House Broker" entry). The Discord
+block above is deliberately player-visible changes only: the Broker is
+invisible by design, so it isn't announced.
+
+**What it does.** A server-side loop (every `tickMinutes`, 5) that:
+- **Supplies** the market: gear per level bracket (1-5, 6-10, 11-15,
+  16-20, 21-30, 31-40, 41-55; target 6 each, +3 when real players listed
+  or bought gear in that bracket in the last 7 days) and consumables as
+  one pool (target 28) -- ~70 listings with an empty market, the 60/40
+  gear/consumable split of the design. Real listings count toward each
+  target, so it stops posting where players keep a bracket stocked.
+  Rarity weights per bracket (mostly Common/Uncommon low, Rare/Epic
+  higher up, Legendary 0-4%). Priced 75-95% of the item's shop value,
+  nudged off round numbers, ~20% priced in scrap (shop value / 9). 7-day
+  listings. Posts trickle in (35% chance per tick, scaled by how empty
+  the bracket is) and are backdated up to 90 minutes. If the Broker has
+  no listings at all (first start) it seeds every bracket at once,
+  backdated across 4 days so the market looks established.
+- **Buys** real players' gear/consumable listings (not Shard stacks,
+  never its own, not in their first 20 minutes) by price vs the shop
+  value of that exact item (enhancement +25% per +1 and wear included,
+  as the vendor's sell price works): up to 75% median 2h, 75-95% median
+  8h, 95-100% ~1 in 3 over a day, above 100% never. Max 3 Broker
+  buyouts per seller per rolling 24h. Rate scales down as real sales
+  approach 15/day (floor 20%).
+
+**Invisibility.** A Broker listing is an ordinary `listings` row with a
+NULL seller (the "system-seeded" shape the schema always had); a Broker
+buyout is an ordinary sale with a NULL buyer, written by the same
+`recordSale` the player buy route now uses (extracted from it, so both
+paths are one piece of code). Public `GET /listings` no longer returns
+`seller_steam_id` at all -- the client never read it, it exposed every
+seller's SteamID publicly, and a NULL would have given Broker listings
+away. Sellers see a Broker sale exactly like any sale (mailbox payout
+incl. deposit refund; My Ledger shows it as sold).
+
+**Item code.** Broker gear has to be real rolled gear, but the compiled
+server can't compile game code (separate tsconfig, NodeNext). New
+`server/items/gameItems.ts` (outside `server/src`) imports the game's own
+`EquipmentManager.instantiate` / `shopPrice`, procedural roller and data,
+mirroring `ShopManager.rollEquipment` exactly (procedural bases roll at
+the target level with sourceTag 'normal'; hand-authored bases are plain
+instances at their own reqLevel). `scripts/bundle-game-items.mjs`
+(esbuild, already present via tsx) bundles it to
+`dist-items/gameItems.mjs` (gitignored) as part of `npm run build`;
+`src/gameItems.ts` loads the bundle, or the .ts source under tsx. If
+neither loads, the Broker logs why and stays off. Game data is baked in
+at build time -- **rebuild the server after changing equipment /
+consumables / tuning data.**
+
+**Server changes.** Migration `003_broker.sql`:
+`transactions.buyer_steam_id` nullable + two partial indexes.
+`src/broker.ts` (supply, demand, tick loop); `broker.config.json`
+(every number above; re-read each tick, no restart);
+`AH_BROKER_ENABLED` (default **off**, `config.ts`, `.env.example`);
+`/health` gains `brokerEnabled`. `requireAuth`-style wiring unchanged.
+
+**Admin dashboard.** `/admin/stats` windows gain `realSales` and a
+`broker` block (listings posted; bought by players + gold/scrap taken in
+-- a sink; bought from players + paid out -- a faucet); daily rows gain
+`realSales` / `brokerBuyouts`; `broker.brackets` gives real vs Broker
+active listings per bracket against the effective target
+(`bracketTarget`, shared with the Broker so both agree). Busiest traders
+excludes Broker buyouts. DevTool: new **Broker** section (status, flows
+with the net coloured, bracket supply table), a "player to player" row
+under Sales, chart metrics "Player sales" / "Broker buyouts", and the
+status line now says Broker on/off.
+
+**Game client.** Browse: **"Near my level"** checkbox, on by default --
+gear from 3 below the guild's lowest hero to 3 above its highest
+(consumables/Shards always show); the label shows the range. Gear
+listing cards show "Lv N". `ServerListingRow.seller_steam_id` now
+optional.
+
+**Verified** (real Postgres 16, migrations 001-003):
+- First tick seeded exactly 70 (6 per bracket + 28 consumables); every
+  gear item's level inside its bracket; rarity mix as weighted; 20%
+  scrap-priced; price/shop 0.72-0.96 (scrap rounding at low prices); no
+  round prices >= 20; every expiry exactly 168h after its backdated
+  start (spread 0-96h); Broker deposit 0.
+- A simulated day (288 ticks) against 160 player listings: 60% of shop
+  -> 100% sold (expected ~100%); 85% -> 93-95% (~88%); 98% -> 25-33%
+  (~33%); 120% -> 0%. Seller with 8 cheap listings: exactly 3 bought. A
+  20-minute-old listing and a Shard stack: never. Broker never bought its
+  own. Every seller's mailbox = price + deposit; Broker buyouts write no
+  buyer item row.
+- Refill/fade: players buying out the 1-5 bracket and half the
+  consumables -> refilled over ~6 simulated hours (posts 7,3,1,3,1,0 per
+  hour); a bracket stocked by 10 real listings got nothing.
+- Production path: `npm run build` (tsc + bundle), `node dist/index.js`
+  with the Broker on -> "Broker running.", 70 listings, `/health`
+  `brokerEnabled: true`, public browse has no seller field. With the
+  bundle missing -> logged reason, Broker off, server fine.
+- Real HTTP traffic (12 players listing, buying Broker stock and each
+  other's): `/admin/stats` Broker flows, real sales and bracket targets
+  correct; a player's `/ledger` shows Broker trades as normal sold/bought.
+- DevTool Broker section and the game's Browse tab (web build pointed at
+  the live local server, level-12 hero: "Near my level (9-15)", 42 of 93
+  cards; unticked shows all 93) checked in a browser.
+- `tsc --noEmit` clean for the client and `server/`; DevTool files
+  `node --check` clean.
+
+**Deploy:** in `server/`: `npm install` (nothing new, but safe),
+`npm run migrate`, `npm run build`, add `AH_BROKER_ENABLED=true` to
+`.env`, restart. Ship the game update for the Browse filter.

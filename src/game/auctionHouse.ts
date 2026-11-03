@@ -259,7 +259,9 @@ export async function claimServerMailboxEntry(entryId: string): Promise<boolean>
  *  seller to see it. */
 export interface ServerListingRow {
   id: string;
-  seller_steam_id: string | null;
+  /** No longer sent by public browse (patch 0462) -- it exposed every
+   *  seller's SteamID. Still present on older servers; never read. */
+  seller_steam_id?: string | null;
   item_type: AhItemType;
   item_payload: unknown;
   currency: 'gold' | 'scrap';

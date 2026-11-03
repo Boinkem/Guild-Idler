@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { PoolClient } from 'pg';
 import { getPool, withTransaction } from './db.js';
 import { verifySessionToken } from './sessions.js';
 import { AppConfig } from './config.js';
@@ -146,6 +147,54 @@ export function requireAuth(config: AppConfig) {
   };
 }
 
+/**
+ * Records a sale on a listing the caller has ALREADY locked (`SELECT ...
+ * FOR UPDATE`) and checked is active, unexpired and not the buyer's own:
+ * marks it sold, posts the item to the buyer's mailbox and the price plus
+ * deposit refund to the seller's, and writes the audit row -- all on the
+ * caller's transaction client. Shared by the player buyout route below
+ * and the Broker (patch 0462), so a Broker buyout is exactly a player
+ * buyout with no buyer: `buyerSteamId` null means the Broker bought it
+ * (no buyer mailbox row; transactions.buyer_steam_id NULL, migration 003).
+ */
+export async function recordSale(
+  client: PoolClient,
+  listing: { id: string; seller_steam_id: string | null; item_type: string; item_payload: unknown; price: string | number; currency: string; deposit_amount?: string | number | null },
+  buyerSteamId: string | null,
+): Promise<void> {
+  await client.query(
+    `UPDATE listings SET status = 'sold', sold_at = now(), buyer_steam_id = $1 WHERE id = $2`,
+    [buyerSteamId, listing.id]
+  );
+
+  // Buyer's mailbox entry -- the purchased item. None for a Broker buyout.
+  if (buyerSteamId) {
+    await client.query(
+      `INSERT INTO mailbox (owner_steam_id, type, item_payload, note)
+       VALUES ($1, $2, $3, $4)`,
+      [buyerSteamId, listing.item_type, JSON.stringify(listing.item_payload), 'Auction House purchase']
+    );
+  }
+
+  // Seller's mailbox entry -- sale price PLUS the deposit refund (patch
+  // 0413) in one entry. Skipped for system-seeded (Broker) listings
+  // (seller_steam_id IS NULL) -- there's no real player to deliver it to.
+  if (listing.seller_steam_id) {
+    const total = Number(listing.price) + Number(listing.deposit_amount ?? 0);
+    await client.query(
+      `INSERT INTO mailbox (owner_steam_id, type, amount, note)
+       VALUES ($1, $2, $3, $4)`,
+      [listing.seller_steam_id, listing.currency, total, 'Auction House sale (includes deposit refund)']
+    );
+  }
+
+  await client.query(
+    `INSERT INTO transactions (listing_id, buyer_steam_id, seller_steam_id, price, currency)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [listing.id, buyerSteamId, listing.seller_steam_id, listing.price, listing.currency]
+  );
+}
+
 export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) {
   const auth = requireAuth(config);
 
@@ -175,7 +224,10 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
     }
 
     const { rows } = await getPool().query(
-      `SELECT id, seller_steam_id, item_type, item_payload, currency, price, created_at, expires_at
+      // seller_steam_id deliberately not returned (patch 0462): it exposed
+      // every seller's SteamID publicly, and a NULL would give away Broker
+      // listings. The client never used it.
+      `SELECT id, item_type, item_payload, currency, price, created_at, expires_at
        FROM listings
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
@@ -307,36 +359,7 @@ export function registerListingsRoutes(app: FastifyInstance, config: AppConfig) 
           throw Object.assign(new Error("Can't buy your own listing."), { code: 'OWN_LISTING' });
         }
 
-        await client.query(
-          `UPDATE listings SET status = 'sold', sold_at = now(), buyer_steam_id = $1 WHERE id = $2`,
-          [buyerSteamId, id]
-        );
-
-        // Buyer's mailbox entry -- the purchased item.
-        await client.query(
-          `INSERT INTO mailbox (owner_steam_id, type, item_payload, note)
-           VALUES ($1, $2, $3, $4)`,
-          [buyerSteamId, listing.item_type, listing.item_payload, 'Auction House purchase']
-        );
-
-        // Seller's mailbox entry -- sale price PLUS the deposit refund
-        // (patch 0413) in one entry. Skipped for system-seeded listings
-        // (seller_steam_id IS NULL) -- there's no real player to deliver
-        // it to.
-        if (listing.seller_steam_id) {
-          const total = Number(listing.price) + Number(listing.deposit_amount ?? 0);
-          await client.query(
-            `INSERT INTO mailbox (owner_steam_id, type, amount, note)
-             VALUES ($1, $2, $3, $4)`,
-            [listing.seller_steam_id, listing.currency, total, 'Auction House sale (includes deposit refund)']
-          );
-        }
-
-        await client.query(
-          `INSERT INTO transactions (listing_id, buyer_steam_id, seller_steam_id, price, currency)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [id, buyerSteamId, listing.seller_steam_id, listing.price, listing.currency]
-        );
+        await recordSale(client, listing, buyerSteamId);
 
         // price/currency echoed back (patch 0431) so the client charges
         // exactly what the server sold it for, not what its card showed.

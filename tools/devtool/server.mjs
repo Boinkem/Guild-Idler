@@ -2920,6 +2920,8 @@ async function checkAhBackend(url) {
       sessionSecretConfigured: body.sessionSecretConfigured,
       // Patch 0459 -- undefined from a server older than 0459.
       adminConfigured: body.adminConfigured,
+      // Patch 0462 -- undefined from a server older than 0462.
+      brokerEnabled: body.brokerEnabled,
     };
   } catch (err) {
     return { reachable: false, error: err.message || String(err) };

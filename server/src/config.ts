@@ -34,6 +34,10 @@ export interface AppConfig {
    *  routes don't register at all. A real secret -- lives in server/.env
    *  and the DevTool's local, gitignored ah.config.json, nowhere else. */
   adminToken: string;
+  /** Patch 0462 -- runs the Auction House Broker (broker.ts) when true
+   *  and AH_ENABLED + DATABASE_URL are set. Off by default: the Broker pays
+   *  players real gold/scrap for listings, so turning it on is a choice. */
+  brokerEnabled: boolean;
 }
 
 export const STEAM_APP_ID_DEFAULT = '5143490';
@@ -65,5 +69,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     sessionSecret: env.SESSION_SECRET?.trim() ?? '',
     steamTicketIdentity: env.STEAM_TICKET_IDENTITY?.trim() || STEAM_TICKET_IDENTITY_DEFAULT,
     adminToken: env.AH_ADMIN_TOKEN?.trim() ?? '',
+    brokerEnabled: parseBool(env.AH_BROKER_ENABLED, false),
   };
 }

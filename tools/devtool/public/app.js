@@ -4859,6 +4859,7 @@ function ahUsageHtml() {
       <tbody>
         ${row('Active players', (w) => ahN(w.activePlayers), ahN(S.allTime.players))}
         ${row('Sales', (w) => ahN(w.sales), ahN(S.allTime.sales))}
+        ${row('&nbsp;&nbsp;player to player', (w) => w.realSales == null ? '--' : ahN(w.realSales))}
         ${row('Buyers', (w) => ahN(w.buyers))}
         ${row('Gold traded', (w) => ahN(w.goldVolume), ahN(S.allTime.goldVolume))}
         ${row('Scrap traded', (w) => ahN(w.scrapVolume), ahN(S.allTime.scrapVolume))}
@@ -4874,7 +4875,7 @@ function ahUsageHtml() {
       Sales, buyers and volume go by sale time. Players = anyone who listed or bought.
       ${S.allTime.firstListing ? `First listing ever: ${new Date(S.allTime.firstListing).toLocaleDateString()}.` : ''}</p>`;
 
-  const metrics = [['sales', 'Sales'], ['listed', 'Listings'], ['players', 'Players'], ['goldVolume', 'Gold'], ['scrapVolume', 'Scrap']];
+  const metrics = [['sales', 'Sales'], ['realSales', 'Player sales'], ['brokerBuyouts', 'Broker buyouts'], ['listed', 'Listings'], ['players', 'Players'], ['goldVolume', 'Gold'], ['scrapVolume', 'Scrap']];
   const metric = ahState.usageMetric;
   const max = Math.max(1, ...S.daily.map((d) => d[metric] || 0));
   const chart = `
@@ -4885,7 +4886,7 @@ function ahUsageHtml() {
       ${S.daily.map((d, i) => {
         const [y, mo, da] = d.day.split('-').map(Number);
         const label = new Date(y, mo - 1, da).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-        return `<div class="ahu-day" title="${label}: ${d.sales} sales, ${d.listed} listed, ${d.players} players, ${ahMoney(d.goldVolume, d.scrapVolume)}">
+        return `<div class="ahu-day" title="${label}: ${d.sales} sales${d.brokerBuyouts ? ` (${d.brokerBuyouts} Broker buyouts)` : ''}, ${d.listed} listed, ${d.players} players, ${ahMoney(d.goldVolume, d.scrapVolume)}">
           <div class="ahu-bar-wrap"><span class="ahu-bar" style="height: ${((d[metric] || 0) / max) * 100}%"></span></div>
           <span class="ahu-day-label">${i % 5 === 0 || i === S.daily.length - 1 ? da : ''}</span></div>`;
       }).join('')}
@@ -4923,12 +4924,61 @@ function ahUsageHtml() {
     </div>
     <div class="section-heading">Activity</div>
     ${table}
+    <div class="section-heading">Broker</div>
+    ${ahBrokerHtml(S, W)}
     <div class="section-heading">Daily, last 30 days</div>
     ${chart}
     <div class="section-heading">Most traded items, 30 days</div>
     ${items}
     <div class="section-heading">Busiest traders, 30 days</div>
     ${traders}`;
+}
+
+/** Patch 0462 -- the Broker's share of the market: what it posted and
+ *  sold (gold/scrap taken IN from players -- a sink), what it bought
+ *  (paid OUT -- a faucet), the net, and supply per level bracket. */
+function ahBrokerHtml(S, W) {
+  const B = S.broker;
+  if (!B || !S.windows.day.broker) return '<p class="tiny muted">This backend predates the Broker (patch 0462).</p>';
+  const net = (w) => {
+    const g = w.broker.takenIn.gold - w.broker.paidOut.gold;
+    const sc = w.broker.takenIn.scrap - w.broker.paidOut.scrap;
+    const fmt = (n, unit) => `<span style="color: ${n < 0 ? 'var(--bad)' : n > 0 ? 'var(--good)' : 'inherit'}">${n > 0 ? '+' : ''}${ahN(n)} ${unit}</span>`;
+    return `${fmt(g, 'gold')}${sc ? ` · ${fmt(sc, 'scrap')}` : ''}`;
+  };
+  const row = (label, fn) => `<tr><td>${label}</td>${W.map(([, w]) => `<td class="num">${fn(w)}</td>`).join('')}</tr>`;
+  const flows = `
+    <table class="ahu-table">
+      <thead><tr><th></th>${W.map(([l]) => `<th class="num">${l}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${row('Listings posted', (w) => ahN(w.broker.listed))}
+        ${row('Bought by players', (w) => ahN(w.broker.soldToPlayers))}
+        ${row('&nbsp;&nbsp;taken in (sink)', (w) => ahMoney(w.broker.takenIn.gold, w.broker.takenIn.scrap))}
+        ${row('Bought from players', (w) => ahN(w.broker.buyouts))}
+        ${row('&nbsp;&nbsp;paid out (faucet)', (w) => ahMoney(w.broker.paidOut.gold, w.broker.paidOut.scrap))}
+        ${row('Net into the Broker', net)}
+        ${row('Player-to-player sales', (w) => ahN(w.realSales))}
+      </tbody>
+    </table>
+    <p class="tiny muted" style="margin: 4px 0 0;">Negative net = the Broker is adding gold/scrap to the economy overall.
+      Buyout cap: ${B.brackets ? B.brackets.dailyCapPerSeller : '?'} per player per day. Tune in <code>server/broker.config.json</code> (picked up within a few minutes, no restart).</p>`;
+  const br = B.brackets;
+  const brackets = !br ? '<p class="tiny muted">Bracket view unavailable -- the server can\'t load its game item bundle (run <code>npm run build</code> in server/).</p>' : `
+    <table class="ahu-table" style="margin-top: 10px;">
+      <thead><tr><th>Listings up now</th><th class="num">Real</th><th class="num">Broker</th><th class="num">Target</th><th>Supply</th></tr></thead>
+      <tbody>
+        ${br.brackets.map((b) => {
+          const total = b.real + b.broker;
+          const status = b.real >= b.target ? '<span class="muted">players cover it</span>' : total >= b.target ? 'stocked' : `<span style="color: var(--warn)">${b.target - total} short</span>`;
+          return `<tr><td>Gear, levels ${b.min}-${b.max}</td><td class="num">${ahN(b.real)}</td><td class="num">${ahN(b.broker)}</td><td class="num">${b.target}${b.boosted ? ' <span class="muted" title="Includes the busy-bracket bonus">↑</span>' : ''}</td><td>${status}</td></tr>`;
+        }).join('')}
+        <tr><td>Consumables</td><td class="num">${ahN(br.consumables.real)}</td><td class="num">${ahN(br.consumables.broker)}</td><td class="num">${br.consumables.target}</td>
+          <td>${br.consumables.real >= br.consumables.target ? '<span class="muted">players cover it</span>' : br.consumables.real + br.consumables.broker >= br.consumables.target ? 'stocked' : `<span style="color: var(--warn)">${br.consumables.target - br.consumables.real - br.consumables.broker} short</span>`}</td></tr>
+      </tbody>
+    </table>
+    <p class="tiny muted" style="margin: 4px 0 0;">↑ = target raised by ${br.activeBracketBonus} because real players traded gear in that bracket in the last 7 days. Real listings count toward the target, so the Broker stops posting where players keep a bracket stocked.</p>`;
+  return `<p class="tiny" style="margin: 0 0 6px;">Status: <b style="color: ${B.enabled ? 'var(--good)' : 'var(--muted)'}">${B.enabled ? 'running' : 'off'}</b>
+    ${B.enabled ? '' : '<span class="muted">-- set <code>AH_BROKER_ENABLED=true</code> in server/.env and restart.</span>'}</p>${flows}${brackets}`;
 }
 
 /** Colour/label for one target's status card -- three states, same
@@ -4951,7 +5001,8 @@ function ahStatusLine(target) {
   if (target.adminConfigured === false) missing.push('AH_ADMIN_TOKEN -- no usage dashboard');
   const keyNote = missing.length ? `, NOT configured: ${missing.join('; ')}` : '';
   const dbNote = target.dbConfigured === true ? ', database configured' : '';
-  const mode = target.ahEnabled ? `online (AH_ENABLED=true${dbNote}${keyNote})` : `reachable, but off (AH_ENABLED=false${keyNote})`;
+  const brokerNote = target.brokerEnabled === true ? ', Broker on' : target.brokerEnabled === false ? ', Broker off' : '';
+  const mode = target.ahEnabled ? `online (AH_ENABLED=true${dbNote}${brokerNote}${keyNote})` : `reachable, but off (AH_ENABLED=false${keyNote})`;
   return { text: `Connected — ${escapeHtml(mode)}`, cls: target.ahEnabled && missing.length === 0 ? 'good' : '' };
 }
 
