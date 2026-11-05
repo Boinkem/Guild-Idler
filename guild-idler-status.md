@@ -37902,3 +37902,31 @@ the road, Contracts shows a questing hero's card once with their dimmed
 board below, and Treat shows Free. Hero sprites aren't in the repo, so
 the walking rider showed its text fallback. Just back wasn't exercised
 (no finished quests in the seeded save). Not checked in the Electron app.
+
+### Task Manager shows "Guildbound" instead of the tagline (patch 0468)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed Windows Task Manager listing the game by its long tagline instead of "Guildbound"
+```
+
+Direct report, with a screenshot: Task Manager's Processes tab showed the
+game as "A cozy desktop companion idle game. Send heroes on quests, ma...".
+That column reads the exe's `FileDescription` version resource, and
+electron-builder fills `FileDescription` from `package.json`'s
+`description`, not from `productName`. So the tagline was being stamped
+into the Windows exe.
+
+**`package.json`.** `description` is now just `"Guildbound"`. Nothing in
+`src/` or `electron/` reads it (checked), and the full tagline still lives
+in `README.md` and the store copy, so nothing is lost. `productName`
+(`Guildbound`) already drives the window title, install folder and Start
+Menu entry and is unchanged.
+
+Takes effect on the next `npm run package`; an already-installed build
+keeps the old string until it's reinstalled. `npm start` / dev runs go
+through the stock `electron.exe`, so those show "Electron" in Task Manager
+regardless -- expected, not this bug. `package:demo` will also show
+"Guildbound" (not "Guildbound Demo") in Task Manager, since it only
+overrides `productName`; fine for now. Not verified on a packaged Windows
+build from here.

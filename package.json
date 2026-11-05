@@ -1,7 +1,7 @@
 {
   "name": "guildbound",
   "version": "1.8.1",
-  "description": "A cozy desktop companion idle game. Send heroes on quests, manage your guild's vendors, and grow a fantasy guild that runs while you work.",
+  "description": "Guildbound",
   "author": "Guildbound",
   "license": "MIT",
   "main": "dist-electron/main.js",
