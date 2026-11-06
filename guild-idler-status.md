@@ -37960,3 +37960,48 @@ pips underneath, instead of label / pips / count on one line.
 Verified in the web build with a seeded save at 1280 and 1000 wide, font
 scale 1.35 and 1.5: no overlap, names and pips clear of the band, quest
 titles still ellipsize as before. Not checked in the Electron app.
+
+### Grimsby's card result no longer overlaps the fee footer (patch 0470)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed Grimsby's "You got:" line sitting on top of the fee and odds at the bottom of the card table
+- Fixed the picked card covering Grimsby after a draw
+- Fixed the jackpot sunburst giving Grimsby's table a scrollbar
+- Fixed a stray "◆" showing instead of the gold icon under Grimsby's dice wager
+```
+
+Direct report, from the new Steam screenshots: on a Pick Your Card
+result, "You got: ..." overlapped the Fee / Outcome tiers / Loyalty
+rebate footer, and the flipped card sat on top of Grimsby's sprite.
+
+**Cause.** `.peddler-modal-body` is `flex: 1` and was `min-height: 0`,
+so once a result (flipped card + tier label + "You got:") was taller than
+the room left between the header and the footer, the body shrank below
+its content. Its `justify-content: center` then spilled the overflow both
+ways: the card up over Grimsby, the summary down over
+`.peddler-facts-grid`. The jackpot's 700px `.peddler-fx-rays` sunburst
+also reached past the modal's bottom edge, adding scroll height mid-
+celebration.
+
+**`app.css`.** `.peddler-modal-body` is `min-height: auto` (never smaller
+than its content; the modal grows, and only scrolls through `.modal`'s
+own `overflow-y` if the window is genuinely too short), plus
+`overflow: clip; overflow-clip-margin: 40px` so the sunburst can't add
+scroll height. Reward particles are `position: fixed`, so the clip
+doesn't touch them. Shared by Dice and Tab too; both checked, unchanged.
+
+**`PeddlerCardModal.tsx`.** Grimsby's header sprite drops from 160 to
+112 tall once a card's been picked, to give the result the room.
+
+**`PeddlerDiceModal.tsx`.** Both wager rows had a bare `◆` in JSX
+text, which renders literally. Wrapped as `{'◆'}` like the topbar.
+
+Verified in the web build with a seeded save at the real menu size
+(1350x930), font scale 1.35 and 1.5, for Jackpot, Modest Find and Bust:
+no overlap, no scrollbar. At 1280x720 with font scale 1.5 the modal is
+taller than the window and scrolls instead of overlapping. Trade-off
+noted: the card modal's height now varies slightly between states, so
+the tabletop background can rescale a little between a draw and its
+result (same accepted trade-off as patch 0262). Not checked in the
+Electron app.

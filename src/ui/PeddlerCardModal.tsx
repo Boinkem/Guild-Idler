@@ -532,7 +532,9 @@ export function PeddlerCardModal({
         <div className="peddler-modal-header">
           <GrimsbySprite
             animation={headerAnimation}
-            height={160}
+            // Patch 0470 -- smaller once a card's been picked: the
+            // flipped card, tier label and reward line need the room.
+            height={result ? 112 : 160}
             once={headerAnimation !== 'idle'}
             onComplete={() => {
               if (headerAnimation === 'wave') setWaveDone(true);

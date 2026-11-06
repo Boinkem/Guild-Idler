@@ -309,7 +309,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
                   <button type="button" className="btn-ghost" disabled={rolling} onClick={setMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
                     Max
                   </button>
-                  <span className="tiny muted">\u25c6 {formatGold(state.gold)} on hand</span>
+                  <span className="tiny muted">{'\u25c6'} {formatGold(state.gold)} on hand</span>
                 </div>
               </>
             )}
@@ -409,7 +409,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
                   <button type="button" className="btn-ghost" disabled={hlRolling} onClick={setHlMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
                     Max
                   </button>
-                  <span className="tiny muted">\u25c6 {formatGold(state.gold)} on hand</span>
+                  <span className="tiny muted">{'\u25c6'} {formatGold(state.gold)} on hand</span>
                 </div>
               </>
             )}

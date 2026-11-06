@@ -5722,7 +5722,23 @@ button.harvest-item:hover {
    is what was reading as "cards pushed low / cut off at the top." */
 .peddler-modal-body {
   flex: 1;
-  min-height: 0;
+  /* Patch 0470 -- was `min-height: 0`, which let this body shrink
+     below its own content once a result (flipped card + tier label +
+     "You got:") was taller than the room left. Centered overflow then
+     spilled both ways: the card up over Grimsby, "You got:" down over
+     the fee/outcome footer. `auto` keeps the body at least as tall as
+     its content, so the modal grows (and scrolls via .modal's own
+     overflow-y if the window is genuinely too short) instead of
+     overlapping. */
+  min-height: auto;
+  /* Patch 0470 -- the jackpot sunburst (.peddler-fx-rays, 700px square)
+     reached past the modal's bottom edge and gave the whole modal a
+     scrollbar mid-celebration. Clipping it here (with a little margin
+     so the glow still bleeds past the card row) keeps it out of the
+     scroll height. The reward particles are position: fixed, so they're
+     unaffected. */
+  overflow: clip;
+  overflow-clip-margin: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
