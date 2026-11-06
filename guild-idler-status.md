@@ -37930,3 +37930,33 @@ regardless -- expected, not this bug. `package:demo` will also show
 "Guildbound" (not "Guildbound Demo") in Task Manager, since it only
 overrides `productName`; fine for now. Not verified on a packaged Windows
 build from here.
+
+### Quest Board Overview: hero names and streaks no longer spill over the quest banner (patch 0469)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed hero names and Auto-Chain streaks overlapping the quest picture on the Quest Board Overview
+```
+
+Direct report, with a screenshot: on the Overview's "on the road" rows,
+"Dame Wren Lv 50" ran into the quest banner image, and the streak's
+"2/10" sat on top of it. Most visible at the default 1.35 font scale and
+above.
+
+**Cause.** `.qov-lane`'s hero column was a fixed `150px`. The who-block's
+text div had no `min-width: 0`, so `.qov-name`'s ellipsis never kicked
+in, and the streak line ("Auto-Chain" + 10 pips + "2/10", all inline)
+was wider than 150px on its own. Both overflowed sideways into the
+`.qov-band` next door.
+
+**`app.css`.** Hero column is now `minmax(9rem, 11.5rem)` (rem, so it
+grows with the font scale). `.qov-who` clips (`overflow: hidden`) and its
+text div gets `min-width: 0; flex: 1`, so long names ellipsize. `.qov-state`
+is a wrapping flex row; `.qov-pips` takes its own line (`flex-basis: 100%`).
+
+**`QuestOverview.tsx`.** Road lane streak reads "Auto-Chain 2/10" with the
+pips underneath, instead of label / pips / count on one line.
+
+Verified in the web build with a seeded save at 1280 and 1000 wide, font
+scale 1.35 and 1.5: no overlap, names and pips clear of the band, quest
+titles still ellipsize as before. Not checked in the Electron app.

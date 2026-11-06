@@ -248,11 +248,13 @@ function RoadLane({ hero, quest, now, onRecall }: { hero: Hero; quest: ActiveQue
           <div className="qov-state gold-text">
             {streak ? (
               <>
-                Auto-Chain{' '}
+                {/* Patch 0469 -- label + count first, pips on their own line
+                    underneath, so a 10-pip streak never pushes past the
+                    hero column into the quest band. */}
+                <span>Auto-Chain {Math.min(hero.autoChainCount + 1, hero.autoChainTarget!)}/{hero.autoChainTarget}</span>
                 <span className="qov-pips" aria-label={`${hero.autoChainCount + 1} of ${hero.autoChainTarget}`}>
                   {Array.from({ length: hero.autoChainTarget! }, (_, i) => <i key={i} className={i <= hero.autoChainCount ? 'on' : ''} />)}
                 </span>
-                {' '}{Math.min(hero.autoChainCount + 1, hero.autoChainTarget!)}/{hero.autoChainTarget}
               </>
             ) : 'On the road'}
           </div>

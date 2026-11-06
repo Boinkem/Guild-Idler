@@ -10157,14 +10157,19 @@ button.harvest-item:hover {
 .qov-k b { font-size: 1.05rem; color: var(--parchment); font-variant-numeric: tabular-nums; }
 .qov-k span { font-size: .625rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .qov-scrap { font-size: .8125rem; color: var(--muted); font-weight: 600; }
+/* Patch 0469 -- hero column was a fixed 150px, which a long name or a
+   10-pip Auto-Chain streak overflowed (worse at bigger font scales),
+   spilling text over the quest band. Sized in rem now so it grows with
+   the font scale, and the who-block clips instead of overflowing. */
 .qov-lane {
-  display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(9rem, 11.5rem) minmax(0, 1fr); gap: 12px; align-items: center;
   margin-bottom: 0; border-left-width: 3px;
 }
 .qov-lane.road { border-left-color: var(--brass); }
 .qov-lane.ready { border-left-color: var(--moss); }
 .qov-lane.hurt, .qov-lane.fallen { border-left-color: var(--blood); }
-.qov-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.qov-who { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
+.qov-who > div:last-child { min-width: 0; flex: 1; }
 .qov-portrait {
   width: 48px; height: 36px; flex: none; border-radius: 6px;
   background-color: var(--panel-2); background-size: cover; background-repeat: no-repeat;
@@ -10173,7 +10178,7 @@ button.harvest-item:hover {
 .qov-portrait.dim { filter: saturate(.5) brightness(.85); }
 .qov-name { font-weight: 800; font-size: .875rem; color: var(--parchment); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qov-name span { font-weight: 400; font-size: .6875rem; color: var(--muted); }
-.qov-state { font-size: .6875rem; margin-top: 2px; }
+.qov-state { font-size: .6875rem; margin-top: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; }
 .qov-job { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-width: 0; }
 .qov-band {
   height: 46px; border-radius: 5px; background-color: var(--panel-2);
@@ -10193,7 +10198,7 @@ button.harvest-item:hover {
 .qov-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; justify-content: center; min-width: 96px; }
 .qov-actions.col { align-items: flex-end; }
 .qov-eta { font-weight: 700; font-size: .8125rem; font-variant-numeric: tabular-nums; }
-.qov-pips { display: inline-flex; gap: 3px; vertical-align: middle; }
+.qov-pips { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: 3px; }
 .qov-pips i { width: 7px; height: 7px; border-radius: 2px; border: 1px solid var(--moss); }
 .qov-pips i.on { background: var(--moss); }
 .qov-justback { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
