@@ -1,0 +1,50 @@
+HOW TO USE
+1. In Steamworks, open Store Page > Description > "About This Game".
+2. Upload each GIF with the editor's image button. Steam inserts a tag like
+   [img]{STEAM_APP_IMAGE}/extras/xxxxxxxx.gif[/img]
+3. Paste the text below, then swap each [img] placeholder for the tag Steam gave you.
+   (Steam also accepts the .mp4 versions in the mp4 folder: sharper and smaller.
+   Animations must be 12 seconds or less; all of these are under 9.)
+
+------------------------------------------------------------
+PASTE FROM HERE
+------------------------------------------------------------
+
+[img]desktop-companion.gif[/img]
+
+[h2]Build a guild that adventures while you don't[/h2]
+GuildBound is a semi-idle guild RPG that lives in the corner of your desktop. Recruit heroes, gear them up and send them out while you work, play or step away. Adventures keep going even while the game is closed.
+
+[h2]Every contract is a gamble[/h2]
+Every mission shows its Success Chance. Better gear, potions and preparation tip the odds. Failure has consequences: heroes come home injured, empty-handed, or not at all.
+
+Sometimes 70% really does feel like 50%.
+
+[img]quest-complete.gif[/img]
+
+[h2]From odd jobs to dying gods[/h2]
+Start with bounties for troublesome goblins. Follow quest chains through besieged kingdoms, dragons and eldritch horrors. Then take on Raids: multi-hero expeditions with their own mechanics, gear sets and difficulties.
+
+[img]raid-cleared.gif[/img]
+
+[h2]Loot. Lots of loot.[/h2]
+Procedurally generated gear with random stats and rarity tiers. Forge, brew, enchant and infuse armour for the fight ahead. Sell what you don't need on the live player Auction House.
+
+[h2]Hatch pets[/h2]
+Eggs drop on adventures and hatch as your heroes earn XP. Pets boost the hero they're paired with, and can join them on your desktop.
+
+Finding an absurdly rare egg is a perfectly valid reason to abandon whatever you were supposed to be doing.
+
+[img]egg-hatch.gif[/img]
+
+[h2]Visit Grimsby[/h2]
+A shady peddler, happy to take your Gold in exchange for the chance of considerably more. Or considerably less. He's happy either way.
+
+[img]grimsby-cards.gif[/img]
+
+[h2]Play for five minutes, or stay a while[/h2]
+[list]
+[*]No energy systems. No microtransactions.
+[*]14 hero classes, crafting, raids and pets
+[*]Earn Renown, grow your Guild Power and climb the Steam Leaderboards
+[/list]

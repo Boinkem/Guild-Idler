@@ -38005,3 +38005,41 @@ noted: the card modal's height now varies slightly between states, so
 the tabletop background can rescale a little between a draw and its
 result (same accepted trade-off as patch 0262). Not checked in the
 Electron app.
+
+### Quest Board icons, cheaper Trade Route, calmer "on a quest" shimmer (patch 0471)
+```discord-update
+Dev Update | Patch 0471
+
+- Changed the Quest Board Overview to show each contract's own icon instead of a stretched banner strip
+- Changed the Trade Route to cost 400 gold to open (was 5,000)
+- Changed the shimmer on heroes who are out questing to a soft cool blue, so gold glows now only mean "something to do here"
+```
+
+Direct feedback, three items.
+
+**Overview thumbnail (`QuestOverview.tsx`, `app.css`).** The Ready lane
+("Best odds for ...") and the On-the-road lane drew the offer's wide tag
+banner (`questTagBannerSrc` / `chainBannerSrc`) in a 92x46 strip, which
+read as a random landscape crop next to the portrait. Both lanes now use
+`offerThumb` -- the same `questTagIconSrc` / `chainIconSrc` art the
+Contracts list's `.raid-card-thumb` shows -- in a new 46x46 `.qov-icon`
+with the thumb's border/background. `.qov-job.with-icon` narrows the
+first grid column to 46px (also in the <=720px container query). The
+injured / fallen / no-contracts lanes keep the 92px text band, so their
+titles sit a little further right than icon lanes; accepted. The unused
+`offerBand` helper and its banner imports are gone.
+
+**Trade Route cost (`tuning.json`).** `harvest.tradeRoute.cost` 5000 ->
+400 (value and default). The trader's reserve is one hour of the guild's
+best-tier quest gold (~25g early), so 5k was ~200 hours of payback for a
+"top-up" feature. 400 sits between Warehouse (300) and the facility base
+costs (500-750). Saves that already bought it are unaffected; no refund.
+
+**Hero card glow (`app.css`).** Checked the clip: every hero in it is
+questing, and `.hero-block.amb-away` (patch 0466) is a brass sweep for
+heroes on a quest -- working as designed, not tied to Training points
+(those get the separate green `amb-points` bob on the "N training
+points" badge). The brass tint was the problem: it matches the gold
+"affordable / act on this" glows, so it read as a points hint. Retinted
+to `--sky` at 9% (was brass 12%), band narrowed, 4.5s -> 7s. Not checked
+in the Electron app.

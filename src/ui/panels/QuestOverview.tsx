@@ -10,7 +10,7 @@ import type { ActiveQuest, Hero, QuestOffer } from '../../game/types';
 import { formatDuration, formatGold, formatNumber } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { ambPhase } from '../ambient';
-import { chainBannerSrc, questTagBannerSrc, questTagIconSrc, chainIconSrc } from './QuestPanel';
+import { questTagIconSrc, chainIconSrc } from './QuestPanel';
 import { heroPortraitSrc, heroPortraitStyle } from './HeroesPanel';
 
 /**
@@ -44,14 +44,6 @@ export function quickSendPick(state: ReturnType<typeof useEngine>['state'], hero
     }
   }
   return best;
-}
-
-function offerBand(offer: QuestOffer): string | undefined {
-  if (offer.chain) {
-    const chain = CHAIN_BY_ID[offer.chain.chainId];
-    return chainBannerSrc(offer.chain.chainId, chain?.banner);
-  }
-  return questTagBannerSrc(offer.tag);
 }
 
 function offerThumb(offer: QuestOffer): string | undefined {
@@ -177,8 +169,11 @@ export function QuestOverview({
           <div key={hero.id} className="card qov-lane ready">
             <div className="qov-who"><Portrait hero={hero} /><div><div className="qov-name">{hero.name} <span>Lv {hero.level}</span></div><div className="qov-state good">Ready{count > 0 ? ` · ${count} contract${count === 1 ? '' : 's'}` : ''}</div></div></div>
             {pick ? (
-              <div className="qov-job">
-                <div className="qov-band dim" style={offerBand(pick.offer) ? ({ backgroundImage: `url(${offerBand(pick.offer)})` } as CSSProperties) : undefined} />
+              <div className="qov-job with-icon">
+                {/* Patch 0471 -- the contract's own square icon (same art the
+                    Contracts list row shows), not the wide tag banner, which
+                    read as a stray landscape strip at this size. */}
+                <div className="qov-icon" style={offerThumb(pick.offer) ? ({ backgroundImage: `url(${offerThumb(pick.offer)})` } as CSSProperties) : undefined} />
                 <div className="qov-job-main">
                   <div className="qov-eyebrow">Best odds for {hero.name}</div>
                   <div className="qov-job-title">{pick.offer.name}</div>
@@ -236,7 +231,6 @@ function RoadLane({ hero, quest, now, onRecall }: { hero: Hero; quest: ActiveQue
   const state = useEngine().state;
   const total = Math.max(1, quest.endsAt - quest.startedAt);
   const progress = Math.min(100, ((now - quest.startedAt) / total) * 100);
-  const band = offerBand(quest.offer);
   const thumb = offerThumb(quest.offer);
   const streak = hero.autoChainTarget != null && hero.autoChainTarget > 1;
   return (
@@ -260,8 +254,8 @@ function RoadLane({ hero, quest, now, onRecall }: { hero: Hero; quest: ActiveQue
           </div>
         </div>
       </div>
-      <div className="qov-job">
-        <div className="qov-band" style={band || thumb ? ({ backgroundImage: `url(${band ?? thumb})` } as CSSProperties) : undefined} />
+      <div className="qov-job with-icon">
+        <div className="qov-icon" style={thumb ? ({ backgroundImage: `url(${thumb})` } as CSSProperties) : undefined} />
         <div className="qov-job-main">
           <div className="qov-job-title">{quest.offer.name}</div>
           <div className="qov-meta">

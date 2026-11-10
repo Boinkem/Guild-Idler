@@ -10102,9 +10102,12 @@ button.harvest-item:hover {
 .hero-block.amb-away { overflow: hidden; }
 .hero-block.amb-away::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: linear-gradient(100deg, transparent 40%, color-mix(in srgb, var(--brass) 12%, transparent) 50%, transparent 60%);
+  /* Patch 0471 -- was a brass sweep, which read as the same gold "act on
+     this" glow used for affordable buys and unspent points. A cool,
+     fainter, slower sky sheen just says "out on the road". */
+  background: linear-gradient(100deg, transparent 42%, color-mix(in srgb, var(--sky) 9%, transparent) 50%, transparent 58%);
   background-size: 260% 100%;
-  animation: amb-away 4.5s linear infinite;
+  animation: amb-away 7s linear infinite;
 }
 @keyframes amb-away { 0% { background-position: 130% 0; } 100% { background-position: -30% 0; } }
 .hero-block-points.amb-points { display: inline-block; animation: amb-points 2.8s ease-in-out infinite; }
@@ -10201,6 +10204,15 @@ button.harvest-item:hover {
   background-size: cover; background-position: center; opacity: .9;
 }
 .qov-band.dim { opacity: .55; }
+/* Patch 0471 -- ready/on-the-road lanes show the contract's square icon
+   (the Contracts list's own .raid-card-thumb look) instead of the wide
+   tag banner; the column shrinks to fit so the title sits right beside it. */
+.qov-job.with-icon { grid-template-columns: 46px minmax(0, 1fr) auto; }
+.qov-icon {
+  width: 46px; height: 46px; border-radius: 6px;
+  background-color: var(--panel-3); background-size: cover; background-position: center;
+  border: 1px solid var(--edge);
+}
 .qov-band-empty {
   display: grid; place-items: center; text-align: center; padding: 0 6px; font-size: .6875rem;
   background: color-mix(in srgb, var(--panel-2) 80%, transparent); opacity: 1;
@@ -10230,6 +10242,7 @@ button.harvest-item:hover {
 @container (max-width: 720px) {
   .qov-lane { grid-template-columns: minmax(0, 1fr); }
   .qov-job { grid-template-columns: 90px minmax(0, 1fr); }
+  .qov-job.with-icon { grid-template-columns: 46px minmax(0, 1fr); }
   .qov-actions { grid-column: 1 / -1; }
   .qov-justback { grid-template-columns: minmax(0, 1fr); }
 }

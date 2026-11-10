@@ -550,10 +550,10 @@
     "id": "harvest.tradeRoute.cost",
     "label": "Trade Route: cost",
     "category": "harvest",
-    "value": 5000,
-    "default": 5000,
+    "value": 400,
+    "default": 400,
     "min": 0,
-    "description": "One-time gold cost to unlock selling materials for gold."
+    "description": "[Patch 0471: cut from 5000 -- direct feedback, 5k to open a trader holding ~25g was absurd] One-time gold cost to unlock selling materials for gold."
   },
   {
     "id": "harvest.overseer.baseCost",

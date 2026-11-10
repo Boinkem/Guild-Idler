@@ -215,7 +215,7 @@ export const HarvestManager = {
     state.stats.goldSpent += TRADE_ROUTE_COST;
     state.tradeRouteUnlocked = true;
     // Starts the trader's reserve full rather than empty -- a player who
-    // just spent 5000 gold to open the Trade Route shouldn't immediately
+    // just paid to open the Trade Route shouldn't immediately
     // hit "check back later" on their very first sale.
     state.harvestTraderGold = HarvestManager.sellGoldPerHourTarget(state);
     state.harvestTraderGoldAt = now;
