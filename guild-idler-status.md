@@ -38271,3 +38271,94 @@ with 1,000 gold migrates to level 2 and 1,166 gold, a non-owner is
 unchanged. Not checked in a running build or the Electron app: the
 first-story modal timing after the tutorial contract, and the Guild Hall
 row's appearance.
+
+### Pinned requirements, a link on every gate, and the Guildmaster's advice (patch 0475)
+```discord-update
+Dev Update | Guild Hall
+
+- Added a pinned "Needed for..." banner in the Guild Hall: follow a link from something you are blocked on and the purchase you need is lifted to the top, with how much gold you are short
+- Added Advice from the Guildmaster, a short recommended list of first purchases for new guilds, with a Show me button
+- Added Guild Hall links wherever an upgrade is what you are missing: Replay Memories, Auto-Chain, Chain Tactics, free rerolls, freezes, consumable slots, free treatment, free repairs, cheaper revivals and the gold cap
+- Fixed notification "Go to" buttons landing in the Guild Hall without pointing at anything
+```
+
+Direct request: a link to a pre-req purchase should make that purchase
+"pop" on arrival, every gated thing should have such a link, and a new
+player opening the Guild Hall (50 gold, 33 rows) needs a starting point.
+
+**Pinned landing (`engine.ts`, `GuildPanel.tsx`, `app.css`).**
+`engine.requestTab(id, highlightId, subTab, reason)` takes a fourth
+argument, held in `requestedReason` and read once by
+`consumeRequestedReason()` (GuildPanel reads it before consuming the
+highlight id). A highlight WITH a reason is pinned; without one it is
+the old 4-second ring, unchanged. Pinned: the row leaves the two-column
+list and renders in `.guild-pin` above the filter chips, under a banner
+"Needed for {reason}" plus either "N more gold needed" or "You can
+afford this now"; the frame glows, the ring stays on the row
+(`pinned` prop), and the other rows dim (per row, restoring on hover).
+It clears when the row's level rises (after the purchase beat), on the
+banner's close button, or on leaving the tab. An id that is unknown or
+already fully bought falls back to the ring. Prestige's Extra Banner
+link is not a Guild Hall row and keeps the ring.
+
+Reasons added to the existing links: Tavern ("recruiting the {class}",
+"a free hero slot"), Raid Charter ("raids"), Heroic / Mythic Clearance
+("{tier} raids"), Black Market Contact, Auction House Charter, Nest
+Expansion, Companion Bond.
+
+**New links (`PrereqLink.tsx`, new; used in six files).**
+`<PrereqLink id reason>` is a small dashed brass button that opens the
+Guild Hall with that row pinned. It resolves facilities, general
+upgrades and the Replay Memories unlock (`guildHallPurchase`), and
+renders nothing once the purchase is fully bought. Placed at:
+
+| Where | Shown when | Pins |
+|---|---|---|
+| Replay Memories intro card | not unlocked | Replay Memories |
+| Quest Board, under the hero tabs | Auto-Chain not owned (not during the tutorial contract) | Auto-Chain |
+| Quest Board, same line | Auto-Chain owned, Chain Tactics not | Chain Tactics |
+| Quest Board, next to Reroll | the reroll costs gold | Board Runner |
+| Quest Board, next to the freeze count | 0 freezes left | Board Warden |
+| Inventory, Consumable Slots heading | Potion Belt not maxed | Potion Belt |
+| Inventory, next to Repair everything | there is a repair bill | Smith's Charity |
+| Hero card, injuries panel | treatment would cost gold | Physician's Charity |
+| Hero card, under Revive | hero is fallen | Undertaker's Favor |
+| Header gold readout | within 10% of the cap, Treasury not maxed | Treasury (the readout itself becomes clickable) |
+
+Story Quests needs none since 0474. Training Grounds, Trade Route,
+harvest tools, Grimsby's spot, the Renown exchange and vendor upgrades
+are bought on their own pages and are unchanged.
+
+**Notifications (`types.ts`, `engine.ts`, `guidance-topics.json`,
+`NotificationBanner.tsx`, `GuidePanel.tsx`).** `NotificationEntry` gets
+`targetHighlightId`, set through a fifth `say`/`archive` argument and
+passed to `requestTab` by both Go-to buttons. Guidance topics take an
+optional `highlightId`: `hero_slots_full` -> `tavern`,
+`auto_chain_affordable` -> `auto_chain`. The failed-recruit "out of hero
+slots" toast targets `tavern` too. These are rings, not pins (no
+reason): only blocked-purchase links pin.
+
+**Advice from the Guildmaster (`GuildPanel.tsx`, `progression.ts`,
+`SaveManager.ts`).** A card above the filter chips. Order is
+`GUILD_GUIDE_STEP_IDS`: Treasury, Tavern, Physician's Charity, Barracks,
+Auto-Chain, Raid Charter; a step is done at level 1. It shows the six as
+chips (done / next / to come), one "Next: {name} · {cost} · {why}" line,
+and Show me, which pins that row with "The Guildmaster recommends this
+next". "Hide advice" sets the new `GameState.guildGuideDismissed`; the
+card also goes once all six are owned. Save version 74 -> 75: migration
+74 starts it hidden for an existing guild that already owns three or
+more of the six, shown otherwise.
+
+Verified in the web build in headless Chrome at 1350x930 with a seeded
+fresh save: the advice card renders; Show me pins Treasury with "You can
+afford this now"; buying from the pinned row clears the pin and the card
+advances to Tavern; Recruit -> Go to Tavern lands on a pinned Tavern
+reading "Needed for a free hero slot · 32 more gold needed"; the Quest
+Board Auto-Chain line and Inventory's "More slots" link render.
+`tsc --noEmit` and the web build pass. Not exercised: the hero card
+links (needs an injured / fallen hero), the reroll / freeze / repair /
+gold-cap links, the Replay Memories link, the notification rings, the
+save migration, and anything in the Electron app.
+
+Noticed, not changed: the Treasury row reads "+12% gold ... per level"
+(`shortEffect`) while `guild_facility.treasury.goldPerLevel` is 6.

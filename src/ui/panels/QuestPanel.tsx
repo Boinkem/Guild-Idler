@@ -16,6 +16,7 @@ import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
 import { ConfirmModal } from '../ConfirmModal';
+import { PrereqLink } from '../PrereqLink';
 import { buyWithFx, fxMs, fxSpeed } from '../purchaseFx';
 import { at } from '../resultFx';
 import { HeroSprite } from '../sprites/HeroSprite';
@@ -927,6 +928,21 @@ export function QuestPanel() {
           Only rendered once the upgrade is owned; a change here only
           affects streaks rolled after this point, not one already
           running (see engine.setAutoChainTactics's own comment). */}
+      {/* Patch 0475 -- neither of these was mentioned anywhere on this tab
+          until it was already bought. One slim line, never during the
+          tutorial contract, gone once owned. */}
+      {!tutorialQuestPending && !autoChainOwned && (
+        <div className="prereq-hint">
+          <span>Heroes come home after every contract. Auto-Chain keeps them taking the next one on their own.</span>
+          <PrereqLink id="auto_chain" reason="Auto-Chain streaks" />
+        </div>
+      )}
+      {autoChainOwned && !chainTacticsOwned && (
+        <div className="prereq-hint">
+          <span>Chain Tactics sets a success floor and a priority for what Auto-Chain picks.</span>
+          <PrereqLink id="chain_tactics" reason="Chain Tactics" />
+        </div>
+      )}
       {chainTacticsOwned && (
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="card-title" style={{ marginBottom: 6 }}>Chain Tactics</div>
@@ -1054,6 +1070,11 @@ export function QuestPanel() {
                 </svg>
                 {rerollCost > 0 ? `Reroll · ${formatGold(rerollCost)}` : 'Reroll · Free'}
               </button>
+              {/* Patch 0475 -- out of free rerolls / freezes: the upgrade
+                  that grants more. Hidden once that upgrade is maxed. */}
+              {rerollCost > 0 && !tutorialQuestPending && (
+                <PrereqLink id="board_runner" reason="more free rerolls each day">More free rerolls →</PrereqLink>
+              )}
               <span
                 className="tiny"
                 style={{
@@ -1064,6 +1085,9 @@ export function QuestPanel() {
               >
                 ❄ {freezeChangesLeft} freeze{freezeChangesLeft === 1 ? '' : 's'} left today
               </span>
+              {freezeChangesLeft === 0 && (
+                <PrereqLink id="board_warden" reason="more contract freezes each day">More freezes →</PrereqLink>
+              )}
               {autoChainOwned && contractOffers.length > 0 && (
                 <button
                   className="btn-ghost"

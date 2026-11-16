@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
+import { GuildManager } from '../game/managers/GuildManager';
 import { useSettings } from './useSettings';
 import { resolveBackgroundMood } from '../game/settings';
 import { OnboardingTour } from './OnboardingTour';
@@ -383,6 +384,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   // mount/app launch (see useCountUp's own doc comment); only on values
   // that change after that.
   const displayGold = useCountUp(engine.state.gold);
+  const nearCapLink = engine.state.gold >= engine.goldStorage * 0.9 && GuildManager.nextCost(engine.state, 'treasury') !== null;
   const goldRef = useFlyTargetRef<HTMLSpanElement>('gold');
   const displayRenown = useCountUp(engine.state.renown);
   // Patch 0424 -- renown is a fly target too (Renown perks, the
@@ -495,8 +497,13 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           {/* Patch 0466 -- warms up within 10% of the storage cap. */}
           <span
             ref={goldRef}
-            className={`gold ${engine.state.gold >= engine.goldStorage * 0.9 ? 'amb-near-cap' : ''}`}
-            title={engine.state.gold >= engine.goldStorage * 0.9 ? 'Nearly at your gold storage cap -- spend some, or raise the cap with the Treasury' : undefined}
+            className={`gold ${engine.state.gold >= engine.goldStorage * 0.9 ? 'amb-near-cap' : ''} ${nearCapLink ? 'gold-cap-link' : ''}`}
+            title={engine.state.gold >= engine.goldStorage * 0.9
+              ? `Nearly at your gold storage cap -- spend some, or raise the cap with the Treasury${nearCapLink ? '. Click to go there.' : ''}`
+              : undefined}
+            // Patch 0475 -- the warning named the Treasury but didn't take you to it.
+            onClick={nearCapLink ? () => engine.requestTab('guild', 'treasury', undefined, 'a higher gold cap') : undefined}
+            role={nearCapLink ? 'button' : undefined}
           >◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>
           {/* Patch 0454 -- only once the guild has had a Shard, so the

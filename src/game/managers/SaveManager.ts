@@ -2,7 +2,7 @@ import { GameState, GuildFacility, MaterialId, SAVE_VERSION } from '../types';
 import { createRng } from '../rng';
 import { HeroManager } from './HeroManager';
 import { AchievementManager } from './AchievementManager';
-import { UPGRADES, UPGRADE_BY_ID, upgradeCost, vendorUpgrades } from '../data/progression';
+import { GUILD_GUIDE_STEP_IDS, UPGRADES, UPGRADE_BY_ID, upgradeCost, vendorUpgrades } from '../data/progression';
 import { BARD_TRACKS } from '../data/bard';
 import { ACHIEVEMENT_BY_ID } from '../data/achievements';
 import { NODE_ORDER } from '../data/materials';
@@ -205,6 +205,7 @@ export function createInitialState(now = Date.now()): GameState {
     commissionDay: { blacksmith: -1, alchemist: -1, enchanter: -1 },
     hasSeenAlchemist: false,
     hasSeenEnchanter: false,
+    guildGuideDismissed: false,
     hasCompletedFirstQuest: false,
     hasVisitedVendorsTab: false,
     hasObtainedConsumable: false,
@@ -1588,6 +1589,19 @@ const MIGRATIONS: Record<number, Migration> = {
       refund = credit;
     }
     return { ...save, version: 74, upgrades, gold: ((save.gold as number | undefined) ?? 0) + refund };
+  },
+  74: (save) => {
+    // Patch 0475. The Guild Hall's new first-purchases advice card is for
+    // new guilds. An existing guild that already owns half of what it
+    // recommends has plainly found its own way, so it starts hidden there.
+    const guild = (save.guild as Record<string, number> | undefined) ?? {};
+    const upgrades = (save.upgrades as Record<string, number> | undefined) ?? {};
+    const owned = GUILD_GUIDE_STEP_IDS.filter((id) => (guild[id] ?? upgrades[id] ?? 0) >= 1).length;
+    return {
+      ...save,
+      version: 75,
+      guildGuideDismissed: (save.guildGuideDismissed as boolean | undefined) ?? owned >= GUILD_GUIDE_STEP_IDS.length / 2,
+    };
   },
 };
 

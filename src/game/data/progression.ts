@@ -430,6 +430,16 @@ export function isVendorUpgradeUnlocked(vendorLevel: number, vendorId: VendorId,
 
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
 
+/**
+ * Patch 0475 -- the Guild Hall's "Advice from the Guildmaster" card: a
+ * recommended order for a new guild's first purchases, cheapest and most
+ * broadly useful first. Each id is a facility or a general upgrade; a
+ * step is done at level 1. The card's own wording lives with it in
+ * GuildPanel.tsx; the ids live here so the save migration that decides
+ * whether an existing guild still needs the advice reads the same list.
+ */
+export const GUILD_GUIDE_STEP_IDS = ['treasury', 'tavern', 'physicians_charity', 'barracks', 'auto_chain', 'raid_charter'] as const;
+
 export function upgradeCost(def: UpgradeDef, currentLevel: number): number {
   return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel) * earlyTierDiscount(currentLevel));
 }

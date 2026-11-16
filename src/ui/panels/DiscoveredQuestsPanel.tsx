@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { PrereqLink } from '../PrereqLink';
 import { useEntryInk, EntryInkMarks } from '../entryInk';
 import type { EntryInk } from '../entryInk';
 import { useSettings } from '../useSettings';
@@ -457,6 +458,12 @@ function ReplayMemoriesView({
           completed chains at Heroic or Legendary for a chance at their own tougher gear -- the story
           plays out again in full, so a failed step sends the whole attempt back to the beginning.
         </p>
+        {/* Patch 0475 -- every saga below reads "Unlock Replay Memories
+            first" until this is bought, and it is bought in the Guild
+            Hall. Renders nothing once owned. */}
+        <PrereqLink id="master" reason="Replay Memories" className="btn-primary" style={{ marginTop: 8, fontSize: '0.6875rem' }}>
+          Unlock Replay Memories in the Guild Hall →
+        </PrereqLink>
       </div>
 
       <div className="section-heading">Heroes</div>

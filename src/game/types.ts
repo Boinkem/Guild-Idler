@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 74;
+export const SAVE_VERSION = 75;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1261,6 +1261,10 @@ export interface NotificationEntry {
    * tabs actually have sub-tabs to target.
    */
   targetSubTab?: string;
+  /** Patch 0475 -- a specific card for the destination tab to ring
+   *  (a Guild Hall row id), same id requestTab's `highlightId` takes.
+   *  Only meaningful paired with targetTab. */
+  targetHighlightId?: string;
   /**
    * Whether this entry is prominent enough to earn the top banner
    * (NotificationBanner.tsx), on top of the ordinary bottom Toast every
@@ -2644,6 +2648,10 @@ export interface GameState {
   /** Same shape as hasSeenAlchemist directly above, for the Enchanter's
    *  own sub-tab. */
   hasSeenEnchanter: boolean;
+  /** Patch 0475 -- the Guild Hall's "Advice from the Guildmaster" card
+   *  (a short recommended-first-purchases list) has been hidden by the
+   *  player. The card also goes away by itself once every step is bought. */
+  guildGuideDismissed: boolean;
   /**
    * Grimsby's Tab -- a repeating push-your-luck game, gated behind
    * grimsbyPermanentSpotUnlocked (see PeddlerManager.canOpenTab). null

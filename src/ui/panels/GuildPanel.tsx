@@ -5,7 +5,7 @@ import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
+import { AUTO_CHAIN_RANGES, GUILD_GUIDE_STEP_IDS } from '../../game/data/progression';
 import { CHAIN_REPLAY_TIER_BY_ID } from '../../game/data/chainReplay';
 import { describeMods, formatGold, formatNumber, pct } from '../../game/util';
 import { GuildHallCategory } from '../../game/types';
@@ -78,6 +78,17 @@ const CATEGORY_FG: Record<GuildHallCategory, string> = {
   Unlocks: 'var(--violet)',
   Quests: 'var(--brass)',
   Raids: 'var(--blood)',
+};
+
+/** Patch 0475 -- one line of "why this, now" per advice step (ids and
+ *  order: GUILD_GUIDE_STEP_IDS in progression.ts). */
+const GUILD_GUIDE_WHY: Record<(typeof GUILD_GUIDE_STEP_IDS)[number], string> = {
+  treasury: 'More gold from every quest, and room to keep it.',
+  tavern: 'A second hero slot. Fill it from the Heroes tab.',
+  physicians_charity: 'One free injury treatment every day.',
+  barracks: 'Better odds on every contract, for every hero.',
+  auto_chain: 'Heroes keep taking the next contract on their own.',
+  raid_charter: 'Opens raids. Worth it once a few heroes are ready.',
 };
 
 const FILTERS: ('All' | GuildHallCategory)[] = ['All', 'Combat', 'Economy', 'Roster', 'Care', 'Unlocks', 'Quests', 'Raids'];
@@ -176,9 +187,12 @@ function upgradeEntries(
  * first, unchanged from before.
  */
 function GuildUpgradeRow({
-  row, beat, highlighted, onDismissHighlight,
+  row, beat, highlighted, onDismissHighlight, pinned,
 }: {
   row: RowData;
+  /** Patch 0475 -- this is the pinned "Needed for ..." row: the ring
+   *  stays on for as long as it is pinned. */
+  pinned?: boolean;
   /** Patch 0420 -- this row's purchase beat, if one is playing (see
    *  usePurchaseBeats in purchaseFx.tsx). Replaces the old level-number
    *  pulse and MaxFlash star burst. */
@@ -209,7 +223,7 @@ function GuildUpgradeRow({
   return (
     <div
       ref={rowRef}
-      className={`guild-upgrade-row ${beatClass} ${highlighted ? 'card requirement-highlight' : ''} ${canBuyNow ? 'amb-afford' : ''}`}
+      className={`guild-upgrade-row ${beatClass} ${highlighted || pinned ? 'card requirement-highlight' : ''} ${pinned ? 'guild-row-pinned' : ''} ${canBuyNow ? 'amb-afford' : ''}`}
       style={canBuyNow ? ambPhase(row.name, 4) : undefined}
       onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
       role="button"
@@ -284,10 +298,27 @@ export function GuildPanel() {
   // "Fund the Guild" modal -- unchanged.
   const [fundingOpen, setFundingOpen] = useState(false);
 
-  // "Jump to and highlight the requirement" landing -- unchanged.
-  const [highlightId, setHighlightId] = useState<string | null>(
-    () => engine.consumeRequestedHighlight(),
-  );
+  // Patch 0475 -- a link from something the player was blocked on carries
+  // a reason ("recruiting the Knight"). That landing is pinned: the row is
+  // lifted to the top under a banner saying what it is needed for and how
+  // much gold is missing, the rest of the list dims, and it stays until
+  // the purchase is made or the banner is dismissed. Also set directly by
+  // the advice card's "Show me". Must read the reason before the
+  // highlight id is consumed just below.
+  const [pin, setPin] = useState<{ id: string; text: string } | null>(() => {
+    const reason = engine.consumeRequestedReason();
+    const id = engine.requestedHighlightId;
+    return reason && id ? { id, text: `Needed for ${reason}` } : null;
+  });
+  const pinStartLevel = useRef<number | null>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
+
+  // "Jump to and highlight the requirement" landing -- the brief ring, for
+  // links with no reason (a notification's Go-to button).
+  const [highlightId, setHighlightId] = useState<string | null>(() => {
+    const id = engine.consumeRequestedHighlight();
+    return pin ? null : id;
+  });
   useEffect(() => {
     if (!highlightId) return undefined;
     const timer = window.setTimeout(() => setHighlightId(null), 4000);
@@ -467,6 +498,38 @@ export function GuildPanel() {
   const builtPulse = usePulsesOnChange([{ id: 'built', value: built.length }]).built;
   const exchangeJustUnlocked = useJustUnlocked('renownExchange', state.goldRenownExchangeUnlocked);
   const builtHasHighlight = built.some((r) => r.id === highlightId);
+
+  // Patch 0475 -- the pinned row, pulled out of the main list while pinned.
+  const pinRow = pin ? rows.find((r) => r.id === pin.id && (!r.maxed || !!beats[r.id])) : undefined;
+  useEffect(() => {
+    if (!pin) { pinStartLevel.current = null; return; }
+    const row = rows.find((r) => r.id === pin.id);
+    // Nothing to pin (unknown id, or already fully bought): fall back to
+    // the ring, which also opens the Built section onto it.
+    if (!row || (row.maxed && !beats[row.id] && pinStartLevel.current === null)) {
+      setHighlightId(pin.id);
+      setPin(null);
+      return;
+    }
+    if (pinStartLevel.current === null) pinStartLevel.current = row.level;
+    // Bought: let the purchase beat finish, then let go.
+    else if (row.level > pinStartLevel.current && !beats[row.id]) setPin(null);
+  });
+  useEffect(() => {
+    if (pin) pinRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [pin?.id]);
+  const pinGap = pinRow && !pinRow.demoLocked && pinRow.cost !== null
+    ? (state.gold >= pinRow.cost ? { text: 'You can afford this now', ok: true } : { text: `${formatGold(pinRow.cost - state.gold)} more gold needed`, ok: false })
+    : null;
+
+  // Patch 0475 -- "Advice from the Guildmaster": a new guild lands here
+  // with 50 gold and 30-odd rows. One recommended purchase at a time.
+  const guideSteps = GUILD_GUIDE_STEP_IDS
+    .map((id) => ({ id, why: GUILD_GUIDE_WHY[id], row: rows.find((r) => r.id === id) }))
+    .filter((s): s is { id: typeof s.id; why: string; row: RowData } => !!s.row);
+  const guideNext = guideSteps.find((s) => s.row.level < 1);
+  const guideDone = guideSteps.filter((s) => s.row.level >= 1).length;
+  const showGuide = !state.guildGuideDismissed && !!guideNext;
   const builtExpanded = showBuilt || builtHasHighlight;
 
   if (customizing) {
@@ -525,6 +588,54 @@ export function GuildPanel() {
         </div>
       </div>
 
+      {showGuide && guideNext && (
+        <div className="card guild-guide">
+          <div className="guild-guide-head">
+            <span className="card-title">Advice from the Guildmaster</span>
+            <span className="guild-guide-count">{guideDone} of {guideSteps.length} done</span>
+            <span style={{ flex: 1 }} />
+            <button className="btn-ghost guild-guide-hide" onClick={() => engine.dismissGuildGuide()} title="Hide this for good">
+              Hide advice
+            </button>
+          </div>
+          <div className="guild-guide-steps">
+            {guideSteps.map((s, i) => (
+              <span
+                key={s.id}
+                className={`guild-guide-step ${s.row.level >= 1 ? 'done' : ''} ${s === guideNext ? 'next' : ''}`}
+              >
+                <b>{s.row.level >= 1 ? '✓' : i + 1}</b>{s.row.name}
+              </span>
+            ))}
+          </div>
+          <div className="guild-guide-next">
+            <span className="guild-guide-next-text">
+              <b>Next: {guideNext.row.name}</b>
+              {guideNext.row.cost !== null && <span className="gold-text"> · {formatGold(guideNext.row.cost)} gold</span>}
+              <span className="muted"> · {guideNext.why}</span>
+            </span>
+            <button
+              className="btn-primary"
+              onClick={() => { pinStartLevel.current = null; setFilter('All'); setPin({ id: guideNext.id, text: 'The Guildmaster recommends this next' }); }}
+            >
+              Show me
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pin && pinRow && (
+        <div className="guild-pin" ref={pinRef}>
+          <div className="guild-pin-head">
+            <span className="guild-pin-text">{pin.text}</span>
+            {pinGap && <span className={`guild-pin-gap ${pinGap.ok ? 'good' : 'bad'}`}>{pinGap.text}</span>}
+            <span style={{ flex: 1 }} />
+            <button className="btn-ghost guild-pin-close" onClick={() => setPin(null)} aria-label="Dismiss" title="Dismiss">✕</button>
+          </div>
+          <GuildUpgradeRow row={pinRow} beat={beats[pinRow.id]} pinned />
+        </div>
+      )}
+
       <div className="guild-filter-bar">
         {FILTERS.map((f) => (
           <button
@@ -541,8 +652,8 @@ export function GuildPanel() {
         </span>
       </div>
 
-      <div className="guild-upgrade-list">
-        {active.map((row) => (
+      <div className={`guild-upgrade-list ${pinRow ? 'dimmed' : ''}`}>
+        {active.filter((row) => row.id !== pinRow?.id).map((row) => (
           <GuildUpgradeRow
             key={row.id}
             row={row}

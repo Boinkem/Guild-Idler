@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useEngine } from '../useEngine';
+import { PrereqLink } from '../PrereqLink';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 import { GameEngine } from '../../game/engine';
@@ -1353,6 +1354,10 @@ export function EquipmentPanel() {
         <button className={`btn-primary ${anyBroken && !rpFx ? 'amb-warm' : ''}`} onClick={(e) => runRepair(() => engine.repairAll(), e.currentTarget)} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
           Repair everything · {formatGold(repairBill)} + {repairScrapBill} Scrap{repairShardBill > 0 ? ` + ${shardLabel(repairShardBill)}` : ''}
         </button>
+        {/* Patch 0475 -- Smith's Charity waives a repair a day per level. */}
+        {repairBill > 0 && (
+          <PrereqLink id="smiths_charity" reason="free repairs each day" style={{ marginLeft: 6 }}>Free repairs →</PrereqLink>
+        )}
       </div>
 
       {/* Per-hero summary of currently-active set bonuses -- lets someone
@@ -1409,6 +1414,9 @@ export function EquipmentPanel() {
         <div className="section-heading" style={{ marginBottom: 0 }}>
           Consumable Slots ({(hero.equippedConsumables ?? []).length}/{ModifierManager.consumableSlots(state)})
         </div>
+        <span style={{ flex: 1 }} />
+        {/* Patch 0475 -- more slots come from Potion Belt. */}
+        <PrereqLink id="potion_belt" reason="another consumable slot" style={{ marginRight: 6 }}>More slots →</PrereqLink>
         {(hero.equippedConsumables ?? []).length < ModifierManager.consumableSlots(state) && (
           <button
             className="btn-green"

@@ -109,7 +109,7 @@ export function NotificationBanner() {
   };
 
   const handleClick = () => {
-    if (shown.targetTab) engine.requestTab(shown.targetTab, undefined, shown.targetSubTab);
+    if (shown.targetTab) engine.requestTab(shown.targetTab, shown.targetHighlightId, shown.targetSubTab);
     acknowledge();
   };
 

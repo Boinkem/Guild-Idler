@@ -357,7 +357,7 @@ function DifficultyCircle({
         <button
           className="btn-ghost"
           style={{ fontSize: '0.5625rem', padding: '1px 4px', minHeight: 0 }}
-          onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID[difficulty])}
+          onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID[difficulty], undefined, `${RAID_DIFFICULTY_LABEL[difficulty]} raids`)}
           title={`Go to the Guild Hall -- ${DIFFICULTY_UNLOCK_LABEL[difficulty]}`}
         >
           Unlock →
@@ -974,7 +974,7 @@ export function RaidsPanel() {
         </div>
         <button
           className="btn-primary"
-          onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID.normal)}
+          onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID.normal, undefined, 'raids')}
         >
           Go to Guild Hall →
         </button>

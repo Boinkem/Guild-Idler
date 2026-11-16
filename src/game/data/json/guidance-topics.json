@@ -26,14 +26,16 @@
     "messages": [
       "Every hero slot is full. Recruiting costs gold, but the slots themselves come from Guild Hall upgrades or a Renown perk."
     ],
-    "targetTab": "guild"
+    "targetTab": "guild",
+    "highlightId": "tavern"
   },
   {
     "id": "auto_chain_affordable",
     "messages": [
       "Enough gold for Auto-Chain now -- a hero can keep taking the next contract on their own for a while, instead of waiting for fresh orders each time."
     ],
-    "targetTab": "guild"
+    "targetTab": "guild",
+    "highlightId": "auto_chain"
   },
   {
     "id": "raids_unlocked",

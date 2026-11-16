@@ -23,6 +23,9 @@ export interface GuidanceTopic {
    *  up (toast is transient either way; the Guide's Notifications log is
    *  where this actually matters, since those entries are permanent). */
   targetTab?: string;
+  /** Patch 0475 -- a Guild Hall row for the notification's Go-to button
+   *  to ring on arrival. */
+  highlightId?: string;
 }
 
 // Lives in json/guidance-topics.json (devtool-editable, new

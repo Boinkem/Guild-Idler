@@ -81,7 +81,7 @@ export function AuctionHousePanel() {
           </div>
           <button
             className="btn-primary"
-            onClick={() => engine.requestTab('guild', 'auction_house_charter')}
+            onClick={() => engine.requestTab('guild', 'auction_house_charter', undefined, 'the Auction House')}
           >
             Go to Guild Hall →
           </button>

@@ -255,6 +255,14 @@ export class GameEngine {
    * every existing call site keeps working unchanged.
    */
   requestedHighlightId: string | null = null;
+  /**
+   * Patch 0475 -- why the player was sent to `requestedHighlightId`, when
+   * the link came from something they were blocked on ("recruiting the
+   * Knight", "another pet slot"). Its presence is what turns the landing
+   * from the brief ring into the Guild Hall's pinned "Needed for ..."
+   * treatment. Same transient, consume-once shape.
+   */
+  requestedReason: string | null = null;
 
   private listeners = new Set<Listener>();
   private timer: number | null = null;
@@ -459,15 +467,16 @@ export class GameEngine {
    *  top of the ordinary Toast every archived message already gets --
    *  see NotificationEntry.banner's own comment for why this exists and
    *  defaults false. */
-  private archive(message: string, targetTab?: string, banner = false, targetSubTab?: string) {
+  private archive(message: string, targetTab?: string, banner = false, targetSubTab?: string, targetHighlightId?: string) {
     this.state.notifications.unshift({
       id: uid('note'), message, timestamp: Date.now(), targetTab, banner, targetSubTab,
+      ...(targetHighlightId ? { targetHighlightId } : {}),
     });
     if (this.state.notifications.length > 100) this.state.notifications.length = 100;
   }
 
-  private say(message: string, targetTab?: string, banner = false, targetSubTab?: string) {
-    this.archive(message, targetTab, banner, targetSubTab);
+  private say(message: string, targetTab?: string, banner = false, targetSubTab?: string, targetHighlightId?: string) {
+    this.archive(message, targetTab, banner, targetSubTab, targetHighlightId);
     // Reuses `banner` as the "this deserves more reading time" signal
     // too, rather than a separate parameter -- banner already means
     // "significant enough for the top NotificationBanner + nav shimmer,"
@@ -549,7 +558,7 @@ export class GameEngine {
         this.say("You've got enough gold to recruit a second hero -- and the Guild Hall has upgrades that help every hero at once, worth a look as gold piles up.", topic.targetTab, true);
         continue;
       }
-      for (const message of topic.messages) this.say(message, topic.targetTab, true);
+      for (const message of topic.messages) this.say(message, topic.targetTab, true, undefined, topic.highlightId);
     }
   }
 
@@ -2099,9 +2108,10 @@ export class GameEngine {
    * patch 0191's per-vendor/per-sub-tab notification targeting is that
    * second (and third through sixth) panel.
    */
-  requestTab(id: string, highlightId?: string, subTab?: string) {
+  requestTab(id: string, highlightId?: string, subTab?: string, reason?: string) {
     this.requestedTab = id;
     this.requestedHighlightId = highlightId ?? null;
+    this.requestedReason = highlightId ? reason ?? null : null;
     this.requestedSubTab = subTab ?? null;
     // Needed so MenuWindow can react to a request made while it's already
     // mounted (e.g. a Guide notification's "Go to" button), not just pick
@@ -2124,6 +2134,21 @@ export class GameEngine {
     const id = this.requestedHighlightId;
     this.requestedHighlightId = null;
     return id;
+  }
+
+  /** Reads and clears the reason that came with the highlight request, if
+   *  any -- see requestedReason. Call BEFORE consumeRequestedHighlight. */
+  consumeRequestedReason(): string | null {
+    const reason = this.requestedReason;
+    this.requestedReason = null;
+    return reason;
+  }
+
+  /** Patch 0475 -- hides the Guild Hall's advice card for good. */
+  dismissGuildGuide() {
+    this.state.guildGuideDismissed = true;
+    this.notify();
+    void this.saveNow();
   }
 
   /**
@@ -4191,7 +4216,7 @@ export class GameEngine {
     // instead of a generic "no room" -- this is exactly the kind of thing
     // a player new to the systems wouldn't otherwise know to go looking for.
     if (this.state.heroes.length >= this.heroSlots) {
-      return this.say("The guild is out of hero slots. Expand the roster via Guild Hall upgrades or a Renown perk.", 'guild');
+      return this.say("The guild is out of hero slots. Expand the roster via Guild Hall upgrades or a Renown perk.", 'guild', false, undefined, 'tavern');
     }
     const error = GuildManager.recruit(this.state, heroClass, createRng(uid('recruit')));
     if (error) return this.say(error);

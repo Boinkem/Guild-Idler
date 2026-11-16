@@ -1239,7 +1239,7 @@ function BlackMarketStock({ now }: { now: number }) {
          *  other Guild Hall upgrade by hand. */}
         <button
           className="btn-ghost"
-          onClick={() => engine.requestTab('guild', 'black_market_contact')}
+          onClick={() => engine.requestTab('guild', 'black_market_contact', undefined, 'the Black Market')}
         >
           Go to Guild Hall →
         </button>

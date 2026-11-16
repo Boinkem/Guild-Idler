@@ -521,7 +521,7 @@ function HeroesRosterView() {
             {/* Patch 0466 -- each glows only while its upgrade is affordable. */}
             <button
               className={`btn-primary ${tavernAffordable ? 'amb-warm' : ''}`}
-              onClick={() => engine.requestTab('guild', 'tavern')}
+              onClick={() => engine.requestTab('guild', 'tavern', undefined, 'a free hero slot')}
             >
               Go to Tavern →
             </button>
@@ -667,7 +667,7 @@ function HeroesRosterView() {
                 <button
                   className="btn-ghost"
                   style={{ width: '100%', marginTop: 10, fontSize: '0.6875rem' }}
-                  onClick={() => { setSelectedRecruitId(null); engine.requestTab('guild', 'tavern'); }}
+                  onClick={() => { setSelectedRecruitId(null); engine.requestTab('guild', 'tavern', undefined, `recruiting the ${def.name}`); }}
                 >
                   Go to Tavern →
                 </button>
@@ -690,7 +690,7 @@ function HeroesRosterView() {
                   <button
                     className="btn-primary"
                     style={{ flex: 1, fontSize: '0.6875rem' }}
-                    onClick={() => { setSelectedRecruitId(null); engine.requestTab('guild', 'tavern'); }}
+                    onClick={() => { setSelectedRecruitId(null); engine.requestTab('guild', 'tavern', undefined, 'a free hero slot'); }}
                   >
                     Go to Tavern →
                   </button>

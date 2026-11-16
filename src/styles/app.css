@@ -741,6 +741,67 @@
 
 /* The main two-column row list -- shared by both the active list and the
    expanded built section below. */
+/* ---- Patch 0475: pinned requirement, advice card, prereq links ---- */
+/* Landing from a blocked purchase: the needed row sits here, above the
+   list, until it is bought or dismissed. See GuildPanel's `pin`. */
+.guild-pin {
+  margin: 0 0 12px; padding: 8px 10px 10px; border-radius: 10px;
+  max-width: 742px; /* .card's 720px cap plus this frame's padding */
+  border: 1px solid var(--brass);
+  background: color-mix(in srgb, var(--brass) 12%, var(--panel));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brass) 22%, transparent), 0 10px 26px rgba(0, 0, 0, 0.5);
+  animation: guild-pin-in 420ms cubic-bezier(.2, 1.3, .4, 1) both, guild-pin-glow 2.4s ease-in-out 420ms infinite;
+}
+@keyframes guild-pin-in { from { opacity: 0; transform: translateY(-10px) scale(.98); } }
+@keyframes guild-pin-glow {
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--brass) 30%, transparent), 0 10px 26px rgba(0, 0, 0, 0.5); }
+}
+.guild-pin-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.guild-pin-text { font-family: var(--font-display); font-size: 0.875rem; color: var(--brass); }
+.guild-pin-text::before { content: '▼ '; font-size: 0.6rem; }
+.guild-pin-gap { font-size: 0.6875rem; font-weight: 700; }
+.guild-pin-close { min-height: 22px; padding: 0 8px; font-size: 0.6875rem; }
+.guild-pin .guild-upgrade-row.guild-row-pinned { margin: 0; border-bottom: 0; }
+.guild-upgrade-list.dimmed .guild-upgrade-row { opacity: .4; filter: saturate(.6); transition: opacity 200ms ease, filter 200ms ease; }
+/* Per row, not the whole list: the pointer usually lands over the list. */
+.guild-upgrade-list.dimmed .guild-upgrade-row:hover { opacity: 1; filter: none; }
+@media (prefers-reduced-motion: reduce) { .guild-pin { animation: none; } }
+
+.guild-guide { margin-bottom: 12px; border-left: 3px solid var(--moss); }
+.guild-guide-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.guild-guide-count { font-size: 0.625rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.guild-guide-hide { min-height: 22px; padding: 2px 8px; font-size: 0.625rem; }
+.guild-guide-steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.guild-guide-step {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 3px; border-radius: 999px;
+  font-size: 0.6875rem; color: var(--muted); border: 1px solid var(--panel-3); background: var(--panel-2);
+}
+.guild-guide-step b {
+  display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
+  font-size: 0.5625rem; background: var(--panel-3); color: var(--parchment);
+}
+.guild-guide-step.done { color: var(--moss); border-color: color-mix(in srgb, var(--moss) 50%, var(--panel-3)); }
+.guild-guide-step.done b { background: var(--moss); color: var(--ink); }
+.guild-guide-step.next { color: var(--parchment); border-color: var(--brass); }
+.guild-guide-step.next b { background: var(--brass); color: var(--ink); }
+.guild-guide-next { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.guild-guide-next-text { flex: 1; min-width: 200px; font-size: 0.75rem; }
+
+/* PrereqLink.tsx -- the small "this is bought in the Guild Hall" link. */
+.btn-ghost.prereq-link {
+  min-height: 22px; padding: 2px 9px; font-size: 0.625rem; white-space: nowrap;
+  color: var(--brass); border: 1px dashed color-mix(in srgb, var(--brass) 55%, transparent);
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+.btn-ghost.prereq-link:hover { border-style: solid; background: color-mix(in srgb, var(--brass) 12%, transparent); }
+.prereq-hint {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; padding: 5px 10px;
+  border-radius: 6px; font-size: 0.6875rem; color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 80%, transparent); border: 1px solid var(--panel-3);
+}
+.prereq-hint > span { flex: 1; min-width: 200px; }
+.resources .gold.gold-cap-link { cursor: pointer; }
+
 .guild-upgrade-list {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -8,6 +8,7 @@ import { rerollsUsedToday } from '../game/data/reroll';
 import { HERO_CLASSES, infirmaryAutoReviveUnlocked, statResetCost } from '../game/data/progression';
 import { Tuning } from '../game/data/tuning';
 import { Hero } from '../game/types';
+import { PrereqLink } from './PrereqLink';
 import { describeMods, formatDuration, formatGold, formatNumber, HOUR } from '../game/util';
 import { HeroSprite } from './sprites/HeroSprite';
 import { LiveryPicker } from './Wardrobe';
@@ -315,6 +316,11 @@ export function HeroBlock({
                   </div>
                 </div>
               ))}
+              {/* Patch 0475 -- paying for treatment / revival: the Guild
+                  Hall purchases that waive or cut it. */}
+              {hero.injuries.length > 0 && !freeTreat && (
+                <PrereqLink id="physicians_charity" reason="free treatment each day" style={{ width: '100%' }}>Free treatment →</PrereqLink>
+              )}
               {fallen && (
                 <div className="hero-block-injury-compact">
                   <div className="tiny muted">
@@ -329,6 +335,7 @@ export function HeroBlock({
                   >
                     Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
                   </button>
+                  <PrereqLink id="undertakers_favor" reason="cheaper revivals" style={{ width: '100%', marginTop: 4 }}>Cheaper revivals →</PrereqLink>
                 </div>
               )}
             </div>

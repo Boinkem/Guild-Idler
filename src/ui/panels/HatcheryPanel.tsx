@@ -130,7 +130,7 @@ function NestsTab() {
       <button
         className="btn-primary"
         style={{ marginBottom: 10, fontSize: '0.6875rem' }}
-        onClick={() => engine.requestTab('guild', 'nest_expansion')}
+        onClick={() => engine.requestTab('guild', 'nest_expansion', undefined, 'another incubation slot')}
       >
         Go to Guild Hall →
       </button>
@@ -238,7 +238,7 @@ function PetsTab() {
       <button
         className="btn-primary"
         style={{ marginBottom: 10, fontSize: '0.6875rem' }}
-        onClick={() => engine.requestTab('guild', 'companion_bond')}
+        onClick={() => engine.requestTab('guild', 'companion_bond', undefined, 'another pet slot')}
       >
         Go to Guild Hall →
       </button>
