@@ -501,7 +501,13 @@ export const ShopManager = {
       if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) return false;
-      if (item.customMods && def.rarity !== 'common') return false;
+      // Patch 0472 -- was `item.customMods`, which is ALSO set on every
+      // level-scaled hand-authored drop that has a Health/Durability mod
+      // (see EquipmentManager.instantiate), so dropped Uncommon/Rare
+      // armour was being treated as crafted and never sold. The def's
+      // own `craftable` flag is the real "this came from Crafting" mark
+      // (every recipe's result def sets it; nothing else can drop one).
+      if (def.craftable && def.rarity !== 'common') return false;
       return RARITY_ORDER.indexOf(def.rarity) <= maxIndex;
     });
     if (toSell.length === 0) return { count: 0, gold: 0 };

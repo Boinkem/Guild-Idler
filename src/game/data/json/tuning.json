@@ -486,10 +486,10 @@
     "id": "harvest.sellPricePerUnit",
     "label": "Harvest: sell price per unit",
     "category": "harvest",
-    "value": 0.1,
-    "default": 0.1,
+    "value": 1,
+    "default": 1,
     "min": 0,
-    "description": "Flat gold per material unit sold, once Trade Route is unlocked. Deliberately cheap -- selling is a minor top-up for excess, capped hard by harvest.traderRegenTimeMs, not meant to compete with questing."
+    "description": "Flat gold per material unit sold, once Trade Route is unlocked (patch 0472: 1, up from 0.1 -- a 10-unit sale now nets 10 gold, not 1). Still cheap -- selling is a minor top-up for excess, capped hard by harvest.traderRegenTimeMs, not meant to compete with questing."
   },
   {
     "id": "harvest.traderRegenTimeMs",

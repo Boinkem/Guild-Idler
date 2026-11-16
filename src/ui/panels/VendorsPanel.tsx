@@ -667,7 +667,12 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
     if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return false;
-    if (item.customMods && def.rarity !== 'common') return false;
+    // Patch 0472 -- "crafted" is the def's own `craftable` flag, not
+    // `item.customMods`: every hand-authored drop with a Health/
+    // Durability mod carries customMods too (EquipmentManager.instantiate
+    // writes the level-scaled pair there), so the old check silently
+    // protected ordinary dropped armour above Common from Scrap All.
+    if (def.craftable && def.rarity !== 'common') return false;
     return RARITY_ORDER.indexOf(def.rarity) <= scrapMaxIndex;
   });
   const scrapPreviewTotal = scrapPreview.reduce((sum, item) => sum + EquipmentManager.scrapValue(item, scrapBonus), 0);
@@ -718,7 +723,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
     if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return false;
-    if (item.customMods && def.rarity !== 'common') return false;
+    if (def.craftable && def.rarity !== 'common') return false; // patch 0472, see scrapPreview above
     return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
   });
   const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
@@ -1203,6 +1208,7 @@ function SuppliesStock() {
               def={def}
               price={price}
               canAfford={(amount) => state.gold >= price * amount}
+              maxAffordable={price > 0 ? Math.floor(state.gold / price) : 0}
               onBuy={(amount) => engine.buyConsumable(entry.defId, amount)}
             />
           );
@@ -1369,12 +1375,25 @@ function EquipmentShopCard({
   );
 }
 
+/** Patch 0472 -- the most of one consumable a single purchase can buy. */
+const BUY_QTY_MAX = 999;
+
 function ConsumableShopCard({
-  def, price, canAfford, onBuy,
+  def, price, canAfford, maxAffordable, onBuy,
 }: {
-  def: ConsumableDef | undefined; price: number; canAfford: (amount: number) => boolean; onBuy: (amount: number) => void;
+  def: ConsumableDef | undefined; price: number; canAfford: (amount: number) => boolean;
+  /** How many the guild's gold covers right now -- the Max preset. */
+  maxAffordable: number;
+  onBuy: (amount: number) => void;
 }) {
   const [showModal, setShowModal] = useState(false);
+  // Patch 0472 -- buy any amount: a typed quantity plus presets, one Buy
+  // button for the total (was fixed Buy / Buy x5 only). Kept as text so
+  // the field can be cleared while typing; `qty` is the parsed, clamped
+  // amount the button actually buys.
+  const [qtyText, setQtyText] = useState('1');
+  const qty = Math.max(1, Math.min(BUY_QTY_MAX, Math.floor(Number(qtyText)) || 1));
+  const maxQty = Math.max(1, Math.min(BUY_QTY_MAX, maxAffordable));
   if (!def) return null;
 
   return (
@@ -1382,10 +1401,10 @@ function ConsumableShopCard({
       <div
         className="card vendor-stock-card"
         style={{ marginBottom: 0 }}
-        onClick={() => setShowModal(true)}
+        onClick={() => { setQtyText('1'); setShowModal(true); }}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQtyText('1'); setShowModal(true); } }}
       >
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
@@ -1407,18 +1426,28 @@ function ConsumableShopCard({
                 <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
               </div>
               <p className="card-flavour">{def.description}</p>
+              {/* Alchemist stock (potions, charms) gets bought through
+                  repeatedly far more than gear does. Patch 0472: any
+                  amount in one purchase -- type it, or tap a preset. */}
+              <div className="buy-qty">
+                <span className="tiny muted">Amount</span>
+                <input
+                  type="number" min={1} max={BUY_QTY_MAX} step={1} inputMode="numeric"
+                  aria-label={`How many ${def.name} to buy`}
+                  value={qtyText}
+                  onChange={(e) => setQtyText(e.target.value)}
+                  onBlur={() => setQtyText(String(qty))}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && canAfford(qty)) { onBuy(qty); setShowModal(false); } }}
+                />
+                {[1, 5, 25, 100].map((n) => (
+                  <button key={n} className={`btn-ghost ${qty === n ? 'on' : ''}`} onClick={() => setQtyText(String(n))}>×{n}</button>
+                ))}
+                <button className="btn-ghost" disabled={maxAffordable < 1} onClick={() => setQtyText(String(maxQty))} title="As many as the guild's gold covers">Max</button>
+              </div>
               <div className="row end" style={{ gap: 8, marginTop: 8 }}>
                 <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
-                <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
-                  Buy · {formatGold(price)}
-                </button>
-                {/* Alchemist stock (potions, charms) gets bought through
-                    repeatedly far more than gear does -- a x5 button here
-                    cuts five separate clicks (open modal, buy, close,
-                    repeat) down to one, on the item people actually stock
-                    up on. */}
-                <button className="btn-primary" disabled={!canAfford(5)} onClick={() => { onBuy(5); setShowModal(false); }}>
-                  Buy ×5 · {formatGold(price * 5)}
+                <button className="btn-primary" disabled={!canAfford(qty)} onClick={() => { onBuy(qty); setShowModal(false); }}>
+                  Buy{qty > 1 ? ` ×${qty}` : ''} · {formatGold(price * qty)}
                 </button>
               </div>
             </div>

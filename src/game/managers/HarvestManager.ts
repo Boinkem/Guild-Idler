@@ -133,7 +133,13 @@ export const HarvestManager = {
     const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
     const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
     const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
-    return expectedRatePerHour(tier, 'gold', topLevel);
+    // Patch 0472 -- never less than one 10-unit sale is worth. A sale the
+    // reserve can't cover is blocked outright (see sell()), and at the new
+    // 1 gold/unit price a low-level guild's quest-tier rate (4 gold at
+    // level 1, 7 at level 5) sits under the 10 gold a single sale costs,
+    // which would have left the trader unable to ever buy anything.
+    const oneSale = Math.floor(10 * Tuning.get('harvest.sellPricePerUnit'));
+    return Math.max(expectedRatePerHour(tier, 'gold', topLevel), oneSale);
   },
 
   /**
@@ -179,7 +185,7 @@ export const HarvestManager = {
 
   /**
    * Sells `amount` of one material at Trade Route -- flat
-   * harvest.sellPricePerUnit (0.1 by default; materials are cheap
+   * harvest.sellPricePerUnit (1 by default, patch 0472; materials are cheap
    * individually on purpose, selling excess is meant to be a minor
    * convenience next to actually questing, not a competing income
    * source). Blocks the ENTIRE sale, materials untouched, if the

@@ -756,6 +756,8 @@ export function QuestPanel() {
     if (pendingRecallHeroId) engine.recallHero(pendingRecallHeroId);
     setPendingRecallHeroId(null);
   };
+  // Patch 0472 -- Recall All: the same confirm, for every active contract.
+  const [pendingRecallAll, setPendingRecallAll] = useState(false);
 
   // Roster-wide count of heroes not currently questing -- drives the "Send
   // All Idle" button (see engine.sendAllIdle). Doesn't check whether each
@@ -875,6 +877,7 @@ export function QuestPanel() {
           now={now}
           onPickAnother={(heroId) => { setSelectedHeroId(heroId); setSubTab('contracts'); }}
           onRecall={recall}
+          onRecallAll={() => setPendingRecallAll(true)}
           onQuickSend={(hero, offer) => engine.startQuest(hero.id, offer, [], false, true)}
         />
       )}
@@ -891,6 +894,17 @@ export function QuestPanel() {
           to scroll past their own pick to find it. */}
       <div className="spread" style={{ alignItems: 'center' }}>
         <div className="section-heading" style={{ marginBottom: 0 }}>Heroes</div>
+        <span style={{ flex: 1 }} />
+        {state.activeQuests.length > 0 && (
+          <button
+            className="btn-ghost"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem', marginRight: 6 }}
+            onClick={() => setPendingRecallAll(true)}
+            title="Cancel every active contract and bring those heroes home. Rewards are forfeited."
+          >
+            Recall All ({state.activeQuests.length})
+          </button>
+        )}
         {idleCount > 0 && (
           <button
             className="btn-green"
@@ -1122,6 +1136,16 @@ export function QuestPanel() {
           cancelLabel="Keep going"
           onConfirm={confirmRecall}
           onCancel={() => setPendingRecallHeroId(null)}
+        />
+      )}
+      {pendingRecallAll && (
+        <ConfirmModal
+          title="Recall all heroes"
+          message={`Cancel ${state.activeQuests.length === 1 ? 'the 1 active contract' : `all ${state.activeQuests.length} active contracts`} and bring everyone home? Every reward is forfeited, and any Auto-Chain streak stops. A raid in progress is not affected.`}
+          confirmLabel="Recall All"
+          cancelLabel="Keep going"
+          onConfirm={() => { engine.recallAllHeroes(); setPendingRecallAll(false); }}
+          onCancel={() => setPendingRecallAll(false)}
         />
       )}
       </div>

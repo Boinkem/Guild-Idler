@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useEngine } from './useEngine';
 import { HERO_CLASSES, SKINS, SKIN_BY_ID } from '../game/data/progression';
@@ -80,6 +80,40 @@ function Dropdown({ button, disabled, label, onClose, className, menuClass, chil
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const close = () => { setOpen(false); closeRef.current?.(); };
+  // Patch 0472 -- the menu used to always hang below its button at up to
+  // 340px. The Tint picker sits at the bottom of the Wardrobe card, so
+  // most of its list fell past the edge of the panel, where it was cut
+  // off and could not be scrolled to. On open, measure the room above and
+  // below inside whatever actually clips the menu (nearest scrolling/
+  // clipping ancestor, and the window), open towards the bigger side, and
+  // cap the height to that room so the menu's own scrollbar reaches every
+  // row.
+  const [place, setPlace] = useState<{ up: boolean; maxHeight: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) { setPlace(null); return; }
+    const measure = () => {
+      const el = ref.current;
+      if (!el) return;
+      const btn = el.getBoundingClientRect();
+      let top = 0;
+      let bottom = window.innerHeight;
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        const oy = getComputedStyle(p).overflowY;
+        if (oy !== 'visible') {
+          const r = p.getBoundingClientRect();
+          top = Math.max(top, r.top);
+          bottom = Math.min(bottom, r.bottom);
+        }
+      }
+      const below = bottom - btn.bottom - 12;
+      const above = btn.top - top - 12;
+      const up = below < 200 && above > below;
+      setPlace({ up, maxHeight: Math.max(96, Math.min(340, up ? above : below)) });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) { setOpen(false); closeRef.current?.(); } };
@@ -102,7 +136,15 @@ function Dropdown({ button, disabled, label, onClose, className, menuClass, chil
         {button}
         <span className="wdr-car" aria-hidden="true">▾</span>
       </button>
-      {open && !disabled && <div className={`wdr-menu ${menuClass ?? ''}`} role="listbox">{children(close)}</div>}
+      {open && !disabled && (
+        <div
+          className={`wdr-menu ${place?.up ? 'up' : ''} ${menuClass ?? ''}`}
+          role="listbox"
+          style={place ? { maxHeight: place.maxHeight } : undefined}
+        >
+          {children(close)}
+        </div>
+      )}
     </div>
   );
 }

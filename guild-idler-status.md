@@ -38043,3 +38043,98 @@ points" badge). The brass tint was the problem: it matches the gold
 "affordable / act on this" glows, so it read as a points hint. Retinted
 to `--sky` at 9% (was brass 12%), band narrowed, 4.5s -> 7s. Not checked
 in the Electron app.
+
+### Raid heroes on the Overview, bulk sell fix, buy any amount, Recall All (patch 0472)
+```discord-update
+Dev Update | Patch 0472
+
+- Fixed heroes who are away on a raid showing as "Ready" with a Quick Send on the Quest Board Overview
+- Fixed Sell Junk and Scrap All skipping most dropped Uncommon and Rare armour
+- Fixed the Wardrobe's Tint list being cut off so the lower tints could not be reached
+- Added buy any amount at the Alchemist: type a number, or tap ×5, ×25, ×100 or Max
+- Added Recall All to the Quest Board, to bring every hero home from their contracts at once
+- Changed materials to sell for 10 gold per 10 units on the Trade Route (was 1)
+```
+
+Direct feedback, six items.
+
+**Raid party on the Overview (`QuestOverview.tsx`).** `RaidManager.start`
+sets each party hero to `status: 'questing'` but a raid never creates an
+`activeQuest` (it lives in `state.activeRaid.heroIds`). The Overview
+picks a hero's lane by "has an activeQuest -> fallen -> injured -> else
+Ready", so raiders landed in Ready with a best-odds pick and a Quick
+Send (the send itself was refused by the engine; the lane was just
+wrong). New lane, checked before fallen: raid banner
+(`raidBannerSrc`), raid name, difficulty tag, party size, a progress bar
+off `activeRaid.startedAt/endsAt`, time left, and "Raids ->". The strip
+gets an "On a raid" count while one is running. Same fold IdleView's
+`busy` and HeroStatusBar's `onRaid` already do. The strip's Ready /
+Send All Idle counts were already right (they key off `status`).
+
+**Bulk sell / scrap skipping dropped armour (`ShopManager.ts`,
+`VendorsPanel.tsx`).** Sell Junk and Scrap All protect crafted gear
+above Common, and tested "crafted" as `item.customMods` being set. But
+since 0256/0382 `EquipmentManager.instantiate` also writes `customMods`
+on every level-scaled hand-authored drop whose def has a Health /
+Durability mod (the scaled pair replaces `def.mods`). 8 of the 13
+non-crafted chests and all 6 shields have one, so Steel Cuirass, Chainmail Hauberk, Cutpurse's Leathers,
+Steel Kite Shield etc. from any quest or raid tier were all treated as
+crafted and never swept up, whatever the threshold said. The drops
+themselves are fine: rarity, `[Hard]`-style source tag, rolled stats and
+item level are all set correctly, and single Sell / Scrap always worked.
+The test is now `def.craftable` in all three places
+(`sellBelowRarity`, `scrapPreview`, `junkPreview`) -- the same flag the
+Crafted pill uses. Checked: all 84 gear recipe results are `craftable`
+defs, and nothing else can produce one, so real crafted gear (Heirlooms
+included) is still protected above Common. Enchanted and Vault-locked
+items are still always skipped. Note for players: after this patch a
+"rare and below" Sell Junk will take dropped Rares it used to leave
+behind; buyback still covers a mis-sell.
+
+**Tint list cut off (`Wardrobe.tsx`, `app.css`).** The shared `Dropdown`
+always hung its menu below the button at up to 340px. The Tint picker is
+the last thing in the Wardrobe card, so the list ran past the bottom of
+the panel and the rows below the edge could not be scrolled to. On open
+it now measures the room above and below inside whatever clips it (every
+ancestor with non-visible `overflow-y`, and the window), opens upward
+(`.wdr-menu.up`) when there is under 200px below and more above, and
+sets `max-height` to the room on that side (96-340px) so the menu's own
+scrollbar reaches every row. Applies to the Class / Hero dropdowns and
+the hero card's LiveryPicker too, since they share the component.
+
+**Buy any amount (`VendorsPanel.tsx`, `app.css`).** `ConsumableShopCard`'s
+modal had fixed Buy and Buy x5 buttons. Now an Amount row (number field,
+×1 / ×5 / ×25 / ×100 presets, Max = what current gold covers) and one
+"Buy ×N · total" button; Enter in the field buys. Capped at
+`BUY_QTY_MAX` = 999 per purchase. The amount resets to 1 each time the
+modal opens. `engine.buyConsumable(defId, amount)` already took an
+amount; no engine change.
+
+**Recall All (`engine.ts`, `QuestOverview.tsx`, `QuestPanel.tsx`).** New
+`engine.recallAllHeroes()`: every active contract cancelled, same clean
+cut as `recallHero` per hero (no reward, no penalty, Auto-Chain streak
+and chain-stepping dropped), one toast, one save. Button "Recall All
+(N)" on the Overview strip and beside Send All Idle on Contracts, shown
+only while something is out, behind a ConfirmModal. Quests only: a raid
+has no recall and is left running (the confirm says so).
+
+**Material sell price (`tuning.json`, `HarvestManager.ts`).**
+`harvest.sellPricePerUnit` 0.1 -> 1 (value and default), so "Sell 10"
+nets 10 gold instead of 1. Read "10g per" as per 10-unit sale; if 10g
+per single unit was meant, set the tuning to 10. The trader's hourly
+reserve (`sellGoldPerHourTarget`, one hour of best-tier quest gold: 11
+at level 10, 25 at 20, 41 at 30, 81 at 50) is NOT raised, so gold per
+hour from selling is unchanged above about level 10 -- the same reserve
+is just emptied with a tenth of the materials. One guard added: the
+reserve is now never smaller than one 10-unit sale (10 gold), because a
+sale the reserve cannot cover is blocked outright and the quest-tier
+rate is under 10 below about level 10, which would have locked selling
+entirely. Open question for a later patch: whether the reserve should
+grow too.
+
+Verified: `tsc --noEmit` and the web build pass; a script run confirms
+level-scaled Steel Cuirass / Chainmail Hauberk / Cutpurse's Leathers now
+sell under "uncommon / rare and below" while a crafted Guildmade Blade
+stays, and a 10-unit material sale pays 10 gold. The UI changes (raid
+lane, Recall All, tint menu direction, amount row) were not checked in a
+running build or the Electron app.

@@ -8974,6 +8974,15 @@ button.harvest-item:hover {
   animation: wdr-open 160ms ease-out;
 }
 @keyframes wdr-open { from { opacity: 0; transform: translateY(-4px); } }
+/* Patch 0472 -- opens upward when there is no room below (Wardrobe.tsx's
+   Dropdown measures and sets this plus an inline max-height). */
+.wdr-menu.up { top: auto; bottom: calc(100% + 4px); animation-name: wdr-open-up; }
+@keyframes wdr-open-up { from { opacity: 0; transform: translateY(4px); } }
+/* Patch 0472 -- the Alchemist's buy-any-amount row (ConsumableShopCard). */
+.buy-qty { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.buy-qty input { width: 64px; min-height: 26px; text-align: center; font-variant-numeric: tabular-nums; }
+.buy-qty button { min-height: 26px; padding: 2px 9px; font-size: 0.6875rem; }
+.buy-qty button.on { border-color: var(--brass); color: var(--brass); }
 .wdr-mi {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px;
   padding: 4px 8px; background: transparent; border: 0; border-radius: 6px;

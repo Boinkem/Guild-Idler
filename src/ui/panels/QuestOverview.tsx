@@ -4,6 +4,7 @@ import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { DIFFICULTIES } from '../../game/data/quests';
+import { RAID_BY_ID, RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { HERO_CLASSES } from '../../game/data/progression';
 import { rerollsUsedToday } from '../../game/data/reroll';
 import type { ActiveQuest, Hero, QuestOffer } from '../../game/types';
@@ -12,6 +13,7 @@ import { HeroSprite } from '../sprites/HeroSprite';
 import { ambPhase } from '../ambient';
 import { questTagIconSrc, chainIconSrc } from './QuestPanel';
 import { heroPortraitSrc, heroPortraitStyle } from './HeroesPanel';
+import { raidBannerSrc } from './RaidsPanel';
 
 /**
  * Patch 0467 -- the Quest Board's Overview sub-tab (Design canvas
@@ -71,18 +73,27 @@ function Portrait({ hero, dim = false }: { hero: Hero; dim?: boolean }) {
 }
 
 export function QuestOverview({
-  now, onPickAnother, onRecall, onQuickSend,
+  now, onPickAnother, onRecall, onRecallAll, onQuickSend,
 }: {
   now: number;
   /** Open the Contracts sub-tab on this hero. */
   onPickAnother: (heroId: string) => void;
   onRecall: (heroId: string) => void;
+  /** Patch 0472 -- ask to recall every hero out on a contract. */
+  onRecallAll: () => void;
   onQuickSend: (hero: Hero, offer: QuestOffer) => void;
 }) {
   const engine = useEngine();
   const state = engine.state;
 
   const out = state.activeQuests;
+  // Patch 0472 -- a raid party is status 'questing' with no activeQuest of
+  // its own (state.activeRaid.heroIds tracks it), so those heroes fell
+  // through to the Ready lane with a live Quick Send. They get their own
+  // lane now, and count as out on the strip.
+  const raid = state.activeRaid;
+  const raidDef = raid ? RAID_BY_ID[raid.raidId] : undefined;
+  const raidHeroIds = new Set(raid?.heroIds ?? []);
   const idle = state.heroes.filter((h) => h.status !== 'questing' && h.status !== 'fallen');
   const recovering = state.heroes.filter((h) => h.status === 'fallen' || (h.status !== 'questing' && h.injuries.length > 0));
   const ready = idle.filter((h) => h.injuries.length === 0);
@@ -99,6 +110,7 @@ export function QuestOverview({
     <div className="qov">
       <div className="card qov-strip">
         <div className="qov-k"><b>{out.length}</b><span>On the road</span></div>
+        {raid && <div className="qov-k"><b>{raid.heroIds.length}</b><span>On a raid</span></div>}
         <div className="qov-k"><b className="good">{ready.length}</b><span>Ready for work</span></div>
         <div className="qov-k"><b className={recovering.length > 0 ? 'bad' : ''}>{recovering.length}</b><span>Recovering</span></div>
         {nextBack && (
@@ -111,6 +123,15 @@ export function QuestOverview({
           </div>
         )}
         <span style={{ flex: 1 }} />
+        {out.length > 0 && (
+          <button
+            className="btn-ghost"
+            onClick={onRecallAll}
+            title="Cancel every active contract and bring those heroes home. Rewards are forfeited."
+          >
+            Recall All ({out.length})
+          </button>
+        )}
         {idleCount > 0 && (
           <button
             className="btn-green"
@@ -125,6 +146,30 @@ export function QuestOverview({
       {state.heroes.map((hero) => {
         const quest = out.find((q) => q.heroId === hero.id);
         if (quest) return <RoadLane key={hero.id} hero={hero} quest={quest} now={now} onRecall={() => onRecall(hero.id)} />;
+        if (raid && raidHeroIds.has(hero.id)) {
+          const total = Math.max(1, raid.endsAt - raid.startedAt);
+          const progress = Math.min(100, ((now - raid.startedAt) / total) * 100);
+          return (
+            <div key={hero.id} className="card qov-lane road raid">
+              <div className="qov-who"><Portrait hero={hero} /><div><div className="qov-name">{hero.name} <span>Lv {hero.level}</span></div><div className="qov-state gold-text">On a raid</div></div></div>
+              <div className="qov-job">
+                <div className="qov-band" style={{ backgroundImage: `url(${raidBannerSrc(raid.raidId, raidDef?.banner)})` }} />
+                <div className="qov-job-main">
+                  <div className="qov-job-title">{raidDef?.name ?? 'A raid'}</div>
+                  <div className="qov-meta">
+                    <span className="tag">{RAID_DIFFICULTY_LABEL[raid.difficulty]}</span>
+                    <span className="muted">Party of {raid.heroIds.length} · no contracts until they are back</span>
+                  </div>
+                  <div className="bar amb-sheen-bar" style={{ marginTop: 6 }}><span style={{ width: `${progress}%` }} /></div>
+                </div>
+                <div className="qov-actions col">
+                  <span className="qov-eta gold-text">{formatDuration(Math.max(0, raid.endsAt - now))}</span>
+                  <button className="btn-ghost" onClick={() => engine.requestTab('raids')}>Raids →</button>
+                </div>
+              </div>
+            </div>
+          );
+        }
         if (hero.status === 'fallen') {
           return (
             <div key={hero.id} className="card qov-lane fallen">

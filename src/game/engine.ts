@@ -2459,6 +2459,37 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /**
+   * Patch 0472 -- Recall, for every hero out on a contract at once (the
+   * Quest Board's "Recall All"). Same clean cut as recallHero for each:
+   * no reward, no failure penalty, streak and chain-stepping dropped. One
+   * toast and one save for the lot. Quests only: a raid has no recall and
+   * is left running (its heroes are 'questing' but have no activeQuest).
+   * Confirmed with the player before this is ever called. Returns how
+   * many heroes came home.
+   */
+  recallAllHeroes(): number {
+    const quests = this.state.activeQuests;
+    if (quests.length === 0) return 0;
+    let recalled = 0;
+    for (const quest of quests) {
+      const hero = this.hero(quest.heroId);
+      if (!hero) continue;
+      hero.status = 'idle';
+      hero.activeQuestId = null;
+      hero.autoChainTarget = null;
+      hero.autoChainCount = 0;
+      hero.autoChainMinutesRemaining = null;
+      hero.autoAdvanceChainId = null;
+      recalled++;
+    }
+    this.state.activeQuests = [];
+    playSound('depart');
+    this.say(recalled === 1 ? '1 hero is recalled and heads back to the guild.' : `${recalled} heroes are recalled and head back to the guild.`, 'quests');
+    void this.saveNow();
+    return recalled;
+  }
+
   /** Replaces this hero's own quest-board contracts with a fresh set --
    *  free once a day (more via Board Runner), gold cost climbing after
    *  that. See QuestManager.rerollContractsForHero for the cost/state math. */
