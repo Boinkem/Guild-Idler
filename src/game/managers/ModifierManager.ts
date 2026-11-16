@@ -161,6 +161,15 @@ export const ModifierManager = {
     return 1 + bonus;
   },
 
+  /** Patch 0474 -- percent cut from every Story Quest stage's time (Guild
+   *  Charter, 1% per level). See UpgradeDef.storyStageTimeReductionPctPerLevel. */
+  storyStageTimeReduction(state: GameState): number {
+    return Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+      const def = UPGRADE_BY_ID[id];
+      return sum + (def?.storyStageTimeReductionPctPerLevel ?? 0) * level;
+    }, 0);
+  },
+
   /** 1 free quest-board reroll per day base, +1 per Board Runner level
    *  (max 3 levels -> 4 total, matching the backlog's "up to 4" spec). */
   questFreeRerolls(state: GameState): number {
@@ -240,7 +249,7 @@ export const ModifierManager = {
     return Infinity;
   },
 
-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics' | 'auctionHouse'): boolean {
+  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics' | 'auctionHouse'): boolean {
     return Object.entries(state.upgrades).some(([id, level]) => {
       const def = UPGRADE_BY_ID[id];
       return !!def && def.unlocks === unlock && level > 0;

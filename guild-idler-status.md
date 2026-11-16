@@ -38198,3 +38198,76 @@ raises the cap, which is intended.
 Verified: `tsc --noEmit` and the web build pass; a script run printed
 the table above and a mixed 8-hero roster (levels 9-25) at 186. Not
 checked in a running build or the Electron app.
+
+### Story Quests are free; Guild Charter becomes a 5-level upgrade (patch 0474)
+```discord-update
+Dev Update | Story Quests
+
+- Changed Story Quests to be free for every guild: the first story surfaces as soon as your first contract is back
+- Changed the Guild Charter into a 5-level upgrade that makes every Story Quest stage 1% quicker per level
+- Changed the Guild Charter's price to start at 60 gold (was 450)
+- Added a refund for guilds that already own the Charter: you start at level 2 with 166 gold back
+```
+
+Direct request, out of the pre-req link review. The Charter (450 gold)
+gated `generateChainBoard` entirely. Sim of a fresh guild (one ungeared
+hero, expected value, back-to-back contracts, 50 starting gold): ~41
+hours of questing to afford it, first hero ~level 5 by then (~49 hours
+and ~level 6 if Treasury, Tavern, a second hero, Physician's Charity and
+Barracks are bought first). Chains sit at reqLevel 1, 2, 4, 5 and 5 by
+that point, and three of them unlock whole tabs (`the_first_haul` ->
+Harvest, `the_last_clutch` -> Hatchery, `the_man_who_sells_maybe` ->
+Grimsby). The Story Quests empty state also told players to "keep
+completing normal quests", which could never surface one.
+
+**Story Quests free (`QuestManager.ts`, `engine.ts`, `types.ts`,
+`ModifierManager.ts`).** The `'chains'` unlock flag is gone from
+`UpgradeDef.unlocks` and `hasUnlock`. `generateChainBoard` is gated only
+on `state.stats.totalQuests >= 1` (lifetime, never reset), so the first
+story's `ChainDiscoveryModal` cannot land on top of guild naming and the
+tutorial contract. The chain board normally rolls only on a 30-minute
+window rollover; a guild with an empty `chainsSeenOnBoard` and at least
+one finished contract now gets one extra immediate roll in the tick
+block, acted on only when it produces an offer (so nothing is re-saved
+every tick). Existing guilds that never bought the Charter get their
+first story, modal and all, on the first tick after loading; every
+chain at or under their top hero's level appears at once.
+
+**Guild Charter reworked (`progression.ts`, `tuning.json`,
+`GuildPanel.tsx`).** Same id and name. New
+`UpgradeDef.storyStageTimeReductionPctPerLevel` (tuning
+`upgrade.guild_charter.storyStageTimeReductionPctPerLevel`, 1), read by
+`ModifierManager.storyStageTimeReduction` and added to hero speed inside
+`QuestManager.previewDuration`'s existing 0.25x-1.75x clamp, for
+`offer.chain` offers only (Replay Memories stages included; ordinary
+contracts and raids untouched). Max level 1 -> 5, base cost 3000 -> 400,
+growth 1 -> 1.6: the Undertaker's Favor curve, 60 / 224 / 614 / 1,392 /
+2,621 (4,911 total) for 5% at max. For scale, Mounted Travel is 3% on
+every quest per level and costs 15,630 for its first five. Category
+`Unlocks` -> `Quests`; the row reads "-1% Story Quest stage time per
+level". A 16-hour late stage loses 48 minutes at level 5.
+
+**Existing owners (`SaveManager.ts`, save version 73 -> 74).** Migration
+73 converts the 450 gold already paid into levels at the new prices
+(walks the live `upgradeCost` curve) and refunds the remainder as gold:
+level 2 plus 166 gold at current tuning. Gold is added without checking
+the storage cap. Non-owners are untouched.
+
+**Tidy-up.** The `guild_charter_affordable` guidance topic and its check
+are removed (a stale id in an old save's `seenGuidance` is harmless).
+Story Quests empty state now reads "No story has surfaced yet. Finish
+your first contract and one will find its way to the board." Demo build:
+the Charter is no longer needed for the demo's chains, and the normal
+rank cap lets demo players buy it to level 2. Anyone who held "every
+upgrade maxed" has four new Charter levels to buy; achievements already
+granted stay granted.
+
+Verified: `tsc --noEmit` and the web build pass. Script run: fresh guild
+with 0 finished contracts gets no story, 1 finished contract gets
+`the_first_haul`; costs print 60 / 224 / 614 / 1392 / 2621; a first-stage
+story at 28.33 minutes drops to 28.03 / 27.43 / 26.83 at levels 1 / 3 /
+5 while an ordinary contract is unchanged; a v73 save owning the Charter
+with 1,000 gold migrates to level 2 and 1,166 gold, a non-owner is
+unchanged. Not checked in a running build or the Electron app: the
+first-story modal timing after the tutorial contract, and the Guild Hall
+row's appearance.

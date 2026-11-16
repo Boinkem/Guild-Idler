@@ -2,7 +2,7 @@ import { GameState, GuildFacility, MaterialId, SAVE_VERSION } from '../types';
 import { createRng } from '../rng';
 import { HeroManager } from './HeroManager';
 import { AchievementManager } from './AchievementManager';
-import { UPGRADES, vendorUpgrades } from '../data/progression';
+import { UPGRADES, UPGRADE_BY_ID, upgradeCost, vendorUpgrades } from '../data/progression';
 import { BARD_TRACKS } from '../data/bard';
 import { ACHIEVEMENT_BY_ID } from '../data/achievements';
 import { NODE_ORDER } from '../data/materials';
@@ -1566,7 +1566,34 @@ const MIGRATIONS: Record<number, Migration> = {
    *  adopted silently the first time it's opened (see entryScopes), so a
    *  long-running guild's history doesn't all read as new. */
   72: (save) => ({ ...save, version: 73, entryMarks: save.entryMarks ?? {}, entryScopes: save.entryScopes ?? [] }),
+  73: (save) => {
+    // Patch 0474. Guild Charter stopped being the 450-gold Story Quests
+    // unlock and became a 5-level upgrade on a much cheaper curve. A guild
+    // that already bought it keeps what it paid for: the 450 is converted
+    // into as many levels as it covers at the new prices, and whatever is
+    // left over comes back as gold. Read off the live cost curve rather
+    // than hard-coding "level 2 + 166", so a later tuning change to the
+    // Charter's price can't quietly make this migration wrong.
+    const upgrades = { ...((save.upgrades as Record<string, number> | undefined) ?? {}) };
+    let refund = 0;
+    const def = UPGRADE_BY_ID.guild_charter;
+    if ((upgrades.guild_charter ?? 0) >= 1 && def) {
+      let credit = OLD_GUILD_CHARTER_PRICE;
+      let level = 0;
+      while (level < def.maxLevel && upgradeCost(def, level) <= credit) {
+        credit -= upgradeCost(def, level);
+        level++;
+      }
+      upgrades.guild_charter = Math.max(1, level);
+      refund = credit;
+    }
+    return { ...save, version: 74, upgrades, gold: ((save.gold as number | undefined) ?? 0) + refund };
+  },
 };
+
+/** What every pre-0474 guild paid for the one-off Guild Charter
+ *  (3000 base x the 0.15 first-tier discount). See migration 73. */
+const OLD_GUILD_CHARTER_PRICE = 450;
 
 export const SaveManager = {
   serialize(state: GameState): string {

@@ -144,7 +144,8 @@ function upgradeEntries(
   return [
     ...describeMods(def.modsPerLevel).map((line) => ({ text: `${line} per level` })),
     ...(def.unlocks === 'legendaryQuests' ? [{ text: 'Unlocks Legendary quests', gold: true }] : []),
-    ...(def.unlocks === 'chains' ? [{ text: 'Unlocks multi-day quest chains', gold: true }] : []),
+    ...(def.storyStageTimeReductionPctPerLevel
+      ? [{ text: `-${def.storyStageTimeReductionPctPerLevel}% Story Quest stage time per level` }] : []),
     ...(def.unlocks === 'blackMarket' ? [{ text: 'Unlocks the Black Market', gold: true }] : []),
     ...(def.unlocks === 'raids' ? [{ text: 'Unlocks Normal-difficulty raids', gold: true }] : []),
     ...(def.unlocks === 'raidsHeroic' ? [{ text: 'Unlocks Heroic raid difficulty', gold: true }] : []),

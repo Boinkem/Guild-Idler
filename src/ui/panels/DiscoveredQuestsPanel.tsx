@@ -150,7 +150,7 @@ export function DiscoveredQuestsPanel() {
         <h2>Story Quests</h2>
         <div className="card">
           <p className="small muted" style={{ margin: 0 }}>
-            You have yet to unlock a story quest. Keep completing normal quests and contracts, and check back later.
+            No story has surfaced yet. Finish your first contract and one will find its way to the board.
           </p>
         </div>
         </div>

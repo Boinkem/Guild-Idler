@@ -1267,8 +1267,17 @@ export class GameEngine {
     // than a sign it was never generated -- so only the window rollover
     // (which also covers a fresh save/migration, since boardRefreshedAt
     // starts far behind the real current window) should trigger this.
-    if (windowRolledOver) {
-      this.state.chainBoard = QuestManager.generateChainBoard(this.state, now).filter((o) => !active.has(o.id));
+    // Patch 0474 -- Story Quests are free now, held only until the
+    // guild's first contract is back (see generateChainBoard). That
+    // moment falls mid-window, so a guild that has never seen a story
+    // gets one extra, immediate roll rather than waiting out the rest of
+    // the half hour. Only acted on when it actually produces something,
+    // so a guild with nothing eligible isn't re-saved every tick.
+    const firstStoryBoard = !windowRolledOver && this.state.chainsSeenOnBoard.length === 0 && this.state.stats.totalQuests >= 1
+      ? QuestManager.generateChainBoard(this.state, now).filter((o) => !active.has(o.id))
+      : null;
+    if (windowRolledOver || (firstStoryBoard !== null && firstStoryBoard.length > 0)) {
+      this.state.chainBoard = firstStoryBoard ?? QuestManager.generateChainBoard(this.state, now).filter((o) => !active.has(o.id));
       changed = true;
 
       // New quest-chain discovery notification (patch 0191) -- fires once

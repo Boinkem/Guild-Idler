@@ -354,7 +354,13 @@ export const QuestManager = {
     const window = Math.floor(now / BOARD_REFRESH_MS);
     const rng = createRng(`chains:${window}:${state.createdAt}`);
     const offers: QuestOffer[] = [];
-    if (ModifierManager.hasUnlock(state, 'chains')) {
+    // Patch 0474 -- Story Quests no longer need the Guild Charter (it cost
+    // 450 gold, ~40 hours of a new guild's income, by which point the
+    // first hero had outlevelled five chains, three of which unlock
+    // Harvest, the Hatchery and Grimsby). The only hold left is one
+    // finished contract, so the first story's own discovery modal never
+    // lands on top of guild naming and the tutorial contract.
+    if (state.stats.totalQuests >= 1) {
       for (const chain of QUEST_CHAINS) {
         if (state.completedChains.includes(chain.id)) continue;
         // Patch 0438 -- the demo build only tells one story chain (plus
@@ -1050,7 +1056,10 @@ export const QuestManager = {
 
   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {
     const mods = sumMods(HeroManager.heroMods(state, hero, now), ModifierManager.global(state));
-    const factor = clamp(1 - mods.speed / 100, 0.25, 1.75);
+    // Patch 0474 -- Guild Charter's story-stage cut stacks with speed,
+    // inside the same clamp. Chain offers only.
+    const storyCut = offer.chain ? ModifierManager.storyStageTimeReduction(state) : 0;
+    const factor = clamp(1 - (mods.speed + storyCut) / 100, 0.25, 1.75);
     return Math.max(MINUTE, Math.floor(offer.duration * factor));
   },
 

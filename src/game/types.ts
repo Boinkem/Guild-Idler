@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 73;
+export const SAVE_VERSION = 74;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1883,7 +1883,7 @@ export interface UpgradeDef {
   // 'raidsLegendary' renamed to 'raidsMythic' in patch 0317 -- it gates
   // the raid tier now called Mythic; the new top Legendary tier auto-
   // unlocks once Mythic is cleared instead of needing its own purchase.
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics' | 'auctionHouse';
+  unlocks?: 'legendaryQuests' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training' | 'autoChainTactics' | 'auctionHouse';
   /**
    * Which vendor offers this upgrade. Undefined means it's a general guild
    * upgrade with no vendor attached (unlocks like Guild Charter or Black
@@ -1918,6 +1918,13 @@ export interface UpgradeDef {
    *  is always free (see QuestManager.unfreezeOffer). Only Board Warden
    *  uses this. */
   freezeChangesPerLevel?: number;
+  /** Patch 0474 -- cuts every Story Quest stage's time by this many
+   *  percent per level (added to the hero's own speed inside
+   *  QuestManager.previewDuration's clamp; chain offers only, replays
+   *  included). Only Guild Charter uses this -- its old job, unlocking
+   *  Story Quests at all (`unlocks: 'chains'`), is gone: stories are
+   *  free from a guild's first finished contract. */
+  storyStageTimeReductionPctPerLevel?: number;
   /** Grants this many extra stash slots per level, on top of the (now-
    *  removed) base floor -- see ModifierManager.stashCapacity's own
    *  comment: the stash is uncapped as of patch 0354, direct request,

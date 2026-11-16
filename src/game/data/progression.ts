@@ -105,11 +105,15 @@ export const UPGRADES: UpgradeDef[] = [
   },
   {
     id: 'guild_charter', name: 'Guild Charter',
-    description: 'Unlocks multi-day quest chains.',
+    // Patch 0474 -- was the one-off unlock for Story Quests (now free).
+    // Tiered instead: each level trims every Story Quest stage's time.
+    description: 'Standing papers with every town on the road -- fewer gates to wait at, so each stage of a Story Quest is over sooner.',
     baseCost: Tuning.get('upgrade.guild_charter.baseCost'),
     costGrowth: Tuning.get('upgrade.guild_charter.costGrowth'),
     maxLevel: Tuning.get('upgrade.guild_charter.maxLevel'),
-    modsPerLevel: {}, unlocks: 'chains', category: 'Unlocks',
+    modsPerLevel: {},
+    storyStageTimeReductionPctPerLevel: Tuning.get('upgrade.guild_charter.storyStageTimeReductionPctPerLevel'),
+    category: 'Quests',
   },
   {
     id: 'black_market_contact', name: 'Black Market Contact',

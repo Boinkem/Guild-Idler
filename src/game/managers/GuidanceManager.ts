@@ -66,17 +66,12 @@ const CHECKS: Record<string, Check> = {
   // directly rather than assumed.
   hero_slots_full: (state) => state.heroes.length >= ModifierManager.heroSlots(state)
     && state.gold >= (GuildManager.nextCost(state, 'tavern') ?? Infinity),
-  // Two direct requests, same shape as second_hero_affordable above:
-  // notify the moment the guild can afford Guild Charter (unlocks Story
-  // Quests) or Auto-Chain, rather than leaving it to be noticed by
-  // browsing Guild Hall. Both gated on upgradeLevel === 0 specifically
-  // (not "not yet unlocked" via hasUnlock) -- both are single-level
-  // (maxLevel 1) purchases, so "not owned yet" and "level 0" are the
-  // same condition here; written the more direct way since neither
-  // 'chains' nor 'autoChain' need ModifierManager.hasUnlock's own wider
-  // unlock-flag machinery for a same-tick, single-read check like this.
-  guild_charter_affordable: (state) => GuildManager.upgradeLevel(state, 'guild_charter') === 0
-    && state.gold >= (GuildManager.nextUpgradeCost(state, 'guild_charter') ?? Infinity),
+  // Same shape as second_hero_affordable above: notify the moment the
+  // guild can afford Auto-Chain, rather than leaving it to be noticed by
+  // browsing Guild Hall. Gated on upgradeLevel === 0 (first purchase
+  // only). Its old twin, guild_charter_affordable, went with patch 0474:
+  // the Charter no longer unlocks Story Quests, so "you can afford it"
+  // stopped being news worth a notification.
   auto_chain_affordable: (state) => GuildManager.upgradeLevel(state, 'auto_chain') === 0
     && state.gold >= (GuildManager.nextUpgradeCost(state, 'auto_chain') ?? Infinity),
   raids_unlocked: (state) => ModifierManager.hasUnlock(state, 'raids'),

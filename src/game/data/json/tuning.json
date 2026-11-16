@@ -1959,17 +1959,17 @@
     "id": "upgrade.guild_charter.baseCost",
     "label": "Guild Charter: base cost",
     "category": "vendor_upgrades",
-    "value": 3000,
-    "default": 3000,
-    "description": "Gold cost of Guild Charter's first level.",
+    "value": 400,
+    "default": 400,
+    "description": "Base gold cost of Guild Charter (before the early-tier discount). 400 with 1.6 growth is the same curve as Undertaker's Favor: 60 / 224 / 614 / 1,392 / 2,621. Was 3000 (450 after discount) while it was the one-off Story Quests unlock, before patch 0474.",
     "min": 0
   },
   {
     "id": "upgrade.guild_charter.costGrowth",
     "label": "Guild Charter: cost growth",
     "category": "vendor_upgrades",
-    "value": 1,
-    "default": 1,
+    "value": 1.6,
+    "default": 1.6,
     "description": "Multiplier applied per level to Guild Charter's cost.",
     "min": 1
   },
@@ -1977,9 +1977,18 @@
     "id": "upgrade.guild_charter.maxLevel",
     "label": "Guild Charter: max level",
     "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "description": "Level cap for Guild Charter.",
+    "min": 0
+  },
+  {
+    "id": "upgrade.guild_charter.storyStageTimeReductionPctPerLevel",
+    "label": "Guild Charter: story stage time cut per level (%)",
+    "category": "vendor_upgrades",
     "value": 1,
     "default": 1,
-    "description": "Level cap for Guild Charter.",
+    "description": "Percent cut from every Story Quest stage's time per Guild Charter level (replays included). Adds to hero speed inside the same 0.25x-1.75x duration clamp.",
     "min": 0
   },
   {
