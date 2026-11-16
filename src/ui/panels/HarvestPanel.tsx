@@ -751,8 +751,9 @@ function TradeRouteCard() {
       {justOpened && <UnlockFx />}
       <div className="card-title">Trade Route</div>
       <p className="card-flavour">
-        Sell surplus materials for a little gold -- 10 units nets {costPerSale}. The trader only has so much to
-        spend at once; it&rsquo;s meant as a top-up for what you don&rsquo;t need, not a strategy on its own.
+        Sell surplus materials for gold -- 10 units nets {costPerSale}. The trader only has so much to spend at
+        once, and carries more coin the bigger and stronger your roster is: about what your heroes would
+        earn from an hour of contracts.
       </p>
       <p className={`tiny ${canAfford ? 'muted' : 'bad'}`} style={{ marginTop: -4, marginBottom: 8 }}>
         {canAfford

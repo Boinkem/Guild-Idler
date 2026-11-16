@@ -119,10 +119,16 @@ export const HarvestManager = {
   },
 
   /**
-   * Target gold/hr Trade Route selling is capped toward -- exactly what a
-   * hero currently earns at the guild's own best-unlocked quest tier
-   * (expectedRatePerHour/bestUnlockedTier, balance.ts), not a
-   * separate hand-picked number. Self-corrects automatically if
+   * Target gold/hr Trade Route selling is capped toward -- what the whole
+   * roster earns in an hour of ordinary questing: each hero's own
+   * expected rate at their own level and best-unlocked tier
+   * (expectedRatePerHour/bestUnlockedTier, balance.ts), summed, times
+   * harvest.traderReserveMultiplier (patch 0473). Before 0473 this was
+   * the top hero's rate alone, which ignored roster size: an 8-hero
+   * level-20 guild quests for ~210 gold/hr before gear against a 25 gold
+   * reserve, and material production outruns any reserve many times
+   * over, so the reserve IS selling's income. Not a separate hand-picked
+   * number. Self-corrects automatically if
    * DIFFICULTIES or the guild's own level ever changes -- no curve here
    * to re-tune by hand if quest rewards are rebalanced again later. This
    * is also the trader's maximum gold reserve (see currentTraderGold) --
@@ -130,16 +136,21 @@ export const HarvestManager = {
    * hand" is the plain-language version of the whole mechanic.
    */
   sellGoldPerHourTarget(state: GameState): number {
-    const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
     const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
-    const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
+    // Every hero counts, whatever they are doing right now (questing,
+    // hurt, fallen) -- the reserve shouldn't jump about as heroes come
+    // and go. An empty roster still reads as one level-1 hero.
+    const levels = state.heroes.length > 0 ? state.heroes.map((h) => Math.max(1, h.level)) : [1];
+    const rosterRate = levels.reduce(
+      (sum, level) => sum + expectedRatePerHour(DIFFICULTIES[bestUnlockedTier(level, legendaryUnlocked)], 'gold', level), 0,
+    ) * Tuning.get('harvest.traderReserveMultiplier');
     // Patch 0472 -- never less than one 10-unit sale is worth. A sale the
     // reserve can't cover is blocked outright (see sell()), and at the new
-    // 1 gold/unit price a low-level guild's quest-tier rate (4 gold at
+    // 1 gold/unit price a lone low-level hero's quest-tier rate (4 gold at
     // level 1, 7 at level 5) sits under the 10 gold a single sale costs,
     // which would have left the trader unable to ever buy anything.
     const oneSale = Math.floor(10 * Tuning.get('harvest.sellPricePerUnit'));
-    return Math.max(expectedRatePerHour(tier, 'gold', topLevel), oneSale);
+    return Math.max(rosterRate, oneSale);
   },
 
   /**

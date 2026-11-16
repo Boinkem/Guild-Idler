@@ -501,6 +501,15 @@
     "description": "Time for the Trade Route trader's gold reserve to regenerate from empty to full (full = the live quest-gold/hr target). Selling spends the reserve down gold-for-gold; a sale that would exceed it is blocked outright until enough regenerates."
   },
   {
+    "id": "harvest.traderReserveMultiplier",
+    "label": "Harvest: trader gold reserve multiplier",
+    "category": "harvest",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Scales the Trade Route trader's full gold reserve (and so selling's gold per hour). 1 = one hour of the whole roster's expected quest gold, each hero at their own level, before gear. Raise it to bring selling closer to what a geared roster actually earns (roughly 1.5-2.5x the ungeared figure)."
+  },
+  {
     "id": "harvest.baseWarehouseCapacity",
     "label": "Harvest: base warehouse capacity",
     "category": "harvest",

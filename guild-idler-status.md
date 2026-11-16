@@ -38138,3 +38138,63 @@ sell under "uncommon / rare and below" while a crafted Guildmade Blade
 stays, and a 10-unit material sale pays 10 gold. The UI changes (raid
 lane, Recall All, tint menu direction, amount row) were not checked in a
 running build or the Electron app.
+
+### Trade Route trader scales with the roster (patch 0473)
+```discord-update
+Dev Update | Trade Route
+
+- Changed the Trade Route trader to carry gold for your whole roster, not just your top hero, so selling materials now pays about what an hour of contracts would
+- Changed the trader's coin to grow with every hero you recruit and every level they gain
+```
+
+Follow-up to 0472's open question. Reviewed selling against questing
+with the real contract generator (4,000 boards per level, one hero with
+no gear, expected gold including the 15% failure payout, time-weighted):
+
+| Hero level | Old reserve /hr | Random contracts /hr | Quick Send picks /hr |
+|---|---|---|---|
+| 1 | 10 | 8 | 6 |
+| 10 | 11 | 14 | 11 |
+| 20 | 25 | 26 | 21 |
+| 30 | 41 | 41 | 34 |
+| 50 | 81 | 74 | 63 |
+
+Two findings. (1) The reserve is the only thing limiting selling: four
+nodes with no tools already produce ~200 materials/hr if every spawn is
+clicked, thousands with tools, so at 1 gold/unit the reserve empties in
+minutes at any investment level. (2) The reserve equalled ONE ungeared
+hero's questing, because `sellGoldPerHourTarget` read the top hero's
+level only. An 8-hero level-20 roster quests for ~210 gold/hr before
+gear (real Quick Send picks from a live save: ~33, 38 and 72 gold/hr for
+level 16, 18 and 23 heroes, i.e. 1.5-2.5x the ungeared figure), so
+selling was about a tenth of questing or less.
+
+**Change (`HarvestManager.ts`, `tuning.json`, `HarvestPanel.tsx`).**
+`sellGoldPerHourTarget` is now the sum over every hero of
+`expectedRatePerHour(bestUnlockedTier(hero.level), 'gold', hero.level)`
+times the new `harvest.traderReserveMultiplier` (default 1), still
+floored at one 10-unit sale. Every hero counts whatever their status, so
+the cap does not move as heroes leave and return. New full reserve:
+
+| Roster | lv 1 | lv 10 | lv 20 | lv 30 | lv 50 |
+|---|---|---|---|---|---|
+| 1 hero | 10 | 11 | 25 | 41 | 81 |
+| 4 heroes | 19 | 47 | 103 | 166 | 325 |
+| 8 heroes | 39 | 94 | 206 | 333 | 651 |
+
+A single-hero guild is unchanged. Regen is still empty-to-full over
+`harvest.traderRegenTimeMs` (1h), so the full reserve is also the gold
+per hour. Existing saves keep their current reserve and fill up to the
+new cap at the new rate; no migration. The Trade Route card's blurb no
+longer calls selling "a little gold ... not a strategy on its own".
+
+Things a later patch author should know: selling stacks on top of
+questing, so at multiplier 1 an actively harvesting guild gains up to
+one extra roster-hour of ungeared quest gold per hour (roughly +40-65%
+on a geared guild's quest income). The multiplier is the single knob:
+~2 would match a geared roster, below 1 pulls it back. Recruiting now
+raises the cap, which is intended.
+
+Verified: `tsc --noEmit` and the web build pass; a script run printed
+the table above and a mixed 8-hero roster (levels 9-25) at 186. Not
+checked in a running build or the Electron app.
