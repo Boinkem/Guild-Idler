@@ -1,7 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PoolClient } from 'pg';
 import { getPool, withTransaction } from './db.js';
-import { verifySessionToken } from './sessions.js';
+import { verifySession } from './sessions.js';
+import type { Session } from './sessions.js';
 import { AppConfig } from './config.js';
 
 /**
@@ -136,15 +137,46 @@ export async function sweepExpiredListings(): Promise<number> {
  */
 export function requireAuth(config: AppConfig) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    const header = request.headers.authorization;
-    const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
-    const steamId = token ? verifySessionToken(token, config.sessionSecret) : null;
-    if (!steamId) {
+    const session = readSession(request, config);
+    if (!session) {
       reply.code(401);
       throw new Error('Missing or invalid session token.');
     }
-    (request as FastifyRequest & { steamId: string }).steamId = steamId;
+    // Patch 0477 -- demo-build sessions exist now (realm events), and none
+    // of the routes behind this preHandler are for them: no Auction House,
+    // no mailbox, no ledger, whatever the client sends.
+    if (session.app !== 'full') {
+      reply.code(403);
+      throw new Error('Not available in the demo.');
+    }
+    (request as FastifyRequest & { steamId: string }).steamId = session.steamId;
   };
+}
+
+function readSession(request: FastifyRequest, config: AppConfig): Session | null {
+  const header = request.headers.authorization;
+  const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
+  return token ? verifySession(token, config.sessionSecret) : null;
+}
+
+/** Patch 0477 -- like requireAuth, but a demo session is let through too.
+ *  Attaches the whole session (steamId + app); the route decides what a
+ *  demo session may do. Only /realm/* uses this. */
+export function requireAnySession(config: AppConfig) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const session = readSession(request, config);
+    if (!session) {
+      reply.code(401);
+      throw new Error('Missing or invalid session token.');
+    }
+    (request as FastifyRequest & { session: Session }).session = session;
+  };
+}
+
+/** Patch 0477 -- the session if a valid token came with the request, else
+ *  null. For routes that work signed-out (bug reports). */
+export function optionalSession(request: FastifyRequest, config: AppConfig): Session | null {
+  return readSession(request, config);
 }
 
 /**

@@ -63,3 +63,13 @@ export function createRng(seed: number | string): Rng {
 export function uid(prefix = 'id'): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Patch 0477 -- a real v4 UUID, for idempotency keys the server checks
+ *  the shape of (realm batches, bug reports). */
+export function uuidv4(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16);
+    return (c === 'x' ? r : (r % 4) + 8).toString(16);
+  });
+}

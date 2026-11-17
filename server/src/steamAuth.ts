@@ -1,8 +1,11 @@
 import { AppConfig } from './config.js';
+import type { SessionApp } from './sessions.js';
 
 export interface SteamAuthResult {
   ok: boolean;
   steamId?: string;
+  /** Which app's ticket this was -- set on success (patch 0477). */
+  app?: SessionApp;
   error?: string;
 }
 
@@ -33,10 +36,22 @@ export async function verifySteamTicket(config: AppConfig, ticketHex: string): P
   if (!ticketHex) {
     return { ok: false, error: 'No ticket provided.' };
   }
+  // Patch 0477 -- the demo is its own Steam app, so its tickets only
+  // verify against its own App ID. Full game first (the common case once
+  // launched); a ticket Steam refuses there is tried once more as a demo
+  // ticket. The app that accepted it travels with the session.
+  const full = await verifyAgainstApp(config, ticketHex, config.steamAppId);
+  if (full.ok) return { ...full, app: 'full' };
+  if (!config.steamDemoAppId || config.steamDemoAppId === config.steamAppId) return full;
+  const demo = await verifyAgainstApp(config, ticketHex, config.steamDemoAppId);
+  if (demo.ok) return { ...demo, app: 'demo' };
+  return { ok: false, error: `${full.error} (as the demo: ${demo.error})` };
+}
 
+async function verifyAgainstApp(config: AppConfig, ticketHex: string, appId: string): Promise<SteamAuthResult> {
   const url = `${STEAM_WEB_API_BASE}/ISteamUserAuth/AuthenticateUserTicket/v1/`
     + `?key=${encodeURIComponent(config.steamWebApiKey)}`
-    + `&appid=${encodeURIComponent(config.steamAppId)}`
+    + `&appid=${encodeURIComponent(appId)}`
     + `&ticket=${encodeURIComponent(ticketHex)}`
     // Patch 0418 -- required: the client's ticket is issued for this
     // identity, and Steam only accepts it when the same one is quoted back.

@@ -475,3 +475,147 @@ export async function fetchMyLedger(period: AhLedgerPeriod): Promise<AhLedger | 
     return null;
   }
 }
+
+/* ------------------------------------------------------- realm events --- */
+// Patch 0477 -- Realm Threat server calls (events only for now; see
+// managers/RealmThreatManager.ts). Same backend, same session as the
+// Auction House, but signing in here does NOT need the AH Charter, and the
+// demo build can do it (the server gives a demo session access to these
+// routes and nothing else).
+
+export type RealmPhase = 'teaser' | 'open' | 'tallying' | 'closed';
+
+export interface RealmFeedRow {
+  guild: string | null;
+  /** 'quests' | 'milestone' | 'reserve' */
+  kind: string;
+  points: number;
+  at: string;
+}
+
+export interface RealmEvent {
+  id: number;
+  campaignKey: string;
+  eventKey: string | null;
+  kind: string;
+  phase: RealmPhase;
+  opensAt: string;
+  endsAt: string;
+  /** End of the grace period: late reports are accepted until here. */
+  finalisesAt: string;
+  target: number;
+  total: number;
+  contributors: number;
+  tiers: number[];
+  cap: number;
+  rewards: { tierTitles: (string | null)[]; sealTitle: string | null };
+  allowDemo: boolean;
+  result: { sealed: boolean; finalPct: number; milestonesReached: number } | null;
+  feed: RealmFeedRow[];
+}
+
+export interface RealmCurrent {
+  realmEnabled: boolean;
+  event: RealmEvent | null;
+  serverNow: string;
+}
+
+const REALM_TIMEOUT_MS = 8000;
+
+async function timedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REALM_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** The event to show, if any. Public, no sign-in. Null = the server
+ *  couldn't be reached (as opposed to "reached, nothing on"). */
+export async function fetchRealmCurrent(): Promise<RealmCurrent | null> {
+  if (!AH_READY || !AH_BACKEND_URL) return null;
+  try {
+    const response = await timedFetch(`${AH_BACKEND_URL}/realm/current`);
+    if (!response.ok) return null;
+    return (await response.json()) as RealmCurrent;
+  } catch {
+    return null;
+  }
+}
+
+export interface RealmMine {
+  campaignId: number | null;
+  points?: number;
+  tier?: number;
+  titles?: string[];
+}
+
+/** This player's Ward, tier and earned titles in the shown event. */
+export async function fetchRealmMine(): Promise<RealmMine | null> {
+  try {
+    const response = await authedFetch(`${AH_BACKEND_URL}/realm/mine`);
+    if (!response || !response.ok) return null;
+    return (await response.json()) as RealmMine;
+  } catch {
+    return null;
+  }
+}
+
+export type RealmContributeResult =
+  | { ok: true; applied: number; points: number; tier: number; cap: number; total: number; target: number; contributors?: number; titles: string[] }
+  /** The server answered and will never take this batch (event over, or
+   *  not for this build): drop it. */
+  | { ok: false; rejected: true; error: string }
+  /** No answer, or no session: keep the batch and try again later. */
+  | { ok: false; rejected: false; error: string };
+
+export async function contributeRealm(campaignId: number, points: number, guildName: string, batchKey: string): Promise<RealmContributeResult> {
+  try {
+    const response = await authedFetch(`${AH_BACKEND_URL}/realm/contribute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaignId, chapter: 1, points, guildName, batchKey }),
+    });
+    if (!response) return { ok: false, rejected: false, error: NO_SESSION.error };
+    const body = await response.json().catch(() => null);
+    if (response.ok && body?.ok) return body as RealmContributeResult;
+    const rejected = response.status === 409 || response.status === 403 || response.status === 400;
+    return { ok: false, rejected, error: body?.error || body?.message || `HTTP ${response.status}` };
+  } catch (err) {
+    return { ok: false, rejected: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/* -------------------------------------------------------- bug reports --- */
+// Patch 0477. No sign-in needed (the demo reports too); if a session
+// already exists its token rides along so the report carries a SteamID,
+// but this never asks Steam for a ticket just to file a bug.
+
+export interface BugReportPayload {
+  reportKey: string;
+  message: string;
+  category: string;
+  contact: string;
+  build: string;
+  demo: boolean;
+  context: Record<string, string | number | boolean>;
+}
+
+/** 'sent' | 'retry' (unreachable / rate-limited: keep it queued) |
+ *  'rejected' (the server will never take it: drop it). */
+export async function submitBugReport(report: BugReportPayload): Promise<'sent' | 'retry' | 'rejected'> {
+  if (!AH_READY || !AH_BACKEND_URL) return 'retry';
+  try {
+    const response = await timedFetch(`${AH_BACKEND_URL}/bugs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cachedSessionToken ? { Authorization: `Bearer ${cachedSessionToken}` } : {}) },
+      body: JSON.stringify(report),
+    });
+    if (response.ok) return 'sent';
+    return response.status === 400 ? 'rejected' : 'retry';
+  } catch {
+    return 'retry';
+  }
+}

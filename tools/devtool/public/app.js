@@ -2533,7 +2533,177 @@ const ahState = {
   usage: null, // { ok, target, url, fetchedAt, stats?, error? } | null
   loadingUsage: false,
   usageMetric: 'sales', // daily chart: sales | listed | goldVolume | scrapVolume | players
+  // Patch 0477 -- realm events and bug reports (local backend, admin token).
+  realm: null, // { ok, realmEnabled, envEnabled, serverNow, events } | { ok:false, error }
+  loadingRealm: false,
+  realmBusy: false,
+  realmMsg: null, // { text, cls }
+  bugs: null, // { ok, counts, reports } | { ok:false, error }
+  bugFilter: 'new',
+  loadingBugs: false,
 };
+
+/* ------------------------------------------- realm events / bug reports --- */
+// Patch 0477.
+
+async function ahAdmin(path, method = 'GET', body) {
+  return api('/api/auction-house/admin', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, method, body }),
+  });
+}
+
+async function loadRealmNow() {
+  ahState.loadingRealm = true;
+  if (state.kind === '__auctionhouse__') renderAuctionHouse();
+  try { ahState.realm = await ahAdmin('/admin/realm'); } catch (err) { ahState.realm = { ok: false, error: err.message || String(err) }; }
+  ahState.loadingRealm = false;
+  if (state.kind === '__auctionhouse__') renderAuctionHouse();
+}
+
+async function loadBugsNow() {
+  ahState.loadingBugs = true;
+  if (state.kind === '__auctionhouse__') renderAuctionHouse();
+  try { ahState.bugs = await ahAdmin(`/admin/bugs?status=${ahState.bugFilter}`); } catch (err) { ahState.bugs = { ok: false, error: err.message || String(err) }; }
+  ahState.loadingBugs = false;
+  if (state.kind === '__auctionhouse__') renderAuctionHouse();
+}
+
+async function realmAction(path, body, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  ahState.realmBusy = true;
+  renderAuctionHouse();
+  try {
+    const r = await ahAdmin(path, 'POST', body);
+    ahState.realmMsg = r.ok ? { text: 'Done.', cls: 'good' } : { text: escapeHtml(r.error || `HTTP ${r.status}`), cls: 'bad' };
+  } catch (err) {
+    ahState.realmMsg = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
+  }
+  ahState.realmBusy = false;
+  await loadRealmNow();
+}
+
+const localStamp = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '--');
+
+function realmHtml() {
+  const r = ahState.realm;
+  const head = `
+    <div class="row" style="gap: 8px; margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
+      <button id="realmLoadBtn" class="primary" ${ahState.loadingRealm || !ahState.adminTokenSet ? 'disabled' : ''}>${ahState.loadingRealm ? 'Loading…' : (r ? 'Refresh' : 'Load events')}</button>
+      ${r?.ok ? `<span class="tiny ${r.realmEnabled ? 'good' : 'muted'}">${r.realmEnabled ? 'Realm ON' : `Realm OFF -- ${r.envEnabled ? 'realm.config.json has "enabled": false' : 'add AH_REALM_ENABLED=true to server/.env and restart'}`}</span>` : ''}
+    </div>
+    ${ahState.realmMsg ? `<div class="patch-result ${ahState.realmMsg.cls}"><div class="patch-result-label">${ahState.realmMsg.text}</div></div>` : ''}`;
+  if (!ahState.adminTokenSet) return `${head}<p class="tiny muted">Save the admin token under Usage first.</p>`;
+  if (!r) return head;
+  if (!r.ok) return `${head}<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(r.error || 'Failed')}</div></div>`;
+  const events = r.events || [];
+  const rows = events.map((e) => {
+    const pct = e.target > 0 ? Math.round((e.total / e.target) * 1000) / 10 : 0;
+    const live = e.status === 'open' || (e.status === 'closed' && !e.finalisedAt);
+    return `
+      <div class="patch-result" style="margin-bottom: 8px;">
+        <div class="patch-result-label">
+          <b>${escapeHtml(e.eventKey || `#${e.id}`)}</b> · ${escapeHtml(e.campaignKey)} ·
+          <b>${escapeHtml(e.phase)}</b>${e.visible ? '' : ' (hidden from players)'} ·
+          ${localStamp(e.opensAt)} → ${localStamp(e.endsAt)} (+${e.graceMinutes}m grace)
+        </div>
+        <div class="tiny" style="margin: 4px 0;">
+          <b>${e.total.toLocaleString()} / ${e.target.toLocaleString()}</b> Ward (${pct}%) ·
+          ${e.players} player${e.players === 1 ? '' : 's'} (${e.demoPlayers} demo, ${e.atCap} at the cap of ${e.cap}, avg ${e.avgPoints}) ·
+          tiers ${e.tiers.join(' / ')}
+          ${e.result ? ` · <b>${e.result.sealed ? 'SEALED' : 'held open'}</b> at ${Math.round(e.result.finalPct * 100)}%` : ''}
+        </div>
+        ${e.top.length ? `<div class="tiny muted">Top: ${e.top.map((t) => `${escapeHtml(t.guild || '?')} ${t.points}${t.app === 'demo' ? 'ᵈ' : ''}`).join(' · ')}</div>` : ''}
+        <div class="row" style="gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+          ${e.status === 'scheduled' ? `<button data-realm-open="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Open now</button>` : ''}
+          ${live ? `<button data-realm-target="${e.id}" data-current="${e.target}" ${ahState.realmBusy ? 'disabled' : ''}>Set target…</button>` : ''}
+          ${live ? `<button data-realm-add="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Add Ward…</button>` : ''}
+          ${e.status === 'open' ? `<button data-realm-close="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Close now</button>` : ''}
+          ${live ? `<button data-realm-finalise="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Close + finalise (skip grace)</button>` : ''}
+          <button class="remove" data-realm-delete="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Delete</button>
+        </div>
+      </div>`;
+  }).join('');
+  return `${head}
+    <p class="tiny muted" style="margin: 0 0 6px;">Server time ${localStamp(r.serverNow)}. Events listed in <code>server/realm.config.json</code> are created at server start and every minute; edit times there until the event opens. Delete removes an event and everything recorded for it.</p>
+    ${rows || '<p class="tiny muted">No events yet.</p>'}`;
+}
+
+function bugsHtml() {
+  const b = ahState.bugs;
+  const counts = b?.counts || {};
+  const filters = ['new', 'seen', 'fixed', 'wontfix', 'all'];
+  const head = `
+    <div class="row" style="gap: 6px; margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
+      ${filters.map((f) => `<button data-bug-filter="${f}" class="${ahState.bugFilter === f ? 'primary' : ''}" ${!ahState.adminTokenSet ? 'disabled' : ''}>${f}${counts[f] !== undefined ? ` (${counts[f]})` : ''}</button>`).join('')}
+      <button id="bugsLoadBtn" ${ahState.loadingBugs || !ahState.adminTokenSet ? 'disabled' : ''}>${ahState.loadingBugs ? 'Loading…' : 'Refresh'}</button>
+    </div>`;
+  if (!ahState.adminTokenSet) return `${head}<p class="tiny muted">Save the admin token under Usage first.</p>`;
+  if (!b) return head;
+  if (!b.ok) return `${head}<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(b.error || 'Failed')}</div></div>`;
+  const list = (b.reports || []).map((r) => {
+    const ctx = r.context || {};
+    return `
+      <div class="patch-result" style="margin-bottom: 8px;">
+        <div class="patch-result-label">
+          <b>#${r.id}</b> · ${escapeHtml(r.category)} · ${r.app === 'demo' ? 'demo' : 'full'} ${escapeHtml(r.build || '')} · ${localStamp(r.at)}
+          ${r.contact ? ` · <b>${escapeHtml(r.contact)}</b>` : ''} · <b>${escapeHtml(r.status)}</b>${r.fixedPatch ? ` in ${escapeHtml(r.fixedPatch)}` : ''}
+        </div>
+        <div style="white-space: pre-wrap; margin: 4px 0;">${escapeHtml(r.message)}</div>
+        <div class="tiny muted">${Object.entries(ctx).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`).join(' · ')}${r.steamId ? ` · steam ${escapeHtml(r.steamId)}` : ''}</div>
+        ${r.note ? `<div class="tiny">Note: ${escapeHtml(r.note)}</div>` : ''}
+        <div class="row" style="gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+          ${r.status !== 'seen' ? `<button data-bug-set="${r.id}" data-status="seen">Seen</button>` : ''}
+          ${r.status !== 'fixed' ? `<button data-bug-fixed="${r.id}">Fixed in…</button>` : ''}
+          ${r.status !== 'wontfix' ? `<button data-bug-set="${r.id}" data-status="wontfix">Won't fix</button>` : ''}
+          ${r.status !== 'new' ? `<button data-bug-set="${r.id}" data-status="new">Back to new</button>` : ''}
+          <button data-bug-note="${r.id}">Note…</button>
+        </div>
+      </div>`;
+  }).join('');
+  return `${head}${list || '<p class="tiny muted">Nothing here.</p>'}
+    <p class="tiny muted">Every report is also appended to <code>server/bug-reports.jsonl</code> (one JSON line each), readable without the database.</p>`;
+}
+
+async function bugUpdate(id, body) {
+  try {
+    const r = await ahAdmin(`/admin/bugs/${id}`, 'POST', body);
+    if (!r.ok) setStatus(r.error || `HTTP ${r.status}`, 'err');
+  } catch (err) {
+    setStatus(err.message, 'err');
+  }
+  await loadBugsNow();
+}
+
+function bindRealmAndBugs() {
+  const on = (sel, fn) => { for (const el of document.querySelectorAll(sel)) el.onclick = () => fn(el); };
+  const realmLoad = document.getElementById('realmLoadBtn');
+  if (realmLoad) realmLoad.onclick = () => { ahState.realmMsg = null; loadRealmNow(); };
+  on('[data-realm-open]', (el) => realmAction('/admin/realm/close-now', { id: Number(el.dataset.realmOpen), open: true }, 'Open this event now?'));
+  on('[data-realm-close]', (el) => realmAction('/admin/realm/close-now', { id: Number(el.dataset.realmClose) }, 'Close this event now? Late reports are still accepted for its grace period.'));
+  on('[data-realm-finalise]', (el) => realmAction('/admin/realm/close-now', { id: Number(el.dataset.realmFinalise), skipGrace: true }, 'Close and finalise now, with no grace period? Ward still on its way from players is lost.'));
+  on('[data-realm-delete]', (el) => realmAction('/admin/realm/delete', { id: Number(el.dataset.realmDelete) }, 'Delete this event and everything recorded for it? This cannot be undone.'));
+  on('[data-realm-target]', (el) => {
+    const v = prompt('New realm target (Ward):', el.dataset.current);
+    if (v !== null && Number(v) > 0) realmAction('/admin/realm/target', { id: Number(el.dataset.realmTarget), target: Math.floor(Number(v)) });
+  });
+  on('[data-realm-add]', (el) => {
+    const v = prompt('Add how much Ward to the bar? (shown as "The Crown\'s Reserve"; negative removes)', '5');
+    if (v !== null && Number(v)) realmAction('/admin/realm/add', { id: Number(el.dataset.realmAdd), points: Math.floor(Number(v)) });
+  });
+  const bugsLoad = document.getElementById('bugsLoadBtn');
+  if (bugsLoad) bugsLoad.onclick = () => loadBugsNow();
+  on('[data-bug-filter]', (el) => { ahState.bugFilter = el.dataset.bugFilter; loadBugsNow(); });
+  on('[data-bug-set]', (el) => bugUpdate(el.dataset.bugSet, { status: el.dataset.status }));
+  on('[data-bug-fixed]', (el) => {
+    const v = prompt('Fixed in which patch? (e.g. 0478)', '');
+    if (v !== null) bugUpdate(el.dataset.bugFixed, { status: 'fixed', fixedPatch: v.trim() });
+  });
+  on('[data-bug-note]', (el) => {
+    const v = prompt('Note (empty clears it):', '');
+    if (v !== null) bugUpdate(el.dataset.bugNote, { note: v.trim() });
+  });
+}
 
 
 function formatBytes(n) {
@@ -4658,7 +4828,12 @@ async function selectAuctionHouseTab() {
     setStatus('');
     renderAuctionHouse();
     // Health and usage load side by side -- neither waits on the other.
-    await Promise.all([checkAhNow(), ahState.adminTokenSet ? loadAhUsageNow() : null]);
+    await Promise.all([
+      checkAhNow(),
+      ahState.adminTokenSet ? loadAhUsageNow() : null,
+      ahState.adminTokenSet ? loadRealmNow() : null,
+      ahState.adminTokenSet ? loadBugsNow() : null,
+    ]);
   } catch (err) {
     setStatus(err.message, 'err');
   }
@@ -5041,6 +5216,12 @@ function renderAuctionHouse() {
     <div class="section-heading">Usage</div>
     ${ahUsageHtml()}
 
+    <div class="section-heading">Realm events (local backend)</div>
+    ${realmHtml()}
+
+    <div class="section-heading">Bug reports (local backend)</div>
+    ${bugsHtml()}
+
     <div class="section-heading">Local backend URL</div>
     <div class="devtool-note">
       Saved locally (<code>tools/devtool/ah.config.json</code>, gitignored). Defaults to
@@ -5144,6 +5325,8 @@ function renderAuctionHouse() {
   for (const btn of document.querySelectorAll('.ahu-metric')) {
     btn.onclick = () => { ahState.usageMetric = btn.dataset.metric; renderAuctionHouse(); };
   }
+
+  bindRealmAndBugs();
 
   const ahStartBtn = document.getElementById('ahStartBtn');
   if (ahStartBtn) ahStartBtn.onclick = () => startAhServerNow();

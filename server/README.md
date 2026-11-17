@@ -69,6 +69,37 @@ edits apply within a few minutes without a restart. Under `npm run dev`
 (tsx) the Broker reads the game's item code straight from `src/` instead
 of the bundle.
 
+## Migrations run on start (patch 0477)
+
+The server applies any pending `db/migrations/*.sql` by itself when it
+starts, before it listens, using the same runner as `npm run migrate`
+(now in `src/migrations.ts`). So after a patch that adds a migration,
+restarting the server (DevTool: Stop, then Start) is all that's needed. A
+failed migration is logged loudly and the server still starts.
+
+## Realm events and demo sign-in (patch 0477)
+
+One-off server events (the Next Fest Breach). Every quest a player's heroes
+finish adds Ward to one shared bar; tiers can grant guild titles.
+
+- On/off: `AH_REALM_ENABLED=true` in `.env` **and** `"enabled": true` in
+  `realm.config.json`. `/health` reports `realmEnabled`.
+- Events: list them under `"events"` in `realm.config.json` (key, times in
+  UTC, target, cap, tiers, titles, grace minutes). The server creates them
+  at start and re-reads the file every minute, so a new or edited event
+  appears within a minute -- until it opens; after that only the DevTool
+  (Auction House tab > Realm events) changes it: target, add Ward, close,
+  delete.
+- Demo sign-in: tickets from the demo (App ID 5488030) now verify and get a
+  *demo* session, which only `/realm/*` accepts. Everything else answers 403.
+
+## Bug reports (patch 0477)
+
+`POST /bugs` takes reports from the game's bug button (no sign-in, rate
+limited). Each lands in the `bug_reports` table and as one JSON line in
+`server/bug-reports.jsonl`. Read and triage them in the DevTool (Auction
+House tab > Bug reports).
+
 ## Admin usage dashboard (patch 0459)
 
 The DevTool's Auction House tab shows how much the AH gets used, read

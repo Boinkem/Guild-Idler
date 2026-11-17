@@ -32,6 +32,8 @@ import { CurioManager } from './CurioManager';
 import { PeddlerManager } from './PeddlerManager';
 import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
 import { rollElementTags, elementalBonusForHero } from '../data/elements';
+import { RealmThreatManager } from './RealmThreatManager';
+import { wardForQuest } from '../data/realmThreat';
 
 export const BOARD_SIZE = 6;
 export const BOARD_REFRESH_MS = 30 * MINUTE;
@@ -1629,6 +1631,10 @@ export const QuestManager = {
     const isBurstQuest = QuestManager.isFastOffer(quest.offer);
     const grimsbyWasPresent = PeddlerManager.isPresent(state);
     PeddlerManager.registerQuestCompletion(state, isBurstQuest, resolvedAt);
+    // Patch 0477 -- Ward toward the realm event, if one is running and
+    // this quest finished inside its window. Local tally only; the engine
+    // sends it. Offline catch-up resolves through here too.
+    RealmThreatManager.addWard(state, wardForQuest(quest.offer, success, isBurstQuest), resolvedAt);
     const grimsbyArrived = !grimsbyWasPresent && PeddlerManager.isPresent(state);
 
     const storage = ModifierManager.goldStorage(state);

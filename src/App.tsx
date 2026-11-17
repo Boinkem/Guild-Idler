@@ -20,6 +20,8 @@ import { DlcGrantModal } from './ui/DlcGrantModal';
 import { Toast } from './ui/Toast';
 import { NotificationBanner } from './ui/NotificationBanner';
 import { DemoWallHost } from './ui/DemoWall';
+import { RealmThreatHost } from './ui/RealmThreat';
+import { BugReportHost } from './ui/BugReport';
 
 export type ViewMode = 'idle' | 'menu';
 
@@ -199,6 +201,9 @@ export function App() {
           {/* Patch 0438 -- demo build's wishlist card. Renders nothing in
               the full game; menu-gated like the result modals above. */}
           <DemoWallHost active={mode === 'menu'} />
+          {/* Patch 0477 -- realm event panel/result, and the bug report form. */}
+          <RealmThreatHost active={mode === 'menu'} />
+          <BugReportHost active={mode === 'menu'} />
         </>
       )}
       <Toast skipBanners={mode === 'menu'} />

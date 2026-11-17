@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "maxBatch": 500,
+  "feedMinutes": 5,
+  "events": [
+    {
+      "eventKey": "test-2026-11-17",
+      "campaignKey": "next_fest_breach",
+      "opensAt": "2026-11-17T09:30:00Z",
+      "endsAt": "2026-11-17T21:30:00Z",
+      "teaserFrom": "2026-11-17T00:00:00Z",
+      "resultsUntil": "2026-11-19T21:30:00Z",
+      "graceMinutes": 60,
+      "allowDemo": true,
+      "target": 20,
+      "cap": 30,
+      "tiers": [2, 6, 12],
+      "rewards": { "tierTitles": [], "sealTitle": null }
+    }
+  ]
+}

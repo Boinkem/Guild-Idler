@@ -145,7 +145,9 @@ export function DemoWallHost({ active }: { active: boolean }) {
           This is an early demo{BUILD_VERSION ? ` (build ${BUILD_VERSION})` : ''}: tuning and features are still changing before launch.
         </p>
         <div className="row end" style={{ marginTop: 16, gap: 8 }}>
-          <button className="btn-ghost" style={{ marginRight: 'auto' }} onClick={openDiscord}>Discord</button>
+          <button className="btn-ghost" onClick={openDiscord}>Discord</button>
+          {/* Patch 0477 */}
+          <button className="btn-ghost" style={{ marginRight: 'auto' }} onClick={() => { close(); engine.openBugReport('demo-card'); }}>Report a bug</button>
           <button onClick={close}>Keep playing</button>
           <button className="btn-yellow" onClick={() => { openStorePage(); close(); }}>Wishlist on Steam</button>
         </div>

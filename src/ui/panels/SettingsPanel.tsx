@@ -432,6 +432,17 @@ export function SettingsPanel() {
         <Toggle value={settings.confirmSell} onChange={set('confirmSell')} />
       </Row>
 
+      {/* Patch 0477 */}
+      <div className="section-heading">Feedback</div>
+      <div className="card">
+        <div className="spread" style={{ gap: 12 }}>
+          <p className="small muted" style={{ margin: 0 }}>
+            Found something broken or confusing? Tell the developer. It takes a few seconds, and your save is not sent.
+          </p>
+          <button className="btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={() => engine.openBugReport('settings')}>🐞 Report a bug</button>
+        </div>
+      </div>
+
       <div className="section-heading">Credits</div>
       <div className="card">
         <p className="small muted" style={{ margin: 0 }}>

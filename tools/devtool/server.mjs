@@ -4034,6 +4034,30 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // Patch 0477 -- Realm events and bug reports: a narrow pass-through to
+  // the LOCAL backend's admin routes (this DevTool runs on the same PC as
+  // the server), with the saved admin token. Only the paths listed here.
+  if (url.pathname === '/api/auction-house/admin' && req.method === 'POST') {
+    const cfg = await readAhConfig();
+    const body = JSON.parse((await readBody(req)) || '{}');
+    const allowed = /^\/admin\/(realm|realm\/(schedule|target|close-now|add|delete)|bugs(\?status=[a-z]+)?|bugs\/\d+)$/;
+    if (typeof body.path !== 'string' || !allowed.test(body.path)) return json(res, 400, { ok: false, error: 'Path not allowed.' });
+    if (!cfg.adminToken) return json(res, 200, { ok: false, error: 'No admin token saved -- paste AH_ADMIN_TOKEN from server/.env into the Admin token box under Usage.' });
+    try {
+      const r = await fetch(`${cfg.url}${body.path}`, {
+        method: body.method === 'POST' ? 'POST' : 'GET',
+        headers: { Authorization: `Bearer ${cfg.adminToken}`, ...(body.method === 'POST' ? { 'Content-Type': 'application/json' } : {}) },
+        body: body.method === 'POST' ? JSON.stringify(body.body ?? {}) : undefined,
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await r.json().catch(() => null);
+      if (r.status === 404 && !data?.error) return json(res, 200, { ok: false, error: 'This backend has no such route -- it needs patch 0477 and a restart (Stop, then Start, above).' });
+      return json(res, 200, { ok: r.ok, status: r.status, ...(data && typeof data === 'object' ? data : {}) });
+    } catch (err) {
+      return json(res, 200, { ok: false, error: `Could not reach ${cfg.url}: ${err.message || err}` });
+    }
+  }
+
   if (url.pathname === '/api/auction-house/server' && req.method === 'GET') {
     return json(res, 200, await ahServerProcessInfo());
   }

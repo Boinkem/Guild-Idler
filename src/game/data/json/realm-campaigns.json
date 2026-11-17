@@ -1,0 +1,14 @@
+{
+  "next_fest_breach": {
+    "name": "The Next Fest Breach!",
+    "kicker": "Server event",
+    "paceLabel": "THE BREACH WIDENS",
+    "blurb": "A breach has opened over the realm, and every guild is being called to hold it shut. Your heroes don't have to do anything different: every quest they finish adds Ward to the line, even while you're away.",
+    "teaserBlurb": "Something is pressing on the sky above the realm. When the breach opens, every guild holds the line together: every quest your heroes finish will add Ward.",
+    "tierNames": ["Sentry", "Warden", "Shield of the Realm"],
+    "sealedHeadline": "The breach is sealed",
+    "heldOpenHeadline": "The breach held open",
+    "winText": "The last of the Ward went up and the breach closed like an eye. Every guild that sent heroes out this week had a hand on it.",
+    "loseText": "The line held, but the breach did not close. Every guild that sent heroes out kept it from opening any wider."
+  }
+}

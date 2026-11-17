@@ -10333,3 +10333,120 @@ button.harvest-item:hover {
   .qov-actions { grid-column: 1 / -1; }
   .qov-justback { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ==== Patch 0477: Realm Threat (event slice) =============================
+   RealmThreat.tsx. Colours follow the design doc's mockup: the breach is
+   violet (#b48cff, borders #5b3f7a), the realm's Ward is brass. They differ
+   in lightness as well as hue, so the bar reads without colour. */
+.realm-banner {
+  display: flex; align-items: center; gap: 12px; width: 100%; max-width: 720px; margin: 0 0 10px; padding: 7px 12px;
+  text-align: left; border-radius: 8px; cursor: pointer; min-height: 0;
+  background: color-mix(in srgb, #1a1026 88%, transparent); border: 1px solid #5b3f7a; color: var(--parchment);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.realm-banner:hover { border-color: #b48cff; box-shadow: 0 0 0 2px color-mix(in srgb, #b48cff 25%, transparent); }
+.realm-banner-kicker { font-size: 0.5625rem; letter-spacing: .14em; text-transform: uppercase; color: #b48cff; white-space: nowrap; }
+.realm-banner-name { font-family: var(--font-display); font-size: 0.8125rem; white-space: nowrap; }
+.realm-banner-time { flex: 1; font-size: 0.6875rem; color: var(--brass); text-align: right; }
+.realm-mini-bar { position: relative; flex: 1; min-width: 60px; height: 7px; border-radius: 4px; background: #120b1c; border: 1px solid #5b3f7a; overflow: hidden; }
+.realm-mini-bar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--brass-dim), var(--brass)); }
+.realm-mini-bar b { position: absolute; top: -1px; bottom: -1px; width: 2px; margin-left: -1px; background: #b48cff; }
+.realm-banner-pct { font-size: 0.75rem; font-weight: 700; color: var(--brass); font-variant-numeric: tabular-nums; }
+.realm-banner-mine { font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
+.realm-banner-go { color: var(--brass); font-size: 1rem; line-height: 1; }
+.realm-pill {
+  display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 999px; white-space: nowrap;
+  font-size: 0.625rem; border: 1px solid var(--panel-3); color: var(--muted);
+}
+.realm-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.realm-pill.good { color: var(--moss); border-color: color-mix(in srgb, var(--moss) 55%, transparent); background: color-mix(in srgb, var(--moss) 12%, transparent); }
+.realm-pill.warn { color: #e0934a; border-color: color-mix(in srgb, #e0934a 55%, transparent); background: color-mix(in srgb, #e0934a 12%, transparent); }
+
+.modal.realm-modal { max-width: 860px; background: #150f1c; border-color: #5b3f7a; }
+.realm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.realm-kicker { font-size: 0.625rem; letter-spacing: .14em; text-transform: uppercase; color: #b48cff; }
+.realm-title { margin: 2px 0 0; font-family: var(--font-display); font-size: 1.375rem; color: var(--parchment); }
+.realm-title.good { color: var(--moss); }
+.realm-title.warn { color: #e0934a; }
+.realm-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-bottom: 10px; border: 1px solid var(--panel-3); border-radius: 8px; overflow: hidden; background: var(--panel-3); }
+.realm-strip > div { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; background: var(--panel); }
+.realm-strip span { font-size: 0.5625rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.realm-strip b { font-size: 0.75rem; font-weight: 600; }
+.realm-strip b.good::before, .realm-strip b.bad::before { content: '● '; }
+.realm-strip b.good::before { color: var(--moss); }
+.realm-strip b.bad { color: #e0934a; }
+.realm-cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.realm-side { display: flex; flex-direction: column; gap: 10px; }
+.realm-card { position: relative; padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--panel-3); }
+.realm-card.realm-threat { background: #1a1026; border-color: #5b3f7a; overflow: hidden; }
+.realm-rift {
+  position: absolute; top: 14px; right: 26px; width: 22px; height: 150px; transform-origin: 50% 50%; pointer-events: none;
+  background: linear-gradient(180deg, #5b3f7a, #d9c4ff 50%, #5b3f7a);
+  clip-path: polygon(50% 0, 78% 22%, 60% 30%, 90% 50%, 62% 66%, 72% 80%, 50% 100%, 34% 82%, 42% 68%, 12% 50%, 40% 32%, 26% 20%);
+  filter: drop-shadow(0 0 14px #8f5bff); transition: transform 900ms ease, opacity 900ms ease;
+}
+.realm-blurb { position: relative; margin: 0 0 12px; max-width: 78%; font-size: 0.75rem; line-height: 1.5; color: var(--parchment); }
+.realm-label { font-size: 0.5625rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.realm-label.spread { display: flex; justify-content: space-between; }
+.realm-total-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 2px 0 6px; }
+.realm-total { font-family: var(--font-display); font-size: 1.75rem; line-height: 1.1; color: var(--brass); text-shadow: 0 0 12px color-mix(in srgb, var(--brass) 45%, transparent); font-variant-numeric: tabular-nums; }
+.realm-target { font-size: 0.8125rem; color: var(--muted); }
+.realm-bar-wrap { position: relative; padding-top: 20px; }
+.realm-pace { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.5625rem; letter-spacing: .1em; color: #b48cff; white-space: nowrap; }
+.realm-pace::after { content: ''; position: absolute; left: 50%; top: 13px; margin-left: -4px; border: 4px solid transparent; border-top-color: #b48cff; }
+/* Near either end the label hangs off the marker instead of centring on it. */
+.realm-pace.from-left { transform: translateX(-4px); }
+.realm-pace.from-left::after { left: 4px; }
+.realm-pace.from-right { transform: translateX(calc(-100% + 4px)); }
+.realm-pace.from-right::after { left: auto; right: 0; }
+.realm-bar { position: relative; height: 22px; border-radius: 4px; background: #120b1c; border: 1px solid #5b3f7a; overflow: hidden; }
+.realm-fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--brass-dim), var(--brass) 85%, #fff2c2); transition: width 900ms cubic-bezier(.2, .8, .2, 1); }
+.realm-fill-reveal { animation: realm-reveal 1600ms cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes realm-reveal { from { width: 0; } }
+.realm-hatch { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, #3a2659 0 6px, #24173a 6px 12px); }
+.realm-bar b { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--ink, #000) 70%, transparent); }
+.realm-ticks { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 3px; font-size: 0.5625rem; color: var(--muted); text-align: right; }
+.realm-ticks .hit { color: var(--brass); }
+.realm-sub { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 0.625rem; color: var(--muted); }
+.realm-teaser { text-align: center; padding: 8px 0 4px; }
+.realm-teaser .realm-sub { justify-content: center; }
+.realm-mine-row { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 10px; }
+.realm-mine { font-family: var(--font-display); font-size: 1.5rem; line-height: 1; color: var(--brass); }
+.realm-mine-tier { font-size: 0.75rem; color: var(--muted); }
+.realm-track { position: relative; height: 4px; margin: 0 6px 12px 0; border-radius: 2px; background: var(--panel-3); }
+.realm-track i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--brass); transition: width 600ms ease; }
+.realm-track b { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; transform: rotate(45deg); background: var(--panel); border: 1.5px solid var(--brass-dim); }
+.realm-track b.hit { background: var(--brass); border-color: var(--brass); box-shadow: 0 0 8px color-mix(in srgb, var(--brass) 60%, transparent); }
+.realm-tier-list { display: flex; flex-direction: column; gap: 2px; font-size: 0.6875rem; color: var(--muted); }
+.realm-tier-list > div { display: flex; justify-content: space-between; gap: 8px; }
+.realm-tier-list > div.hit { color: var(--parchment); }
+.realm-tier-list > div.hit span:first-child { color: var(--brass); }
+.realm-note { margin: 8px 0 0; font-size: 0.6875rem; line-height: 1.45; color: var(--muted); }
+.realm-outbox { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 7px 9px; border: 1px dashed var(--brass-dim); border-radius: 6px; }
+.realm-outbox > div { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 0.625rem; color: var(--muted); }
+.realm-outbox b { font-size: 0.75rem; color: var(--parchment); }
+.realm-outbox button { white-space: nowrap; }
+.realm-feed { margin-top: 10px; }
+.realm-feed-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 0.6875rem; border-top: 1px solid color-mix(in srgb, var(--panel-3) 60%, transparent); }
+.realm-feed-row:first-of-type { border-top: 0; }
+.realm-feed-row b { color: var(--brass); }
+.realm-feed-row span:last-child { color: var(--muted); white-space: nowrap; }
+.modal.realm-result { max-width: 520px; text-align: center; }
+@media (max-width: 760px) {
+  .realm-cols { grid-template-columns: 1fr; }
+  .realm-strip { grid-template-columns: repeat(2, 1fr); }
+  .realm-banner { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { .realm-fill, .realm-rift, .realm-track i { transition: none; } .realm-fill-reveal { animation: none; } }
+
+/* ==== Patch 0477: bug report form (BugReport.tsx) ======================== */
+.header-bug-icon { opacity: .75; }
+.header-bug-icon:hover { opacity: 1; }
+.modal.bugrep-modal { max-width: 520px; }
+.bugrep-label { display: block; margin: 8px 0 3px; font-size: 0.625rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.bugrep-text { width: 100%; min-height: 130px; resize: vertical; box-sizing: border-box; padding: 8px; font: inherit; font-size: 0.8125rem; line-height: 1.4; color: var(--parchment); background: var(--panel-2); border: 1px solid var(--panel-3); border-radius: 6px; }
+.bugrep-text:focus, .bugrep-row input:focus, .bugrep-row select:focus { outline: none; border-color: var(--brass); }
+.bugrep-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bugrep-row input, .bugrep-row select { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; font-size: 0.75rem; color: var(--parchment); background: var(--panel-2); border: 1px solid var(--panel-3); border-radius: 6px; }
+.bugrep-note { margin: 10px 0; font-size: 0.6875rem; line-height: 1.45; color: var(--muted); }
+.bugrep-done { margin: 6px 0 14px; font-size: 0.8125rem; line-height: 1.5; }

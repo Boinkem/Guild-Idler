@@ -34,7 +34,7 @@ const num = (value: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-function requireAdmin(config: AppConfig) {
+export function requireAdmin(config: AppConfig) {
   const expected = Buffer.from(config.adminToken);
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const header = request.headers.authorization;

@@ -30,8 +30,11 @@ if (!secret) {
 }
 
 const steamId = process.argv[2] || '76561198000000001';
-const token = jwt.sign({ steamId }, secret, { expiresIn: '1h' });
+// Patch 0477 -- optional second argument 'demo' mints a demo-build session
+// (only /realm/* accepts those).
+const app = process.argv[3] === 'demo' ? 'demo' : 'full';
+const token = jwt.sign({ steamId, app }, secret, { expiresIn: '1h' });
 
-console.log(`\nTest session for SteamID ${steamId} (valid 1 hour):\n`);
+console.log(`\nTest ${app} session for SteamID ${steamId} (valid 1 hour):\n`);
 console.log(token);
 console.log('\nPaste this into TestingPanel -> Auction House dev session -> Set token.\n');

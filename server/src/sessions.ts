@@ -19,35 +19,47 @@ import jwt from 'jsonwebtoken';
 
 const SESSION_TOKEN_EXPIRY = '1h';
 
+/** Patch 0477 -- which Steam app the ticket behind a session was issued
+ *  for. The demo is its own app (5488030); a demo session may only use the
+ *  routes that explicitly allow it (realm events). Tokens issued before
+ *  this patch carry no `app` and are read as 'full' -- only the full game
+ *  could sign in then. */
+export type SessionApp = 'full' | 'demo';
+
 export interface SessionPayload {
   steamId: string;
+  app?: SessionApp;
 }
 
-/**
- * Signs a new session token for a verified SteamID. Throws if
- * SESSION_SECRET isn't configured -- callers (the /auth/verify route)
- * are expected to check `config.sessionSecret` before reaching this, same
- * "fail loud in code, fail safe in behaviour" shape steamAuth.ts's own
- * missing-key check already uses.
- */
-export function issueSessionToken(steamId: string, secret: string): string {
-  const payload: SessionPayload = { steamId };
+export interface Session {
+  steamId: string;
+  app: SessionApp;
+}
+
+export function issueSessionToken(steamId: string, secret: string, app: SessionApp = 'full'): string {
+  const payload: SessionPayload = { steamId, app };
   return jwt.sign(payload, secret, { expiresIn: SESSION_TOKEN_EXPIRY });
 }
 
-/**
- * Verifies a session token, returning the SteamID it was issued for, or
- * `null` for anything wrong with it -- expired, tampered, wrong secret,
- * malformed. Never throws: an invalid session is a normal, expected
- * outcome (tokens expire after an hour by design), not an exceptional
- * one, so callers check for `null` rather than wrapping this in
- * try/catch.
- */
-export function verifySessionToken(token: string, secret: string): string | null {
+/** Verifies a session token and says which app it belongs to. Null for a
+ *  bad, expired or missing-secret token. */
+export function verifySession(token: string, secret: string): Session | null {
   try {
     const decoded = jwt.verify(token, secret) as SessionPayload;
-    return decoded.steamId ?? null;
+    if (!decoded.steamId) return null;
+    return { steamId: decoded.steamId, app: decoded.app === 'demo' ? 'demo' : 'full' };
   } catch {
     return null;
   }
+}
+
+/**
+ * Verifies a session token and returns the SteamID it was issued for, or
+ * null if the token is invalid/expired/tampered with. Never throws.
+ * FULL-GAME sessions only (patch 0477): a demo session reads as null here,
+ * so anything still calling this refuses the demo by default.
+ */
+export function verifySessionToken(token: string, secret: string): string | null {
+  const session = verifySession(token, secret);
+  return session && session.app === 'full' ? session.steamId : null;
 }

@@ -14,6 +14,7 @@ import { EquipmentManager } from './EquipmentManager';
 import { tutorialQuestOffer } from '../data/quests';
 import { ALWAYS_KNOWN_RECIPE_IDS, RECIPE_SCROLLS } from '../data/recipeScrolls';
 import { DEMO_BUILD } from '../demo';
+import { EMPTY_REALM_THREAT } from './RealmThreatManager';
 
 /** Storage abstraction so the game also runs in a plain browser tab for testing. */
 export interface SaveAdapter {
@@ -208,6 +209,7 @@ export function createInitialState(now = Date.now()): GameState {
     hasSeenAlchemist: false,
     hasSeenEnchanter: false,
     guildGuideDismissed: false,
+    realmThreat: { ...EMPTY_REALM_THREAT },
     hasCompletedFirstQuest: false,
     hasVisitedVendorsTab: false,
     hasObtainedConsumable: false,
@@ -1605,6 +1607,8 @@ const MIGRATIONS: Record<number, Migration> = {
       guildGuideDismissed: (save.guildGuideDismissed as boolean | undefined) ?? owned >= GUILD_GUIDE_STEP_IDS.length / 2,
     };
   },
+  // Patch 0477 -- Realm Threat event state.
+  75: (save) => ({ ...save, version: 76, realmThreat: { ...EMPTY_REALM_THREAT, ...((save.realmThreat as object | undefined) ?? {}) } }),
 };
 
 /** What every pre-0474 guild paid for the one-off Guild Charter

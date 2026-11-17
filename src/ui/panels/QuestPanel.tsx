@@ -17,6 +17,7 @@ import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
 import { ConfirmModal } from '../ConfirmModal';
 import { PrereqLink } from '../PrereqLink';
+import { RealmQuestBanner } from '../RealmThreat';
 import { buyWithFx, fxMs, fxSpeed } from '../purchaseFx';
 import { at } from '../resultFx';
 import { HeroSprite } from '../sprites/HeroSprite';
@@ -851,6 +852,8 @@ export function QuestPanel() {
     <div className="tab-scene" style={{ backgroundImage: `url(${backgroundSrc('./lore/panels/quests.jpg', settings.backgroundMood)})` }}>
       <div className="tab-scene-content">
       <h2>Quest Board</h2>
+      {/* Patch 0477 -- shows only while the server reports a realm event. */}
+      <RealmQuestBanner />
       <div className="card">
         <p className="small muted" style={{ margin: 0 }}>
           Each hero keeps their own contracts, scaled to their own level. Pick a hero below to see

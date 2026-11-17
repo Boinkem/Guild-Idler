@@ -37,6 +37,7 @@ import { PrestigePanel } from './panels/PrestigePanel';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { ShardMark } from './icons';
 import { goToGuildHallPurchase } from './PrereqLink';
+import { BugReportButton } from './BugReport';
 
 /**
  * Grouped rather than one flat 13-entry list -- the nav had grown past the
@@ -525,6 +526,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
               <span className="header-notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
             )}
           </button>
+          {/* Patch 0477 -- report a bug from anywhere. */}
+          <BugReportButton tab={tab} />
         </div>
         <div className="spacer" />
         {/* Quick mute -- same underlying settings as Settings -> Sound /

@@ -1,5 +1,5 @@
 import { ActiveQuest, AutoChainTactics, CommissionReward, ChainReplayDifficulty, DiceFace, DlcGrantNotice, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
-import { createRng, uid } from './rng';
+import { createRng, uid, uuidv4 } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
 import { TUTORIAL_QUEST_ID } from './data/quests';
@@ -51,12 +51,29 @@ import { Tuning } from './data/tuning';
 import { rerollDay, rerollsUsedToday } from './data/reroll';
 import { playSound } from './sound';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
-import { DEMO_LOCK_ERROR, requestDemoWall } from './demo';
+import { BUILD_VERSION, DEMO_BUILD, DEMO_LOCK_ERROR, requestDemoWall } from './demo';
+import { RealmThreatManager } from './managers/RealmThreatManager';
+import { contributeRealm, fetchRealmCurrent, fetchRealmMine, submitBugReport } from './auctionHouse';
+import type { BugReportPayload, RealmEvent } from './auctionHouse';
 
 const TICK_MS = 1000;
 /** Patch 0463 -- how often to check for Auction House sales (see checkAuctionSales). */
 const AH_SALE_CHECK_MS = 10 * 60 * 1000;
 const AUTOSAVE_MS = 15_000;
+/** Patch 0477 -- realm event sync: how often while an event is showing,
+ *  how often when nothing is on, and how soon to retry an unreachable
+ *  server. Each sync is one cached public GET, plus a small POST only
+ *  when there is Ward to send. */
+const REALM_SYNC_MS = 5 * 60 * 1000;
+const REALM_IDLE_SYNC_MS = 30 * 60 * 1000;
+const REALM_RETRY_MS = 2 * 60 * 1000;
+/** After an event boundary (open / close / result), sync once this long
+ *  past it -- the server's own job runs every 60s. */
+const REALM_BOUNDARY_LAG_MS = 75_000;
+/** Minimum gap between syncs the player triggers (Send now, opening the panel). */
+const REALM_MANUAL_GAP_MS = 30_000;
+const BUG_QUEUE_KEY = 'guildbound-bug-queue';
+const BUG_QUEUE_MAX = 20;
 
 export interface OfflineReport {
   elapsedMs: number;
@@ -1143,6 +1160,7 @@ export class GameEngine {
     this.state.stats.playTimeMs += Math.max(0, Math.min(delta, TICK_MS * 5));
     this.state.lastSeen = now;
     this.maybeCheckAuctionSales(now);
+    this.maybeSyncRealm(now);
 
     let changed = false;
     const infirmaryLevel = this.state.guild.infirmary ?? 0;
@@ -1794,6 +1812,241 @@ export class GameEngine {
 
   private lastSaleCheckAt = 0;
   private saleCheckInFlight = false;
+
+  /* ---------------------------------------------------- realm events --- */
+  // Patch 0477 -- see managers/RealmThreatManager.ts for what is and
+  // isn't built. Nothing here is saved except state.realmThreat.
+
+  /** What the server last said. `status` 'unreachable' keeps the last
+   *  known event on screen with a "can't be reached" note. */
+  realmView: {
+    status: 'unknown' | 'ok' | 'unreachable';
+    event: RealmEvent | null;
+    fetchedAt: number;
+    /** Why the last send didn't go through (no Steam session, offline). */
+    sendError: string | null;
+    syncing: boolean;
+  } = { status: 'unknown', event: null, fetchedAt: 0, sendError: null, syncing: false };
+  realmPanelOpen = false;
+  /** The end-of-event reveal is waiting to be shown / is showing. */
+  realmResultOpen = false;
+  private lastRealmSyncAt = 0;
+  private realmMineKey = '';
+
+  /** Called from tick(). Syncs on a slow cadence, straight after each
+   *  event boundary, and sooner while the server can't be reached. */
+  private maybeSyncRealm(now: number) {
+    if (this.realmView.syncing) return;
+    const since = now - this.lastRealmSyncAt;
+    const rt = this.state.realmThreat;
+    const boundaryDue = rt.campaignId !== 0 && [rt.opensAt, rt.endsAt, rt.finalisesAt]
+      .some((at) => at > 0 && now >= at + REALM_BOUNDARY_LAG_MS && this.lastRealmSyncAt < at + REALM_BOUNDARY_LAG_MS);
+    const every = this.realmView.status === 'unreachable' || this.realmView.status === 'unknown' && this.lastRealmSyncAt > 0
+      ? REALM_RETRY_MS
+      : this.realmView.event ? REALM_SYNC_MS : REALM_IDLE_SYNC_MS;
+    if (this.lastRealmSyncAt !== 0 && since < every && !(boundaryDue && since >= 5000)) return;
+    void this.syncRealm();
+  }
+
+  /**
+   * One round with the server: what's on, send any Ward waiting, pick up
+   * this guild's standing and titles. Every step fails soft -- offline or
+   * signed out, the local tally simply waits for the next round.
+   */
+  async syncRealm(): Promise<void> {
+    if (this.realmView.syncing) return;
+    this.realmView.syncing = true;
+    this.lastRealmSyncAt = Date.now();
+    this.notify();
+    try {
+      void this.flushBugQueue();
+      const current = await fetchRealmCurrent();
+      if (!current) {
+        this.realmView = { ...this.realmView, status: 'unreachable' };
+        return;
+      }
+      let event = current.realmEnabled ? current.event : null;
+      this.realmView = { ...this.realmView, status: 'ok', event, fetchedAt: Date.now() };
+      const before = JSON.stringify(this.state.realmThreat);
+      RealmThreatManager.onCurrent(this.state, event);
+      const rt = this.state.realmThreat;
+      if (!event || !RealmThreatManager.canContribute(event)) {
+        if (JSON.stringify(rt) !== before) void this.saveNow();
+        return;
+      }
+
+      let sent = false;
+      if (event.phase === 'open' || event.phase === 'tallying') {
+        const batch = RealmThreatManager.buildBatch(this.state);
+        if (batch) {
+          // Saved first: a crash from here on retries the SAME batch key.
+          await this.saveNow();
+          const result = await contributeRealm(batch.campaignId, batch.points, this.state.guildName, batch.batchKey);
+          if (result.ok) {
+            RealmThreatManager.settleBatch(this.state, { points: result.points, tier: result.tier });
+            event = { ...event, total: result.total, target: result.target, contributors: result.contributors ?? event.contributors };
+            this.realmView = { ...this.realmView, event, sendError: null };
+            this.grantRealmTitles(result.titles);
+            sent = true;
+            // Re-read the event so the feed shows this guild's own line too.
+            const fresh = await fetchRealmCurrent();
+            if (fresh?.realmEnabled && fresh.event?.id === event.id) {
+              event = fresh.event;
+              this.realmView = { ...this.realmView, event };
+            }
+          } else if (result.rejected) {
+            RealmThreatManager.settleBatch(this.state);
+            this.realmView = { ...this.realmView, sendError: null };
+          } else {
+            this.realmView = { ...this.realmView, sendError: result.error };
+          }
+        }
+      }
+
+      // Standing and titles from the server: once per event phase (covers a
+      // fresh install mid-event, and titles handed out when it is sealed).
+      const mineKey = `${event.id}:${event.phase}`;
+      if (!sent && event.phase !== 'teaser' && this.realmMineKey !== mineKey) {
+        const mine = await fetchRealmMine();
+        if (mine && mine.campaignId === event.id) {
+          this.realmMineKey = mineKey;
+          rt.points = Math.max(0, mine.points ?? 0);
+          rt.tier = Math.max(0, mine.tier ?? 0);
+          this.grantRealmTitles(mine.titles ?? []);
+        }
+      }
+
+      if (event.phase === 'closed' && event.result && rt.seenResultFor !== event.id && rt.points > 0) {
+        this.realmResultOpen = true;
+      }
+      if (JSON.stringify(rt) !== before) void this.saveNow();
+    } finally {
+      this.realmView = { ...this.realmView, syncing: false };
+      this.notify();
+    }
+  }
+
+  private grantRealmTitles(titles: string[]) {
+    for (const title of titles) {
+      if (typeof title !== 'string' || !title) continue;
+      if (GuildTitleManager.grant(this.state, title)) {
+        this.say(`New guild title earned: "${title}".${DEMO_BUILD ? ' Your guild keeps it in the full game.' : ''}`, 'dashboard', true);
+      }
+    }
+  }
+
+  /** The panel's "Send now", and opening the panel: a sync, unless one
+   *  just ran. Returns false when it was too soon. */
+  requestRealmSync(): boolean {
+    if (this.realmView.syncing || Date.now() - this.lastRealmSyncAt < REALM_MANUAL_GAP_MS) return false;
+    void this.syncRealm();
+    return true;
+  }
+
+  openRealmPanel() {
+    this.realmPanelOpen = true;
+    this.requestRealmSync();
+    this.notify();
+  }
+
+  closeRealmPanel() {
+    this.realmPanelOpen = false;
+    this.notify();
+  }
+
+  dismissRealmResult() {
+    this.realmResultOpen = false;
+    const event = this.realmView.event;
+    if (event) this.state.realmThreat.seenResultFor = event.id;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /* ----------------------------------------------------- bug reports --- */
+  // Patch 0477. Reports wait in localStorage (not the save: they aren't
+  // part of a guild, and must survive a save reset) until the server
+  // takes them.
+
+  bugReportOpen = false;
+  /** The tab the player was on when they opened the form. */
+  bugReportTab = '';
+
+  openBugReport(tab = '') {
+    this.bugReportTab = tab;
+    this.bugReportOpen = true;
+    this.notify();
+  }
+
+  closeBugReport() {
+    this.bugReportOpen = false;
+    this.notify();
+  }
+
+  private readBugQueue(): BugReportPayload[] {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(BUG_QUEUE_KEY) ?? '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private writeBugQueue(queue: BugReportPayload[]) {
+    try { window.localStorage.setItem(BUG_QUEUE_KEY, JSON.stringify(queue.slice(-BUG_QUEUE_MAX))); } catch { /* storage full or blocked: the report just isn't queued */ }
+  }
+
+  private bugFlushInFlight = false;
+
+  /** Sends whatever is queued, oldest first; stops at the first one the
+   *  server can't be reached for. Returns how many are still waiting. */
+  async flushBugQueue(): Promise<number> {
+    if (this.bugFlushInFlight) return this.readBugQueue().length;
+    this.bugFlushInFlight = true;
+    try {
+      let queue = this.readBugQueue();
+      while (queue.length > 0) {
+        const outcome = await submitBugReport(queue[0]);
+        if (outcome === 'retry') break;
+        // Re-read: a new report may have been queued while this one was in flight.
+        queue = this.readBugQueue().filter((r) => r.reportKey !== queue[0].reportKey);
+        this.writeBugQueue(queue);
+      }
+      return queue.length;
+    } finally {
+      this.bugFlushInFlight = false;
+    }
+  }
+
+  /**
+   * Files a bug report: queued locally, then sent. Attaches only what
+   * helps place the bug (build, demo or full, tab, guild name, top hero
+   * level, save version) -- never the save itself. Resolves 'sent', or
+   * 'queued' when the server couldn't be reached (it goes with a later sync).
+   */
+  async sendBugReport(input: { message: string; category: string; contact: string }): Promise<'sent' | 'queued'> {
+    const report: BugReportPayload = {
+      reportKey: uuidv4(),
+      message: input.message.trim().slice(0, 4000),
+      category: input.category,
+      contact: input.contact.trim().slice(0, 64),
+      build: BUILD_VERSION,
+      demo: DEMO_BUILD,
+      context: {
+        tab: this.bugReportTab,
+        guild: this.state.guildName,
+        topLevel: Math.max(0, ...this.state.heroes.map((h) => h.level)),
+        heroes: this.state.heroes.length,
+        saveVersion: this.state.version,
+        steam: typeof window !== 'undefined' && !!window.littleKnight,
+        platform: typeof navigator !== 'undefined' ? navigator.platform : '',
+      },
+    };
+    this.writeBugQueue([...this.readBugQueue(), report]);
+    await this.flushBugQueue();
+    const sent = !this.readBugQueue().some((r) => r.reportKey === report.reportKey);
+    this.say(sent ? 'Bug report sent. Thank you!' : "Bug report saved. It will be sent when the server can be reached.");
+    return sent ? 'sent' : 'queued';
+  }
 
   /** Turns sale alerts on the first time the player lists something. */
   private startSaleWatch() {

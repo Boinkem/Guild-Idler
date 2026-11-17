@@ -22,6 +22,9 @@ import { registerListingsRoutes, sweepExpiredListings } from './listings.js';
 import { registerLedgerRoutes } from './ledger.js';
 import { registerAdminRoutes } from './admin.js';
 import { startBroker } from './broker.js';
+import { registerRealmRoutes, startRealm, readRealmConfig } from './realm.js';
+import { registerBugRoutes } from './bugs.js';
+import { runMigrations } from './migrations.js';
 
 const config = loadConfig();
 const app = Fastify({ logger: true });
@@ -56,7 +59,15 @@ app.get('/health', async () => ({
   adminConfigured: !!config.adminToken,
   // Patch 0462 -- whether the Broker is switched on (AH_BROKER_ENABLED).
   brokerEnabled: config.brokerEnabled,
+  // Patch 0477 -- true only when AH_REALM_ENABLED and realm.config.json's
+  // "enabled" are both on. Clients show nothing Realm-related otherwise.
+  realmEnabled: config.realmEnabled && realmConfigEnabled(),
+  demoSignIn: !!config.steamDemoAppId,
 }));
+
+function realmConfigEnabled(): boolean {
+  try { return readRealmConfig().enabled === true; } catch { return false; }
+}
 
 /**
  * Steam ticket verification (patch 0405), now issuing a session token on
@@ -86,7 +97,9 @@ app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) =
 
   // verifySteamTicket's own contract: result.ok === true always pairs
   // with a real steamId -- see steamAuth.ts's SteamAuthResult.
-  const sessionToken = issueSessionToken(result.steamId!, config.sessionSecret);
+  // Patch 0477 -- the session remembers which app the ticket was for; a
+  // demo session is refused everywhere except the realm event routes.
+  const sessionToken = issueSessionToken(result.steamId!, config.sessionSecret, result.app ?? 'full');
   return { ...result, sessionToken };
 });
 
@@ -98,6 +111,20 @@ app.post<{ Body: { ticket?: string } }>('/auth/verify', async (request, reply) =
  * crashing on an undefined connection pool.
  */
 if (config.databaseUrl) {
+  // Patch 0477 -- pending migrations are applied here, before anything
+  // listens, instead of needing `npm run migrate` by hand after a patch.
+  // Same runner, same once-only bookkeeping. A failure is logged and the
+  // server still starts: the existing routes keep working, and whatever
+  // needed the new tables answers with errors until it is fixed.
+  try {
+    const ran = await runMigrations(config.databaseUrl, (message) => app.log.info(message));
+    if (ran.length > 0) app.log.info({ ran }, 'migrations applied');
+  } catch (err) {
+    app.log.error({ err }, 'MIGRATION FAILED -- new features may not work until this is fixed (see the error above, or run `npm run migrate`)');
+  }
+  registerRealmRoutes(app, config);
+  registerBugRoutes(app, config);
+  if (startRealm(app.log, config)) app.log.info('Realm events running.');
   registerListingsRoutes(app, config);
   // My Ledger (patch 0458) -- the player's own Auction House dashboard.
   registerLedgerRoutes(app, config);
@@ -134,6 +161,9 @@ app.addHook('onRequest', async (request, reply) => {
   // Patch 0459 -- /admin/* has its own token check (admin.ts), so usage
   // stats stay readable while the Auction House is switched off.
   if (request.raw.url?.startsWith('/admin/')) return;
+  // Patch 0477 -- bug reports and realm events don't depend on the Auction
+  // House being switched on (each has its own gate).
+  if (request.raw.url?.startsWith('/bugs') || request.raw.url?.startsWith('/realm/')) return;
 
   reply.code(503).send({
     error: 'auction_house_offline',

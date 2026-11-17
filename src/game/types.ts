@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 75;
+export const SAVE_VERSION = 76;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2652,6 +2652,33 @@ export interface GameState {
    *  (a short recommended-first-purchases list) has been hidden by the
    *  player. The card also goes away by itself once every step is bought. */
   guildGuideDismissed: boolean;
+  /**
+   * Patch 0477 -- Realm Threat (server events for now; see
+   * RealmThreatManager.ts). The event this save last heard about, the
+   * window its Ward counts in, and the Ward not yet confirmed by the
+   * server.
+   */
+  realmThreat: {
+    /** Server campaign id; 0 = no event known. */
+    campaignId: number;
+    /** ms timestamps. A quest finishing in [opensAt, endsAt) earns Ward. */
+    opensAt: number;
+    endsAt: number;
+    /** Late reports are accepted until here (the server's grace period). */
+    finalisesAt: number;
+    /** Ward earned locally, not yet packaged into a batch. */
+    unsent: number;
+    /** A batch that has been (or is about to be) sent and not yet
+     *  confirmed. Re-sent with the same key until the server answers. */
+    pending: { batchKey: string; points: number; campaignId: number } | null;
+    /** This guild's Ward and tier in that event, as last confirmed by the server. */
+    points: number;
+    tier: number;
+    /** Campaign id whose end-of-event reveal has been shown. */
+    seenResultFor: number;
+    /** Lifetime Ward earned, across every event. */
+    wardTotal: number;
+  };
   /**
    * Grimsby's Tab -- a repeating push-your-luck game, gated behind
    * grimsbyPermanentSpotUnlocked (see PeddlerManager.canOpenTab). null

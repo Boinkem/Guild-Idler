@@ -38433,3 +38433,128 @@ build pass; main.js and preload carry the Discord handler. Not checked:
 the Discord button actually opening Discord from the packaged Electron
 app, and the full-game build's links in a browser (the helper is a
 pass-through there).
+
+### Realm events (Next Fest Breach slice), demo sign-in, bug reports (patch 0477)
+```discord-update
+Dev Update | Patch 0477
+
+- Added server events: when one is running, every quest your heroes finish adds Ward to one bar shared by every guild, even while you're away
+- Added a banner on the Quest Board and an event panel showing the realm's progress, your Ward and tier, and the latest deeds
+- Added "Report a bug": the bug icon on the top bar, or Settings > Feedback. Your save is never sent
+- Changed the demo so it can sign in for server events (and nothing else)
+```
+
+First slice of the Realm Threat (design doc "Realm Threat -- complete
+system spec", in the owner's GuildBound Design Docs folder; project doc
+`claude/next-fest-breach-plan.md`). Built as a one-off **event** on the
+spec's own tables and Ward rules, so the Next Fest Breach and its test
+runs exercise the same path the monthly campaigns will use. Scheduled
+first: a test event tonight, 17 Nov 8:00 PM to 18 Nov 8:00 AM Adelaide
+(09:30-21:30 UTC), no rewards.
+
+**Not built yet (later patches, before launch):** kinds `full` and
+`prologue` (four chapters, chapter chests, the Last Stand rally, the
+chain and its item, the Realm Archive, trophy), the demo's view-only
+mode for full campaigns (spec section 13), the full game's claim of
+event titles at launch (`realm_rewards` already records them per Steam
+account), and the "Festival Breacher" title for the real Next Fest event.
+
+**Server (`server/`).**
+- Migrations `004_realm_threat.sql` (the spec's `realm_campaigns`,
+  `realm_chapters`, `realm_contributions`, `realm_chain_bonus`,
+  `realm_feed`, plus `realm_rewards`; kind `event` with `event_key`,
+  `rewards`, `allow_demo`, `grace_minutes`, `teaser_from`,
+  `results_until`, `finalised_at`; mailbox type `realm_chest` allowed
+  but unused) and `005_bug_reports.sql`.
+- **Migrations now run on server start** (`src/migrations.ts`, shared
+  with `npm run migrate`), under an advisory lock, before listening. A
+  failure is logged and the server still starts. So applying a patch
+  with a migration is just Stop/Start in the DevTool.
+- **Demo sign-in** (`steamAuth.ts`, `sessions.ts`, `config.ts`): a
+  ticket that fails against `STEAM_APP_ID` is tried against
+  `STEAM_DEMO_APP_ID` (default 5488030). The session JWT carries
+  `app: 'full' | 'demo'`; tokens without it read as full.
+  `requireAuth` now **403s demo sessions**, so the Auction House,
+  mailbox and ledger stay full-game only; `verifySessionToken` returns
+  null for demo sessions. `requireAnySession` (realm only) and
+  `optionalSession` (bugs) are new.
+- **`src/realm.ts`**: `GET /realm/current` (public, cached 15s; picks
+  open > tallying > a result under 72h old > the soonest countdown >
+  older results), `GET /realm/mine`, `POST /realm/contribute`
+  (idempotent on a UUID `batchKey`, clamped to `maxBatch` and the cap
+  under a row lock on the campaign, demo allowed only if `allow_demo`,
+  feed lines folded per player per `feedMinutes`, milestone lines at
+  25/50/75/100%, tier titles written to `realm_rewards`). A 60s job
+  creates events from `realm.config.json`, then opens, closes, and
+  **finalises after the grace period** (default 60 min, late reports
+  accepted until then) and hands out the seal title. Admin:
+  `GET /admin/realm`, `POST /admin/realm/{schedule,target,close-now,add,delete}`.
+  An event can only be rescheduled until it opens.
+- On/off: `AH_REALM_ENABLED=true` in `.env` **and** `"enabled": true`
+  in `realm.config.json`; `/health` reports `realmEnabled` and
+  `demoSignIn`. `/bugs` and `/realm/*` skip the AH-off 503 gate.
+- **`src/bugs.ts`**: `POST /bugs`, no sign-in (SteamID recorded if a
+  session token comes along), 5 per address per 10 min (uses
+  `cf-connecting-ip` behind the tunnel), 2,000 a day, fields capped,
+  idempotent on `reportKey`. Each report goes to `bug_reports` and as
+  one line to `server/bug-reports.jsonl` (gitignored). Admin:
+  `GET /admin/bugs?status=`, `POST /admin/bugs/:id` (status, fixed in
+  patch, note).
+- `mint-test-session.mjs` takes `demo` as a second argument.
+
+**Game (`src/`).**
+- Ward exactly per spec 4.1 (`data/realmThreat.ts`): 1 per 90 min of
+  quest time, failed half, fast 0, raids 10/20/35/50 (half if not a full
+  clear). Hooked in `QuestManager.resolve` and `RaidManager.resolve`,
+  which offline catch-up shares, so offline quests count once, by their
+  own finish time.
+- `RealmThreatManager`: the event's window is copied into the save, so
+  only quests finishing inside it count; batches are saved before
+  sending and re-sent with the same key until the server answers. Save
+  version 75 -> 76 (`state.realmThreat`).
+- Engine sync: every 5 min with an event showing (30 min without, 2 min
+  while unreachable), straight after each boundary, on panel open and on
+  Send now (30s minimum gap). Titles are granted with
+  `GuildTitleManager.grant` and a notification. Demo sign-in reuses the
+  AH session code; no AH Charter needed.
+- UI (`RealmThreat.tsx`): Quest Board banner (hidden during the
+  scripted first contract), the event panel (cut-down version of the
+  spec's image 01, same violet/brass), and a one-time result reveal.
+  Text lives in `data/json/realm-campaigns.json` (`next_fest_breach`:
+  "The Next Fest Breach!", lore-free); an unknown key shows a generic card.
+- Bug reports (`BugReport.tsx`): 🐞 on the top bar, Settings > Feedback,
+  and the demo's wishlist card. Sends build, demo/full, tab, guild name,
+  top hero level, hero count, save version, and never the save. Queued in
+  localStorage when the server can't be reached and sent on a later sync.
+
+**DevTool (Auction House tab).** New "Realm events" (each event's
+progress, players, demo count, players at the cap; open now, set target,
+add Ward, close, close and finalise, delete) and "Bug reports" (filter
+by status; seen, fixed in a patch, won't fix, notes). Both talk to the
+**local** backend through a narrow pass-through using the saved admin
+token.
+
+**To turn it on:** apply, add `AH_REALM_ENABLED=true` to `server/.env`,
+Stop/Start the server in the DevTool (migrations 004 and 005 run
+themselves), package and push the demo. Tonight's event is already in
+`server/realm.config.json`; its countdown shows as soon as the server
+restarts.
+
+**Verified:**
+- 43 server checks against real Postgres 16: scheduling, open,
+  contribute, replay, 10 concurrent sends at the cap, oversized batches,
+  totals and contributors, feed and milestones, demo 403 on mailbox,
+  listings and ledger, old tokens still accepted, retarget, close,
+  grace-period late report, finalise and seal title, rejection after
+  finalise, reschedule refused once open, demo refused when not allowed,
+  bug reports, rate limit, triage.
+- In a headless browser, a demo web build against that server: the
+  countdown, Ward from a live quest, Ward from a quest finished offline,
+  the tier title, the sealed reveal, and a bug report arriving with its
+  context.
+- DevTool sections exercised.
+- `tsc` (game and server), both web builds and the Electron demo build
+  pass.
+
+**Not verified:** a real Steam demo ticket (tonight is the first),
+anything inside packaged Electron, and the public URL/tunnel path.

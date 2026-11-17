@@ -19,6 +19,8 @@ import { earnFromRaidClear } from '../classSkins';
 import { clamp, sumMods, MINUTE, softCap } from '../util';
 import { RecipeManager } from './RecipeManager';
 import { raidRecipeDropChance } from '../data/recipeScrolls';
+import { RealmThreatManager } from './RealmThreatManager';
+import { wardForRaid } from '../data/realmThreat';
 
 export const RaidManager = {
   /**
@@ -481,6 +483,10 @@ export const RaidManager = {
     }
 
     const fullClear = encounterIds.length > 0 && encountersCleared === encounterIds.length;
+    // Patch 0477 -- Ward toward the realm event (see QuestManager.resolve's
+    // own call). One amount for the whole run: full on a full clear, half
+    // otherwise.
+    RealmThreatManager.addWard(state, wardForRaid(active.difficulty, fullClear), resolvedAt);
 
     // New in patch 0249, Hero Comparison table -- raids never had any
     // per-hero tracking before this (only QuestManager's questsCompleted

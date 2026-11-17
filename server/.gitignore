@@ -3,3 +3,5 @@ dist
 .env
 *.log
 dist-items
+# Patch 0477 -- in-game bug reports, one JSON line each (also in the database).
+bug-reports.jsonl

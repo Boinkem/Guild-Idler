@@ -38,10 +38,19 @@ export interface AppConfig {
    *  and AH_ENABLED + DATABASE_URL are set. Off by default: the Broker pays
    *  players real gold/scrap for listings, so turning it on is a choice. */
   brokerEnabled: boolean;
+  /** Patch 0477 -- the demo's own Steam App ID. A ticket that fails
+   *  against steamAppId is tried against this one; a match gives a 'demo'
+   *  session (see sessions.ts). Empty disables demo sign-in. */
+  steamDemoAppId: string;
+  /** Patch 0477 -- master switch for /realm/* (AH_REALM_ENABLED). Also
+   *  needs "enabled": true in realm.config.json. Off by default. */
+  realmEnabled: boolean;
 }
 
 export const STEAM_APP_ID_DEFAULT = '5143490';
 /** Must match AH_AUTH_IDENTITY in src/game/auctionHouse.ts. */
+/** "GuildBound Demo" (patch 0444's App ID). */
+export const STEAM_DEMO_APP_ID_DEFAULT = '5488030';
 export const STEAM_TICKET_IDENTITY_DEFAULT = 'guildbound-ah';
 
 function parseBool(value: string | undefined, fallback: boolean): boolean {
@@ -70,5 +79,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     steamTicketIdentity: env.STEAM_TICKET_IDENTITY?.trim() || STEAM_TICKET_IDENTITY_DEFAULT,
     adminToken: env.AH_ADMIN_TOKEN?.trim() ?? '',
     brokerEnabled: parseBool(env.AH_BROKER_ENABLED, false),
+    steamDemoAppId: env.STEAM_DEMO_APP_ID !== undefined ? env.STEAM_DEMO_APP_ID.trim() : STEAM_DEMO_APP_ID_DEFAULT,
+    realmEnabled: parseBool(env.AH_REALM_ENABLED, false),
   };
 }
