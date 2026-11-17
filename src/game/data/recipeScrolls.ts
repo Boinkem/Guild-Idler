@@ -72,6 +72,9 @@ export const ALWAYS_KNOWN_RECIPE_IDS: string[] = [
   'craft_foragers_bundle',
   'craft_pet_treat',
   'craft_beckoning_charm',
+  // Patch 0484 -- known from the start (RecipeManager.isKnown also checks
+  // this list, so existing saves get it too).
+  'craft_raiders_charm',
   // Patch 0362 -- Guildmade's own tier I (level 1) is now the Gear
   // category's lowest tier, same "the bottom rung of any tiered family
   // is free" rule every other category (Gems/Sigils/Charms/

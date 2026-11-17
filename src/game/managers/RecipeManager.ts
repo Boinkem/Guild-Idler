@@ -1,4 +1,4 @@
-import { RECIPE_SCROLLS, RECIPE_SCROLL_BY_ID, scrollSellValue } from '../data/recipeScrolls';
+import { ALWAYS_KNOWN_RECIPE_IDS, RECIPE_SCROLLS, RECIPE_SCROLL_BY_ID, scrollSellValue } from '../data/recipeScrolls';
 import { RecipeScrollDef, GameState } from '../types';
 import { Rng } from '../rng';
 import { ModifierManager } from './ModifierManager';
@@ -33,7 +33,9 @@ export const RecipeManager = {
   },
 
   isKnown(state: GameState, recipeId: string): boolean {
-    return state.unlockedRecipes.includes(recipeId);
+    // Patch 0484 -- always-known recipes added after a save was made
+    // (Raider's Charm) count as known without a migration.
+    return state.unlockedRecipes.includes(recipeId) || ALWAYS_KNOWN_RECIPE_IDS.includes(recipeId);
   },
 
   /**

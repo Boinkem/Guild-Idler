@@ -4,6 +4,7 @@ import {
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
 import { renownForRaidClear, TOMBSTONE_STYLES } from '../data/progression';
 import { Tuning } from '../data/tuning';
+import { armouryWearCut, heroSignature } from '../data/attunement';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
@@ -21,6 +22,9 @@ import { RecipeManager } from './RecipeManager';
 import { raidRecipeDropChance } from '../data/recipeScrolls';
 import { RealmThreatManager } from './RealmThreatManager';
 import { wardForRaid } from '../data/realmThreat';
+
+/** Patch 0484 -- the Raider's Charm consumable's id. */
+export const RAIDERS_CHARM_ID = 'raiders_charm';
 
 export const RaidManager = {
   /**
@@ -104,7 +108,8 @@ export const RaidManager = {
     if (heroes.length === 0) return 0;
     const contributions = heroes
       .map((h) => {
-        const raw = sumMods(HeroManager.heroMods(state, h, now), ModifierManager.global(state)).success ?? 0;
+        // Patch 0484 -- + a Raidborn Attunement's raid-only success.
+        const raw = (sumMods(HeroManager.heroMods(state, h, now), ModifierManager.global(state)).success ?? 0) + heroSignature(h, 'raidborn');
         // Hero Tier-Up (patch 0329) -- passes h.tierUpLevel so a
         // tiered-up hero's raid contribution baseline reflects their
         // bought-up stats, same fix as QuestManager.previewSuccess's own
@@ -298,9 +303,51 @@ export const RaidManager = {
   },
 
   /** Commits the party -- marks every hero busy, locks in the party's success bonus, and starts the clock. */
-  start(state: GameState, raidId: string, difficulty: RaidDifficulty, heroIds: string[], now: number): { raid?: ActiveRaid; error?: string } {
+  /**
+   * Patch 0484 -- Raider's Charm. Every item id across this raid's
+   * encounters (one loot pool per encounter, shared by every difficulty),
+   * and which the guild has never found (state.discoveredItems -- the same
+   * record the loot preview's "???" reads).
+   */
+  raidLootIds(raidId: string): string[] {
+    const raid = RAID_BY_ID[raidId];
+    if (!raid) return [];
+    const ids = new Set<string>();
+    for (const encounterId of raid.encounterIds) {
+      const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
+      if (!encounter) continue;
+      for (const entry of [...encounter.loot, ...(encounter.lootHeroic ?? []), ...(encounter.lootMythic ?? []), ...(encounter.lootLegendary ?? [])]) {
+        const parsed = parseLootEntry(entry);
+        if (parsed) ids.add(parsed.defId);
+      }
+    }
+    return [...ids];
+  },
+
+  undiscoveredRaidLoot(state: GameState, raidId: string): string[] {
+    return RaidManager.raidLootIds(raidId).filter((id) => !state.discoveredItems.includes(id));
+  },
+
+  /** Which way an armed charm would work on this raid right now. */
+  charmMode(state: GameState, raidId: string): 'seek' | 'boost' {
+    return RaidManager.undiscoveredRaidLoot(state, raidId).length > 0 ? 'seek' : 'boost';
+  },
+
+  charmShardCost(difficulty: RaidDifficulty): number {
+    if (difficulty === 'heroic') return Tuning.get('economy.raidCharmShardsHeroic');
+    if (difficulty === 'mythic') return Tuning.get('economy.raidCharmShardsMythic');
+    if (difficulty === 'legendary') return Tuning.get('economy.raidCharmShardsLegendary');
+    return Tuning.get('economy.raidCharmShardsNormal');
+  },
+
+  start(
+    state: GameState, raidId: string, difficulty: RaidDifficulty, heroIds: string[], now: number, armCharm = false,
+  ): { raid?: ActiveRaid; error?: string } {
     const check = RaidManager.canStart(state, raidId, difficulty, heroIds);
     if (!check.ok) return { error: check.error };
+    const charmShards = armCharm ? RaidManager.charmShardCost(difficulty) : 0;
+    if (armCharm && (state.inventory[RAIDERS_CHARM_ID] ?? 0) < 1) return { error: "You don't have a Raider's Charm." };
+    if ((state.legendaryShards ?? 0) < charmShards) return { error: 'Not enough Legendary Shards to arm the charm.' };
 
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
     const raidDef = RAID_BY_ID[raidId]!;
@@ -314,7 +361,12 @@ export const RaidManager = {
       endsAt: now + duration,
       currentEncounter: 0,
       partySuccessBonus,
+      ...(armCharm ? { charm: RaidManager.charmMode(state, raidId) } : {}),
     };
+    if (armCharm) {
+      state.inventory[RAIDERS_CHARM_ID] = (state.inventory[RAIDERS_CHARM_ID] ?? 0) - 1;
+      state.legendaryShards = (state.legendaryShards ?? 0) - charmShards;
+    }
 
     for (const hero of heroes) hero.status = 'questing';
     state.activeRaid = active;
@@ -417,7 +469,7 @@ export const RaidManager = {
       // line, so every application here already represents an actual
       // clear, not a loss.
       const wear = 3 + DIFFICULTY_ORDER.indexOf(questDifficulty) * 2;
-      for (const hero of heroes) EquipmentManager.applyWear(hero, wear, globalMods.durability ?? 0);
+      for (const hero of heroes) EquipmentManager.applyWear(hero, wear, globalMods.durability ?? 0, armouryWearCut(state));
       // Soft-capped the same way QuestManager's own goldMultiplier/
       // xpMultiplier are (patch 0214) -- same shared softCap() helper, so
       // there's one formula for both instead of two that can drift.
@@ -430,7 +482,12 @@ export const RaidManager = {
         // diffCfg.lootBonus is new -- harder raid tiers now trade success
         // for better odds too, not just bigger gold/xp (see
         // RaidDifficultyConfig.lootBonus for the reasoning).
-        if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
+        let chance = parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100);
+        // Patch 0484 -- Raider's Charm. Same single rng roll either way, so
+        // a run's other outcomes don't shift with the charm on or off.
+        if (active.charm === 'seek' && !state.discoveredItems.includes(parsed.defId)) chance *= Tuning.get('economy.raidCharmSeekMultiplier');
+        else if (active.charm === 'boost') chance *= 1 + Tuning.get('economy.raidCharmBoostPct') / 100;
+        if (!rng.chance(Math.min(90, chance))) continue;
         const def = EQUIPMENT_BY_ID[parsed.defId];
         // itemLevel comes from the raid's own fixed reqLevel (raids
         // aren't part of the reqLevel-roll rework -- see
@@ -677,8 +734,12 @@ export const RaidManager = {
     // as they stood BEFORE this raid's xp, not after, in both systems
     // now. Same even per-hero split as gold/xpEarnedLifetime already
     // use (one pooled reward, divided, not the full total per hero).
+    // Patch 0484 -- Mentor Attunement: each hero earns +X% from every OTHER
+    // party member's Mentor lines.
+    const mentorTotal = heroes.reduce((s, h) => s + heroSignature(h, 'mentor'), 0);
     for (const hero of heroes) {
-      const heroXp = Math.floor(xp / heroes.length);
+      const mentorPct = mentorTotal - heroSignature(hero, 'mentor');
+      const heroXp = Math.floor((xp / heroes.length) * (1 + mentorPct / 100));
       const levelsGained = HeroManager.grantXp(hero, heroXp);
       if (levelsGained > 0) heroesLeveledUp.push({ heroId: hero.id, heroName: hero.name, levelsGained });
       // Same gap, one level down -- a pet paired with a raid-only hero
@@ -702,6 +763,7 @@ export const RaidManager = {
       encountersCleared,
       totalEncounters: encounterIds.length,
       fullClear,
+      ...(active.charm ? { charm: active.charm } : {}),
       recipeScrollGained,
       shardsGained,
       gold,

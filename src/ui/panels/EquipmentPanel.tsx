@@ -8,6 +8,7 @@ import { GameEngine } from '../../game/engine';
 import { EquipmentManager, RepairMode } from '../../game/managers/EquipmentManager';
 import { shardLabel } from '../../game/data/shards';
 import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
+import { AttunementLine } from '../AttunementLine';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance, itemDisplayName } from '../../game/data/equipment';
@@ -842,6 +843,8 @@ function SlotCard({
   // source of truth when Repair is actually clicked.
   const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
   const itemFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) || !hero.usedFreeRepair;
+  // Patch 0484 -- free repairs never cover Legendaries.
+  const freeRepairFor = (it: EquipmentItem) => itemFreeRepairAvailable && !EquipmentManager.isLegendary(it);
   const repairDiscount = ModifierManager.global(engine.state).repairDiscount ?? 0;
   // Patch 0466 -- ambient condition: worn (50% or less) breathes amber at
   // the edge, broken breathes red. Off during a repair replay.
@@ -920,7 +923,7 @@ function SlotCard({
                 // purchased stats, never touched by this.
                 const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
                 const lines = [...modLines, ...baseLines, ...rolledLines];
-                return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
+                return <><div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div><AttunementLine item={item} /></>;
               })()}
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
                 <div
@@ -974,7 +977,7 @@ function SlotCard({
                     affordance for it rather than a label that silently
                     changed meaning depending on state. .btn-teal to match
                     Repair's colour everywhere else it shows up now. */}
-                {itemFreeRepairAvailable && !HeroManager.isAway(hero) && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
+                {freeRepairFor(item) && !HeroManager.isAway(hero) && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
                   <button
                     className="btn-teal"
                     onClick={() => { if (onRepair) onRepair(item.uid); else engine.repair(item.uid); setOpen(false); }}
@@ -1089,7 +1092,7 @@ function StashCard({
                 // purchased stats, never touched by this.
                 const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
                 const lines = [...modLines, ...baseLines, ...rolledLines];
-                return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
+                return <><div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div><AttunementLine item={item} /></>;
               })()}
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
                 <div
@@ -1306,6 +1309,12 @@ export function EquipmentPanel() {
             value={state.autoRepairEnabled}
             onChange={(v) => engine.setAutoRepair(v)}
           />
+        </Row>
+        <Row
+          label="Use Shards on Legendary repairs"
+          hint="Repair Everything and auto-repair spend 1 Legendary Shard per Legendary repair. Off: they pay the no-Shard markup instead, and Shards are only spent when you repair a Legendary yourself."
+        >
+          <Toggle value={state.autoShardRepairs !== false} onChange={(v) => engine.setAutoShardRepairs(v)} />
         </Row>
         {state.autoRepairEnabled && (
           <Row label="Repair threshold" hint="Lower means gear wears further before it's automatically fixed.">

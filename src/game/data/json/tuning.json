@@ -4510,6 +4510,143 @@
     "description": "Legendary Shards per level raised when re-levelling a Legendary (patch 0455). Replaces its Scrap cost."
   },
   {
+    "id": "economy.attuneShardCost",
+    "label": "Attunement: Shards to attune",
+    "category": "economy",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 50,
+    "description": "Legendary Shards to give a Legendary its Attunement line (patch 0484)."
+  },
+  {
+    "id": "economy.reattuneShardCost",
+    "label": "Attunement: Shards to re-attune",
+    "category": "economy",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 50,
+    "description": "Legendary Shards to reroll an existing Attunement line (patch 0484)."
+  },
+  {
+    "id": "economy.attuneSignatureChance",
+    "label": "Attunement: signature affix chance %",
+    "category": "economy",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "Percent chance an Attunement roll lands a Legendary-only signature affix (Raidborn, Unfading, Mentor, Shardseeker, Beastbond) instead of a common one (patch 0484)."
+  },
+  {
+    "id": "economy.legendaryRerollShardCost",
+    "label": "Legendary reroll: Shards",
+    "category": "economy",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 50,
+    "description": "Legendary Shards the Enchanter's stat reroll costs on a procedural Legendary, in place of its 20 Herbs (patch 0484)."
+  },
+  {
+    "id": "economy.raidCharmShardsNormal",
+    "label": "Raider's Charm: Shards to arm (Normal)",
+    "category": "economy",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 20,
+    "description": "Legendary Shards to arm a Raider's Charm on a Normal raid (patch 0484)."
+  },
+  {
+    "id": "economy.raidCharmShardsHeroic",
+    "label": "Raider's Charm: Shards to arm (Heroic)",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "Legendary Shards to arm a Raider's Charm on a Heroic raid (patch 0484)."
+  },
+  {
+    "id": "economy.raidCharmShardsMythic",
+    "label": "Raider's Charm: Shards to arm (Mythic)",
+    "category": "economy",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 20,
+    "description": "Legendary Shards to arm a Raider's Charm on a Mythic raid (patch 0484)."
+  },
+  {
+    "id": "economy.raidCharmShardsLegendary",
+    "label": "Raider's Charm: Shards to arm (Legendary)",
+    "category": "economy",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 20,
+    "description": "Legendary Shards to arm a Raider's Charm on a Legendary raid (patch 0484)."
+  },
+  {
+    "id": "economy.raidCharmSeekMultiplier",
+    "label": "Raider's Charm: undiscovered-item chance multiplier",
+    "category": "economy",
+    "value": 2,
+    "default": 2,
+    "min": 1,
+    "max": 10,
+    "description": "Drop-chance multiplier on raid items the guild has never found, while a Raider's Charm is armed (patch 0484). The 90% per-roll cap still applies."
+  },
+  {
+    "id": "economy.raidCharmBoostPct",
+    "label": "Raider's Charm: complete-raid drop boost %",
+    "category": "economy",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 200,
+    "description": "Extra % drop chance on every roll once every item in the raid has been found, while a Raider's Charm is armed (patch 0484)."
+  },
+  {
+    "id": "upgrade.legendary_armoury.baseCost",
+    "label": "Legendary Armoury: base cost",
+    "category": "vendor_upgrades",
+    "value": 25000,
+    "default": 25000,
+    "min": 0,
+    "description": "Gold cost of the Legendary Armoury's first level (patch 0484). Each level also costs Shards (economy.legendaryArmouryShards)."
+  },
+  {
+    "id": "upgrade.legendary_armoury.costGrowth",
+    "label": "Legendary Armoury: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.8,
+    "default": 1.8,
+    "min": 1,
+    "description": "Multiplier applied per level to the Legendary Armoury's gold cost."
+  },
+  {
+    "id": "upgrade.legendary_armoury.maxLevel",
+    "label": "Legendary Armoury: max level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "description": "Level cap for the Legendary Armoury."
+  },
+  {
+    "id": "upgrade.legendary_armoury.wearCutPerLevel",
+    "label": "Legendary Armoury: wear cut % per level",
+    "category": "vendor_upgrades",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 20,
+    "description": "How much slower Legendary items wear, per Armoury level (patch 0484)."
+  },
+  {
     "id": "economy.chainCompletionQuestMultiplier",
     "label": "Chain completion bonus: quest-tier multiplier",
     "category": "economy",

@@ -3149,5 +3149,23 @@
     "statsToPick": 0,
     "statValue": 0,
     "scrapCost": 832
+  },
+  {
+    "id": "craft_raiders_charm",
+    "name": "Raider's Charm",
+    "description": "Arm it when a raid sets out: x2 drop chance on the raid items you've never found, or +25% on every drop once you have them all. Heroic and harder raids also take Legendary Shards to arm.",
+    "category": "charm",
+    "icon": "crafting/Crafting_28.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 15
+    },
+    "goldCost": 600,
+    "scrapCost": 60,
+    "resultConsumableId": "raiders_charm",
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0
   }
 ]

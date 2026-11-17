@@ -3,6 +3,7 @@ import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Rar
 import { uid, Rng } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
+import { MAX_ITEM_WEAR_CUT_PCT } from '../data/attunement';
 import { matchBonusForTier } from '../data/elements';
 import { isProceduralTemplate, rollProceduralItem, scaleDedicatedItem, LootSourceTag } from '../data/proceduralLoot';
 import { scrapCostFromGold, repairScrapCost as repairScrapCostFromGold } from '../data/progression';
@@ -464,14 +465,21 @@ export const EquipmentManager = {
   },
 
   /** Applies wear after a quest. Returns names of items that just broke. */
-  applyWear(hero: Hero, amount: number, durabilityMod: number): string[] {
+  applyWear(hero: Hero, amount: number, durabilityMod: number, armouryCutPct = 0): string[] {
     const broken: string[] = [];
     const multiplier = clamp(1 - durabilityMod / 100, 0.15, 1);
     for (const item of Object.values(hero.equipment)) {
       if (!item) continue;
       const before = item.durability;
       if (before <= 0) continue;
-      item.durability = Math.max(0, item.durability - Math.max(1, Math.round(amount * multiplier)));
+      // Patch 0484 -- per-item cut on top of the hero-wide one: the
+      // Legendary Armoury (Legendaries only) plus an Unfading Attunement,
+      // capped together at MAX_ITEM_WEAR_CUT_PCT.
+      const itemCut = Math.min(MAX_ITEM_WEAR_CUT_PCT,
+        (EquipmentManager.isLegendary(item) ? armouryCutPct : 0)
+        + (item.attunement?.affix === 'unfading' ? item.attunement.value : 0));
+      const itemMultiplier = multiplier * (1 - itemCut / 100);
+      item.durability = Math.max(0, item.durability - Math.max(1, Math.round(amount * itemMultiplier)));
       if (item.durability === 0) {
         broken.push(EQUIPMENT_BY_ID[item.defId]?.name ?? 'Unknown item');
       }
@@ -498,10 +506,17 @@ export const EquipmentManager = {
     const scrap = EquipmentManager.repairScrapCost(item, workshopLevel, vendorDiscountPercent);
     if (!EquipmentManager.isLegendary(item)) return { gold, scrap, shards: 0, route: 'standard' };
     const shardCost = Tuning.get('economy.legendaryRepairShardCost');
-    const useShard = mode === 'shard' || (mode === 'auto' && (state.legendaryShards ?? 0) >= shardCost);
+    // Patch 0484 -- 'auto' only reaches for a Shard when the guild allows it
+    // (GameState.autoShardRepairs, default on).
+    const useShard = mode === 'shard' || (mode === 'auto' && state.autoShardRepairs !== false && (state.legendaryShards ?? 0) >= shardCost);
     if (useShard) return { gold, scrap: 0, shards: shardCost, route: 'shard' };
     const mult = Tuning.get('economy.legendaryRepairFallbackMultiplier');
     return { gold: Math.ceil(gold * mult), scrap: Math.ceil(scrap * mult), shards: 0, route: 'standard' };
+  },
+
+  /** Patch 0484 -- Shards for this item's next Attunement (first or reroll). */
+  attuneShardCost(item: EquipmentItem): number {
+    return Tuning.get(item.attunement ? 'economy.reattuneShardCost' : 'economy.attuneShardCost');
   },
 
   isLegendary(item: EquipmentItem): boolean {

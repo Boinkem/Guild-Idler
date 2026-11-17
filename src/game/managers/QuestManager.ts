@@ -24,6 +24,7 @@ import { HeroManager } from './HeroManager';
 import { EventManager } from './EventManager';
 import { InventoryManager } from './InventoryManager';
 import { Tuning } from '../data/tuning';
+import { armouryWearCut, heroSignature } from '../data/attunement';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { demoAllowsChain } from '../demo';
@@ -1401,7 +1402,11 @@ export const QuestManager = {
     // Patch 0454 -- Legendary Shard, a small chance on a successful Epic
     // or Legendary quest (see questShardChance). Raids are the main source.
     let shardsGained: number | undefined;
-    if (success && rng.chance(questShardChance(quest.offer.difficulty))) {
+    // Patch 0484 -- + a Shardseeker Attunement (only where the base chance
+    // exists: Epic and Legendary quests).
+    const baseShardChance = questShardChance(quest.offer.difficulty);
+    const shardChance = baseShardChance > 0 ? baseShardChance + heroSignature(hero, 'shardseeker') : 0;
+    if (success && rng.chance(shardChance)) {
       state.legendaryShards = (state.legendaryShards ?? 0) + 1;
       shardsGained = 1;
     }
@@ -1542,7 +1547,7 @@ export const QuestManager = {
     // durability negative or otherwise misbehave.
     const wear = isTutorialQuest ? 9999 : baseWear + events.durabilityDelta;
     const globalMods = ModifierManager.global(state);
-    const broken = hero ? EquipmentManager.applyWear(hero, wear, globalMods.durability) : [];
+    const broken = hero ? EquipmentManager.applyWear(hero, wear, globalMods.durability, armouryWearCut(state)) : [];
 
     /* ----------------------------- apply -------------------------------- */
     let levelsGained = 0;

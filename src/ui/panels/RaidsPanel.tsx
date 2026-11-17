@@ -3,7 +3,8 @@ import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { RaidManager } from '../../game/managers/RaidManager';
+import { RaidManager, RAIDERS_CHARM_ID } from '../../game/managers/RaidManager';
+import { Tuning } from '../../game/data/tuning';
 import { HeroManager } from '../../game/managers/HeroManager';
 import {
   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON_DEFS, raidDifficultyIconSrc, RAID_DIFFICULTY_LABEL,
@@ -509,11 +510,18 @@ function RaidDetailModal({
   // portcullis slams down behind them, and only then is the raid
   // committed. Straight through with motion off.
   const [marching, setMarching] = useState(false);
+  // Patch 0484 -- Raider's Charm, armed from the confirm screen.
+  const [armCharm, setArmCharm] = useState(false);
+  const charmsHeld = state.inventory[RAIDERS_CHARM_ID] ?? 0;
+  const charmShards = difficulty ? RaidManager.charmShardCost(difficulty) : 0;
+  const charmMode = RaidManager.charmMode(state, raid.id);
+  const charmMissing = RaidManager.undiscoveredRaidLoot(state, raid.id).length;
+  const canArm = charmsHeld > 0 && (state.legendaryShards ?? 0) >= charmShards;
   const marchTimer = useRef<number>();
   useEffect(() => () => window.clearTimeout(marchTimer.current), []);
   const commitNow = () => {
     if (!difficulty) return;
-    engine.startRaid(raid.id, difficulty, selectedHeroIds);
+    engine.startRaid(raid.id, difficulty, selectedHeroIds, armCharm && canArm);
     if (fxMs(1)) lastRaidCommitAt = Date.now();
     setConfirming(false);
     onClose();
@@ -740,6 +748,23 @@ function RaidDetailModal({
             <p className="small bad" style={{ margin: '0 0 4px' }}>
               The whole party is committed until the raid resolves. There's no early retreat.
             </p>
+            {/* Patch 0484 -- Raider's Charm. Shown whenever the guild holds
+                one; the line says which way it would work on this raid. */}
+            {charmsHeld > 0 && (
+              <label className={`raid-charm-row ${armCharm && canArm ? 'on' : ''}`} title={canArm ? undefined : `Needs ${charmShards} Legendary Shard${charmShards === 1 ? '' : 's'} to arm`}>
+                <input type="checkbox" checked={armCharm && canArm} disabled={!canArm || marching} onChange={(e) => setArmCharm(e.target.checked)} />
+                <span>
+                  <b>Arm a Raider&apos;s Charm</b> <span className="tiny muted">({charmsHeld} held{charmShards > 0 ? ` · costs ${charmShards} Shard${charmShards === 1 ? '' : 's'}` : ''})</span>
+                  <br />
+                  <span className="tiny">
+                    {charmMode === 'seek'
+                      ? `${charmMissing} item${charmMissing === 1 ? '' : 's'} here you've never found: x${Tuning.get('economy.raidCharmSeekMultiplier')} chance on ${charmMissing === 1 ? 'it' : 'those'}.`
+                      : `Raid complete: +${Tuning.get('economy.raidCharmBoostPct')}% chance on every drop.`}
+                    {' '}Used up win or lose.
+                  </span>
+                </span>
+              </label>
+            )}
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setConfirming(false)} disabled={marching}>Cancel</button>
               <button className="btn-primary" onClick={confirmCommit} disabled={marching}>Send them</button>

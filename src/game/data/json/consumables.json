@@ -585,5 +585,18 @@
     "icon": "misc/Misc_25_hue1.png",
     "craftable": true,
     "effect": {}
+  },
+  {
+    "id": "raiders_charm",
+    "name": "Raider's Charm",
+    "description": "Hung at the head of the column on the way in. Raids with one armed turn up the pieces you're still missing -- and once you've found them all, a little more of everything. Armed when a raid sets out, used up win or lose.",
+    "cost": 400,
+    "rarity": "epic",
+    "glyph": "⚔",
+    "icon": "food/Food_12.png",
+    "craftable": true,
+    "effect": {
+      "raidCharm": true
+    }
   }
 ]

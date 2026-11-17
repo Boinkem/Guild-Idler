@@ -204,6 +204,19 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: {}, unlocks: 'raidsMythic', category: 'Unlocks',
   },
   {
+    // Patch 0484 -- a Legendary Shard sink: gold AND Shards per level.
+    // Effect read by data/attunement.ts's armouryWearCut.
+    id: 'legendary_armoury', name: 'Legendary Armoury',
+    description: 'Racks, oils and a smith who does nothing but tend the guild\'s finest pieces between outings. Legendary gear wears slower.',
+    baseCost: Tuning.get('upgrade.legendary_armoury.baseCost'),
+    costGrowth: Tuning.get('upgrade.legendary_armoury.costGrowth'),
+    maxLevel: Tuning.get('upgrade.legendary_armoury.maxLevel'),
+    modsPerLevel: {}, category: 'Raids',
+    shardCostsPerLevel: [1, 2, 3, 5, 8],
+    requiresUpgradeId: 'raid_charter',
+    legendaryWearCutPctPerLevel: Tuning.get('upgrade.legendary_armoury.wearCutPerLevel'),
+  },
+  {
     id: 'potion_belt', name: 'Potion Belt',
     description: "Extra loops and pouches on a hero's kit -- room to carry more into a quest without digging through the stash first.",
     // Base slot count (1) lives in ModifierManager.consumableSlots as the

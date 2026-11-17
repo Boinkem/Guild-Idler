@@ -128,6 +128,20 @@ export const GuildManager = {
     return upgradeScrapCost(def, level);
   },
 
+  /** Patch 0484 -- Legendary Shards for the next level (0 for most). */
+  nextUpgradeShardCost(state: GameState, id: string): number {
+    const def = UPGRADE_BY_ID[id];
+    const level = GuildManager.upgradeLevel(state, id);
+    if (!def?.shardCostsPerLevel || level >= def.maxLevel) return 0;
+    return def.shardCostsPerLevel[Math.min(level, def.shardCostsPerLevel.length - 1)] ?? 0;
+  },
+
+  /** Patch 0484 -- the upgrade this one waits on, if it isn't owned yet. */
+  missingUpgradePrereq(state: GameState, id: string): string | null {
+    const req = UPGRADE_BY_ID[id]?.requiresUpgradeId;
+    return req && GuildManager.upgradeLevel(state, req) < 1 ? req : null;
+  },
+
   buyUpgrade(state: GameState, id: string): string | null {
     const def = UPGRADE_BY_ID[id];
     if (!def) return 'Unknown upgrade.';
@@ -140,11 +154,16 @@ export const GuildManager = {
     const cost = GuildManager.nextUpgradeCost(state, id);
     if (cost === null) return 'Already at maximum.';
     const scrapCost = GuildManager.nextUpgradeScrapCost(state, id) ?? 0;
+    const shardCost = GuildManager.nextUpgradeShardCost(state, id);
+    const prereq = GuildManager.missingUpgradePrereq(state, id);
+    if (prereq) return `Needs ${UPGRADE_BY_ID[prereq]?.name ?? 'another upgrade'} first.`;
     if (state.gold < cost) return 'Not enough gold.';
     if (state.scrap < scrapCost) return 'Not enough scrap.';
+    if ((state.legendaryShards ?? 0) < shardCost) return 'Not enough Legendary Shards.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
     state.scrap -= scrapCost;
+    state.legendaryShards = (state.legendaryShards ?? 0) - shardCost;
     if (def.vendor) state.vendorGoldSpent[def.vendor] += cost;
     state.upgrades[id] = level + 1;
     return null;

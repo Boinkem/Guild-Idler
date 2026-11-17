@@ -10,6 +10,7 @@ import { ItemIcon } from './icons';
 import { PickerModal } from './CraftingStation';
 import type { PickerOption } from './CraftingStation';
 import { buyWithFx, fxMs, fxSpeed } from './purchaseFx';
+import { shardLabel } from '../game/data/shards';
 
 /**
  * Patch 0426 -- the Enchanter's reroll, finally reachable. The logic
@@ -53,7 +54,7 @@ export function RerollStation({ onClose }: { onClose: () => void }) {
   const wearer = found?.heroId ? state.heroes.find((h) => h.id === found.heroId) : undefined;
   const cost = item ? CraftingManager.rerollCost(state, item) : null;
   const herbs = state.materials.herbs ?? 0;
-  const canAfford = !!cost && state.gold >= cost.gold && herbs >= cost.herbs;
+  const canAfford = !!cost && state.gold >= cost.gold && herbs >= cost.herbs && (state.legendaryShards ?? 0) >= cost.shards;
   const roll: Roll = item?.rolledStats ?? {};
   const compareTo = fx?.old ?? last?.old;
   const keys = STAT_KEYS.filter((k) => (roll[k] ?? 0) !== 0 || (compareTo?.[k] ?? 0) !== 0);
@@ -168,7 +169,12 @@ export function RerollStation({ onClose }: { onClose: () => void }) {
 
         <button className="btn-purple" disabled={!item || !cost || busy || !canAfford} onClick={(e) => handleReroll(e.currentTarget)}>
           {!item ? 'Reroll' : busy ? 'Rerolling…' : !cost ? 'Fixed stats' : (
-            <>Reroll {'·'} <span className="gold-text">{'◆'} {formatGold(cost.gold)}</span> + {cost.herbs} Herbs <span className="tiny muted">({formatGold(herbs)} held)</span></>
+            cost.shards > 0 ? (
+              // Patch 0484 -- a Legendary pays Shards in place of Herbs.
+              <>Reroll {'·'} <span className="gold-text">{'◆'} {formatGold(cost.gold)}</span> + {shardLabel(cost.shards)} <span className="tiny muted">({state.legendaryShards ?? 0} held)</span></>
+            ) : (
+              <>Reroll {'·'} <span className="gold-text">{'◆'} {formatGold(cost.gold)}</span> + {cost.herbs} Herbs <span className="tiny muted">({formatGold(herbs)} held)</span></>
+            )
           )}
         </button>
       </div>

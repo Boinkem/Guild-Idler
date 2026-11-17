@@ -1529,6 +1529,8 @@ const EFFECT_KEYS = [
   'health', 'restoreHealth', 'healthDamageReduction', 'revivalDiscount',
   'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
   'preventInjury', 'guaranteedGoodEvent', 'healInjury',
+  // Patch 0484 -- Raider's Charm (a boolean, armed at raid launch).
+  'raidCharm',
   // Fortune Charms (patch 0215) -- lootWeightStat is a string key name
   // (a Stats key as of patch 0255's all-stats rework, e.g. 'luck'/
   // 'wisdom' -- see guild-idler-status.md), not itself a numeric

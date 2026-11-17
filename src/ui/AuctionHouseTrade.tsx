@@ -1,3 +1,4 @@
+import { describeAttunement } from '../game/data/attunement';
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipSlot, EquipmentItem, Hero, Rarity } from '../game/types';
@@ -398,6 +399,8 @@ function ListingInspectModal({ row, heroes, buying, onClose, onBuy }: {
         ...describeMods(item.customMods ?? def.mods ?? {}),
         ...describeStats(def.stats, true),
         ...(item.rolledStats ? describeStats(item.rolledStats, true) : []),
+        // Patch 0484 -- an attuned Legendary keeps its line when sold.
+        ...(item.attunement ? [`Attuned: ${describeAttunement(item.attunement)}`] : []),
       ];
       icon = <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />;
       subtitle = `${def.slot} · item level ${item.rolledItemLevel ?? def.reqLevel} · requires level ${def.reqLevel}`;

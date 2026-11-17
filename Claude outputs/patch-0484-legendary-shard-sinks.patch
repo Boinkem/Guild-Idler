@@ -1,0 +1,1615 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index bb0dd05..50e4644 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -38818,3 +38818,111 @@ Owner report: Leaderboard read 1,903 while the Dashboard showed 64.
+ 
+ Checks: `tsc` passes. tsx: a fresh state uploads its current power (18)
+ with force = true and stores it as the best.
++
++### Legendary Shards: Attunement, Legendary Armoury, Raider's Charm, Shard repair rules (patch 0484)
++```discord-update
++Dev Update | Legendary Shards
++
++- Added Attunement at the Enchanter: spend 3 Legendary Shards to give any Legendary an extra bonus line, and 2 to reroll it. Some rolls land a rare signature line: Raidborn, Unfading, Mentor, Shardseeker or Beastbond
++- Added the Legendary Armoury to the Guild Hall: Legendary gear wears 3% slower per level, up to 15%. Costs gold and Shards, and needs the Raid Charter
++- Added the Raider's Charm, crafted at the Enchanter and armed when a raid sets out: double drop chance on raid items you've never found, or +25% on every drop once you've found them all. Heroic, Mythic and Legendary raids take 1, 2 or 3 Shards to arm it
++- Changed free repairs so they no longer cover Legendary gear, which always takes a Shard (or the no-Shard price). Repair Everything now uses free repairs on your other gear first
++- Changed the Enchanter's stat reroll on random-stat Legendaries to cost 2 Shards instead of Herbs
++- Added a setting in Inventory to stop Repair Everything and auto-repair spending Shards on their own
++- Fixed "Auto-fill consumables on send" sometimes packing Pet Treats or a Beckoning Charm into a hero's slots
++```
++
++Design locked with the owner in `claude/legendary-shard-sinks-plan.md`
++(project doc). Heirloom tiers V and VI are Legendary rarity and are
++deliberately IN everything here (Shard repairs, Attunement, Armoury).
++
++- **Repair rules** -- `engine.consumeFreeRepair(heroId, now, item)` returns
++  false for a Legendary, which covers both the Smith's Charity daily
++  allowance and each hero's first free repair. `repairAll` and the
++  Vendors stash Repair All sort non-Legendary first. New
++  `GameState.autoShardRepairs` (optional, undefined = on, no migration):
++  `EquipmentManager.repairQuote`'s 'auto' mode only takes the Shard route
++  when it's on. The Legendary repair buttons pass an explicit mode, so they
++  are unaffected. Toggle in the Inventory automation card
++  (`engine.setAutoShardRepairs`). The free-repair UI hints (Free Repair
++  button, stash "Free" label) skip Legendaries.
++- **Attunement** -- `data/attunement.ts`. `EquipmentItem.attunement
++  {affix, value}`. 12 common affixes ride the existing sums
++  (`HeroManager.equipmentMods` / `equipmentStats`, flat, not scaled by
++  +refine or relevance). The 5 signatures each hook in one place:
++  - Raidborn: raid success in `RaidManager.partySuccessBonus`.
++  - Unfading: 50% fixed wear cut on that item, in `applyWear`.
++  - Mentor: +X% raid XP to the OTHER party members, in `RaidManager.resolve`.
++  - Shardseeker: + percentage points on the Epic/Legendary quest Shard
++    chance, in `QuestManager.resolve`.
++  - Beastbond: the paired pet's max Health in `PetManager.maxHealth`, plus a
++    revive discount in `engine.revivePet`.
++  Value = affix max × clamp(itemLevel/50, 0.3, 1.2) × quality 0.7-1.0,
++  fixed at roll time (re-level first). A re-attune always picks a
++  different affix. Tunables: `economy.attuneShardCost` 3,
++  `reattuneShardCost` 2, `attuneSignatureChance` 15. UI: `AttuneStation`
++  (Enchanter, "Attune Legendary"), with an `AttunementLine` shown on the
++  item modals, the stash card and AH listings. The line travels with the
++  item through the AH (the server stores item payloads as-is).
++- **Reroll** -- `CraftingManager.rerollCost` now returns `shards`. A
++  procedural Legendary pays `economy.legendaryRerollShardCost` (2) in place
++  of the 20 Herbs. RerollStation shows it.
++- **Legendary Armoury** -- general upgrade `legendary_armoury`, category
++  Raids, 5 levels. New `UpgradeDef` fields: `shardCostsPerLevel` [1,2,3,5,8],
++  `requiresUpgradeId` 'raid_charter', and the display-only
++  `legendaryWearCutPctPerLevel`. `GuildManager.nextUpgradeShardCost` /
++  `missingUpgradePrereq` are both checked in `buyUpgrade`. The Guild Hall
++  row shows "+ N Shards" or "Needs Raid Charter". Gold uses the normal
++  curve: `upgrade.legendary_armoury.baseCost` 25,000, growth 1.8, giving
++  3,750 / 15,749 / 48,600 / 123,930 / 262,440 with the early-tier
++  discount. `applyWear(hero, amount, durabilityMod, armouryCutPct)`: the
++  per-item cut (Armoury on Legendaries + Unfading) is capped at
++  `MAX_ITEM_WEAR_CUT_PCT` 60, on top of the existing hero-wide durability
++  modifier and its floor.
++- **Raider's Charm** -- consumable `raiders_charm` (effect `raidCharm`)
++  plus recipe `craft_raiders_charm` (Enchanter charm: 20 ore, 15 herbs,
++  600 gold, 60 scrap). It's in `ALWAYS_KNOWN_RECIPE_IDS`, and
++  `RecipeManager.isKnown` now also checks that list, so existing saves know
++  it without a migration. `RaidManager.start(..., armCharm)` takes the
++  charm and the Shards (`economy.raidCharmShards{Normal,Heroic,Mythic,Legendary}`
++  0/1/2/3) and stores `ActiveRaid.charm` as 'seek' or 'boost', fixed at
++  launch by `charmMode` (any of `raidLootIds` missing from
++  `state.discoveredItems`). In resolve, 'seek' multiplies the chance of
++  undiscovered items by `raidCharmSeekMultiplier` (2) and 'boost'
++  multiplies every roll by 1 + `raidCharmBoostPct` (25%). It's the same
++  single rng call either way, and the 90% cap is kept. `RaidResult.charm`
++  records it. UI: a checkbox on the raid confirm screen, shown whenever
++  one is held, saying which mode applies. The DevTool's effect key lists
++  now know `raidCharm` (otherwise an edit would drop it).
++- **Bug fix along the way** -- `engine.fillEmptyConsumableSlots`
++  (Auto-fill on send / Equip best) picked any owned consumable, priciest
++  first, so non-quest items (Pet Treat, Beckoning Charm, and now the
++  charm) could be packed. It now filters to
++  `InventoryManager.isLoadoutEffect`, the same check manual equip uses.
++
++Checks: `tsc` and the web production build pass. tsx checks (all pass):
++- **Repairs:** a Legendary repair spent a Shard with a free repair
++  available. Repair Everything repaired both items for 1 Shard. Auto-mode
++  skips Shards when the setting is off.
++- **Attunement:** attune costs 3, re-attune costs 2 and changes the affix,
++  and non-Legendaries are refused. 4,000 rolls gave 13.8% signatures.
++  Gold and Strength lines reach hero mods and stats.
++- **Wear:** 100 → 85 with the Armoury maxed; Armoury + Unfading is capped
++  at 60%; non-Legendaries are untouched.
++- **Armoury purchase:** needs the Raid Charter; Shards per level 1/2/3/5/8.
++- **Raider's Charm:** the recipe is known on an existing save. Over 600
++  Normal runs, seek moved average drops 0.47 → 0.93 and boost 0.47 → 0.59,
++  with full clears unchanged. Arming on Mythic took the charm and
++  2 Shards; arming on Legendary with 2 Shards was refused.
++- **Reroll:** a procedural Legendary costs 2 Shards and 0 Herbs.
++
++Headless Chrome on a seeded save, no page errors:
++- The Guild Hall shows "Legendary Armoury · Buy · 3,750 + 1 Shard".
++- At the Enchanter, Attune Legendary → pick → Re-attune changed
++  Raidborn +4 into +6% loot chance and showed "was:".
++- The Inventory toggle shows.
++- Raid confirm on a spoofed save (Raid Charter + Clearances, 9 level-40
++  heroes, 3 charms): the checkbox shows "(3 held)" on Normal and "costs 2
++  Shards" on Mythic, with "7 items here you've never found". Arming it on
++  Mythic and sending gave `activeRaid.charm` 'seek', 2 charms left and
++  30 → 28 Shards.
+diff --git a/src/game/data/attunement.ts b/src/game/data/attunement.ts
+new file mode 100644
+index 0000000..df565b1
+--- /dev/null
++++ b/src/game/data/attunement.ts
+@@ -0,0 +1,137 @@
++import type { EquipmentItem, GameState, Hero, Modifiers, Stats } from '../types';
++import type { Rng } from '../rng';
++import { EQUIPMENT_BY_ID } from './equipment';
++import { Tuning } from './tuning';
++
++/**
++ * Attunement (patch 0484) -- a Legendary Shard sink. Any Legendary item
++ * (hand-authored, procedural or a Heirloom V/VI) can be Attuned for
++ * economy.attuneShardCost Shards: one extra bonus line, stored on the item
++ * as `attunement`. Re-attuning (economy.reattuneShardCost) rerolls it.
++ *
++ * A line's strength is fixed at roll time from the item's level (its
++ * rolledItemLevel, else the def's reqLevel) and a 70-100% quality roll --
++ * so re-level first, then attune, same order the Enchanter's reroll uses.
++ * Not scaled by +refine or gear relevance: it's a flat bonus line.
++ *
++ * Common affixes feed the existing Modifiers / Stats sums
++ * (HeroManager.equipmentMods / equipmentStats). Signature affixes are
++ * Legendary-only flavour, read where they apply:
++ *  - raidborn   RaidManager.partySuccessBonus (+success on raids)
++ *  - unfading   EquipmentManager.applyWear (this item wears less)
++ *  - mentor     RaidManager.resolve (other party members earn more XP)
++ *  - shardseeker QuestManager.resolve (Shard chance on Epic/Legendary quests)
++ *  - beastbond  PetManager.maxHealth + engine.revivePet (the wearer's pet)
++ */
++export type AttuneAffixId =
++  | 'success' | 'gold' | 'xp' | 'loot' | 'speed' | 'health' | 'injuryResist' | 'durability'
++  | 'strength' | 'endurance' | 'luck' | 'wisdom'
++  | 'raidborn' | 'unfading' | 'mentor' | 'shardseeker' | 'beastbond';
++
++export interface AttuneAffixDef {
++  id: AttuneAffixId;
++  name: string;
++  kind: 'mod' | 'stat' | 'signature';
++  /** Value at item level 50 and a perfect quality roll. */
++  max: number;
++  /** Fixed value: ignores item level and quality (Unfading). */
++  fixed?: boolean;
++  /** How a value reads on an item. */
++  describe: (v: number) => string;
++}
++
++const pct = (label: string) => (v: number) => `+${v}% ${label}`;
++
++export const ATTUNE_AFFIXES: AttuneAffixDef[] = [
++  { id: 'success', name: 'Steady', kind: 'mod', max: 5, describe: pct('quest success') },
++  { id: 'gold', name: 'Gilded', kind: 'mod', max: 12, describe: pct('gold') },
++  { id: 'xp', name: 'Learned', kind: 'mod', max: 12, describe: pct('XP') },
++  { id: 'loot', name: 'Seeking', kind: 'mod', max: 12, describe: pct('loot chance') },
++  { id: 'speed', name: 'Swift', kind: 'mod', max: 10, describe: pct('speed') },
++  { id: 'health', name: 'Hale', kind: 'mod', max: 60, describe: (v) => `+${v} Health` },
++  { id: 'injuryResist', name: 'Warded', kind: 'mod', max: 12, describe: pct('injury resist') },
++  { id: 'durability', name: 'Tempered', kind: 'mod', max: 15, describe: pct('durability') },
++  { id: 'strength', name: 'Mighty', kind: 'stat', max: 30, describe: (v) => `+${v} Strength` },
++  { id: 'endurance', name: 'Stalwart', kind: 'stat', max: 30, describe: (v) => `+${v} Endurance` },
++  { id: 'luck', name: 'Lucky', kind: 'stat', max: 30, describe: (v) => `+${v} Luck` },
++  { id: 'wisdom', name: 'Wise', kind: 'stat', max: 30, describe: (v) => `+${v} Wisdom` },
++  { id: 'raidborn', name: 'Raidborn', kind: 'signature', max: 6, describe: (v) => `Raidborn: +${v} success on raids` },
++  { id: 'unfading', name: 'Unfading', kind: 'signature', max: 50, fixed: true, describe: (v) => `Unfading: this item wears ${v}% slower` },
++  { id: 'mentor', name: 'Mentor', kind: 'signature', max: 10, describe: (v) => `Mentor: the rest of the raid party earns +${v}% XP` },
++  { id: 'shardseeker', name: 'Shardseeker', kind: 'signature', max: 2, describe: (v) => `Shardseeker: +${v}% Shard chance on Epic and Legendary quests` },
++  { id: 'beastbond', name: 'Beastbond', kind: 'signature', max: 30, describe: (v) => `Beastbond: companion +${v} Health and ${v}% cheaper revives` },
++];
++
++export const ATTUNE_AFFIX_BY_ID: Record<string, AttuneAffixDef> = Object.fromEntries(ATTUNE_AFFIXES.map((a) => [a.id, a]));
++
++const COMMON = ATTUNE_AFFIXES.filter((a) => a.kind !== 'signature');
++const SIGNATURE = ATTUNE_AFFIXES.filter((a) => a.kind === 'signature');
++
++/** May this item be attuned at all? Legendary rarity only. */
++export function canAttune(item: EquipmentItem): boolean {
++  return EQUIPMENT_BY_ID[item.defId]?.rarity === 'legendary';
++}
++
++export function attuneLevel(item: EquipmentItem): number {
++  return item.rolledItemLevel ?? EQUIPMENT_BY_ID[item.defId]?.reqLevel ?? 1;
++}
++
++/** Rolls a fresh line for this item. `exclude` = the current affix, so a
++ *  re-attune always lands on something different. */
++export function rollAttunement(item: EquipmentItem, rng: Rng, exclude?: string): { affix: AttuneAffixId; value: number } {
++  const signature = rng.chance(Tuning.get('economy.attuneSignatureChance'));
++  const pool = (signature ? SIGNATURE : COMMON).filter((a) => a.id !== exclude);
++  const def = pool[Math.floor(rng.next() * pool.length)] ?? COMMON[0];
++  if (def.fixed) return { affix: def.id, value: def.max };
++  const levelFactor = Math.min(1.2, Math.max(0.3, attuneLevel(item) / 50));
++  const quality = 0.7 + rng.next() * 0.3;
++  const precise = def.max * levelFactor * quality;
++  // Small values keep one decimal place (Shardseeker's 2%) -- everything
++  // else is a whole number, at least 1.
++  const value = def.max <= 5 ? Math.max(0.5, Math.round(precise * 10) / 10) : Math.max(1, Math.round(precise));
++  return { affix: def.id, value };
++}
++
++export function describeAttunement(a: NonNullable<EquipmentItem['attunement']>): string {
++  return ATTUNE_AFFIX_BY_ID[a.affix]?.describe(a.value) ?? '';
++}
++
++/** The line as a Modifiers contribution (common mod affixes only). */
++export function attunementMods(item: EquipmentItem): Partial<Modifiers> {
++  const a = item.attunement;
++  const def = a && ATTUNE_AFFIX_BY_ID[a.affix];
++  if (!a || !def || def.kind !== 'mod') return {};
++  return { [a.affix]: a.value } as Partial<Modifiers>;
++}
++
++/** The line as a Stats contribution (stat affixes only). */
++export function attunementStats(item: EquipmentItem): Partial<Stats> {
++  const a = item.attunement;
++  const def = a && ATTUNE_AFFIX_BY_ID[a.affix];
++  if (!a || !def || def.kind !== 'stat') return {};
++  return { [a.affix]: a.value } as Partial<Stats>;
++}
++
++/** Sum of one signature affix across a hero's working (unbroken) gear. */
++export function heroSignature(hero: Hero | undefined, affix: AttuneAffixId): number {
++  if (!hero) return 0;
++  let total = 0;
++  for (const item of Object.values(hero.equipment)) {
++    if (!item || item.durability <= 0 || item.attunement?.affix !== affix) continue;
++    total += item.attunement.value;
++  }
++  return total;
++}
++
++/**
++ * Patch 0484 -- combined cap on how much slower one Legendary can wear from
++ * the Legendary Armoury plus an Unfading line (the hero-wide durability
++ * modifier, Heirloom of the Unbreakable included, still applies on top
++ * with its own existing floor).
++ */
++export const MAX_ITEM_WEAR_CUT_PCT = 60;
++
++/** Legendary Armoury (Guild Hall, patch 0484): % slower Legendary wear. */
++export function armouryWearCut(state: GameState): number {
++  return (state.upgrades.legendary_armoury ?? 0) * Tuning.get('upgrade.legendary_armoury.wearCutPerLevel');
++}
+diff --git a/src/game/data/json/consumables.json b/src/game/data/json/consumables.json
+index 71bf781..822276e 100644
+--- a/src/game/data/json/consumables.json
++++ b/src/game/data/json/consumables.json
+@@ -585,5 +585,18 @@
+     "icon": "misc/Misc_25_hue1.png",
+     "craftable": true,
+     "effect": {}
++  },
++  {
++    "id": "raiders_charm",
++    "name": "Raider's Charm",
++    "description": "Hung at the head of the column on the way in. Raids with one armed turn up the pieces you're still missing -- and once you've found them all, a little more of everything. Armed when a raid sets out, used up win or lose.",
++    "cost": 400,
++    "rarity": "epic",
++    "glyph": "⚔",
++    "icon": "food/Food_12.png",
++    "craftable": true,
++    "effect": {
++      "raidCharm": true
++    }
+   }
+ ]
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+index 5c53128..f88e8cd 100644
+--- a/src/game/data/json/crafting-recipes.json
++++ b/src/game/data/json/crafting-recipes.json
+@@ -3149,5 +3149,23 @@
+     "statsToPick": 0,
+     "statValue": 0,
+     "scrapCost": 832
++  },
++  {
++    "id": "craft_raiders_charm",
++    "name": "Raider's Charm",
++    "description": "Arm it when a raid sets out: x2 drop chance on the raid items you've never found, or +25% on every drop once you have them all. Heroic and harder raids also take Legendary Shards to arm.",
++    "category": "charm",
++    "icon": "crafting/Crafting_28.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 15
++    },
++    "goldCost": 600,
++    "scrapCost": 60,
++    "resultConsumableId": "raiders_charm",
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0
+   }
+ ]
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 321f022..f564651 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -4509,6 +4509,143 @@
+     "max": 10,
+     "description": "Legendary Shards per level raised when re-levelling a Legendary (patch 0455). Replaces its Scrap cost."
+   },
++  {
++    "id": "economy.attuneShardCost",
++    "label": "Attunement: Shards to attune",
++    "category": "economy",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "max": 50,
++    "description": "Legendary Shards to give a Legendary its Attunement line (patch 0484)."
++  },
++  {
++    "id": "economy.reattuneShardCost",
++    "label": "Attunement: Shards to re-attune",
++    "category": "economy",
++    "value": 2,
++    "default": 2,
++    "min": 0,
++    "max": 50,
++    "description": "Legendary Shards to reroll an existing Attunement line (patch 0484)."
++  },
++  {
++    "id": "economy.attuneSignatureChance",
++    "label": "Attunement: signature affix chance %",
++    "category": "economy",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "max": 100,
++    "description": "Percent chance an Attunement roll lands a Legendary-only signature affix (Raidborn, Unfading, Mentor, Shardseeker, Beastbond) instead of a common one (patch 0484)."
++  },
++  {
++    "id": "economy.legendaryRerollShardCost",
++    "label": "Legendary reroll: Shards",
++    "category": "economy",
++    "value": 2,
++    "default": 2,
++    "min": 0,
++    "max": 50,
++    "description": "Legendary Shards the Enchanter's stat reroll costs on a procedural Legendary, in place of its 20 Herbs (patch 0484)."
++  },
++  {
++    "id": "economy.raidCharmShardsNormal",
++    "label": "Raider's Charm: Shards to arm (Normal)",
++    "category": "economy",
++    "value": 0,
++    "default": 0,
++    "min": 0,
++    "max": 20,
++    "description": "Legendary Shards to arm a Raider's Charm on a Normal raid (patch 0484)."
++  },
++  {
++    "id": "economy.raidCharmShardsHeroic",
++    "label": "Raider's Charm: Shards to arm (Heroic)",
++    "category": "economy",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "max": 20,
++    "description": "Legendary Shards to arm a Raider's Charm on a Heroic raid (patch 0484)."
++  },
++  {
++    "id": "economy.raidCharmShardsMythic",
++    "label": "Raider's Charm: Shards to arm (Mythic)",
++    "category": "economy",
++    "value": 2,
++    "default": 2,
++    "min": 0,
++    "max": 20,
++    "description": "Legendary Shards to arm a Raider's Charm on a Mythic raid (patch 0484)."
++  },
++  {
++    "id": "economy.raidCharmShardsLegendary",
++    "label": "Raider's Charm: Shards to arm (Legendary)",
++    "category": "economy",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "max": 20,
++    "description": "Legendary Shards to arm a Raider's Charm on a Legendary raid (patch 0484)."
++  },
++  {
++    "id": "economy.raidCharmSeekMultiplier",
++    "label": "Raider's Charm: undiscovered-item chance multiplier",
++    "category": "economy",
++    "value": 2,
++    "default": 2,
++    "min": 1,
++    "max": 10,
++    "description": "Drop-chance multiplier on raid items the guild has never found, while a Raider's Charm is armed (patch 0484). The 90% per-roll cap still applies."
++  },
++  {
++    "id": "economy.raidCharmBoostPct",
++    "label": "Raider's Charm: complete-raid drop boost %",
++    "category": "economy",
++    "value": 25,
++    "default": 25,
++    "min": 0,
++    "max": 200,
++    "description": "Extra % drop chance on every roll once every item in the raid has been found, while a Raider's Charm is armed (patch 0484)."
++  },
++  {
++    "id": "upgrade.legendary_armoury.baseCost",
++    "label": "Legendary Armoury: base cost",
++    "category": "vendor_upgrades",
++    "value": 25000,
++    "default": 25000,
++    "min": 0,
++    "description": "Gold cost of the Legendary Armoury's first level (patch 0484). Each level also costs Shards (economy.legendaryArmouryShards)."
++  },
++  {
++    "id": "upgrade.legendary_armoury.costGrowth",
++    "label": "Legendary Armoury: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.8,
++    "default": 1.8,
++    "min": 1,
++    "description": "Multiplier applied per level to the Legendary Armoury's gold cost."
++  },
++  {
++    "id": "upgrade.legendary_armoury.maxLevel",
++    "label": "Legendary Armoury: max level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "min": 0,
++    "description": "Level cap for the Legendary Armoury."
++  },
++  {
++    "id": "upgrade.legendary_armoury.wearCutPerLevel",
++    "label": "Legendary Armoury: wear cut % per level",
++    "category": "vendor_upgrades",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "max": 20,
++    "description": "How much slower Legendary items wear, per Armoury level (patch 0484)."
++  },
+   {
+     "id": "economy.chainCompletionQuestMultiplier",
+     "label": "Chain completion bonus: quest-tier multiplier",
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index f6ac1d0..ef571f6 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -203,6 +203,19 @@ export const UPGRADES: UpgradeDef[] = [
+     maxLevel: Tuning.get('upgrade.raid_legendary_clearance.maxLevel'),
+     modsPerLevel: {}, unlocks: 'raidsMythic', category: 'Unlocks',
+   },
++  {
++    // Patch 0484 -- a Legendary Shard sink: gold AND Shards per level.
++    // Effect read by data/attunement.ts's armouryWearCut.
++    id: 'legendary_armoury', name: 'Legendary Armoury',
++    description: 'Racks, oils and a smith who does nothing but tend the guild\'s finest pieces between outings. Legendary gear wears slower.',
++    baseCost: Tuning.get('upgrade.legendary_armoury.baseCost'),
++    costGrowth: Tuning.get('upgrade.legendary_armoury.costGrowth'),
++    maxLevel: Tuning.get('upgrade.legendary_armoury.maxLevel'),
++    modsPerLevel: {}, category: 'Raids',
++    shardCostsPerLevel: [1, 2, 3, 5, 8],
++    requiresUpgradeId: 'raid_charter',
++    legendaryWearCutPctPerLevel: Tuning.get('upgrade.legendary_armoury.wearCutPerLevel'),
++  },
+   {
+     id: 'potion_belt', name: 'Potion Belt',
+     description: "Extra loops and pouches on a hero's kit -- room to carry more into a quest without digging through the stash first.",
+diff --git a/src/game/data/recipeScrolls.ts b/src/game/data/recipeScrolls.ts
+index adcee6e..c1a594a 100644
+--- a/src/game/data/recipeScrolls.ts
++++ b/src/game/data/recipeScrolls.ts
+@@ -72,6 +72,9 @@ export const ALWAYS_KNOWN_RECIPE_IDS: string[] = [
+   'craft_foragers_bundle',
+   'craft_pet_treat',
+   'craft_beckoning_charm',
++  // Patch 0484 -- known from the start (RecipeManager.isKnown also checks
++  // this list, so existing saves get it too).
++  'craft_raiders_charm',
+   // Patch 0362 -- Guildmade's own tier I (level 1) is now the Gear
+   // category's lowest tier, same "the bottom rung of any tiered family
+   // is free" rule every other category (Gems/Sigils/Charms/
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index bf8b0c1..234f40f 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -48,6 +48,7 @@ import { HERO_CLASSES as CLASS_DEFS } from './data/progression';
+ import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
+ import { RAID_BY_ID } from './data/raids';
+ import { Tuning } from './data/tuning';
++import { canAttune, describeAttunement, heroSignature, rollAttunement } from './data/attunement';
+ import { rerollDay, rerollsUsedToday } from './data/reroll';
+ import { playSound } from './sound';
+ import { TESTING_TOOLS_ENABLED } from './testingTools';
+@@ -3008,7 +3009,12 @@ export class GameEngine {
+       // from grabbing the same last unit twice -- InventoryManager.owned
+       // is recomputed fresh each iteration, so it naturally reflects
+       // whatever this loop has already spent so far.
+-      const available = InventoryManager.owned(this.state).sort((a, b) => b.def.cost - a.def.cost);
++      // Patch 0484 -- only things that do something on a quest (the
++      // Raider's Charm, Pet Treats and the Beckoning Charm used to be
++      // picked up here too, priciest first).
++      const available = InventoryManager.owned(this.state)
++        .filter(({ def }) => InventoryManager.isLoadoutEffect(def))
++        .sort((a, b) => b.def.cost - a.def.cost);
+       if (available.length === 0) break;
+       const defId = available[0].def.id;
+       if (!InventoryManager.remove(this.state, defId)) break;
+@@ -3032,8 +3038,8 @@ export class GameEngine {
+    * deliberate, noticed commitment, not something that should ever start
+    * without the player choosing it.
+    */
+-  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[]) {
+-    const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now());
++  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[], armCharm = false) {
++    const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now(), armCharm);
+     if (error) return this.say(error);
+     playSound('depart');
+     this.say(`The guild marches on ${RAID_BY_ID[raidId]?.name ?? 'the raid'}. ${heroIds.length} strong.`, 'raids');
+@@ -3105,7 +3111,7 @@ export class GameEngine {
+     const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
+     const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0, repairDiscount);
+     if (cost === 0) return this.say('Already in perfect condition.');
+-    const free = this.consumeFreeRepair(found.heroId, Date.now());
++    const free = this.consumeFreeRepair(found.heroId, Date.now(), found.item);
+     let usedShard = false;
+     if (free) {
+       found.item.durability = EquipmentManager.maxDurability(found.item);
+@@ -3130,10 +3136,14 @@ export class GameEngine {
+     let freeCount = 0;
+     // Patch 0481 -- skips gear worn by heroes who are still out.
+     const awayCount = EquipmentManager.allItems(this.state).length - EquipmentManager.repairableItems(this.state).length;
+-    for (const { item, heroId } of EquipmentManager.repairableItems(this.state)) {
++    // Patch 0484 -- non-Legendary gear first, so the day's free repairs
++    // land on items they can actually cover.
++    const queue = [...EquipmentManager.repairableItems(this.state)]
++      .sort((a, b) => Number(EquipmentManager.isLegendary(a.item)) - Number(EquipmentManager.isLegendary(b.item)));
++    for (const { item, heroId } of queue) {
+       const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
+       if (cost === 0) continue;
+-      const free = this.consumeFreeRepair(heroId, now);
++      const free = this.consumeFreeRepair(heroId, now, item);
+       if (free) {
+         item.durability = EquipmentManager.maxDurability(item);
+         freeCount += 1;
+@@ -3176,6 +3186,14 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Patch 0484 -- may Repair Everything / auto-repair spend Shards on
++   *  Legendaries? Off = the no-Shard markup unless repaired by hand. */
++  setAutoShardRepairs(enabled: boolean) {
++    this.state.autoShardRepairs = enabled;
++    this.notify();
++    void this.saveNow();
++  }
++
+   upgradeItem(itemUid: string) {
+     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+     if (!found) return;
+@@ -3260,6 +3278,30 @@ export class GameEngine {
+     return true;
+   }
+ 
++  /**
++   * Patch 0484 -- Attunement: a Legendary's Shard-bought bonus line
++   * (data/attunement.ts). First attune costs economy.attuneShardCost,
++   * every reroll after economy.reattuneShardCost, and a reroll always
++   * lands on a different affix than the one it replaces.
++   */
++  attuneItem(itemUid: string): boolean {
++    const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
++    if (!found) return false;
++    const { item } = found;
++    if (!canAttune(item)) { this.say('Only Legendary items can be attuned.'); return false; }
++    const wearer = found.heroId ? this.hero(found.heroId) : undefined;
++    if (wearer && HeroManager.isAway(wearer)) { this.say(`${wearer.name} is still out -- attune their gear once they're back.`); return false; }
++    const cost = EquipmentManager.attuneShardCost(item);
++    if ((this.state.legendaryShards ?? 0) < cost) { this.say(`Needs ${shardLabel(cost)}.`); return false; }
++    const rng = createRng(`attune:${item.uid}:${Date.now()}`);
++    item.attunement = rollAttunement(item, rng, item.attunement?.affix);
++    this.state.legendaryShards -= cost;
++    playSound('enchant');
++    this.say(`Attuned: ${describeAttunement(item.attunement)}.`);
++    void this.saveNow();
++    return true;
++  }
++
+   /**
+    * Patch 0428 -- seen/opened marks for Lore and Discovered Quests entries
+    * (ui/entryInk.tsx). A scope seen for the first time on an older save is
+@@ -4096,7 +4138,10 @@ export class GameEngine {
+    * but the one-time-per-hero fallback obviously can't, since there's
+    * no hero to charge it to.
+    */
+-  private consumeFreeRepair(heroId: string | null, now: number): boolean {
++  private consumeFreeRepair(heroId: string | null, now: number, item?: EquipmentItem): boolean {
++    // Patch 0484 -- free repairs never cover a Legendary: it pays a Shard
++    // (or the no-Shard markup) every time.
++    if (item && EquipmentManager.isLegendary(item)) return false;
+     const usedToday = rerollsUsedToday(this.state.freeRepairsUsedToday, this.state.freeRepairDay, now);
+     if (usedToday < ModifierManager.freeRepairsPerDay(this.state)) {
+       this.state.freeRepairDay = rerollDay(now);
+@@ -4430,7 +4475,9 @@ export class GameEngine {
+     const pet = this.state.pets.find((p) => p.uid === petUid);
+     if (!pet) return;
+     if (!PetManager.isFallen(pet)) return;
+-    const discount = ModifierManager.global(this.state).petRevivalDiscount ?? 0;
++    // Patch 0484 -- + Beastbond on the hero this pet is paired with.
++    const owner = this.state.heroes.find((h) => h.equippedPetId === pet.uid);
++    const discount = (ModifierManager.global(this.state).petRevivalDiscount ?? 0) + heroSignature(owner, 'beastbond');
+     const cost = PetManager.revivalCost(pet, discount);
+     if (this.state.gold < cost) return this.say('Not enough gold for revival.');
+     this.state.gold -= cost;
+diff --git a/src/game/managers/CraftingManager.ts b/src/game/managers/CraftingManager.ts
+index 5428013..be29e43 100644
+--- a/src/game/managers/CraftingManager.ts
++++ b/src/game/managers/CraftingManager.ts
+@@ -1,3 +1,4 @@
++import { Tuning } from '../data/tuning';
+ import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, GemTier, MaterialId, Modifiers, Stats } from '../types';
+ import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
+ import { CONSUMABLE_BY_ID } from '../data/items';
+@@ -309,24 +310,27 @@ export const CraftingManager = {
+    * that made the item in the first place, so its own cost formula lives
+    * here instead.
+    */
+-  rerollCost(state: GameState, item: EquipmentItem): { gold: number; herbs: number } | null {
++  rerollCost(state: GameState, item: EquipmentItem): { gold: number; herbs: number; shards: number } | null {
+     const def = EQUIPMENT_BY_ID[item.defId];
+     if (!def || !isProceduralTemplate(def)) return null;
+     const goldRaw = def.value * 1.2;
+     const discount = ModifierManager.global(state).enchantDiscount ?? 0;
+-    return { gold: Math.max(0, Math.round(goldRaw * (1 - discount / 100))), herbs: 20 };
++    const gold = Math.max(0, Math.round(goldRaw * (1 - discount / 100)));
++    // Patch 0484 -- a Legendary pays Shards instead of Herbs.
++    if (def.rarity === 'legendary') return { gold, herbs: 0, shards: Tuning.get('economy.legendaryRerollShardCost') };
++    return { gold, herbs: 20, shards: 0 };
+   },
+ 
+   reroll(state: GameState, item: EquipmentItem, heroLevel: number): string | null {
+     const def = EQUIPMENT_BY_ID[item.defId];
+     if (!def) return 'Unknown item.';
+-    if (!isProceduralTemplate(def)) return 'This item\u2019s power is fixed -- nothing to reroll.';
+-    const goldRaw = def.value * 1.2;
+-    const discount = ModifierManager.global(state).enchantDiscount ?? 0;
+-    const goldCost = Math.max(0, Math.round(goldRaw * (1 - discount / 100)));
+-    const herbsCost = 20;
++    const cost = CraftingManager.rerollCost(state, item);
++    if (!cost) return 'This item\u2019s power is fixed -- nothing to reroll.';
++    const goldCost = cost.gold;
++    const herbsCost = cost.herbs;
+     if (state.gold < goldCost) return 'Not enough gold for the reroll.';
+     if ((state.materials.herbs ?? 0) < herbsCost) return 'Not enough herbs for the reroll.';
++    if ((state.legendaryShards ?? 0) < cost.shards) return 'Not enough Legendary Shards for the reroll.';
+ 
+     const itemLevel = item.rolledItemLevel ?? Math.min(def.reqLevel, heroLevel);
+     const rng = createRng(`reroll:${item.uid}:${Date.now()}`);
+@@ -340,6 +344,7 @@ export const CraftingManager = {
+     state.gold -= goldCost;
+     state.stats.goldSpent += goldCost;
+     state.materials.herbs -= herbsCost;
++    state.legendaryShards = (state.legendaryShards ?? 0) - cost.shards;
+     return null;
+   },
+ };
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index d3e2c08..6137576 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -3,6 +3,7 @@ import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Rar
+ import { uid, Rng } from '../rng';
+ import { clamp } from '../util';
+ import { Tuning } from '../data/tuning';
++import { MAX_ITEM_WEAR_CUT_PCT } from '../data/attunement';
+ import { matchBonusForTier } from '../data/elements';
+ import { isProceduralTemplate, rollProceduralItem, scaleDedicatedItem, LootSourceTag } from '../data/proceduralLoot';
+ import { scrapCostFromGold, repairScrapCost as repairScrapCostFromGold } from '../data/progression';
+@@ -464,14 +465,21 @@ export const EquipmentManager = {
+   },
+ 
+   /** Applies wear after a quest. Returns names of items that just broke. */
+-  applyWear(hero: Hero, amount: number, durabilityMod: number): string[] {
++  applyWear(hero: Hero, amount: number, durabilityMod: number, armouryCutPct = 0): string[] {
+     const broken: string[] = [];
+     const multiplier = clamp(1 - durabilityMod / 100, 0.15, 1);
+     for (const item of Object.values(hero.equipment)) {
+       if (!item) continue;
+       const before = item.durability;
+       if (before <= 0) continue;
+-      item.durability = Math.max(0, item.durability - Math.max(1, Math.round(amount * multiplier)));
++      // Patch 0484 -- per-item cut on top of the hero-wide one: the
++      // Legendary Armoury (Legendaries only) plus an Unfading Attunement,
++      // capped together at MAX_ITEM_WEAR_CUT_PCT.
++      const itemCut = Math.min(MAX_ITEM_WEAR_CUT_PCT,
++        (EquipmentManager.isLegendary(item) ? armouryCutPct : 0)
++        + (item.attunement?.affix === 'unfading' ? item.attunement.value : 0));
++      const itemMultiplier = multiplier * (1 - itemCut / 100);
++      item.durability = Math.max(0, item.durability - Math.max(1, Math.round(amount * itemMultiplier)));
+       if (item.durability === 0) {
+         broken.push(EQUIPMENT_BY_ID[item.defId]?.name ?? 'Unknown item');
+       }
+@@ -498,12 +506,19 @@ export const EquipmentManager = {
+     const scrap = EquipmentManager.repairScrapCost(item, workshopLevel, vendorDiscountPercent);
+     if (!EquipmentManager.isLegendary(item)) return { gold, scrap, shards: 0, route: 'standard' };
+     const shardCost = Tuning.get('economy.legendaryRepairShardCost');
+-    const useShard = mode === 'shard' || (mode === 'auto' && (state.legendaryShards ?? 0) >= shardCost);
++    // Patch 0484 -- 'auto' only reaches for a Shard when the guild allows it
++    // (GameState.autoShardRepairs, default on).
++    const useShard = mode === 'shard' || (mode === 'auto' && state.autoShardRepairs !== false && (state.legendaryShards ?? 0) >= shardCost);
+     if (useShard) return { gold, scrap: 0, shards: shardCost, route: 'shard' };
+     const mult = Tuning.get('economy.legendaryRepairFallbackMultiplier');
+     return { gold: Math.ceil(gold * mult), scrap: Math.ceil(scrap * mult), shards: 0, route: 'standard' };
+   },
+ 
++  /** Patch 0484 -- Shards for this item's next Attunement (first or reroll). */
++  attuneShardCost(item: EquipmentItem): number {
++    return Tuning.get(item.attunement ? 'economy.reattuneShardCost' : 'economy.attuneShardCost');
++  },
++
+   isLegendary(item: EquipmentItem): boolean {
+     return EQUIPMENT_BY_ID[item.defId]?.rarity === 'legendary';
+   },
+diff --git a/src/game/managers/GuildManager.ts b/src/game/managers/GuildManager.ts
+index f5ab146..33d3218 100644
+--- a/src/game/managers/GuildManager.ts
++++ b/src/game/managers/GuildManager.ts
+@@ -128,6 +128,20 @@ export const GuildManager = {
+     return upgradeScrapCost(def, level);
+   },
+ 
++  /** Patch 0484 -- Legendary Shards for the next level (0 for most). */
++  nextUpgradeShardCost(state: GameState, id: string): number {
++    const def = UPGRADE_BY_ID[id];
++    const level = GuildManager.upgradeLevel(state, id);
++    if (!def?.shardCostsPerLevel || level >= def.maxLevel) return 0;
++    return def.shardCostsPerLevel[Math.min(level, def.shardCostsPerLevel.length - 1)] ?? 0;
++  },
++
++  /** Patch 0484 -- the upgrade this one waits on, if it isn't owned yet. */
++  missingUpgradePrereq(state: GameState, id: string): string | null {
++    const req = UPGRADE_BY_ID[id]?.requiresUpgradeId;
++    return req && GuildManager.upgradeLevel(state, req) < 1 ? req : null;
++  },
++
+   buyUpgrade(state: GameState, id: string): string | null {
+     const def = UPGRADE_BY_ID[id];
+     if (!def) return 'Unknown upgrade.';
+@@ -140,11 +154,16 @@ export const GuildManager = {
+     const cost = GuildManager.nextUpgradeCost(state, id);
+     if (cost === null) return 'Already at maximum.';
+     const scrapCost = GuildManager.nextUpgradeScrapCost(state, id) ?? 0;
++    const shardCost = GuildManager.nextUpgradeShardCost(state, id);
++    const prereq = GuildManager.missingUpgradePrereq(state, id);
++    if (prereq) return `Needs ${UPGRADE_BY_ID[prereq]?.name ?? 'another upgrade'} first.`;
+     if (state.gold < cost) return 'Not enough gold.';
+     if (state.scrap < scrapCost) return 'Not enough scrap.';
++    if ((state.legendaryShards ?? 0) < shardCost) return 'Not enough Legendary Shards.';
+     state.gold -= cost;
+     state.stats.goldSpent += cost;
+     state.scrap -= scrapCost;
++    state.legendaryShards = (state.legendaryShards ?? 0) - shardCost;
+     if (def.vendor) state.vendorGoldSpent[def.vendor] += cost;
+     state.upgrades[id] = level + 1;
+     return null;
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 2114faf..9f99d99 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -8,6 +8,7 @@ import {
+ } from '../data/heroTierUp';
+ import { DIFFICULTY_ORDER } from '../data/quests';
+ import { Tuning } from '../data/tuning';
++import { attunementMods, attunementStats } from '../data/attunement';
+ import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
+ import { Rng, uid } from '../rng';
+ import { MINUTE, scaleMods, sumMods, clamp } from '../util';
+@@ -455,6 +456,12 @@ export const HeroManager = {
+       const base = def.stats;
+       const enchant = item.enchantStats;
+       const rolled = item.rolledStats;
++      // Patch 0484 -- an Attunement stat line, flat (not scaled).
++      const attuned = attunementStats(item);
++      total.strength += attuned.strength ?? 0;
++      total.endurance += attuned.endurance ?? 0;
++      total.luck += attuned.luck ?? 0;
++      total.wisdom += attuned.wisdom ?? 0;
+       if (!base && !enchant && !rolled) continue;
+       total.strength += ((base?.strength ?? 0) + (enchant?.strength ?? 0) + (rolled?.strength ?? 0)) * scale;
+       total.endurance += ((base?.endurance ?? 0) + (enchant?.endurance ?? 0) + (rolled?.endurance ?? 0)) * scale;
+@@ -727,6 +734,8 @@ export const HeroManager = {
+       // Crafted items carry their own chosen mods (EquipmentItem.customMods)
+       // instead of the def's -- see that field's own comment in types.ts.
+       sources.push(scaleMods(item.customMods ?? def.mods ?? {}, (1 + item.plus * 0.15) * relevance));
++      // Patch 0484 -- an Attunement mod line, flat (not scaled).
++      if (item.attunement) sources.push(attunementMods(item));
+       if (def.setId) {
+         setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
+         (setRelevance[def.setId] ??= []).push(relevance);
+diff --git a/src/game/managers/PetManager.ts b/src/game/managers/PetManager.ts
+index 8e23a67..2b77dbe 100644
+--- a/src/game/managers/PetManager.ts
++++ b/src/game/managers/PetManager.ts
+@@ -2,6 +2,7 @@ import { EggInstance, GameState, Hero, MaterialId, Pet, PetBonusType, Rarity } f
+ import { uid } from '../rng';
+ import { clamp, RARITY_ORDER } from '../util';
+ import { Tuning } from '../data/tuning';
++import { heroSignature } from '../data/attunement';
+ import { PET_BY_ID, hatchXpThreshold, pickHatchedPetDefId } from '../data/pets';
+ import { kennelHealTimeMinutes } from '../data/progression';
+ import { ModifierManager } from './ModifierManager';
+@@ -342,7 +343,9 @@ export const PetManager = {
+     const level = PetManager.levelForXp(pet.xp);
+     const base = Tuning.get('pets.maxHealthBase') + level * Tuning.get('pets.maxHealthPerLevel');
+     const bonus = ModifierManager.global(state).petHealth ?? 0;
+-    return Math.round(base + bonus);
++    // Patch 0484 -- Beastbond Attunement on the hero this pet is paired with.
++    const owner = state.heroes.find((h) => h.equippedPetId === pet.uid);
++    return Math.round(base + bonus + heroSignature(owner, 'beastbond'));
+   },
+ 
+   currentHealth(state: GameState, pet: Pet): number {
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index f42bca6..1169c39 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -24,6 +24,7 @@ import { HeroManager } from './HeroManager';
+ import { EventManager } from './EventManager';
+ import { InventoryManager } from './InventoryManager';
+ import { Tuning } from '../data/tuning';
++import { armouryWearCut, heroSignature } from '../data/attunement';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { demoAllowsChain } from '../demo';
+@@ -1401,7 +1402,11 @@ export const QuestManager = {
+     // Patch 0454 -- Legendary Shard, a small chance on a successful Epic
+     // or Legendary quest (see questShardChance). Raids are the main source.
+     let shardsGained: number | undefined;
+-    if (success && rng.chance(questShardChance(quest.offer.difficulty))) {
++    // Patch 0484 -- + a Shardseeker Attunement (only where the base chance
++    // exists: Epic and Legendary quests).
++    const baseShardChance = questShardChance(quest.offer.difficulty);
++    const shardChance = baseShardChance > 0 ? baseShardChance + heroSignature(hero, 'shardseeker') : 0;
++    if (success && rng.chance(shardChance)) {
+       state.legendaryShards = (state.legendaryShards ?? 0) + 1;
+       shardsGained = 1;
+     }
+@@ -1542,7 +1547,7 @@ export const QuestManager = {
+     // durability negative or otherwise misbehave.
+     const wear = isTutorialQuest ? 9999 : baseWear + events.durabilityDelta;
+     const globalMods = ModifierManager.global(state);
+-    const broken = hero ? EquipmentManager.applyWear(hero, wear, globalMods.durability) : [];
++    const broken = hero ? EquipmentManager.applyWear(hero, wear, globalMods.durability, armouryWearCut(state)) : [];
+ 
+     /* ----------------------------- apply -------------------------------- */
+     let levelsGained = 0;
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 952a705..dcad62e 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -4,6 +4,7 @@ import {
+ import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
+ import { renownForRaidClear, TOMBSTONE_STYLES } from '../data/progression';
+ import { Tuning } from '../data/tuning';
++import { armouryWearCut, heroSignature } from '../data/attunement';
+ import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
+ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+ import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
+@@ -22,6 +23,9 @@ import { raidRecipeDropChance } from '../data/recipeScrolls';
+ import { RealmThreatManager } from './RealmThreatManager';
+ import { wardForRaid } from '../data/realmThreat';
+ 
++/** Patch 0484 -- the Raider's Charm consumable's id. */
++export const RAIDERS_CHARM_ID = 'raiders_charm';
++
+ export const RaidManager = {
+   /**
+    * Average elemental contribution across the party for one specific
+@@ -104,7 +108,8 @@ export const RaidManager = {
+     if (heroes.length === 0) return 0;
+     const contributions = heroes
+       .map((h) => {
+-        const raw = sumMods(HeroManager.heroMods(state, h, now), ModifierManager.global(state)).success ?? 0;
++        // Patch 0484 -- + a Raidborn Attunement's raid-only success.
++        const raw = (sumMods(HeroManager.heroMods(state, h, now), ModifierManager.global(state)).success ?? 0) + heroSignature(h, 'raidborn');
+         // Hero Tier-Up (patch 0329) -- passes h.tierUpLevel so a
+         // tiered-up hero's raid contribution baseline reflects their
+         // bought-up stats, same fix as QuestManager.previewSuccess's own
+@@ -298,9 +303,51 @@ export const RaidManager = {
+   },
+ 
+   /** Commits the party -- marks every hero busy, locks in the party's success bonus, and starts the clock. */
+-  start(state: GameState, raidId: string, difficulty: RaidDifficulty, heroIds: string[], now: number): { raid?: ActiveRaid; error?: string } {
++  /**
++   * Patch 0484 -- Raider's Charm. Every item id across this raid's
++   * encounters (one loot pool per encounter, shared by every difficulty),
++   * and which the guild has never found (state.discoveredItems -- the same
++   * record the loot preview's "???" reads).
++   */
++  raidLootIds(raidId: string): string[] {
++    const raid = RAID_BY_ID[raidId];
++    if (!raid) return [];
++    const ids = new Set<string>();
++    for (const encounterId of raid.encounterIds) {
++      const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
++      if (!encounter) continue;
++      for (const entry of [...encounter.loot, ...(encounter.lootHeroic ?? []), ...(encounter.lootMythic ?? []), ...(encounter.lootLegendary ?? [])]) {
++        const parsed = parseLootEntry(entry);
++        if (parsed) ids.add(parsed.defId);
++      }
++    }
++    return [...ids];
++  },
++
++  undiscoveredRaidLoot(state: GameState, raidId: string): string[] {
++    return RaidManager.raidLootIds(raidId).filter((id) => !state.discoveredItems.includes(id));
++  },
++
++  /** Which way an armed charm would work on this raid right now. */
++  charmMode(state: GameState, raidId: string): 'seek' | 'boost' {
++    return RaidManager.undiscoveredRaidLoot(state, raidId).length > 0 ? 'seek' : 'boost';
++  },
++
++  charmShardCost(difficulty: RaidDifficulty): number {
++    if (difficulty === 'heroic') return Tuning.get('economy.raidCharmShardsHeroic');
++    if (difficulty === 'mythic') return Tuning.get('economy.raidCharmShardsMythic');
++    if (difficulty === 'legendary') return Tuning.get('economy.raidCharmShardsLegendary');
++    return Tuning.get('economy.raidCharmShardsNormal');
++  },
++
++  start(
++    state: GameState, raidId: string, difficulty: RaidDifficulty, heroIds: string[], now: number, armCharm = false,
++  ): { raid?: ActiveRaid; error?: string } {
+     const check = RaidManager.canStart(state, raidId, difficulty, heroIds);
+     if (!check.ok) return { error: check.error };
++    const charmShards = armCharm ? RaidManager.charmShardCost(difficulty) : 0;
++    if (armCharm && (state.inventory[RAIDERS_CHARM_ID] ?? 0) < 1) return { error: "You don't have a Raider's Charm." };
++    if ((state.legendaryShards ?? 0) < charmShards) return { error: 'Not enough Legendary Shards to arm the charm.' };
+ 
+     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
+     const raidDef = RAID_BY_ID[raidId]!;
+@@ -314,7 +361,12 @@ export const RaidManager = {
+       endsAt: now + duration,
+       currentEncounter: 0,
+       partySuccessBonus,
++      ...(armCharm ? { charm: RaidManager.charmMode(state, raidId) } : {}),
+     };
++    if (armCharm) {
++      state.inventory[RAIDERS_CHARM_ID] = (state.inventory[RAIDERS_CHARM_ID] ?? 0) - 1;
++      state.legendaryShards = (state.legendaryShards ?? 0) - charmShards;
++    }
+ 
+     for (const hero of heroes) hero.status = 'questing';
+     state.activeRaid = active;
+@@ -417,7 +469,7 @@ export const RaidManager = {
+       // line, so every application here already represents an actual
+       // clear, not a loss.
+       const wear = 3 + DIFFICULTY_ORDER.indexOf(questDifficulty) * 2;
+-      for (const hero of heroes) EquipmentManager.applyWear(hero, wear, globalMods.durability ?? 0);
++      for (const hero of heroes) EquipmentManager.applyWear(hero, wear, globalMods.durability ?? 0, armouryWearCut(state));
+       // Soft-capped the same way QuestManager's own goldMultiplier/
+       // xpMultiplier are (patch 0214) -- same shared softCap() helper, so
+       // there's one formula for both instead of two that can drift.
+@@ -430,7 +482,12 @@ export const RaidManager = {
+         // diffCfg.lootBonus is new -- harder raid tiers now trade success
+         // for better odds too, not just bigger gold/xp (see
+         // RaidDifficultyConfig.lootBonus for the reasoning).
+-        if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
++        let chance = parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100);
++        // Patch 0484 -- Raider's Charm. Same single rng roll either way, so
++        // a run's other outcomes don't shift with the charm on or off.
++        if (active.charm === 'seek' && !state.discoveredItems.includes(parsed.defId)) chance *= Tuning.get('economy.raidCharmSeekMultiplier');
++        else if (active.charm === 'boost') chance *= 1 + Tuning.get('economy.raidCharmBoostPct') / 100;
++        if (!rng.chance(Math.min(90, chance))) continue;
+         const def = EQUIPMENT_BY_ID[parsed.defId];
+         // itemLevel comes from the raid's own fixed reqLevel (raids
+         // aren't part of the reqLevel-roll rework -- see
+@@ -677,8 +734,12 @@ export const RaidManager = {
+     // as they stood BEFORE this raid's xp, not after, in both systems
+     // now. Same even per-hero split as gold/xpEarnedLifetime already
+     // use (one pooled reward, divided, not the full total per hero).
++    // Patch 0484 -- Mentor Attunement: each hero earns +X% from every OTHER
++    // party member's Mentor lines.
++    const mentorTotal = heroes.reduce((s, h) => s + heroSignature(h, 'mentor'), 0);
+     for (const hero of heroes) {
+-      const heroXp = Math.floor(xp / heroes.length);
++      const mentorPct = mentorTotal - heroSignature(hero, 'mentor');
++      const heroXp = Math.floor((xp / heroes.length) * (1 + mentorPct / 100));
+       const levelsGained = HeroManager.grantXp(hero, heroXp);
+       if (levelsGained > 0) heroesLeveledUp.push({ heroId: hero.id, heroName: hero.name, levelsGained });
+       // Same gap, one level down -- a pet paired with a raid-only hero
+@@ -702,6 +763,7 @@ export const RaidManager = {
+       encountersCleared,
+       totalEncounters: encounterIds.length,
+       fullClear,
++      ...(active.charm ? { charm: active.charm } : {}),
+       recipeScrollGained,
+       shardsGained,
+       gold,
+diff --git a/src/game/managers/RecipeManager.ts b/src/game/managers/RecipeManager.ts
+index b30531e..bdb21e7 100644
+--- a/src/game/managers/RecipeManager.ts
++++ b/src/game/managers/RecipeManager.ts
+@@ -1,4 +1,4 @@
+-import { RECIPE_SCROLLS, RECIPE_SCROLL_BY_ID, scrollSellValue } from '../data/recipeScrolls';
++import { ALWAYS_KNOWN_RECIPE_IDS, RECIPE_SCROLLS, RECIPE_SCROLL_BY_ID, scrollSellValue } from '../data/recipeScrolls';
+ import { RecipeScrollDef, GameState } from '../types';
+ import { Rng } from '../rng';
+ import { ModifierManager } from './ModifierManager';
+@@ -33,7 +33,9 @@ export const RecipeManager = {
+   },
+ 
+   isKnown(state: GameState, recipeId: string): boolean {
+-    return state.unlockedRecipes.includes(recipeId);
++    // Patch 0484 -- always-known recipes added after a save was made
++    // (Raider's Charm) count as known without a migration.
++    return state.unlockedRecipes.includes(recipeId) || ALWAYS_KNOWN_RECIPE_IDS.includes(recipeId);
+   },
+ 
+   /**
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 3c25198..40e34ff 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -321,6 +321,8 @@ export interface ConsumableDef {
+      */
+     lootWeightStat?: keyof Stats;
+     lootWeightMultiplier?: number;
++    /** Patch 0484 -- Raider's Charm: armed at raid launch, not equipped. */
++    raidCharm?: boolean;
+   };
+ }
+ 
+@@ -434,6 +436,9 @@ export interface EquipmentItem {
+    * HeroManager.equipmentStats for where this actually gets applied.
+    */
+   enchantStats?: Partial<Stats>;
++  /** Patch 0484 -- a Legendary's Attunement line (data/attunement.ts):
++   *  one Shard-bought bonus, rerollable. Flat, not scaled by +refine. */
++  attunement?: { affix: string; value: number };
+   /**
+    * Set on procedurally-generated items (patch 0214, all-stats rework
+    * patch 0255) and on Guildmade/Masterwork crafted gear -- the item's
+@@ -1753,6 +1758,10 @@ export interface ActiveRaid {
+    * independently against (its own baseSuccess - difficulty penalty + this).
+    */
+   partySuccessBonus: number;
++  /** Patch 0484 -- a Raider's Charm armed at launch. 'seek': x2 chance on
++   *  raid items never found; 'boost': +25% on every roll (raid complete).
++   *  Mode is fixed at launch, as the confirm screen showed it. */
++  charm?: 'seek' | 'boost';
+ }
+ 
+ export interface RaidLootDrop {
+@@ -1770,6 +1779,8 @@ export interface RaidResult {
+   encountersCleared: number;
+   totalEncounters: number;
+   fullClear: boolean;
++  /** Patch 0484 -- the Raider's Charm mode this run had armed, if any. */
++  charm?: 'seek' | 'boost';
+   gold: number;
+   xp: number;
+   loot: RaidLootDrop[];
+@@ -1936,6 +1947,13 @@ export interface UpgradeDef {
+    *  retired the same patch. Left on the type rather than deleted in
+    *  case a real cap ever comes back; no UpgradeDef currently sets it. */
+   stashCapacityPerLevel?: number;
++  /** Patch 0484 -- Legendary Shards per level, on top of gold (index =
++   *  the level being bought, 0-based). */
++  shardCostsPerLevel?: number[];
++  /** Patch 0484 -- can't be bought until this upgrade has a level. */
++  requiresUpgradeId?: string;
++  /** Patch 0484 -- display only: Legendary Armoury's wear cut per level. */
++  legendaryWearCutPctPerLevel?: number;
+   /**
+    * Guild Hall Upgrades panel category, for the tab's filter chips and
+    * each row's category label (patch 0314's dense-list redesign) --
+@@ -3204,6 +3222,9 @@ export interface GameState {
+    *  never repairs past what the guild can currently afford, same
+    *  affordability gate repairAll() already uses. */
+   autoRepairEnabled: boolean;
++  /** Patch 0484 -- Repair Everything and auto-repair spend a Legendary
++   *  Shard on Legendary repairs (else the no-Shard markup). Undefined = on. */
++  autoShardRepairs?: boolean;
+   /** 1-99. Repair triggers once current/max durability, as a percentage,
+    *  drops to or below this. Deliberately not 0 or 100 -- 0 would mean
+    *  "wait until fully broken" (defeats the point of *auto*-repair) and
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 81ac846..f8b57f5 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -3789,6 +3789,13 @@ input[type='range'] {
+   border-radius: 6px;
+   border: 1px solid var(--edge);
+ }
++.raid-charm-row { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; padding: 8px 10px; border: 1px dashed var(--line, #5a4a2a); border-radius: 8px; cursor: pointer; }
++.raid-charm-row.on { border-style: solid; border-color: var(--brass, #d9a441); background: rgba(217, 164, 65, 0.08); }
++.raid-charm-row input { margin-top: 3px; }
++.raid-charm-row > span { font-size: 0.9rem; line-height: 1.35; }
++.raid-charm-row b { font-size: inherit; }
++.attune-line { color: #c9a3ff; margin-top: 2px; }
++.attune-line.signature { color: var(--brass, #d9a441); font-weight: 600; }
+ .guild-guide-toggle { opacity: 0.55; }
+ .guild-guide-toggle.on { opacity: 1; box-shadow: inset 0 0 0 1px var(--brass); }
+ .runecloth-swatch-marks { position: absolute; inset: 0; border-radius: inherit; }
+diff --git a/src/ui/AttuneStation.tsx b/src/ui/AttuneStation.tsx
+new file mode 100644
+index 0000000..5a4ffd8
+--- /dev/null
++++ b/src/ui/AttuneStation.tsx
+@@ -0,0 +1,138 @@
++import { useState } from 'react';
++import { useEngine } from './useEngine';
++import { EquipmentManager } from '../game/managers/EquipmentManager';
++import { HeroManager } from '../game/managers/HeroManager';
++import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
++import { ATTUNE_AFFIX_BY_ID, ATTUNE_AFFIXES, canAttune, describeAttunement, attuneLevel } from '../game/data/attunement';
++import { shardLabel } from '../game/data/shards';
++import { Tuning } from '../game/data/tuning';
++import { RARITY_COLOR } from '../game/util';
++import { ItemIcon, ShardMark } from './icons';
++import { PickerModal } from './CraftingStation';
++import type { PickerOption } from './CraftingStation';
++import { buyWithFx } from './purchaseFx';
++
++/**
++ * Patch 0484 -- the Enchanter's Attunement bench: give a Legendary one
++ * extra bonus line for Legendary Shards, or reroll the one it has. Same
++ * station shape as RerollStation (pick an item, see what it has, pay).
++ * Any Legendary is offered -- hand-authored, procedural or Heirloom.
++ */
++export function AttuneStation({ onClose }: { onClose: () => void }) {
++  const engine = useEngine();
++  const state = engine.state;
++  const [uid, setUid] = useState('');
++  const [openPicker, setOpenPicker] = useState(false);
++  const [previous, setPrevious] = useState<string | null>(null);
++  const [showList, setShowList] = useState(false);
++
++  const found = uid ? EquipmentManager.allItems(state).find((e) => e.item.uid === uid) : undefined;
++  const item = found?.item;
++  const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
++  const wearer = found?.heroId ? state.heroes.find((h) => h.id === found.heroId) : undefined;
++  const away = !!wearer && HeroManager.isAway(wearer);
++  const cost = item ? EquipmentManager.attuneShardCost(item) : Tuning.get('economy.attuneShardCost');
++  const have = state.legendaryShards ?? 0;
++
++  const options: PickerOption[] = EquipmentManager.allItems(state)
++    .map(({ item: i, heroId }): PickerOption | null => {
++      const d = EQUIPMENT_BY_ID[i.defId];
++      if (!d || !canAttune(i)) return null;
++      const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
++      return {
++        key: i.uid,
++        label: `${itemDisplayName(i, d)}${i.plus > 0 ? ` +${i.plus}` : ''}`,
++        sublabel: `${owner} -- ${i.attunement ? describeAttunement(i.attunement) : 'not attuned'}`,
++        icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
++        rarity: d.rarity,
++        tags: heroId ? ['equipped', heroId] : ['unequipped'],
++      };
++    })
++    .filter((o): o is PickerOption => o !== null);
++  const itemTabs = [
++    { id: 'equipped', label: 'Equipped' },
++    { id: 'unequipped', label: 'Unequipped' },
++    ...state.heroes.map((h) => ({ id: h.id, label: h.name })),
++  ];
++
++  function handleAttune(btn: HTMLElement) {
++    if (!item) return;
++    const before = item.attunement ? describeAttunement(item.attunement) : null;
++    let ok = false;
++    buyWithFx(engine, btn, () => { ok = engine.attuneItem(item.uid); });
++    if (ok) setPrevious(before);
++  }
++
++  const signature = item?.attunement && ATTUNE_AFFIX_BY_ID[item.attunement.affix]?.kind === 'signature';
++
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal rrx-modal" onClick={(e) => e.stopPropagation()}>
++        <div className="spread" style={{ marginBottom: 8 }}>
++          <span className="card-title">Attunement</span>
++          <button className="btn-primary" onClick={onClose}>Close</button>
++        </div>
++        <p className="tiny muted" style={{ marginTop: 0 }}>
++          Bind one extra bonus into a Legendary. {Tuning.get('economy.attuneSignatureChance')}% of the time it&apos;s a signature line found nowhere else.
++          Its strength follows the item&apos;s level, so re-level it at the Blacksmith first.
++        </p>
++
++        <button type="button" className="rrx-stage" onClick={() => setOpenPicker(true)} aria-label="Choose a Legendary to attune">
++          <svg className="rrx-ring" viewBox="0 0 200 200" aria-hidden="true">
++            <circle cx="100" cy="100" r="92" strokeWidth="1.4" strokeDasharray="3 8" />
++            <circle cx="100" cy="100" r="78" strokeWidth="1" strokeDasharray="22 7 3 7" />
++          </svg>
++          {def ? <ItemIcon slot={def.slot} icon={def.icon} size={64} /> : <span className="craft-slot-plus" aria-hidden="true">+</span>}
++        </button>
++
++        {item && def ? (
++          <div style={{ textAlign: 'center', margin: '6px 0 10px' }}>
++            <div className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{itemDisplayName(item, def)}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
++            <div className="tiny muted">Lv {attuneLevel(item)} · {wearer ? `worn by ${wearer.name}` : 'in the stash'}</div>
++            <div className={`attune-line ${signature ? 'signature' : ''}`} style={{ marginTop: 8 }}>
++              {item.attunement ? <>{'✦'} {describeAttunement(item.attunement)}</> : <span className="muted">Not attuned yet</span>}
++            </div>
++            {previous && <div className="tiny muted">was: {previous}</div>}
++            {item.attunement && <p className="tiny" style={{ color: 'var(--blood)', margin: '8px 0 0' }}>Re-attuning replaces this line with a different one. There&apos;s no undo.</p>}
++          </div>
++        ) : (
++          <p className="tiny muted" style={{ margin: '8px 0', textAlign: 'center' }}>
++            {options.length === 0 ? 'You have no Legendary items yet.' : 'Choose a Legendary item.'}
++          </p>
++        )}
++
++        <button
++          className="btn-purple"
++          disabled={!item || away || have < cost}
++          title={away ? `${wearer?.name} is still out` : have < cost ? `Needs ${shardLabel(cost)} (you have ${have})` : undefined}
++          onClick={(e) => handleAttune(e.currentTarget)}
++        >
++          {item?.attunement ? 'Re-attune' : 'Attune'} {'·'} {cost} <ShardMark /> <span className="tiny muted">({have} held)</span>
++        </button>
++
++        <button className="btn-ghost tiny" style={{ marginTop: 8 }} onClick={() => setShowList((v) => !v)}>
++          {showList ? 'Hide' : 'Show'} possible lines
++        </button>
++        {showList && (
++          <ul className="tiny muted" style={{ margin: '6px 0 0', paddingLeft: 16 }}>
++            {ATTUNE_AFFIXES.map((a) => (
++              <li key={a.id} className={a.kind === 'signature' ? 'attune-line signature' : undefined}>
++                {a.describe(a.max)}{a.fixed ? '' : ' (at item level 50, best roll)'}
++              </li>
++            ))}
++          </ul>
++        )}
++      </div>
++
++      {openPicker && (
++        <PickerModal
++          title="Choose a Legendary to attune"
++          options={options}
++          tabs={itemTabs}
++          onPick={(key) => { setUid(key); setPrevious(null); }}
++          onClose={() => setOpenPicker(false)}
++        />
++      )}
++    </div>
++  );
++}
+diff --git a/src/ui/AttunementLine.tsx b/src/ui/AttunementLine.tsx
+new file mode 100644
+index 0000000..c925d01
+--- /dev/null
++++ b/src/ui/AttunementLine.tsx
+@@ -0,0 +1,14 @@
++import type { EquipmentItem } from '../game/types';
++import { ATTUNE_AFFIX_BY_ID, describeAttunement } from '../game/data/attunement';
++
++/** Patch 0484 -- a Legendary's Attunement line, under its other bonuses. */
++export function AttunementLine({ item }: { item: EquipmentItem }) {
++  const a = item.attunement;
++  if (!a) return null;
++  const signature = ATTUNE_AFFIX_BY_ID[a.affix]?.kind === 'signature';
++  return (
++    <div className={`tiny attune-line ${signature ? 'signature' : ''}`} title="Attunement -- re-attune at the Enchanter">
++      {'✦'} Attuned: {describeAttunement(a)}
++    </div>
++  );
++}
+diff --git a/src/ui/AuctionHouseTrade.tsx b/src/ui/AuctionHouseTrade.tsx
+index ce30ae5..7d49e45 100644
+--- a/src/ui/AuctionHouseTrade.tsx
++++ b/src/ui/AuctionHouseTrade.tsx
+@@ -1,3 +1,4 @@
++import { describeAttunement } from '../game/data/attunement';
+ import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { EquipSlot, EquipmentItem, Hero, Rarity } from '../game/types';
+@@ -398,6 +399,8 @@ function ListingInspectModal({ row, heroes, buying, onClose, onBuy }: {
+         ...describeMods(item.customMods ?? def.mods ?? {}),
+         ...describeStats(def.stats, true),
+         ...(item.rolledStats ? describeStats(item.rolledStats, true) : []),
++        // Patch 0484 -- an attuned Legendary keeps its line when sold.
++        ...(item.attunement ? [`Attuned: ${describeAttunement(item.attunement)}`] : []),
+       ];
+       icon = <ItemIcon slot={def.slot} icon={def.icon} size={48} broken={EquipmentManager.isBroken(item)} />;
+       subtitle = `${def.slot} · item level ${item.rolledItemLevel ?? def.reqLevel} · requires level ${def.reqLevel}`;
+diff --git a/src/ui/RerollStation.tsx b/src/ui/RerollStation.tsx
+index c33878a..4506d44 100644
+--- a/src/ui/RerollStation.tsx
++++ b/src/ui/RerollStation.tsx
+@@ -10,6 +10,7 @@ import { ItemIcon } from './icons';
+ import { PickerModal } from './CraftingStation';
+ import type { PickerOption } from './CraftingStation';
+ import { buyWithFx, fxMs, fxSpeed } from './purchaseFx';
++import { shardLabel } from '../game/data/shards';
+ 
+ /**
+  * Patch 0426 -- the Enchanter's reroll, finally reachable. The logic
+@@ -53,7 +54,7 @@ export function RerollStation({ onClose }: { onClose: () => void }) {
+   const wearer = found?.heroId ? state.heroes.find((h) => h.id === found.heroId) : undefined;
+   const cost = item ? CraftingManager.rerollCost(state, item) : null;
+   const herbs = state.materials.herbs ?? 0;
+-  const canAfford = !!cost && state.gold >= cost.gold && herbs >= cost.herbs;
++  const canAfford = !!cost && state.gold >= cost.gold && herbs >= cost.herbs && (state.legendaryShards ?? 0) >= cost.shards;
+   const roll: Roll = item?.rolledStats ?? {};
+   const compareTo = fx?.old ?? last?.old;
+   const keys = STAT_KEYS.filter((k) => (roll[k] ?? 0) !== 0 || (compareTo?.[k] ?? 0) !== 0);
+@@ -168,7 +169,12 @@ export function RerollStation({ onClose }: { onClose: () => void }) {
+ 
+         <button className="btn-purple" disabled={!item || !cost || busy || !canAfford} onClick={(e) => handleReroll(e.currentTarget)}>
+           {!item ? 'Reroll' : busy ? 'Rerolling…' : !cost ? 'Fixed stats' : (
+-            <>Reroll {'·'} <span className="gold-text">{'◆'} {formatGold(cost.gold)}</span> + {cost.herbs} Herbs <span className="tiny muted">({formatGold(herbs)} held)</span></>
++            cost.shards > 0 ? (
++              // Patch 0484 -- a Legendary pays Shards in place of Herbs.
++              <>Reroll {'·'} <span className="gold-text">{'◆'} {formatGold(cost.gold)}</span> + {shardLabel(cost.shards)} <span className="tiny muted">({state.legendaryShards ?? 0} held)</span></>
++            ) : (
++              <>Reroll {'·'} <span className="gold-text">{'◆'} {formatGold(cost.gold)}</span> + {cost.herbs} Herbs <span className="tiny muted">({formatGold(herbs)} held)</span></>
++            )
+           )}
+         </button>
+       </div>
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 5dd5ab1..820098c 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -8,6 +8,7 @@ import { GameEngine } from '../../game/engine';
+ import { EquipmentManager, RepairMode } from '../../game/managers/EquipmentManager';
+ import { shardLabel } from '../../game/data/shards';
+ import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
++import { AttunementLine } from '../AttunementLine';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance, itemDisplayName } from '../../game/data/equipment';
+@@ -842,6 +843,8 @@ function SlotCard({
+   // source of truth when Repair is actually clicked.
+   const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
+   const itemFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) || !hero.usedFreeRepair;
++  // Patch 0484 -- free repairs never cover Legendaries.
++  const freeRepairFor = (it: EquipmentItem) => itemFreeRepairAvailable && !EquipmentManager.isLegendary(it);
+   const repairDiscount = ModifierManager.global(engine.state).repairDiscount ?? 0;
+   // Patch 0466 -- ambient condition: worn (50% or less) breathes amber at
+   // the edge, broken breathes red. Off during a repair replay.
+@@ -920,7 +923,7 @@ function SlotCard({
+                 // purchased stats, never touched by this.
+                 const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
+                 const lines = [...modLines, ...baseLines, ...rolledLines];
+-                return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
++                return <><div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div><AttunementLine item={item} /></>;
+               })()}
+               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+                 <div
+@@ -974,7 +977,7 @@ function SlotCard({
+                     affordance for it rather than a label that silently
+                     changed meaning depending on state. .btn-teal to match
+                     Repair's colour everywhere else it shows up now. */}
+-                {itemFreeRepairAvailable && !HeroManager.isAway(hero) && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
++                {freeRepairFor(item) && !HeroManager.isAway(hero) && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
+                   <button
+                     className="btn-teal"
+                     onClick={() => { if (onRepair) onRepair(item.uid); else engine.repair(item.uid); setOpen(false); }}
+@@ -1089,7 +1092,7 @@ function StashCard({
+                 // purchased stats, never touched by this.
+                 const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
+                 const lines = [...modLines, ...baseLines, ...rolledLines];
+-                return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
++                return <><div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div><AttunementLine item={item} /></>;
+               })()}
+               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+                 <div
+@@ -1307,6 +1310,12 @@ export function EquipmentPanel() {
+             onChange={(v) => engine.setAutoRepair(v)}
+           />
+         </Row>
++        <Row
++          label="Use Shards on Legendary repairs"
++          hint="Repair Everything and auto-repair spend 1 Legendary Shard per Legendary repair. Off: they pay the no-Shard markup instead, and Shards are only spent when you repair a Legendary yourself."
++        >
++          <Toggle value={state.autoShardRepairs !== false} onChange={(v) => engine.setAutoShardRepairs(v)} />
++        </Row>
+         {state.autoRepairEnabled && (
+           <Row label="Repair threshold" hint="Lower means gear wears further before it's automatically fixed.">
+             <input
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 06745ed..7aa9dfb 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -174,6 +174,8 @@ function upgradeEntries(
+     ...(def.questFreeRerollsPerLevel ? [{ text: `+${def.questFreeRerollsPerLevel} free quest board reroll per level` }] : []),
+     ...(def.freezeChangesPerLevel ? [{ text: `+${def.freezeChangesPerLevel} contract freeze per level` }] : []),
+     ...(def.stashCapacityPerLevel ? [{ text: `+${def.stashCapacityPerLevel} stash space per level` }] : []),
++    ...(def.legendaryWearCutPctPerLevel
++      ? [{ text: `Legendary gear wears ${def.legendaryWearCutPctPerLevel}% slower per level${level > 0 ? ` (now ${def.legendaryWearCutPctPerLevel * level}%)` : ''}` }] : []),
+   ];
+ }
+ 
+@@ -386,15 +388,21 @@ export function GuildPanel() {
+     const level = GuildManager.upgradeLevel(state, def.id);
+     const cost = GuildManager.nextUpgradeCost(state, def.id);
+     const maxed = cost === null && level >= def.maxLevel;
+-    const affordable = !maxed && cost !== null && state.gold >= cost;
++    // Patch 0484 -- some rows also cost Legendary Shards, or wait on
++    // another upgrade (Legendary Armoury needs Raid Charter).
++    const shards = GuildManager.nextUpgradeShardCost(state, def.id);
++    const prereq = GuildManager.missingUpgradePrereq(state, def.id);
++    const affordable = !maxed && !prereq && cost !== null && state.gold >= cost && (state.legendaryShards ?? 0) >= shards;
+     const entries = upgradeEntries(def, level, maxed);
+     return withDemoLock({
+       id: def.id, name: def.name, description: def.description,
+       category: def.category ?? 'Unlocks', level, maxLevel: def.maxLevel, maxed, affordable, cost,
+       effectText: def.shortEffect ?? entries.map((e) => e.text).join(' · '),
+       statLines: entries.map((e) => <span key={e.text} className={e.gold ? 'gold-text' : undefined}>{e.text}</span>),
+-      buyLabel: maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`,
+-      buyDisabled: maxed || cost === null || state.gold < cost,
++      buyLabel: maxed ? 'Fully upgraded'
++        : prereq ? `Needs ${GuildManager.upgrades().find((u) => u.id === prereq)?.name ?? prereq}`
++          : `Buy · ${formatGold(cost ?? 0)}${shards > 0 ? ` + ${shards} Shard${shards === 1 ? '' : 's'}` : ''}`,
++      buyDisabled: maxed || !affordable,
+       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id)),
+     }, demoLockKind(def.id, level));
+   }
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index baf46c4..eabd008 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -3,7 +3,8 @@ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { backgroundSrc } from '../../game/settings';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { RaidManager } from '../../game/managers/RaidManager';
++import { RaidManager, RAIDERS_CHARM_ID } from '../../game/managers/RaidManager';
++import { Tuning } from '../../game/data/tuning';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import {
+   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON_DEFS, raidDifficultyIconSrc, RAID_DIFFICULTY_LABEL,
+@@ -509,11 +510,18 @@ function RaidDetailModal({
+   // portcullis slams down behind them, and only then is the raid
+   // committed. Straight through with motion off.
+   const [marching, setMarching] = useState(false);
++  // Patch 0484 -- Raider's Charm, armed from the confirm screen.
++  const [armCharm, setArmCharm] = useState(false);
++  const charmsHeld = state.inventory[RAIDERS_CHARM_ID] ?? 0;
++  const charmShards = difficulty ? RaidManager.charmShardCost(difficulty) : 0;
++  const charmMode = RaidManager.charmMode(state, raid.id);
++  const charmMissing = RaidManager.undiscoveredRaidLoot(state, raid.id).length;
++  const canArm = charmsHeld > 0 && (state.legendaryShards ?? 0) >= charmShards;
+   const marchTimer = useRef<number>();
+   useEffect(() => () => window.clearTimeout(marchTimer.current), []);
+   const commitNow = () => {
+     if (!difficulty) return;
+-    engine.startRaid(raid.id, difficulty, selectedHeroIds);
++    engine.startRaid(raid.id, difficulty, selectedHeroIds, armCharm && canArm);
+     if (fxMs(1)) lastRaidCommitAt = Date.now();
+     setConfirming(false);
+     onClose();
+@@ -740,6 +748,22 @@ function RaidDetailModal({
+             <p className="small bad" style={{ margin: '0 0 4px' }}>
+               The whole party is committed until the raid resolves. There's no early retreat.
+             </p>
++            {/* Patch 0484 -- Raider's Charm. Shown whenever the guild holds
++                one; the line says which way it would work on this raid. */}
++            {charmsHeld > 0 && (
++              <label className={`raid-charm-row ${armCharm && canArm ? 'on' : ''}`} title={canArm ? undefined : `Needs ${charmShards} Legendary Shard${charmShards === 1 ? '' : 's'} to arm`}>
++                <input type="checkbox" checked={armCharm && canArm} disabled={!canArm || marching} onChange={(e) => setArmCharm(e.target.checked)} />
++                <span>
++                  <b>Arm a Raider&apos;s Charm</b> <span className="tiny muted">({charmsHeld} held{charmShards > 0 ? ` · costs ${charmShards} Shard${charmShards === 1 ? '' : 's'}` : ''})</span>
++                  <span className="tiny" style={{ display: 'block', marginTop: 2 }}>
++                    {charmMode === 'seek'
++                      ? `${charmMissing} item${charmMissing === 1 ? '' : 's'} here you've never found: x${Tuning.get('economy.raidCharmSeekMultiplier')} chance on ${charmMissing === 1 ? 'it' : 'those'}.`
++                      : `Raid complete: +${Tuning.get('economy.raidCharmBoostPct')}% chance on every drop.`}
++                    {' '}Used up win or lose.
++                  </span>
++                </span>
++              </label>
++            )}
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setConfirming(false)} disabled={marching}>Cancel</button>
+               <button className="btn-primary" onClick={confirmCommit} disabled={marching}>Send them</button>
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 7a67a2d..16b8a6c 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -7,6 +7,8 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { EquipmentManager, RepairMode } from '../../game/managers/EquipmentManager';
+ import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
++import { AttunementLine } from '../AttunementLine';
++import { AttuneStation } from '../AttuneStation';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { EQUIPMENT_BY_ID, itemDisplayName } from '../../game/data/equipment';
+ import { rerollDay, rerollsUsedToday } from '../../game/data/reroll';
+@@ -295,6 +297,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+   const [showEnhance, setShowEnhance] = useState(false);
+   // Patch 0426 -- Enchanter reroll (RerollStation.tsx).
+   const [showReroll, setShowReroll] = useState(false);
++  const [showAttune, setShowAttune] = useState(false); // patch 0484
+   const [showScrap, setShowScrap] = useState(false);
+   const [showWeaponEnchant, setShowWeaponEnchant] = useState(false);
+   const [showArmourInfusion, setShowArmourInfusion] = useState(false);
+@@ -410,6 +413,9 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+               {vendorId === 'enchanter' && (
+                 <button className="btn-purple" onClick={() => setShowReroll(true)}>Reroll stats</button>
+               )}
++              {vendorId === 'enchanter' && (
++                <button className="btn-purple" onClick={() => setShowAttune(true)}>Attune Legendary</button>
++              )}
+               {/* A handful of consumables (Lucky Charm, Fortune Weave,
+                   Windfall Sigil) were mistakenly showing under the
+                   Alchemist's Supplies -- thematically the Enchanter's own
+@@ -487,6 +493,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+       {showWeaponEnchant && <WeaponEnchantStation onClose={() => setShowWeaponEnchant(false)} />}
+       {showArmourInfusion && <ArmourInfusionStation onClose={() => setShowArmourInfusion(false)} />}
+       {showReroll && <RerollStation onClose={() => setShowReroll(false)} />}
++      {showAttune && <AttuneStation onClose={() => setShowAttune(false)} />}
+       {showCharms && <CraftingStation category="charm" onClose={() => setShowCharms(false)} />}
+     </>
+   );
+@@ -766,7 +773,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+     const workshop = state.guild.workshop ?? 0;
+     const repairDiscount = ModifierManager.global(state).repairDiscount ?? 0;
+     return EquipmentManager.repairCost(item, workshop, repairDiscount) > 0;
+-  });
++  // Patch 0484 -- non-Legendary first, so free repairs land where they can.
++  }).sort((a, b) => Number(EquipmentManager.isLegendary(a)) - Number(EquipmentManager.isLegendary(b)));
+   /**
+    * Repair Only Broken (patch 0339), direct request: a narrower sibling
+    * to Repair All above, scoped to items at 0 durability specifically
+@@ -790,7 +798,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+     targets.forEach((t, i) => {
+       window.setTimeout(() => {
+         const repairsUsedToday = rerollsUsedToday(state.freeRepairsUsedToday, state.freeRepairDay, Date.now());
+-        const free = repairsUsedToday < ModifierManager.freeRepairsPerDay(state);
++        const target = state.stash.find((s) => s.uid === t.uid);
++        const free = repairsUsedToday < ModifierManager.freeRepairsPerDay(state) && !(target && EquipmentManager.isLegendary(target));
+         engine.repair(t.uid);
+         pushRepairBurst(t.x, t.y, free);
+       }, i * STAGGER_MS);
+@@ -1036,7 +1045,8 @@ function ArmourStashCard({
+   const repairCost = EquipmentManager.repairCost(item, workshop, repairDiscount);
+   const repairScrapCost = EquipmentManager.repairScrapCost(item, workshop, repairDiscount);
+   const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
+-  const stashFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state);
++  // Patch 0484 -- free repairs never cover Legendaries.
++  const stashFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) && !EquipmentManager.isLegendary(item);
+ 
+   const centerOf = (el: HTMLElement) => {
+     const rect = el.getBoundingClientRect();
+@@ -1106,6 +1116,7 @@ function ArmourStashCard({
+                   return lines.length > 0 ? lines.join(' · ') : 'No bonuses';
+                 })()}
+               </p>
++              <AttunementLine item={item} />
+               <div className="row wrap" style={{ gap: 6, marginTop: 12 }}>
+                 <button
+                   className="btn-ghost"
+@@ -1137,7 +1148,7 @@ function ArmourStashCard({
+                 </button>
+                 {/* Patch 0454 -- a Legendary picks its route (Shard or
+                     no-Shard markup) unless today's free repair covers it. */}
+-                {EquipmentManager.isLegendary(item) && repairCost > 0 && !stashFreeRepairAvailable ? (
++                {EquipmentManager.isLegendary(item) && repairCost > 0 ? (
+                   <LegendaryRepairButtons
+                     item={item} workshop={workshop} repairDiscount={repairDiscount} compact
+                     onRepair={(mode, el) => doRepair(centerOf(el), mode)}
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 7b6404d..c3fe698 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -845,9 +845,10 @@ const EFFECT_KEYS = [
+   'health', 'restoreHealth', 'healthDamageReduction', 'revivalDiscount',
+   'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
+   'preventInjury', 'guaranteedGoodEvent', 'healInjury',
++  'raidCharm', // patch 0484
+ ];
+ const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
+-const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury']);
++const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury', 'raidCharm']);
+ // guaranteedLoot is eventEffects' one non-numeric, non-boolean key -- a
+ // Rarity string, not a percentage or flat amount. Kept as its own named
+ // set (rather than generalizing kvGrid to an arbitrary per-key type map,
+@@ -926,6 +927,7 @@ const EFFECT_FIELD_INFO = {
+   petRevivalDiscount: MOD_FIELD_INFO.petRevivalDiscount,
+   peddlerCounterReduction: { unit: 'flat', title: "Flat reduction to the guild's quest-count counter toward Grimsby's next visit." },
+   preventInjury: { unit: 'bool', title: 'Blocks any injury roll on the quest this is equipped for.' },
++  raidCharm: { unit: 'bool', title: "Raider's Charm (patch 0484): armed when a raid sets out, not equipped on a hero." },
+   guaranteedGoodEvent: { unit: 'bool', title: 'Forces the quest event roll (if any fires) to land positive.' },
+   healInjury: { unit: 'bool', title: "Clears the hero's current injury immediately on use." },
+ };
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 6f6258f..96e7bf3 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -1529,6 +1529,8 @@ const EFFECT_KEYS = [
+   'health', 'restoreHealth', 'healthDamageReduction', 'revivalDiscount',
+   'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
+   'preventInjury', 'guaranteedGoodEvent', 'healInjury',
++  // Patch 0484 -- Raider's Charm (a boolean, armed at raid launch).
++  'raidCharm',
+   // Fortune Charms (patch 0215) -- lootWeightStat is a string key name
+   // (a Stats key as of patch 0255's all-stats rework, e.g. 'luck'/
+   // 'wisdom' -- see guild-idler-status.md), not itself a numeric

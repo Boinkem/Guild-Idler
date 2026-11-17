@@ -1,3 +1,4 @@
+import { Tuning } from '../data/tuning';
 import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, GemTier, MaterialId, Modifiers, Stats } from '../types';
 import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
 import { CONSUMABLE_BY_ID } from '../data/items';
@@ -309,24 +310,27 @@ export const CraftingManager = {
    * that made the item in the first place, so its own cost formula lives
    * here instead.
    */
-  rerollCost(state: GameState, item: EquipmentItem): { gold: number; herbs: number } | null {
+  rerollCost(state: GameState, item: EquipmentItem): { gold: number; herbs: number; shards: number } | null {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def || !isProceduralTemplate(def)) return null;
     const goldRaw = def.value * 1.2;
     const discount = ModifierManager.global(state).enchantDiscount ?? 0;
-    return { gold: Math.max(0, Math.round(goldRaw * (1 - discount / 100))), herbs: 20 };
+    const gold = Math.max(0, Math.round(goldRaw * (1 - discount / 100)));
+    // Patch 0484 -- a Legendary pays Shards instead of Herbs.
+    if (def.rarity === 'legendary') return { gold, herbs: 0, shards: Tuning.get('economy.legendaryRerollShardCost') };
+    return { gold, herbs: 20, shards: 0 };
   },
 
   reroll(state: GameState, item: EquipmentItem, heroLevel: number): string | null {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return 'Unknown item.';
-    if (!isProceduralTemplate(def)) return 'This item\u2019s power is fixed -- nothing to reroll.';
-    const goldRaw = def.value * 1.2;
-    const discount = ModifierManager.global(state).enchantDiscount ?? 0;
-    const goldCost = Math.max(0, Math.round(goldRaw * (1 - discount / 100)));
-    const herbsCost = 20;
+    const cost = CraftingManager.rerollCost(state, item);
+    if (!cost) return 'This item\u2019s power is fixed -- nothing to reroll.';
+    const goldCost = cost.gold;
+    const herbsCost = cost.herbs;
     if (state.gold < goldCost) return 'Not enough gold for the reroll.';
     if ((state.materials.herbs ?? 0) < herbsCost) return 'Not enough herbs for the reroll.';
+    if ((state.legendaryShards ?? 0) < cost.shards) return 'Not enough Legendary Shards for the reroll.';
 
     const itemLevel = item.rolledItemLevel ?? Math.min(def.reqLevel, heroLevel);
     const rng = createRng(`reroll:${item.uid}:${Date.now()}`);
@@ -340,6 +344,7 @@ export const CraftingManager = {
     state.gold -= goldCost;
     state.stats.goldSpent += goldCost;
     state.materials.herbs -= herbsCost;
+    state.legendaryShards = (state.legendaryShards ?? 0) - cost.shards;
     return null;
   },
 };

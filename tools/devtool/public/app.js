@@ -845,9 +845,10 @@ const EFFECT_KEYS = [
   'health', 'restoreHealth', 'healthDamageReduction', 'revivalDiscount',
   'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
   'preventInjury', 'guaranteedGoodEvent', 'healInjury',
+  'raidCharm', // patch 0484
 ];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
-const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury']);
+const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury', 'raidCharm']);
 // guaranteedLoot is eventEffects' one non-numeric, non-boolean key -- a
 // Rarity string, not a percentage or flat amount. Kept as its own named
 // set (rather than generalizing kvGrid to an arbitrary per-key type map,
@@ -926,6 +927,7 @@ const EFFECT_FIELD_INFO = {
   petRevivalDiscount: MOD_FIELD_INFO.petRevivalDiscount,
   peddlerCounterReduction: { unit: 'flat', title: "Flat reduction to the guild's quest-count counter toward Grimsby's next visit." },
   preventInjury: { unit: 'bool', title: 'Blocks any injury roll on the quest this is equipped for.' },
+  raidCharm: { unit: 'bool', title: "Raider's Charm (patch 0484): armed when a raid sets out, not equipped on a hero." },
   guaranteedGoodEvent: { unit: 'bool', title: 'Forces the quest event roll (if any fires) to land positive.' },
   healInjury: { unit: 'bool', title: "Clears the hero's current injury immediately on use." },
 };

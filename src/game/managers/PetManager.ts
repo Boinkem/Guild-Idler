@@ -2,6 +2,7 @@ import { EggInstance, GameState, Hero, MaterialId, Pet, PetBonusType, Rarity } f
 import { uid } from '../rng';
 import { clamp, RARITY_ORDER } from '../util';
 import { Tuning } from '../data/tuning';
+import { heroSignature } from '../data/attunement';
 import { PET_BY_ID, hatchXpThreshold, pickHatchedPetDefId } from '../data/pets';
 import { kennelHealTimeMinutes } from '../data/progression';
 import { ModifierManager } from './ModifierManager';
@@ -342,7 +343,9 @@ export const PetManager = {
     const level = PetManager.levelForXp(pet.xp);
     const base = Tuning.get('pets.maxHealthBase') + level * Tuning.get('pets.maxHealthPerLevel');
     const bonus = ModifierManager.global(state).petHealth ?? 0;
-    return Math.round(base + bonus);
+    // Patch 0484 -- Beastbond Attunement on the hero this pet is paired with.
+    const owner = state.heroes.find((h) => h.equippedPetId === pet.uid);
+    return Math.round(base + bonus + heroSignature(owner, 'beastbond'));
   },
 
   currentHealth(state: GameState, pet: Pet): number {

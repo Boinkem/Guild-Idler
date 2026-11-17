@@ -7,6 +7,8 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { EquipmentManager, RepairMode } from '../../game/managers/EquipmentManager';
 import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
+import { AttunementLine } from '../AttunementLine';
+import { AttuneStation } from '../AttuneStation';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../../game/data/equipment';
 import { rerollDay, rerollsUsedToday } from '../../game/data/reroll';
@@ -295,6 +297,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const [showEnhance, setShowEnhance] = useState(false);
   // Patch 0426 -- Enchanter reroll (RerollStation.tsx).
   const [showReroll, setShowReroll] = useState(false);
+  const [showAttune, setShowAttune] = useState(false); // patch 0484
   const [showScrap, setShowScrap] = useState(false);
   const [showWeaponEnchant, setShowWeaponEnchant] = useState(false);
   const [showArmourInfusion, setShowArmourInfusion] = useState(false);
@@ -410,6 +413,9 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               {vendorId === 'enchanter' && (
                 <button className="btn-purple" onClick={() => setShowReroll(true)}>Reroll stats</button>
               )}
+              {vendorId === 'enchanter' && (
+                <button className="btn-purple" onClick={() => setShowAttune(true)}>Attune Legendary</button>
+              )}
               {/* A handful of consumables (Lucky Charm, Fortune Weave,
                   Windfall Sigil) were mistakenly showing under the
                   Alchemist's Supplies -- thematically the Enchanter's own
@@ -487,6 +493,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
       {showWeaponEnchant && <WeaponEnchantStation onClose={() => setShowWeaponEnchant(false)} />}
       {showArmourInfusion && <ArmourInfusionStation onClose={() => setShowArmourInfusion(false)} />}
       {showReroll && <RerollStation onClose={() => setShowReroll(false)} />}
+      {showAttune && <AttuneStation onClose={() => setShowAttune(false)} />}
       {showCharms && <CraftingStation category="charm" onClose={() => setShowCharms(false)} />}
     </>
   );
@@ -766,7 +773,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
     const workshop = state.guild.workshop ?? 0;
     const repairDiscount = ModifierManager.global(state).repairDiscount ?? 0;
     return EquipmentManager.repairCost(item, workshop, repairDiscount) > 0;
-  });
+  // Patch 0484 -- non-Legendary first, so free repairs land where they can.
+  }).sort((a, b) => Number(EquipmentManager.isLegendary(a)) - Number(EquipmentManager.isLegendary(b)));
   /**
    * Repair Only Broken (patch 0339), direct request: a narrower sibling
    * to Repair All above, scoped to items at 0 durability specifically
@@ -790,7 +798,8 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
     targets.forEach((t, i) => {
       window.setTimeout(() => {
         const repairsUsedToday = rerollsUsedToday(state.freeRepairsUsedToday, state.freeRepairDay, Date.now());
-        const free = repairsUsedToday < ModifierManager.freeRepairsPerDay(state);
+        const target = state.stash.find((s) => s.uid === t.uid);
+        const free = repairsUsedToday < ModifierManager.freeRepairsPerDay(state) && !(target && EquipmentManager.isLegendary(target));
         engine.repair(t.uid);
         pushRepairBurst(t.x, t.y, free);
       }, i * STAGGER_MS);
@@ -1036,7 +1045,8 @@ function ArmourStashCard({
   const repairCost = EquipmentManager.repairCost(item, workshop, repairDiscount);
   const repairScrapCost = EquipmentManager.repairScrapCost(item, workshop, repairDiscount);
   const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
-  const stashFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state);
+  // Patch 0484 -- free repairs never cover Legendaries.
+  const stashFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) && !EquipmentManager.isLegendary(item);
 
   const centerOf = (el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
@@ -1106,6 +1116,7 @@ function ArmourStashCard({
                   return lines.length > 0 ? lines.join(' · ') : 'No bonuses';
                 })()}
               </p>
+              <AttunementLine item={item} />
               <div className="row wrap" style={{ gap: 6, marginTop: 12 }}>
                 <button
                   className="btn-ghost"
@@ -1137,7 +1148,7 @@ function ArmourStashCard({
                 </button>
                 {/* Patch 0454 -- a Legendary picks its route (Shard or
                     no-Shard markup) unless today's free repair covers it. */}
-                {EquipmentManager.isLegendary(item) && repairCost > 0 && !stashFreeRepairAvailable ? (
+                {EquipmentManager.isLegendary(item) && repairCost > 0 ? (
                   <LegendaryRepairButtons
                     item={item} workshop={workshop} repairDiscount={repairDiscount} compact
                     onRepair={(mode, el) => doRepair(centerOf(el), mode)}

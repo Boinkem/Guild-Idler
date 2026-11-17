@@ -8,6 +8,7 @@ import {
 } from '../data/heroTierUp';
 import { DIFFICULTY_ORDER } from '../data/quests';
 import { Tuning } from '../data/tuning';
+import { attunementMods, attunementStats } from '../data/attunement';
 import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
 import { Rng, uid } from '../rng';
 import { MINUTE, scaleMods, sumMods, clamp } from '../util';
@@ -455,6 +456,12 @@ export const HeroManager = {
       const base = def.stats;
       const enchant = item.enchantStats;
       const rolled = item.rolledStats;
+      // Patch 0484 -- an Attunement stat line, flat (not scaled).
+      const attuned = attunementStats(item);
+      total.strength += attuned.strength ?? 0;
+      total.endurance += attuned.endurance ?? 0;
+      total.luck += attuned.luck ?? 0;
+      total.wisdom += attuned.wisdom ?? 0;
       if (!base && !enchant && !rolled) continue;
       total.strength += ((base?.strength ?? 0) + (enchant?.strength ?? 0) + (rolled?.strength ?? 0)) * scale;
       total.endurance += ((base?.endurance ?? 0) + (enchant?.endurance ?? 0) + (rolled?.endurance ?? 0)) * scale;
@@ -727,6 +734,8 @@ export const HeroManager = {
       // Crafted items carry their own chosen mods (EquipmentItem.customMods)
       // instead of the def's -- see that field's own comment in types.ts.
       sources.push(scaleMods(item.customMods ?? def.mods ?? {}, (1 + item.plus * 0.15) * relevance));
+      // Patch 0484 -- an Attunement mod line, flat (not scaled).
+      if (item.attunement) sources.push(attunementMods(item));
       if (def.setId) {
         setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
         (setRelevance[def.setId] ??= []).push(relevance);

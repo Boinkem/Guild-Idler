@@ -48,6 +48,7 @@ import { HERO_CLASSES as CLASS_DEFS } from './data/progression';
 import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
+import { canAttune, describeAttunement, heroSignature, rollAttunement } from './data/attunement';
 import { rerollDay, rerollsUsedToday } from './data/reroll';
 import { playSound } from './sound';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
@@ -3008,7 +3009,12 @@ export class GameEngine {
       // from grabbing the same last unit twice -- InventoryManager.owned
       // is recomputed fresh each iteration, so it naturally reflects
       // whatever this loop has already spent so far.
-      const available = InventoryManager.owned(this.state).sort((a, b) => b.def.cost - a.def.cost);
+      // Patch 0484 -- only things that do something on a quest (the
+      // Raider's Charm, Pet Treats and the Beckoning Charm used to be
+      // picked up here too, priciest first).
+      const available = InventoryManager.owned(this.state)
+        .filter(({ def }) => InventoryManager.isLoadoutEffect(def))
+        .sort((a, b) => b.def.cost - a.def.cost);
       if (available.length === 0) break;
       const defId = available[0].def.id;
       if (!InventoryManager.remove(this.state, defId)) break;
@@ -3032,8 +3038,8 @@ export class GameEngine {
    * deliberate, noticed commitment, not something that should ever start
    * without the player choosing it.
    */
-  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[]) {
-    const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now());
+  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[], armCharm = false) {
+    const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now(), armCharm);
     if (error) return this.say(error);
     playSound('depart');
     this.say(`The guild marches on ${RAID_BY_ID[raidId]?.name ?? 'the raid'}. ${heroIds.length} strong.`, 'raids');
@@ -3105,7 +3111,7 @@ export class GameEngine {
     const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
     const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0, repairDiscount);
     if (cost === 0) return this.say('Already in perfect condition.');
-    const free = this.consumeFreeRepair(found.heroId, Date.now());
+    const free = this.consumeFreeRepair(found.heroId, Date.now(), found.item);
     let usedShard = false;
     if (free) {
       found.item.durability = EquipmentManager.maxDurability(found.item);
@@ -3130,10 +3136,14 @@ export class GameEngine {
     let freeCount = 0;
     // Patch 0481 -- skips gear worn by heroes who are still out.
     const awayCount = EquipmentManager.allItems(this.state).length - EquipmentManager.repairableItems(this.state).length;
-    for (const { item, heroId } of EquipmentManager.repairableItems(this.state)) {
+    // Patch 0484 -- non-Legendary gear first, so the day's free repairs
+    // land on items they can actually cover.
+    const queue = [...EquipmentManager.repairableItems(this.state)]
+      .sort((a, b) => Number(EquipmentManager.isLegendary(a.item)) - Number(EquipmentManager.isLegendary(b.item)));
+    for (const { item, heroId } of queue) {
       const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
       if (cost === 0) continue;
-      const free = this.consumeFreeRepair(heroId, now);
+      const free = this.consumeFreeRepair(heroId, now, item);
       if (free) {
         item.durability = EquipmentManager.maxDurability(item);
         freeCount += 1;
@@ -3173,6 +3183,14 @@ export class GameEngine {
     if (thresholdPercent !== undefined) {
       this.state.autoRepairThresholdPercent = Math.max(1, Math.min(99, Math.round(thresholdPercent)));
     }
+    void this.saveNow();
+  }
+
+  /** Patch 0484 -- may Repair Everything / auto-repair spend Shards on
+   *  Legendaries? Off = the no-Shard markup unless repaired by hand. */
+  setAutoShardRepairs(enabled: boolean) {
+    this.state.autoShardRepairs = enabled;
+    this.notify();
     void this.saveNow();
   }
 
@@ -3256,6 +3274,30 @@ export class GameEngine {
     if (error) { this.say(error); return false; }
     playSound('enchant');
     this.say('Rerolled.');
+    void this.saveNow();
+    return true;
+  }
+
+  /**
+   * Patch 0484 -- Attunement: a Legendary's Shard-bought bonus line
+   * (data/attunement.ts). First attune costs economy.attuneShardCost,
+   * every reroll after economy.reattuneShardCost, and a reroll always
+   * lands on a different affix than the one it replaces.
+   */
+  attuneItem(itemUid: string): boolean {
+    const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+    if (!found) return false;
+    const { item } = found;
+    if (!canAttune(item)) { this.say('Only Legendary items can be attuned.'); return false; }
+    const wearer = found.heroId ? this.hero(found.heroId) : undefined;
+    if (wearer && HeroManager.isAway(wearer)) { this.say(`${wearer.name} is still out -- attune their gear once they're back.`); return false; }
+    const cost = EquipmentManager.attuneShardCost(item);
+    if ((this.state.legendaryShards ?? 0) < cost) { this.say(`Needs ${shardLabel(cost)}.`); return false; }
+    const rng = createRng(`attune:${item.uid}:${Date.now()}`);
+    item.attunement = rollAttunement(item, rng, item.attunement?.affix);
+    this.state.legendaryShards -= cost;
+    playSound('enchant');
+    this.say(`Attuned: ${describeAttunement(item.attunement)}.`);
     void this.saveNow();
     return true;
   }
@@ -4096,7 +4138,10 @@ export class GameEngine {
    * but the one-time-per-hero fallback obviously can't, since there's
    * no hero to charge it to.
    */
-  private consumeFreeRepair(heroId: string | null, now: number): boolean {
+  private consumeFreeRepair(heroId: string | null, now: number, item?: EquipmentItem): boolean {
+    // Patch 0484 -- free repairs never cover a Legendary: it pays a Shard
+    // (or the no-Shard markup) every time.
+    if (item && EquipmentManager.isLegendary(item)) return false;
     const usedToday = rerollsUsedToday(this.state.freeRepairsUsedToday, this.state.freeRepairDay, now);
     if (usedToday < ModifierManager.freeRepairsPerDay(this.state)) {
       this.state.freeRepairDay = rerollDay(now);
@@ -4430,7 +4475,9 @@ export class GameEngine {
     const pet = this.state.pets.find((p) => p.uid === petUid);
     if (!pet) return;
     if (!PetManager.isFallen(pet)) return;
-    const discount = ModifierManager.global(this.state).petRevivalDiscount ?? 0;
+    // Patch 0484 -- + Beastbond on the hero this pet is paired with.
+    const owner = this.state.heroes.find((h) => h.equippedPetId === pet.uid);
+    const discount = (ModifierManager.global(this.state).petRevivalDiscount ?? 0) + heroSignature(owner, 'beastbond');
     const cost = PetManager.revivalCost(pet, discount);
     if (this.state.gold < cost) return this.say('Not enough gold for revival.');
     this.state.gold -= cost;

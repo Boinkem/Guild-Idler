@@ -38818,3 +38818,108 @@ Owner report: Leaderboard read 1,903 while the Dashboard showed 64.
 
 Checks: `tsc` passes. tsx: a fresh state uploads its current power (18)
 with force = true and stores it as the best.
+
+### Legendary Shards: Attunement, Legendary Armoury, Raider's Charm, Shard repair rules (patch 0484)
+```discord-update
+Dev Update | Legendary Shards
+
+- Added Attunement at the Enchanter: spend 3 Legendary Shards to give any Legendary an extra bonus line, and 2 to reroll it. Some rolls land a rare signature line: Raidborn, Unfading, Mentor, Shardseeker or Beastbond
+- Added the Legendary Armoury to the Guild Hall: Legendary gear wears 3% slower per level, up to 15%. Costs gold and Shards, and needs the Raid Charter
+- Added the Raider's Charm, crafted at the Enchanter and armed when a raid sets out: double drop chance on raid items you've never found, or +25% on every drop once you've found them all. Heroic, Mythic and Legendary raids take 1, 2 or 3 Shards to arm it
+- Changed free repairs so they no longer cover Legendary gear, which always takes a Shard (or the no-Shard price). Repair Everything now uses free repairs on your other gear first
+- Changed the Enchanter's stat reroll on random-stat Legendaries to cost 2 Shards instead of Herbs
+- Added a setting in Inventory to stop Repair Everything and auto-repair spending Shards on their own
+- Fixed "Auto-fill consumables on send" sometimes packing Pet Treats or a Beckoning Charm into a hero's slots
+```
+
+Design locked with the owner in `claude/legendary-shard-sinks-plan.md`
+(project doc). Heirloom tiers V and VI are Legendary rarity and are
+deliberately IN everything here (Shard repairs, Attunement, Armoury).
+
+- **Repair rules** -- `engine.consumeFreeRepair(heroId, now, item)` returns
+  false for a Legendary, which covers both the Smith's Charity daily
+  allowance and each hero's first free repair. `repairAll` and the
+  Vendors stash Repair All sort non-Legendary first. New
+  `GameState.autoShardRepairs` (optional, undefined = on, no migration):
+  `EquipmentManager.repairQuote`'s 'auto' mode only takes the Shard route
+  when it's on. The Legendary repair buttons pass an explicit mode, so they
+  are unaffected. Toggle in the Inventory automation card
+  (`engine.setAutoShardRepairs`). The free-repair UI hints (Free Repair
+  button, stash "Free" label) skip Legendaries.
+- **Attunement** -- `data/attunement.ts`. `EquipmentItem.attunement
+  {affix, value}`. 12 common affixes ride the existing sums
+  (`HeroManager.equipmentMods` / `equipmentStats`, flat, not scaled by
+  +refine or relevance). The 5 signatures each hook in one place:
+  - Raidborn: raid success in `RaidManager.partySuccessBonus`.
+  - Unfading: 50% fixed wear cut on that item, in `applyWear`.
+  - Mentor: +X% raid XP to the OTHER party members, in `RaidManager.resolve`.
+  - Shardseeker: + percentage points on the Epic/Legendary quest Shard
+    chance, in `QuestManager.resolve`.
+  - Beastbond: the paired pet's max Health in `PetManager.maxHealth`, plus a
+    revive discount in `engine.revivePet`.
+  Value = affix max × clamp(itemLevel/50, 0.3, 1.2) × quality 0.7-1.0,
+  fixed at roll time (re-level first). A re-attune always picks a
+  different affix. Tunables: `economy.attuneShardCost` 3,
+  `reattuneShardCost` 2, `attuneSignatureChance` 15. UI: `AttuneStation`
+  (Enchanter, "Attune Legendary"), with an `AttunementLine` shown on the
+  item modals, the stash card and AH listings. The line travels with the
+  item through the AH (the server stores item payloads as-is).
+- **Reroll** -- `CraftingManager.rerollCost` now returns `shards`. A
+  procedural Legendary pays `economy.legendaryRerollShardCost` (2) in place
+  of the 20 Herbs. RerollStation shows it.
+- **Legendary Armoury** -- general upgrade `legendary_armoury`, category
+  Raids, 5 levels. New `UpgradeDef` fields: `shardCostsPerLevel` [1,2,3,5,8],
+  `requiresUpgradeId` 'raid_charter', and the display-only
+  `legendaryWearCutPctPerLevel`. `GuildManager.nextUpgradeShardCost` /
+  `missingUpgradePrereq` are both checked in `buyUpgrade`. The Guild Hall
+  row shows "+ N Shards" or "Needs Raid Charter". Gold uses the normal
+  curve: `upgrade.legendary_armoury.baseCost` 25,000, growth 1.8, giving
+  3,750 / 15,749 / 48,600 / 123,930 / 262,440 with the early-tier
+  discount. `applyWear(hero, amount, durabilityMod, armouryCutPct)`: the
+  per-item cut (Armoury on Legendaries + Unfading) is capped at
+  `MAX_ITEM_WEAR_CUT_PCT` 60, on top of the existing hero-wide durability
+  modifier and its floor.
+- **Raider's Charm** -- consumable `raiders_charm` (effect `raidCharm`)
+  plus recipe `craft_raiders_charm` (Enchanter charm: 20 ore, 15 herbs,
+  600 gold, 60 scrap). It's in `ALWAYS_KNOWN_RECIPE_IDS`, and
+  `RecipeManager.isKnown` now also checks that list, so existing saves know
+  it without a migration. `RaidManager.start(..., armCharm)` takes the
+  charm and the Shards (`economy.raidCharmShards{Normal,Heroic,Mythic,Legendary}`
+  0/1/2/3) and stores `ActiveRaid.charm` as 'seek' or 'boost', fixed at
+  launch by `charmMode` (any of `raidLootIds` missing from
+  `state.discoveredItems`). In resolve, 'seek' multiplies the chance of
+  undiscovered items by `raidCharmSeekMultiplier` (2) and 'boost'
+  multiplies every roll by 1 + `raidCharmBoostPct` (25%). It's the same
+  single rng call either way, and the 90% cap is kept. `RaidResult.charm`
+  records it. UI: a checkbox on the raid confirm screen, shown whenever
+  one is held, saying which mode applies. The DevTool's effect key lists
+  now know `raidCharm` (otherwise an edit would drop it).
+- **Bug fix along the way** -- `engine.fillEmptyConsumableSlots`
+  (Auto-fill on send / Equip best) picked any owned consumable, priciest
+  first, so non-quest items (Pet Treat, Beckoning Charm, and now the
+  charm) could be packed. It now filters to
+  `InventoryManager.isLoadoutEffect`, the same check manual equip uses.
+
+Checks: `tsc` and the web production build pass. tsx checks (all pass):
+- **Repairs:** a Legendary repair spent a Shard with a free repair
+  available. Repair Everything repaired both items for 1 Shard. Auto-mode
+  skips Shards when the setting is off.
+- **Attunement:** attune costs 3, re-attune costs 2 and changes the affix,
+  and non-Legendaries are refused. 4,000 rolls gave 13.8% signatures.
+  Gold and Strength lines reach hero mods and stats.
+- **Wear:** 100 → 85 with the Armoury maxed; Armoury + Unfading is capped
+  at 60%; non-Legendaries are untouched.
+- **Armoury purchase:** needs the Raid Charter; Shards per level 1/2/3/5/8.
+- **Raider's Charm:** the recipe is known on an existing save. Over 600
+  Normal runs, seek moved average drops 0.47 → 0.93 and boost 0.47 → 0.59,
+  with full clears unchanged. Arming on Mythic took the charm and
+  2 Shards; arming on Legendary with 2 Shards was refused.
+- **Reroll:** a procedural Legendary costs 2 Shards and 0 Herbs.
+
+Headless Chrome on a seeded save, no page errors:
+- The Guild Hall shows "Legendary Armoury · Buy · 3,750 + 1 Shard".
+- At the Enchanter, Attune Legendary → pick → Re-attune changed
+  Raidborn +4 into +6% loot chance and showed "was:".
+- The Inventory toggle shows.
+
+The raid confirm checkbox was not checked visually.

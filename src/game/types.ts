@@ -321,6 +321,8 @@ export interface ConsumableDef {
      */
     lootWeightStat?: keyof Stats;
     lootWeightMultiplier?: number;
+    /** Patch 0484 -- Raider's Charm: armed at raid launch, not equipped. */
+    raidCharm?: boolean;
   };
 }
 
@@ -434,6 +436,9 @@ export interface EquipmentItem {
    * HeroManager.equipmentStats for where this actually gets applied.
    */
   enchantStats?: Partial<Stats>;
+  /** Patch 0484 -- a Legendary's Attunement line (data/attunement.ts):
+   *  one Shard-bought bonus, rerollable. Flat, not scaled by +refine. */
+  attunement?: { affix: string; value: number };
   /**
    * Set on procedurally-generated items (patch 0214, all-stats rework
    * patch 0255) and on Guildmade/Masterwork crafted gear -- the item's
@@ -1753,6 +1758,10 @@ export interface ActiveRaid {
    * independently against (its own baseSuccess - difficulty penalty + this).
    */
   partySuccessBonus: number;
+  /** Patch 0484 -- a Raider's Charm armed at launch. 'seek': x2 chance on
+   *  raid items never found; 'boost': +25% on every roll (raid complete).
+   *  Mode is fixed at launch, as the confirm screen showed it. */
+  charm?: 'seek' | 'boost';
 }
 
 export interface RaidLootDrop {
@@ -1770,6 +1779,8 @@ export interface RaidResult {
   encountersCleared: number;
   totalEncounters: number;
   fullClear: boolean;
+  /** Patch 0484 -- the Raider's Charm mode this run had armed, if any. */
+  charm?: 'seek' | 'boost';
   gold: number;
   xp: number;
   loot: RaidLootDrop[];
@@ -1936,6 +1947,13 @@ export interface UpgradeDef {
    *  retired the same patch. Left on the type rather than deleted in
    *  case a real cap ever comes back; no UpgradeDef currently sets it. */
   stashCapacityPerLevel?: number;
+  /** Patch 0484 -- Legendary Shards per level, on top of gold (index =
+   *  the level being bought, 0-based). */
+  shardCostsPerLevel?: number[];
+  /** Patch 0484 -- can't be bought until this upgrade has a level. */
+  requiresUpgradeId?: string;
+  /** Patch 0484 -- display only: Legendary Armoury's wear cut per level. */
+  legendaryWearCutPctPerLevel?: number;
   /**
    * Guild Hall Upgrades panel category, for the tab's filter chips and
    * each row's category label (patch 0314's dense-list redesign) --
@@ -3204,6 +3222,9 @@ export interface GameState {
    *  never repairs past what the guild can currently afford, same
    *  affordability gate repairAll() already uses. */
   autoRepairEnabled: boolean;
+  /** Patch 0484 -- Repair Everything and auto-repair spend a Legendary
+   *  Shard on Legendary repairs (else the no-Shard markup). Undefined = on. */
+  autoShardRepairs?: boolean;
   /** 1-99. Repair triggers once current/max durability, as a percentage,
    *  drops to or below this. Deliberately not 0 or 100 -- 0 would mean
    *  "wait until fully broken" (defeats the point of *auto*-repair) and

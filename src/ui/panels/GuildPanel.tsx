@@ -174,6 +174,8 @@ function upgradeEntries(
     ...(def.questFreeRerollsPerLevel ? [{ text: `+${def.questFreeRerollsPerLevel} free quest board reroll per level` }] : []),
     ...(def.freezeChangesPerLevel ? [{ text: `+${def.freezeChangesPerLevel} contract freeze per level` }] : []),
     ...(def.stashCapacityPerLevel ? [{ text: `+${def.stashCapacityPerLevel} stash space per level` }] : []),
+    ...(def.legendaryWearCutPctPerLevel
+      ? [{ text: `Legendary gear wears ${def.legendaryWearCutPctPerLevel}% slower per level${level > 0 ? ` (now ${def.legendaryWearCutPctPerLevel * level}%)` : ''}` }] : []),
   ];
 }
 
@@ -386,15 +388,21 @@ export function GuildPanel() {
     const level = GuildManager.upgradeLevel(state, def.id);
     const cost = GuildManager.nextUpgradeCost(state, def.id);
     const maxed = cost === null && level >= def.maxLevel;
-    const affordable = !maxed && cost !== null && state.gold >= cost;
+    // Patch 0484 -- some rows also cost Legendary Shards, or wait on
+    // another upgrade (Legendary Armoury needs Raid Charter).
+    const shards = GuildManager.nextUpgradeShardCost(state, def.id);
+    const prereq = GuildManager.missingUpgradePrereq(state, def.id);
+    const affordable = !maxed && !prereq && cost !== null && state.gold >= cost && (state.legendaryShards ?? 0) >= shards;
     const entries = upgradeEntries(def, level, maxed);
     return withDemoLock({
       id: def.id, name: def.name, description: def.description,
       category: def.category ?? 'Unlocks', level, maxLevel: def.maxLevel, maxed, affordable, cost,
       effectText: def.shortEffect ?? entries.map((e) => e.text).join(' · '),
       statLines: entries.map((e) => <span key={e.text} className={e.gold ? 'gold-text' : undefined}>{e.text}</span>),
-      buyLabel: maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`,
-      buyDisabled: maxed || cost === null || state.gold < cost,
+      buyLabel: maxed ? 'Fully upgraded'
+        : prereq ? `Needs ${GuildManager.upgrades().find((u) => u.id === prereq)?.name ?? prereq}`
+          : `Buy · ${formatGold(cost ?? 0)}${shards > 0 ? ` + ${shards} Shard${shards === 1 ? '' : 's'}` : ''}`,
+      buyDisabled: maxed || !affordable,
       onBuy: (btn) => buyWithFx(engine, btn, () => engine.buyUpgrade(def.id)),
     }, demoLockKind(def.id, level));
   }
