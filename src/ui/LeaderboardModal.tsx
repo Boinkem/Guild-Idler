@@ -41,7 +41,7 @@ export function LeaderboardModal({ onClose }: { onClose: () => void }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="card-title">🏆 Leaderboard</div>
         <p className="tiny muted" style={{ marginBottom: 10 }}>
-          Ranked by Guild Power -- the same number shown on the Dashboard.
+          Ranked by the highest Guild Power each guild has reached.
         </p>
 
         <div className="row" style={{ gap: 6, marginBottom: 10 }}>

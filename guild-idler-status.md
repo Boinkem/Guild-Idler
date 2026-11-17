@@ -38788,3 +38788,33 @@ at 5/20.
 
 Checks: `tsc` passes. tsx check of `onCurrent`: event → gone → same event
 keeps points 5 and unsent Ward (3 + 2); a different event still resets.
+
+### Leaderboard shows this guild's Guild Power, not an old save's (patch 0483)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the Leaderboard showing a higher Guild Power than your guild has, carried over from an older or reset save. It now shows the best your current guild has reached, and updates within a few minutes of launching
+```
+
+Owner report: Leaderboard read 1,903 while the Dashboard showed 64.
+
+- **Cause** -- `uploadGuildPowerScore` sent `forceUpdate: false`, i.e.
+  Steam's KeepBest. Steam keeps one score per Steam account, so the
+  highest Guild Power ANY save on the account ever uploaded (dev saves,
+  pre-reset saves) stayed on the board forever. Not a sum of saves.
+- **Fix** -- new save field `leaderboardBest` (save v77; migration 76
+  starts it at 0). Each upload sets it to max(best, current Guild Power)
+  and uploads it with `forceUpdate: true`. That keeps the old "a dip
+  doesn't cost your rank" intent, but per save: a new save or hard reset
+  (`createInitialState`) starts from 0. The migration means existing
+  saves overwrite the stale Steam score with their real number on the
+  first upload (the throttle allows one straight away after launch). A
+  save that had genuinely been higher before a retirement loses that old
+  peak. The Leaderboard subtitle now reads "Ranked by the highest Guild
+  Power each guild has reached." The preview row (no Steam) uses the same
+  best.
+- Other players' rows (e.g. #1 on the owner's board) fix themselves once
+  they run a build with this patch.
+
+Checks: `tsc` passes. tsx: a fresh state uploads its current power (18)
+with force = true and stores it as the best.

@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 76;
+export const SAVE_VERSION = 77;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2652,6 +2652,9 @@ export interface GameState {
    *  (a short recommended-first-purchases list) has been hidden by the
    *  player. The card also goes away by itself once every step is bought. */
   guildGuideDismissed: boolean;
+  /** Patch 0483 -- the highest Guild Power THIS save has reached; what the
+   *  Steam leaderboard shows. A new save or hard reset starts it at 0. */
+  leaderboardBest: number;
   /**
    * Patch 0477 -- Realm Threat (server events for now; see
    * RealmThreatManager.ts). The event this save last heard about, the

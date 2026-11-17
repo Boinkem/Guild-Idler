@@ -209,6 +209,7 @@ export function createInitialState(now = Date.now()): GameState {
     hasSeenAlchemist: false,
     hasSeenEnchanter: false,
     guildGuideDismissed: false,
+    leaderboardBest: 0,
     realmThreat: { ...EMPTY_REALM_THREAT },
     hasCompletedFirstQuest: false,
     hasVisitedVendorsTab: false,
@@ -1609,6 +1610,10 @@ const MIGRATIONS: Record<number, Migration> = {
   },
   // Patch 0477 -- Realm Threat event state.
   75: (save) => ({ ...save, version: 76, realmThreat: { ...EMPTY_REALM_THREAT, ...((save.realmThreat as object | undefined) ?? {}) } }),
+  // Patch 0483 -- the leaderboard now shows this save's own best. Starting
+  // at 0, the next upload overwrites whatever Steam was holding from an
+  // older save with this guild's real Guild Power.
+  76: (save) => ({ ...save, version: 77, leaderboardBest: 0 }),
 };
 
 /** What every pre-0474 guild paid for the one-off Guild Charter

@@ -77,7 +77,15 @@ export function uploadGuildPowerScore(state: GameState): void {
   const now = Date.now();
   if (now - lastUploadAttemptAt < UPLOAD_THROTTLE_MS) return;
   lastUploadAttemptAt = now;
-  void window.littleKnight.uploadGuildPowerScore(clampForUpload(guildPowerLevel(state)), false);
+  // Patch 0483 -- the best is kept in the SAVE and force-uploaded. Steam's
+  // own keep-best (forceUpdate false) held the highest score any save on
+  // this Steam account ever sent, so after a new save or hard reset the
+  // board kept showing the old guild's number (owner: 1,903 on the board,
+  // 64 on the Dashboard). This keeps the "a dip doesn't cost your rank"
+  // intent, per save instead of per account.
+  const power = clampForUpload(guildPowerLevel(state));
+  state.leaderboardBest = Math.max(state.leaderboardBest ?? 0, power);
+  void window.littleKnight.uploadGuildPowerScore(state.leaderboardBest, true);
 }
 
 /**
@@ -91,7 +99,7 @@ export async function fetchLeaderboard(state: GameState, scope: LeaderboardScope
   const previewRow: LeaderboardEntry = {
     rank: 1,
     name: state.guildName || 'Your Guild',
-    power: clampForUpload(guildPowerLevel(state)),
+    power: Math.max(state.leaderboardBest ?? 0, clampForUpload(guildPowerLevel(state))),
     isYou: true,
   };
 
