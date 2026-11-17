@@ -38558,3 +38558,48 @@ restarts.
 
 **Not verified:** a real Steam demo ticket (tonight is the first),
 anything inside packaged Electron, and the public URL/tunnel path.
+
+### DevTool: Live Services tab with a health dashboard (patch 0478)
+```discord-update
+Dev Update | DevTool
+
+- Changed the DevTool's Auction House page into a Live Services tab, with Dashboard, Auction House, Realm Events and Bug Reports sub-tabs
+- Added a health dashboard: one card per service (server, public address, Auction House, Steam sign-in, Realm events, bug reports) with an overall status line, refreshed every minute
+```
+
+Direct request: the Auction House, Realm events (0477) and bug reports
+(0477) were all stacked on one long "Auction House" page.
+DevTool only (`tools/devtool/`); no game or server changes.
+
+- **Nav (`public/app.js`):** the "Auction House" entry is now **Live
+  Services** (`ph-broadcast`), opening a sub-tab strip like the content
+  groups: Dashboard, Auction House, Realm Events, Bug Reports. It
+  remembers the last sub-tab for the session. `selectAuctionHouseTab` /
+  `renderAuctionHouse` became `selectLiveTab(sub)` / `renderLive()`,
+  with one render per sub-tab. State kind `'__auctionhouse__'` ->
+  `'__live__'`.
+- **Dashboard cards** (`liveCards()`), each green / amber / red with a
+  headline and details:
+  - **AH server** (local process, with Start / Stop).
+  - **Public address** (tunnel; it says whether the server or the
+    tunnel is the problem).
+  - **Auction House** (AH_ENABLED, database, session secret, Broker).
+  - **Steam sign-in** (key, session secret, whether demo tickets are
+    accepted, last wiring test, with a "Test wiring" button).
+  - **Realm events** (off / next / LIVE with % / tallying / result,
+    Ward and player counts).
+  - **Bug reports** (new count, and counts per status).
+
+  Cards with an "Open →" jump to their sub-tab. An overall line on top
+  ("All services running" / "N need attention" / "N down") is refreshed
+  every minute while the dashboard is open and visible. The server log
+  tail sits under the cards.
+- **Connection** (local URL + admin token) moved from inside Usage to
+  the dashboard, since Realm events and bug reports need the token too.
+  The Auction House sub-tab is now just Usage.
+- **`server.mjs`:** `checkAhBackend` passes through `/health`'s
+  `realmEnabled` and `demoSignIn` (0477), which it had been dropping.
+
+Verified in headless Chrome against a local server: every sub-tab
+renders, the "Open →" links land on the right sub-tab, returning to Live
+Services reopens the last sub-tab, and there are no page errors.

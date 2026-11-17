@@ -112,11 +112,14 @@ async function init() {
   heroLabBtn.onclick = () => selectHeroLabTab();
   tabsEl.appendChild(heroLabBtn);
 
-  const ahBtn = document.createElement('button');
-  ahBtn.innerHTML = '<i class="ph ph-storefront"></i><span>Auction House</span>';
-  ahBtn.dataset.group = '__auctionhouse__';
-  ahBtn.onclick = () => selectAuctionHouseTab();
-  tabsEl.appendChild(ahBtn);
+  // Patch 0478 -- "Live Services": everything that runs on the server
+  // (Auction House, Realm events, bug reports) under one entry, with a
+  // health dashboard first. Was a single "Auction House" page.
+  const liveBtn = document.createElement('button');
+  liveBtn.innerHTML = '<i class="ph ph-broadcast"></i><span>Live Services</span>';
+  liveBtn.dataset.group = '__live__';
+  liveBtn.onclick = () => selectLiveTab();
+  tabsEl.appendChild(liveBtn);
 
   groupOrder.forEach((group) => {
     const btn = document.createElement('button');
@@ -2555,24 +2558,24 @@ async function ahAdmin(path, method = 'GET', body) {
 
 async function loadRealmNow() {
   ahState.loadingRealm = true;
-  if (state.kind === '__auctionhouse__') renderAuctionHouse();
+  if (state.kind === '__live__') renderLive();
   try { ahState.realm = await ahAdmin('/admin/realm'); } catch (err) { ahState.realm = { ok: false, error: err.message || String(err) }; }
   ahState.loadingRealm = false;
-  if (state.kind === '__auctionhouse__') renderAuctionHouse();
+  if (state.kind === '__live__') renderLive();
 }
 
 async function loadBugsNow() {
   ahState.loadingBugs = true;
-  if (state.kind === '__auctionhouse__') renderAuctionHouse();
+  if (state.kind === '__live__') renderLive();
   try { ahState.bugs = await ahAdmin(`/admin/bugs?status=${ahState.bugFilter}`); } catch (err) { ahState.bugs = { ok: false, error: err.message || String(err) }; }
   ahState.loadingBugs = false;
-  if (state.kind === '__auctionhouse__') renderAuctionHouse();
+  if (state.kind === '__live__') renderLive();
 }
 
 async function realmAction(path, body, confirmText) {
   if (confirmText && !confirm(confirmText)) return;
   ahState.realmBusy = true;
-  renderAuctionHouse();
+  renderLive();
   try {
     const r = await ahAdmin(path, 'POST', body);
     ahState.realmMsg = r.ok ? { text: 'Done.', cls: 'good' } : { text: escapeHtml(r.error || `HTTP ${r.status}`), cls: 'bad' };
@@ -2593,7 +2596,7 @@ function realmHtml() {
       ${r?.ok ? `<span class="tiny ${r.realmEnabled ? 'good' : 'muted'}">${r.realmEnabled ? 'Realm ON' : `Realm OFF -- ${r.envEnabled ? 'realm.config.json has "enabled": false' : 'add AH_REALM_ENABLED=true to server/.env and restart'}`}</span>` : ''}
     </div>
     ${ahState.realmMsg ? `<div class="patch-result ${ahState.realmMsg.cls}"><div class="patch-result-label">${ahState.realmMsg.text}</div></div>` : ''}`;
-  if (!ahState.adminTokenSet) return `${head}<p class="tiny muted">Save the admin token under Usage first.</p>`;
+  if (!ahState.adminTokenSet) return `${head}<p class="tiny muted">Save the admin token under Dashboard &gt; Connection first.</p>`;
   if (!r) return head;
   if (!r.ok) return `${head}<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(r.error || 'Failed')}</div></div>`;
   const events = r.events || [];
@@ -2638,7 +2641,7 @@ function bugsHtml() {
       ${filters.map((f) => `<button data-bug-filter="${f}" class="${ahState.bugFilter === f ? 'primary' : ''}" ${!ahState.adminTokenSet ? 'disabled' : ''}>${f}${counts[f] !== undefined ? ` (${counts[f]})` : ''}</button>`).join('')}
       <button id="bugsLoadBtn" ${ahState.loadingBugs || !ahState.adminTokenSet ? 'disabled' : ''}>${ahState.loadingBugs ? 'Loading…' : 'Refresh'}</button>
     </div>`;
-  if (!ahState.adminTokenSet) return `${head}<p class="tiny muted">Save the admin token under Usage first.</p>`;
+  if (!ahState.adminTokenSet) return `${head}<p class="tiny muted">Save the admin token under Dashboard &gt; Connection first.</p>`;
   if (!b) return head;
   if (!b.ok) return `${head}<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(b.error || 'Failed')}</div></div>`;
   const list = (b.reports || []).map((r) => {
@@ -4813,35 +4816,85 @@ function renderSandbox() {
 
 /* ---------------------------- auction house tab ---------------------------- */
 
-async function selectAuctionHouseTab() {
-  state.kind = '__auctionhouse__';
+const LIVE_SUBTABS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'auction', label: 'Auction House' },
+  { id: 'realm', label: 'Realm Events' },
+  { id: 'bugs', label: 'Bug Reports' },
+];
+
+/** Opens Live Services on a sub-tab (default: the last one open, else the
+ *  dashboard). Same nested-strip shape as the content groups' selectGroup. */
+async function selectLiveTab(sub) {
+  const first = state.kind !== '__live__';
+  state.kind = '__live__';
   state.group = null;
-  markActiveGroup('__auctionhouse__');
-  subtabsEl.style.display = 'none';
+  ahState.sub = sub || ahState.sub || 'dashboard';
+  markActiveGroup('__live__');
+  subtabsEl.style.display = 'flex';
   subtabsEl.innerHTML = '';
-  setStatus('Loading…');
-  try {
-    const cfg = await api('/api/auction-house/config');
-    ahState.url = cfg.url;
-    ahState.adminTokenSet = !!cfg.adminTokenSet;
-    ahState.proc = await api('/api/auction-house/server').catch(() => null);
-    setStatus('');
-    renderAuctionHouse();
-    // Health and usage load side by side -- neither waits on the other.
-    await Promise.all([
-      checkAhNow(),
-      ahState.adminTokenSet ? loadAhUsageNow() : null,
-      ahState.adminTokenSet ? loadRealmNow() : null,
-      ahState.adminTokenSet ? loadBugsNow() : null,
-    ]);
-  } catch (err) {
-    setStatus(err.message, 'err');
+  for (const t of LIVE_SUBTABS) {
+    const btn = document.createElement('button');
+    btn.textContent = t.label;
+    btn.dataset.kind = `live:${t.id}`;
+    btn.onclick = () => selectLiveTab(t.id);
+    subtabsEl.appendChild(btn);
   }
+  const activeBtn = [...tabsEl.children].find((b) => b.dataset && b.dataset.group === '__live__');
+  if (activeBtn) activeBtn.insertAdjacentElement('afterend', subtabsEl);
+  syncSubtabsOffset();
+  markActiveSubTab(`live:${ahState.sub}`);
+  startLiveAutoRefresh();
+
+  if (first || !ahState.configLoaded) {
+    setStatus('Loading…');
+    try {
+      const cfg = await api('/api/auction-house/config');
+      ahState.url = cfg.url;
+      ahState.adminTokenSet = !!cfg.adminTokenSet;
+      ahState.configLoaded = true;
+      ahState.proc = await api('/api/auction-house/server').catch(() => null);
+      setStatus('');
+    } catch (err) {
+      setStatus(err.message, 'err');
+    }
+  }
+  renderLive();
+  await loadLiveSub(first);
+}
+
+/** Loads what the open sub-tab shows. The dashboard needs a bit of
+ *  everything (health, the current event, new bug count). */
+async function loadLiveSub(force) {
+  const sub = ahState.sub;
+  const jobs = [];
+  if (sub === 'dashboard') {
+    jobs.push(checkAhNow());
+    if (ahState.adminTokenSet) jobs.push(loadRealmNow(), loadBugsNow());
+  } else if (sub === 'auction') {
+    if (force || !ahState.status) jobs.push(checkAhNow());
+    if (ahState.adminTokenSet && (force || !ahState.usage)) jobs.push(loadAhUsageNow());
+  } else if (sub === 'realm') {
+    if (ahState.adminTokenSet) jobs.push(loadRealmNow());
+  } else if (sub === 'bugs') {
+    if (ahState.adminTokenSet) jobs.push(loadBugsNow());
+  }
+  await Promise.all(jobs);
+}
+
+/** While the dashboard is open, re-checks every minute. */
+let liveTimer = null;
+function startLiveAutoRefresh() {
+  if (liveTimer) return;
+  liveTimer = setInterval(() => {
+    if (state.kind !== '__live__') { clearInterval(liveTimer); liveTimer = null; return; }
+    if (ahState.sub === 'dashboard' && !ahState.checking && document.visibilityState === 'visible') loadLiveSub(false);
+  }, 60_000);
 }
 
 async function checkAhNow() {
   ahState.checking = true;
-  renderAuctionHouse();
+  renderLive();
   try {
     ahState.status = await api('/api/auction-house/status');
   } catch (err) {
@@ -4853,7 +4906,7 @@ async function checkAhNow() {
     };
   }
   ahState.checking = false;
-  renderAuctionHouse();
+  renderLive();
 }
 
 /** Patch 0416 -- launches server/'s `npm run dev` via the DevTool, then
@@ -4863,7 +4916,7 @@ async function checkAhNow() {
 async function startAhServerNow() {
   ahState.launching = true;
   ahState.launchMessage = null;
-  renderAuctionHouse();
+  renderLive();
   try {
     const result = await api('/api/auction-house/server/start', { method: 'POST' });
     ahState.proc = result.process;
@@ -4873,7 +4926,7 @@ async function startAhServerNow() {
       ahState.launchMessage = { text: escapeHtml(result.error || 'Could not start the server.'), cls: 'bad' };
     } else {
       ahState.launchMessage = { text: `Started (PID ${result.pid}) -- waiting for /health…`, cls: '' };
-      renderAuctionHouse();
+      renderLive();
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 1500));
         ahState.proc = await api('/api/auction-house/server').catch(() => ahState.proc);
@@ -4895,12 +4948,12 @@ async function startAhServerNow() {
     ahState.launchMessage = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
   }
   ahState.launching = false;
-  renderAuctionHouse();
+  renderLive();
 }
 
 async function stopAhServerNow() {
   ahState.stopping = true;
-  renderAuctionHouse();
+  renderLive();
   try {
     const result = await api('/api/auction-house/server/stop', { method: 'POST' });
     ahState.proc = result.process;
@@ -4911,13 +4964,13 @@ async function stopAhServerNow() {
     ahState.launchMessage = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
   }
   ahState.stopping = false;
-  renderAuctionHouse();
+  renderLive();
   await checkAhNow();
 }
 
 async function testAhAuthNow() {
   ahState.testingAuth = true;
-  renderAuctionHouse();
+  renderLive();
   try {
     ahState.authTest = await api('/api/auction-house/test-auth', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
@@ -4926,26 +4979,26 @@ async function testAhAuthNow() {
     ahState.authTest = { reachable: false, error: err.message || String(err), checkedAt: Date.now() };
   }
   ahState.testingAuth = false;
-  renderAuctionHouse();
+  renderLive();
 }
 
 /* ---- patch 0459: usage dashboard ---- */
 
 async function loadAhUsageNow() {
   ahState.loadingUsage = true;
-  renderAuctionHouse();
+  renderLive();
   try {
     ahState.usage = await api(`/api/auction-house/usage?target=${ahState.usageTarget}`);
   } catch (err) {
     ahState.usage = { ok: false, error: err.message || String(err), fetchedAt: Date.now() };
   }
   ahState.loadingUsage = false;
-  renderAuctionHouse();
+  renderLive();
 }
 
 async function saveAhAdminToken(token) {
   ahState.savingToken = true;
-  renderAuctionHouse();
+  renderLive();
   try {
     const result = await api('/api/auction-house/config', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4957,9 +5010,9 @@ async function saveAhAdminToken(token) {
     setStatus(err.message, 'err');
   }
   ahState.savingToken = false;
-  renderAuctionHouse();
+  renderLive();
   if (ahState.adminTokenSet) await loadAhUsageNow();
-  else { ahState.usage = null; renderAuctionHouse(); }
+  else { ahState.usage = null; renderLive(); }
 }
 
 const AH_RARITY_COLOR = { common: '#c9cbd6', uncommon: '#7fc98f', rare: '#7fa9e8', epic: '#b48ae0', legendary: '#e0b45a' };
@@ -4996,23 +5049,9 @@ function ahUsageHtml() {
       <button id="ahUsageBtn" class="primary" ${ahState.loadingUsage || !ahState.adminTokenSet ? 'disabled' : ''}>${ahState.loadingUsage ? 'Loading…' : (u?.ok ? 'Refresh' : 'Load usage')}</button>
       ${u?.ok ? `<span class="tiny muted">Updated ${new Date(u.fetchedAt).toLocaleTimeString()} from ${escapeHtml(u.url)}</span>` : ''}
     </div>
-    <details ${!ahState.adminTokenSet || u?.status === 401 ? 'open' : ''} style="margin-bottom: 8px;">
-      <summary class="tiny muted">Admin token ${ahState.adminTokenSet ? '(saved)' : '(not set)'}</summary>
-      <div class="devtool-note">
-        Paste the value of <code>AH_ADMIN_TOKEN</code> from <code>server/.env</code>. Saved to
-        <code>tools/devtool/ah.config.json</code> (gitignored) and only ever sent to the AH backend --
-        the browser never gets it back. The server needs a restart after you add or change it there.
-      </div>
-      <div class="row" style="gap: 8px; flex-wrap: wrap;">
-        <input type="password" id="ahTokenInput" autocomplete="off" placeholder="${ahState.adminTokenSet ? '•••••••• (saved -- paste to replace)' : 'AH_ADMIN_TOKEN'}"
-          value="${escapeHtml(ahState.tokenDraft)}"
-          style="flex: 1 1 260px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-        <button id="ahTokenSaveBtn" ${ahState.savingToken ? 'disabled' : ''}>${ahState.savingToken ? 'Saving…' : 'Save token'}</button>
-        ${ahState.adminTokenSet ? `<button id="ahTokenClearBtn" class="danger" ${ahState.savingToken ? 'disabled' : ''}>Clear</button>` : ''}
-      </div>
-    </details>`;
+    ${ahState.adminTokenSet ? '' : '<p class="tiny muted">Set the admin token under Dashboard &gt; Connection first.</p>'}`;
 
-  if (!u) return tokenRow + (ahState.adminTokenSet ? '' : '<p class="tiny muted">Save the admin token to load usage.</p>');
+  if (!u) return tokenRow;
   if (!u.ok) {
     return tokenRow + `<div class="patch-result bad"><div class="patch-result-label">Couldn't load usage -- ${escapeHtml(u.error || 'unknown error')}</div></div>`;
   }
@@ -5198,93 +5237,190 @@ function ahAuthTestLine() {
   return { text: `Reached Steam auth — HTTP ${ahState.authTest.status}`, cls: 'good' };
 }
 
-function renderAuctionHouse() {
-  const localLine = ahStatusLine(ahState.status?.local);
-  const publicLine = ahStatusLine(ahState.status?.public);
-  const authLine = ahAuthTestLine();
+/* ------------------------------ live services ------------------------------ */
+// Patch 0478. One render function per sub-tab; renderLive() puts the open
+// one in the page, then binds whatever controls it contains (every binding
+// below is null-safe, so each sub-tab only gets the ones it shows).
+
+const dot = (cls) => `<span class="live-dot ${cls}"></span>`;
+
+/** One health card: { name, cls ('good'|'warn'|'bad'|''), headline, lines[], action? }. */
+function liveCard(c) {
+  return `
+    <div class="live-card ${c.cls}">
+      <div class="live-card-head">${dot(c.cls)}<span class="live-card-name">${c.name}</span>
+        ${c.go ? `<button class="live-go" data-live-go="${c.go}">Open →</button>` : ''}</div>
+      <div class="live-card-headline">${c.headline}</div>
+      ${(c.lines || []).filter(Boolean).map((l) => `<div class="tiny muted">${l}</div>`).join('')}
+      ${c.action || ''}
+    </div>`;
+}
+
+function liveCards() {
+  const loc = ahState.status?.local;
+  const pub = ahState.status?.public;
+  const checking = ahState.checking && !ahState.status;
+  const cards = [];
+
+  // Server process
+  if (checking) cards.push({ name: 'AH server', cls: '', headline: 'Checking…' });
+  else if (loc?.reachable) {
+    cards.push({
+      name: 'AH server', cls: 'good', headline: 'Running',
+      lines: [escapeHtml(ahState.url), ahState.proc?.owned ? `Started by this DevTool, PID ${ahState.proc.pid}` : 'Started outside this DevTool (by hand, a startup script, or the Windows Service)'],
+      action: ahState.proc?.owned ? `<button id="ahStopBtn" class="remove" ${ahState.stopping ? 'disabled' : ''}>${ahState.stopping ? 'Stopping…' : 'Stop'}</button>` : '',
+    });
+  } else {
+    cards.push({
+      name: 'AH server', cls: 'bad', headline: 'Not running',
+      lines: [escapeHtml(loc?.error || ''), escapeHtml(ahState.url)],
+      action: `<button id="ahStartBtn" class="primary" ${ahState.launching ? 'disabled' : ''}>${ahState.launching ? 'Starting…' : 'Start AH server'}</button>`,
+    });
+  }
+
+  // Public address
+  if (checking) cards.push({ name: 'Public address', cls: '', headline: 'Checking…' });
+  else cards.push(pub?.reachable
+    ? { name: 'Public address', cls: 'good', headline: 'Reachable', lines: ['ah.guildbound.dev: DNS, TLS and the Cloudflare Tunnel all OK'] }
+    : { name: 'Public address', cls: 'bad', headline: 'Unreachable', lines: [escapeHtml(pub?.error || ''), loc?.reachable ? 'The server is up locally, so check the Cloudflare Tunnel.' : 'The server itself is down.'] });
+
+  // Health flags come from whichever answered (public is what players see).
+  const h = pub?.reachable ? pub : loc?.reachable ? loc : null;
+
+  // Auction House
+  if (!h) cards.push({ name: 'Auction House', cls: checking ? '' : 'bad', headline: checking ? 'Checking…' : 'No server answering' });
+  else {
+    const missing = [];
+    if (h.dbConfigured === false) missing.push('database');
+    if (h.sessionSecretConfigured === false) missing.push('session secret');
+    cards.push({
+      name: 'Auction House', go: 'auction',
+      cls: !h.ahEnabled ? 'warn' : missing.length ? 'bad' : 'good',
+      headline: !h.ahEnabled ? 'Off (AH_ENABLED=false)' : missing.length ? `On, but missing ${missing.join(' and ')}` : 'On',
+      lines: [h.brokerEnabled ? 'Broker on' : 'Broker off'],
+    });
+  }
+
+  // Steam sign-in
+  if (h) {
+    const auth = ahState.authTest;
+    const authLine = ahAuthTestLine();
+    cards.push({
+      name: 'Steam sign-in',
+      cls: h.steamKeyConfigured === false || h.sessionSecretConfigured === false ? 'bad' : auth && !authLine.cls.includes('good') && auth.reachable === false ? 'warn' : 'good',
+      headline: h.steamKeyConfigured === false ? 'No Steam Web API key' : h.sessionSecretConfigured === false ? 'No session secret' : 'Configured',
+      lines: [
+        h.demoSignIn === true ? 'Full game and demo tickets accepted' : h.demoSignIn === false ? 'Full game only (demo sign-in off)' : 'Full game only (pre-0477 server)',
+        auth ? `Last wiring test: ${authLine.text}` : '',
+      ],
+      action: `<button id="ahAuthTestBtn" ${ahState.testingAuth ? 'disabled' : ''}>${ahState.testingAuth ? 'Testing…' : 'Test wiring'}</button>`,
+    });
+  }
+
+  // Realm events
+  const r = ahState.realm;
+  if (h) {
+    if (h.realmEnabled !== true) {
+      cards.push({ name: 'Realm events', go: 'realm', cls: 'warn', headline: 'Off', lines: [h.realmEnabled === false ? 'AH_REALM_ENABLED and realm.config.json "enabled" must both be on' : 'Server is older than patch 0477'] });
+    } else {
+      const ev = (r?.events || []).find((e) => e.visible) || null;
+      const pct = ev && ev.target > 0 ? Math.round((ev.total / ev.target) * 1000) / 10 : 0;
+      cards.push({
+        name: 'Realm events', go: 'realm', cls: ev?.phase === 'open' ? 'good' : '',
+        headline: !ahState.adminTokenSet ? 'On' : !r ? 'On · loading…' : !ev ? 'On · nothing scheduled' :
+          ev.phase === 'open' ? `LIVE · ${escapeHtml(ev.eventKey || '')} · ${pct}%` :
+          ev.phase === 'teaser' ? `Next: ${escapeHtml(ev.eventKey || '')}` :
+          ev.phase === 'tallying' ? `Tallying ${escapeHtml(ev.eventKey || '')}` : `Ended: ${escapeHtml(ev.eventKey || '')}`,
+        lines: ev ? [
+          ev.phase === 'teaser' ? `Opens ${localStamp(ev.opensAt)}` : ev.phase === 'open' ? `Ends ${localStamp(ev.endsAt)}` : ev.result ? (ev.result.sealed ? `Sealed at ${Math.round(ev.result.finalPct * 100)}%` : `Held open at ${Math.round(ev.result.finalPct * 100)}%`) : '',
+          `${ev.total.toLocaleString()} / ${ev.target.toLocaleString()} Ward · ${ev.players} player${ev.players === 1 ? '' : 's'}${ev.demoPlayers ? ` (${ev.demoPlayers} demo)` : ''}`,
+        ] : [],
+      });
+    }
+  }
+
+  // Bug reports
+  const b = ahState.bugs;
+  const fresh = b?.counts?.new ?? 0;
+  cards.push({
+    name: 'Bug reports', go: 'bugs', cls: !ahState.adminTokenSet || !b ? '' : !b.ok ? 'bad' : fresh > 0 ? 'warn' : 'good',
+    headline: !ahState.adminTokenSet ? 'Admin token not set' : !b ? 'Loading…' : !b.ok ? 'Unavailable' : fresh > 0 ? `${fresh} new` : 'Nothing new',
+    lines: b?.ok ? [`${b.counts?.seen ?? 0} seen · ${b.counts?.fixed ?? 0} fixed · ${b.counts?.wontfix ?? 0} won't fix`] : b && !b.ok ? [escapeHtml(b.error || '')] : [],
+  });
+
+  return cards;
+}
+
+function dashboardHtml() {
+  const cards = liveCards();
+  const bad = cards.filter((c) => c.cls === 'bad').length;
+  const warn = cards.filter((c) => c.cls === 'warn').length;
+  const overall = ahState.checking && !ahState.status ? { cls: '', text: 'Checking…' }
+    : bad ? { cls: 'bad', text: `${bad} service${bad === 1 ? '' : 's'} down` }
+      : warn ? { cls: 'warn', text: `Running, ${warn} need${warn === 1 ? 's' : ''} attention` }
+        : { cls: 'good', text: 'All services running' };
   const checkedAt = ahState.status?.checkedAt ? new Date(ahState.status.checkedAt).toLocaleTimeString() : null;
-  const localRunning = !ahState.checking && !!ahState.status?.local?.reachable;
-
-  appEl.innerHTML = `
-    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Auction House</h2>
-    <p class="tiny muted" style="margin: 0 0 12px;">
-      Usage dashboard (patch 0459), then the connection/health monitor and launcher for the AH backend (server/).
-      Read-only: force-rotation, transaction search, trade reversal and suspension still need their own
-      <code>/admin/*</code> routes.
-    </p>
-
-    <div class="section-heading">Usage</div>
-    ${ahUsageHtml()}
-
-    <div class="section-heading">Realm events (local backend)</div>
-    ${realmHtml()}
-
-    <div class="section-heading">Bug reports (local backend)</div>
-    ${bugsHtml()}
-
-    <div class="section-heading">Local backend URL</div>
-    <div class="devtool-note">
-      Saved locally (<code>tools/devtool/ah.config.json</code>, gitignored). Defaults to
-      <code>http://localhost:4000</code> -- server/'s own dev default.
-    </div>
-    <div class="row" style="gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
-      <input type="text" id="ahUrlInput" placeholder="http://localhost:4000"
-        value="${escapeHtml(ahState.url)}"
-        style="flex: 1 1 260px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <button id="ahSaveBtn" ${ahState.saving ? 'disabled' : ''}>${ahState.saving ? 'Saving…' : 'Save URL'}</button>
+  return `
+    <div class="live-overall ${overall.cls}">
+      ${dot(overall.cls)}<b>${overall.text}</b>
+      <span class="tiny muted">${checkedAt ? `Checked ${checkedAt} · refreshes every minute` : ''}</span>
+      <span style="flex: 1"></span>
       <button id="ahCheckBtn" ${ahState.checking ? 'disabled' : ''}>${ahState.checking ? 'Checking…' : 'Check now'}</button>
     </div>
-
-    <div class="section-heading">AH server process</div>
-    <p class="tiny muted" style="margin: 0 0 6px;">
-      Runs <code>server/src/index.ts</code> (via server/'s own tsx) in the background (no extra window),
-      logging to <code>server/ah-devtool.log</code>. No auto-reload -- after applying a patch that touches
-      <code>server/</code>, Stop then Start. Won't start a second copy if the local URL above
-      already answers -- including one started by hand or as the GuildboundAH Windows Service.
-      Closing the DevTool leaves it running; use Stop first if you want it gone.
-    </p>
-    <div class="row" style="gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-      <button id="ahStartBtn" ${ahState.launching || localRunning ? 'disabled' : ''}>${ahState.launching ? 'Starting…' : (localRunning ? 'AH server running' : 'Start AH server')}</button>
-      ${ahState.proc?.owned ? `<button id="ahStopBtn" class="remove" ${ahState.stopping ? 'disabled' : ''}>${ahState.stopping ? 'Stopping…' : 'Stop AH server'}</button>` : ''}
-      ${ahState.proc?.owned ? `<span class="tiny muted" style="align-self: center;">Started by DevTool, PID ${ahState.proc.pid}</span>` : ''}
-    </div>
     ${ahState.launchMessage ? `<div class="patch-result ${ahState.launchMessage.cls}"><div class="patch-result-label">${ahState.launchMessage.text}</div></div>` : ''}
-    ${ahState.proc?.logTail ? `<details style="margin-bottom: 10px;" ${ahState.launchMessage?.cls === 'bad' ? 'open' : ''}><summary class="tiny muted">server/ah-devtool.log (last lines)</summary><pre class="tiny" style="white-space: pre-wrap; max-height: 220px; overflow-y: auto; background: var(--panel2); padding: 8px; margin: 6px 0 0;">${escapeHtml(ahState.proc.logTail)}</pre></details>` : ''}
+    <div class="live-grid">${cards.map(liveCard).join('')}</div>
+    ${ahState.proc?.logTail ? `<details style="margin: 10px 0;" ${ahState.launchMessage?.cls === 'bad' ? 'open' : ''}><summary class="tiny muted">server/ah-devtool.log (last lines)</summary><pre class="patch-git-status" style="max-height: 260px; overflow: auto;">${escapeHtml(ahState.proc.logTail)}</pre></details>` : ''}
 
-    <div class="section-heading">Status -- local (is the process up?)</div>
-    <div class="patch-result ${localLine.cls}">
-      <div class="patch-result-label">${localLine.text}</div>
+    <div class="section-heading">Connection</div>
+    <div class="devtool-note">
+      Both saved in <code>tools/devtool/ah.config.json</code> (gitignored). The URL is this PC's own backend
+      (default <code>http://localhost:4000</code>); the admin token is <code>AH_ADMIN_TOKEN</code> from
+      <code>server/.env</code>, needed for usage, Realm events and bug reports. The browser never gets the token back.
     </div>
+    <div class="row" style="gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+      <input type="text" id="ahUrlInput" placeholder="http://localhost:4000" value="${escapeHtml(ahState.url)}"
+        style="flex: 1 1 260px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <button id="ahSaveBtn" ${ahState.saving ? 'disabled' : ''}>${ahState.saving ? 'Saving…' : 'Save URL'}</button>
+    </div>
+    <div class="row" style="gap: 8px; flex-wrap: wrap; align-items: center;">
+      <input type="password" id="ahTokenInput" autocomplete="off" placeholder="${ahState.adminTokenSet ? '•••••••• (saved -- paste to replace)' : 'AH_ADMIN_TOKEN'}"
+        value="${escapeHtml(ahState.tokenDraft)}"
+        style="flex: 1 1 260px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <button id="ahTokenSaveBtn" ${ahState.savingToken ? 'disabled' : ''}>${ahState.savingToken ? 'Saving…' : 'Save token'}</button>
+      ${ahState.adminTokenSet ? `<button id="ahTokenClearBtn" class="danger" ${ahState.savingToken ? 'disabled' : ''}>Clear</button>` : ''}
+      <span class="tiny ${ahState.adminTokenSet ? 'good' : 'muted'}">${ahState.adminTokenSet ? 'Token saved' : 'No token saved'}</span>
+    </div>`;
+}
 
-    <div class="section-heading">Status -- public, ah.guildbound.dev (is the whole hosting chain up?)</div>
-    <p class="tiny muted" style="margin: 0 0 6px;">
-      DNS, TLS, and the Cloudflare Tunnel all have to work for this one to succeed --
-      local can be healthy while this is broken, or the other way around. Both are checked
-      together above, not sequentially.
+function auctionSubHtml() {
+  return `
+    <p class="tiny muted" style="margin: 0 0 10px;">
+      Usage (patch 0459). Server health, start/stop and the Steam sign-in test are on the Dashboard.
+      Force-rotation, transaction search, trade reversal and suspension still need their own <code>/admin/*</code> routes.
     </p>
-    <div class="patch-result ${publicLine.cls}">
-      <div class="patch-result-label">${publicLine.text}</div>
-      ${checkedAt ? `<div class="tiny muted">Last checked ${checkedAt}.</div>` : ''}
-    </div>
+    ${ahUsageHtml()}`;
+}
 
-    <div class="section-heading">Steam auth wiring</div>
-    <p class="tiny muted" style="margin: 0 0 6px;">
-      Sends a placeholder ticket to the public URL's real <code>/auth/verify</code> --
-      a genuine Steam rejection (or a clear "not configured" error) both count as success
-      here. This is the same check a person would otherwise run by hand with curl.
-    </p>
-    <div class="row" style="margin-bottom: 8px;">
-      <button id="ahAuthTestBtn" ${ahState.testingAuth ? 'disabled' : ''}>${ahState.testingAuth ? 'Testing…' : 'Test Steam auth wiring'}</button>
-    </div>
-    <div class="patch-result ${authLine.cls}">
-      <div class="patch-result-label">${authLine.text}</div>
-    </div>
-  `;
+function renderLive() {
+  if (state.kind !== '__live__') return;
+  const sub = ahState.sub || 'dashboard';
+  const title = (LIVE_SUBTABS.find((t) => t.id === sub) || LIVE_SUBTABS[0]).label;
+  const body = sub === 'auction' ? auctionSubHtml()
+    : sub === 'realm' ? realmHtml()
+      : sub === 'bugs' ? bugsHtml()
+        : dashboardHtml();
+  appEl.innerHTML = `
+    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Live Services · ${title}</h2>
+    ${sub === 'realm' ? '<p class="tiny muted" style="margin: 0 0 10px;">Server events on this PC\'s backend (patch 0477). Players see one at a time: a live event, then one being tallied, then a recent result, then the next countdown.</p>' : ''}
+    ${sub === 'bugs' ? '<p class="tiny muted" style="margin: 0 0 10px;">Reports from the game\'s 🐞 button, Settings and the demo card (patch 0477), newest first.</p>' : ''}
+    ${body}`;
+
+  for (const el of document.querySelectorAll('[data-live-go]')) el.onclick = () => selectLiveTab(el.dataset.liveGo);
 
   const ahSaveBtn = document.getElementById('ahSaveBtn');
   if (ahSaveBtn) ahSaveBtn.onclick = async () => {
     ahState.saving = true;
-    renderAuctionHouse();
+    renderLive();
     try {
       const result = await api('/api/auction-house/config', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5295,12 +5431,12 @@ function renderAuctionHouse() {
       setStatus(err.message, 'err');
     }
     ahState.saving = false;
-    renderAuctionHouse();
+    renderLive();
     await checkAhNow();
   };
 
   const ahCheckBtn = document.getElementById('ahCheckBtn');
-  if (ahCheckBtn) ahCheckBtn.onclick = () => checkAhNow();
+  if (ahCheckBtn) ahCheckBtn.onclick = () => loadLiveSub(true);
 
   const ahAuthTestBtn = document.getElementById('ahAuthTestBtn');
   if (ahAuthTestBtn) ahAuthTestBtn.onclick = () => testAhAuthNow();
@@ -5323,7 +5459,7 @@ function renderAuctionHouse() {
   const ahTokenClearBtn = document.getElementById('ahTokenClearBtn');
   if (ahTokenClearBtn) ahTokenClearBtn.onclick = () => saveAhAdminToken('');
   for (const btn of document.querySelectorAll('.ahu-metric')) {
-    btn.onclick = () => { ahState.usageMetric = btn.dataset.metric; renderAuctionHouse(); };
+    btn.onclick = () => { ahState.usageMetric = btn.dataset.metric; renderLive(); };
   }
 
   bindRealmAndBugs();

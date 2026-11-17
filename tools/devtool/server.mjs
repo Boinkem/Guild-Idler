@@ -2922,6 +2922,9 @@ async function checkAhBackend(url) {
       adminConfigured: body.adminConfigured,
       // Patch 0462 -- undefined from a server older than 0462.
       brokerEnabled: body.brokerEnabled,
+      // Patch 0477/0478 -- undefined from a server older than 0477.
+      realmEnabled: body.realmEnabled,
+      demoSignIn: body.demoSignIn,
     };
   } catch (err) {
     return { reachable: false, error: err.message || String(err) };
