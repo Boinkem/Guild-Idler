@@ -619,8 +619,15 @@ export function registerRealmRoutes(app: FastifyInstance, config: AppConfig) {
 /** Starts the 60s job. Routes are registered separately so /realm/current
  *  can answer "off" even when the job never runs. */
 export function startRealm(log: FastifyBaseLogger, config: AppConfig): boolean {
-  if (!realmOn(config)) return false;
-  const tick = () => { tickRealm(log).catch((err) => log.error({ err }, 'realm tick failed')); };
+  // Patch 0479 -- only the .env flag decides whether the job runs at all.
+  // realm.config.json's "enabled" is re-checked on every tick, so the
+  // DevTool's on/off switch works without a restart (before, a server
+  // started with it off never ran the job, even after it was turned on).
+  if (!config.realmEnabled) return false;
+  const tick = () => {
+    if (!realmOn(config)) return;
+    tickRealm(log).catch((err) => log.error({ err }, 'realm tick failed'));
+  };
   setInterval(tick, 60_000).unref();
   tick();
   return true;

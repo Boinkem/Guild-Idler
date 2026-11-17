@@ -3822,6 +3822,126 @@ function readBody(req) {
   });
 }
 
+/* ------------------------------------------------ realm event config --- */
+// Patch 0479 -- so events are run from the DevTool instead of by editing
+// files: server/realm.config.json (the on/off switch and the event list,
+// which the server re-reads every minute) and the one AH_REALM_ENABLED
+// line in server/.env (read only when the server starts). Nothing else in
+// .env is read or touched.
+
+const REALM_CONFIG_PATH = path.join(ROOT, 'server', 'realm.config.json');
+const SERVER_ENV_PATH = path.join(ROOT, 'server', '.env');
+const REALM_CAMPAIGNS_PATH = path.join(ROOT, 'src', 'game', 'data', 'json', 'realm-campaigns.json');
+const REALM_DEFAULTS = { enabled: false, maxBatch: 500, feedMinutes: 5, events: [] };
+
+async function readRealmFile() {
+  try {
+    const parsed = JSON.parse(await fs.readFile(REALM_CONFIG_PATH, 'utf8'));
+    return { ...REALM_DEFAULTS, ...parsed, events: Array.isArray(parsed.events) ? parsed.events : [] };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { ...REALM_DEFAULTS };
+    throw new Error(`server/realm.config.json is not valid JSON: ${err.message}`);
+  }
+}
+
+async function writeRealmFile(cfg) {
+  // Write-then-rename, so the server never reads a half-written file.
+  const tmp = `${REALM_CONFIG_PATH}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+  await fs.rename(tmp, REALM_CONFIG_PATH);
+}
+
+/** true / false from server/.env's AH_REALM_ENABLED line; null = no .env. */
+async function readRealmEnvFlag() {
+  try {
+    const raw = await fs.readFile(SERVER_ENV_PATH, 'utf8');
+    const m = raw.match(/^\s*AH_REALM_ENABLED\s*=\s*([^\r\n#]*)/m);
+    return !!m && ['true', '1', 'yes', 'on'].includes(m[1].trim().replace(/^["']|["']$/g, '').toLowerCase());
+  } catch {
+    return null;
+  }
+}
+
+async function writeRealmEnvFlag(on) {
+  let raw;
+  try { raw = await fs.readFile(SERVER_ENV_PATH, 'utf8'); } catch { throw new Error('server/.env was not found -- the server has never been set up on this PC.'); }
+  const eol = raw.includes('\r\n') ? '\r\n' : '\n';
+  const line = `AH_REALM_ENABLED=${on ? 'true' : 'false'}`;
+  const next = /^\s*AH_REALM_ENABLED\s*=.*$/m.test(raw)
+    ? raw.replace(/^\s*AH_REALM_ENABLED\s*=.*$/m, line)
+    : `${raw.replace(/\s*$/, '')}${eol}${eol}# Realm events (patch 0477). Set from the DevTool.${eol}${line}${eol}`;
+  await fs.writeFile(SERVER_ENV_PATH, next, 'utf8');
+}
+
+/** The same checks the server makes (server/src/realm.ts parseEvent), so
+ *  the DevTool refuses a bad event before writing it anywhere. */
+function cleanRealmEvent(input) {
+  const e = input && typeof input === 'object' ? input : {};
+  const eventKey = String(e.eventKey || '').trim();
+  if (!/^[a-z0-9][a-z0-9_-]{1,48}$/.test(eventKey)) throw new Error('The event ID must be 2-49 characters of a-z, 0-9, - or _.');
+  const campaignKey = String(e.campaignKey || '').trim();
+  if (!campaignKey) throw new Error('Pick which event text to show.');
+  const opens = new Date(e.opensAt);
+  const ends = new Date(e.endsAt);
+  if (Number.isNaN(opens.getTime()) || Number.isNaN(ends.getTime())) throw new Error('Set both the start and the end.');
+  if (ends <= opens) throw new Error('The end must be after the start.');
+  const target = Math.floor(Number(e.target));
+  const cap = Math.floor(Number(e.cap));
+  if (!(target > 0)) throw new Error('The realm target must be more than 0.');
+  if (!(cap > 0)) throw new Error('The per-player cap must be more than 0.');
+  const tiers = (Array.isArray(e.tiers) ? e.tiers : []).map((t) => Math.floor(Number(t))).filter((t) => t > 0);
+  if (tiers.length === 0 || tiers.some((t, i) => i > 0 && t <= tiers[i - 1])) throw new Error('Tiers must be rising numbers, e.g. 5 / 30 / 100.');
+  const title = (t) => (typeof t === 'string' && t.trim() ? t.trim().slice(0, 40) : null);
+  const optDate = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  };
+  return {
+    eventKey,
+    campaignKey,
+    opensAt: opens.toISOString(),
+    endsAt: ends.toISOString(),
+    teaserFrom: optDate(e.teaserFrom),
+    resultsUntil: optDate(e.resultsUntil),
+    graceMinutes: Math.max(0, Math.min(1440, Math.floor(Number(e.graceMinutes ?? 60)) || 0)),
+    allowDemo: e.allowDemo !== false,
+    target,
+    cap,
+    tiers,
+    rewards: {
+      tierTitles: tiers.map((_, i) => title(e.rewards?.tierTitles?.[i])),
+      sealTitle: title(e.rewards?.sealTitle),
+    },
+  };
+}
+
+/** Calls the local backend's admin route, if the server is running and a
+ *  token is saved. Returns null when it couldn't (the server picks file
+ *  changes up within a minute anyway). */
+async function realmAdminCall(pathname, body) {
+  const cfg = await readAhConfig();
+  if (!cfg.adminToken) return null;
+  try {
+    const r = await fetch(`${cfg.url}${pathname}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${cfg.adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    return { status: r.status, ...(await r.json().catch(() => ({}))) };
+  } catch {
+    return null;
+  }
+}
+
+async function realmConfigView() {
+  const cfg = await readRealmFile();
+  let campaigns = [];
+  try { campaigns = Object.entries(JSON.parse(await fs.readFile(REALM_CAMPAIGNS_PATH, 'utf8'))).map(([key, v]) => ({ key, name: v?.name || key })); } catch { /* none */ }
+  return { ok: true, enabled: cfg.enabled === true, envEnabled: await readRealmEnvFlag(), events: cfg.events, campaigns };
+}
+
 function json(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(payload));
@@ -4068,6 +4188,74 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/auction-house/server/start' && req.method === 'POST') {
     const result = await startAhServer();
     return json(res, 200, { ...result, process: await ahServerProcessInfo() });
+  }
+
+  // Patch 0479 -- realm event config (see readRealmFile above).
+  if (url.pathname === '/api/live/realm-config' && req.method === 'GET') {
+    try { return json(res, 200, await realmConfigView()); } catch (err) { return json(res, 200, { ok: false, error: err.message }); }
+  }
+  if (url.pathname.startsWith('/api/live/realm-config/') && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)) || '{}'); } catch { return json(res, 400, { ok: false, error: 'Bad JSON.' }); }
+    try {
+      const action = url.pathname.slice('/api/live/realm-config/'.length);
+      if (action === 'enabled') {
+        const cfg = await readRealmFile();
+        cfg.enabled = body.enabled === true;
+        await writeRealmFile(cfg);
+        return json(res, 200, { ...(await realmConfigView()), message: cfg.enabled ? 'Realm events switched ON. Players see them within about a minute.' : 'Realm events switched OFF. Players stop seeing them within about a minute.' });
+      }
+      if (action === 'env') {
+        await writeRealmEnvFlag(body.enabled === true);
+        // A server this DevTool started can be restarted here so the flag
+        // takes effect at once; one started some other way is left alone.
+        let restarted = false;
+        if (body.restart) {
+          const proc = await ahServerProcessInfo();
+          if (proc?.owned) {
+            await stopAhServer();
+            await startAhServer();
+            restarted = true;
+          }
+        }
+        return json(res, 200, {
+          ...(await realmConfigView()),
+          restarted,
+          message: restarted ? 'Saved to server/.env and the server is restarting.' : 'Saved to server/.env. Restart the server for it to take effect.',
+        });
+      }
+      if (action === 'event') {
+        const event = cleanRealmEvent(body.event);
+        const cfg = await readRealmFile();
+        const at = cfg.events.findIndex((e) => e.eventKey === event.eventKey);
+        if (body.isNew && at !== -1) throw new Error(`An event with the ID "${event.eventKey}" already exists.`);
+        if (at === -1) cfg.events.push(event); else cfg.events[at] = event;
+        await writeRealmFile(cfg);
+        // Apply now rather than within the minute, and hear back if the
+        // server refuses (e.g. the event has already opened).
+        const applied = await realmAdminCall('/admin/realm/schedule', event);
+        const refused = applied && applied.status >= 400 ? applied.error : null;
+        return json(res, 200, {
+          ...(await realmConfigView()),
+          message: refused ? `Saved to realm.config.json, but the server says: ${refused}` : applied ? 'Event saved and scheduled.' : 'Event saved. The server picks it up within a minute.',
+          warn: !!refused,
+        });
+      }
+      if (action === 'remove') {
+        const key = String(body.eventKey || '');
+        const cfg = await readRealmFile();
+        cfg.events = cfg.events.filter((e) => e.eventKey !== key);
+        await writeRealmFile(cfg);
+        // Then the database row, in that order -- removing only the row
+        // would let the file put the event straight back.
+        let deleted = null;
+        if (body.id) deleted = await realmAdminCall('/admin/realm/delete', { id: Number(body.id) });
+        return json(res, 200, { ...(await realmConfigView()), message: body.id && !deleted?.ok ? 'Removed from realm.config.json. The server could not be reached to delete its record; use Delete again once it is running.' : 'Event removed.' });
+      }
+      return json(res, 404, { ok: false, error: 'Unknown action.' });
+    } catch (err) {
+      return json(res, 200, { ok: false, error: err.message || String(err) });
+    }
   }
 
   if (url.pathname === '/api/auction-house/server/stop' && req.method === 'POST') {

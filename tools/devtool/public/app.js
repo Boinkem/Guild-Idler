@@ -2559,7 +2559,12 @@ async function ahAdmin(path, method = 'GET', body) {
 async function loadRealmNow() {
   ahState.loadingRealm = true;
   if (state.kind === '__live__') renderLive();
-  try { ahState.realm = await ahAdmin('/admin/realm'); } catch (err) { ahState.realm = { ok: false, error: err.message || String(err) }; }
+  const [realm, cfg] = await Promise.all([
+    ahState.adminTokenSet ? ahAdmin('/admin/realm').catch((err) => ({ ok: false, error: err.message || String(err) })) : null,
+    api('/api/live/realm-config').catch((err) => ({ ok: false, error: err.message || String(err) })),
+  ]);
+  ahState.realm = realm;
+  ahState.realmCfg = cfg;
   ahState.loadingRealm = false;
   if (state.kind === '__live__') renderLive();
 }
@@ -2588,48 +2593,222 @@ async function realmAction(path, body, confirmText) {
 
 const localStamp = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '--');
 
+/* Patch 0479 -- the Realm Events page runs everything from here: the two
+   switches, a New / Edit event form, and an event list that merges what's
+   in realm.config.json with what the server has recorded. */
+
+const pad2 = (n) => String(n).padStart(2, '0');
+/** ISO -> the value a <input type="datetime-local"> wants, in this PC's time. */
+function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function newRealmForm() {
+  const opens = new Date(Date.now() + 60 * 60_000);
+  opens.setMinutes(0, 0, 0);
+  const ends = new Date(opens.getTime() + 12 * 60 * 60_000);
+  const campaigns = ahState.realmCfg?.campaigns || [];
+  return {
+    isNew: true, eventKey: '', campaignKey: campaigns[0]?.key || 'next_fest_breach',
+    opens: toLocalInput(opens.toISOString()), ends: toLocalInput(ends.toISOString()),
+    teaserHours: 24, resultsDays: 2, graceMinutes: 60, allowDemo: true,
+    target: 20, cap: 30, tiers: [2, 6, 12], titles: ['', '', ''], sealTitle: '',
+  };
+}
+
+function formFromEvent(e) {
+  const hours = (a, b) => (a && b ? Math.round((new Date(b) - new Date(a)) / 3_600_000) : 0);
+  const tiers = [...(e.tiers || [])];
+  while (tiers.length < 3) tiers.push('');
+  const titles = tiers.map((_, i) => e.rewards?.tierTitles?.[i] || '');
+  return {
+    isNew: false, eventKey: e.eventKey, campaignKey: e.campaignKey,
+    opens: toLocalInput(e.opensAt), ends: toLocalInput(e.endsAt),
+    teaserHours: e.teaserFrom ? hours(e.teaserFrom, e.opensAt) : 0,
+    resultsDays: e.resultsUntil ? Math.round(hours(e.endsAt, e.resultsUntil) / 24 * 10) / 10 : 0,
+    graceMinutes: e.graceMinutes ?? 60, allowDemo: e.allowDemo !== false,
+    target: e.target, cap: e.cap, tiers, titles, sealTitle: e.rewards?.sealTitle || '',
+  };
+}
+
+/** The form's fields as the event realm.config.json stores. */
+function eventFromForm(f) {
+  const opens = new Date(f.opens);
+  const ends = new Date(f.ends);
+  const tiers = f.tiers.map((t) => Math.floor(Number(t))).filter((t) => t > 0);
+  return {
+    eventKey: f.eventKey.trim(),
+    campaignKey: f.campaignKey,
+    opensAt: Number.isNaN(opens.getTime()) ? '' : opens.toISOString(),
+    endsAt: Number.isNaN(ends.getTime()) ? '' : ends.toISOString(),
+    teaserFrom: Number(f.teaserHours) > 0 && !Number.isNaN(opens.getTime()) ? new Date(opens.getTime() - Number(f.teaserHours) * 3_600_000).toISOString() : null,
+    resultsUntil: Number(f.resultsDays) > 0 && !Number.isNaN(ends.getTime()) ? new Date(ends.getTime() + Number(f.resultsDays) * 86_400_000).toISOString() : null,
+    graceMinutes: Math.max(0, Math.floor(Number(f.graceMinutes)) || 0),
+    allowDemo: !!f.allowDemo,
+    target: Math.floor(Number(f.target)),
+    cap: Math.floor(Number(f.cap)),
+    tiers,
+    rewards: { tierTitles: tiers.map((_, i) => f.titles[i]?.trim() || null), sealTitle: f.sealTitle.trim() || null },
+  };
+}
+
+function realmSwitchesHtml() {
+  const c = ahState.realmCfg;
+  const r = ahState.realm;
+  if (!c) return '';
+  if (!c.ok) return `<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(c.error || 'Could not read realm.config.json')}</div></div>`;
+  const live = r?.ok ? r.realmEnabled : null; // what the running server says
+  const restartNeeded = r?.ok && c.envEnabled === true && r.envEnabled === false;
+  const owned = !!ahState.proc?.owned;
+  return `
+    <div class="live-grid" style="margin-bottom: 12px;">
+      <div class="live-card ${c.envEnabled ? (restartNeeded ? 'warn' : 'good') : 'bad'}">
+        <div class="live-card-head">${dot(c.envEnabled ? (restartNeeded ? 'warn' : 'good') : 'bad')}<span class="live-card-name">Server switch</span></div>
+        <div class="live-card-headline">${c.envEnabled ? (restartNeeded ? 'On, restart needed' : 'On') : c.envEnabled === null ? 'No server/.env found' : 'Off'}</div>
+        <div class="tiny muted">Lets the server run events at all. Set it once and leave it on; it's read when the server starts.</div>
+        ${c.envEnabled === null ? '' : c.envEnabled
+          ? (restartNeeded ? `<button data-realm-env="on" class="primary" ${ahState.realmBusy ? 'disabled' : ''}>${owned ? 'Restart server now' : 'Restart needed (Dashboard)'}</button>` : `<button data-realm-env="off" ${ahState.realmBusy ? 'disabled' : ''}>Turn off</button>`)
+          : `<button data-realm-env="on" class="primary" ${ahState.realmBusy ? 'disabled' : ''}>Turn on${owned ? ' and restart' : ''}</button>`}
+      </div>
+      <div class="live-card ${c.enabled ? 'good' : 'warn'}">
+        <div class="live-card-head">${dot(c.enabled ? 'good' : 'warn')}<span class="live-card-name">Events switch</span></div>
+        <div class="live-card-headline">${c.enabled ? 'On' : 'Off'}</div>
+        <div class="tiny muted">Shows or hides every event for players, within about a minute. No restart. Your emergency off switch.</div>
+        <button data-realm-toggle="${c.enabled ? 'off' : 'on'}" class="${c.enabled ? '' : 'primary'}" ${ahState.realmBusy ? 'disabled' : ''}>${c.enabled ? 'Switch off' : 'Switch on'}</button>
+      </div>
+      <div class="live-card ${live ? 'good' : live === false ? 'warn' : ''}">
+        <div class="live-card-head">${dot(live ? 'good' : live === false ? 'warn' : '')}<span class="live-card-name">Players see</span></div>
+        <div class="live-card-headline">${live === null ? (ahState.adminTokenSet ? 'Server not answering' : 'Admin token not set') : live ? 'Events' : 'Nothing'}</div>
+        <div class="tiny muted">${live === null ? 'Start the server (Dashboard) to see what it is doing.' : live ? 'Both switches are on and the server has picked them up.' : restartNeeded ? 'Waiting for the server to restart.' : 'Turn both switches on.'}</div>
+      </div>
+    </div>`;
+}
+
+function realmFormHtml() {
+  const f = ahState.realmForm;
+  if (!f) return '';
+  const campaigns = ahState.realmCfg?.campaigns || [];
+  const inp = (name, value, attrs = '') => `<input data-rf="${name}" value="${escapeHtml(String(value ?? ''))}" ${attrs} style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 6px 8px; width: 100%; box-sizing: border-box;" />`;
+  const field = (label, html, hint = '') => `<label class="tiny muted" style="display:flex; flex-direction:column; gap:3px;">${label}${html}${hint ? `<span class="tiny muted">${hint}</span>` : ''}</label>`;
+  return `
+    <div class="patch-result" style="margin-bottom: 12px;">
+      <div class="patch-result-label"><b>${f.isNew ? 'New event' : `Edit ${escapeHtml(f.eventKey)}`}</b> · times are this PC's local time</div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 8px;">
+        ${field('Event ID', inp('eventKey', f.eventKey, `placeholder="e.g. nextfest-2027" ${f.isNew ? '' : 'disabled'}`), 'Lowercase, numbers, - or _')}
+        ${field('Event text', `<select data-rf="campaignKey" style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 6px 8px;">${campaigns.map((c) => `<option value="${escapeHtml(c.key)}" ${c.key === f.campaignKey ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}</select>`)}
+        ${field('Starts', inp('opens', f.opens, 'type="datetime-local"'))}
+        ${field('Ends', inp('ends', f.ends, 'type="datetime-local"'))}
+        ${field('Countdown from (hours before start)', inp('teaserHours', f.teaserHours, 'type="number" min="0"'), '0 = no countdown')}
+        ${field('Result shown for (days after end)', inp('resultsDays', f.resultsDays, 'type="number" min="0" step="0.5"'), '0 = until the next event')}
+        ${field('Late reports accepted (minutes)', inp('graceMinutes', f.graceMinutes, 'type="number" min="0"'), 'Offline quest time sent after the end')}
+        ${field('Realm target (Ward)', inp('target', f.target, 'type="number" min="1"'))}
+        ${field('Per-player cap (Ward)', inp('cap', f.cap, 'type="number" min="1"'))}
+        ${[0, 1, 2].map((i) => field(`Tier ${i + 1}: Ward · title`, `<div style="display:flex; gap:6px;">${inp(`tier${i}`, f.tiers[i], 'type="number" min="1" style="width:70px"')}${inp(`title${i}`, f.titles[i], 'placeholder="no title"')}</div>`)).join('')}
+        ${field('Title if the realm seals it', inp('sealTitle', f.sealTitle, 'placeholder="no title"'), 'Given to everyone at tier 1+')}
+        ${field('Demo players', `<span><input type="checkbox" data-rf="allowDemo" ${f.allowDemo ? 'checked' : ''} /> can take part</span>`)}
+      </div>
+      <div class="row" style="gap: 8px; margin-top: 10px;">
+        <button id="realmFormSave" class="primary" ${ahState.realmBusy ? 'disabled' : ''}>${f.isNew ? 'Create event' : 'Save changes'}</button>
+        <button id="realmFormCancel">Cancel</button>
+      </div>
+    </div>`;
+}
+
 function realmHtml() {
   const r = ahState.realm;
+  const c = ahState.realmCfg;
   const head = `
     <div class="row" style="gap: 8px; margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
-      <button id="realmLoadBtn" class="primary" ${ahState.loadingRealm || !ahState.adminTokenSet ? 'disabled' : ''}>${ahState.loadingRealm ? 'Loading…' : (r ? 'Refresh' : 'Load events')}</button>
-      ${r?.ok ? `<span class="tiny ${r.realmEnabled ? 'good' : 'muted'}">${r.realmEnabled ? 'Realm ON' : `Realm OFF -- ${r.envEnabled ? 'realm.config.json has "enabled": false' : 'add AH_REALM_ENABLED=true to server/.env and restart'}`}</span>` : ''}
+      <button id="realmLoadBtn" ${ahState.loadingRealm ? 'disabled' : ''}>${ahState.loadingRealm ? 'Loading…' : 'Refresh'}</button>
+      ${!ahState.realmForm ? `<button id="realmNewBtn" class="primary" ${!c?.ok ? 'disabled' : ''}>New event</button>` : ''}
     </div>
-    ${ahState.realmMsg ? `<div class="patch-result ${ahState.realmMsg.cls}"><div class="patch-result-label">${ahState.realmMsg.text}</div></div>` : ''}`;
-  if (!ahState.adminTokenSet) return `${head}<p class="tiny muted">Save the admin token under Dashboard &gt; Connection first.</p>`;
-  if (!r) return head;
-  if (!r.ok) return `${head}<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(r.error || 'Failed')}</div></div>`;
-  const events = r.events || [];
-  const rows = events.map((e) => {
+    ${ahState.realmMsg ? `<div class="patch-result ${ahState.realmMsg.cls}"><div class="patch-result-label">${ahState.realmMsg.text}</div></div>` : ''}
+    ${realmSwitchesHtml()}
+    ${realmFormHtml()}`;
+  if (!c && !r) return head;
+
+  const dbEvents = r?.ok ? r.events || [] : [];
+  const cfgEvents = c?.ok ? c.events || [] : [];
+  const inCfg = new Set(cfgEvents.map((e) => e.eventKey));
+  const waiting = cfgEvents.filter((e) => !dbEvents.some((d) => d.eventKey === e.eventKey));
+
+  const dbRows = dbEvents.map((e) => {
     const pct = e.target > 0 ? Math.round((e.total / e.target) * 1000) / 10 : 0;
     const live = e.status === 'open' || (e.status === 'closed' && !e.finalisedAt);
+    const cfgEvent = cfgEvents.find((x) => x.eventKey === e.eventKey);
     return `
       <div class="patch-result" style="margin-bottom: 8px;">
         <div class="patch-result-label">
-          <b>${escapeHtml(e.eventKey || `#${e.id}`)}</b> · ${escapeHtml(e.campaignKey)} ·
-          <b>${escapeHtml(e.phase)}</b>${e.visible ? '' : ' (hidden from players)'} ·
-          ${localStamp(e.opensAt)} → ${localStamp(e.endsAt)} (+${e.graceMinutes}m grace)
+          <b>${escapeHtml(e.eventKey || `#${e.id}`)}</b> · <b>${escapeHtml(e.phase)}</b>${e.visible ? '' : ' (hidden from players)'} ·
+          ${localStamp(e.opensAt)} → ${localStamp(e.endsAt)} (+${e.graceMinutes}m late reports)
         </div>
         <div class="tiny" style="margin: 4px 0;">
           <b>${e.total.toLocaleString()} / ${e.target.toLocaleString()}</b> Ward (${pct}%) ·
           ${e.players} player${e.players === 1 ? '' : 's'} (${e.demoPlayers} demo, ${e.atCap} at the cap of ${e.cap}, avg ${e.avgPoints}) ·
           tiers ${e.tiers.join(' / ')}
+          ${(e.rewards?.tierTitles || []).some(Boolean) || e.rewards?.sealTitle ? ` · titles: ${[...(e.rewards.tierTitles || []).map((t, i) => (t ? `T${i + 1} ${escapeHtml(t)}` : '')), e.rewards.sealTitle ? `seal ${escapeHtml(e.rewards.sealTitle)}` : ''].filter(Boolean).join(', ')}` : ''}
           ${e.result ? ` · <b>${e.result.sealed ? 'SEALED' : 'held open'}</b> at ${Math.round(e.result.finalPct * 100)}%` : ''}
         </div>
         ${e.top.length ? `<div class="tiny muted">Top: ${e.top.map((t) => `${escapeHtml(t.guild || '?')} ${t.points}${t.app === 'demo' ? 'ᵈ' : ''}`).join(' · ')}</div>` : ''}
         <div class="row" style="gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+          ${e.status === 'scheduled' && cfgEvent ? `<button data-realm-edit="${escapeHtml(e.eventKey)}">Edit</button>` : ''}
           ${e.status === 'scheduled' ? `<button data-realm-open="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Open now</button>` : ''}
           ${live ? `<button data-realm-target="${e.id}" data-current="${e.target}" ${ahState.realmBusy ? 'disabled' : ''}>Set target…</button>` : ''}
           ${live ? `<button data-realm-add="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Add Ward…</button>` : ''}
           ${e.status === 'open' ? `<button data-realm-close="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Close now</button>` : ''}
-          ${live ? `<button data-realm-finalise="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Close + finalise (skip grace)</button>` : ''}
-          <button class="remove" data-realm-delete="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Delete</button>
+          ${live ? `<button data-realm-finalise="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Close + finalise (skip late reports)</button>` : ''}
+          <button class="remove" data-realm-remove="${escapeHtml(e.eventKey || '')}" data-id="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Delete</button>
         </div>
       </div>`;
   }).join('');
-  return `${head}
-    <p class="tiny muted" style="margin: 0 0 6px;">Server time ${localStamp(r.serverNow)}. Events listed in <code>server/realm.config.json</code> are created at server start and every minute; edit times there until the event opens. Delete removes an event and everything recorded for it.</p>
-    ${rows || '<p class="tiny muted">No events yet.</p>'}`;
+  const waitingRows = waiting.map((e) => `
+    <div class="patch-result" style="margin-bottom: 8px;">
+      <div class="patch-result-label"><b>${escapeHtml(e.eventKey)}</b> · <b>saved, not on the server yet</b> · ${localStamp(e.opensAt)} → ${localStamp(e.endsAt)}</div>
+      <div class="tiny muted" style="margin: 4px 0;">${r?.ok ? (r.realmEnabled ? 'The server picks it up within a minute.' : 'Turn both switches on and the server will schedule it.') : 'The server is not answering; it is scheduled when it is running.'} Target ${e.target}, cap ${e.cap}, tiers ${(e.tiers || []).join(' / ')}.</div>
+      <div class="row" style="gap: 6px; margin-top: 6px;">
+        <button data-realm-edit="${escapeHtml(e.eventKey)}">Edit</button>
+        <button class="remove" data-realm-remove="${escapeHtml(e.eventKey)}" ${ahState.realmBusy ? 'disabled' : ''}>Delete</button>
+      </div>
+    </div>`).join('');
+  const orphanNote = dbEvents.some((e) => e.eventKey && !inCfg.has(e.eventKey) && e.status === 'scheduled')
+    ? '<p class="tiny muted">Events without an Edit button were scheduled from outside this page; delete and recreate them here to edit.</p>' : '';
+  const serverNote = r && !r.ok ? `<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(r.error || 'Server not answering')}</div></div>` : '';
+  return `${head}${serverNote}
+    ${dbRows || waitingRows ? '' : '<p class="tiny muted">No events. "New event" schedules one.</p>'}
+    ${waitingRows}${dbRows}${orphanNote}`;
+}
+
+async function realmCfgAction(action, body, confirmText) {
+  if (confirmText && !confirm(confirmText)) return false;
+  ahState.realmBusy = true;
+  renderLive();
+  let ok = false;
+  try {
+    const r = await api(`/api/live/realm-config/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (r.ok) {
+      ahState.realmCfg = r;
+      ahState.realmMsg = { text: escapeHtml(r.message || 'Done.'), cls: r.warn ? 'bad' : 'good' };
+      ok = !r.warn;
+    } else {
+      ahState.realmMsg = { text: escapeHtml(r.error || 'Failed'), cls: 'bad' };
+    }
+    if (r.restarted) {
+      // Same wait as the Start button: tsx takes a few seconds to boot.
+      for (let i = 0; i < 20; i++) {
+        await new Promise((res) => setTimeout(res, 1500));
+        const st = await api('/api/auction-house/status').catch(() => null);
+        if (st?.local?.reachable) { ahState.status = st; break; }
+      }
+      ahState.proc = await api('/api/auction-house/server').catch(() => ahState.proc);
+    }
+  } catch (err) {
+    ahState.realmMsg = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
+  }
+  ahState.realmBusy = false;
+  await loadRealmNow();
+  return ok;
 }
 
 function bugsHtml() {
@@ -2685,7 +2864,42 @@ function bindRealmAndBugs() {
   on('[data-realm-open]', (el) => realmAction('/admin/realm/close-now', { id: Number(el.dataset.realmOpen), open: true }, 'Open this event now?'));
   on('[data-realm-close]', (el) => realmAction('/admin/realm/close-now', { id: Number(el.dataset.realmClose) }, 'Close this event now? Late reports are still accepted for its grace period.'));
   on('[data-realm-finalise]', (el) => realmAction('/admin/realm/close-now', { id: Number(el.dataset.realmFinalise), skipGrace: true }, 'Close and finalise now, with no grace period? Ward still on its way from players is lost.'));
-  on('[data-realm-delete]', (el) => realmAction('/admin/realm/delete', { id: Number(el.dataset.realmDelete) }, 'Delete this event and everything recorded for it? This cannot be undone.'));
+  // Patch 0479 -- Delete takes the event out of realm.config.json AND the
+  // server's records, so it can't be recreated from the file.
+  on('[data-realm-remove]', (el) => realmCfgAction('remove', { eventKey: el.dataset.realmRemove, id: el.dataset.id ? Number(el.dataset.id) : undefined },
+    'Delete this event and everything recorded for it (Ward, titles earned, feed)? This cannot be undone.'));
+  on('[data-realm-toggle]', (el) => realmCfgAction('enabled', { enabled: el.dataset.realmToggle === 'on' },
+    el.dataset.realmToggle === 'on' ? null : 'Hide every event from players? Ward already sent is kept, and switching back on shows them again.'));
+  on('[data-realm-env]', (el) => {
+    const on = el.dataset.realmEnv === 'on';
+    realmCfgAction('env', { enabled: on, restart: true }, on ? null : 'Turn off realm events on the server? This restarts the server if this DevTool started it.');
+  });
+  const newBtn = document.getElementById('realmNewBtn');
+  if (newBtn) newBtn.onclick = () => { ahState.realmForm = newRealmForm(); ahState.realmMsg = null; renderLive(); };
+  on('[data-realm-edit]', (el) => {
+    const e = (ahState.realmCfg?.events || []).find((x) => x.eventKey === el.dataset.realmEdit);
+    if (e) { ahState.realmForm = formFromEvent(e); ahState.realmMsg = null; renderLive(); }
+  });
+  // The form keeps its values in ahState.realmForm as they're typed, so a
+  // re-render (refresh, auto-check) never wipes them.
+  for (const el of document.querySelectorAll('[data-rf]')) {
+    el.oninput = el.onchange = () => {
+      const f = ahState.realmForm;
+      if (!f) return;
+      const k = el.dataset.rf;
+      const v = el.type === 'checkbox' ? el.checked : el.value;
+      const m = k.match(/^(tier|title)(\d)$/);
+      if (m) (m[1] === 'tier' ? f.tiers : f.titles)[Number(m[2])] = v;
+      else f[k] = v;
+    };
+  }
+  const formSave = document.getElementById('realmFormSave');
+  if (formSave) formSave.onclick = async () => {
+    const f = ahState.realmForm;
+    if (await realmCfgAction('event', { event: eventFromForm(f), isNew: f.isNew })) { ahState.realmForm = null; renderLive(); }
+  };
+  const formCancel = document.getElementById('realmFormCancel');
+  if (formCancel) formCancel.onclick = () => { ahState.realmForm = null; renderLive(); };
   on('[data-realm-target]', (el) => {
     const v = prompt('New realm target (Ward):', el.dataset.current);
     if (v !== null && Number(v) > 0) realmAction('/admin/realm/target', { id: Number(el.dataset.realmTarget), target: Math.floor(Number(v)) });
@@ -4870,12 +5084,13 @@ async function loadLiveSub(force) {
   const jobs = [];
   if (sub === 'dashboard') {
     jobs.push(checkAhNow());
-    if (ahState.adminTokenSet) jobs.push(loadRealmNow(), loadBugsNow());
+    jobs.push(loadRealmNow());
+    if (ahState.adminTokenSet) jobs.push(loadBugsNow());
   } else if (sub === 'auction') {
     if (force || !ahState.status) jobs.push(checkAhNow());
     if (ahState.adminTokenSet && (force || !ahState.usage)) jobs.push(loadAhUsageNow());
   } else if (sub === 'realm') {
-    if (ahState.adminTokenSet) jobs.push(loadRealmNow());
+    jobs.push(loadRealmNow());
   } else if (sub === 'bugs') {
     if (ahState.adminTokenSet) jobs.push(loadBugsNow());
   }
@@ -5321,7 +5536,7 @@ function liveCards() {
   const r = ahState.realm;
   if (h) {
     if (h.realmEnabled !== true) {
-      cards.push({ name: 'Realm events', go: 'realm', cls: 'warn', headline: 'Off', lines: [h.realmEnabled === false ? 'AH_REALM_ENABLED and realm.config.json "enabled" must both be on' : 'Server is older than patch 0477'] });
+      cards.push({ name: 'Realm events', go: 'realm', cls: 'warn', headline: 'Off', lines: [h.realmEnabled === false ? 'Turn it on under Realm Events (two switches)' : 'Server is older than patch 0477'] });
     } else {
       const ev = (r?.events || []).find((e) => e.visible) || null;
       const pct = ev && ev.target > 0 ? Math.round((ev.total / ev.target) * 1000) / 10 : 0;

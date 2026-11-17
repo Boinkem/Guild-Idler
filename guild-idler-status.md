@@ -38603,3 +38603,62 @@ DevTool only (`tools/devtool/`); no game or server changes.
 Verified in headless Chrome against a local server: every sub-tab
 renders, the "Open →" links land on the right sub-tab, returning to Live
 Services reopens the last sub-tab, and there are no page errors.
+
+### DevTool runs Realm events: switches, New / Edit / Delete (patch 0479)
+```discord-update
+Dev Update | DevTool
+
+- Added on/off switches for Realm events to the DevTool, so there's no file editing to turn them on or off
+- Added a New / Edit event form: dates, target, cap, tiers and titles
+- Changed Delete to remove an event for good
+```
+
+Direct request: run events from the DevTool, not by editing
+`server/realm.config.json` and `server/.env` by hand.
+
+- **Live Services > Realm Events (`tools/devtool/public/app.js`).** Three cards on top:
+  - **Server switch:** the `AH_REALM_ENABLED` line in `server/.env`.
+    "Turn on and restart" writes the line and, when the DevTool started
+    the server, restarts it. It shows "On, restart needed" when the
+    file and the running server disagree.
+  - **Events switch:** realm.config.json's `"enabled"`. It takes effect
+    for players within about a minute, with no restart; this is the
+    emergency off switch.
+  - **Players see:** what the running server actually reports.
+
+  "New event" opens a form in this PC's local time: event ID, which
+  event text, start, end, countdown lead (hours), results shown for
+  (days), late-report minutes, target, cap, three tiers each with an
+  optional title, a seal title, and whether demo players can take part.
+  Edit (scheduled events only) reopens it. The list merges the file and
+  the server: an event saved but not yet picked up shows as "saved, not
+  on the server yet".
+- **Delete** now removes the event from realm.config.json **first**,
+  then from the database. Before, deleting only the database row let the
+  server recreate the event from the file within a minute.
+- **`tools/devtool/server.mjs`:** `GET /api/live/realm-config`, and
+  `POST /api/live/realm-config/{enabled,env,event,remove}`.
+  - Validation matches the server's `parseEvent`.
+  - The file is written via a temp file and rename.
+  - Of `.env`, only the `AH_REALM_ENABLED` line is read or written, and
+    line endings are kept.
+  - A saved event is also sent to `/admin/realm/schedule`, so it applies
+    at once and any refusal (e.g. the event has already opened) shows in
+    the DevTool.
+- **Server fix (`server/src/realm.ts` `startRealm`):** the event job
+  used to start only if events were switched on when the server
+  started. Now only the `.env` flag decides whether it runs, and
+  `"enabled"` is checked on each tick, so the Events switch works both
+  ways without a restart. Takes effect after one server restart.
+- The dashboard's Realm card now points to these switches.
+
+Verified in headless Chrome against a sandbox set up like the owner's
+PC (no `AH_REALM_ENABLED` line, server started by the DevTool):
+- "Turn on and restart" wrote the line, restarted the server, and
+  `/health` then reported `realmEnabled: true`.
+- Switching events off hid the event from `/realm/current`.
+- A new event with a tier-1 title was written and scheduled; an edit
+  changed the server's target; a duplicate ID was refused.
+- Delete removed the event from the file and the server, and it did not
+  come back after a minute.
+- No page errors. Server `tsc` passes.
