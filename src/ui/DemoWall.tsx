@@ -3,7 +3,7 @@ import { useEngine } from './useEngine';
 import { HeroManager } from '../game/managers/HeroManager';
 import { CHAIN_BY_ID } from '../game/managers/QuestManager';
 import { QUEST_CHAINS } from '../game/data/quests';
-import { DEMO, DEMO_BUILD, DEMO_STORE_URL, DemoWallReason, demoAllowsChain, onDemoWall, requestDemoWall } from '../game/demo';
+import { BUILD_VERSION, DEMO, DEMO_BUILD, DEMO_STORE_URL, DISCORD_INVITE_URL, DemoWallReason, demoAllowsChain, onDemoWall, requestDemoWall } from '../game/demo';
 
 /**
  * Patch 0438 -- the demo build's wishlist card, and the small "Demo ·
@@ -23,6 +23,38 @@ export function openStorePage() {
     return;
   }
   window.open(DEMO_STORE_URL, '_blank', 'noopener');
+}
+
+/** Patch 0476 -- the community Discord. Electron goes through main.ts's
+ *  fixed-URL handler; the browser build opens a tab. */
+export function openDiscord() {
+  const bridge = window.littleKnight;
+  if (bridge?.openDiscord) {
+    void bridge.openDiscord();
+    return;
+  }
+  window.open(DISCORD_INVITE_URL, '_blank', 'noopener');
+}
+
+/**
+ * Patch 0476 -- the demo's "early build" notice, shown as a banner on the
+ * first step of guild setup (GuildNamingModal) so every new demo player
+ * reads it before anything else. Renders nothing in the full game.
+ */
+export function DemoEarlyBanner() {
+  if (!DEMO_BUILD) return null;
+  return (
+    <div className="demo-early-banner" role="note">
+      <div className="demo-early-head">
+        <span className="demo-early-kicker">Early demo{BUILD_VERSION ? ` · build ${BUILD_VERSION}` : ''}</span>
+        <button type="button" className="demo-early-discord" onClick={openDiscord}>Join the Discord →</button>
+      </div>
+      <p>
+        Guildbound is still in development. Tuning, balance and features are still changing ahead of launch,
+        so expect numbers to shift between updates. Your guild carries over to the full game on this PC.
+      </p>
+    </div>
+  );
 }
 
 function copyFor(reason: DemoWallReason): { kicker: string; title: string; body: string } {
@@ -108,7 +140,12 @@ export function DemoWallHost({ active }: { active: boolean }) {
         <p className="card-flavour">{copy.body}</p>
         {/* Patch 0439 -- true now: electron/main.ts importDemoSave. */}
         <p className="small muted" style={{ marginTop: 8 }}>Your guild carries over to the full game on this PC.</p>
+        {/* Patch 0476 -- same notice as the setup banner, findable again. */}
+        <p className="small muted" style={{ marginTop: 4 }}>
+          This is an early demo{BUILD_VERSION ? ` (build ${BUILD_VERSION})` : ''}: tuning and features are still changing before launch.
+        </p>
         <div className="row end" style={{ marginTop: 16, gap: 8 }}>
+          <button className="btn-ghost" style={{ marginRight: 'auto' }} onClick={openDiscord}>Discord</button>
           <button onClick={close}>Keep playing</button>
           <button className="btn-yellow" onClick={() => { openStorePage(); close(); }}>Wishlist on Steam</button>
         </div>

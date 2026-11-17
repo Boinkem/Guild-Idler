@@ -41,6 +41,7 @@ import { getFlyTargetCenter } from '../flyTarget';
 import { backgroundSrc } from '../../game/settings';
 import { CommissionManager } from '../../game/managers/CommissionManager';
 import { COMMISSION_FLAVOUR, COMMISSION_TITLE, commissionOdds } from '../../game/data/commissions';
+import { goToGuildHallPurchase } from '../PrereqLink';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -1239,7 +1240,7 @@ function BlackMarketStock({ now }: { now: number }) {
          *  other Guild Hall upgrade by hand. */}
         <button
           className="btn-ghost"
-          onClick={() => engine.requestTab('guild', 'black_market_contact', undefined, 'the Black Market')}
+          onClick={() => goToGuildHallPurchase(engine, 'black_market_contact', 'the Black Market')}
         >
           Go to Guild Hall →
         </button>

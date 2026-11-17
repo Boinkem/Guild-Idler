@@ -36,6 +36,7 @@ import { StatsPanel } from './panels/StatsPanel';
 import { PrestigePanel } from './panels/PrestigePanel';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { ShardMark } from './icons';
+import { goToGuildHallPurchase } from './PrereqLink';
 
 /**
  * Grouped rather than one flat 13-entry list -- the nav had grown past the
@@ -502,7 +503,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
               ? `Nearly at your gold storage cap -- spend some, or raise the cap with the Treasury${nearCapLink ? '. Click to go there.' : ''}`
               : undefined}
             // Patch 0475 -- the warning named the Treasury but didn't take you to it.
-            onClick={nearCapLink ? () => engine.requestTab('guild', 'treasury', undefined, 'a higher gold cap') : undefined}
+            onClick={nearCapLink ? () => goToGuildHallPurchase(engine, 'treasury', 'a higher gold cap') : undefined}
             role={nearCapLink ? 'button' : undefined}
           >◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span ref={scrapRef} className="scrap">⚙ {formatNumber(engine.state.scrap)}</span>

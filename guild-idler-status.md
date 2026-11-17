@@ -38362,3 +38362,74 @@ save migration, and anything in the Electron app.
 
 Noticed, not changed: the Treasury row reads "+12% gold ... per level"
 (`shortEffect`) while `guild_facility.treasury.goldPerLevel` is 6.
+
+### Demo: early-build banner, Discord link, no more dead-end links (patch 0476)
+```discord-update
+Dev Update | Demo
+
+- Added an early demo notice to the first guild setup screen: tuning and features are still changing before launch, with the build number and a link to the Discord
+- Added a Discord button to the demo's wishlist card
+- Changed demo links to locked content (heroes past Tavern 2, Heroic raids, upgrades past rank 2) to open the full game card instead of a Guild Hall row you can't buy
+```
+
+Direct request ahead of putting the demo on the store page (not public
+yet, so the notice only needs to reach new guilds).
+
+**Early-build banner (`DemoWall.tsx`, `GuildNamingModal.tsx`,
+`app.css`).** New `DemoEarlyBanner`, first item on the name step of
+guild setup, demo build only: "Early demo · build {version}", a "Join
+the Discord" button, and "Guildbound is still in development. Tuning,
+balance and features are still changing ahead of launch, so expect
+numbers to shift between updates. Your guild carries over to the full
+game on this PC." Sized to fit the setup card's fixed 3:2 frame. The
+wishlist card (`DemoWall`) repeats a one-line version of it and gets a
+Discord button. Shown only at guild setup, so a demo guild that was
+already named before this patch never sees the banner (fine today: the
+demo hasn't shipped).
+
+**Build version (`vite.config.ts`, `vite.web.config.ts`, `demo.ts`).**
+Both configs read package.json's `version` and define
+`__GUILDBOUND_VERSION__` for the renderer; `demo.ts` exposes it as
+`BUILD_VERSION` (empty outside a Vite build). Bump package.json and the
+banner follows.
+
+**Discord link (`demo.ts`, `electron/main.ts`, `electron/preload.ts`,
+`SaveManager.ts` window typing).** `DISCORD_INVITE_URL` =
+https://discord.gg/AHTCRyWMK7. Electron opens it through a new
+`shell:openDiscord` IPC handler with the URL fixed in main.ts (not passed
+from the renderer, so the bridge can't open arbitrary links); the
+browser build opens a tab. `openDiscord()` lives next to
+`openStorePage()` in DemoWall.tsx. Change the invite in BOTH places if it
+ever moves.
+
+**Demo dead ends (`PrereqLink.tsx`, `HeroesPanel.tsx`, `RaidsPanel.tsx`,
+`MenuWindow.tsx`, `HatcheryPanel.tsx`, `AuctionHousePanel.tsx`,
+`VendorsPanel.tsx`).** Every "go buy what you're missing" link now goes
+through `goToGuildHallPurchase(engine, id, reason)`: in the full game it
+is exactly 0475's pinned landing; in the demo, when
+`guildHallDemoLock` says the next rank is closed (rank cap, a
+full-game-only unlock, or Replay Memories), it opens the wishlist card
+(`requestDemoWall` with the purchase's name) instead of pinning a row
+that only offers "Full game". Covers all of 0475's `PrereqLink`s plus the
+older Tavern, raid difficulty, Black Market, Auction House, Nest
+Expansion, Companion Bond and gold-cap links. Recruiting: a class whose
+`unlockTavernLevel` is past the demo's rank cap (new
+`demoRankReachable`) shows "Full game" on its button and "The {class}
+joins in the full game →" instead of Go to Tavern; with the cap at 2
+that is the 8 classes from tier 3 up. Notification rings
+(hero_slots_full etc.) still just ring, unchanged.
+
+**Tidy-up.** `electron/main.ts`'s note that demo progress "does NOT
+carry over" was stale since 0439; corrected.
+
+Verified in the web demo build (headless Chrome, 1350x930): the banner
+renders on the name step with build 1.8.4 and fits the card; Lizardman
+(Tavern 3) shows "Full game" and its link opens the wishlist card with
+the early-demo line and Discord button; with Treasury at the demo cap
+and gold near the limit, clicking the gold readout opens "Treasury goes
+further" with no pin; Heroic's Unlock link opens "Heroic Clearance".
+`tsc --noEmit`, the web build (full and demo) and the Electron demo
+build pass; main.js and preload carry the Discord handler. Not checked:
+the Discord button actually opening Discord from the packaged Electron
+app, and the full-game build's links in a browser (the helper is a
+pass-through there).

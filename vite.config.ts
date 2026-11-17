@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import electron from 'vite-plugin-electron/simple';
+import { readFileSync } from 'node:fs';
 
 /**
  * Patch 0438 -- `--mode demo` (npm run dev:demo / build:demo /
@@ -10,9 +11,12 @@ import electron from 'vite-plugin-electron/simple';
  */
 export default defineConfig(({ mode }) => {
   const demoDefine = { __GUILDBOUND_DEMO__: JSON.stringify(mode === 'demo') };
+  // Patch 0476 -- package.json's version, shown on the demo's early-build
+  // banner so feedback can be matched to a build. Renderer only.
+  const version = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string;
   return {
     base: './',
-    define: demoDefine,
+    define: { ...demoDefine, __GUILDBOUND_VERSION__: JSON.stringify(version) },
     plugins: [
       react(),
       electron({

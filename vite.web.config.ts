@@ -1,5 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
+
+// Patch 0476 -- see vite.config.ts.
+const version = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string;
 
 /**
  * Browser-only config. No Electron plugin, so this runs even when the Electron
@@ -16,7 +20,7 @@ export default defineConfig(({ mode }) => ({
   base: './',
   // Patch 0438 -- `vite --config vite.web.config.ts --mode demo` for a
   // browser demo build; see vite.config.ts / src/game/demo.ts.
-  define: { __GUILDBOUND_DEMO__: JSON.stringify(mode === 'demo') },
+  define: { __GUILDBOUND_DEMO__: JSON.stringify(mode === 'demo'), __GUILDBOUND_VERSION__: JSON.stringify(version) },
   plugins: [react()],
   server: { open: true },
 }));

@@ -74,6 +74,8 @@ declare global {
       /** Patch 0438 -- demo build's wishlist button. Optional: only the
        *  Electron preload has it; the browser build opens a tab instead. */
       openStorePage?(): Promise<void>;
+      /** Patch 0476 -- the demo's Discord link. Optional, same as above. */
+      openDiscord?(): Promise<void>;
     };
   }
 }

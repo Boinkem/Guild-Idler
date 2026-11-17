@@ -7,6 +7,7 @@ import { AH_READY, AhConnectionStatus, checkAhConnection } from '../../game/auct
 import { MailboxModal } from '../MailboxModal';
 import { registerFlyTarget } from '../flyTarget';
 import { AuctionHouseTrade } from '../AuctionHouseTrade';
+import { goToGuildHallPurchase } from '../PrereqLink';
 
 /**
  * Auction House panel shell -- build-order item 2 from the ranked list
@@ -81,7 +82,7 @@ export function AuctionHousePanel() {
           </div>
           <button
             className="btn-primary"
-            onClick={() => engine.requestTab('guild', 'auction_house_charter', undefined, 'the Auction House')}
+            onClick={() => goToGuildHallPurchase(engine, 'auction_house_charter', 'the Auction House')}
           >
             Go to Guild Hall →
           </button>

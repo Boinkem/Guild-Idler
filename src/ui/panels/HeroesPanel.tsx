@@ -27,6 +27,8 @@ import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { DyeFx } from '../dyeFx';
 import { usePulsesOnChange } from '../maxFlash';
 import { buyWithFx, flyCard, fxMs, fxSpeed, LevelRoll, usePurchaseBeats, useRecentIncrease } from '../purchaseFx';
+import { goToGuildHallPurchase } from '../PrereqLink';
+import { demoRankReachable, requestDemoWall } from '../../game/demo';
 
 /**
  * Patch 0296. Recruit-card portrait for a hero class -- mirrors
@@ -521,7 +523,7 @@ function HeroesRosterView() {
             {/* Patch 0466 -- each glows only while its upgrade is affordable. */}
             <button
               className={`btn-primary ${tavernAffordable ? 'amb-warm' : ''}`}
-              onClick={() => engine.requestTab('guild', 'tavern', undefined, 'a free hero slot')}
+              onClick={() => goToGuildHallPurchase(engine, 'tavern', 'a free hero slot')}
             >
               Go to Tavern →
             </button>
@@ -649,7 +651,7 @@ function HeroesRosterView() {
                   {alreadyRecruited
                     ? 'Already Recruited'
                     : !unlocked
-                      ? `Tavern level ${def.unlockTavernLevel}`
+                      ? (demoRankReachable(def.unlockTavernLevel) ? `Tavern level ${def.unlockTavernLevel}` : 'Full game')
                       : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
                 </button>
               </div>
@@ -663,15 +665,27 @@ function HeroesRosterView() {
                   Tavern route wouldn't even be the reason to follow) --
                   tavernUnlocked distinguishes "locked, Tavern would help"
                   from "unlocked via milestone, Tavern link irrelevant". */}
-              {!unlocked && !tavernUnlocked && (
+              {/* Patch 0476 -- in the demo, a class whose Tavern level is
+                  past the demo's rank cap can't be reached at all: the
+                  link opens the wishlist card instead of pinning a Tavern
+                  rank that only offers "Full game". */}
+              {!unlocked && !tavernUnlocked && (demoRankReachable(def.unlockTavernLevel) ? (
                 <button
                   className="btn-ghost"
                   style={{ width: '100%', marginTop: 10, fontSize: '0.6875rem' }}
-                  onClick={() => { setSelectedRecruitId(null); engine.requestTab('guild', 'tavern', undefined, `recruiting the ${def.name}`); }}
+                  onClick={() => { setSelectedRecruitId(null); goToGuildHallPurchase(engine, 'tavern', `recruiting the ${def.name}`); }}
                 >
                   Go to Tavern →
                 </button>
-              )}
+              ) : (
+                <button
+                  className="btn-ghost"
+                  style={{ width: '100%', marginTop: 10, fontSize: '0.6875rem' }}
+                  onClick={() => { setSelectedRecruitId(null); requestDemoWall({ kind: 'unlock', name: def.name }); }}
+                >
+                  The {def.name} joins in the full game →
+                </button>
+              ))}
               {/* Patch 0387, direct request: the same "jump to and highlight
                   the requirement" treatment just above, but for the OTHER
                   reason this button can be greyed out -- a full roster
@@ -690,7 +704,7 @@ function HeroesRosterView() {
                   <button
                     className="btn-primary"
                     style={{ flex: 1, fontSize: '0.6875rem' }}
-                    onClick={() => { setSelectedRecruitId(null); engine.requestTab('guild', 'tavern', undefined, 'a free hero slot'); }}
+                    onClick={() => { setSelectedRecruitId(null); goToGuildHallPurchase(engine, 'tavern', 'a free hero slot'); }}
                   >
                     Go to Tavern →
                   </button>

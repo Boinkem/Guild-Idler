@@ -27,6 +27,16 @@
  */
 
 declare const __GUILDBOUND_DEMO__: boolean | undefined;
+declare const __GUILDBOUND_VERSION__: string | undefined;
+
+/** Patch 0476 -- package.json's version, compiled in by Vite. Empty
+ *  outside a Vite build (tsx sims, tsc). */
+export const BUILD_VERSION: string = typeof __GUILDBOUND_VERSION__ !== 'undefined' ? __GUILDBOUND_VERSION__ : '';
+
+/** Patch 0476 -- the community Discord, linked from the demo's early-build
+ *  banner and wishlist card. Electron opens it through main.ts's own
+ *  copy of this URL (shell:openDiscord), never a renderer-supplied one. */
+export const DISCORD_INVITE_URL = 'https://discord.gg/AHTCRyWMK7';
 
 export const DEMO_BUILD: boolean = typeof __GUILDBOUND_DEMO__ !== 'undefined' && __GUILDBOUND_DEMO__ === true;
 
@@ -74,6 +84,13 @@ export function demoLockKind(id: string, currentLevel: number): 'unlock' | 'rank
   if (DEMO.lockedUpgradeIds.includes(id)) return 'unlock';
   if (currentLevel >= DEMO.upgradeRankCap) return 'rank';
   return null;
+}
+
+/** Patch 0476 -- whether rank `level` of any leveled upgrade can be
+ *  reached at all in this build (e.g. a hero class needing Tavern 4 in a
+ *  demo that stops the Tavern at 2). Always true in the full game. */
+export function demoRankReachable(level: number): boolean {
+  return !DEMO_BUILD || level <= DEMO.upgradeRankCap;
 }
 
 export function demoRankLocked(id: string, currentLevel: number): boolean {

@@ -5,6 +5,7 @@ import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { backgroundSrc, BackgroundMoodId, resolveBackgroundMood } from '../game/settings';
 import { BackdropStyleId, RUNECLOTH_COLOURS, RuneclothColourId, runeclothBackground } from '../game/runecloth';
+import { DemoEarlyBanner } from './DemoWall';
 
 /**
  * Blocking, non-dismissible prompt asking the player to name their guild.
@@ -221,6 +222,8 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise
         <div className="guild-naming-content" key={step}>
           {step === 'name' ? (
             <>
+              {/* Patch 0476 -- demo build only; renders nothing otherwise. */}
+              <DemoEarlyBanner />
               <div className="guild-naming-textbox guild-naming-textbox-title">
                 <h3 style={{ margin: 0 }}>What is your guild called?</h3>
               </div>

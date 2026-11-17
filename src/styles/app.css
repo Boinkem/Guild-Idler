@@ -9160,6 +9160,23 @@ button.harvest-item:hover {
 .demo-badge:hover { filter: brightness(1.08); }
 
 .demo-wall-modal { max-width: 440px; }
+/* Patch 0476 -- demo setup banner (DemoWall.tsx's DemoEarlyBanner), first
+   item on GuildNamingModal's name step. Sized to keep that step inside the
+   card's fixed 3:2 frame. */
+.demo-early-banner {
+  padding: 8px 12px; border-radius: 8px; text-align: left;
+  background: rgba(15, 12, 10, 0.9);
+  border: 1px solid color-mix(in srgb, var(--brass) 70%, transparent);
+  border-left: 4px solid var(--brass);
+}
+.demo-early-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+.demo-early-kicker { font-size: 0.625rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--brass); }
+.demo-early-banner p { margin: 0; font-size: 0.6875rem; line-height: 1.4; color: var(--parchment); }
+.demo-early-discord {
+  min-height: 22px; padding: 2px 10px; font-size: 0.625rem; font-weight: 700; white-space: nowrap;
+  color: #fff; background: #5865f2; border: 1px solid #4752c4; border-radius: 6px;
+}
+.demo-early-discord:hover { filter: brightness(1.1); }
 .demo-wall-kicker {
   font-size: 0.6875rem;
   font-weight: 700;

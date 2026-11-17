@@ -22,6 +22,7 @@ import { useFirstSeen } from '../firstSeen';
 import { ambPhase } from '../ambient';
 import { at } from '../resultFx';
 import { formatDuration, describeMods, describeStats, RARITY_COLOR } from '../../game/util';
+import { goToGuildHallPurchase } from '../PrereqLink';
 
 // Single-letter fallback badge (used only if the icon art at
 // public/raid-icons/<difficulty>.png is missing).
@@ -357,7 +358,7 @@ function DifficultyCircle({
         <button
           className="btn-ghost"
           style={{ fontSize: '0.5625rem', padding: '1px 4px', minHeight: 0 }}
-          onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID[difficulty], undefined, `${RAID_DIFFICULTY_LABEL[difficulty]} raids`)}
+          onClick={() => goToGuildHallPurchase(engine, DIFFICULTY_UNLOCK_ID[difficulty], `${RAID_DIFFICULTY_LABEL[difficulty]} raids`)}
           title={`Go to the Guild Hall -- ${DIFFICULTY_UNLOCK_LABEL[difficulty]}`}
         >
           Unlock →
@@ -974,7 +975,7 @@ export function RaidsPanel() {
         </div>
         <button
           className="btn-primary"
-          onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID.normal, undefined, 'raids')}
+          onClick={() => goToGuildHallPurchase(engine, DIFFICULTY_UNLOCK_ID.normal, 'raids')}
         >
           Go to Guild Hall →
         </button>

@@ -40,8 +40,8 @@ const IS_DEMO = typeof __GUILDBOUND_DEMO__ !== 'undefined' && __GUILDBOUND_DEMO_
 
 // Patch 0438 -- the demo gets its own userData folder ('guildbound-demo'),
 // so a demo save and a full-game save can never overwrite each other on
-// a machine that has both installed. Demo progress does NOT carry over
-// into the full game (logged in guild-idler-status.md as a follow-up).
+// a machine that has both installed. (Patch 0476: demo progress DOES carry
+// over since patch 0439 -- see importDemoSave below.)
 app.setName(IS_DEMO ? 'guildbound-demo' : 'guildbound');
 
 /**
@@ -1188,6 +1188,13 @@ ipcMain.handle('shell:openStore', async () => {
   } catch {
     await shell.openExternal(`https://store.steampowered.com/app/${FULL_GAME_STEAM_APP_ID}/`);
   }
+});
+
+/** Patch 0476 -- the demo's "Join the Discord" link. A fixed URL here
+ *  (same as src/game/demo.ts's DISCORD_INVITE_URL), not one passed in
+ *  from the renderer, so this can't be used to open anything else. */
+ipcMain.handle('shell:openDiscord', async () => {
+  await shell.openExternal('https://discord.gg/AHTCRyWMK7');
 });
 
 ipcMain.handle('steam:isDlcOwned', (_e, packId: string) => {

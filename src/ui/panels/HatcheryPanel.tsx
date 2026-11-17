@@ -24,6 +24,7 @@ import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { PairStage, pairFxDuration } from '../pairFx';
 import type { PairFx } from '../pairFx';
 import type { Hero } from '../../game/types';
+import { goToGuildHallPurchase } from '../PrereqLink';
 
 type SubTab = 'home' | 'pets';
 
@@ -130,7 +131,7 @@ function NestsTab() {
       <button
         className="btn-primary"
         style={{ marginBottom: 10, fontSize: '0.6875rem' }}
-        onClick={() => engine.requestTab('guild', 'nest_expansion', undefined, 'another incubation slot')}
+        onClick={() => goToGuildHallPurchase(engine, 'nest_expansion', 'another incubation slot')}
       >
         Go to Guild Hall →
       </button>
@@ -238,7 +239,7 @@ function PetsTab() {
       <button
         className="btn-primary"
         style={{ marginBottom: 10, fontSize: '0.6875rem' }}
-        onClick={() => engine.requestTab('guild', 'companion_bond', undefined, 'another pet slot')}
+        onClick={() => goToGuildHallPurchase(engine, 'companion_bond', 'another pet slot')}
       >
         Go to Guild Hall →
       </button>

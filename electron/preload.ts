@@ -117,6 +117,8 @@ const api = {
    *  full game's store page in the Steam client (see main.ts's
    *  shell:openStore handler). */
   openStorePage: (): Promise<void> => ipcRenderer.invoke('shell:openStore'),
+  /** Patch 0476 -- the demo's Discord link (fixed URL, see main.ts). */
+  openDiscord: (): Promise<void> => ipcRenderer.invoke('shell:openDiscord'),
   onFullscreenChanged: (callback: (value: boolean) => void): (() => void) => {
     const listener = (_e: unknown, value: boolean) => callback(value);
     ipcRenderer.on('window:fullscreen-changed', listener);
