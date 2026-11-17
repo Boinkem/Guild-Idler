@@ -38753,3 +38753,38 @@ for good once hidden; empty Runecloth swatches in Settings.
 
 Checks: `tsc` passes. Headless Chrome: Guild Hall advice hidden via "Hide
 advice", 📜 brought it back, title flips; Settings swatches render.
+
+### Realm event: Send now always answers; Your Ward no longer resets to 0 (patch 0482)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the Send now button on realm events doing nothing. It now sends any waiting Ward, or becomes Refresh when nothing's waiting, and always tells you what happened
+- Fixed Your Ward sometimes showing 0 after Ward had already been sent, and Ward from quests finished at that moment being lost
+```
+
+Owner report (test event 17-18 Nov): Send now did nothing; the panel also
+showed Your Ward 0 while the feed showed House MD +2 / +1 and the realm
+at 5/20.
+
+- **Send now** -- the button called `requestRealmSync()`, which returns
+  silently within `REALM_MANUAL_GAP_MS` (30s) of any sync, and opening the
+  panel syncs, so the first press after opening always did nothing. With
+  nothing waiting, a successful sync also showed nothing. New
+  `engine.manualRealmSync()`: own 5s guard (`REALM_MANUAL_PRESS_GAP_MS`)
+  that says "Try again in Ns"; clears `realmMineKey` so `/realm/mine` is
+  re-read; leaves `realmView.note` ("Sent +N Ward." / "Up to date with the
+  server."), cleared at the start of every sync. The label is "Refresh"
+  when nothing is waiting. Automatic syncs are unchanged.
+- **Your Ward 0** -- `RealmThreatManager.onCurrent(null)` cleared the
+  stored event. The next time the same event came back it looked new,
+  which zeroed points/tier and dropped unsent Ward; and `/realm/mine` was
+  never re-read, since `realmMineKey` (id:phase) hadn't changed. Any
+  moment with no event triggers it: realm switched off/on, a restart, an
+  event edit in the DevTool. Now `onCurrent(null)` leaves the stored
+  event alone (addWard still only counts inside its window), and
+  `syncRealm` clears `realmMineKey` whenever the stored event changes.
+  This is the likely cause, not confirmed from the owner's machine; the
+  server keys Ward by SteamID, so pressing Refresh should now show the 5.
+
+Checks: `tsc` passes. tsx check of `onCurrent`: event → gone → same event
+keeps points 5 and unsent Ward (3 + 2); a different event still resets.

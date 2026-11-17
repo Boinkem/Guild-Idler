@@ -236,11 +236,17 @@ function RealmPanel({ event }: { event: RealmEvent }) {
                     <span>
                       {view.status === 'unreachable' ? 'The server is out of reach. Your Ward is saved and sends when it can.'
                         : view.sendError ? `Not sent yet: ${view.sendError}`
-                          : onItsWay > 0 ? 'Sends with your next sync, every few minutes.' : 'Nothing waiting. Finished quests add Ward here.'}
+                          : view.note ? view.note
+                            : onItsWay > 0 ? 'Sends with your next sync, every few minutes.' : 'Nothing waiting. Finished quests add Ward here.'}
                     </span>
                   </div>
-                  <button className="btn-primary" disabled={view.syncing} onClick={() => engine.requestRealmSync()}>
-                    {view.syncing ? 'Sending…' : 'Send now'}
+                  <button
+                    className="btn-primary"
+                    disabled={view.syncing}
+                    onClick={() => void engine.manualRealmSync()}
+                    title={onItsWay > 0 ? 'Send your waiting Ward now' : 'Check the server for your latest Ward'}
+                  >
+                    {view.syncing ? (onItsWay > 0 ? 'Sending…' : 'Checking…') : onItsWay > 0 ? 'Send now' : 'Refresh'}
                   </button>
                 </div>
               )}

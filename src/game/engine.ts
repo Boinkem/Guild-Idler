@@ -72,6 +72,8 @@ const REALM_RETRY_MS = 2 * 60 * 1000;
 const REALM_BOUNDARY_LAG_MS = 75_000;
 /** Minimum gap between syncs the player triggers (Send now, opening the panel). */
 const REALM_MANUAL_GAP_MS = 30_000;
+/** Patch 0482 -- the panel button's own, shorter spam guard. */
+const REALM_MANUAL_PRESS_GAP_MS = 5_000;
 const BUG_QUEUE_KEY = 'guildbound-bug-queue';
 const BUG_QUEUE_MAX = 20;
 
@@ -1841,7 +1843,9 @@ export class GameEngine {
     /** Why the last send didn't go through (no Steam session, offline). */
     sendError: string | null;
     syncing: boolean;
-  } = { status: 'unknown', event: null, fetchedAt: 0, sendError: null, syncing: false };
+    /** Patch 0482 -- what the last Send now / Refresh press did. */
+    note: string | null;
+  } = { status: 'unknown', event: null, fetchedAt: 0, sendError: null, syncing: false, note: null };
   realmPanelOpen = false;
   /** The end-of-event reveal is waiting to be shown / is showing. */
   realmResultOpen = false;
@@ -1871,6 +1875,7 @@ export class GameEngine {
   async syncRealm(): Promise<void> {
     if (this.realmView.syncing) return;
     this.realmView.syncing = true;
+    this.realmView.note = null; // patch 0482 -- a fresh round, a fresh note
     this.lastRealmSyncAt = Date.now();
     this.notify();
     try {
@@ -1883,8 +1888,12 @@ export class GameEngine {
       let event = current.realmEnabled ? current.event : null;
       this.realmView = { ...this.realmView, status: 'ok', event, fetchedAt: Date.now() };
       const before = JSON.stringify(this.state.realmThreat);
+      const campaignBefore = this.state.realmThreat.campaignId;
       RealmThreatManager.onCurrent(this.state, event);
       const rt = this.state.realmThreat;
+      // Patch 0482 -- a newly picked-up event always fetches this guild's
+      // standing, even if an earlier event shared its id:phase key.
+      if (rt.campaignId !== campaignBefore) this.realmMineKey = '';
       if (!event || !RealmThreatManager.canContribute(event)) {
         if (JSON.stringify(rt) !== before) void this.saveNow();
         return;
@@ -1956,6 +1965,34 @@ export class GameEngine {
     if (this.realmView.syncing || Date.now() - this.lastRealmSyncAt < REALM_MANUAL_GAP_MS) return false;
     void this.syncRealm();
     return true;
+  }
+
+  /**
+   * Patch 0482 -- the panel's Send now / Refresh button. It used to call
+   * requestRealmSync(), which quietly did nothing for 30s after any sync
+   * (and opening the panel syncs), and said nothing when there was
+   * nothing to send. Now it always answers: sends what's waiting,
+   * re-reads this guild's standing from the server, and leaves a note.
+   */
+  async manualRealmSync(): Promise<void> {
+    if (this.realmView.syncing) return;
+    const wait = REALM_MANUAL_PRESS_GAP_MS - (Date.now() - this.lastRealmSyncAt);
+    if (wait > 0) {
+      this.realmView = { ...this.realmView, note: `Just checked. Try again in ${Math.ceil(wait / 1000)}s.` };
+      this.notify();
+      return;
+    }
+    const waiting = RealmThreatManager.onItsWay(this.state);
+    this.realmMineKey = '';
+    await this.syncRealm();
+    const left = RealmThreatManager.onItsWay(this.state);
+    const view = this.realmView;
+    const note = view.status === 'unreachable' ? null
+      : view.sendError ? null
+        : waiting > left ? `Sent +${(waiting - left).toLocaleString()} Ward.`
+          : 'Up to date with the server.';
+    this.realmView = { ...this.realmView, note };
+    this.notify();
   }
 
   openRealmPanel() {

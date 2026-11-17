@@ -51,14 +51,19 @@ export const RealmThreatManager = {
 
   /** The server's view of the current event (null = nothing scheduled).
    *  A different event than the one stored drops whatever was unsent for
-   *  the old one -- an accepted loss of at most one sync's Ward. */
+   *  the old one -- an accepted loss of at most one sync's Ward.
+   *
+   *  Patch 0482 -- "nothing on" no longer clears the stored event. It
+   *  used to, so a moment with no event (realm switched off and on, a
+   *  server restart, an event edited in the DevTool) made the SAME event
+   *  look new when it came back: Your Ward reset to 0 and Ward finished
+   *  in the meantime was thrown away. Now the stored event stays put
+   *  (its own window still limits what addWard counts) and is only
+   *  replaced when a different event arrives. */
   onCurrent(state: GameState, event: RealmEvent | null): void {
     const rt = state.realmThreat;
     const usable = event && RealmThreatManager.canContribute(event) ? event : null;
-    if (!usable) {
-      if (rt.campaignId !== 0) Object.assign(rt, { campaignId: 0, opensAt: 0, endsAt: 0, finalisesAt: 0, unsent: 0, pending: null });
-      return;
-    }
+    if (!usable) return;
     if (usable.id !== rt.campaignId) {
       Object.assign(rt, { campaignId: usable.id, unsent: 0, pending: null, points: 0, tier: 0 });
     }
