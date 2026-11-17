@@ -2661,7 +2661,7 @@ function realmSwitchesHtml() {
   if (!c.ok) return `<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(c.error || 'Could not read realm.config.json')}</div></div>`;
   const live = r?.ok ? r.realmEnabled : null; // what the running server says
   const restartNeeded = r?.ok && c.envEnabled === true && r.envEnabled === false;
-  const owned = !!ahState.proc?.owned;
+  const owned = !!(ahState.proc?.owned || ahState.proc?.externalPid);
   return `
     <div class="live-grid" style="margin-bottom: 12px;">
       <div class="live-card ${c.envEnabled ? (restartNeeded ? 'warn' : 'good') : 'bad'}">
@@ -2669,7 +2669,7 @@ function realmSwitchesHtml() {
         <div class="live-card-headline">${c.envEnabled ? (restartNeeded ? 'On, restart needed' : 'On') : c.envEnabled === null ? 'No server/.env found' : 'Off'}</div>
         <div class="tiny muted">Lets the server run events at all. Set it once and leave it on; it's read when the server starts.</div>
         ${c.envEnabled === null ? '' : c.envEnabled
-          ? (restartNeeded ? `<button data-realm-env="on" class="primary" ${ahState.realmBusy ? 'disabled' : ''}>${owned ? 'Restart server now' : 'Restart needed (Dashboard)'}</button>` : `<button data-realm-env="off" ${ahState.realmBusy ? 'disabled' : ''}>Turn off</button>`)
+          ? (restartNeeded ? `<button data-realm-env="on" class="primary" ${ahState.realmBusy ? 'disabled' : ''}>${owned ? 'Restart server now' : 'Start the server (Dashboard)'}</button>` : `<button data-realm-env="off" ${ahState.realmBusy ? 'disabled' : ''}>Turn off</button>`)
           : `<button data-realm-env="on" class="primary" ${ahState.realmBusy ? 'disabled' : ''}>Turn on${owned ? ' and restart' : ''}</button>`}
       </div>
       <div class="live-card ${c.enabled ? 'good' : 'warn'}">
@@ -5128,6 +5128,35 @@ async function checkAhNow() {
  *  re-checks /health every 1.5s (up to ~30s) until the local backend answers
  *  or the launched process dies -- tsx takes a few seconds to boot, so a
  *  single immediate check would always report "unreachable". */
+/** Patch 0480 -- Restart: stop (whoever started it) and start from the
+ *  DevTool, then wait for /health like the Start button does. */
+async function restartAhServerNow() {
+  ahState.launching = true;
+  ahState.launchMessage = { text: 'Restarting the AH server…', cls: '' };
+  renderLive();
+  try {
+    const result = await api('/api/auction-house/server/restart', { method: 'POST' });
+    ahState.proc = result.process;
+    if (!result.ok) {
+      ahState.launchMessage = { text: escapeHtml(result.error || 'Restart failed.'), cls: 'bad' };
+    } else {
+      let up = false;
+      for (let i = 0; i < 20 && !up; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const st = await api('/api/auction-house/status').catch(() => null);
+        up = !!st?.local?.reachable;
+        if (up) ahState.status = st;
+      }
+      ahState.proc = await api('/api/auction-house/server').catch(() => ahState.proc);
+      ahState.launchMessage = up ? { text: 'Restarted.', cls: 'good' } : { text: 'Started, but /health is not answering yet. Check the log below.', cls: 'bad' };
+    }
+  } catch (err) {
+    ahState.launchMessage = { text: escapeHtml(err.message || String(err)), cls: 'bad' };
+  }
+  ahState.launching = false;
+  await loadLiveSub(true);
+}
+
 async function startAhServerNow() {
   ahState.launching = true;
   ahState.launchMessage = null;
@@ -5482,8 +5511,17 @@ function liveCards() {
   else if (loc?.reachable) {
     cards.push({
       name: 'AH server', cls: 'good', headline: 'Running',
-      lines: [escapeHtml(ahState.url), ahState.proc?.owned ? `Started by this DevTool, PID ${ahState.proc.pid}` : 'Started outside this DevTool (by hand, a startup script, or the Windows Service)'],
-      action: ahState.proc?.owned ? `<button id="ahStopBtn" class="remove" ${ahState.stopping ? 'disabled' : ''}>${ahState.stopping ? 'Stopping…' : 'Stop'}</button>` : '',
+      lines: [
+        escapeHtml(ahState.url),
+        ahState.proc?.owned ? `Started by this DevTool, PID ${ahState.proc.pid}`
+          : ahState.proc?.externalPid ? `Started outside this DevTool run (PID ${ahState.proc.externalPid}); Restart moves it under the DevTool`
+            : 'Started outside this DevTool',
+      ],
+      // Patch 0480 -- Restart and Stop work however the server was started.
+      action: (ahState.proc?.owned || ahState.proc?.externalPid) ? `<div class="row" style="gap: 6px;">
+        <button id="ahRestartBtn" class="primary" ${ahState.stopping || ahState.launching ? 'disabled' : ''}>${ahState.launching ? 'Restarting…' : 'Restart'}</button>
+        <button id="ahStopBtn" class="remove" ${ahState.stopping || ahState.launching ? 'disabled' : ''}>${ahState.stopping ? 'Stopping…' : 'Stop'}</button>
+      </div>` : '',
     });
   } else {
     cards.push({
@@ -5682,5 +5720,10 @@ function renderLive() {
   const ahStartBtn = document.getElementById('ahStartBtn');
   if (ahStartBtn) ahStartBtn.onclick = () => startAhServerNow();
   const ahStopBtn = document.getElementById('ahStopBtn');
-  if (ahStopBtn) ahStopBtn.onclick = () => stopAhServerNow();
+  if (ahStopBtn) ahStopBtn.onclick = () => {
+    if (!ahState.proc?.owned && !confirm('Stop the AH server? It was started outside this DevTool run (a startup script or an earlier DevTool). Players lose the Auction House and events until it is started again.')) return;
+    stopAhServerNow();
+  };
+  const ahRestartBtn = document.getElementById('ahRestartBtn');
+  if (ahRestartBtn) ahRestartBtn.onclick = () => restartAhServerNow();
 }

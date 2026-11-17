@@ -38662,3 +38662,51 @@ PC (no `AH_REALM_ENABLED` line, server started by the DevTool):
 - Delete removed the event from the file and the server, and it did not
   come back after a minute.
 - No page errors. Server `tsc` passes.
+
+### DevTool: Restart and Stop work however the server was started (patch 0480)
+```discord-update
+Dev Update | DevTool
+
+- Added a Restart button for the AH server on the Live Services dashboard
+- Fixed Stop, Restart and "Turn on and restart" not appearing once the DevTool itself had been restarted
+```
+
+Owner report after applying 0479: no server on/off/restart buttons. The
+DevTool only tracked a server it had started during its **current run**
+(`ahProcess`, in memory). Applying a patch that touches the DevTool means
+restarting it, after which the running server showed as "Started outside
+this DevTool" with no Stop, and Realm Events' "Turn on and restart" could
+only save the setting.
+
+- **`tools/devtool/server.mjs`:**
+  - New `findListeningPid()` finds whatever listens on the local backend
+    URL's port, only for localhost URLs. Windows uses
+    `netstat -ano -p TCP`, parsed by `parseNetstatListeningPid` (exact
+    `:port` match, so 4000 is never confused with 14000); Linux/macOS use
+    `/proc` or `lsof`.
+  - `ahServerProcessInfo()` reports `externalPid`.
+  - `stopAhServer()` stops the DevTool's own child as before, otherwise
+    whatever holds the port (`taskkill /T /F` on Windows). It refuses if
+    the port is the DevTool's own.
+  - New `restartAhServer()` (stop, wait up to 10s for the port to free,
+    start) and `POST /api/auction-house/server/restart`. A restarted
+    server is then the DevTool's own child, logging to
+    `server/ah-devtool.log`.
+  - Realm Events' "Turn on and restart" uses it for any running server.
+- **`public/app.js`:** the dashboard's AH server card shows **Restart**
+  and **Stop** whenever a server is running, saying whether this DevTool
+  run started it. Stopping one it didn't start asks first. Realm Events'
+  restart button follows the same rule.
+
+Caveat: a server run as the NSSM Windows Service would be restarted by
+the service manager after a Stop; stop that one in Services. (The owner's
+server isn't installed that way.)
+
+Verified in a sandbox with the server started outside the DevTool:
+- The DevTool showed its PID with Restart and Stop.
+- "Turn on and restart" wrote the flag and restarted it under the
+  DevTool, and `/health` showed `realmEnabled: true`.
+- After restarting the DevTool itself, the server was found again by its
+  port; Restart took it over, Stop took it down, and Start brought it back.
+- The Windows `netstat` parser was checked on sample output.
+- Not run on Windows itself.

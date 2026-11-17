@@ -3027,11 +3027,83 @@ async function ahLogTail() {
   }
 }
 
+/**
+ * Patch 0480 -- the PID of whatever is listening on the local backend's
+ * port, however it was started (this DevTool, an earlier run of it, a
+ * startup .cmd, by hand). The DevTool only remembers servers it started
+ * during its own current run, so after a DevTool restart (e.g. applying a
+ * patch to the DevTool itself) it lost its Stop button. Null when nothing
+ * is listening or it can't tell.
+ */
+async function findListeningPid() {
+  const cfg = await readAhConfig();
+  let port;
+  try {
+    const u = new URL(cfg.url);
+    if (!['localhost', '127.0.0.1', '::1', '[::1]'].includes(u.hostname)) return null; // only ever this PC
+    port = Number(u.port) || (u.protocol === 'https:' ? 443 : 80);
+  } catch {
+    return null;
+  }
+  if (process.platform === 'win32') {
+    const r = await run('netstat', ['-ano', '-p', 'TCP'], 10_000);
+    return parseNetstatListeningPid(String(r.stdout || ''), port);
+  }
+  return linuxListeningPid(port);
+}
+
+/** Windows `netstat -ano -p TCP`: the PID column of the LISTENING row for
+ *  this port. Exported shape kept tiny so it can be checked on sample output. */
+export function parseNetstatListeningPid(stdout, port) {
+  for (const line of stdout.split(/\r?\n/)) {
+    const cols = line.trim().split(/\s+/);
+    // Proto  Local Address  Foreign Address  State  PID
+    if (cols.length >= 5 && cols[0] === 'TCP' && cols[3] === 'LISTENING' && cols[1].endsWith(`:${port}`)) {
+      const pid = Number(cols[4]);
+      if (pid > 0) return pid;
+    }
+  }
+  return null;
+}
+
+/** Linux/macOS dev boxes: /proc when there is one, else lsof. */
+async function linuxListeningPid(port) {
+  try {
+    const hexPort = port.toString(16).toUpperCase().padStart(4, '0');
+    const inodes = new Set();
+    for (const f of ['/proc/net/tcp', '/proc/net/tcp6']) {
+      const raw = await fs.readFile(f, 'utf8').catch(() => '');
+      for (const line of raw.split('\n').slice(1)) {
+        const c = line.trim().split(/\s+/);
+        if (c[1]?.endsWith(`:${hexPort}`) && c[3] === '0A') inodes.add(c[9]);
+      }
+    }
+    if (inodes.size > 0) {
+      for (const dir of await fs.readdir('/proc')) {
+        if (!/^\d+$/.test(dir)) continue;
+        const fds = await fs.readdir(`/proc/${dir}/fd`).catch(() => []);
+        for (const fd of fds) {
+          const link = await fs.readlink(`/proc/${dir}/fd/${fd}`).catch(() => '');
+          const m = link.match(/^socket:\[(\d+)\]$/);
+          if (m && inodes.has(m[1])) return Number(dir);
+        }
+      }
+    }
+  } catch { /* fall through */ }
+  const r = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], 10_000);
+  const pid = Number(String(r.stdout || '').trim().split(/\s+/)[0]);
+  return pid > 0 ? pid : null;
+}
+
 async function ahServerProcessInfo() {
   const running = !!(ahProcess && ahProcess.exitCode === undefined && isPidAlive(ahProcess.pid));
+  // Patch 0480 -- a server this DevTool didn't start (this run) is still
+  // found, by its port, so it can be stopped and restarted from here too.
+  const externalPid = running ? null : await findListeningPid();
   return {
     owned: running,
     pid: running ? ahProcess.pid : null,
+    externalPid,
     startedAt: ahProcess?.startedAt ?? null,
     exitCode: ahProcess && ahProcess.exitCode !== undefined ? ahProcess.exitCode : null,
     exitedAt: ahProcess?.exitedAt ?? null,
@@ -3089,13 +3161,32 @@ async function startAhServer() {
 }
 
 async function stopAhServer() {
-  if (!ahProcess || ahProcess.exitCode !== undefined || !isPidAlive(ahProcess.pid)) {
-    return { ok: false, error: 'No AH server started by this DevTool is running (one started by hand or as a Windows Service has to be stopped there).' };
+  if (ahProcess && ahProcess.exitCode === undefined && isPidAlive(ahProcess.pid)) {
+    await killProcessTree(ahProcess.pid);
+    ahProcess.exitCode = 0;
+    ahProcess.exitedAt = Date.now();
+    return { ok: true };
   }
-  await killProcessTree(ahProcess.pid);
-  ahProcess.exitCode = 0;
-  ahProcess.exitedAt = Date.now();
-  return { ok: true };
+  // Patch 0480 -- not ours (this run): stop whatever holds the port.
+  const pid = await findListeningPid();
+  if (!pid) return { ok: false, error: 'No AH server is running on this PC.' };
+  if (pid === process.pid) return { ok: false, error: 'That port belongs to the DevTool itself -- check the backend URL under Dashboard > Connection.' };
+  if (process.platform === 'win32') await killProcessTree(pid); // taskkill /T: it and anything it started
+  else { try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ } } // not our process group
+  return { ok: true, external: true };
+}
+
+/** Patch 0480 -- Stop (whoever started it), wait for the port to free up,
+ *  then Start from here. Used by the Restart buttons and by Realm Events'
+ *  "Turn on and restart". */
+async function restartAhServer() {
+  const stopped = await stopAhServer();
+  if (!stopped.ok && !/No AH server is running/.test(stopped.error || '')) return stopped;
+  for (let i = 0; i < 20; i++) {
+    if (!(await findListeningPid())) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return startAhServer();
 }
 
 /**
@@ -4185,6 +4276,11 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, await ahServerProcessInfo());
   }
 
+  if (url.pathname === '/api/auction-house/server/restart' && req.method === 'POST') {
+    const result = await restartAhServer();
+    return json(res, 200, { ...result, process: await ahServerProcessInfo() });
+  }
+
   if (url.pathname === '/api/auction-house/server/start' && req.method === 'POST') {
     const result = await startAhServer();
     return json(res, 200, { ...result, process: await ahServerProcessInfo() });
@@ -4211,11 +4307,11 @@ const server = http.createServer(async (req, res) => {
         // takes effect at once; one started some other way is left alone.
         let restarted = false;
         if (body.restart) {
+          // Patch 0480 -- whoever started it (see restartAhServer).
           const proc = await ahServerProcessInfo();
-          if (proc?.owned) {
-            await stopAhServer();
-            await startAhServer();
-            restarted = true;
+          if (proc?.owned || proc?.externalPid) {
+            const r = await restartAhServer();
+            restarted = !!r.ok;
           }
         }
         return json(res, 200, {
