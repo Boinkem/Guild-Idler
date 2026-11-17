@@ -38710,3 +38710,46 @@ Verified in a sandbox with the server started outside the DevTool:
   port; Restart took it over, Stop took it down, and Start brought it back.
 - The Windows `netstat` parser was checked on sample output.
 - Not run on Windows itself.
+
+### Heroes who are out can't be repaired or patched up; quieter first-quest debrief (patch 0481)
+```discord-update
+Dev Update | Patch 0481
+
+- Changed Repair, Treat and Field Bandages so they only work on heroes who are back at the guild, not ones out on quests, raids or chain-step runs
+- Changed the first-quest debrief: the gear and injury tips now arrive as one notification instead of four
+- Added a 📜 button beside the Guild Hall's ? that shows or hides the Guildmaster's advice, so you can bring it back after hiding it
+- Fixed the Runecloth colour swatches in Settings sometimes showing as empty boxes
+```
+
+Owner report: repaired a weapon and used a Field Bandage on a hero who was
+chain-stepping; four banners after the tutorial quest; Guild Guide gone
+for good once hidden; empty Runecloth swatches in Settings.
+
+- **Away heroes** -- `HeroManager.isAway(hero)` (`status === 'questing'`,
+  which covers quests, raids and chain-step / Saga Auto-Pilot runs, since
+  those re-send in the same tick). `engine.repair`, `treatInjury` and
+  `useConsumable` refuse with a toast. New
+  `EquipmentManager.repairableItems(state)` (allItems minus gear worn by
+  away heroes) drives `repairAll` and `repairBill`, so Repair Everything's
+  price only counts gear that's home. UI: hero-card Treat/Bandage disabled
+  with a tooltip; the gear modal shows "Repair once X is back" in place of
+  its Repair buttons; "Use on X" disabled for consumables. The opt-in
+  auto-repair tick is deliberately unchanged (still uses `allItems`), so
+  owners of that setting keep gear topped up between chain steps.
+- **Debrief** -- `first_durability_explainer` / `first_treat_explainer`
+  each raise one banner (their two messages joined). When both land in
+  the same batch (normal after the tutorial quest, as both queue behind
+  the result card) `fireGuidance` raises one merged banner pointing at
+  Heroes. JSON text unchanged.
+- **Guild Guide toggle** -- `engine.setGuildGuideHidden(hidden)`;
+  `dismissGuildGuide()` now calls it. MenuWindow shows a 📜 button left of
+  the panel "?" on the Guild Hall tab while any `GUILD_GUIDE_STEP_IDS`
+  step is unbought (same ownership read as save migration 74).
+- **Runecloth swatches** -- couldn't reproduce in the web build (dev or
+  production, every theme/style/mood/density tried), so the tile now
+  paints a plain radial colour ground itself and the layered preview sits
+  on a child span above it. If the layered background fails to paint, the
+  colour still shows. Ask the owner to confirm on their build.
+
+Checks: `tsc` passes. Headless Chrome: Guild Hall advice hidden via "Hide
+advice", 📜 brought it back, title flips; Settings swatches render.

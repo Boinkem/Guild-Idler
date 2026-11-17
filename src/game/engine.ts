@@ -567,6 +567,21 @@ export class GameEngine {
         topic.messages.forEach(quiet);
         continue;
       }
+      // Patch 0481 -- the first-quest wear-and-injury debrief was four
+      // banners (two per topic). Each topic now raises one, and when both
+      // land together (usual after the tutorial quest) they merge into a
+      // single banner pointing at the Heroes tab.
+      if (topic.id === 'first_durability_explainer' && ids.has('first_treat_explainer')) {
+        continue;
+      }
+      if (topic.id === 'first_treat_explainer' && ids.has('first_durability_explainer')) {
+        this.say("Your hero came back hurt and their gear's worn -- both drag down every quest until fixed. Treat them from their card in Heroes and Repair gear in Inventory once they're back; each hero's first of each is free.", topic.targetTab, true);
+        continue;
+      }
+      if (topic.id === 'first_durability_explainer' || topic.id === 'first_treat_explainer') {
+        this.say(topic.messages.join(' '), topic.targetTab, true, undefined, topic.highlightId);
+        continue;
+      }
       if (topic.id === 'guild_hall_intro' && ids.has('second_hero_affordable')) {
         topic.messages.forEach(quiet);
         continue;
@@ -2397,9 +2412,14 @@ export class GameEngine {
     return reason;
   }
 
-  /** Patch 0475 -- hides the Guild Hall's advice card for good. */
+  /** Patch 0475 -- hides the Guild Hall's advice card. */
   dismissGuildGuide() {
-    this.state.guildGuideDismissed = true;
+    this.setGuildGuideHidden(true);
+  }
+
+  /** Patch 0481 -- the Guild Hall header's advice toggle, beside its "?". */
+  setGuildGuideHidden(hidden: boolean) {
+    this.state.guildGuideDismissed = hidden;
     this.notify();
     void this.saveNow();
   }
@@ -3041,6 +3061,10 @@ export class GameEngine {
   repair(itemUid: string, mode: RepairMode = 'auto') {
     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
     if (!found) return;
+    // Patch 0481 -- gear on a hero who's out stays out of reach until
+    // they're back (chain-stepping heroes included).
+    const owner = found.heroId ? this.hero(found.heroId) : undefined;
+    if (owner && HeroManager.isAway(owner)) return this.say(`${owner.name} is still out -- repair their gear once they're back.`);
     const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
     const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0, repairDiscount);
     if (cost === 0) return this.say('Already in perfect condition.');
@@ -3067,7 +3091,9 @@ export class GameEngine {
     let scrapSpent = 0;
     let shardsSpent = 0;
     let freeCount = 0;
-    for (const { item, heroId } of EquipmentManager.allItems(this.state)) {
+    // Patch 0481 -- skips gear worn by heroes who are still out.
+    const awayCount = EquipmentManager.allItems(this.state).length - EquipmentManager.repairableItems(this.state).length;
+    for (const { item, heroId } of EquipmentManager.repairableItems(this.state)) {
       const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
       if (cost === 0) continue;
       const free = this.consumeFreeRepair(heroId, now);
@@ -3090,7 +3116,7 @@ export class GameEngine {
     }
     if (spent > 0 || freeCount > 0) playSound('repair');
     if (spent === 0 && freeCount === 0) {
-      this.say('Nothing needed repairing.');
+      this.say(awayCount > 0 ? 'Nothing at the guild needed repairing -- gear on heroes who are out waits until they\'re back.' : 'Nothing needed repairing.');
     } else if (freeCount > 0 && spent === 0) {
       this.say(freeCount === 1 ? 'Repaired one item, on the house.' : `Repaired ${freeCount} items, on the house.`);
     } else {
@@ -3988,6 +4014,7 @@ export class GameEngine {
   useConsumable(heroId: string, defId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
+    if (HeroManager.isAway(hero)) return this.say(`${hero.name} is still out -- patch them up once they're back.`); // patch 0481
     const error = InventoryManager.useOnHero(this.state, hero, defId);
     if (error) return this.say(error);
     // Reuses `enhance` -- a quick magical uplift, same character as an
@@ -4054,6 +4081,7 @@ export class GameEngine {
     if (!hero) return;
     const injury = hero.injuries.find((i) => i.id === injuryId);
     if (!injury) return;
+    if (HeroManager.isAway(hero)) return this.say(`${hero.name} is still out -- treat them once they're back.`); // patch 0481
     const free = this.consumeFreeHeal(hero, Date.now());
     if (!free && this.state.gold < injury.treatmentCost) return this.say('Not enough gold for treatment.');
     if (!free) {

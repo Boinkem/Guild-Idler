@@ -14,6 +14,12 @@ import { MINUTE, scaleMods, sumMods, clamp } from '../util';
 import { ModifierManager } from './ModifierManager';
 
 export const HeroManager = {
+  /** Patch 0481 -- out on a quest, raid, or chain-step run. Repair,
+   *  Treat and instant-use consumables wait until they're back. */
+  isAway(hero: Hero): boolean {
+    return hero.status === 'questing';
+  },
+
   create(heroClass: HeroClass, rng: Rng, nameOverride?: string): Hero {
     const def = HERO_CLASSES[heroClass];
     // Patch 0438 -- clamped to the demo's level cap (no-op in the full game).

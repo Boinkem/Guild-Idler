@@ -572,6 +572,8 @@ function ConsumableInfoCard({
               {instantUse && (
                 <button
                   className="btn-primary"
+                  disabled={deployed}
+                  title={deployed ? `${hero.name} is out -- use it once they're back` : undefined}
                   onClick={() => { engine.useConsumable(hero.id, def.id); setOpen(false); }}
                 >
                   Use on {hero.name}
@@ -938,7 +940,13 @@ function SlotCard({
               </div>
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
-                {EquipmentManager.isLegendary(item) && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 ? (
+                {/* Patch 0481 -- no repairs while the wearer is out
+                    (quests, raids and chain-step runs alike). */}
+                {HeroManager.isAway(hero) ? (
+                  EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
+                    <span className="tiny muted" style={{ alignSelf: 'center' }}>Repair once {hero.name} is back</span>
+                  )
+                ) : EquipmentManager.isLegendary(item) && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 ? (
                   // Patch 0454 -- a Legendary shows both routes and the
                   // player picks: a Shard (cheap) or the no-Shard markup.
                   <LegendaryRepairButtons
@@ -966,7 +974,7 @@ function SlotCard({
                     affordance for it rather than a label that silently
                     changed meaning depending on state. .btn-teal to match
                     Repair's colour everywhere else it shows up now. */}
-                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
+                {itemFreeRepairAvailable && !HeroManager.isAway(hero) && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0 && (
                   <button
                     className="btn-teal"
                     onClick={() => { if (onRepair) onRepair(item.uid); else engine.repair(item.uid); setOpen(false); }}

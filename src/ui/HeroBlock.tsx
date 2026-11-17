@@ -137,6 +137,9 @@ export function HeroBlock({
   const sets = HeroManager.activeSetBonuses(hero);
   const blocks = statEffectBlocks(total, role, hero.heroClass, hero.level);
   const bandages = InventoryManager.count(state, 'field_bandage');
+  // Patch 0481 -- Treat / Bandage wait until the hero is back.
+  const away = HeroManager.isAway(hero);
+  const awayTitle = `${hero.name} is still out -- patch them up once they're back`;
   const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
   const healsUsedToday = rerollsUsedToday(state.freeHealsUsedToday, state.freeHealDay, now);
   const freeTreat = healsUsedToday < ModifierManager.freeHealsPerDay(state) || !hero.usedFreeTreat;
@@ -301,15 +304,16 @@ export function HeroBlock({
                     <button
                       className="btn-primary"
                       onClick={() => engine.treatInjury(hero.id, injury.id)}
-                      disabled={!freeTreat && state.gold < injury.treatmentCost}
-                      title={freeTreat ? 'Free -- on the guild' : undefined}
+                      disabled={away || (!freeTreat && state.gold < injury.treatmentCost)}
+                      title={away ? awayTitle : freeTreat ? 'Free -- on the guild' : undefined}
                     >
                       {freeTreat ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
                     </button>
                     <button
                       className="btn-primary"
                       onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
-                      disabled={bandages === 0}
+                      disabled={away || bandages === 0}
+                      title={away ? awayTitle : undefined}
                     >
                       Bandage ×{bandages}
                     </button>

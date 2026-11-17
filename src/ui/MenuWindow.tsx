@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { GuildManager } from '../game/managers/GuildManager';
+import { GUILD_GUIDE_STEP_IDS } from '../game/data/progression';
 import { useSettings } from './useSettings';
 import { resolveBackgroundMood } from '../game/settings';
 import { OnboardingTour } from './OnboardingTour';
@@ -353,6 +354,11 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const activeTabDef = ALL_TABS.find((t) => t.id === tab)!;
   const Panel = activeTabDef.Panel;
   const panelBreakdown = PANEL_BREAKDOWNS[tab];
+  // Patch 0481 -- the Guild Hall's advice card can be brought back from a
+  // toggle beside the "?", for as long as it still has advice to give.
+  const guildGuideOpen = tab === 'guild' && GUILD_GUIDE_STEP_IDS.some(
+    (id) => ((engine.state.guild as Record<string, number | undefined>)[id] ?? engine.state.upgrades[id] ?? 0) < 1,
+  );
   const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
   const navHasTodo = (id: string) => (id === 'quests' && idleHeroes > 0) || (id === 'hatchery' && eggsReady > 0)
     || (id === 'equipment' && brokenGear > 0) || (id === 'harvest' && harvestReady > 0);
@@ -730,6 +736,17 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
             PANEL_BREAKDOWNS actually has an entry for the current tab, same
             "quietly absent rather than a broken/empty popover" fallback
             STEP_DESCRIPTIONS' own missing-id case already uses. */}
+        {guildGuideOpen && (
+          <button
+            className={`btn-ghost panel-help-btn guild-guide-toggle ${engine.state.guildGuideDismissed ? '' : 'on'}`}
+            style={{ position: 'absolute', top: 10, right: panelBreakdown ? 52 : 16, zIndex: 5 }}
+            onClick={() => engine.setGuildGuideHidden(!engine.state.guildGuideDismissed)}
+            title={engine.state.guildGuideDismissed ? "Show the Guildmaster's advice" : "Hide the Guildmaster's advice"}
+            aria-pressed={!engine.state.guildGuideDismissed}
+          >
+            📜
+          </button>
+        )}
         {panelBreakdown && (
           <>
             <button

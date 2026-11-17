@@ -160,11 +160,20 @@ export function SettingsPanel() {
                   onClick={() => update('runeclothColour', c.id)}
                   aria-pressed={settings.runeclothColour === c.id}
                 >
+                  {/* Patch 0481 -- the plain colour ground sits on the tile
+                      itself, the full layered preview on a child above it,
+                      so a swatch always shows its colour even where the
+                      layered background doesn't paint. */}
                   <span
                     className="runecloth-swatch-tile"
                     aria-hidden="true"
-                    style={runeclothBackground(c.id, settings.runeclothMarking, settings.runeclothStrength, { scale: 0.5 })}
-                  />
+                    style={{ background: `radial-gradient(ellipse at 50% 35%, ${c.base} 0%, ${c.deep} 100%)` }}
+                  >
+                    <span
+                      className="runecloth-swatch-marks"
+                      style={runeclothBackground(c.id, settings.runeclothMarking, settings.runeclothStrength, { scale: 0.5 })}
+                    />
+                  </span>
                   {c.name}
                 </button>
               ))}

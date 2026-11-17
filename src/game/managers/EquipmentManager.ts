@@ -531,7 +531,7 @@ export const EquipmentManager = {
   repairBill(state: GameState, workshopLevel: number, vendorDiscountPercent = 0): { gold: number; scrap: number; shards: number } {
     const bill = { gold: 0, scrap: 0, shards: 0 };
     let shardsLeft = state.legendaryShards ?? 0;
-    for (const { item } of EquipmentManager.allItems(state)) {
+    for (const { item } of EquipmentManager.repairableItems(state)) {
       const quote = EquipmentManager.repairQuote(
         { ...state, legendaryShards: shardsLeft }, item, workshopLevel, vendorDiscountPercent,
       );
@@ -685,6 +685,17 @@ export const EquipmentManager = {
       }
     }
     return out;
+  },
+
+  /**
+   * Patch 0481 -- allItems() minus anything worn by a hero who's out on a
+   * quest, raid or chain run. Manual repairs (single, Repair Everything,
+   * and the bill shown beside it) only reach gear that's actually back
+   * at the guild. The opt-in auto-repair tick still uses allItems().
+   */
+  repairableItems(state: GameState): { item: EquipmentItem; heroId: string | null }[] {
+    const away = new Set(state.heroes.filter((h) => h.status === 'questing').map((h) => h.id));
+    return EquipmentManager.allItems(state).filter((e) => !e.heroId || !away.has(e.heroId));
   },
 
   /**

@@ -594,7 +594,7 @@ export function GuildPanel() {
             <span className="card-title">Advice from the Guildmaster</span>
             <span className="guild-guide-count">{guideDone} of {guideSteps.length} done</span>
             <span style={{ flex: 1 }} />
-            <button className="btn-ghost guild-guide-hide" onClick={() => engine.dismissGuildGuide()} title="Hide this for good">
+            <button className="btn-ghost guild-guide-hide" onClick={() => engine.dismissGuildGuide()} title="Hide this -- the 📜 button up by the ? brings it back">
               Hide advice
             </button>
           </div>
