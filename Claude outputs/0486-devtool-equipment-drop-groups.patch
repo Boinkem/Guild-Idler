@@ -1,0 +1,358 @@
+From 82895352bfc027c68c562a8e795e1dde38af0c8b Mon Sep 17 00:00:00 2001
+From: claude <noreply@anthropic.com>
+Date: Wed, 18 Nov 2026 12:17:46 +1030
+Subject: [PATCH] Patch 0486: DevTool equipment drop groups
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Sn8rnNYaKjuo2dhAhqbCCA
+---
+ guild-idler-status.md          |  76 +++++++++++++++
+ tools/devtool/public/app.js    | 165 ++++++++++++++++++++++++++++++++-
+ tools/devtool/public/style.css |  25 +++++
+ 3 files changed, 264 insertions(+), 2 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a259928..fe5b6b6 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1134,6 +1134,23 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Raid loot rework -- planned (DevTool groundwork in patch 0486)
++Agreed direction (18 Nov 2026):
++- Every raid drop is raid-only: flag the 29 leaking raid items
++  `raidExclusive` so they leave Quest/Shop/Black Market/Peddler/Commissions.
++  Raid gear can't be bought.
++- Raid drops are at least Rare, even on early Normal raids (Blackford
++  Keep's Uncommon/Common set). Heroic and up at least Epic again (restores
++  patch 0146's rule that patch 0214 lost). Applied at drop time, never
++  lowers an item's rarity.
++- New generic items to refill the quest/shop pool, so contracts and
++  quests don't keep dropping the same few things once raid gear leaves.
++- Quest Chain rewards stay unbuyable (already true, `chainExclusive`).
++- Parked: per-raid name prefixes for procedural drops (list agreed in
++  chat, e.g. Frostbitten / Hymnless) and a `[Normal]` tag.
++- Open: raid items that are also chain rewards (6, e.g. Dragonscale
++  Helm) -- keep both sources or split.
++
+ ### Animation pass, round 3: static spots audit -- built, patch 0465
+ Logged in patch 0464, mocked up on the Design canvas "Guildbound
+ Animation Round 3", signed off and built in 0465 -- see that patch's
+@@ -38993,3 +39010,62 @@ the guard. IP filter: 127.0.0.1, ::1, ::ffff:127.0.0.1, 172.20.x trusted;
+   saving data, Bug Reports (Seen / Fixed in… / Note…) and Ship it all work.
+ - Send a bug report from the game: it arrives as normal.
+ - Open http://127.0.0.1:5175 too: also works.
++
++### DevTool: Equipment drop groups -- which pool every item really lands in (patch 0486)
++```discord-update
++Dev Update | Features
++
++- Added a drop-group view to the dev tools' Equipment list, to sort out which gear comes from raids, quest chains, crafting and the general quest/shop pool
++- Groundwork for the upcoming raid loot rework: raid gear will become raid-only and won't drop green any more
++```
++
++Direct request, first step of the raid loot rework (see Backlog → "Raid
++loot rework"). Feedback said raid loot "feels bad" with green drops, and
++the owner remembered raids pulling from the general pool. Reading the code
++showed otherwise, so the first ask was a way to *see* the pools before
++moving any items.
++
++**DevTool → Items & Crafting → Equipment** (`tools/devtool/public/app.js`,
++`style.css`) now has a pill strip above the table:
++All items / Raid items (sub-row: Every raid + one pill per raid, sorted by
++reqLevel) / Quest / Shop pool / Chain rewards / Craftable / Leaks, each with
++a live count, plus a new **drops from** column of badges per row. Read-only
++and front-end only: filtering keeps each row's real index (same as sorting),
++so Edit/Duplicate/Delete still hit the right entry, and no data or server
++schema changed.
++
++- **Quest / Shop pool** uses the exact filter the game does,
++  `!raidExclusive && !craftable && !chainExclusive`. It is shared by
++  `QuestManager.lootTableFor`, `ShopManager` (shop + Black Market),
++  `PeddlerManager.eligibleEquipmentForRarity` and `CommissionManager`.
++  There is no "quest-only" pool: anything that drops from a quest can also
++  turn up for sale.
++- **Raid items** come from every `loot*` list on each raid's encounters
++  (`id@chance` tokens), and **chain rewards** from `quest-chains.json`
++  `rewardItems` plus anything flagged `chainExclusive`. Raid, encounter and
++  chain data is refetched each time the Equipment tab opens, so edits on
++  those tabs show straight away.
++- **Leaks** = a raid drop or chain reward that still sits in the generic
++  pool (red badge), plus any `raidExclusive` item no encounter lists ("No
++  source").
++
++**What it shows today (214 items):** 42 raid items, of which only the 7
++Requiem pieces are `raidExclusive`. **29 raid items leak** into the
++quest/shop pool, e.g. Sewn Maw Greataxe (House of Bones) is buyable and can
++drop from ordinary quests. The other 6 are also Quest Chain rewards and are
++kept out by `chainExclusive` (e.g. Dragonscale Helm: Wyrmkeep, Bonewrought
++Vault and The Dragon Hunt). Chain rewards themselves are clean: all 39
++`rewardItems` are flagged. `tollkeepers_signet` is flagged
++`chainExclusive` without being any chain's reward (a Blackford drop),
++harmless but odd. Pool sizes: 83 generic, 40 chain, 84 craftable.
++
++**Root cause of the "green raid drop" feedback, found while checking:**
++patch 0214 deleted the authored `_heroic`/`_mythic` copies (which were
++authored Epic, per patch 0146's rule) in favour of one item + a budget
++multiplier. Stats survived, but rarity didn't: `RaidManager` reports
++`def.rarity` and nothing bumps it, so a Heroic Blackford Keep drop is still
++Uncommon. Fix is planned in the rework, not here.
++
++Verified: `node --check` on `app.js`; ran the new helpers against the live
++DevTool API (counts above); headless Chrome on the Equipment tab with the
++Raid and Leaks pills, no page errors.
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 5409821..e69d7b2 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -40,6 +40,13 @@ const state = {
+   // the same tab (editing/saving a row calls renderTable directly, not
+   // selectTab, so the chosen sort survives that).
+   sortColumn: null, sortDir: 'asc',
++  // Patch 0486 -- Equipment drop-group view. equipGroup is which pool
++  // filter pill is active ('all' | 'raid' | 'generic' | 'chain' |
++  // 'craftable' | 'leaks'), equipRaid narrows 'raid' to one raid id (null
++  // = every raid). equipSources is the raid/chain lookup built by
++  // loadEquipmentSources -- refetched every time the Equipment tab opens,
++  // so edits made on the Raids/Encounters/Chains tabs show up here.
++  equipGroup: 'all', equipRaid: null, equipSources: null,
+ };
+ 
+ const tabsEl = document.getElementById('tabs');
+@@ -185,6 +192,7 @@ async function selectTab(kind) {
+   try {
+     const { data } = await api(`/api/data/${kind}`);
+     state.rows = data;
++    if (kind === 'equipment') await loadEquipmentSources();
+     setStatus('');
+     renderTable();
+   } catch (err) {
+@@ -224,6 +232,141 @@ function renderTable() {
+   renderGenericTable();
+ }
+ 
++/* ------------------------------------------ equipment drop groups --- */
++// Patch 0486. Shows which pool every equipment entry actually lands in,
++// using the SAME rules the game does -- the generic pool is exactly the
++// `!raidExclusive && !craftable && !chainExclusive` filter shared by
++// QuestManager.lootTableFor, ShopManager (shop + Black Market),
++// PeddlerManager.eligibleEquipmentForRarity and CommissionManager. Raid
++// membership comes from every `loot*` list on raid-encounters.json
++// (`id@chance` tokens), chain membership from quest-chains' rewardItems.
++// Read-only: nothing here writes data, it only filters the table.
++
++/** Builds itemId -> { raids: [{id,name}], chains: [{id,name}] } from the
++ *  live raids / raid-encounters / quest-chains data. Failure leaves
++ *  equipSources null, which just hides the view (plain table as before). */
++async function loadEquipmentSources() {
++  try {
++    const [raids, encounters, chains] = await Promise.all([
++      api('/api/data/raids'), api('/api/data/raid-encounters'), api('/api/data/quest-chains'),
++    ]);
++    const encById = new Map(encounters.data.map((e) => [e.id, e]));
++    const byItem = new Map();
++    const entry = (id) => {
++      if (!byItem.has(id)) byItem.set(id, { raids: [], chains: [] });
++      return byItem.get(id);
++    };
++    const raidList = raids.data.map((r) => ({ id: r.id, name: r.name || r.id, reqLevel: r.reqLevel }));
++    raids.data.forEach((raid) => {
++      (raid.encounterIds || []).forEach((encId) => {
++        const enc = encById.get(encId);
++        if (!enc) return;
++        Object.keys(enc).filter((k) => /^loot/.test(k) && Array.isArray(enc[k])).forEach((k) => {
++          enc[k].forEach((token) => {
++            const itemId = String(token).split('@')[0].trim();
++            if (!itemId) return;
++            const e = entry(itemId);
++            if (!e.raids.some((r) => r.id === raid.id)) e.raids.push({ id: raid.id, name: raid.name || raid.id });
++          });
++        });
++      });
++    });
++    chains.data.forEach((chain) => {
++      (chain.rewardItems || []).forEach((itemId) => {
++        const e = entry(itemId);
++        if (!e.chains.some((c) => c.id === chain.id)) e.chains.push({ id: chain.id, name: chain.name || chain.id });
++      });
++    });
++    state.equipSources = { byItem, raids: raidList };
++  } catch (err) {
++    state.equipSources = null;
++    setStatus('Drop groups unavailable: ' + err.message, 'err');
++  }
++}
++
++/** Every derived fact the strip/badges need about one equipment row. */
++function equipInfo(row) {
++  const src = state.equipSources?.byItem.get(row.id) || { raids: [], chains: [] };
++  const generic = !row.raidExclusive && !row.craftable && !row.chainExclusive;
++  return {
++    raids: src.raids,
++    chains: src.chains,
++    generic,
++    // A raid drop or chain reward that ALSO sits in the generic pool --
++    // i.e. buyable / random-droppable outside its own content.
++    leak: generic && (src.raids.length > 0 || src.chains.length > 0),
++    // Flagged raid-only but no encounter lists it: it can't drop at all.
++    orphan: !!row.raidExclusive && src.raids.length === 0,
++  };
++}
++
++function equipMatchesGroup(row) {
++  const info = equipInfo(row);
++  switch (state.equipGroup) {
++    case 'raid': return state.equipRaid ? info.raids.some((r) => r.id === state.equipRaid) : info.raids.length > 0;
++    case 'generic': return info.generic;
++    case 'chain': return info.chains.length > 0 || !!row.chainExclusive;
++    case 'craftable': return !!row.craftable;
++    case 'leaks': return info.leak || info.orphan;
++    default: return true;
++  }
++}
++
++function equipSourceBadges(row) {
++  const info = equipInfo(row);
++  const out = [];
++  info.raids.forEach((r) => out.push(`<span class="drop-badge drop-raid${info.leak ? ' drop-leak' : ''}" title="Raid drop${info.leak ? ' -- NOT raidExclusive, also in the generic pool' : ''}">${escapeHtml(r.name)}</span>`));
++  info.chains.forEach((c) => out.push(`<span class="drop-badge drop-chain${info.leak ? ' drop-leak' : ''}" title="Quest Chain reward">${escapeHtml(c.name)}</span>`));
++  if (row.craftable) out.push('<span class="drop-badge drop-craft">Craftable</span>');
++  if (info.generic) out.push(`<span class="drop-badge drop-generic${info.leak ? ' drop-leak' : ''}" title="Quests, Shop, Black Market, Peddler, Commissions">Quest / Shop pool</span>`);
++  if (info.orphan) out.push('<span class="drop-badge drop-leak" title="raidExclusive but no raid encounter lists it">No source</span>');
++  if (!out.length) out.push('<span class="drop-badge" title="No pool and no raid/chain lists it">Unobtainable</span>');
++  return out.join(' ');
++}
++
++function renderEquipGroupStrip() {
++  const rows = state.rows;
++  const count = (group, raidId = null) => {
++    const prevG = state.equipGroup; const prevR = state.equipRaid;
++    state.equipGroup = group; state.equipRaid = raidId;
++    const n = rows.filter((r) => equipMatchesGroup(r)).length;
++    state.equipGroup = prevG; state.equipRaid = prevR;
++    return n;
++  };
++  const pill = (label, group, raidId, n, extra = '') => {
++    const active = state.equipGroup === group && (group !== 'raid' || state.equipRaid === raidId);
++    return `<button class="drop-pill${active ? ' active' : ''}${extra}" data-group="${group}" data-raid="${raidId ?? ''}">${escapeHtml(label)} <span class="drop-pill-n">${n}</span></button>`;
++  };
++  const leaks = count('leaks');
++  const wrap = document.createElement('div');
++  wrap.className = 'drop-strip';
++  let html = '<div class="drop-row">'
++    + pill('All items', 'all', null, rows.length)
++    + pill('Raid items', 'raid', null, count('raid'))
++    + pill('Quest / Shop pool', 'generic', null, count('generic'))
++    + pill('Chain rewards', 'chain', null, count('chain'))
++    + pill('Craftable', 'craftable', null, count('craftable'))
++    + pill('Leaks', 'leaks', null, leaks, leaks ? ' drop-pill-warn' : '')
++    + '</div>';
++  if (state.equipGroup === 'raid') {
++    const raids = [...state.equipSources.raids].sort((a, b) => (a.reqLevel ?? 0) - (b.reqLevel ?? 0));
++    html += '<div class="drop-row drop-row-sub">'
++      + pill('Every raid', 'raid', null, count('raid'))
++      + raids.map((r) => pill(`${r.name}${r.reqLevel != null ? ' (' + r.reqLevel + ')' : ''}`, 'raid', r.id, count('raid', r.id))).join('')
++      + '</div>';
++  }
++  html += '<p class="drop-note">Quest / Shop pool = everything not flagged raidExclusive, craftable or chainExclusive. That one filter feeds quest loot, the Shop, the Black Market, Peddler cards and Commissions alike. Leaks = raid drops or chain rewards still in that pool, plus raidExclusive items no encounter lists.</p>';
++  wrap.innerHTML = html;
++  wrap.querySelectorAll('.drop-pill').forEach((b) => {
++    b.onclick = () => {
++      state.equipGroup = b.dataset.group;
++      state.equipRaid = b.dataset.raid || null;
++      renderTable();
++    };
++  });
++  return wrap;
++}
++
+ function renderGenericTable() {
+   const schema = state.schema[state.kind];
+   const cols = displayColumns(schema);
+@@ -264,7 +407,7 @@ function renderGenericTable() {
+   const thead = document.createElement('thead');
+   const sortArrow = (c) => state.sortColumn === c ? (state.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+   thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${decorKey ? '<th></th>' : ''}${cols.map((c) =>
+-    `<th class="sortable" data-sort="${c}">${c}${sortArrow(c)}</th>`).join('')}<th></th></tr>`;
++    `<th class="sortable" data-sort="${c}">${c}${sortArrow(c)}</th>`).join('')}${state.kind === 'equipment' && state.equipSources ? '<th>drops from</th>' : ''}<th></th></tr>`;
+   const tbody = document.createElement('tbody');
+ 
+   if (state.rows.length === 0) {
+@@ -278,6 +421,18 @@ function renderGenericTable() {
+   // order) all key off that real index, not display position -- sorting
+   // only ever reorders what's rendered, never state.rows itself.
+   let displayEntries = state.rows.map((row, index) => ({ row, index }));
++  // Patch 0486 -- Equipment only: narrow to the active drop-group pill.
++  // Filtering keeps each entry's real index, same as sorting does, so
++  // Edit/Duplicate/Delete still hit the right row.
++  const isEquip = state.kind === 'equipment' && !!state.equipSources;
++  if (isEquip) {
++    displayEntries = displayEntries.filter(({ row }) => equipMatchesGroup(row));
++    if (displayEntries.length === 0 && state.rows.length > 0) {
++      const tr = document.createElement('tr');
++      tr.innerHTML = `<td colspan="${cols.length + extraCols + 2}"><div class="empty">No items in this drop group.</div></td>`;
++      tbody.appendChild(tr);
++    }
++  }
+   if (state.sortColumn && cols.includes(state.sortColumn)) {
+     const col = state.sortColumn;
+     const isNumeric = schema.fields[col]?.type === 'number';
+@@ -325,7 +480,8 @@ function renderGenericTable() {
+       const cls = c === 'rarity' ? `rarity-${val}` : c === 'kind' ? `kind-${val}` : '';
+       return `<td class="${cls}">${val ?? ''}</td>`;
+     }).join('');
+-    tr.innerHTML = `${iconCell}${bannerCell}${decorCell}${cells}<td class="actions">
++    const sourcesCell = isEquip ? `<td>${equipSourceBadges(row)}</td>` : '';
++    tr.innerHTML = `${iconCell}${bannerCell}${decorCell}${cells}${sourcesCell}<td class="actions">
+       <button data-edit="${index}">Edit</button>
+       <button data-dup="${index}">Duplicate</button>
+       <button class="danger" data-del="${index}">Delete</button>
+@@ -338,6 +494,11 @@ function renderGenericTable() {
+ 
+   appEl.innerHTML = '';
+   appEl.appendChild(toolbar);
++  if (isEquip) {
++    const countEl = toolbar.querySelector('.spacer + span');
++    if (countEl) countEl.textContent = `${displayEntries.length} of ${state.rows.length} entries`;
++    appEl.appendChild(renderEquipGroupStrip());
++  }
+   appEl.appendChild(table);
+ 
+   document.getElementById('addBtn').onclick = () => openEditor(null);
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index fda8f09..34b03d9 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -1144,3 +1144,28 @@ td.icon-cell { width: 1%; padding-right: 0; }
+ .live-dot.good { background: #4caf7a; box-shadow: 0 0 6px #4caf7a; }
+ .live-dot.warn { background: #e0a24a; }
+ .live-dot.bad { background: #e05a5a; box-shadow: 0 0 6px #e05a5a; }
++
++/* Patch 0486 -- Equipment drop-group strip + "drops from" badges
++   (see renderEquipGroupStrip in app.js). */
++.drop-strip { margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; }
++.drop-row { display: flex; flex-wrap: wrap; gap: 6px; }
++.drop-row-sub { padding-left: 12px; border-left: 2px solid var(--brass-dim); }
++.drop-pill {
++  background: var(--panel2); border: 1px solid var(--panel3); color: var(--muted);
++  border-radius: 999px; padding: 3px 10px; font-size: 11.5px; cursor: pointer;
++}
++.drop-pill:hover { color: var(--text-bright); border-color: var(--brass-dim); }
++.drop-pill.active { background: var(--brass-wash); border-color: var(--brass); color: var(--text-bright); }
++.drop-pill-n { color: var(--dim); margin-left: 2px; }
++.drop-pill.active .drop-pill-n { color: var(--text); }
++.drop-pill-warn { border-color: var(--bad); color: var(--bad); }
++.drop-note { color: var(--dim); font-size: 11px; margin: 2px 0 0; max-width: 110ch; }
++.drop-badge {
++  display: inline-block; border-radius: var(--radius-sm); padding: 1px 6px; margin: 1px 0;
++  font-size: 10.5px; background: var(--panel3); color: var(--muted); white-space: nowrap;
++}
++.drop-raid { background: var(--brass-wash); color: #c3b9ff; }
++.drop-chain { background: rgba(127, 169, 232, 0.14); color: var(--blue); }
++.drop-craft { background: rgba(110, 194, 160, 0.14); color: var(--good); }
++.drop-generic { background: var(--panel3); color: var(--text); }
++.drop-badge.drop-leak { background: var(--bad-wash); color: var(--bad); outline: 1px solid rgba(217, 143, 143, 0.4); }
+-- 
+2.43.0
+

@@ -1134,6 +1134,23 @@ raid fight).
 
 ## Backlog
 
+### Raid loot rework -- planned (DevTool groundwork in patch 0486)
+Agreed direction (18 Nov 2026):
+- Every raid drop is raid-only: flag the 29 leaking raid items
+  `raidExclusive` so they leave Quest/Shop/Black Market/Peddler/Commissions.
+  Raid gear can't be bought.
+- Raid drops are at least Rare, even on early Normal raids (Blackford
+  Keep's Uncommon/Common set). Heroic and up at least Epic again (restores
+  patch 0146's rule that patch 0214 lost). Applied at drop time, never
+  lowers an item's rarity.
+- New generic items to refill the quest/shop pool, so contracts and
+  quests don't keep dropping the same few things once raid gear leaves.
+- Quest Chain rewards stay unbuyable (already true, `chainExclusive`).
+- Parked: per-raid name prefixes for procedural drops (list agreed in
+  chat, e.g. Frostbitten / Hymnless) and a `[Normal]` tag.
+- Open: raid items that are also chain rewards (6, e.g. Dragonscale
+  Helm) -- keep both sources or split.
+
 ### Animation pass, round 3: static spots audit -- built, patch 0465
 Logged in patch 0464, mocked up on the Design canvas "Guildbound
 Animation Round 3", signed off and built in 0465 -- see that patch's
@@ -38993,3 +39010,62 @@ the guard. IP filter: 127.0.0.1, ::1, ::ffff:127.0.0.1, 172.20.x trusted;
   saving data, Bug Reports (Seen / Fixed in… / Note…) and Ship it all work.
 - Send a bug report from the game: it arrives as normal.
 - Open http://127.0.0.1:5175 too: also works.
+
+### DevTool: Equipment drop groups -- which pool every item really lands in (patch 0486)
+```discord-update
+Dev Update | Features
+
+- Added a drop-group view to the dev tools' Equipment list, to sort out which gear comes from raids, quest chains, crafting and the general quest/shop pool
+- Groundwork for the upcoming raid loot rework: raid gear will become raid-only and won't drop green any more
+```
+
+Direct request, first step of the raid loot rework (see Backlog → "Raid
+loot rework"). Feedback said raid loot "feels bad" with green drops, and
+the owner remembered raids pulling from the general pool. Reading the code
+showed otherwise, so the first ask was a way to *see* the pools before
+moving any items.
+
+**DevTool → Items & Crafting → Equipment** (`tools/devtool/public/app.js`,
+`style.css`) now has a pill strip above the table:
+All items / Raid items (sub-row: Every raid + one pill per raid, sorted by
+reqLevel) / Quest / Shop pool / Chain rewards / Craftable / Leaks, each with
+a live count, plus a new **drops from** column of badges per row. Read-only
+and front-end only: filtering keeps each row's real index (same as sorting),
+so Edit/Duplicate/Delete still hit the right entry, and no data or server
+schema changed.
+
+- **Quest / Shop pool** uses the exact filter the game does,
+  `!raidExclusive && !craftable && !chainExclusive`. It is shared by
+  `QuestManager.lootTableFor`, `ShopManager` (shop + Black Market),
+  `PeddlerManager.eligibleEquipmentForRarity` and `CommissionManager`.
+  There is no "quest-only" pool: anything that drops from a quest can also
+  turn up for sale.
+- **Raid items** come from every `loot*` list on each raid's encounters
+  (`id@chance` tokens), and **chain rewards** from `quest-chains.json`
+  `rewardItems` plus anything flagged `chainExclusive`. Raid, encounter and
+  chain data is refetched each time the Equipment tab opens, so edits on
+  those tabs show straight away.
+- **Leaks** = a raid drop or chain reward that still sits in the generic
+  pool (red badge), plus any `raidExclusive` item no encounter lists ("No
+  source").
+
+**What it shows today (214 items):** 42 raid items, of which only the 7
+Requiem pieces are `raidExclusive`. **29 raid items leak** into the
+quest/shop pool, e.g. Sewn Maw Greataxe (House of Bones) is buyable and can
+drop from ordinary quests. The other 6 are also Quest Chain rewards and are
+kept out by `chainExclusive` (e.g. Dragonscale Helm: Wyrmkeep, Bonewrought
+Vault and The Dragon Hunt). Chain rewards themselves are clean: all 39
+`rewardItems` are flagged. `tollkeepers_signet` is flagged
+`chainExclusive` without being any chain's reward (a Blackford drop),
+harmless but odd. Pool sizes: 83 generic, 40 chain, 84 craftable.
+
+**Root cause of the "green raid drop" feedback, found while checking:**
+patch 0214 deleted the authored `_heroic`/`_mythic` copies (which were
+authored Epic, per patch 0146's rule) in favour of one item + a budget
+multiplier. Stats survived, but rarity didn't: `RaidManager` reports
+`def.rarity` and nothing bumps it, so a Heroic Blackford Keep drop is still
+Uncommon. Fix is planned in the rework, not here.
+
+Verified: `node --check` on `app.js`; ran the new helpers against the live
+DevTool API (counts above); headless Chrome on the Equipment tab with the
+Raid and Leaks pills, no page errors.

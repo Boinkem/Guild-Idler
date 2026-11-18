@@ -40,6 +40,13 @@ const state = {
   // the same tab (editing/saving a row calls renderTable directly, not
   // selectTab, so the chosen sort survives that).
   sortColumn: null, sortDir: 'asc',
+  // Patch 0486 -- Equipment drop-group view. equipGroup is which pool
+  // filter pill is active ('all' | 'raid' | 'generic' | 'chain' |
+  // 'craftable' | 'leaks'), equipRaid narrows 'raid' to one raid id (null
+  // = every raid). equipSources is the raid/chain lookup built by
+  // loadEquipmentSources -- refetched every time the Equipment tab opens,
+  // so edits made on the Raids/Encounters/Chains tabs show up here.
+  equipGroup: 'all', equipRaid: null, equipSources: null,
 };
 
 const tabsEl = document.getElementById('tabs');
@@ -185,6 +192,7 @@ async function selectTab(kind) {
   try {
     const { data } = await api(`/api/data/${kind}`);
     state.rows = data;
+    if (kind === 'equipment') await loadEquipmentSources();
     setStatus('');
     renderTable();
   } catch (err) {
@@ -222,6 +230,141 @@ function renderTable() {
     return;
   }
   renderGenericTable();
+}
+
+/* ------------------------------------------ equipment drop groups --- */
+// Patch 0486. Shows which pool every equipment entry actually lands in,
+// using the SAME rules the game does -- the generic pool is exactly the
+// `!raidExclusive && !craftable && !chainExclusive` filter shared by
+// QuestManager.lootTableFor, ShopManager (shop + Black Market),
+// PeddlerManager.eligibleEquipmentForRarity and CommissionManager. Raid
+// membership comes from every `loot*` list on raid-encounters.json
+// (`id@chance` tokens), chain membership from quest-chains' rewardItems.
+// Read-only: nothing here writes data, it only filters the table.
+
+/** Builds itemId -> { raids: [{id,name}], chains: [{id,name}] } from the
+ *  live raids / raid-encounters / quest-chains data. Failure leaves
+ *  equipSources null, which just hides the view (plain table as before). */
+async function loadEquipmentSources() {
+  try {
+    const [raids, encounters, chains] = await Promise.all([
+      api('/api/data/raids'), api('/api/data/raid-encounters'), api('/api/data/quest-chains'),
+    ]);
+    const encById = new Map(encounters.data.map((e) => [e.id, e]));
+    const byItem = new Map();
+    const entry = (id) => {
+      if (!byItem.has(id)) byItem.set(id, { raids: [], chains: [] });
+      return byItem.get(id);
+    };
+    const raidList = raids.data.map((r) => ({ id: r.id, name: r.name || r.id, reqLevel: r.reqLevel }));
+    raids.data.forEach((raid) => {
+      (raid.encounterIds || []).forEach((encId) => {
+        const enc = encById.get(encId);
+        if (!enc) return;
+        Object.keys(enc).filter((k) => /^loot/.test(k) && Array.isArray(enc[k])).forEach((k) => {
+          enc[k].forEach((token) => {
+            const itemId = String(token).split('@')[0].trim();
+            if (!itemId) return;
+            const e = entry(itemId);
+            if (!e.raids.some((r) => r.id === raid.id)) e.raids.push({ id: raid.id, name: raid.name || raid.id });
+          });
+        });
+      });
+    });
+    chains.data.forEach((chain) => {
+      (chain.rewardItems || []).forEach((itemId) => {
+        const e = entry(itemId);
+        if (!e.chains.some((c) => c.id === chain.id)) e.chains.push({ id: chain.id, name: chain.name || chain.id });
+      });
+    });
+    state.equipSources = { byItem, raids: raidList };
+  } catch (err) {
+    state.equipSources = null;
+    setStatus('Drop groups unavailable: ' + err.message, 'err');
+  }
+}
+
+/** Every derived fact the strip/badges need about one equipment row. */
+function equipInfo(row) {
+  const src = state.equipSources?.byItem.get(row.id) || { raids: [], chains: [] };
+  const generic = !row.raidExclusive && !row.craftable && !row.chainExclusive;
+  return {
+    raids: src.raids,
+    chains: src.chains,
+    generic,
+    // A raid drop or chain reward that ALSO sits in the generic pool --
+    // i.e. buyable / random-droppable outside its own content.
+    leak: generic && (src.raids.length > 0 || src.chains.length > 0),
+    // Flagged raid-only but no encounter lists it: it can't drop at all.
+    orphan: !!row.raidExclusive && src.raids.length === 0,
+  };
+}
+
+function equipMatchesGroup(row) {
+  const info = equipInfo(row);
+  switch (state.equipGroup) {
+    case 'raid': return state.equipRaid ? info.raids.some((r) => r.id === state.equipRaid) : info.raids.length > 0;
+    case 'generic': return info.generic;
+    case 'chain': return info.chains.length > 0 || !!row.chainExclusive;
+    case 'craftable': return !!row.craftable;
+    case 'leaks': return info.leak || info.orphan;
+    default: return true;
+  }
+}
+
+function equipSourceBadges(row) {
+  const info = equipInfo(row);
+  const out = [];
+  info.raids.forEach((r) => out.push(`<span class="drop-badge drop-raid${info.leak ? ' drop-leak' : ''}" title="Raid drop${info.leak ? ' -- NOT raidExclusive, also in the generic pool' : ''}">${escapeHtml(r.name)}</span>`));
+  info.chains.forEach((c) => out.push(`<span class="drop-badge drop-chain${info.leak ? ' drop-leak' : ''}" title="Quest Chain reward">${escapeHtml(c.name)}</span>`));
+  if (row.craftable) out.push('<span class="drop-badge drop-craft">Craftable</span>');
+  if (info.generic) out.push(`<span class="drop-badge drop-generic${info.leak ? ' drop-leak' : ''}" title="Quests, Shop, Black Market, Peddler, Commissions">Quest / Shop pool</span>`);
+  if (info.orphan) out.push('<span class="drop-badge drop-leak" title="raidExclusive but no raid encounter lists it">No source</span>');
+  if (!out.length) out.push('<span class="drop-badge" title="No pool and no raid/chain lists it">Unobtainable</span>');
+  return out.join(' ');
+}
+
+function renderEquipGroupStrip() {
+  const rows = state.rows;
+  const count = (group, raidId = null) => {
+    const prevG = state.equipGroup; const prevR = state.equipRaid;
+    state.equipGroup = group; state.equipRaid = raidId;
+    const n = rows.filter((r) => equipMatchesGroup(r)).length;
+    state.equipGroup = prevG; state.equipRaid = prevR;
+    return n;
+  };
+  const pill = (label, group, raidId, n, extra = '') => {
+    const active = state.equipGroup === group && (group !== 'raid' || state.equipRaid === raidId);
+    return `<button class="drop-pill${active ? ' active' : ''}${extra}" data-group="${group}" data-raid="${raidId ?? ''}">${escapeHtml(label)} <span class="drop-pill-n">${n}</span></button>`;
+  };
+  const leaks = count('leaks');
+  const wrap = document.createElement('div');
+  wrap.className = 'drop-strip';
+  let html = '<div class="drop-row">'
+    + pill('All items', 'all', null, rows.length)
+    + pill('Raid items', 'raid', null, count('raid'))
+    + pill('Quest / Shop pool', 'generic', null, count('generic'))
+    + pill('Chain rewards', 'chain', null, count('chain'))
+    + pill('Craftable', 'craftable', null, count('craftable'))
+    + pill('Leaks', 'leaks', null, leaks, leaks ? ' drop-pill-warn' : '')
+    + '</div>';
+  if (state.equipGroup === 'raid') {
+    const raids = [...state.equipSources.raids].sort((a, b) => (a.reqLevel ?? 0) - (b.reqLevel ?? 0));
+    html += '<div class="drop-row drop-row-sub">'
+      + pill('Every raid', 'raid', null, count('raid'))
+      + raids.map((r) => pill(`${r.name}${r.reqLevel != null ? ' (' + r.reqLevel + ')' : ''}`, 'raid', r.id, count('raid', r.id))).join('')
+      + '</div>';
+  }
+  html += '<p class="drop-note">Quest / Shop pool = everything not flagged raidExclusive, craftable or chainExclusive. That one filter feeds quest loot, the Shop, the Black Market, Peddler cards and Commissions alike. Leaks = raid drops or chain rewards still in that pool, plus raidExclusive items no encounter lists.</p>';
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('.drop-pill').forEach((b) => {
+    b.onclick = () => {
+      state.equipGroup = b.dataset.group;
+      state.equipRaid = b.dataset.raid || null;
+      renderTable();
+    };
+  });
+  return wrap;
 }
 
 function renderGenericTable() {
@@ -264,7 +407,7 @@ function renderGenericTable() {
   const thead = document.createElement('thead');
   const sortArrow = (c) => state.sortColumn === c ? (state.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
   thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${decorKey ? '<th></th>' : ''}${cols.map((c) =>
-    `<th class="sortable" data-sort="${c}">${c}${sortArrow(c)}</th>`).join('')}<th></th></tr>`;
+    `<th class="sortable" data-sort="${c}">${c}${sortArrow(c)}</th>`).join('')}${state.kind === 'equipment' && state.equipSources ? '<th>drops from</th>' : ''}<th></th></tr>`;
   const tbody = document.createElement('tbody');
 
   if (state.rows.length === 0) {
@@ -278,6 +421,18 @@ function renderGenericTable() {
   // order) all key off that real index, not display position -- sorting
   // only ever reorders what's rendered, never state.rows itself.
   let displayEntries = state.rows.map((row, index) => ({ row, index }));
+  // Patch 0486 -- Equipment only: narrow to the active drop-group pill.
+  // Filtering keeps each entry's real index, same as sorting does, so
+  // Edit/Duplicate/Delete still hit the right row.
+  const isEquip = state.kind === 'equipment' && !!state.equipSources;
+  if (isEquip) {
+    displayEntries = displayEntries.filter(({ row }) => equipMatchesGroup(row));
+    if (displayEntries.length === 0 && state.rows.length > 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="${cols.length + extraCols + 2}"><div class="empty">No items in this drop group.</div></td>`;
+      tbody.appendChild(tr);
+    }
+  }
   if (state.sortColumn && cols.includes(state.sortColumn)) {
     const col = state.sortColumn;
     const isNumeric = schema.fields[col]?.type === 'number';
@@ -325,7 +480,8 @@ function renderGenericTable() {
       const cls = c === 'rarity' ? `rarity-${val}` : c === 'kind' ? `kind-${val}` : '';
       return `<td class="${cls}">${val ?? ''}</td>`;
     }).join('');
-    tr.innerHTML = `${iconCell}${bannerCell}${decorCell}${cells}<td class="actions">
+    const sourcesCell = isEquip ? `<td>${equipSourceBadges(row)}</td>` : '';
+    tr.innerHTML = `${iconCell}${bannerCell}${decorCell}${cells}${sourcesCell}<td class="actions">
       <button data-edit="${index}">Edit</button>
       <button data-dup="${index}">Duplicate</button>
       <button class="danger" data-del="${index}">Delete</button>
@@ -338,6 +494,11 @@ function renderGenericTable() {
 
   appEl.innerHTML = '';
   appEl.appendChild(toolbar);
+  if (isEquip) {
+    const countEl = toolbar.querySelector('.spacer + span');
+    if (countEl) countEl.textContent = `${displayEntries.length} of ${state.rows.length} entries`;
+    appEl.appendChild(renderEquipGroupStrip());
+  }
   appEl.appendChild(table);
 
   document.getElementById('addBtn').onclick = () => openEditor(null);

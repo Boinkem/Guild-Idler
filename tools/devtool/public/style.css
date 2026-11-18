@@ -1144,3 +1144,28 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .live-dot.good { background: #4caf7a; box-shadow: 0 0 6px #4caf7a; }
 .live-dot.warn { background: #e0a24a; }
 .live-dot.bad { background: #e05a5a; box-shadow: 0 0 6px #e05a5a; }
+
+/* Patch 0486 -- Equipment drop-group strip + "drops from" badges
+   (see renderEquipGroupStrip in app.js). */
+.drop-strip { margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; }
+.drop-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.drop-row-sub { padding-left: 12px; border-left: 2px solid var(--brass-dim); }
+.drop-pill {
+  background: var(--panel2); border: 1px solid var(--panel3); color: var(--muted);
+  border-radius: 999px; padding: 3px 10px; font-size: 11.5px; cursor: pointer;
+}
+.drop-pill:hover { color: var(--text-bright); border-color: var(--brass-dim); }
+.drop-pill.active { background: var(--brass-wash); border-color: var(--brass); color: var(--text-bright); }
+.drop-pill-n { color: var(--dim); margin-left: 2px; }
+.drop-pill.active .drop-pill-n { color: var(--text); }
+.drop-pill-warn { border-color: var(--bad); color: var(--bad); }
+.drop-note { color: var(--dim); font-size: 11px; margin: 2px 0 0; max-width: 110ch; }
+.drop-badge {
+  display: inline-block; border-radius: var(--radius-sm); padding: 1px 6px; margin: 1px 0;
+  font-size: 10.5px; background: var(--panel3); color: var(--muted); white-space: nowrap;
+}
+.drop-raid { background: var(--brass-wash); color: #c3b9ff; }
+.drop-chain { background: rgba(127, 169, 232, 0.14); color: var(--blue); }
+.drop-craft { background: rgba(110, 194, 160, 0.14); color: var(--good); }
+.drop-generic { background: var(--panel3); color: var(--text); }
+.drop-badge.drop-leak { background: var(--bad-wash); color: var(--bad); outline: 1px solid rgba(217, 143, 143, 0.4); }
