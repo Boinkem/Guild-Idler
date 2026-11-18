@@ -1271,6 +1271,12 @@ const SCHEMAS = {
       // successModifier below; fixed alongside it rather than filed
       // separately.
       requiresChainId: { type: 'string', required: false },
+      // Patch 0487 -- one word put in front of every item this raid drops
+      // ("Rimebound Frostfang Claw"), so gear shows which raid it came
+      // from. Optional; blank = no prefix. Must be listed here or saving
+      // a raid in the editor would silently drop it (see raidExclusive's
+      // comment on the equipment schema).
+      lootPrefix: { type: 'string', required: false },
       // Flat percentage points added to every encounter's success chance
       // in this raid, independent of the global Normal/Heroic/Legendary
       // tiers -- see RaidDef.successModifier's own comment in types.ts.

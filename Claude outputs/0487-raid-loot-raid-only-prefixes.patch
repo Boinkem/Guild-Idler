@@ -1,0 +1,714 @@
+From 8a845e765155a4cc276e3d6bf87b0a64e1180c9d Mon Sep 17 00:00:00 2001
+From: claude <noreply@anthropic.com>
+Date: Wed, 18 Nov 2026 14:14:40 +1030
+Subject: [PATCH] Patch 0487: raid-only gear, Rare floor, raid loot prefixes
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Sn8rnNYaKjuo2dhAhqbCCA
+---
+ guild-idler-status.md                   | 104 +++++++++++++++++++----
+ src/game/data/equipment.ts              |   2 +-
+ src/game/data/json/equipment.json       | 107 ++++++++++++++++--------
+ src/game/data/json/raid-encounters.json |   2 +-
+ src/game/data/json/raids.json           |   8 ++
+ src/game/data/proceduralLoot.ts         |  26 +++++-
+ src/game/managers/RaidManager.ts        |  12 ++-
+ src/game/types.ts                       |   9 ++
+ tools/devtool/server.mjs                |   6 ++
+ 9 files changed, 217 insertions(+), 59 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index fe5b6b6..b4bacd5 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1134,22 +1134,29 @@ raid fight).
+ 
+ ## Backlog
+ 
+-### Raid loot rework -- planned (DevTool groundwork in patch 0486)
+-Agreed direction (18 Nov 2026):
+-- Every raid drop is raid-only: flag the 29 leaking raid items
+-  `raidExclusive` so they leave Quest/Shop/Black Market/Peddler/Commissions.
+-  Raid gear can't be bought.
+-- Raid drops are at least Rare, even on early Normal raids (Blackford
+-  Keep's Uncommon/Common set). Heroic and up at least Epic again (restores
+-  patch 0146's rule that patch 0214 lost). Applied at drop time, never
+-  lowers an item's rarity.
+-- New generic items to refill the quest/shop pool, so contracts and
+-  quests don't keep dropping the same few things once raid gear leaves.
+-- Quest Chain rewards stay unbuyable (already true, `chainExclusive`).
+-- Parked: per-raid name prefixes for procedural drops (list agreed in
+-  chat, e.g. Frostbitten / Hymnless) and a `[Normal]` tag.
+-- Open: raid items that are also chain rewards (6, e.g. Dragonscale
+-  Helm) -- keep both sources or split.
++### Raid loot rework -- in progress (0486 DevTool, 0487 Patch A built)
++Agreed with the owner (18 Nov 2026), split into three patches:
++- **A -- built, patch 0487:** raid gear raid-only (28 items flagged),
++  Blackford Keep set raised to Rare, Copper Band swapped for the new
++  Mourning Locket, one loot prefix per raid, `[Normal]` tag on Normal raid
++  drops.
++- **B -- next:** Heroic and up drops at least Epic (restores patch 0146's
++  rule that 0214 lost). Only matters for Blackford's 7 pieces (and
++  Ashwoven Charm, Rare, also a chain reward). Needs a per-item rarity on
++  the dropped item: ~112 reads of `def.rarity` across 23 files.
++- **C -- later:** refill the Quest/Shop pool to 20 per rarity. Random-gen
++  templates (blank `mods`/`stats`) like the existing ones: +4 Common, +9
++  Uncommon, +6 Rare, +5 Epic, +3 Legendary (27; names agreed in chat,
++  e.g. Kettle Helm, Sundering Maul, The Long Patience). Plus two new
++  9-piece non-raid sets so every rarity has a set to chase after
++  Leather/Steel/Cutpurse: **Free Company** (Epic: success/XP/injury
++  resist/speed at 3/6/9) and **Wayfinder's** (Legendary: success/loot/
++  gold/speed). Set bonus numbers are starting points for the Balance
++  Sandbox. Icons: hue variants of the existing packs (every base
++  accessory icon is already used).
++- Decided: Quest Chain rewards stay unbuyable (already true). Items that
++  are both a raid drop and a chain reward (6, e.g. Dragonscale Helm,
++  Ashwoven Charm) stay as they are for now.
+ 
+ ### Animation pass, round 3: static spots audit -- built, patch 0465
+ Logged in patch 0464, mocked up on the Design canvas "Guildbound
+@@ -39069,3 +39076,68 @@ Uncommon. Fix is planned in the rework, not here.
+ Verified: `node --check` on `app.js`; ran the new helpers against the live
+ DevTool API (counts above); headless Chrome on the Equipment tab with the
+ Raid and Leaks pills, no page errors.
++
++### Raid loot: raid-only gear, Rare floor, raid name prefixes (patch 0487)
++```discord-update
++Dev Update | Raid Loot
++
++- Changed raid gear to be raid-only: it no longer drops from quests or turns up in the Shop, Black Market, Peddler or Commissions
++- Changed the Blackford Keep set to Rare, so raids no longer drop green or grey gear
++- Added the Mourning Locket, a new Blackford Keep set piece, in place of the Copper Band
++- Added a raid name to every raid drop so you can tell where it came from, e.g. Rimebound Frostfang Claw or Hymnless Requiem Edge
++- Added a [Normal] tag to Normal raid drops, matching [Heroic], [Mythic] and [Legendary]
++```
++
++Patch A of the raid loot rework (see Backlog). Feedback: green raid drops
++feel bad. Patch 0486's DevTool drop groups showed why: 29 raid items sat in
++the generic pool, and Blackford Keep's set was Common/Uncommon.
++
++**Raid-only.** `raidExclusive: true` on the 28 raid drops that were in the
++generic pool (every raid's Set pieces; Requiem's 7 already were). They now
++leave all five generic sources (`QuestManager.lootTableFor`, Shop + Black
++Market, Peddler, Commissions), which share one filter. Raid items that are
++also Quest Chain rewards were already out via `chainExclusive` and are
++unchanged, as decided. `tollkeepers_signet` (Tyrant's Seal) was flagged
++`chainExclusive` without being any chain's reward; now `raidExclusive`
++instead. Generic pool: 83 -> 55.
++
++**Rare floor (Normal raids).** Done in data, not code: the Blackford
++Garrison set (`knights_blade`, `iron_helm`, `chainmail`, `work_gloves`,
++`ranger_boots`, `tollkeepers_signet`) is now `rare`. Safe because they are
++raid-only now, so only raid drops change. Every other raid item was
++already Rare or better. Authored stats untouched: drops still scale
++additively with level via `scaleDedicatedItem`, now off the Rare budget.
++Only other code mention was a comment in `EquipmentManager` citing
++`work_gloves` as a shop example (still a fine historical note).
++
++**Copper Band out, Mourning Locket in.** Copper Band is a generic
++random-gen ring, not raid gear, so it came off The Outer Palisade's list
++(stays in the quest pool) and was replaced by `mourning_locket@10`: new
++Rare amulet, req. level 7, wisdom 2 / endurance 1, icon
++`accessories/Accessory_14_hue5.png` (every base accessory icon was taken),
++raid-only, 7th piece of the Blackford set (`equipment.ts`; set bonuses
++still trigger at 2/4/6). Named for Lord Blackford's grief over his son.
++
++**Raid prefixes.** New optional `RaidDef.lootPrefix` (`types.ts`,
++`raids.json`, DevTool raids schema so saving doesn't drop it): Siege-Worn,
++Rimebound, Vault-Sealed, Breach-Touched, Ridgeburnt, Ossuary, Whispering,
++Hymnless. New `raidPrefixedName()` in `proceduralLoot.ts` swaps the item's
++base name in its built display name, so a bonus prefix and the [tag] both
++survive (`Fortunate Siege-Worn Copper Band [Normal]`) and drops a leading
++"The" (`Vault-Sealed Silenced Bell`). `RaidManager` applies it right after
++`instantiate`, baked into `proceduralName` (no save shape change; gear
++already owned keeps its name). Dragonscale Helm, shared by two raids,
++takes whichever raid it dropped from.
++
++**[Normal] tag.** New `LootSourceTag` `'raidNormal'`, labelled "Normal",
++used for Normal raids instead of the quest `'normal'` tag. No budget
++multiplier (`sourceBudgetMultiplier` default 1, not a dedicated tag in
++`scaleDedicatedItem`), so same power as before.
++
++**Verified:** `npx tsc --noEmit`, `vite build --config vite.web.config.ts`
++and `node --check` on the DevTool server all clean. A tsx script against
++the real data: generic pool 55 with zero raid items in it, no raid item
++below Rare, all 8 prefixes loaded, Blackford set has 7 pieces, a real
++`instantiate('knights_blade', raidNormal)` + prefix gives "Siege-Worn
++Knight's Blade [Normal]", and the "The"/bonus-prefix/no-prefix cases all
++come out as above. Not run: a full in-game raid in the browser.
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index 3f9c770..ad2230b 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -325,7 +325,7 @@ export const ITEM_SETS: ItemSet[] = [
+   {
+     id: 'blackford',
+     name: 'Blackford Garrison Set',
+-    pieces: ['knights_blade', 'iron_helm', 'chainmail', 'work_gloves', 'ranger_boots', 'tollkeepers_signet'],
++    pieces: ['knights_blade', 'iron_helm', 'chainmail', 'work_gloves', 'ranger_boots', 'tollkeepers_signet', 'mourning_locket'],
+     bonuses: [
+       { count: 2, mods: { success: 3, injuryResist: 6 }, label: 'Garrison Standard' },
+       { count: 4, mods: { success: 6, injuryResist: 12, gold: 6 }, label: 'Held the Wall' },
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index c20a312..c08fba6 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -45,7 +45,7 @@
+     "id": "knights_blade",
+     "name": "Knight's Blade",
+     "slot": "weapon",
+-    "rarity": "uncommon",
++    "rarity": "rare",
+     "reqLevel": 5,
+     "maxDurability": 70,
+     "value": 160,
+@@ -54,7 +54,8 @@
+       "luck": 1
+     },
+     "icon": "weapons/Weapon_03.png",
+-    "setId": "blackford"
++    "setId": "blackford",
++    "raidExclusive": true
+   },
+   {
+     "id": "silver_rapier",
+@@ -114,7 +115,7 @@
+     "id": "iron_helm",
+     "name": "Iron Helm",
+     "slot": "helmet",
+-    "rarity": "uncommon",
++    "rarity": "rare",
+     "reqLevel": 4,
+     "maxDurability": 60,
+     "value": 140,
+@@ -123,7 +124,8 @@
+       "endurance": 1
+     },
+     "icon": "armor/Armor_24.png",
+-    "setId": "blackford"
++    "setId": "blackford",
++    "raidExclusive": true
+   },
+   {
+     "id": "visored_sallet",
+@@ -184,7 +186,7 @@
+     "id": "chainmail",
+     "name": "Chainmail Hauberk",
+     "slot": "chest",
+-    "rarity": "uncommon",
++    "rarity": "rare",
+     "reqLevel": 6,
+     "maxDurability": 75,
+     "value": 210,
+@@ -196,7 +198,8 @@
+       "endurance": 2
+     },
+     "icon": "armor/Armor_03.png",
+-    "setId": "blackford"
++    "setId": "blackford",
++    "raidExclusive": true
+   },
+   {
+     "id": "guardplate",
+@@ -253,7 +256,7 @@
+     "id": "work_gloves",
+     "name": "Work Gloves",
+     "slot": "gloves",
+-    "rarity": "common",
++    "rarity": "rare",
+     "reqLevel": 1,
+     "maxDurability": 30,
+     "value": 20,
+@@ -261,7 +264,8 @@
+     "setId": "blackford",
+     "stats": {
+       "luck": 1
+-    }
++    },
++    "raidExclusive": true
+   },
+   {
+     "id": "gauntlets",
+@@ -319,7 +323,7 @@
+     "id": "ranger_boots",
+     "name": "Ranger Boots",
+     "slot": "boots",
+-    "rarity": "uncommon",
++    "rarity": "rare",
+     "reqLevel": 4,
+     "maxDurability": 58,
+     "value": 135,
+@@ -327,7 +331,8 @@
+       "endurance": 2
+     },
+     "icon": "armor/Armor_53.png",
+-    "setId": "blackford"
++    "setId": "blackford",
++    "raidExclusive": true
+   },
+   {
+     "id": "sevenleague_boots",
+@@ -1096,7 +1101,7 @@
+     "id": "tollkeepers_signet",
+     "name": "Tyrant's Seal",
+     "slot": "ring",
+-    "rarity": "uncommon",
++    "rarity": "rare",
+     "reqLevel": 7,
+     "maxDurability": 75,
+     "value": 150,
+@@ -1105,10 +1110,28 @@
+       "strength": 1
+     },
+     "icon": "accessories/Accessory_02.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "setId": "blackford",
+-    "chainExclusive": true
++    "chainExclusive": false
++  },
++  {
++    "id": "mourning_locket",
++    "name": "Mourning Locket",
++    "slot": "amulet",
++    "rarity": "rare",
++    "reqLevel": 7,
++    "maxDurability": 75,
++    "value": 180,
++    "stats": {
++      "wisdom": 2,
++      "endurance": 1
++    },
++    "icon": "accessories/Accessory_14_hue5.png",
++    "raidExclusive": true,
++    "craftable": false,
++    "chainExclusive": false,
++    "setId": "blackford"
+   },
+   {
+     "id": "frostfang_claw",
+@@ -1124,7 +1147,7 @@
+     },
+     "setId": "wyrmkeep",
+     "icon": "weapons/Weapon_10_hue4.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1145,7 +1168,7 @@
+     },
+     "setId": "wyrmkeep",
+     "icon": "accessories/Accessory_19.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1163,7 +1186,7 @@
+     },
+     "setId": "wyrmkeep",
+     "icon": "armor/Armor_48.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1185,7 +1208,7 @@
+     },
+     "setId": "wyrmkeep",
+     "icon": "shields/Shield_26_hue5.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1204,7 +1227,7 @@
+     },
+     "setId": "what_got_out",
+     "icon": "armor/Armor_77.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1225,7 +1248,7 @@
+     },
+     "setId": "what_got_out",
+     "icon": "accessories/Accessory_08_hue2.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1244,7 +1267,7 @@
+     },
+     "setId": "what_got_out",
+     "icon": "weapons/Weapon_05_hue5.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1264,7 +1287,7 @@
+     },
+     "setId": "what_got_out",
+     "icon": "armor/Armor_110.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1714,7 +1737,8 @@
+       "endurance": 20
+     },
+     "icon": "armor/Armor_15.png",
+-    "setId": "cinderfang"
++    "setId": "cinderfang",
++    "raidExclusive": true
+   },
+   {
+     "id": "wyrmwardens_cloak",
+@@ -1729,7 +1753,8 @@
+       "endurance": 38
+     },
+     "icon": "armor/Armor_60.png",
+-    "setId": "cinderfang"
++    "setId": "cinderfang",
++    "raidExclusive": true
+   },
+   {
+     "id": "scaleknit_boots",
+@@ -1743,7 +1768,8 @@
+       "endurance": 49
+     },
+     "icon": "armor/Armor_70.png",
+-    "setId": "cinderfang"
++    "setId": "cinderfang",
++    "raidExclusive": true
+   },
+   {
+     "id": "brood_fang_dagger",
+@@ -1759,7 +1785,8 @@
+       "luck": 5
+     },
+     "icon": "weapons/Weapon_33.png",
+-    "setId": "cinderfang"
++    "setId": "cinderfang",
++    "raidExclusive": true
+   },
+   {
+     "id": "blackscale_helm",
+@@ -1774,7 +1801,8 @@
+       "endurance": 65
+     },
+     "icon": "armor/Armor_41.png",
+-    "setId": "cinderfang"
++    "setId": "cinderfang",
++    "raidExclusive": true
+   },
+   {
+     "id": "broodmothers_crown",
+@@ -1789,7 +1817,8 @@
+       "wisdom": 34
+     },
+     "icon": "accessories/Accessory_18.png",
+-    "setId": "cinderfang"
++    "setId": "cinderfang",
++    "raidExclusive": true
+   },
+   {
+     "id": "sewn_maw_greataxe",
+@@ -1804,7 +1833,8 @@
+       "luck": 16
+     },
+     "icon": "weapons/Weapon_45.png",
+-    "setId": "grimward"
++    "setId": "grimward",
++    "raidExclusive": true
+   },
+   {
+     "id": "stitched_hide_vest",
+@@ -1819,7 +1849,8 @@
+       "endurance": 55
+     },
+     "icon": "armor/Armor_18.png",
+-    "setId": "grimward"
++    "setId": "grimward",
++    "raidExclusive": true
+   },
+   {
+     "id": "phylactery_shard_ring",
+@@ -1835,7 +1866,8 @@
+       "wisdom": 32
+     },
+     "icon": "accessories/Accessory_07.png",
+-    "setId": "grimward"
++    "setId": "grimward",
++    "raidExclusive": true
+   },
+   {
+     "id": "unbinding_gauntlets",
+@@ -1851,7 +1883,7 @@
+     },
+     "setId": "grimward",
+     "icon": "armor/Armor_73.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1870,7 +1902,8 @@
+       "wisdom": 65
+     },
+     "icon": "armor/Armor_42.png",
+-    "setId": "grimward"
++    "setId": "grimward",
++    "raidExclusive": true
+   },
+   {
+     "id": "grimward_amulet",
+@@ -1886,7 +1919,8 @@
+       "wisdom": 15
+     },
+     "icon": "accessories/Accessory_19.png",
+-    "setId": "grimward"
++    "setId": "grimward",
++    "raidExclusive": true
+   },
+   {
+     "id": "woven_mind_circlet",
+@@ -1903,7 +1937,7 @@
+     },
+     "setId": "loom",
+     "icon": "armor/Armor_111.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+@@ -1922,7 +1956,8 @@
+       "luck": 13
+     },
+     "icon": "armor/Armor_62.png",
+-    "setId": "loom"
++    "setId": "loom",
++    "raidExclusive": true
+   },
+   {
+     "id": "threadcutter",
+@@ -1939,7 +1974,7 @@
+     },
+     "setId": "loom",
+     "icon": "weapons/Weapon_10.png",
+-    "raidExclusive": false,
++    "raidExclusive": true,
+     "craftable": false,
+     "chainExclusive": false,
+     "gearScoreOverride": 0
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index 34e469a..24d8e57 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -60,7 +60,7 @@
+     "rewardGold": 400,
+     "rewardXp": 80,
+     "loot": [
+-      "copper_band@12",
++      "mourning_locket@10",
+       "work_gloves@10"
+     ]
+   },
+diff --git a/src/game/data/json/raids.json b/src/game/data/json/raids.json
+index 5122928..c738f1a 100644
+--- a/src/game/data/json/raids.json
++++ b/src/game/data/json/raids.json
+@@ -10,6 +10,7 @@
+       "blackford_right_hand",
+       "blackford_tyrant"
+     ],
++    "lootPrefix": "Siege-Worn",
+     "unlocksRaidId": "frozen_wyrmkeep",
+     "successModifier": 0,
+     "banner": {
+@@ -31,6 +32,7 @@
+       "wyrmkeep_wyrm_keepers",
+       "wyrmkeep_frozen_wyrm"
+     ],
++    "lootPrefix": "Rimebound",
+     "unlocksRaidId": "bonewrought_vault",
+     "successModifier": 0,
+     "icon": {
+@@ -55,6 +57,7 @@
+       "bonewrought_choir_of_bones",
+       "bonewrought_vault_keeper"
+     ],
++    "lootPrefix": "Vault-Sealed",
+     "successModifier": 0,
+     "icon": {
+       "path": "raids-icons/Bonerwought.png"
+@@ -78,6 +81,7 @@
+       "gotout_the_last_loyal",
+       "gotout_cornered"
+     ],
++    "lootPrefix": "Breach-Touched",
+     "requiresChainId": "demon_fortress",
+     "successModifier": 0,
+     "icon": {
+@@ -103,6 +107,7 @@
+       "blackdragon_the_hatchlings",
+       "blackdragon_the_brood_mother"
+     ],
++    "lootPrefix": "Ridgeburnt",
+     "successModifier": 0,
+     "banner": {
+       "path": "raids/black_dragon_nest.png",
+@@ -129,6 +134,7 @@
+       "hob_the_phylactery",
+       "hob_the_lich"
+     ],
++    "lootPrefix": "Ossuary",
+     "requiresChainId": "hunt_a_lich",
+     "successModifier": 0,
+     "icon": {
+@@ -151,6 +157,7 @@
+     "encounterIds": [
+       "loom_the_presiding_intelligence"
+     ],
++    "lootPrefix": "Whispering",
+     "requiresChainId": "the_loom_beneath",
+     "successModifier": -8,
+     "icon": {
+@@ -178,6 +185,7 @@
+       "last_god_silence_where_prayer_used_to_work",
+       "last_god_what_is_left_of_it"
+     ],
++    "lootPrefix": "Hymnless",
+     "requiresChainId": "last_pilgrimage",
+     "successModifier": 0,
+     "banner": {
+diff --git a/src/game/data/proceduralLoot.ts b/src/game/data/proceduralLoot.ts
+index 91ca9b3..f51f381 100644
+--- a/src/game/data/proceduralLoot.ts
++++ b/src/game/data/proceduralLoot.ts
+@@ -56,7 +56,7 @@ import { Tuning } from './tuning';
+  *  isProceduralTemplate() in the first place. */
+ export type LootSourceTag =
+   | 'easy' | 'normal' | 'hard' | 'epic' | 'legendary'
+-  | 'raidHeroic' | 'raidMythic' | 'raidLegendary'
++  | 'raidNormal' | 'raidHeroic' | 'raidMythic' | 'raidLegendary'
+   | 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary';
+ 
+ export type BonusRollTier = 'none' | 'fortunate' | 'charmed';
+@@ -114,6 +114,11 @@ function sourceTagLabel(sourceTag: LootSourceTag): string | null {
+     case 'hard': return 'Hard';
+     case 'epic': return 'Epic';
+     case 'legendary': return 'Legendary';
++    // Patch 0487 -- Normal raid drops get a tag too, so every raid
++    // difficulty reads the same way. No budget multiplier (falls through
++    // to sourceBudgetMultiplier's default 1, and scaleDedicatedItem treats
++    // it as a non-dedicated tag) -- identical power to the old 'normal'.
++    case 'raidNormal': return 'Normal';
+     case 'raidHeroic': return 'Heroic';
+     case 'raidMythic': return 'Mythic';
+     case 'raidLegendary': return 'Legendary';
+@@ -345,3 +350,22 @@ export function scaleDedicatedItem(
+   return { rolledStats, mods, displayName };
+ }
+ 
++
++/**
++ * Patch 0487 -- one fixed prefix per raid (RaidDef.lootPrefix, e.g.
++ * "Rimebound"), so a raid drop says which raid it came from. Applied once,
++ * at drop time, to the already-built display name: swaps the item's own
++ * base name inside `displayName` for the prefixed one, so any bonus-roll
++ * prefix in front ("Fortunate") and the [tag] suffix behind both survive
++ * ("Fortunate Rimebound Frostfang Claw [Heroic]"). A leading "The " is
++ * dropped ("The Silenced Bell" -> "Vault-Sealed Silenced Bell"). No prefix
++ * set -> `displayName` back unchanged.
++ */
++export function raidPrefixedName(prefix: string | undefined, baseName: string, displayName: string): string {
++  const p = prefix?.trim();
++  if (!p) return displayName;
++  const prefixed = `${p} ${baseName.replace(/^The\s+/i, '')}`;
++  const at = displayName.indexOf(baseName);
++  if (at === -1) return `${p} ${displayName}`;
++  return displayName.slice(0, at) + prefixed + displayName.slice(at + baseName.length);
++}
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index dcad62e..c695a2e 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -6,6 +6,7 @@ import { renownForRaidClear, TOMBSTONE_STYLES } from '../data/progression';
+ import { Tuning } from '../data/tuning';
+ import { armouryWearCut, heroSignature } from '../data/attunement';
+ import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
++import { raidPrefixedName } from '../data/proceduralLoot';
+ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+ import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
+ import { DIFFICULTY_ORDER } from '../data/quests';
+@@ -497,16 +498,19 @@ export const RaidManager = {
+         // (patch 0258, see EquipmentManager.instantiate's own comment) --
+         // sourceTag maps Heroic/Mythic/Legendary to their own budget
+         // multiplier + bracketed tag either way; Normal raid drops get
+-        // neither (same as an ordinary Easy/Normal quest drop, and a
+-        // Normal Set-piece drop stays at its own unscaled authored
+-        // numbers).
++        // 'raidNormal' (patch 0487): a [Normal] tag but no multiplier, so
++        // the same power an ordinary Normal quest drop gets.
+         const raidSourceTag = active.difficulty === 'heroic' ? 'raidHeroic'
+           : active.difficulty === 'mythic' ? 'raidMythic'
+-            : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
++            : active.difficulty === 'legendary' ? 'raidLegendary' : 'raidNormal';
+         const item = EquipmentManager.instantiate(parsed.defId, {
+           itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng, heroLevel: partyLevel,
+         });
+         if (!def || !item) continue;
++        // Patch 0487 -- the raid's own prefix ("Rimebound ...") on every
++        // drop. Normal now uses 'raidNormal' (a [Normal] tag, same power as
++        // the old 'normal'), so proceduralName is always set here.
++        item.proceduralName = raidPrefixedName(raid?.lootPrefix, def.name, item.proceduralName ?? def.name);
+         state.stash.push(item);
+         if (!state.discoveredItems.includes(parsed.defId)) state.discoveredItems.push(parsed.defId);
+         state.stats.itemsFound += 1;
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 40e34ff..a959600 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1540,6 +1540,15 @@ export interface RaidDef {
+    * can be gated by a chain, another raid, both, or neither.
+    */
+   requiresChainId?: string;
++  /**
++   * Patch 0487. One fixed word put in front of every item this raid drops
++   * (e.g. "Rimebound" -> "Rimebound Frostfang Claw [Heroic]"), so a piece
++   * always shows which raid it came from -- see raidPrefixedName in
++   * proceduralLoot.ts. Baked into the item's proceduralName at drop time;
++   * gear dropped before this keeps its old name. Optional: unset = no
++   * prefix.
++   */
++  lootPrefix?: string;
+   /**
+    * Optional banner-art override + focus point, editable via the DevTool's
+    * banner picker (see server.mjs's `bannerImage` field type). `path` is
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 3aebd98..77b1a07 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -1271,6 +1271,12 @@ const SCHEMAS = {
+       // successModifier below; fixed alongside it rather than filed
+       // separately.
+       requiresChainId: { type: 'string', required: false },
++      // Patch 0487 -- one word put in front of every item this raid drops
++      // ("Rimebound Frostfang Claw"), so gear shows which raid it came
++      // from. Optional; blank = no prefix. Must be listed here or saving
++      // a raid in the editor would silently drop it (see raidExclusive's
++      // comment on the equipment schema).
++      lootPrefix: { type: 'string', required: false },
+       // Flat percentage points added to every encounter's success chance
+       // in this raid, independent of the global Normal/Heroic/Legendary
+       // tiers -- see RaidDef.successModifier's own comment in types.ts.
+-- 
+2.43.0
+

@@ -56,7 +56,7 @@ import { Tuning } from './tuning';
  *  isProceduralTemplate() in the first place. */
 export type LootSourceTag =
   | 'easy' | 'normal' | 'hard' | 'epic' | 'legendary'
-  | 'raidHeroic' | 'raidMythic' | 'raidLegendary'
+  | 'raidNormal' | 'raidHeroic' | 'raidMythic' | 'raidLegendary'
   | 'chainReplayHeroic' | 'chainReplayMythic' | 'chainReplayLegendary';
 
 export type BonusRollTier = 'none' | 'fortunate' | 'charmed';
@@ -114,6 +114,11 @@ function sourceTagLabel(sourceTag: LootSourceTag): string | null {
     case 'hard': return 'Hard';
     case 'epic': return 'Epic';
     case 'legendary': return 'Legendary';
+    // Patch 0487 -- Normal raid drops get a tag too, so every raid
+    // difficulty reads the same way. No budget multiplier (falls through
+    // to sourceBudgetMultiplier's default 1, and scaleDedicatedItem treats
+    // it as a non-dedicated tag) -- identical power to the old 'normal'.
+    case 'raidNormal': return 'Normal';
     case 'raidHeroic': return 'Heroic';
     case 'raidMythic': return 'Mythic';
     case 'raidLegendary': return 'Legendary';
@@ -345,3 +350,22 @@ export function scaleDedicatedItem(
   return { rolledStats, mods, displayName };
 }
 
+
+/**
+ * Patch 0487 -- one fixed prefix per raid (RaidDef.lootPrefix, e.g.
+ * "Rimebound"), so a raid drop says which raid it came from. Applied once,
+ * at drop time, to the already-built display name: swaps the item's own
+ * base name inside `displayName` for the prefixed one, so any bonus-roll
+ * prefix in front ("Fortunate") and the [tag] suffix behind both survive
+ * ("Fortunate Rimebound Frostfang Claw [Heroic]"). A leading "The " is
+ * dropped ("The Silenced Bell" -> "Vault-Sealed Silenced Bell"). No prefix
+ * set -> `displayName` back unchanged.
+ */
+export function raidPrefixedName(prefix: string | undefined, baseName: string, displayName: string): string {
+  const p = prefix?.trim();
+  if (!p) return displayName;
+  const prefixed = `${p} ${baseName.replace(/^The\s+/i, '')}`;
+  const at = displayName.indexOf(baseName);
+  if (at === -1) return `${p} ${displayName}`;
+  return displayName.slice(0, at) + prefixed + displayName.slice(at + baseName.length);
+}

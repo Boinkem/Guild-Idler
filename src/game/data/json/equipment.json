@@ -45,7 +45,7 @@
     "id": "knights_blade",
     "name": "Knight's Blade",
     "slot": "weapon",
-    "rarity": "uncommon",
+    "rarity": "rare",
     "reqLevel": 5,
     "maxDurability": 70,
     "value": 160,
@@ -54,7 +54,8 @@
       "luck": 1
     },
     "icon": "weapons/Weapon_03.png",
-    "setId": "blackford"
+    "setId": "blackford",
+    "raidExclusive": true
   },
   {
     "id": "silver_rapier",
@@ -114,7 +115,7 @@
     "id": "iron_helm",
     "name": "Iron Helm",
     "slot": "helmet",
-    "rarity": "uncommon",
+    "rarity": "rare",
     "reqLevel": 4,
     "maxDurability": 60,
     "value": 140,
@@ -123,7 +124,8 @@
       "endurance": 1
     },
     "icon": "armor/Armor_24.png",
-    "setId": "blackford"
+    "setId": "blackford",
+    "raidExclusive": true
   },
   {
     "id": "visored_sallet",
@@ -184,7 +186,7 @@
     "id": "chainmail",
     "name": "Chainmail Hauberk",
     "slot": "chest",
-    "rarity": "uncommon",
+    "rarity": "rare",
     "reqLevel": 6,
     "maxDurability": 75,
     "value": 210,
@@ -196,7 +198,8 @@
       "endurance": 2
     },
     "icon": "armor/Armor_03.png",
-    "setId": "blackford"
+    "setId": "blackford",
+    "raidExclusive": true
   },
   {
     "id": "guardplate",
@@ -253,7 +256,7 @@
     "id": "work_gloves",
     "name": "Work Gloves",
     "slot": "gloves",
-    "rarity": "common",
+    "rarity": "rare",
     "reqLevel": 1,
     "maxDurability": 30,
     "value": 20,
@@ -261,7 +264,8 @@
     "setId": "blackford",
     "stats": {
       "luck": 1
-    }
+    },
+    "raidExclusive": true
   },
   {
     "id": "gauntlets",
@@ -319,7 +323,7 @@
     "id": "ranger_boots",
     "name": "Ranger Boots",
     "slot": "boots",
-    "rarity": "uncommon",
+    "rarity": "rare",
     "reqLevel": 4,
     "maxDurability": 58,
     "value": 135,
@@ -327,7 +331,8 @@
       "endurance": 2
     },
     "icon": "armor/Armor_53.png",
-    "setId": "blackford"
+    "setId": "blackford",
+    "raidExclusive": true
   },
   {
     "id": "sevenleague_boots",
@@ -1096,7 +1101,7 @@
     "id": "tollkeepers_signet",
     "name": "Tyrant's Seal",
     "slot": "ring",
-    "rarity": "uncommon",
+    "rarity": "rare",
     "reqLevel": 7,
     "maxDurability": 75,
     "value": 150,
@@ -1105,10 +1110,28 @@
       "strength": 1
     },
     "icon": "accessories/Accessory_02.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "setId": "blackford",
-    "chainExclusive": true
+    "chainExclusive": false
+  },
+  {
+    "id": "mourning_locket",
+    "name": "Mourning Locket",
+    "slot": "amulet",
+    "rarity": "rare",
+    "reqLevel": 7,
+    "maxDurability": 75,
+    "value": 180,
+    "stats": {
+      "wisdom": 2,
+      "endurance": 1
+    },
+    "icon": "accessories/Accessory_14_hue5.png",
+    "raidExclusive": true,
+    "craftable": false,
+    "chainExclusive": false,
+    "setId": "blackford"
   },
   {
     "id": "frostfang_claw",
@@ -1124,7 +1147,7 @@
     },
     "setId": "wyrmkeep",
     "icon": "weapons/Weapon_10_hue4.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1145,7 +1168,7 @@
     },
     "setId": "wyrmkeep",
     "icon": "accessories/Accessory_19.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1163,7 +1186,7 @@
     },
     "setId": "wyrmkeep",
     "icon": "armor/Armor_48.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1185,7 +1208,7 @@
     },
     "setId": "wyrmkeep",
     "icon": "shields/Shield_26_hue5.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1204,7 +1227,7 @@
     },
     "setId": "what_got_out",
     "icon": "armor/Armor_77.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1225,7 +1248,7 @@
     },
     "setId": "what_got_out",
     "icon": "accessories/Accessory_08_hue2.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1244,7 +1267,7 @@
     },
     "setId": "what_got_out",
     "icon": "weapons/Weapon_05_hue5.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1264,7 +1287,7 @@
     },
     "setId": "what_got_out",
     "icon": "armor/Armor_110.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1714,7 +1737,8 @@
       "endurance": 20
     },
     "icon": "armor/Armor_15.png",
-    "setId": "cinderfang"
+    "setId": "cinderfang",
+    "raidExclusive": true
   },
   {
     "id": "wyrmwardens_cloak",
@@ -1729,7 +1753,8 @@
       "endurance": 38
     },
     "icon": "armor/Armor_60.png",
-    "setId": "cinderfang"
+    "setId": "cinderfang",
+    "raidExclusive": true
   },
   {
     "id": "scaleknit_boots",
@@ -1743,7 +1768,8 @@
       "endurance": 49
     },
     "icon": "armor/Armor_70.png",
-    "setId": "cinderfang"
+    "setId": "cinderfang",
+    "raidExclusive": true
   },
   {
     "id": "brood_fang_dagger",
@@ -1759,7 +1785,8 @@
       "luck": 5
     },
     "icon": "weapons/Weapon_33.png",
-    "setId": "cinderfang"
+    "setId": "cinderfang",
+    "raidExclusive": true
   },
   {
     "id": "blackscale_helm",
@@ -1774,7 +1801,8 @@
       "endurance": 65
     },
     "icon": "armor/Armor_41.png",
-    "setId": "cinderfang"
+    "setId": "cinderfang",
+    "raidExclusive": true
   },
   {
     "id": "broodmothers_crown",
@@ -1789,7 +1817,8 @@
       "wisdom": 34
     },
     "icon": "accessories/Accessory_18.png",
-    "setId": "cinderfang"
+    "setId": "cinderfang",
+    "raidExclusive": true
   },
   {
     "id": "sewn_maw_greataxe",
@@ -1804,7 +1833,8 @@
       "luck": 16
     },
     "icon": "weapons/Weapon_45.png",
-    "setId": "grimward"
+    "setId": "grimward",
+    "raidExclusive": true
   },
   {
     "id": "stitched_hide_vest",
@@ -1819,7 +1849,8 @@
       "endurance": 55
     },
     "icon": "armor/Armor_18.png",
-    "setId": "grimward"
+    "setId": "grimward",
+    "raidExclusive": true
   },
   {
     "id": "phylactery_shard_ring",
@@ -1835,7 +1866,8 @@
       "wisdom": 32
     },
     "icon": "accessories/Accessory_07.png",
-    "setId": "grimward"
+    "setId": "grimward",
+    "raidExclusive": true
   },
   {
     "id": "unbinding_gauntlets",
@@ -1851,7 +1883,7 @@
     },
     "setId": "grimward",
     "icon": "armor/Armor_73.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1870,7 +1902,8 @@
       "wisdom": 65
     },
     "icon": "armor/Armor_42.png",
-    "setId": "grimward"
+    "setId": "grimward",
+    "raidExclusive": true
   },
   {
     "id": "grimward_amulet",
@@ -1886,7 +1919,8 @@
       "wisdom": 15
     },
     "icon": "accessories/Accessory_19.png",
-    "setId": "grimward"
+    "setId": "grimward",
+    "raidExclusive": true
   },
   {
     "id": "woven_mind_circlet",
@@ -1903,7 +1937,7 @@
     },
     "setId": "loom",
     "icon": "armor/Armor_111.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0
@@ -1922,7 +1956,8 @@
       "luck": 13
     },
     "icon": "armor/Armor_62.png",
-    "setId": "loom"
+    "setId": "loom",
+    "raidExclusive": true
   },
   {
     "id": "threadcutter",
@@ -1939,7 +1974,7 @@
     },
     "setId": "loom",
     "icon": "weapons/Weapon_10.png",
-    "raidExclusive": false,
+    "raidExclusive": true,
     "craftable": false,
     "chainExclusive": false,
     "gearScoreOverride": 0

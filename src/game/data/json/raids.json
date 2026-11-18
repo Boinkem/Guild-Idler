@@ -10,6 +10,7 @@
       "blackford_right_hand",
       "blackford_tyrant"
     ],
+    "lootPrefix": "Siege-Worn",
     "unlocksRaidId": "frozen_wyrmkeep",
     "successModifier": 0,
     "banner": {
@@ -31,6 +32,7 @@
       "wyrmkeep_wyrm_keepers",
       "wyrmkeep_frozen_wyrm"
     ],
+    "lootPrefix": "Rimebound",
     "unlocksRaidId": "bonewrought_vault",
     "successModifier": 0,
     "icon": {
@@ -55,6 +57,7 @@
       "bonewrought_choir_of_bones",
       "bonewrought_vault_keeper"
     ],
+    "lootPrefix": "Vault-Sealed",
     "successModifier": 0,
     "icon": {
       "path": "raids-icons/Bonerwought.png"
@@ -78,6 +81,7 @@
       "gotout_the_last_loyal",
       "gotout_cornered"
     ],
+    "lootPrefix": "Breach-Touched",
     "requiresChainId": "demon_fortress",
     "successModifier": 0,
     "icon": {
@@ -103,6 +107,7 @@
       "blackdragon_the_hatchlings",
       "blackdragon_the_brood_mother"
     ],
+    "lootPrefix": "Ridgeburnt",
     "successModifier": 0,
     "banner": {
       "path": "raids/black_dragon_nest.png",
@@ -129,6 +134,7 @@
       "hob_the_phylactery",
       "hob_the_lich"
     ],
+    "lootPrefix": "Ossuary",
     "requiresChainId": "hunt_a_lich",
     "successModifier": 0,
     "icon": {
@@ -151,6 +157,7 @@
     "encounterIds": [
       "loom_the_presiding_intelligence"
     ],
+    "lootPrefix": "Whispering",
     "requiresChainId": "the_loom_beneath",
     "successModifier": -8,
     "icon": {
@@ -178,6 +185,7 @@
       "last_god_silence_where_prayer_used_to_work",
       "last_god_what_is_left_of_it"
     ],
+    "lootPrefix": "Hymnless",
     "requiresChainId": "last_pilgrimage",
     "successModifier": 0,
     "banner": {

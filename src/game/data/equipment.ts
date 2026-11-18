@@ -325,7 +325,7 @@ export const ITEM_SETS: ItemSet[] = [
   {
     id: 'blackford',
     name: 'Blackford Garrison Set',
-    pieces: ['knights_blade', 'iron_helm', 'chainmail', 'work_gloves', 'ranger_boots', 'tollkeepers_signet'],
+    pieces: ['knights_blade', 'iron_helm', 'chainmail', 'work_gloves', 'ranger_boots', 'tollkeepers_signet', 'mourning_locket'],
     bonuses: [
       { count: 2, mods: { success: 3, injuryResist: 6 }, label: 'Garrison Standard' },
       { count: 4, mods: { success: 6, injuryResist: 12, gold: 6 }, label: 'Held the Wall' },

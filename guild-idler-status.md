@@ -1134,22 +1134,29 @@ raid fight).
 
 ## Backlog
 
-### Raid loot rework -- planned (DevTool groundwork in patch 0486)
-Agreed direction (18 Nov 2026):
-- Every raid drop is raid-only: flag the 29 leaking raid items
-  `raidExclusive` so they leave Quest/Shop/Black Market/Peddler/Commissions.
-  Raid gear can't be bought.
-- Raid drops are at least Rare, even on early Normal raids (Blackford
-  Keep's Uncommon/Common set). Heroic and up at least Epic again (restores
-  patch 0146's rule that patch 0214 lost). Applied at drop time, never
-  lowers an item's rarity.
-- New generic items to refill the quest/shop pool, so contracts and
-  quests don't keep dropping the same few things once raid gear leaves.
-- Quest Chain rewards stay unbuyable (already true, `chainExclusive`).
-- Parked: per-raid name prefixes for procedural drops (list agreed in
-  chat, e.g. Frostbitten / Hymnless) and a `[Normal]` tag.
-- Open: raid items that are also chain rewards (6, e.g. Dragonscale
-  Helm) -- keep both sources or split.
+### Raid loot rework -- in progress (0486 DevTool, 0487 Patch A built)
+Agreed with the owner (18 Nov 2026), split into three patches:
+- **A -- built, patch 0487:** raid gear raid-only (28 items flagged),
+  Blackford Keep set raised to Rare, Copper Band swapped for the new
+  Mourning Locket, one loot prefix per raid, `[Normal]` tag on Normal raid
+  drops.
+- **B -- next:** Heroic and up drops at least Epic (restores patch 0146's
+  rule that 0214 lost). Only matters for Blackford's 7 pieces (and
+  Ashwoven Charm, Rare, also a chain reward). Needs a per-item rarity on
+  the dropped item: ~112 reads of `def.rarity` across 23 files.
+- **C -- later:** refill the Quest/Shop pool to 20 per rarity. Random-gen
+  templates (blank `mods`/`stats`) like the existing ones: +4 Common, +9
+  Uncommon, +6 Rare, +5 Epic, +3 Legendary (27; names agreed in chat,
+  e.g. Kettle Helm, Sundering Maul, The Long Patience). Plus two new
+  9-piece non-raid sets so every rarity has a set to chase after
+  Leather/Steel/Cutpurse: **Free Company** (Epic: success/XP/injury
+  resist/speed at 3/6/9) and **Wayfinder's** (Legendary: success/loot/
+  gold/speed). Set bonus numbers are starting points for the Balance
+  Sandbox. Icons: hue variants of the existing packs (every base
+  accessory icon is already used).
+- Decided: Quest Chain rewards stay unbuyable (already true). Items that
+  are both a raid drop and a chain reward (6, e.g. Dragonscale Helm,
+  Ashwoven Charm) stay as they are for now.
 
 ### Animation pass, round 3: static spots audit -- built, patch 0465
 Logged in patch 0464, mocked up on the Design canvas "Guildbound
@@ -39069,3 +39076,68 @@ Uncommon. Fix is planned in the rework, not here.
 Verified: `node --check` on `app.js`; ran the new helpers against the live
 DevTool API (counts above); headless Chrome on the Equipment tab with the
 Raid and Leaks pills, no page errors.
+
+### Raid loot: raid-only gear, Rare floor, raid name prefixes (patch 0487)
+```discord-update
+Dev Update | Raid Loot
+
+- Changed raid gear to be raid-only: it no longer drops from quests or turns up in the Shop, Black Market, Peddler or Commissions
+- Changed the Blackford Keep set to Rare, so raids no longer drop green or grey gear
+- Added the Mourning Locket, a new Blackford Keep set piece, in place of the Copper Band
+- Added a raid name to every raid drop so you can tell where it came from, e.g. Rimebound Frostfang Claw or Hymnless Requiem Edge
+- Added a [Normal] tag to Normal raid drops, matching [Heroic], [Mythic] and [Legendary]
+```
+
+Patch A of the raid loot rework (see Backlog). Feedback: green raid drops
+feel bad. Patch 0486's DevTool drop groups showed why: 29 raid items sat in
+the generic pool, and Blackford Keep's set was Common/Uncommon.
+
+**Raid-only.** `raidExclusive: true` on the 28 raid drops that were in the
+generic pool (every raid's Set pieces; Requiem's 7 already were). They now
+leave all five generic sources (`QuestManager.lootTableFor`, Shop + Black
+Market, Peddler, Commissions), which share one filter. Raid items that are
+also Quest Chain rewards were already out via `chainExclusive` and are
+unchanged, as decided. `tollkeepers_signet` (Tyrant's Seal) was flagged
+`chainExclusive` without being any chain's reward; now `raidExclusive`
+instead. Generic pool: 83 -> 55.
+
+**Rare floor (Normal raids).** Done in data, not code: the Blackford
+Garrison set (`knights_blade`, `iron_helm`, `chainmail`, `work_gloves`,
+`ranger_boots`, `tollkeepers_signet`) is now `rare`. Safe because they are
+raid-only now, so only raid drops change. Every other raid item was
+already Rare or better. Authored stats untouched: drops still scale
+additively with level via `scaleDedicatedItem`, now off the Rare budget.
+Only other code mention was a comment in `EquipmentManager` citing
+`work_gloves` as a shop example (still a fine historical note).
+
+**Copper Band out, Mourning Locket in.** Copper Band is a generic
+random-gen ring, not raid gear, so it came off The Outer Palisade's list
+(stays in the quest pool) and was replaced by `mourning_locket@10`: new
+Rare amulet, req. level 7, wisdom 2 / endurance 1, icon
+`accessories/Accessory_14_hue5.png` (every base accessory icon was taken),
+raid-only, 7th piece of the Blackford set (`equipment.ts`; set bonuses
+still trigger at 2/4/6). Named for Lord Blackford's grief over his son.
+
+**Raid prefixes.** New optional `RaidDef.lootPrefix` (`types.ts`,
+`raids.json`, DevTool raids schema so saving doesn't drop it): Siege-Worn,
+Rimebound, Vault-Sealed, Breach-Touched, Ridgeburnt, Ossuary, Whispering,
+Hymnless. New `raidPrefixedName()` in `proceduralLoot.ts` swaps the item's
+base name in its built display name, so a bonus prefix and the [tag] both
+survive (`Fortunate Siege-Worn Copper Band [Normal]`) and drops a leading
+"The" (`Vault-Sealed Silenced Bell`). `RaidManager` applies it right after
+`instantiate`, baked into `proceduralName` (no save shape change; gear
+already owned keeps its name). Dragonscale Helm, shared by two raids,
+takes whichever raid it dropped from.
+
+**[Normal] tag.** New `LootSourceTag` `'raidNormal'`, labelled "Normal",
+used for Normal raids instead of the quest `'normal'` tag. No budget
+multiplier (`sourceBudgetMultiplier` default 1, not a dedicated tag in
+`scaleDedicatedItem`), so same power as before.
+
+**Verified:** `npx tsc --noEmit`, `vite build --config vite.web.config.ts`
+and `node --check` on the DevTool server all clean. A tsx script against
+the real data: generic pool 55 with zero raid items in it, no raid item
+below Rare, all 8 prefixes loaded, Blackford set has 7 pieces, a real
+`instantiate('knights_blade', raidNormal)` + prefix gives "Siege-Worn
+Knight's Blade [Normal]", and the "The"/bonus-prefix/no-prefix cases all
+come out as above. Not run: a full in-game raid in the browser.

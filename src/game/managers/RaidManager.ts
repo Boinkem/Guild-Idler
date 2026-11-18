@@ -6,6 +6,7 @@ import { renownForRaidClear, TOMBSTONE_STYLES } from '../data/progression';
 import { Tuning } from '../data/tuning';
 import { armouryWearCut, heroSignature } from '../data/attunement';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
+import { raidPrefixedName } from '../data/proceduralLoot';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
 import { DIFFICULTY_ORDER } from '../data/quests';
@@ -497,16 +498,19 @@ export const RaidManager = {
         // (patch 0258, see EquipmentManager.instantiate's own comment) --
         // sourceTag maps Heroic/Mythic/Legendary to their own budget
         // multiplier + bracketed tag either way; Normal raid drops get
-        // neither (same as an ordinary Easy/Normal quest drop, and a
-        // Normal Set-piece drop stays at its own unscaled authored
-        // numbers).
+        // 'raidNormal' (patch 0487): a [Normal] tag but no multiplier, so
+        // the same power an ordinary Normal quest drop gets.
         const raidSourceTag = active.difficulty === 'heroic' ? 'raidHeroic'
           : active.difficulty === 'mythic' ? 'raidMythic'
-            : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
+            : active.difficulty === 'legendary' ? 'raidLegendary' : 'raidNormal';
         const item = EquipmentManager.instantiate(parsed.defId, {
           itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng, heroLevel: partyLevel,
         });
         if (!def || !item) continue;
+        // Patch 0487 -- the raid's own prefix ("Rimebound ...") on every
+        // drop. Normal now uses 'raidNormal' (a [Normal] tag, same power as
+        // the old 'normal'), so proceduralName is always set here.
+        item.proceduralName = raidPrefixedName(raid?.lootPrefix, def.name, item.proceduralName ?? def.name);
         state.stash.push(item);
         if (!state.discoveredItems.includes(parsed.defId)) state.discoveredItems.push(parsed.defId);
         state.stats.itemsFound += 1;

@@ -1541,6 +1541,15 @@ export interface RaidDef {
    */
   requiresChainId?: string;
   /**
+   * Patch 0487. One fixed word put in front of every item this raid drops
+   * (e.g. "Rimebound" -> "Rimebound Frostfang Claw [Heroic]"), so a piece
+   * always shows which raid it came from -- see raidPrefixedName in
+   * proceduralLoot.ts. Baked into the item's proceduralName at drop time;
+   * gear dropped before this keeps its old name. Optional: unset = no
+   * prefix.
+   */
+  lootPrefix?: string;
+  /**
    * Optional banner-art override + focus point, editable via the DevTool's
    * banner picker (see server.mjs's `bannerImage` field type). `path` is
    * relative to public/lore/ (e.g. "raids/foo.jpg") and overrides the
