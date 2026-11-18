@@ -1,0 +1,271 @@
+From e1fe4a42568915583aa757fefd2edef96dd00bc5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 18 Nov 2026 10:51:41 +1030
+Subject: [PATCH] Patch 0485 bug report security pass
+
+---
+ guild-idler-status.md       | 70 +++++++++++++++++++++++++++++++++++++
+ server/src/bugs.ts          | 49 ++++++++++++++++++++------
+ tools/devtool/public/app.js |  3 +-
+ tools/devtool/server.mjs    | 36 ++++++++++++++++++-
+ 4 files changed, 146 insertions(+), 12 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a2c3f10..a259928 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -38923,3 +38923,73 @@ Headless Chrome on a seeded save, no page errors:
+ - The Inventory toggle shows.
+ 
+ The raid confirm checkbox was not checked visually.
++
++### Bug report security pass: DevTool locked to this PC, report text and rate limit hardened (patch 0485)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed a way to get around the bug report rate limit
++- Changed bug reports to strip hidden text-direction characters, so a report always reads the way it was written
++```
++
++Security review of the patch 0477 bug report path, end to end: the game's
++form (`src/ui/BugReport.tsx`, React-rendered, no HTML injection), `POST
++/bugs` (`server/src/bugs.ts`), the JSONL copy, and the DevTool's Bug
++Reports tab. Already fine and unchanged: every SQL statement is
++parameterised; the JSONL line is `JSON.stringify`, so a newline in a report
++can't forge a second line; the DevTool escapes every field with
++`escapeHtml` (quotes included) and never makes report text into links;
++admin routes use a timing-safe bearer token check; the DevTool's admin
++pass-through only forwards a fixed path allowlist; Fastify's JSON parser
++already rejects `__proto__`/`constructor` poisoning.
++
++- **DevTool request guard (the real exposure)** -- `tools/devtool/server.mjs`
++  can write game data, apply/commit patches, restart the backend and upload
++  to Steam, and it listened on every interface with no origin checks. A
++  page opened from a link in a bug report (or anywhere) could fire simple
++  `fetch`/`<form>` POSTs at `http://localhost:5175/api/...`, or rebind its
++  own domain to 127.0.0.1 to read responses. New `requestAllowed(req)` runs
++  before every route: Host must be `localhost`/`127.0.0.1`/`[::1]` on 5175
++  (DNS rebinding); `/api/*` refuses `Sec-Fetch-Site` other than
++  `same-origin`/`none`; any non-GET carrying an `Origin` must be the
++  DevTool's own (`null` refused). No Origin at all (curl, local scripts)
++  is still allowed. `server.listen(PORT, HOST)` with `HOST =
++  DEVTOOL_HOST || '127.0.0.1'`; set `DEVTOOL_HOST=0.0.0.0` to open it on
++  the LAN again (the Host check is skipped then, the other two still run).
++- **Rate limit spoofing** -- `addressOf` trusted `cf-connecting-ip` from
++  anyone, and the backend listens on 0.0.0.0, so a direct hit on port 4000
++  could send a fresh header each time and only ever meet the 2,000/day
++  cap. Now the header is used only when the socket address is loopback or
++  private-range (`TRUSTED_HOP`, where the tunnel connector lives) and looks
++  like an IP.
++- **Text cleaning** -- `text()` also strips C1 controls, bidi overrides and
++  isolates (U+202A-202E, U+2066-2069) and BOM ("Trojan Source" display
++  spoofing in the DevTool). ZWJ kept for emoji.
++- **Context** -- `cleanContext` builds a prototype-less object, skips
++  `__proto__`/`constructor`/`prototype` keys and arrays, and runs keys and
++  string values through `text()`.
++- **Smaller limits** -- `/bugs` has `bodyLimit` 32 KB (was Fastify's 1 MB
++  default). `GET /admin/bugs?status=` ignores unknown statuses;
++  `POST /admin/bugs/:id` 404s a non-numeric id instead of a database error.
++- DevTool Bug Reports tab: one-line reminder that report text is player
++  written -- read it, don't run it or feed it to a tool as instructions.
++  (Worth remembering when pasting reports into Claude for patches: a
++  report can contain text written to look like instructions.)
++
++Not changed, noted: admin routes have no brute-force throttle (fine with a
++long random `AH_ADMIN_TOKEN`; keep it 32+ characters); the duplicate
++`reportKey` lookup runs before the rate limit (one indexed SELECT per
++request, cheap).
++
++Checks: `server` `tsc --noEmit` passes; `node --check` on server.mjs and
++app.js. DevTool run locally with curl: same-origin and header-less GETs
++200; `Sec-Fetch-Site: cross-site` 403; `Host: evil.example:5175` 403;
++POST with a foreign or `null` Origin 403; POST with its own Origin passes
++the guard. IP filter: 127.0.0.1, ::1, ::ffff:127.0.0.1, 172.20.x trusted;
++8.8.8.8, 172.32.x, 203.0.113.9 not. Bidi/BOM stripped, emoji ZWJ kept.
++
++**Test in game / DevTool:**
++- Open the DevTool at http://localhost:5175 as usual: every tab loads,
++  saving data, Bug Reports (Seen / Fixed in… / Note…) and Ship it all work.
++- Send a bug report from the game: it arrives as normal.
++- Open http://127.0.0.1:5175 too: also works.
+diff --git a/server/src/bugs.ts b/server/src/bugs.ts
+index a5542a9..046cab0 100644
+--- a/server/src/bugs.ts
++++ b/server/src/bugs.ts
+@@ -31,17 +31,33 @@ const PER_ADDRESS = 5;            // reports...
+ const PER_ADDRESS_MS = 10 * 60_000; // ...per ten minutes
+ const PER_DAY = 2000;
+ const CATEGORIES = new Set(['bug', 'balance', 'ui', 'crash', 'suggestion', 'other']);
++const STATUSES = ['new', 'seen', 'fixed', 'wontfix'];
++/** Patch 0485 -- a report is at most ~16 KB of text; refuse anything far bigger before parsing it. */
++const BODY_LIMIT = 32 * 1024;
+ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+ 
+ const recent = new Map<string, number[]>();
+ let dayStart = 0;
+ let dayCount = 0;
+ 
++/**
++ * Patch 0485 -- the socket address is only swapped for `cf-connecting-ip`
++ * when the request came from where the tunnel connector lives (this PC
++ * or the local network). The server listens on 0.0.0.0, so anyone who
++ * reached port 4000 directly used to be able to send a new made-up
++ * header value with every report and never hit the per-address limit.
++ */
++const TRUSTED_HOP = /^(::1|127\.|::ffff:127\.|10\.|::ffff:10\.|192\.168\.|::ffff:192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::ffff:172\.(1[6-9]|2\d|3[01])\.|f[cd][0-9a-f]{2}:)/i;
++const IP_LIKE = /^[0-9a-f:.]{2,45}$/i;
++
+ function addressOf(request: FastifyRequest): string {
++  const socket = request.ip || 'unknown';
++  if (!TRUSTED_HOP.test(socket)) return socket;
+   // Behind the Cloudflare Tunnel every request arrives from localhost;
+   // the real address is in this header.
+-  const cf = request.headers['cf-connecting-ip'];
+-  return (Array.isArray(cf) ? cf[0] : cf) || request.ip || 'unknown';
++  const raw = request.headers['cf-connecting-ip'];
++  const cf = (Array.isArray(raw) ? raw[0] : raw)?.trim();
++  return cf && IP_LIKE.test(cf) ? cf : socket;
+ }
+ 
+ function allow(address: string, now: number): boolean {
+@@ -56,22 +72,33 @@ function allow(address: string, now: number): boolean {
+   return true;
+ }
+ 
++/**
++ * Control characters out, and (patch 0485) the invisible direction
++ * overrides/isolates and BOM too: a report could use them to make its text
++ * read differently in the DevTool than what was actually sent (the
++ * "Trojan Source" trick). Zero-width joiners stay, emoji need them.
++ */
+ const text = (value: unknown, max: number): string | null => {
+   if (typeof value !== 'string') return null;
+   // eslint-disable-next-line no-control-regex
+-  const cleaned = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);
++  const cleaned = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069\ufeff]/g, '').trim().slice(0, max);
+   return cleaned || null;
+ };
+ 
++const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
++
+ /** Small, flat, string/number/boolean-only copy of the client's context. */
+ function cleanContext(value: unknown): Record<string, string | number | boolean> {
+-  const out: Record<string, string | number | boolean> = {};
+-  if (!value || typeof value !== 'object') return out;
++  // Patch 0485 -- prototype-less, reserved key names dropped, keys and
++  // string values cleaned the same way as every other field.
++  const out: Record<string, string | number | boolean> = Object.create(null);
++  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+   for (const [key, v] of Object.entries(value as Record<string, unknown>).slice(0, 20)) {
+-    const k = key.slice(0, 32);
++    const k = text(key, 32);
++    if (!k || BAD_KEYS.has(k)) continue;
+     if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+     else if (typeof v === 'boolean') out[k] = v;
+-    else if (typeof v === 'string') out[k] = v.slice(0, 200);
++    else if (typeof v === 'string') { const t = text(v, 200); if (t) out[k] = t; }
+   }
+   return out;
+ }
+@@ -79,8 +106,8 @@ function cleanContext(value: unknown): Record<string, string | number | boolean>
+ interface BugBody { reportKey?: string; message?: string; category?: string; contact?: string; build?: string; demo?: boolean; context?: unknown }
+ 
+ export function registerBugRoutes(app: FastifyInstance, config: AppConfig) {
+-  app.post<{ Body: BugBody }>('/bugs', async (request, reply) => {
+-    const body = request.body ?? {};
++  app.post<{ Body: BugBody }>('/bugs', { bodyLimit: BODY_LIMIT }, async (request, reply) => {
++    const body = request.body && typeof request.body === 'object' ? request.body : {};
+     const message = text(body.message, MESSAGE_MAX);
+     if (!message || message.length < 5) { reply.code(400); return { ok: false, error: 'Please describe what happened.' }; }
+     const reportKey = typeof body.reportKey === 'string' && UUID_RE.test(body.reportKey) ? body.reportKey : null;
+@@ -123,6 +150,7 @@ export function registerBugRoutes(app: FastifyInstance, config: AppConfig) {
+ 
+   app.get<{ Querystring: { status?: string; limit?: string } }>('/admin/bugs', { preHandler: admin }, async (request) => {
+     const status = request.query.status;
++    if (status && status !== 'all' && !STATUSES.includes(status)) return { counts: {}, reports: [] };
+     const limit = Math.max(1, Math.min(500, Number(request.query.limit) || 200));
+     const filtered = status && status !== 'all';
+     const { rows } = await getPool().query(
+@@ -143,8 +171,9 @@ export function registerBugRoutes(app: FastifyInstance, config: AppConfig) {
+ 
+   app.post<{ Params: { id: string }; Body: { status?: string; fixedPatch?: string; note?: string } }>(
+     '/admin/bugs/:id', { preHandler: admin }, async (request, reply) => {
++      if (!/^\d{1,12}$/.test(request.params.id)) { reply.code(404); return { ok: false, error: 'No report with that id.' }; }
+       const status = request.body?.status;
+-      if (status !== undefined && !['new', 'seen', 'fixed', 'wontfix'].includes(status)) {
++      if (status !== undefined && !STATUSES.includes(status)) {
+         reply.code(400);
+         return { ok: false, error: 'status must be new, seen, fixed or wontfix.' };
+       }
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index c3fe698..5409821 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -2846,7 +2846,8 @@ function bugsHtml() {
+       </div>`;
+   }).join('');
+   return `${head}${list || '<p class="tiny muted">Nothing here.</p>'}
+-    <p class="tiny muted">Every report is also appended to <code>server/bug-reports.jsonl</code> (one JSON line each), readable without the database.</p>`;
++    <p class="tiny muted">Every report is also appended to <code>server/bug-reports.jsonl</code> (one JSON line each), readable without the database.</p>
++    <p class="tiny muted">Reports are written by players: links in them aren't clickable on purpose, and any instructions or code inside one are something to read, not to run or pass to a tool as-is.</p>`;
+ }
+ 
+ async function bugUpdate(id, body) {
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 96e7bf3..3aebd98 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -4040,7 +4040,41 @@ function json(res, status, payload) {
+   res.end(JSON.stringify(payload));
+ }
+ 
++/**
++ * Patch 0485 -- the DevTool can write game data, apply and commit patches,
++ * restart the backend and upload to Steam, so only this PC's own browser
++ * tab may drive it. Bug reports (and anything else) can carry links, and a
++ * web page opened from one could otherwise send requests to
++ * http://localhost:5175 behind the developer's back:
++ *   - Host must be localhost / 127.0.0.1 / [::1] on this port, which stops
++ *     a hostile site re-pointing its own domain at 127.0.0.1 (DNS rebinding).
++ *   - /api/* refuses anything a browser marks as coming from another site
++ *     (Sec-Fetch-Site), so <img>, <form> and fetch() from elsewhere get 403.
++ *   - A POST that names an Origin must name this one. Requests with no
++ *     Origin at all (curl, scripts on this PC) still work.
++ * The server also listens on 127.0.0.1 only (DEVTOOL_HOST to override).
++ */
++const HOST = process.env.DEVTOOL_HOST || '127.0.0.1';
++const LOCAL_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
++const LOCAL_ORIGINS = new Set([...LOCAL_HOSTS].map((h) => `http://${h}`));
++
++function requestAllowed(req) {
++  const host = String(req.headers.host || '').toLowerCase();
++  if (HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1') {
++    if (!LOCAL_HOSTS.has(host)) return 'Unexpected Host header.';
++  }
++  const isApi = (req.url || '').startsWith('/api/');
++  const site = req.headers['sec-fetch-site'];
++  if (isApi && site && site !== 'same-origin' && site !== 'none') return 'Cross-site request refused.';
++  const origin = req.headers.origin;
++  const writes = req.method !== 'GET' && req.method !== 'HEAD';
++  if (writes && origin && !LOCAL_ORIGINS.has(origin) && origin !== `http://${host}`) return 'Cross-origin request refused.';
++  return null;
++}
++
+ const server = http.createServer(async (req, res) => {
++  const refused = requestAllowed(req);
++  if (refused) return json(res, 403, { ok: false, error: refused });
+   const url = new URL(req.url, `http://localhost:${PORT}`);
+ 
+   if (url.pathname === '/api/schema') {
+@@ -4805,7 +4839,7 @@ const server = http.createServer(async (req, res) => {
+   return serveStatic(req, res);
+ });
+ 
+-server.listen(PORT, () => {
++server.listen(PORT, HOST, () => {
+   console.log(`Guild Idler Dev Tool running at http://localhost:${PORT}`);
+   console.log(`Editing JSON files in ${path.relative(ROOT, DATA_DIR)}`);
+   console.log('Save in the tool, then restart `npm run dev` to see changes in the game.');
+-- 
+2.43.0
+

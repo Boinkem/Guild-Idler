@@ -31,17 +31,33 @@ const PER_ADDRESS = 5;            // reports...
 const PER_ADDRESS_MS = 10 * 60_000; // ...per ten minutes
 const PER_DAY = 2000;
 const CATEGORIES = new Set(['bug', 'balance', 'ui', 'crash', 'suggestion', 'other']);
+const STATUSES = ['new', 'seen', 'fixed', 'wontfix'];
+/** Patch 0485 -- a report is at most ~16 KB of text; refuse anything far bigger before parsing it. */
+const BODY_LIMIT = 32 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const recent = new Map<string, number[]>();
 let dayStart = 0;
 let dayCount = 0;
 
+/**
+ * Patch 0485 -- the socket address is only swapped for `cf-connecting-ip`
+ * when the request came from where the tunnel connector lives (this PC
+ * or the local network). The server listens on 0.0.0.0, so anyone who
+ * reached port 4000 directly used to be able to send a new made-up
+ * header value with every report and never hit the per-address limit.
+ */
+const TRUSTED_HOP = /^(::1|127\.|::ffff:127\.|10\.|::ffff:10\.|192\.168\.|::ffff:192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::ffff:172\.(1[6-9]|2\d|3[01])\.|f[cd][0-9a-f]{2}:)/i;
+const IP_LIKE = /^[0-9a-f:.]{2,45}$/i;
+
 function addressOf(request: FastifyRequest): string {
+  const socket = request.ip || 'unknown';
+  if (!TRUSTED_HOP.test(socket)) return socket;
   // Behind the Cloudflare Tunnel every request arrives from localhost;
   // the real address is in this header.
-  const cf = request.headers['cf-connecting-ip'];
-  return (Array.isArray(cf) ? cf[0] : cf) || request.ip || 'unknown';
+  const raw = request.headers['cf-connecting-ip'];
+  const cf = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+  return cf && IP_LIKE.test(cf) ? cf : socket;
 }
 
 function allow(address: string, now: number): boolean {
@@ -56,22 +72,33 @@ function allow(address: string, now: number): boolean {
   return true;
 }
 
+/**
+ * Control characters out, and (patch 0485) the invisible direction
+ * overrides/isolates and BOM too: a report could use them to make its text
+ * read differently in the DevTool than what was actually sent (the
+ * "Trojan Source" trick). Zero-width joiners stay, emoji need them.
+ */
 const text = (value: unknown, max: number): string | null => {
   if (typeof value !== 'string') return null;
   // eslint-disable-next-line no-control-regex
-  const cleaned = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);
+  const cleaned = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069\ufeff]/g, '').trim().slice(0, max);
   return cleaned || null;
 };
 
+const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 /** Small, flat, string/number/boolean-only copy of the client's context. */
 function cleanContext(value: unknown): Record<string, string | number | boolean> {
-  const out: Record<string, string | number | boolean> = {};
-  if (!value || typeof value !== 'object') return out;
+  // Patch 0485 -- prototype-less, reserved key names dropped, keys and
+  // string values cleaned the same way as every other field.
+  const out: Record<string, string | number | boolean> = Object.create(null);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [key, v] of Object.entries(value as Record<string, unknown>).slice(0, 20)) {
-    const k = key.slice(0, 32);
+    const k = text(key, 32);
+    if (!k || BAD_KEYS.has(k)) continue;
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
     else if (typeof v === 'boolean') out[k] = v;
-    else if (typeof v === 'string') out[k] = v.slice(0, 200);
+    else if (typeof v === 'string') { const t = text(v, 200); if (t) out[k] = t; }
   }
   return out;
 }
@@ -79,8 +106,8 @@ function cleanContext(value: unknown): Record<string, string | number | boolean>
 interface BugBody { reportKey?: string; message?: string; category?: string; contact?: string; build?: string; demo?: boolean; context?: unknown }
 
 export function registerBugRoutes(app: FastifyInstance, config: AppConfig) {
-  app.post<{ Body: BugBody }>('/bugs', async (request, reply) => {
-    const body = request.body ?? {};
+  app.post<{ Body: BugBody }>('/bugs', { bodyLimit: BODY_LIMIT }, async (request, reply) => {
+    const body = request.body && typeof request.body === 'object' ? request.body : {};
     const message = text(body.message, MESSAGE_MAX);
     if (!message || message.length < 5) { reply.code(400); return { ok: false, error: 'Please describe what happened.' }; }
     const reportKey = typeof body.reportKey === 'string' && UUID_RE.test(body.reportKey) ? body.reportKey : null;
@@ -123,6 +150,7 @@ export function registerBugRoutes(app: FastifyInstance, config: AppConfig) {
 
   app.get<{ Querystring: { status?: string; limit?: string } }>('/admin/bugs', { preHandler: admin }, async (request) => {
     const status = request.query.status;
+    if (status && status !== 'all' && !STATUSES.includes(status)) return { counts: {}, reports: [] };
     const limit = Math.max(1, Math.min(500, Number(request.query.limit) || 200));
     const filtered = status && status !== 'all';
     const { rows } = await getPool().query(
@@ -143,8 +171,9 @@ export function registerBugRoutes(app: FastifyInstance, config: AppConfig) {
 
   app.post<{ Params: { id: string }; Body: { status?: string; fixedPatch?: string; note?: string } }>(
     '/admin/bugs/:id', { preHandler: admin }, async (request, reply) => {
+      if (!/^\d{1,12}$/.test(request.params.id)) { reply.code(404); return { ok: false, error: 'No report with that id.' }; }
       const status = request.body?.status;
-      if (status !== undefined && !['new', 'seen', 'fixed', 'wontfix'].includes(status)) {
+      if (status !== undefined && !STATUSES.includes(status)) {
         reply.code(400);
         return { ok: false, error: 'status must be new, seen, fixed or wontfix.' };
       }

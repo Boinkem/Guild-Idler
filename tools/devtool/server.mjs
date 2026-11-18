@@ -4040,7 +4040,41 @@ function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+/**
+ * Patch 0485 -- the DevTool can write game data, apply and commit patches,
+ * restart the backend and upload to Steam, so only this PC's own browser
+ * tab may drive it. Bug reports (and anything else) can carry links, and a
+ * web page opened from one could otherwise send requests to
+ * http://localhost:5175 behind the developer's back:
+ *   - Host must be localhost / 127.0.0.1 / [::1] on this port, which stops
+ *     a hostile site re-pointing its own domain at 127.0.0.1 (DNS rebinding).
+ *   - /api/* refuses anything a browser marks as coming from another site
+ *     (Sec-Fetch-Site), so <img>, <form> and fetch() from elsewhere get 403.
+ *   - A POST that names an Origin must name this one. Requests with no
+ *     Origin at all (curl, scripts on this PC) still work.
+ * The server also listens on 127.0.0.1 only (DEVTOOL_HOST to override).
+ */
+const HOST = process.env.DEVTOOL_HOST || '127.0.0.1';
+const LOCAL_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
+const LOCAL_ORIGINS = new Set([...LOCAL_HOSTS].map((h) => `http://${h}`));
+
+function requestAllowed(req) {
+  const host = String(req.headers.host || '').toLowerCase();
+  if (HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1') {
+    if (!LOCAL_HOSTS.has(host)) return 'Unexpected Host header.';
+  }
+  const isApi = (req.url || '').startsWith('/api/');
+  const site = req.headers['sec-fetch-site'];
+  if (isApi && site && site !== 'same-origin' && site !== 'none') return 'Cross-site request refused.';
+  const origin = req.headers.origin;
+  const writes = req.method !== 'GET' && req.method !== 'HEAD';
+  if (writes && origin && !LOCAL_ORIGINS.has(origin) && origin !== `http://${host}`) return 'Cross-origin request refused.';
+  return null;
+}
+
 const server = http.createServer(async (req, res) => {
+  const refused = requestAllowed(req);
+  if (refused) return json(res, 403, { ok: false, error: refused });
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
   if (url.pathname === '/api/schema') {
@@ -4805,7 +4839,7 @@ const server = http.createServer(async (req, res) => {
   return serveStatic(req, res);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`Guild Idler Dev Tool running at http://localhost:${PORT}`);
   console.log(`Editing JSON files in ${path.relative(ROOT, DATA_DIR)}`);
   console.log('Save in the tool, then restart `npm run dev` to see changes in the game.');

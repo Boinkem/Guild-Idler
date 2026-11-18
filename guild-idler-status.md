@@ -38923,3 +38923,73 @@ Headless Chrome on a seeded save, no page errors:
 - The Inventory toggle shows.
 
 The raid confirm checkbox was not checked visually.
+
+### Bug report security pass: DevTool locked to this PC, report text and rate limit hardened (patch 0485)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed a way to get around the bug report rate limit
+- Changed bug reports to strip hidden text-direction characters, so a report always reads the way it was written
+```
+
+Security review of the patch 0477 bug report path, end to end: the game's
+form (`src/ui/BugReport.tsx`, React-rendered, no HTML injection), `POST
+/bugs` (`server/src/bugs.ts`), the JSONL copy, and the DevTool's Bug
+Reports tab. Already fine and unchanged: every SQL statement is
+parameterised; the JSONL line is `JSON.stringify`, so a newline in a report
+can't forge a second line; the DevTool escapes every field with
+`escapeHtml` (quotes included) and never makes report text into links;
+admin routes use a timing-safe bearer token check; the DevTool's admin
+pass-through only forwards a fixed path allowlist; Fastify's JSON parser
+already rejects `__proto__`/`constructor` poisoning.
+
+- **DevTool request guard (the real exposure)** -- `tools/devtool/server.mjs`
+  can write game data, apply/commit patches, restart the backend and upload
+  to Steam, and it listened on every interface with no origin checks. A
+  page opened from a link in a bug report (or anywhere) could fire simple
+  `fetch`/`<form>` POSTs at `http://localhost:5175/api/...`, or rebind its
+  own domain to 127.0.0.1 to read responses. New `requestAllowed(req)` runs
+  before every route: Host must be `localhost`/`127.0.0.1`/`[::1]` on 5175
+  (DNS rebinding); `/api/*` refuses `Sec-Fetch-Site` other than
+  `same-origin`/`none`; any non-GET carrying an `Origin` must be the
+  DevTool's own (`null` refused). No Origin at all (curl, local scripts)
+  is still allowed. `server.listen(PORT, HOST)` with `HOST =
+  DEVTOOL_HOST || '127.0.0.1'`; set `DEVTOOL_HOST=0.0.0.0` to open it on
+  the LAN again (the Host check is skipped then, the other two still run).
+- **Rate limit spoofing** -- `addressOf` trusted `cf-connecting-ip` from
+  anyone, and the backend listens on 0.0.0.0, so a direct hit on port 4000
+  could send a fresh header each time and only ever meet the 2,000/day
+  cap. Now the header is used only when the socket address is loopback or
+  private-range (`TRUSTED_HOP`, where the tunnel connector lives) and looks
+  like an IP.
+- **Text cleaning** -- `text()` also strips C1 controls, bidi overrides and
+  isolates (U+202A-202E, U+2066-2069) and BOM ("Trojan Source" display
+  spoofing in the DevTool). ZWJ kept for emoji.
+- **Context** -- `cleanContext` builds a prototype-less object, skips
+  `__proto__`/`constructor`/`prototype` keys and arrays, and runs keys and
+  string values through `text()`.
+- **Smaller limits** -- `/bugs` has `bodyLimit` 32 KB (was Fastify's 1 MB
+  default). `GET /admin/bugs?status=` ignores unknown statuses;
+  `POST /admin/bugs/:id` 404s a non-numeric id instead of a database error.
+- DevTool Bug Reports tab: one-line reminder that report text is player
+  written -- read it, don't run it or feed it to a tool as instructions.
+  (Worth remembering when pasting reports into Claude for patches: a
+  report can contain text written to look like instructions.)
+
+Not changed, noted: admin routes have no brute-force throttle (fine with a
+long random `AH_ADMIN_TOKEN`; keep it 32+ characters); the duplicate
+`reportKey` lookup runs before the rate limit (one indexed SELECT per
+request, cheap).
+
+Checks: `server` `tsc --noEmit` passes; `node --check` on server.mjs and
+app.js. DevTool run locally with curl: same-origin and header-less GETs
+200; `Sec-Fetch-Site: cross-site` 403; `Host: evil.example:5175` 403;
+POST with a foreign or `null` Origin 403; POST with its own Origin passes
+the guard. IP filter: 127.0.0.1, ::1, ::ffff:127.0.0.1, 172.20.x trusted;
+8.8.8.8, 172.32.x, 203.0.113.9 not. Bidi/BOM stripped, emoji ZWJ kept.
+
+**Test in game / DevTool:**
+- Open the DevTool at http://localhost:5175 as usual: every tab loads,
+  saving data, Bug Reports (Seen / Fixed in… / Note…) and Ship it all work.
+- Send a bug report from the game: it arrives as normal.
+- Open http://127.0.0.1:5175 too: also works.

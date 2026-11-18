@@ -2846,7 +2846,8 @@ function bugsHtml() {
       </div>`;
   }).join('');
   return `${head}${list || '<p class="tiny muted">Nothing here.</p>'}
-    <p class="tiny muted">Every report is also appended to <code>server/bug-reports.jsonl</code> (one JSON line each), readable without the database.</p>`;
+    <p class="tiny muted">Every report is also appended to <code>server/bug-reports.jsonl</code> (one JSON line each), readable without the database.</p>
+    <p class="tiny muted">Reports are written by players: links in them aren't clickable on purpose, and any instructions or code inside one are something to read, not to run or pass to a tool as-is.</p>`;
 }
 
 async function bugUpdate(id, body) {
