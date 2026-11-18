@@ -42,24 +42,43 @@ const BOLTS: Record<string, { w: number; style: CSSProperties }[]> = {
   ],
 };
 
-export function HeroPowerPortrait({ hero }: { hero: Hero }) {
+export function HeroPowerPortrait({ hero, tombstoneIcon }: {
+  hero: Hero;
+  /** Patch 0489 -- the guild's selected tombstone style's file (under
+   *  public/hero-status/, same as HeroBlock's Tombstone). Given and the
+   *  hero is Fallen: the frame shows the tombstone instead of the
+   *  portrait, and the power effects (bolts, rings, orbs, sheen) go
+   *  quiet. Omitted: always the portrait, as before. */
+  tombstoneIcon?: string;
+}) {
   const cls = HERO_CLASSES[hero.heroClass];
   const tier = levelTierName(hero.level);
-  const bolts = BOLTS[tier] ?? [];
-  const showSheen = tier === 'Epic' || tier === 'Legendary';
+  const fallen = !!tombstoneIcon && hero.status === 'fallen';
+  const bolts = fallen ? [] : (BOLTS[tier] ?? []);
+  const showSheen = !fallen && (tier === 'Epic' || tier === 'Legendary');
+  const fx = !fallen && tier === 'Legendary';
   return (
-    <div className={`amb-aura amb-aura-${tier.toLowerCase()}`} title={`${hero.name} -- ${tier} power (level ${hero.level})`}>
+    <div
+      className={`amb-aura amb-aura-${tier.toLowerCase()} ${fallen ? 'amb-aura-fallen' : ''}`}
+      title={fallen ? `${hero.name} -- Fallen` : `${hero.name} -- ${tier} power (level ${hero.level})`}
+    >
       <div className="amb-aura-stage">
         <span className="amb-aura-glow" aria-hidden="true" />
-        {tier === 'Legendary' && <><span className="amb-aura-ring" aria-hidden="true" /><span className="amb-aura-ring r2" aria-hidden="true" /></>}
-        <div
-          className="amb-aura-frame"
-          role="img"
-          aria-label={`${hero.name}, ${cls?.name ?? hero.heroClass}`}
-          style={{ backgroundImage: `url(${heroPortraitSrc(hero.heroClass, cls?.portrait)})`, ...heroPortraitStyle(cls?.portrait) }}
-        >
-          {showSheen && <span className="amb-aura-sheen" aria-hidden="true" />}
-        </div>
+        {fx && <><span className="amb-aura-ring" aria-hidden="true" /><span className="amb-aura-ring r2" aria-hidden="true" /></>}
+        {fallen ? (
+          <div className="amb-aura-frame amb-aura-grave" role="img" aria-label={`${hero.name}'s tombstone, Fallen`}>
+            <img className="amb-aura-tomb" src={`./hero-status/${tombstoneIcon}`} alt="" />
+          </div>
+        ) : (
+          <div
+            className="amb-aura-frame"
+            role="img"
+            aria-label={`${hero.name}, ${cls?.name ?? hero.heroClass}`}
+            style={{ backgroundImage: `url(${heroPortraitSrc(hero.heroClass, cls?.portrait)})`, ...heroPortraitStyle(cls?.portrait) }}
+          >
+            {showSheen && <span className="amb-aura-sheen" aria-hidden="true" />}
+          </div>
+        )}
         {bolts.map((b, i) => (
           <svg
             key={`${tier}-${i}`}
@@ -74,7 +93,7 @@ export function HeroPowerPortrait({ hero }: { hero: Hero }) {
             <path className="alt" d={BOLT_ALT} />
           </svg>
         ))}
-        {tier === 'Legendary' && (
+        {fx && (
           <>
             <span className="amb-aura-orb" aria-hidden="true"><i /><i /></span>
             <span className="amb-aura-orb o2" aria-hidden="true"><i /><i /></span>

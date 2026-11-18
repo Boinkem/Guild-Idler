@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { useEngine } from '../useEngine';
+import { useEngine, useNow } from '../useEngine';
 import { PrereqLink } from '../PrereqLink';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -35,7 +35,10 @@ import { fxSpeed } from '../purchaseFx';
 import { useRepairFx } from '../repairFx';
 import { useRecentIncrease } from '../purchaseFx';
 import { HeroPowerPortrait } from '../heroAura';
-import { HERO_CLASSES } from '../../game/data/progression';
+import { HERO_CLASSES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+import { GuildManager } from '../../game/managers/GuildManager';
+import { heroStatusInfo } from '../HeroStatusBar';
+import { formatDuration } from '../../game/util';
 import { heroPortraitSrc, heroPortraitStyle } from './HeroesPanel';
 
 const SLOTS = EQUIP_SLOTS;
@@ -518,9 +521,104 @@ function CurioCard({ def, count, engine }: { def: CurioDef; count: number; engin
   );
 }
 
+/* ------------------------------------------------ health (0489) --- */
+// Patch 0489. Health on the Inventory screen, where gear is repaired and
+// health items are used: a panel under the hero's portrait, and a thin
+// bar under each hero tab's name. Same .bar.health styles and the same
+// 25% "low" line HeroBlock already uses, so Health reads the same way
+// here as on the Heroes screen.
+
+const HEALTH_LOW_RATIO = 0.25;
+
+function TabHealthSliver({ hero }: { hero: Hero }) {
+  const max = HeroManager.maxHealth(hero);
+  const ratio = hero.status === 'fallen' || max <= 0 ? 0 : HeroManager.currentHealth(hero) / max;
+  return (
+    <span className={`bar health hero-tab-hp ${ratio < HEALTH_LOW_RATIO ? 'low' : ''}`} aria-hidden="true">
+      <span style={{ width: `${ratio * 100}%` }} />
+    </span>
+  );
+}
+
+function InventoryHealthPanel({ hero, engine, preview }: { hero: Hero; engine: GameEngine; preview: ConsumableDef | null }) {
+  const now = useNow(1000);
+  const state = engine.state;
+  const fallen = hero.status === 'fallen';
+  const max = HeroManager.maxHealth(hero);
+  const current = fallen ? 0 : HeroManager.currentHealth(hero);
+  const ratio = max > 0 ? current / max : 0;
+  const low = !fallen && ratio < HEALTH_LOW_RATIO;
+  const healEta = HeroManager.healthRegenEtaMs(hero, GuildManager.facilityLevel(state, 'infirmary'));
+  const injuries = hero.injuries.length;
+
+  // Hover preview: what the hovered item would do. Ghost segment only for
+  // restoreHealth on a living hero (draughts can't revive the Fallen).
+  const restore = preview?.effect.restoreHealth ?? 0;
+  const gain = !fallen && restore > 0 ? Math.min(restore, max - current) : 0;
+  let previewText: string | null = null;
+  if (preview) {
+    if (restore > 0) {
+      // Health regenerates fractionally, so round for display (same as
+      // the number above the bar).
+      previewText = fallen ? "Can't revive a Fallen hero" : gain > 0 ? `+${Math.round(gain)} \u2192 ${Math.round(current + gain)}` : 'Already at full Health';
+    } else if (preview.effect.healInjury) {
+      previewText = injuries > 0 ? 'Clears an injury' : 'No injury to clear';
+    }
+  }
+
+  let status = 'Full health';
+  let statusClass = 'ok';
+  if (fallen) { status = 'Fallen, cannot be sent'; statusClass = 'bad'; }
+  else if (low) { status = 'Critical'; statusClass = 'bad'; }
+  else if (current < max) { status = 'Wounded'; statusClass = 'warn'; }
+
+  const fallenInfo = fallen ? heroStatusInfo(engine, now, hero) : null;
+  const reviveTimed = !!fallenInfo && Number.isFinite(fallenInfo.remainingMs);
+
+  return (
+    <div className="inv-health" aria-label={`${hero.name}'s Health`}>
+      <div className="inv-health-head">
+        <span className="inv-health-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" aria-hidden="true" className={`inv-health-heart ${fallen ? 'off' : low ? 'low' : ''}`}>
+            <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
+          </svg>
+          Health
+        </span>
+        <span className="inv-health-num">{Math.round(current)}<span className="muted"> / {max}</span></span>
+      </div>
+      <div className={`bar health inv-health-bar ${low ? 'low' : ''}`}>
+        <span style={{ width: `${ratio * 100}%` }} />
+        {gain > 0 && <span className="inv-health-ghost" style={{ left: `${ratio * 100}%`, width: `${(gain / max) * 100}%` }} />}
+      </div>
+      {fallenInfo && reviveTimed && (
+        <>
+          <div className="bar heal-timer inv-health-revive"><span style={{ width: `${fallenInfo.percent}%` }} /></div>
+          <div className="tiny inv-health-revive-text">
+            {fallenInfo.remainingMs <= 0 ? 'Infirmary revive ready' : `Infirmary revive in ${formatDuration(fallenInfo.remainingMs)}`}
+          </div>
+        </>
+      )}
+      <div className="inv-health-foot">
+        <span className={`inv-health-status ${statusClass}`}>{status}</span>
+        {injuries > 0 && <span className="inv-health-injury">{injuries > 1 ? `Injured \u00d7${injuries}` : 'Injured'}</span>}
+        {previewText && <span className="inv-health-preview">{previewText}</span>}
+      </div>
+      {!fallen && !previewText && healEta > 0 && (
+        <div className="tiny muted">Auto heal · full in {formatDuration(healEta)}</div>
+      )}
+      {fallen && !reviveTimed && <div className="tiny muted">Revive from the Heroes tab</div>}
+    </div>
+  );
+}
+
 function ConsumableInfoCard({
-  def, count, hero, engine,
-}: { def: ConsumableDef; count: number; hero: Hero; engine: GameEngine }) {
+  def, count, hero, engine, onPreview,
+}: {
+  def: ConsumableDef; count: number; hero: Hero; engine: GameEngine;
+  /** Patch 0489 -- hover/focus on a Health or injury item previews it on
+   *  the hero's Health panel (InventoryHealthPanel); null clears it. */
+  onPreview?: (def: ConsumableDef | null) => void;
+}) {
   const [open, setOpen] = useState(false);
   const instantUse = isInstantUseOnHero(def);
   const loadout = InventoryManager.isLoadoutEffect(def);
@@ -535,6 +633,10 @@ function ConsumableInfoCard({
       <div
         className="item-card rarity-card"
         onClick={() => setOpen(true)}
+        onMouseEnter={instantUse ? () => onPreview?.(def) : undefined}
+        onMouseLeave={instantUse ? () => onPreview?.(null) : undefined}
+        onFocus={instantUse ? () => onPreview?.(def) : undefined}
+        onBlur={instantUse ? () => onPreview?.(null) : undefined}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
@@ -1145,6 +1247,10 @@ export function EquipmentPanel() {
   const [heroId, setHeroId] = useState(state.heroes[0].id);
   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
   const { fx: eqFx, run: runEquip } = useEquipFx(engine, hero.id);
+  // Patch 0489 -- consumable being hovered (Health panel preview), and the
+  // guild's chosen tombstone (same lookup HeroesPanel uses).
+  const [healPreview, setHealPreview] = useState<ConsumableDef | null>(null);
+  const tombstoneIcon = TOMBSTONE_STYLE_BY_ID[state.selectedTombstoneStyle ?? 'plain']?.icon ?? 'tombstone.png';
   // Patch 0428 -- the recipe being learned (scroll moment, recipeFx.tsx).
   const [learning, setLearning] = useState<CraftingRecipeDef | null>(null);
   const { fx: rpFx, run: runRepair } = useRepairFx(engine);
@@ -1337,7 +1443,13 @@ export function EquipmentPanel() {
         </Row>
       </div>
       </div>
-      <HeroPowerPortrait hero={hero} />
+      {/* Patch 0489 -- Health under the portrait: this is where gear is
+          repaired and health items are used, but Health itself wasn't
+          shown anywhere on this screen. */}
+      <div className="inv-head-side">
+        <HeroPowerPortrait hero={hero} tombstoneIcon={tombstoneIcon} />
+        <InventoryHealthPanel hero={hero} engine={engine} preview={healPreview} />
+      </div>
       </div>
 
       <div className="row wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
@@ -1345,13 +1457,23 @@ export function EquipmentPanel() {
           <button key={h.id} className={`hero-tab-chip has-portrait ${h.id === hero.id ? 'on' : ''}`} onClick={() => setHeroId(h.id)}>
             {/* Patch 0466 -- class portrait in each tab; the selected one
                 breathes, a hurt or fallen hero gets a red dot. */}
-            <span
-              className="hero-tab-portrait"
-              aria-hidden="true"
-              style={{ backgroundImage: `url(${heroPortraitSrc(h.heroClass, HERO_CLASSES[h.heroClass]?.portrait)})`, ...heroPortraitStyle(HERO_CLASSES[h.heroClass]?.portrait) }}
-            />
+            {h.status === 'fallen' ? (
+              // Patch 0489 -- a Fallen hero's tab shows their tombstone.
+              <span className="hero-tab-portrait hero-tab-grave" aria-hidden="true" style={{ backgroundImage: `url(./hero-status/${tombstoneIcon})` }} />
+            ) : (
+              <span
+                className="hero-tab-portrait"
+                aria-hidden="true"
+                style={{ backgroundImage: `url(${heroPortraitSrc(h.heroClass, HERO_CLASSES[h.heroClass]?.portrait)})`, ...heroPortraitStyle(HERO_CLASSES[h.heroClass]?.portrait) }}
+              />
+            )}
             {(h.injuries.length > 0 || h.status === 'fallen') && <span className="amb-hurt-dot" aria-label="Injured" />}
-            <span>{h.name}</span>
+            {/* Patch 0489 -- a thin Health bar under each name, so who needs
+                healing shows without clicking through every tab. */}
+            <span className="hero-tab-name">
+              <span>{h.name}</span>
+              <TabHealthSliver hero={h} />
+            </span>
           </button>
         ))}
         <div style={{ flex: 1 }} />
@@ -1478,7 +1600,7 @@ export function EquipmentPanel() {
       ) : (
         <div className="item-card-grid gear-card-grid">
           {InventoryManager.owned(state).map(({ def, count }) => (
-            <ConsumableInfoCard key={def.id} def={def} count={count} hero={hero} engine={engine} />
+            <ConsumableInfoCard key={def.id} def={def} count={count} hero={hero} engine={engine} onPreview={setHealPreview} />
           ))}
         </div>
       )}

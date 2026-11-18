@@ -39197,3 +39197,64 @@ rising stats; Ashwoven Charm on Heroic -> Epic; Requiem and Frostfang
 untouched; faked legendary / epic-on-generic / junk values all ignored;
 AH `listingInfo` as above. Not checked: the result screen and loot
 preview in a browser.
+
+### Inventory: Health under the hero portrait, tombstone when Fallen (patch 0489)
+```discord-update
+Dev Update | Inventory Health
+
+- Added a Health bar under the hero's portrait in the Inventory, with current / max Health, an Injured tag and the auto-heal timer
+- Added a preview when you hover a health item: the bar shows where Health will land (e.g. +40 → 113) before you use it
+- Added a thin Health bar under each hero's name tab, so you can see who needs healing at a glance
+- Changed a Fallen hero's portrait and tab to show the guild's tombstone, with the Infirmary revive countdown under it
+```
+
+Direct request with a screenshot: the Inventory is where gear is repaired
+and health items are used, but Health itself wasn't shown anywhere on that
+screen. Mocked up on a Design canvas first ("Inventory Health Bar Mockup")
+and built to match.
+
+**`InventoryHealthPanel`** (`EquipmentPanel.tsx`), under
+`HeroPowerPortrait` in a new `.inv-head-side` column: current / max Health
+(`HeroManager.currentHealth` / `maxHealth`, rounded), a 10px `.bar.health`
+(red below 25%, the same line `HeroBlock` uses), a status line (Full health
+/ Wounded / Critical / Fallen, cannot be sent), an Injured tag (`×n` for
+more than one), and "Auto heal · full in …" from
+`HeroManager.healthRegenEtaMs` when nothing is being previewed. Fallen with
+the Infirmary auto-revive unlocked: a teal `.bar.heal-timer` plus
+"Infirmary revive in …", both from `heroStatusInfo` (HeroStatusBar.tsx) so
+it matches the status bar exactly; without it, "Revive from the Heroes
+tab".
+
+**Hover preview.** `ConsumableInfoCard` gained an optional `onPreview`,
+called on hover and keyboard focus for instant-use items only
+(`isInstantUseOnHero`: `restoreHealth` and/or `healInjury`). `restoreHealth`
+on a living hero draws a striped ghost segment after the fill, capped at
+max, with "+40 → 113". On a Fallen hero it says "Can't revive a Fallen
+hero" (draughts don't revive, as before). `healInjury` items say "Clears an
+injury" / "No injury to clear". Nothing about using items changed.
+
+**Tombstone.** `HeroPowerPortrait` (heroAura.tsx) takes an optional
+`tombstoneIcon`. Given, and the hero Fallen: the frame shows the guild's
+selected tombstone style (`TOMBSTONE_STYLE_BY_ID[state.
+selectedTombstoneStyle]`, same lookup as HeroesPanel, image from
+`./hero-status/`) on a dusk background with a grass fade, a grey aura, and
+no bolts, rings, orbs or sheen. Other callers pass nothing and are
+unchanged (it's only used here today).
+
+**Hero tabs.** A Fallen hero's tab portrait becomes the tombstone, and every
+tab gets a 3px `.bar.health` under the name (`TabHealthSliver`, red below
+25%, empty when Fallen). The injured/fallen red dot stays.
+
+CSS: new `.inv-head-side`, `.inv-health*`, `.amb-aura-fallen`,
+`.amb-aura-grave`, `.amb-aura-tomb`, `.hero-tab-grave`, `.hero-tab-name`,
+`.hero-tab-hp` block at the end of `app.css`. No game logic or save
+changes.
+
+**Verified:** `npx tsc --noEmit` and `vite build --config
+vite.web.config.ts` clean. Ran the web build in headless Chrome on a
+seeded save (one wounded + injured hero, one Fallen with Infirmary 5, one
+at 20/127): panel, Injured tag and auto-heal line show; hovering
+Restorative Draught draws the ghost and "+40 → 113" (fixed an unrounded
+number found here: Health regenerates fractionally); the Fallen hero shows
+the tombstone, empty bar, revive countdown and "Fallen, cannot be sent";
+tab bars show green/red/empty; no page errors.

@@ -10461,3 +10461,63 @@ button.harvest-item:hover {
 .bugrep-row input, .bugrep-row select { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; font-size: 0.75rem; color: var(--parchment); background: var(--panel-2); border: 1px solid var(--panel-3); border-radius: 6px; }
 .bugrep-note { margin: 10px 0; font-size: 0.6875rem; line-height: 1.45; color: var(--muted); }
 .bugrep-done { margin: 6px 0 14px; font-size: 0.8125rem; line-height: 1.5; }
+
+/* ------------------------------------------- inventory health (0489) --- */
+/* Patch 0489 -- Health under the Inventory portrait (InventoryHealthPanel,
+   EquipmentPanel.tsx), a thin bar under each hero tab's name, and the
+   Fallen tombstone in the portrait frame (HeroPowerPortrait's
+   tombstoneIcon). Bars reuse .bar.health / .bar.heal-timer. */
+.inv-head-side { flex: none; display: flex; flex-direction: column; align-items: center; margin: 0 34px 8px 4px; }
+.inv-head-side .amb-aura { margin: 26px 0 6px; }
+.inv-health {
+  width: 220px; box-sizing: border-box; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--panel-3); border-radius: 8px;
+}
+.inv-health-head { display: flex; align-items: center; justify-content: space-between; }
+.inv-health-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--parchment);
+}
+.inv-health-heart { color: var(--moss); }
+.inv-health-heart.low { color: color-mix(in srgb, var(--blood) 70%, white); }
+.inv-health-heart.off { color: var(--muted, #8f8670); }
+.inv-health-num { font-size: 0.8125rem; font-variant-numeric: tabular-nums; color: #fff8e6; }
+.inv-health-bar { height: 10px; }
+/* The hovered item's heal, drawn after the current fill. */
+.inv-health-ghost {
+  position: absolute; top: 0; bottom: 0; display: block;
+  background: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--moss) 75%, white) 0 4px,
+    color-mix(in srgb, var(--moss) 40%, transparent) 4px 8px) !important;
+  transition: width 200ms ease-out;
+}
+.inv-health-revive { height: 4px; }
+.inv-health-revive-text { color: color-mix(in srgb, var(--teal) 70%, white); }
+.inv-health-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 18px; }
+.inv-health-status { font-size: 0.6875rem; font-weight: 600; }
+.inv-health-status.ok { color: color-mix(in srgb, var(--moss) 65%, white); }
+.inv-health-status.warn { color: color-mix(in srgb, var(--brass) 75%, white); }
+.inv-health-status.bad { color: color-mix(in srgb, var(--blood) 55%, white); }
+.inv-health-injury {
+  font-size: 0.625rem; padding: 1px 6px; border-radius: 4px;
+  color: #f0b88a; border: 1px solid #a5602e; background: rgba(180, 90, 40, 0.18);
+}
+.inv-health-preview { font-size: 0.6875rem; color: color-mix(in srgb, var(--moss) 60%, white); }
+
+/* Fallen: the tombstone stands in the portrait frame. */
+.amb-aura-fallen { --c: rgba(90, 90, 120, 0.35); --edge: #6f6a80; --g: .5; }
+.amb-aura-grave {
+  display: flex; align-items: flex-end; justify-content: center; animation: none;
+  background: radial-gradient(ellipse at 50% 88%, #2c2a44 0%, #15122a 72%);
+}
+.amb-aura-grave::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 20px;
+  background: linear-gradient(180deg, rgba(40, 52, 30, 0), rgba(40, 52, 30, 0.85));
+}
+.amb-aura-tomb { position: relative; z-index: 1; height: 86px; width: auto; margin-bottom: 3px; image-rendering: pixelated; }
+.amb-aura-fallen .amb-aura-tier { color: var(--muted, #8f8670); }
+
+/* Hero tabs: tombstone when Fallen, Health sliver under the name. */
+.hero-tab-grave { background-color: #15122a; background-size: contain; background-position: center bottom; image-rendering: pixelated; }
+.hero-tab-name { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.hero-tab-hp { width: 100%; min-width: 40px; height: 3px; border-width: 0; box-shadow: none; }
