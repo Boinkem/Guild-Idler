@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipSlot, EquipmentItem, Hero, Rarity } from '../game/types';
 import { MAIN_STAT_TOOLTIP, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, describeMods, describeStats, formatGold } from '../game/util';
-import { EQUIPMENT_BY_ID, EQUIP_SLOTS, gearScoreForInstance, itemDisplayName } from '../game/data/equipment';
+import { itemDef, EQUIP_SLOTS, gearScoreForInstance, itemDisplayName } from '../game/data/equipment';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { auctionItemLevel, auctionItemName, auctionItemRarity, auctionShopValue, goldToScrap, priceInGold } from '../game/ahItems';
 import { ElementalInfoLine, RarityPill, SetInfoBlock, SetPill, isGearUpgrade } from './panels/EquipmentPanel';
@@ -74,7 +74,7 @@ function ShardListingSummary({ row }: { row: ServerListingRow }) {
 function listingLevel(row: ServerListingRow): number | null {
   if (row.item_type !== 'equipment') return null;
   const item = row.item_payload as EquipmentItem;
-  const def = EQUIPMENT_BY_ID[item?.defId];
+  const def = itemDef(item);
   return def ? item.rolledItemLevel ?? def.reqLevel : null;
 }
 
@@ -90,7 +90,7 @@ function rarityOf(row: ServerListingRow): Rarity | null {
   if (row.item_type === 'shard') return 'legendary';
   if (row.item_type === 'equipment') {
     const item = row.item_payload as EquipmentItem;
-    return EQUIPMENT_BY_ID[item.defId]?.rarity ?? null;
+    return itemDef(item)?.rarity ?? null;
   }
   const payload = row.item_payload as { defId?: string };
   if (!payload.defId) return null;
@@ -113,12 +113,12 @@ function timeLeft(expiresAt: string): string {
 function upgradeHeroes(row: ServerListingRow, heroes: Hero[]): Hero[] {
   if (row.item_type !== 'equipment') return [];
   const item = row.item_payload as EquipmentItem;
-  const def = EQUIPMENT_BY_ID[item?.defId];
+  const def = itemDef(item);
   if (!def) return [];
   const score = gearScoreForInstance(item, def);
   const gain = (h: Hero) => {
     const worn = h.equipment[def.slot];
-    const wornDef = worn ? EQUIPMENT_BY_ID[worn.defId] : undefined;
+    const wornDef = worn ? itemDef(worn) : undefined;
     return score - (worn && wornDef ? gearScoreForInstance(worn, wornDef) : -1);
   };
   return heroes.filter((h) => isGearUpgrade(h, item, def)).sort((a, b) => gain(b) - gain(a));
@@ -198,7 +198,7 @@ function BrowseTab() {
     if (rarityFilter && rarityOf(row) !== rarityFilter) return false;
     if (slotFilter) {
       if (row.item_type !== 'equipment') return false;
-      if (EQUIPMENT_BY_ID[(row.item_payload as EquipmentItem)?.defId]?.slot !== slotFilter) return false;
+      if (itemDef(row.item_payload as EquipmentItem)?.slot !== slotFilter) return false;
     }
     if (needle && !auctionItemName(row.item_type, row.item_payload).toLowerCase().includes(needle)) return false;
     if (!nearLevel) return true;
@@ -325,7 +325,7 @@ function ListingCard({ row, heroes, tagMode, buying, bought = false, onBuy, onIn
   }
   if (row.item_type === 'equipment') {
     const item = row.item_payload as EquipmentItem;
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return null;
     const upgrades = taggedHeroes(row, heroes, tagMode);
     return (
@@ -390,7 +390,7 @@ function ListingInspectModal({ row, heroes, buying, onClose, onBuy }: {
 
   if (row.item_type === 'equipment') {
     const item = row.item_payload as EquipmentItem;
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (def) {
       const topHero = [...heroes].sort((a, b) => b.level - a.level)[0];
       const upgrades = upgradeHeroes(row, heroes);
@@ -521,7 +521,7 @@ function SellTab() {
       ) : (
         <div className="item-card-grid">
           {sellableStash.map((item) => {
-            const def = EQUIPMENT_BY_ID[item.defId];
+            const def = itemDef(item);
             if (!def) return null;
             return (
               <div key={item.uid} className="item-card rarity-card">
@@ -639,7 +639,7 @@ function SellForm({ draft, onDone }: { draft: SellDraft; onDone: () => void }) {
 
   const name = draft.kind === 'equipment'
     ? (() => {
-        const def = EQUIPMENT_BY_ID[draft.item.defId];
+        const def = itemDef(draft.item);
         return def ? itemDisplayName(draft.item, def) : draft.item.defId;
       })()
     : draft.kind === 'shard'
@@ -812,7 +812,7 @@ function MyListingCard({ row, cancelling, onCancel }: { row: ServerListingRow; c
 
   if (row.item_type === 'equipment') {
     const item = row.item_payload as EquipmentItem;
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return null;
     return (
       <div className="item-card rarity-card">

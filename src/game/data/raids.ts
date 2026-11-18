@@ -84,7 +84,7 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
   // includes 'mythic') -- no separate Charter/Clearance purchase, unlike
   // Heroic/Mythic's own raidsHeroic/raidsMythic upgrade gates. See
   // RaidManager.canStart.
-  normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
+  normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1, rarityFloor: 'rare' },
   heroic: {
     difficulty: 'heroic', partySize: 6,
     successPenalty: Tuning.get('raid_difficulty.heroic.successPenalty'),
@@ -92,6 +92,8 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
     lootBonus: Tuning.get('raid_difficulty.heroic.lootBonus'),
     durationMultiplier: Tuning.get('raid_difficulty.heroic.durationMultiplier'),
     roleMismatchCap: Tuning.get('raid_difficulty.heroic.roleMismatchCap'),
+    // Patch 0488 -- Heroic and up drop at least Epic (see rarityFloor).
+    rarityFloor: 'epic',
   },
   mythic: {
     difficulty: 'mythic', partySize: 9,
@@ -100,6 +102,8 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
     lootBonus: Tuning.get('raid_difficulty.mythic.lootBonus'),
     durationMultiplier: Tuning.get('raid_difficulty.mythic.durationMultiplier'),
     roleMismatchCap: Tuning.get('raid_difficulty.mythic.roleMismatchCap'),
+    // Patch 0488 -- Heroic and up drop at least Epic (see rarityFloor).
+    rarityFloor: 'epic',
   },
   legendary: {
     difficulty: 'legendary', partySize: 9,
@@ -108,6 +112,8 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
     lootBonus: Tuning.get('raid_difficulty.legendary.lootBonus'),
     durationMultiplier: Tuning.get('raid_difficulty.legendary.durationMultiplier'),
     roleMismatchCap: Tuning.get('raid_difficulty.legendary.roleMismatchCap'),
+    // Patch 0488 -- Heroic and up drop at least Epic (see rarityFloor).
+    rarityFloor: 'epic',
   },
 };
 

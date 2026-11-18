@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { GameEngine } from '../game/engine';
 import { RaidResult } from '../game/types';
 import { RAID_BY_ID, RAID_DIFFICULTY_LABEL, RAID_ENCOUNTER_BY_ID, raidDifficultyIconSrc } from '../game/data/raids';
-import { EQUIPMENT_BY_ID } from '../game/data/equipment';
+import { itemDef } from '../game/data/equipment';
 import { ItemIcon } from './icons';
 import { raidBannerSrc } from './panels/RaidsPanel';
 import { at, useDelayedCount } from './resultFx';
@@ -245,7 +245,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
             </span>
             <div className="rfx-loot">
               {result.loot.map((item, i) => {
-                const def = EQUIPMENT_BY_ID[item.defId];
+                const def = itemDef(item);
                 const color = RARITY_COLOR[item.rarity];
                 return (
                   <div

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { GameEngine } from '../game/engine';
 import { EquipSlot, EquipmentItem, Stats } from '../game/types';
-import { EQUIPMENT_BY_ID, EQUIP_SLOTS, gearScoreForInstance } from '../game/data/equipment';
+import { itemDef, EQUIP_SLOTS, gearScoreForInstance } from '../game/data/equipment';
 import { HeroManager } from '../game/managers/HeroManager';
 import { flyIcon, fxMs, fxSpeed } from './purchaseFx';
 
@@ -48,7 +48,7 @@ function centerOf(el: Element | null): { x: number; y: number } | null {
 }
 
 function itemScore(item: EquipmentItem | undefined): number {
-  const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
+  const def = item ? itemDef(item) : undefined;
   return item && def ? gearScoreForInstance(item, def) : 0;
 }
 
@@ -102,9 +102,9 @@ export function useEquipFx(engine: GameEngine, heroId: string) {
     window.requestAnimationFrame(() => {
       changed.forEach((slot, i) => {
         const item = hero1.equipment[slot]!;
-        const def = EQUIPMENT_BY_ID[item.defId];
+        const def = itemDef(item);
         const old = before[slot];
-        const oldDef = old ? EQUIPMENT_BY_ID[old.defId] : undefined;
+        const oldDef = old ? itemDef(old) : undefined;
         const slotIcon = document.querySelector(`[data-eq-slot="${slot}"] .item-icon`);
         const t0 = i * GAP;
         void flyIcon(from[item.uid] ?? null, slotIcon, { icon: def?.icon, glyph: '⚔' }, { size: 40, delay: t0 });

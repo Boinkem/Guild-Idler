@@ -1,4 +1,4 @@
-import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT, GEAR_SCORE_LEVEL_CAP } from '../data/equipment';
+import { EQUIPMENT_BY_ID, itemDef, rarityRaiseFor, RARITY_PRICE_MULT, GEAR_SCORE_LEVEL_CAP } from '../data/equipment';
 import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Rarity, Stats } from '../types';
 import { uid, Rng } from '../rng';
 import { clamp } from '../util';
@@ -62,10 +62,20 @@ export const EquipmentManager = {
   instantiate(defId: string, roll?: {
     itemLevel: number; sourceTag: LootSourceTag; rng: Rng;
     weightedKey?: keyof Stats; weightMultiplier?: number; heroLevel?: number;
+    /** Patch 0488 -- raise the item to at least this rarity (raid drops,
+     *  see RaidDifficultyConfig.rarityFloor). Stored on the item and used
+     *  for its stat budget below; ignored unless it's a valid raise. */
+    rarityFloor?: Rarity;
   }): EquipmentItem | null {
-    const def = EQUIPMENT_BY_ID[defId];
-    if (!def) return null;
-    const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
+    const baseDef = EQUIPMENT_BY_ID[defId];
+    if (!baseDef) return null;
+    const item: EquipmentItem = { uid: uid('it'), defId, durability: baseDef.maxDurability, plus: 0 };
+    const raise = rarityRaiseFor(baseDef, roll?.rarityFloor);
+    if (raise) item.rarity = raise;
+    // From here on `def` carries the raised rarity, so both rolls below
+    // size the item's power off it (a Heroic Blackford piece rolls an
+    // Epic budget, not just an Epic badge).
+    const def = itemDef(item);
     if (roll && isProceduralTemplate(def)) {
       const result = rollProceduralItem(
         def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng, roll.weightedKey, roll.weightMultiplier,
@@ -135,11 +145,11 @@ export const EquipmentManager = {
   },
 
   def(item: EquipmentItem): EquipmentDef | undefined {
-    return EQUIPMENT_BY_ID[item.defId];
+    return itemDef(item);
   },
 
   maxDurability(item: EquipmentItem): number {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return 1;
     return Math.floor(def.maxDurability * (1 + item.plus * 0.1));
   },
@@ -206,7 +216,7 @@ export const EquipmentManager = {
    * the same thing here it does everywhere else gear pricing reads it.
    */
   repairCost(item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): number {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return 0;
     const missing = EquipmentManager.maxDurability(item) - item.durability;
     if (missing <= 0) return 0;
@@ -237,7 +247,7 @@ export const EquipmentManager = {
     // (economy.repairScrapUncommonFlat), Rare and up keep the existing
     // gold-derived scale. Also closes the backlog's "Level 1 gear should
     // not cost Scrap to repair" item, since starter gear is Common.
-    const rarity = EQUIPMENT_BY_ID[item.defId]?.rarity;
+    const rarity = itemDef(item)?.rarity;
     if (rarity === 'common') return 0;
     if (rarity === 'uncommon') return Tuning.get('economy.repairScrapUncommonFlat');
     return repairScrapCostFromGold(goldCost);
@@ -256,7 +266,7 @@ export const EquipmentManager = {
    * and buying already do.
    */
   upgradeCost(item: EquipmentItem, workshopLevel: number): number {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return 0;
     const reference = EquipmentManager.referenceValue(item, def);
     const base = reference * 0.6 * Math.pow(1.65, item.plus) * (def.enhanceCostMultiplier ?? 1);
@@ -356,7 +366,7 @@ export const EquipmentManager = {
    * actually rolled at, same as its shop price already has since 0241.
    */
   sellValue(item: EquipmentItem): number {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return 0;
     const condition = 0.4 + 0.6 * (item.durability / EquipmentManager.maxDurability(item));
     const reference = EquipmentManager.referenceValue(item, def);
@@ -379,7 +389,7 @@ export const EquipmentManager = {
    * call site keeps working unchanged until it's threaded through.
    */
   scrapValue(item: EquipmentItem, bonusPercent = 0): number {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return 0;
     const base = Tuning.get(`elemental.scrapValue.${def.rarity}`);
     return Math.max(1, Math.round(base * (1 + bonusPercent / 100)));
@@ -436,7 +446,7 @@ export const EquipmentManager = {
   },
 
   canEquip(hero: Hero, item: EquipmentItem): { ok: boolean; reason?: string } {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return { ok: false, reason: 'Unknown item.' };
     if (hero.status === 'questing') return { ok: false, reason: `${hero.name} is away on a quest.` };
     if (hero.level < def.reqLevel) return { ok: false, reason: `Requires level ${def.reqLevel}.` };
@@ -447,7 +457,7 @@ export const EquipmentManager = {
   equip(state: GameState, hero: Hero, item: EquipmentItem): string | null {
     const check = EquipmentManager.canEquip(hero, item);
     if (!check.ok) return check.reason ?? 'Cannot equip.';
-    const def = EQUIPMENT_BY_ID[item.defId]!;
+    const def = itemDef(item)!;
     state.stash = state.stash.filter((i) => i.uid !== item.uid);
     const displaced = hero.equipment[def.slot];
     if (displaced) state.stash.push(displaced);
@@ -481,7 +491,7 @@ export const EquipmentManager = {
       const itemMultiplier = multiplier * (1 - itemCut / 100);
       item.durability = Math.max(0, item.durability - Math.max(1, Math.round(amount * itemMultiplier)));
       if (item.durability === 0) {
-        broken.push(EQUIPMENT_BY_ID[item.defId]?.name ?? 'Unknown item');
+        broken.push(itemDef(item)?.name ?? 'Unknown item');
       }
     }
     return broken;
@@ -520,7 +530,7 @@ export const EquipmentManager = {
   },
 
   isLegendary(item: EquipmentItem): boolean {
-    return EQUIPMENT_BY_ID[item.defId]?.rarity === 'legendary';
+    return itemDef(item)?.rarity === 'legendary';
   },
 
   repair(
@@ -626,7 +636,7 @@ export const EquipmentManager = {
    * action.
    */
   relevelCost(item: EquipmentItem, levelsToRaise: number): { gold: number; scrap: number; shards: number } {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def || levelsToRaise <= 0) return { gold: 0, scrap: 0, shards: 0 };
     const gold = Math.ceil(def.value * 0.5 * levelsToRaise);
     // Patch 0298 (Scrap economy rework): was a flat `2 * levelsToRaise`,
@@ -672,7 +682,7 @@ export const EquipmentManager = {
    * gap for all of them, not just the new dedicated-scaling case.
    */
   relevel(state: GameState, item: EquipmentItem, targetLevel: number, heroLevel: number): string | null {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return 'Unknown item.';
     const current = item.rolledItemLevel ?? def.reqLevel;
     const clampedTarget = Math.max(current, Math.min(targetLevel, heroLevel));

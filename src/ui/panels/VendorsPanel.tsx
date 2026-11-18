@@ -10,7 +10,7 @@ import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
 import { AttunementLine } from '../AttunementLine';
 import { AttuneStation } from '../AttuneStation';
 import { InventoryManager } from '../../game/managers/InventoryManager';
-import { EQUIPMENT_BY_ID, itemDisplayName } from '../../game/data/equipment';
+import { itemDef, itemDisplayName } from '../../game/data/equipment';
 import { rerollDay, rerollsUsedToday } from '../../game/data/reroll';
 import { MATERIAL_BY_ID } from '../../game/data/materials';
 import { isProceduralTemplate } from '../../game/data/proceduralLoot';
@@ -673,7 +673,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
   const scrapPreview = state.stash.filter((item) => {
     if (item.locked) return false;
     if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return false;
     // Patch 0472 -- "crafted" is the def's own `craftable` flag, not
     // `item.customMods`: every hand-authored drop with a Health/
@@ -729,7 +729,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
   const junkPreview = state.stash.filter((item) => {
     if (item.locked) return false;
     if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return false;
     if (def.craftable && def.rarity !== 'common') return false; // patch 0472, see scrapPreview above
     return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
@@ -823,7 +823,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
         {state.shop.equipment.map((entry) => (
           <EquipmentShopCard
             key={entry.uid}
-            def={EQUIPMENT_BY_ID[entry.defId]}
+            def={itemDef(entry)}
             itemLevel={entry.itemLevel}
             rolledStats={entry.rolledStats}
             proceduralName={entry.proceduralName}
@@ -952,7 +952,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           <div className="section-heading">Buy back</div>
           <div className="grid two">
             {state.buyback.map((entry) => {
-              const def = EQUIPMENT_BY_ID[entry.item.defId];
+              const def = itemDef(entry.item);
               if (!def) return null;
               const price = ShopManager.buybackPrice(entry);
               return (
@@ -1030,7 +1030,7 @@ function ArmourStashCard({
   const [open, setOpen] = useState(false);
   const [pendingSell, setPendingSell] = useState<{ x: number; y: number } | null>(null);
   const [pendingScrap, setPendingScrap] = useState<{ x: number; y: number } | null>(null);
-  const def = EQUIPMENT_BY_ID[item.defId];
+  const def = itemDef(item);
   if (!def) return null;
   const scrapValue = EquipmentManager.scrapValue(item, scrapBonus);
 
@@ -1277,7 +1277,7 @@ function BlackMarketStock({ now }: { now: number }) {
         {state.blackMarket.equipment.map((entry) => (
           <EquipmentShopCard
             key={entry.uid}
-            def={EQUIPMENT_BY_ID[entry.defId]}
+            def={itemDef(entry)}
             itemLevel={entry.itemLevel}
             rolledStats={entry.rolledStats}
             proceduralName={entry.proceduralName}

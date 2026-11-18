@@ -19,7 +19,7 @@
  * Game data is baked in at bundle time -- rebuild the server after
  * changing equipment.json / consumables.json / tuning.json.
  */
-import { EQUIPMENT, EQUIPMENT_BY_ID } from '../../src/game/data/equipment';
+import { EQUIPMENT, EQUIPMENT_BY_ID, itemDef } from '../../src/game/data/equipment';
 import { CONSUMABLES, CONSUMABLE_BY_ID } from '../../src/game/data/items';
 import { EquipmentManager } from '../../src/game/managers/EquipmentManager';
 import { isProceduralTemplate } from '../../src/game/data/proceduralLoot';
@@ -99,7 +99,7 @@ export function rollConsumable(weights: RarityWeights, seed: string): BrokerItem
 export function listingInfo(itemType: string, payload: unknown): { shopValue: number; level: number | null; rarity: Rarity } | null {
   if (itemType === 'equipment') {
     const item = payload as EquipmentItem;
-    const def = item && typeof item.defId === 'string' ? EQUIPMENT_BY_ID[item.defId] : undefined;
+    const def = item && typeof item.defId === 'string' ? itemDef(item) : undefined;
     if (!def) return null;
     const level = item.rolledItemLevel ?? def.reqLevel;
     const plus = Math.max(0, Math.floor(Number(item.plus) || 0));

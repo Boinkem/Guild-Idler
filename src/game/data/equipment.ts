@@ -182,6 +182,62 @@ export const EQUIPMENT_BY_ID: Record<string, EquipmentDef> = Object.fromEntries(
   EQUIPMENT.map((e) => [e.id, e]),
 );
 
+/* ------------------------------------------- per-item rarity (0488) --- */
+// Patch 0488. A dropped item can carry its own `rarity`, raised above its
+// def's by a raid difficulty's rarity floor (RaidDifficultyConfig.
+// rarityFloor -- Heroic and up are at least Epic). Every read of an
+// ITEM's def goes through itemDef() below, so the raised rarity follows
+// the item everywhere (badge colour, gear score, prices, scrap, repair,
+// refine costs) without each of those knowing about it. Def-level reads
+// (pools, shop stock, set lists) still use EQUIPMENT_BY_ID directly.
+
+const RARITY_RANK: Record<Rarity, number> = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
+/** Highest rarity a floor can ever raise an item to. */
+export const RARITY_FLOOR_MAX: Rarity = 'epic';
+
+/**
+ * Whether `rarity` is a raise this game can really produce for `def`:
+ * a known rarity, above the def's own, no higher than RARITY_FLOOR_MAX,
+ * on a raid-only or chain item (the only things raids drop). Anything
+ * else is ignored. Matters beyond tidiness: the Auction House server
+ * prices player listings (NPC buyouts) from the client-sent item, so an
+ * unchecked field would let a faked "legendary" inflate a payout.
+ */
+export function isValidRarityRaise(def: EquipmentDef | undefined, rarity: unknown): rarity is Rarity {
+  if (!def || typeof rarity !== 'string' || !(rarity in RARITY_RANK)) return false;
+  const r = rarity as Rarity;
+  return (!!def.raidExclusive || !!def.chainExclusive)
+    && RARITY_RANK[r] > RARITY_RANK[def.rarity]
+    && RARITY_RANK[r] <= RARITY_RANK[RARITY_FLOOR_MAX];
+}
+
+/** The rarity a floor gives `def`: the floor if it is a valid raise, else
+ *  undefined (nothing to store on the item). */
+export function rarityRaiseFor(def: EquipmentDef | undefined, floor: Rarity | undefined): Rarity | undefined {
+  return isValidRarityRaise(def, floor) ? floor : undefined;
+}
+
+const RAISED_DEF_CACHE = new Map<string, EquipmentDef>();
+
+/**
+ * An item's def with the item's own rarity applied -- use this instead of
+ * `EQUIPMENT_BY_ID[item.defId]` whenever an item (or a loot summary with
+ * a defId + rarity) is in hand. Plain def when the item has no valid
+ * raise. Cached, so the same object comes back every call (safe for
+ * React deps / equality checks).
+ */
+export function itemDef(item: { defId?: string; rarity?: unknown } | null | undefined): EquipmentDef {
+  const def = item && typeof item.defId === 'string' ? EQUIPMENT_BY_ID[item.defId] : undefined;
+  if (!def || !isValidRarityRaise(def, item!.rarity)) return def as EquipmentDef;
+  const key = `${def.id}|${item!.rarity}`;
+  let raised = RAISED_DEF_CACHE.get(key);
+  if (!raised) {
+    raised = { ...def, rarity: item!.rarity as Rarity };
+    RAISED_DEF_CACHE.set(key, raised);
+  }
+  return raised;
+}
+
 /**
  * Patch 0457 -- each tier's numbers are the set's TOTAL at that piece
  * count; only the highest met tier applies (HeroManager.equipmentMods).

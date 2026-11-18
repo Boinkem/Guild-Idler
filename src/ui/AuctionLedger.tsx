@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentItem, Rarity } from '../game/types';
 import { RARITY_COLOR, formatGold } from '../game/util';
-import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
+import { itemDef, itemDisplayName } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { ItemIcon, ConsumableIcon } from './icons';
 import { SHARD_GLYPH, SHARD_ICON, shardLabel } from '../game/data/shards';
@@ -53,7 +53,7 @@ function tradeItem(t: AhLedgerTrade): { name: string; rarity: Rarity | null; ico
   }
   if (t.itemType === 'equipment') {
     const item = t.itemPayload as EquipmentItem;
-    const def = EQUIPMENT_BY_ID[item?.defId];
+    const def = itemDef(item);
     if (!def) return { name: item?.defId ?? 'Unknown gear', rarity: null, icon: null };
     return {
       name: `${itemDisplayName(item, def)}${item.plus > 0 ? ` +${item.plus}` : ''}`,

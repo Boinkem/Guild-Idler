@@ -1,4 +1,4 @@
-import { EQUIPMENT, EQUIPMENT_BY_ID, RARITY_WEIGHT } from '../data/equipment';
+import { EQUIPMENT, EQUIPMENT_BY_ID, itemDef, RARITY_WEIGHT } from '../data/equipment';
 import { CONSUMABLES } from '../data/items';
 import { EquipmentItem, GameState, Rarity, ShopStock, Stats } from '../types';
 import { createRng, uid } from '../rng';
@@ -499,7 +499,7 @@ export const ShopManager = {
     const toSell = state.stash.filter((item) => {
       if (item.locked) return false;
       if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
-      const def = EQUIPMENT_BY_ID[item.defId];
+      const def = itemDef(item);
       if (!def) return false;
       // Patch 0472 -- was `item.customMods`, which is ALSO set on every
       // level-scaled hand-authored drop that has a Health/Durability mod

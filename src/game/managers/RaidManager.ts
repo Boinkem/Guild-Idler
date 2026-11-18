@@ -5,7 +5,7 @@ import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, pa
 import { renownForRaidClear, TOMBSTONE_STYLES } from '../data/progression';
 import { Tuning } from '../data/tuning';
 import { armouryWearCut, heroSignature } from '../data/attunement';
-import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
+import { EQUIPMENT_BY_ID, itemDef, itemDisplayName } from '../data/equipment';
 import { raidPrefixedName } from '../data/proceduralLoot';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
@@ -505,6 +505,7 @@ export const RaidManager = {
             : active.difficulty === 'legendary' ? 'raidLegendary' : 'raidNormal';
         const item = EquipmentManager.instantiate(parsed.defId, {
           itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng, heroLevel: partyLevel,
+          rarityFloor: diffCfg.rarityFloor,
         });
         if (!def || !item) continue;
         // Patch 0487 -- the raid's own prefix ("Rimebound ...") on every
@@ -515,7 +516,10 @@ export const RaidManager = {
         if (!state.discoveredItems.includes(parsed.defId)) state.discoveredItems.push(parsed.defId);
         state.stats.itemsFound += 1;
         if (def.rarity === 'legendary') state.stats.legendaryItemsFound += 1;
-        loot.push({ defId: parsed.defId, name: itemDisplayName(item, def), rarity: def.rarity, encounterId });
+        // Patch 0488 -- the item's own (possibly floor-raised) rarity, so the
+        // result screen shows Epic for a raised drop.
+        const shown = itemDef(item);
+        loot.push({ defId: parsed.defId, name: itemDisplayName(item, def), rarity: shown.rarity, encounterId });
       }
 
       // Eggs as raid loot -- same devtool-editable "string list, parsed

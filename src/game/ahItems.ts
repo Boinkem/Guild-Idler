@@ -1,5 +1,5 @@
 import { EquipmentItem, Rarity } from './types';
-import { EQUIPMENT_BY_ID, itemDisplayName } from './data/equipment';
+import { itemDef, itemDisplayName } from './data/equipment';
 import { CONSUMABLE_BY_ID } from './data/items';
 import { EquipmentManager } from './managers/EquipmentManager';
 import { SHARD_NAME, shardLabel } from './data/shards';
@@ -26,7 +26,7 @@ export function auctionItemName(itemType: AhPayloadType, payload: unknown): stri
   }
   if (itemType === 'equipment') {
     const item = payload as EquipmentItem;
-    const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
+    const def = item ? itemDef(item) : undefined;
     if (!def) return item?.defId ?? 'an item';
     return `${itemDisplayName(item, def)}${item.plus > 0 ? ` +${item.plus}` : ''}`;
   }
@@ -36,7 +36,7 @@ export function auctionItemName(itemType: AhPayloadType, payload: unknown): stri
 
 export function auctionItemRarity(itemType: AhPayloadType, payload: unknown): Rarity | null {
   if (itemType === 'shard') return 'legendary';
-  if (itemType === 'equipment') return EQUIPMENT_BY_ID[(payload as EquipmentItem)?.defId]?.rarity ?? null;
+  if (itemType === 'equipment') return itemDef(payload as EquipmentItem)?.rarity ?? null;
   const defId = (payload as { defId?: string })?.defId;
   return (defId && CONSUMABLE_BY_ID[defId]?.rarity) || null;
 }
@@ -45,7 +45,7 @@ export function auctionItemRarity(itemType: AhPayloadType, payload: unknown): Ra
 export function auctionItemLevel(itemType: AhPayloadType, payload: unknown): number | null {
   if (itemType !== 'equipment') return null;
   const item = payload as EquipmentItem;
-  const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
+  const def = item ? itemDef(item) : undefined;
   return def ? item.rolledItemLevel ?? def.reqLevel : null;
 }
 
@@ -54,7 +54,7 @@ export function auctionItemLevel(itemType: AhPayloadType, payload: unknown): num
 export function auctionShopValue(itemType: AhPayloadType, payload: unknown): number | null {
   if (itemType === 'equipment') {
     const item = payload as EquipmentItem;
-    const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
+    const def = item ? itemDef(item) : undefined;
     if (!def) return null;
     const level = item.rolledItemLevel ?? def.reqLevel;
     const plus = Math.max(0, Math.floor(Number(item.plus) || 0));

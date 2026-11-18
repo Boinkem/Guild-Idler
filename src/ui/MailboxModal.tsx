@@ -3,7 +3,7 @@ import { useEngine } from './useEngine';
 import { flyIcon, flyTokens, ghostOut } from './purchaseFx';
 import { MailboxEntry } from '../game/types';
 import { RARITY_BANNER, RARITY_COLOR, formatGold } from '../game/util';
-import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
+import { itemDef, itemDisplayName } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { ItemIcon, ConsumableIcon } from './icons';
 import { SHARD_GLYPH, SHARD_ICON, shardLabel } from '../game/data/shards';
@@ -64,7 +64,7 @@ export function MailboxModal({ onClose }: { onClose: () => void }) {
       if (entry.type === 'gold') flyTokens(from, 'gold', 'coin', 6, delay + 260);
       else if (entry.type === 'scrap') flyTokens(from, 'scrap', 'shard', 5, delay + 260);
       else if (entry.type === 'equipment' && entry.item) {
-        const def = EQUIPMENT_BY_ID[entry.item.defId];
+        const def = itemDef(entry.item);
         void flyIcon(el, 'inventory', { icon: def?.icon, glyph: '✦' }, { delay: delay + 260 });
       } else if (entry.type === 'consumable' && entry.consumableId) {
         const def = CONSUMABLE_BY_ID[entry.consumableId];
@@ -175,7 +175,7 @@ function MailboxCard({ entry, onClaim }: { entry: MailboxEntry; onClaim: () => v
   }
 
   if (entry.type === 'equipment' && entry.item) {
-    const def = EQUIPMENT_BY_ID[entry.item.defId];
+    const def = itemDef(entry.item);
     if (!def) return null;
     return (
       <div className="item-card rarity-card">

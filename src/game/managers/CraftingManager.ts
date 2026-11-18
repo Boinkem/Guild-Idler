@@ -7,7 +7,7 @@ import { InventoryManager } from './InventoryManager';
 import { ModifierManager } from './ModifierManager';
 import { MATERIAL_BY_ID } from '../data/materials';
 import { MOD_LABEL } from '../util';
-import { EQUIPMENT_BY_ID } from '../data/equipment';
+import { itemDef } from '../data/equipment';
 import { isProceduralTemplate, rollProceduralItem } from '../data/proceduralLoot';
 import { createRng } from '../rng';
 import { RecipeManager } from './RecipeManager';
@@ -311,7 +311,7 @@ export const CraftingManager = {
    * here instead.
    */
   rerollCost(state: GameState, item: EquipmentItem): { gold: number; herbs: number; shards: number } | null {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def || !isProceduralTemplate(def)) return null;
     const goldRaw = def.value * 1.2;
     const discount = ModifierManager.global(state).enchantDiscount ?? 0;
@@ -322,7 +322,7 @@ export const CraftingManager = {
   },
 
   reroll(state: GameState, item: EquipmentItem, heroLevel: number): string | null {
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     if (!def) return 'Unknown item.';
     const cost = CraftingManager.rerollCost(state, item);
     if (!cost) return 'This item\u2019s power is fixed -- nothing to reroll.';

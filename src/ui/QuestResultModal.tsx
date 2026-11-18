@@ -10,7 +10,7 @@ import { RarityPill } from './RarityPill';
 import { ItemIcon } from './icons';
 import { at, useDelayedCount, TickMark } from './resultFx';
 import { CHAIN_BY_ID } from '../game/managers/QuestManager';
-import { EQUIPMENT_BY_ID } from '../game/data/equipment';
+import { itemDef } from '../game/data/equipment';
 import { chainBannerSrc, chainIconSrc, questTagBannerSrc, questTagIconSrc } from './panels/QuestPanel';
 import waxSealComplete from '../assets/wax-seal-complete.png';
 import { measureFlyOffset } from './flyTarget';
@@ -231,7 +231,7 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
             <div className="section-heading">Loot</div>
             <div className="qfx-loot">
               {result.loot.map((item, i) => {
-                const def = EQUIPMENT_BY_ID[item.defId];
+                const def = itemDef(item);
                 return (
                   <div
                     key={`${item.defId}-${i}`}

@@ -11,7 +11,7 @@ import { LegendaryRepairButtons } from '../LegendaryRepairButtons';
 import { AttunementLine } from '../AttunementLine';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance, itemDisplayName } from '../../game/data/equipment';
+import { EQUIPMENT_BY_ID, itemDef, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance, itemDisplayName } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
 import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef, RecipeScrollDef, CraftingRecipeDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
@@ -124,7 +124,7 @@ function LockedPill() {
 export function isGearUpgrade(hero: Hero, item: EquipmentItem, def: EquipmentDef): boolean {
   if (hero.level < def.reqLevel) return false;
   const equipped = hero.equipment[def.slot];
-  const equippedDef = equipped ? EQUIPMENT_BY_ID[equipped.defId] : undefined;
+  const equippedDef = equipped ? itemDef(equipped) : undefined;
   const currentScore = equipped && equippedDef ? gearScoreForInstance(equipped, equippedDef) : -1;
   return gearScoreForInstance(item, def) > currentScore;
 }
@@ -220,7 +220,7 @@ function setInfoFor(hero: Hero, setId: string) {
   let count = 0;
   for (const equipped of Object.values(hero.equipment)) {
     if (!equipped || equipped.durability <= 0) continue;
-    if (EQUIPMENT_BY_ID[equipped.defId]?.setId === setId) count++;
+    if (itemDef(equipped)?.setId === setId) count++;
   }
   const active = set.bonuses.filter((b) => count >= b.count);
   const next = set.bonuses.find((b) => count < b.count);
@@ -807,7 +807,7 @@ function SlotCard({
   fxClass?: string; deltas?: string[];
 }) {
   const [open, setOpen] = useState(false);
-  const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
+  const def = item ? itemDef(item) : undefined;
 
   if (!item || !def) {
     return (
@@ -1023,7 +1023,7 @@ function StashCard({
   back?: 'hold' | 'back';
 }) {
   const [open, setOpen] = useState(false);
-  const def = EQUIPMENT_BY_ID[item.defId];
+  const def = itemDef(item);
   if (!def) return null;
   const canEquip = EquipmentManager.canEquip(hero, item);
   const isUpgrade = isGearUpgrade(hero, item, def);
@@ -1157,7 +1157,7 @@ export function EquipmentPanel() {
   const autoActive = !rpFx && Object.keys(autoUp).length > 0;
   // Patch 0466 -- ambient hints on the two bulk buttons.
   const stashHasUpgrade = state.stash.some((it) => {
-    const d = EQUIPMENT_BY_ID[it.defId];
+    const d = itemDef(it);
     return !!d && isGearUpgrade(hero, it, d);
   });
   const anyBroken = state.heroes.some((h) => Object.values(h.equipment).some((it) => !!it && EquipmentManager.isBroken(it)));
@@ -1169,7 +1169,7 @@ export function EquipmentPanel() {
     Array.from(new Set(
       Object.values(hero.equipment)
         .filter((item): item is EquipmentItem => !!item && item.durability > 0)
-        .map((item) => EQUIPMENT_BY_ID[item.defId]?.setId)
+        .map((item) => itemDef(item)?.setId)
         .filter((id): id is string => !!id),
     )).map((setId) => ({ id: `${hero.id}:${setId}`, value: setInfoFor(hero, setId)?.active.length ?? 0 })),
     2600,
@@ -1271,7 +1271,7 @@ export function EquipmentPanel() {
   const [stashSlotFilter, setStashSlotFilter] = useState<EquipSlot | 'all'>('all');
   const filteredStash = state.stash.filter((item) => {
     if (stashSlotFilter === 'all') return true;
-    const def = EQUIPMENT_BY_ID[item.defId];
+    const def = itemDef(item);
     return def?.slot === stashSlotFilter;
   });
 
@@ -1394,7 +1394,7 @@ export function EquipmentPanel() {
           new Set(
             Object.values(hero.equipment)
               .filter((item): item is EquipmentItem => !!item && item.durability > 0)
-              .map((item) => EQUIPMENT_BY_ID[item.defId]?.setId)
+              .map((item) => itemDef(item)?.setId)
               .filter((id): id is string => !!id),
           ),
         );

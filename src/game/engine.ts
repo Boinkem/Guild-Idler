@@ -45,7 +45,7 @@ import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel, statResetCost } from './data/progression';
 import { canWearSkin, isClassSkinEarned, isClassSkinOwned, classSkinKey, classSkinLockReason, backfillFromRaidLog } from './classSkins';
 import { HERO_CLASSES as CLASS_DEFS } from './data/progression';
-import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
+import { EQUIPMENT_BY_ID, itemDef, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
 import { canAttune, describeAttunement, heroSignature, rollAttunement } from './data/attunement';
@@ -3071,7 +3071,7 @@ export class GameEngine {
     const setCounts: Record<string, number> = {};
     for (const item of Object.values(hero.equipment)) {
       if (!item) continue;
-      const def = EQUIPMENT_BY_ID[item.defId];
+      const def = itemDef(item);
       if (def?.setId) setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
     }
     for (const [setId, count] of Object.entries(setCounts)) {
@@ -3246,7 +3246,7 @@ export class GameEngine {
   relevelItem(itemUid: string, targetLevel: number): number {
     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
     if (!found) return 0;
-    const def = EQUIPMENT_BY_ID[found.item.defId];
+    const def = itemDef(found.item);
     const hero = found.heroId ? this.hero(found.heroId) : undefined;
     if (!def || !hero) { this.say('Equip it on a hero first -- re-leveling raises an item to its wearer\u2019s level.'); return 0; }
     const before = found.item.rolledItemLevel ?? def.reqLevel;
@@ -3917,12 +3917,12 @@ export class GameEngine {
     for (const slot of EQUIP_SLOTS) {
       const currentItem = hero.equipment[slot];
       if (currentItem) anyAlreadyEquipped = true;
-      const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
+      const currentDef = currentItem ? itemDef(currentItem) : undefined;
       const currentScore = currentItem && currentDef ? gearScoreForInstance(currentItem, currentDef) : -1;
       let best: typeof currentItem = undefined;
       let bestScore = currentScore;
       for (const item of this.state.stash) {
-        const def = EQUIPMENT_BY_ID[item.defId];
+        const def = itemDef(item);
         if (!def || def.slot !== slot) continue;
         anyCandidateSeen = true;
         if (hero.level < def.reqLevel) { anyLevelGated = true; continue; }

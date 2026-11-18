@@ -1,6 +1,6 @@
 import type { EquipmentItem, GameState, Hero, Modifiers, Stats } from '../types';
 import type { Rng } from '../rng';
-import { EQUIPMENT_BY_ID } from './equipment';
+import { itemDef } from './equipment';
 import { Tuning } from './tuning';
 
 /**
@@ -69,11 +69,11 @@ const SIGNATURE = ATTUNE_AFFIXES.filter((a) => a.kind === 'signature');
 
 /** May this item be attuned at all? Legendary rarity only. */
 export function canAttune(item: EquipmentItem): boolean {
-  return EQUIPMENT_BY_ID[item.defId]?.rarity === 'legendary';
+  return itemDef(item)?.rarity === 'legendary';
 }
 
 export function attuneLevel(item: EquipmentItem): number {
-  return item.rolledItemLevel ?? EQUIPMENT_BY_ID[item.defId]?.reqLevel ?? 1;
+  return item.rolledItemLevel ?? itemDef(item)?.reqLevel ?? 1;
 }
 
 /** Rolls a fresh line for this item. `exclude` = the current affix, so a

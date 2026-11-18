@@ -10,7 +10,7 @@ import {
   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON_DEFS, raidDifficultyIconSrc, RAID_DIFFICULTY_LABEL,
   isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
-import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
+import { EQUIPMENT_BY_ID, SET_BY_ID, itemDef, rarityRaiseFor } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
 import { RaidDifficulty, RaidEncounterDef, RaidDef, ElementType, Hero, Role } from '../../game/types';
 import { ROLE_BY_ID } from '../../game/data/progression';
@@ -160,7 +160,13 @@ function LootPreview({
       {pool.map((entryStr) => {
         const parsed = parseLootEntry(entryStr);
         if (!parsed) return null;
-        const def = EQUIPMENT_BY_ID[parsed.defId];
+        // Patch 0488 -- shown at the rarity it would actually drop at on the
+        // picked difficulty (Heroic and up raise anything below Epic), via
+        // the same rarityRaiseFor/itemDef pair the real drop uses.
+        const def = itemDef({
+          defId: parsed.defId,
+          rarity: rarityRaiseFor(EQUIPMENT_BY_ID[parsed.defId], RAID_DIFFICULTIES[difficulty ?? 'normal'].rarityFloor),
+        });
         const discovered = engine.state.discoveredItems.includes(parsed.defId);
         return (
           <button

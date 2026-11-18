@@ -1,4 +1,4 @@
-import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
+import { itemDef, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
 import { INJURIES, InjuryDef } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
 import { demoLevelCap } from '../demo';
@@ -450,7 +450,7 @@ export const HeroManager = {
     const total: Stats = { strength: 0, endurance: 0, luck: 0, wisdom: 0 };
     for (const item of Object.values(hero.equipment)) {
       if (!item || item.durability <= 0) continue;
-      const def = EQUIPMENT_BY_ID[item.defId];
+      const def = itemDef(item);
       if (!def) continue;
       const scale = (1 + item.plus * 0.15) * HeroManager.gearRelevance(item.rolledItemLevel ?? def.reqLevel, hero.level);
       const base = def.stats;
@@ -489,7 +489,7 @@ export const HeroManager = {
     let total = 0;
     for (const item of Object.values(hero.equipment)) {
       if (!item) continue;
-      const def = EQUIPMENT_BY_ID[item.defId];
+      const def = itemDef(item);
       if (!def) continue;
       total += gearScoreForInstance(item, def);
     }
@@ -728,7 +728,7 @@ export const HeroManager = {
     const setRelevance: Record<string, number[]> = {};
     for (const item of Object.values(hero.equipment)) {
       if (!item || item.durability <= 0) continue;
-      const def = EQUIPMENT_BY_ID[item.defId];
+      const def = itemDef(item);
       if (!def) continue;
       const relevance = HeroManager.gearRelevance(item.rolledItemLevel ?? def.reqLevel, hero.level);
       // Crafted items carry their own chosen mods (EquipmentItem.customMods)
@@ -773,7 +773,7 @@ export const HeroManager = {
     const setCounts: Record<string, number> = {};
     for (const item of Object.values(hero.equipment)) {
       if (!item || item.durability <= 0) continue;
-      const def = EQUIPMENT_BY_ID[item.defId];
+      const def = itemDef(item);
       if (def?.setId) setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
     }
     const out: { setName: string; label: string; mods: Partial<Modifiers> }[] = [];

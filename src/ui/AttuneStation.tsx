@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { HeroManager } from '../game/managers/HeroManager';
-import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
+import { itemDef, itemDisplayName } from '../game/data/equipment';
 import { ATTUNE_AFFIX_BY_ID, ATTUNE_AFFIXES, canAttune, describeAttunement, attuneLevel } from '../game/data/attunement';
 import { shardLabel } from '../game/data/shards';
 import { Tuning } from '../game/data/tuning';
@@ -28,7 +28,7 @@ export function AttuneStation({ onClose }: { onClose: () => void }) {
 
   const found = uid ? EquipmentManager.allItems(state).find((e) => e.item.uid === uid) : undefined;
   const item = found?.item;
-  const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
+  const def = item ? itemDef(item) : undefined;
   const wearer = found?.heroId ? state.heroes.find((h) => h.id === found.heroId) : undefined;
   const away = !!wearer && HeroManager.isAway(wearer);
   const cost = item ? EquipmentManager.attuneShardCost(item) : Tuning.get('economy.attuneShardCost');
@@ -36,7 +36,7 @@ export function AttuneStation({ onClose }: { onClose: () => void }) {
 
   const options: PickerOption[] = EquipmentManager.allItems(state)
     .map(({ item: i, heroId }): PickerOption | null => {
-      const d = EQUIPMENT_BY_ID[i.defId];
+      const d = itemDef(i);
       if (!d || !canAttune(i)) return null;
       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
       return {

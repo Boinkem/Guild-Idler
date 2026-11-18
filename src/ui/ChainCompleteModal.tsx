@@ -5,7 +5,7 @@ import { RarityPill } from './RarityPill';
 import { ItemIcon } from './icons';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { CHAIN_BY_ID } from '../game/managers/QuestManager';
-import { EQUIPMENT_BY_ID } from '../game/data/equipment';
+import { itemDef } from '../game/data/equipment';
 import { rankTierForLevel } from '../game/data/guildRank';
 import { Rarity } from '../game/types';
 import { chainBannerSrc, chainIconSrc } from './panels/QuestPanel';
@@ -148,7 +148,7 @@ function ChainCompleteCard({ celebration, onViewLore }: { celebration: Celebrati
           {celebration.items.length > 0 && (
             <div className="sfx-items">
               {celebration.items.map((it, i) => {
-                const def = EQUIPMENT_BY_ID[it.defId];
+                const def = itemDef(it);
                 const color = RARITY_COLOR[it.rarity as Rarity];
                 return (
                   <div key={`${it.defId}-${i}`} className="sfx-item" style={at(T_ITEMS + Math.min(i, 4) * 200, { borderColor: color })}>

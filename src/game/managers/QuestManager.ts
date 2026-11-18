@@ -1,4 +1,4 @@
-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, itemDisplayName } from '../data/equipment';
+import { EQUIPMENT, EQUIPMENT_BY_ID, itemDef, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, itemDisplayName } from '../data/equipment';
 import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
 } from '../data/quests';
@@ -1273,7 +1273,7 @@ export const QuestManager = {
       for (const entry of quest.offer.loot) {
         const chance = Math.min(90, entry.chance * (1 + lootChance / 100) * (1 + personalLoot / 100));
         if (rng.chance(chance)) {
-          const def = EQUIPMENT_BY_ID[entry.defId];
+          const def = itemDef(entry);
           if (def) {
             // Instantiated here, not in the later stash-push loop below --
             // procedural generation (patch 0214) consumes real rolls off
@@ -1934,7 +1934,7 @@ export const QuestManager = {
     const personalLoot = HeroManager.personalLootBonus(HeroManager.totalStats(hero));
     return offer.loot
       .map((entry) => {
-        const def = EQUIPMENT_BY_ID[entry.defId];
+        const def = itemDef(entry);
         if (!def) return null;
         const chance = Math.min(90, entry.chance * (1 + lootChance / 100) * (1 + personalLoot / 100));
         return { name: def.name, rarity: def.rarity, chance };

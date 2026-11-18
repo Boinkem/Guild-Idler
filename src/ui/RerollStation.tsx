@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CraftingManager } from '../game/managers/CraftingManager';
-import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
+import { itemDef, itemDisplayName } from '../game/data/equipment';
 import { isProceduralTemplate } from '../game/data/proceduralLoot';
 import { formatGold, RARITY_COLOR, STAT_LABEL } from '../game/util';
 import { Stats } from '../game/types';
@@ -50,7 +50,7 @@ export function RerollStation({ onClose }: { onClose: () => void }) {
 
   const found = uid ? EquipmentManager.allItems(state).find((e) => e.item.uid === uid) : undefined;
   const item = found?.item;
-  const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
+  const def = item ? itemDef(item) : undefined;
   const wearer = found?.heroId ? state.heroes.find((h) => h.id === found.heroId) : undefined;
   const cost = item ? CraftingManager.rerollCost(state, item) : null;
   const herbs = state.materials.herbs ?? 0;
@@ -61,7 +61,7 @@ export function RerollStation({ onClose }: { onClose: () => void }) {
 
   const options: PickerOption[] = EquipmentManager.allItems(state)
     .map(({ item: i, heroId }): PickerOption | null => {
-      const d = EQUIPMENT_BY_ID[i.defId];
+      const d = itemDef(i);
       if (!d || !isProceduralTemplate(d)) return null;
       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
       return {

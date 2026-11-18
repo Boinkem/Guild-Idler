@@ -414,6 +414,14 @@ export interface EquipmentDef {
 export interface EquipmentItem {
   uid: string;
   defId: string;
+  /**
+   * Patch 0488. This item's own rarity when a raid difficulty's rarity
+   * floor raised it above its def's (e.g. a Rare Blackford piece that
+   * dropped on Heroic is Epic). Unset = the def's rarity. Never read
+   * directly: go through itemDef() in equipment.ts, which also ignores
+   * anything that isn't a valid raise.
+   */
+  rarity?: Rarity;
   durability: number;
   /** Number of times upgraded at the workshop. */
   plus: number;
@@ -1638,6 +1646,14 @@ export interface RaidDifficultyConfig {
    * just bigger gold/xp.
    */
   lootBonus: number;
+  /**
+   * Patch 0488. Lowest rarity a raid drop can be at this difficulty
+   * (Normal: Rare, Heroic and up: Epic). An item below it drops raised to
+   * it -- stored on the item (EquipmentItem.rarity) and rolled with that
+   * rarity's stat budget. Never lowers an item; capped at RARITY_FLOOR_MAX
+   * (equipment.ts).
+   */
+  rarityFloor: Rarity;
   /**
    * Multiplies total raid duration -- harder tiers take longer too, not
    * just riskier and better-paying. Applied before the party's own speed

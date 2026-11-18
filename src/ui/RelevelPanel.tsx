@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { HeroManager } from '../game/managers/HeroManager';
-import { EQUIPMENT_BY_ID, itemDisplayName } from '../game/data/equipment';
+import { itemDef, itemDisplayName } from '../game/data/equipment';
 import { formatGold, formatModValue, scaleMods, MOD_LABEL, STAT_LABEL } from '../game/util';
 import { EquipmentItem, Modifiers, Stats } from '../game/types';
 import { ItemIcon } from './icons';
@@ -50,14 +50,14 @@ const RIGHT_RECT: Rect = { left: 56.3, top: 39.3, width: 14.3, height: 17.5 };
 const RELEVEL_BG = './lore/crafting/enhance.jpg';
 
 function itemLevelOf(item: EquipmentItem): number {
-  const def = EQUIPMENT_BY_ID[item.defId];
+  const def = itemDef(item);
   return item.rolledItemLevel ?? def?.reqLevel ?? 1;
 }
 
 /** The item's own stat/mod lines at a given item level, for its wearer --
  *  the same maths HeroManager.equipmentStats/equipmentMods use. */
 function linesAt(item: EquipmentItem, itemLevel: number, heroLevel: number): { key: string; label: string; value: string }[] {
-  const def = EQUIPMENT_BY_ID[item.defId];
+  const def = itemDef(item);
   if (!def) return [];
   const scale = (1 + item.plus * 0.15) * HeroManager.gearRelevance(itemLevel, heroLevel);
   const out: { key: string; label: string; value: string }[] = [];
@@ -90,7 +90,7 @@ export function RelevelPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) 
 
   const found = uid ? EquipmentManager.allItems(state).find((e) => e.item.uid === uid) : undefined;
   const item = found?.item;
-  const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
+  const def = item ? itemDef(item) : undefined;
   const hero = found?.heroId ? state.heroes.find((h) => h.id === found.heroId) : undefined;
   const realLv = item ? itemLevelOf(item) : 0;
   const shownLv = run ? run.shown : realLv;
@@ -110,7 +110,7 @@ export function RelevelPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) 
   const options: PickerOption[] = EquipmentManager.allItems(state)
     .filter((e) => !!e.heroId)
     .map(({ item: i, heroId }): PickerOption | null => {
-      const d = EQUIPMENT_BY_ID[i.defId];
+      const d = itemDef(i);
       const h = state.heroes.find((x) => x.id === heroId);
       if (!d || !h) return null;
       const lv = itemLevelOf(i);

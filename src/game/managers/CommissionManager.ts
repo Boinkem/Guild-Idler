@@ -1,7 +1,7 @@
 import { CommissionReward, GameState, Rarity, VendorId } from '../types';
 import { Rng } from '../rng';
 import { RARITY_ORDER } from '../util';
-import { EQUIPMENT, EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
+import { EQUIPMENT, itemDef, itemDisplayName } from '../data/equipment';
 import { CONSUMABLES } from '../data/items';
 import { ELEMENT_GLYPH, ELEMENT_LABEL, ELEMENT_TYPES, GEM_TIER_LABEL } from '../data/elements';
 import { MATERIAL_BY_ID } from '../data/materials';
@@ -87,7 +87,7 @@ export const CommissionManager = {
       const item = EquipmentManager.instantiate(def.id, { itemLevel: topLevel, sourceTag: 'normal', rng, heroLevel: topLevel });
       if (!item) return null;
       state.stash.push(item);
-      return { kind: 'equipment', name: itemDisplayName(item, EQUIPMENT_BY_ID[item.defId]!), icon: def.icon, glyph: '⚔', qty: 1 };
+      return { kind: 'equipment', name: itemDisplayName(item, itemDef(item)!), icon: def.icon, glyph: '⚔', qty: 1 };
     }
     if (vendorId === 'alchemist') {
       // Same pool the Alchemist's Supplies stock rolls from.

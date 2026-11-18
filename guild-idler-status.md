@@ -1134,17 +1134,15 @@ raid fight).
 
 ## Backlog
 
-### Raid loot rework -- in progress (0486 DevTool, 0487 Patch A built)
+### Raid loot rework -- in progress (0486 DevTool, 0487 Patch A, 0488 Patch B built)
 Agreed with the owner (18 Nov 2026), split into three patches:
 - **A -- built, patch 0487:** raid gear raid-only (28 items flagged),
   Blackford Keep set raised to Rare, Copper Band swapped for the new
   Mourning Locket, one loot prefix per raid, `[Normal]` tag on Normal raid
   drops.
-- **B -- next:** Heroic and up drops at least Epic (restores patch 0146's
-  rule that 0214 lost). Only matters for Blackford's 7 pieces (and
-  Ashwoven Charm, Rare, also a chain reward). Needs a per-item rarity on
-  the dropped item: ~112 reads of `def.rarity` across 23 files.
-- **C -- later:** refill the Quest/Shop pool to 20 per rarity. Random-gen
+- **B -- built, patch 0488:** Heroic and up drops at least Epic, via a
+  per-item rarity (`EquipmentItem.rarity` + `itemDef()`).
+- **C -- next:** refill the Quest/Shop pool to 20 per rarity. Random-gen
   templates (blank `mods`/`stats`) like the existing ones: +4 Common, +9
   Uncommon, +6 Rare, +5 Epic, +3 Legendary (27; names agreed in chat,
   e.g. Kettle Helm, Sundering Maul, The Long Patience). Plus two new
@@ -39141,3 +39139,61 @@ below Rare, all 8 prefixes loaded, Blackford set has 7 pieces, a real
 `instantiate('knights_blade', raidNormal)` + prefix gives "Siege-Worn
 Knight's Blade [Normal]", and the "The"/bonus-prefix/no-prefix cases all
 come out as above. Not run: a full in-game raid in the browser.
+
+### Raid loot: Heroic and up drops are at least Epic (patch 0488)
+```discord-update
+Dev Update | Raid Loot
+
+- Changed Heroic, Mythic and Legendary raids to always drop Epic gear or better
+- A Blackford Keep piece from Heroic now drops as a real Epic, with Epic-level stats to match
+- Changed the raid loot preview to show the rarity an item will actually drop at on the difficulty you've picked
+```
+
+Patch B of the raid loot rework (see Backlog). Restores patch 0146's rule
+("Heroic/Mythic pieces are always Epic quality"), lost when patch 0214
+replaced the authored `_heroic`/`_mythic` copies with one item + a budget
+multiplier. Today it only bites on Blackford Keep's 7 pieces (Rare since
+0487) and Ashwoven Charm (Rare, raid drop + chain reward); everything else
+raids drop is already Epic+.
+
+**Per-item rarity.** New optional `EquipmentItem.rarity`: the item's own
+rarity when a floor raised it. New `RaidDifficultyConfig.rarityFloor`
+(`raids.ts`): Normal `rare`, Heroic/Mythic/Legendary `epic`. `RaidManager`
+passes it to `EquipmentManager.instantiate`'s new `roll.rarityFloor`;
+`instantiate` stores the raise and rolls the item with the raised def, so
+the stats are Epic-sized too (Heroic Knight's Blade at party level 10:
+str/luck 12/12 vs Normal's 4/4). The raid result list now reports the
+item's own rarity, not the def's.
+
+**`itemDef(item)`** (`equipment.ts`) -- the def with the item's raise
+applied (cached, same object each call). Replaced all 75
+`EQUIPMENT_BY_ID[x.defId]` item lookups across 22 files (game managers,
+UI, `ahItems.ts`, and the Auction House server's `server/items/
+gameItems.ts`) mechanically, so every rarity read downstream (badge
+colour, gear score, sell/shop price, scrap, repair, refine/reroll costs,
+AH) follows the item without touching ~250 individual reads. Def-level
+reads (loot pools, shop stock, set lists, chain previews) still use
+`EQUIPMENT_BY_ID` on purpose. **Rule for future code: with an item in
+hand, use `itemDef(item)`, not `EQUIPMENT_BY_ID[item.defId]`.**
+
+**Guarded, not trusted.** `isValidRarityRaise` only honours a raise that is
+a real rarity, above the def's, at most `RARITY_FLOOR_MAX` (`epic`), on a
+`raidExclusive`/`chainExclusive` def -- the only raises the game makes.
+Needed because the AH server prices NPC buyouts from the client-sent
+item: tested, a faked `rarity: 'legendary'` on a listing is ignored
+(prices as Rare); an honest Heroic raise prices as Epic (777 vs 324).
+
+**Loot preview.** `RaidsPanel`'s `LootPreview` shows each chip at the
+rarity it would drop at on the picked difficulty (same `rarityRaiseFor`/
+`itemDef` pair).
+
+No save version bump: one new optional field; old items have none and
+read exactly as before. Legendary items are never touched (cap is Epic).
+
+**Verified:** `npx tsc --noEmit`, `vite build --config vite.web.config.ts`
+and the server's `bundle-game-items.mjs` all clean. A tsx script against
+real data: Normal/Heroic/Mythic Knight's Blade -> Rare/Epic/Epic with
+rising stats; Ashwoven Charm on Heroic -> Epic; Requiem and Frostfang
+untouched; faked legendary / epic-on-generic / junk values all ignored;
+AH `listingInfo` as above. Not checked: the result screen and loot
+preview in a browser.
