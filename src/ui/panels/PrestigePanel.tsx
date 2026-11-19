@@ -281,9 +281,10 @@ export function PrestigePanel() {
   // shape GuildPanel's own highlightId already uses (patch 0179), reused
   // here so a locked-purchase link elsewhere in the game (e.g. HeroesPanel's
   // "No free slots" message) can point straight at a specific renown perk.
-  const [highlightId, setHighlightId] = useState<string | null>(
-    () => engine.consumeRequestedHighlight(),
-  );
+  // Patch 0490 -- read in the initialiser, consumed in an effect: StrictMode
+  // (dev) runs initialisers twice, and consuming in one lost the highlight.
+  const [highlightId, setHighlightId] = useState<string | null>(() => engine.requestedHighlightId);
+  useEffect(() => { engine.consumeRequestedHighlight(); }, [engine]);
   useEffect(() => {
     if (!highlightId) return undefined;
     const timer = window.setTimeout(() => setHighlightId(null), 4000);

@@ -39258,3 +39258,83 @@ Restorative Draught draws the ghost and "+40 → 113" (fixed an unrounded
 number found here: Health regenerates fractionally); the Fallen hero shows
 the tombstone, empty bar, revive countdown and "Fallen, cannot be sent";
 tab bars show green/red/empty; no page errors.
+
+### Realm events: finished banner, result expiry, DevTool planning; Guild Hall links in dev (patch 0490)
+```discord-update
+Dev Update | Patch 0490
+
+- Changed a finished realm event's banner to clearly say it has ended ("Ended · Not sealed" / "Ended · Sealed"), dimmed, with "You raised" instead of "You:"
+- Changed finished event results to stop showing after 3 days by default
+- Fixed "Go to Guild Hall" buttons (like the Auction House's) not pinning the upgrade you need
+```
+
+Three direct reports.
+
+**1. "The test event looks like it's up again."** It wasn't: a finished event
+keeps showing its result, by design. But the banner kept the live layout
+and its status pill for a lost event said **"Held open"** (meaning the
+breach was held open), which reads as "the event is open". `RealmThreat.tsx`
+`statusOf`: closed now says "Ended · Sealed" / "Ended · Not sealed" (new
+grey `.realm-pill.quiet`, which "Not open yet" and "Tallying" were already
+asking for but had no style). `RealmQuestBanner` gets `.realm-banner-over`
+when closed (dimmed, desaturated bar, brighter on hover), "You raised N"
+instead of "You: N", and the tooltip "See how the event ended". The event
+panel's pill uses the same `statusOf`, so it says "Ended · Not sealed" too.
+For the record, the test event's own `resultsUntil` was already set (2 days
+after its end, Fri 20 Nov 8:00 AM Adelaide), so it would have dropped off
+on its own.
+
+**2. Results never expiring when "Results until" is blank.** `phaseOf`
+(`server/src/realm.ts`) treated a null `results_until` as "shown forever"
+(behind any newer event, but alone it never went away). Now null = 72h
+after `finalised_at` (`FRESH_RESULT_MS`, the same window a fresh result
+already outranked the next countdown for). An explicit `results_until`
+still wins. The DevTool's admin list `visible` flag uses the same
+`phaseOf`, so it agrees.
+
+**3. DevTool: changing a result window, and planning ahead.** The New/Edit
+form already had "Result shown for (days after end)", but Edit only exists
+while an event is still scheduled (the server refuses to reschedule an
+event that has opened, on purpose), so a finished one could only be
+deleted.
+- New admin route `POST /admin/realm/results-until {id, resultsUntil}`
+  works on ANY event (null = the default), allowed through the DevTool's
+  admin proxy. New **"Result shown until…"** button on every event that
+  has started: days after the end, 0 = hide now, blank = default.
+  It updates the server's record only; realm.config.json is untouched
+  (the config is never re-applied to an event that has opened).
+- Event list is now grouped: **Live now**, **Upcoming** (soonest first,
+  including events saved but not yet on the server), **Finished** (newest
+  first; saved events whose dates passed without the server recording
+  them land here too, with their own note). Each server event says what
+  players see right now: "Players see the countdown now", "Countdown shows
+  from …", "Live now", "Result shown until … (default: 3 days)", "Hidden:
+  result window ended …".
+- New **Duplicate** on every event: opens the New event form with the same
+  settings, ID `<id>-copy`, and dates moved on by whole weeks until it
+  starts in the future (same weekday and time). Build a schedule by
+  duplicating and adjusting.
+- Form hint: "0 = the default, 3 days. Changeable after it ends too".
+
+**4. Auction House "Go to Guild Hall →" did nothing (dev builds).** Not
+AH-specific. `GuildPanel` consumed the engine's request (reason,
+highlight, customize sub-tab) inside `useState` initialisers. React
+StrictMode, on in dev (`main.tsx`), runs initialisers twice and keeps the
+second result, which read null: so in dev every Guild Hall link (AH,
+Raids, recruiting a class, ...) switched tab but pinned nothing. Production
+builds were fine (confirmed: pinned there, not in dev). Now the initialisers
+only READ (`engine.requestedReason` / `requestedHighlightId` /
+`requestedSubTab`) and a mount effect consumes all three. `PrestigePanel`
+had the same pattern for its highlight; same fix. Every other panel already
+consumed in an effect, which survives StrictMode.
+
+**Verified:** `npx tsc --noEmit` (game and `server/`), `vite build` clean,
+`node --check` on both DevTool files. Headless Chrome on the dev server
+(StrictMode on): Auction House → "Go to Guild Hall →" lands with "Needed
+for the Auction House · Auction House Charter" pinned (before: no pin);
+same for Raids. DevTool Realm Events page with no backend running: Live /
+Upcoming / Finished render, Duplicate fills the form (test event → Tue 24
+Nov 8:00 PM to Wed 25 Nov 8:00 AM, `test-2026-11-17-copy`), no page
+errors. **Not run here** (no Postgres/server in this sandbox): the new
+admin route and the server-event cards' "Players see" lines and "Result
+shown until…" button, and the finished banner against a real event.

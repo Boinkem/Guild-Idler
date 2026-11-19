@@ -4296,7 +4296,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/auction-house/admin' && req.method === 'POST') {
     const cfg = await readAhConfig();
     const body = JSON.parse((await readBody(req)) || '{}');
-    const allowed = /^\/admin\/(realm|realm\/(schedule|target|close-now|add|delete)|bugs(\?status=[a-z]+)?|bugs\/\d+)$/;
+    const allowed = /^\/admin\/(realm|realm\/(schedule|target|close-now|add|delete|results-until)|bugs(\?status=[a-z]+)?|bugs\/\d+)$/;
     if (typeof body.path !== 'string' || !allowed.test(body.path)) return json(res, 400, { ok: false, error: 'Path not allowed.' });
     if (!cfg.adminToken) return json(res, 200, { ok: false, error: 'No admin token saved -- paste AH_ADMIN_TOKEN from server/.env into the Admin token box under Usage.' });
     try {

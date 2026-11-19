@@ -2864,7 +2864,7 @@ function realmFormHtml() {
         ${field('Starts', inp('opens', f.opens, 'type="datetime-local"'))}
         ${field('Ends', inp('ends', f.ends, 'type="datetime-local"'))}
         ${field('Countdown from (hours before start)', inp('teaserHours', f.teaserHours, 'type="number" min="0"'), '0 = no countdown')}
-        ${field('Result shown for (days after end)', inp('resultsDays', f.resultsDays, 'type="number" min="0" step="0.5"'), '0 = until the next event')}
+        ${field('Result shown for (days after end)', inp('resultsDays', f.resultsDays, 'type="number" min="0" step="0.5"'), '0 = the default, 3 days. Changeable after it ends too')}
         ${field('Late reports accepted (minutes)', inp('graceMinutes', f.graceMinutes, 'type="number" min="0"'), 'Offline quest time sent after the end')}
         ${field('Realm target (Ward)', inp('target', f.target, 'type="number" min="1"'))}
         ${field('Per-player cap (Ward)', inp('cap', f.cap, 'type="number" min="1"'))}
@@ -2897,7 +2897,21 @@ function realmHtml() {
   const inCfg = new Set(cfgEvents.map((e) => e.eventKey));
   const waiting = cfgEvents.filter((e) => !dbEvents.some((d) => d.eventKey === e.eventKey));
 
-  const dbRows = dbEvents.map((e) => {
+  // Patch 0490 -- what players see for this event right now, in words.
+  const FRESH_RESULT_MS = 72 * 3_600_000; // server/src/realm.ts, same default
+  const seesLine = (e) => {
+    if (e.status === 'scheduled') {
+      if (e.visible) return 'Players see the countdown now';
+      return e.teaserFrom ? `Countdown shows from ${localStamp(e.teaserFrom)}` : 'Hidden until it opens (no countdown)';
+    }
+    if (e.phase === 'open') return 'Live now';
+    if (e.phase === 'tallying') return 'Tallying late reports';
+    const until = e.resultsUntil || (e.finalisedAt ? new Date(new Date(e.finalisedAt).getTime() + FRESH_RESULT_MS).toISOString() : null);
+    const dflt = e.resultsUntil ? '' : ' (default: 3 days)';
+    return e.visible ? `Result shown until ${localStamp(until)}${dflt}` : `Hidden: result window ended ${localStamp(until)}${dflt}`;
+  };
+
+  const dbCard = (e) => {
     const pct = e.target > 0 ? Math.round((e.total / e.target) * 1000) / 10 : 0;
     const live = e.status === 'open' || (e.status === 'closed' && !e.finalisedAt);
     const cfgEvent = cfgEvents.find((x) => x.eventKey === e.eventKey);
@@ -2907,12 +2921,13 @@ function realmHtml() {
           <b>${escapeHtml(e.eventKey || `#${e.id}`)}</b> · <b>${escapeHtml(e.phase)}</b>${e.visible ? '' : ' (hidden from players)'} ·
           ${localStamp(e.opensAt)} → ${localStamp(e.endsAt)} (+${e.graceMinutes}m late reports)
         </div>
+        <div class="tiny" style="margin: 4px 0;"><b>${escapeHtml(seesLine(e))}</b></div>
         <div class="tiny" style="margin: 4px 0;">
           <b>${e.total.toLocaleString()} / ${e.target.toLocaleString()}</b> Ward (${pct}%) ·
           ${e.players} player${e.players === 1 ? '' : 's'} (${e.demoPlayers} demo, ${e.atCap} at the cap of ${e.cap}, avg ${e.avgPoints}) ·
           tiers ${e.tiers.join(' / ')}
           ${(e.rewards?.tierTitles || []).some(Boolean) || e.rewards?.sealTitle ? ` · titles: ${[...(e.rewards.tierTitles || []).map((t, i) => (t ? `T${i + 1} ${escapeHtml(t)}` : '')), e.rewards.sealTitle ? `seal ${escapeHtml(e.rewards.sealTitle)}` : ''].filter(Boolean).join(', ')}` : ''}
-          ${e.result ? ` · <b>${e.result.sealed ? 'SEALED' : 'held open'}</b> at ${Math.round(e.result.finalPct * 100)}%` : ''}
+          ${e.result ? ` · <b>${e.result.sealed ? 'SEALED' : 'not sealed'}</b> at ${Math.round(e.result.finalPct * 100)}%` : ''}
         </div>
         ${e.top.length ? `<div class="tiny muted">Top: ${e.top.map((t) => `${escapeHtml(t.guild || '?')} ${t.points}${t.app === 'demo' ? 'ᵈ' : ''}`).join(' · ')}</div>` : ''}
         <div class="row" style="gap: 6px; margin-top: 6px; flex-wrap: wrap;">
@@ -2922,25 +2937,68 @@ function realmHtml() {
           ${live ? `<button data-realm-add="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Add Ward…</button>` : ''}
           ${e.status === 'open' ? `<button data-realm-close="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Close now</button>` : ''}
           ${live ? `<button data-realm-finalise="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Close + finalise (skip late reports)</button>` : ''}
+          ${e.status !== 'scheduled' ? `<button data-realm-results="${e.id}" data-ends="${escapeHtml(e.endsAt)}" ${ahState.realmBusy ? 'disabled' : ''}>Result shown until…</button>` : ''}
+          <button data-realm-dup="${escapeHtml(e.eventKey || '')}" data-src="db">Duplicate</button>
           <button class="remove" data-realm-remove="${escapeHtml(e.eventKey || '')}" data-id="${e.id}" ${ahState.realmBusy ? 'disabled' : ''}>Delete</button>
         </div>
       </div>`;
-  }).join('');
-  const waitingRows = waiting.map((e) => `
+  };
+  const waitingCard = (e, past = false) => `
     <div class="patch-result" style="margin-bottom: 8px;">
-      <div class="patch-result-label"><b>${escapeHtml(e.eventKey)}</b> · <b>saved, not on the server yet</b> · ${localStamp(e.opensAt)} → ${localStamp(e.endsAt)}</div>
-      <div class="tiny muted" style="margin: 4px 0;">${r?.ok ? (r.realmEnabled ? 'The server picks it up within a minute.' : 'Turn both switches on and the server will schedule it.') : 'The server is not answering; it is scheduled when it is running.'} Target ${e.target}, cap ${e.cap}, tiers ${(e.tiers || []).join(' / ')}.</div>
+      <div class="patch-result-label"><b>${escapeHtml(e.eventKey)}</b> · <b>${past ? 'saved; its dates have passed' : 'saved, not on the server yet'}</b> · ${localStamp(e.opensAt)} → ${localStamp(e.endsAt)}</div>
+      <div class="tiny muted" style="margin: 4px 0;">${past
+        ? (r?.ok ? 'The server has no record of it, so players never saw it.' : 'The server is not answering, so its record (Ward, result) is not shown here.')
+        : r?.ok ? (r.realmEnabled ? 'The server picks it up within a minute.' : 'Turn both switches on and the server will schedule it.') : 'The server is not answering; it is scheduled when it is running.'} Target ${e.target}, cap ${e.cap}, tiers ${(e.tiers || []).join(' / ')}.</div>
       <div class="row" style="gap: 6px; margin-top: 6px;">
         <button data-realm-edit="${escapeHtml(e.eventKey)}">Edit</button>
+        <button data-realm-dup="${escapeHtml(e.eventKey)}" data-src="cfg">Duplicate</button>
         <button class="remove" data-realm-remove="${escapeHtml(e.eventKey)}" ${ahState.realmBusy ? 'disabled' : ''}>Delete</button>
       </div>
-    </div>`).join('');
+    </div>`;
+
+  // Patch 0490 -- grouped: Live, Upcoming (soonest first, saved-but-not-
+  // yet-on-the-server included), Finished (newest first).
+  const t = (iso) => new Date(iso).getTime();
+  const liveEvents = dbEvents.filter((e) => e.phase === 'open' || e.phase === 'tallying');
+  const upcoming = [
+    ...dbEvents.filter((e) => e.status === 'scheduled').map((e) => ({ at: t(e.opensAt), html: dbCard(e) })),
+    ...waiting.filter((e) => t(e.endsAt) > Date.now()).map((e) => ({ at: t(e.opensAt), html: waitingCard(e) })),
+  ].sort((x, y) => x.at - y.at);
+  // Saved events whose end has passed without the server ever recording
+  // them (it was off, or not reachable from here) sit with the finished.
+  const finished = [
+    ...dbEvents.filter((e) => e.status === 'closed' && e.phase !== 'tallying').map((e) => ({ at: t(e.endsAt), html: dbCard(e) })),
+    ...waiting.filter((e) => t(e.endsAt) <= Date.now()).map((e) => ({ at: t(e.endsAt), html: waitingCard(e, true) })),
+  ].sort((x, y) => y.at - x.at);
+  const section = (title, count, body, empty) => `
+    <h3 style="margin: 16px 0 6px; font-size: 14px;">${title} <span class="tiny muted">(${count})</span></h3>
+    ${body || `<p class="tiny muted" style="margin: 0 0 8px;">${empty}</p>`}`;
   const orphanNote = dbEvents.some((e) => e.eventKey && !inCfg.has(e.eventKey) && e.status === 'scheduled')
-    ? '<p class="tiny muted">Events without an Edit button were scheduled from outside this page; delete and recreate them here to edit.</p>' : '';
+    ? '<p class="tiny muted">Upcoming events without an Edit button were scheduled from outside this page; Duplicate one to make an editable copy, then delete the original.</p>' : '';
   const serverNote = r && !r.ok ? `<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(r.error || 'Server not answering')}</div></div>` : '';
   return `${head}${serverNote}
-    ${dbRows || waitingRows ? '' : '<p class="tiny muted">No events. "New event" schedules one.</p>'}
-    ${waitingRows}${dbRows}${orphanNote}`;
+    ${section('Live now', liveEvents.length, liveEvents.map(dbCard).join(''), 'Nothing live.')}
+    ${section('Upcoming', upcoming.length, upcoming.map((x) => x.html).join(''), 'Nothing scheduled. "New event" plans one, or Duplicate a past event.')}
+    ${orphanNote}
+    ${section('Finished', finished.length, finished.map((x) => x.html).join(''), 'No finished events.')}`;
+}
+
+/** Patch 0490 -- a copy of an event for the New event form: same
+ *  settings, a fresh ID, and moved on by whole weeks until it starts in
+ *  the future, keeping its weekday and time. */
+function duplicateForm(e) {
+  const f = formFromEvent(e);
+  const opens = new Date(e.opensAt).getTime();
+  const ends = new Date(e.endsAt).getTime();
+  const week = 7 * 86_400_000;
+  let shift = 0;
+  while (opens + shift <= Date.now()) shift += week;
+  if (shift === 0) shift = week;
+  return {
+    ...f, isNew: true, eventKey: e.eventKey ? `${e.eventKey}-copy` : '',
+    opens: toLocalInput(new Date(opens + shift).toISOString()),
+    ends: toLocalInput(new Date(ends + shift).toISOString()),
+  };
 }
 
 async function realmCfgAction(action, body, confirmText) {
@@ -3043,6 +3101,23 @@ function bindRealmAndBugs() {
   on('[data-realm-edit]', (el) => {
     const e = (ahState.realmCfg?.events || []).find((x) => x.eventKey === el.dataset.realmEdit);
     if (e) { ahState.realmForm = formFromEvent(e); ahState.realmMsg = null; renderLive(); }
+  });
+  // Patch 0490 -- Duplicate (plan ahead from a past or upcoming event) and
+  // the result window for any event that has started.
+  on('[data-realm-dup]', (el) => {
+    const key = el.dataset.realmDup;
+    const pool = el.dataset.src === 'cfg' ? (ahState.realmCfg?.events || []) : (ahState.realm?.events || []);
+    const e = pool.find((x) => x.eventKey === key) || (ahState.realmCfg?.events || []).find((x) => x.eventKey === key);
+    if (e) { ahState.realmForm = duplicateForm(e); ahState.realmMsg = null; renderLive(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  });
+  on('[data-realm-results]', (el) => {
+    const v = prompt('Show the result for how many days after the event ended?\n\n0 = hide it now · blank = the default (3 days after it was finalised)', '');
+    if (v === null) return;
+    const ends = new Date(el.dataset.ends).getTime();
+    const days = v.trim() === '' ? null : Number(v);
+    if (days !== null && !(days >= 0)) { alert('Enter a number of days, 0, or leave it blank.'); return; }
+    const until = days === null ? null : new Date(Math.max(ends + days * 86_400_000, days === 0 ? Date.now() - 60_000 : 0)).toISOString();
+    realmAction('/admin/realm/results-until', { id: Number(el.dataset.realmResults), resultsUntil: until });
   });
   // The form keeps its values in ahState.realmForm as they're typed, so a
   // re-render (refresh, auto-check) never wipes them.

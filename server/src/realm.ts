@@ -112,18 +112,21 @@ interface CampaignRow {
 
 type Phase = 'teaser' | 'open' | 'tallying' | 'closed';
 
+/** How long a just-finished event's result outranks the next event's
+ *  countdown, so players get to see how it ended. Patch 0490: also how
+ *  long a result stays up at all when the event has no results_until
+ *  (before, a blank results_until meant "shown forever"). */
+const FRESH_RESULT_MS = 72 * 60 * 60_000;
+
 function phaseOf(row: CampaignRow, now: number): Phase | null {
   if (row.status === 'open') return 'open';
   if (row.status === 'scheduled') {
     return !row.teaser_from || row.teaser_from.getTime() <= now ? 'teaser' : null;
   }
   if (!row.finalised_at) return 'tallying';
-  return !row.results_until || row.results_until.getTime() > now ? 'closed' : null;
+  const until = row.results_until?.getTime() ?? row.finalised_at.getTime() + FRESH_RESULT_MS;
+  return until > now ? 'closed' : null;
 }
-
-/** How long a just-finished event's result outranks the next event's
- *  countdown, so players get to see how it ended. */
-const FRESH_RESULT_MS = 72 * 60 * 60_000;
 
 /** Lower shows first: a live event, then one being tallied, then a result
  *  from the last few days, then the next countdown, then older results. */
@@ -604,6 +607,21 @@ export function registerRealmRoutes(app: FastifyInstance, config: AppConfig) {
       await getPool().query(`INSERT INTO realm_feed (campaign_id, guild_name, text_key, points) VALUES ($1, $2, 'reserve', $3)`, [request.body?.id, "The Crown's Reserve", points]);
     }
     currentCache = null;
+    return { ok: true };
+  });
+
+  /** Patch 0490 -- sets how long an event's result stays up, on ANY
+   *  event (finished ones included), so a result can be cut short or
+   *  kept up longer after the fact. `resultsUntil` null = the default
+   *  (FRESH_RESULT_MS after it was finalised). */
+  app.post<{ Body: { id?: number; resultsUntil?: string | null } }>('/admin/realm/results-until', { preHandler: admin }, async (request, reply) => {
+    const raw = request.body?.resultsUntil;
+    const until = raw == null || raw === '' ? null : new Date(raw);
+    if (until && Number.isNaN(until.getTime())) { reply.code(400); return { ok: false, error: 'resultsUntil must be a date or null.' }; }
+    const { rowCount } = await getPool().query(
+      `UPDATE realm_campaigns SET results_until = $2 WHERE id = $1 AND kind = 'event'`, [request.body?.id, until]);
+    currentCache = null;
+    if (!rowCount) { reply.code(404); return { ok: false, error: 'No event with that id.' }; }
     return { ok: true };
   });
 

@@ -37,7 +37,9 @@ function statusOf(event: RealmEvent, now: number): { text: string; cls: string }
   const pct = pctOf(event);
   if (event.phase === 'teaser') return { text: 'Not open yet', cls: 'quiet' };
   if (event.phase === 'tallying') return { text: 'Tallying the last reports', cls: 'quiet' };
-  if (event.phase === 'closed') return event.result?.sealed ? { text: 'Sealed', cls: 'good' } : { text: 'Held open', cls: 'warn' };
+  // Patch 0490 -- "Held open" read as "the event is open" on the banner.
+  // A finished event now always says it has ended.
+  if (event.phase === 'closed') return event.result?.sealed ? { text: 'Ended · Sealed', cls: 'good' } : { text: 'Ended · Not sealed', cls: 'quiet' };
   if (pct >= 100) return { text: 'Sealed. Keep it shut', cls: 'good' };
   // A little slack, so the first minutes of an event don't read as losing.
   return pct + 2 >= paceOf(event, now) ? { text: 'Holding the line', cls: 'good' } : { text: 'Falling behind', cls: 'warn' };
@@ -81,7 +83,12 @@ export function RealmQuestBanner() {
   const rt = state.realmThreat;
   const mine = rt.points + RealmThreatManager.onItsWay(state);
   return (
-    <button type="button" className="realm-banner" onClick={() => engine.openRealmPanel()} title="Open the event">
+    <button
+      type="button"
+      className={`realm-banner ${event.phase === 'closed' ? 'realm-banner-over' : ''}`}
+      onClick={() => engine.openRealmPanel()}
+      title={event.phase === 'closed' ? 'See how the event ended' : 'Open the event'}
+    >
       <span className="realm-banner-kicker">{text.kicker}</span>
       <span className="realm-banner-name">{text.name}</span>
       {event.phase === 'teaser' ? (
@@ -95,7 +102,7 @@ export function RealmQuestBanner() {
           <span className="realm-banner-pct">{Math.floor(pct)}%</span>
           <span className={`realm-pill ${status.cls}`}>{status.text}</span>
           <span className="realm-banner-mine">
-            You: {formatNumber(mine)}{rt.tier > 0 ? ` · ${realmTierName(text, rt.tier - 1)}` : ''}
+            {event.phase === 'closed' ? 'You raised' : 'You:'} {formatNumber(mine)}{rt.tier > 0 ? ` · ${realmTierName(text, rt.tier - 1)}` : ''}
           </span>
         </>
       )}

@@ -295,7 +295,13 @@ export function GuildPanel() {
   // longer-standing comment history in guild-idler-status.md.
   // Patch 0437 -- decorations on ice: a stray 'customize' request is still
   // consumed (so it can't leak into another tab) but never opens the scene.
-  const [customizing, setCustomizing] = useState(() => engine.consumeRequestedSubTab() === 'customize' && GUILD_HALL_DECOR_ENABLED);
+  // Patch 0490 -- the three requests below are READ in their useState
+  // initialisers but only CONSUMED in the mount effect after them. React
+  // StrictMode (dev builds) runs every initialiser twice and keeps the
+  // second result, so consuming inside one meant the second run read
+  // null: in dev, every "Go to Guild Hall" link (Auction House, Raids,
+  // hero recruiting...) landed here with nothing pinned.
+  const [customizing, setCustomizing] = useState(() => engine.requestedSubTab === 'customize' && GUILD_HALL_DECOR_ENABLED);
 
   // "Fund the Guild" modal -- unchanged.
   const [fundingOpen, setFundingOpen] = useState(false);
@@ -308,7 +314,7 @@ export function GuildPanel() {
   // the advice card's "Show me". Must read the reason before the
   // highlight id is consumed just below.
   const [pin, setPin] = useState<{ id: string; text: string } | null>(() => {
-    const reason = engine.consumeRequestedReason();
+    const reason = engine.requestedReason;
     const id = engine.requestedHighlightId;
     return reason && id ? { id, text: `Needed for ${reason}` } : null;
   });
@@ -318,9 +324,16 @@ export function GuildPanel() {
   // "Jump to and highlight the requirement" landing -- the brief ring, for
   // links with no reason (a notification's Go-to button).
   const [highlightId, setHighlightId] = useState<string | null>(() => {
-    const id = engine.consumeRequestedHighlight();
+    const id = engine.requestedHighlightId;
     return pin ? null : id;
   });
+  // Consume once, after the first render read them (see above). Reason
+  // first, same order the engine documents.
+  useEffect(() => {
+    engine.consumeRequestedSubTab();
+    engine.consumeRequestedReason();
+    engine.consumeRequestedHighlight();
+  }, [engine]);
   useEffect(() => {
     if (!highlightId) return undefined;
     const timer = window.setTimeout(() => setHighlightId(null), 4000);
