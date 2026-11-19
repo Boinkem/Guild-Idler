@@ -39492,3 +39492,34 @@ longer starts ticked when a webhook is saved; tick it per run. The
 a faked stopped job: checkbox starts unticked, bar shows step 7 of 12
 "Package game" with the stripe while running and the buttons locked, red
 segment and Details link when stopped; no page errors.
+
+### DevTool: Auto picks the newest unapplied patch; version bump defaults to Skip (patch 0495)
+```discord-update
+Dev Update | Changes
+
+- Changed the dev tools' Auto patching to pick the newest patch that isn't applied yet, and to skip the version bump unless you choose one
+```
+
+Two direct requests on the Patches page's Auto tab.
+
+**Patch to apply first.** Patch 0492 pre-selected the OLDEST patch in
+root, which in practice landed on long-applied files (31
+`patch-0453...` to `patch-0485...` files were still in root, see 0493).
+`/api/patches/list` (`tools/devtool/server.mjs`) now flags each file
+`likelyApplied` when its number (`extractPatchNumber`, so every naming
+style) is at or below the newest `(patch NNNN)` heading in
+guild-idler-status.md, the same rule Tidy archives by, and returns
+`num` / `newestLogged`. `defaultShipPatch` (app.js) picks the newest
+unapplied one (highest number, then newest file); none unapplied = None
+(Release). The dropdown lists unapplied first (newest first) and marks the
+rest "-- already applied"; the side list greys them out with a note that
+Tidy moves them. Guide text updated.
+
+**Version bump:** Skip is now the first button and the default
+(`patchState.shipBump = 'none'`); Patch / Minor / Major follow.
+
+**Verified:** `node --check` on both files. Headless Chrome with root =
+`patch-0453`, `patch-0485`, `0490` (all at or below 0494, the newest
+logged) plus `0495-new-a`, `0496-new-b`: default 0496, order 0496, 0495,
+then the three "already applied"; bump buttons Skip / Patch / Minor /
+Major with Skip pressed; no page errors.

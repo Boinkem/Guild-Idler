@@ -1283,3 +1283,5 @@ td.icon-cell { width: 1%; padding-right: 0; }
 }
 @keyframes pt-stripes { to { background-position: 17px 0; } }
 @media (prefers-reduced-motion: reduce) { .pt-progress .running { animation: none; } }
+/* Patch 0495 -- patch files already applied (still in root until Tidy). */
+.pt-file.applied { opacity: 0.55; }

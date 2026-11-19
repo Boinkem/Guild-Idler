@@ -2654,7 +2654,8 @@ const patchState = {
   // (Steam + Discord) and a Guide. shipView/cycleView above are no longer
   // read; kept so nothing that still sets them breaks.
   tab: 'auto', manualStep: 1, settingsOpen: false, guideTopic: null,
-  shipTarget: 'both', shipBump: 'patch',
+  // Patch 0495 -- version bump defaults to Skip.
+  shipTarget: 'both', shipBump: 'none',
   ship: { job: null, shipState: { lastAnnouncedPatch: null } },
   shipPollTimer: null,
   // Highest patch number the current Discord draft covers -- recorded as
@@ -3259,17 +3260,16 @@ function shipCommitMessageFor(name) {
   return name ? 'Apply ' + name.replace(/\.patch$/, '').replace(/^(?:patch[-_]?)?\d+[-_]/i, '').replace(/-/g, ' ') : '';
 }
 
-/** Patch 0492 -- the patch Auto pre-selects: the OLDEST one waiting in the
- *  project root (lowest patch number, then oldest file), so a run can't
- *  skip a patch a newer one depends on. Any other can be picked. */
+/** The patch Auto pre-selects. Patch 0495: the NEWEST patch that isn't
+ *  already applied (numbered above the newest status-doc entry, see
+ *  /api/patches/list's likelyApplied). Patch 0492 picked the oldest, which
+ *  landed on long-applied files still sitting in root. Highest patch
+ *  number first, then newest file. Nothing unapplied: None. */
 function defaultShipPatch() {
   if (patchState.selected && !patchState.applied) return patchState.selected;
-  const root = patchState.files.filter((f) => f.dir === '.');
-  if (!root.length) return '';
-  // Same naming styles extractPatchNumber (server.mjs) accepts:
-  // "0491-name", "patch-0453-name", "patch_0453", "...-patch-0453".
-  const num = (f) => { const m = /^(\d{3,5})[-_]/.exec(f.name) || /patch[-_]?(\d{3,5})/i.exec(f.name); return m ? Number(m[1]) : Infinity; };
-  return [...root].sort((x, y) => num(x) - num(y) || x.mtime - y.mtime)[0].name;
+  const fresh = patchState.files.filter((f) => !f.likelyApplied);
+  if (!fresh.length) return '';
+  return [...fresh].sort((x, y) => (y.num ?? -1) - (x.num ?? -1) || y.mtime - x.mtime)[0].name;
 }
 
 function renderShipCycle() {
@@ -3294,7 +3294,7 @@ function renderShipCycle() {
           <label class="pt-field">Patch to apply first
             <select id="shipPatchSelect" ${dis}>
               <option value="">None -- release what's already pushed</option>
-              ${patchState.files.map((f) => `<option value="${escapeHtml(f.name)}" ${f.name === defaultPatch ? 'selected' : ''}>${escapeHtml(f.name)}${f.dir !== '.' ? ` (${escapeHtml(f.dir)})` : ''}</option>`).join('')}
+              ${[...patchState.files].sort((x, y) => (x.likelyApplied - y.likelyApplied) || (y.num ?? -1) - (x.num ?? -1)).map((f) => `<option value="${escapeHtml(f.name)}" ${f.name === defaultPatch ? 'selected' : ''}>${escapeHtml(f.name)}${f.dir !== '.' ? ` (${escapeHtml(f.dir)})` : ''}${f.likelyApplied ? ' -- already applied' : ''}</option>`).join('')}
             </select>
           </label>
           <label class="pt-field" id="shipCommitRow" ${defaultPatch ? '' : 'hidden'}>Commit message
@@ -3304,10 +3304,10 @@ function renderShipCycle() {
 
         <div class="pt-field" id="shipBumpRow" ${defaultPatch ? '' : 'hidden'}>Version bump
           <select id="shipBumpSelect" hidden>
-            ${['patch', 'minor', 'major', 'none'].map((l) => `<option value="${l}" ${l === patchState.shipBump ? 'selected' : ''}>${l}</option>`).join('')}
+            ${['none', 'patch', 'minor', 'major'].map((l) => `<option value="${l}" ${l === patchState.shipBump ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
           <div class="pt-seg" role="group" aria-label="Version bump">
-            ${['patch', 'minor', 'major', 'none'].map((l) => `<button type="button" class="pt-segbtn ${l === patchState.shipBump ? 'on' : ''}" data-ship-bump="${l}" aria-pressed="${l === patchState.shipBump}" ${dis}>${l === 'patch' ? `Patch · ${escapeHtml(patchState.version || '?')} → ${escapeHtml(nextVersion(patchState.version, 'patch'))}` : bumpLabel(l)}</button>`).join('')}
+            ${['none', 'patch', 'minor', 'major'].map((l) => `<button type="button" class="pt-segbtn ${l === patchState.shipBump ? 'on' : ''}" data-ship-bump="${l}" aria-pressed="${l === patchState.shipBump}" ${dis}>${l === 'patch' ? `Patch · ${escapeHtml(patchState.version || '?')} → ${escapeHtml(nextVersion(patchState.version, 'patch'))}` : bumpLabel(l)}</button>`).join('')}
           </div>
         </div>
 
@@ -3359,11 +3359,11 @@ function renderShipCycle() {
         <section class="pt-card">
           <h3 class="pt-h">Waiting in the root folder <span class="muted">${patchState.files.length}</span></h3>
           ${patchState.files.length ? patchState.files.map((f) => `
-            <div class="pt-file ${f.name === defaultPatch ? 'on' : ''}">
+            <div class="pt-file ${f.name === defaultPatch ? 'on' : ''} ${f.likelyApplied ? 'applied' : ''}">
               <div>${escapeHtml(f.name)}</div>
-              <div class="tiny muted">${f.dir === '.' ? 'project root' : escapeHtml(f.dir)} · ${formatBytes(f.size)} · ${formatWhen(f.mtime)}</div>
+              <div class="tiny muted">${f.likelyApplied ? 'already applied · ' : ''}${f.dir === '.' ? 'project root' : escapeHtml(f.dir)} · ${formatBytes(f.size)} · ${formatWhen(f.mtime)}</div>
             </div>`).join('') : '<p class="tiny muted" style="margin:0;">No .patch files waiting. Drop one in the project root and Refresh.</p>'}
-          ${patchState.files.length > 1 ? '<p class="tiny muted" style="margin:0;">Auto picks the oldest first, so nothing gets skipped.</p>' : ''}
+          ${patchState.files.some((f) => f.likelyApplied) ? '<p class="tiny muted" style="margin:0;">"Already applied" = numbered at or below the newest patch in guild-idler-status.md. Tidy patch files moves them to patches/applied/.</p>' : ''}
         </section>
       </aside>
     </div>
@@ -3739,7 +3739,7 @@ const GUIDE_TOPICS = [
     <p><b>Patch</b> runs Check → Apply → Build → Commit → Version → Push (→ Discord, if ticked) in one go, stopping at the first step that fails. Nothing goes to Steam.</p>
     <p><b>Patch &amp; Upload</b> does all of that, then Package → Build scripts → Upload for the game, the demo or both. Build runs before Commit, so a broken patch is never committed or pushed.</p>
     <p>Set the patch to <b>None</b> and the button becomes <b>Release</b>: package and upload the version exactly as it's pushed, with no apply, commit, bump or push. Pre-flight stops if anything is uncommitted or not pushed, so what goes to Steam always matches GitHub.</p>
-    <p>Auto pre-selects the oldest patch waiting in the root folder, so nothing gets skipped. You can leave the page while it runs; closing the DevTool stops the run. A failed run can be retried from the failed step, or reverted if nothing was committed yet.</p>
+    <p>Auto pre-selects the newest patch that isn't applied yet (anything numbered at or below the newest patch in guild-idler-status.md counts as applied, and is greyed out). Version bump starts on Skip. You can leave the page while it runs; closing the DevTool stops the run. A failed run can be retried from the failed step, or reverted if nothing was committed yet.</p>
     <h4>Manual</h4>
     <p>The same steps as single buttons, one at a time. Use it to check things step by step, re-run one step, or set an exact version.</p>
     <h4>Dev server</h4>

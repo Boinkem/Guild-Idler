@@ -4192,7 +4192,17 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/patches/list' && req.method === 'GET') {
     const files = await listPatchFiles();
     const status = await gitStatus();
-    return json(res, 200, { files, status });
+    // Patch 0495 -- flag files numbered at or below the newest "(patch
+    // NNNN)" heading in guild-idler-status.md as already applied (the same
+    // rule Tidy archives by), so Auto never pre-selects one of them.
+    const entries = await readPatchLogEntries().catch(() => []);
+    const newest = entries.length ? Math.max(...entries.map((e) => e.num)) : 0;
+    for (const f of files) {
+      const num = extractPatchNumber(f.name);
+      f.num = num ? parseInt(num, 10) : null;
+      f.likelyApplied = !!(newest && f.num && f.num <= newest);
+    }
+    return json(res, 200, { files, status, newestLogged: newest || null });
   }
 
   if (url.pathname === '/api/patches/status' && req.method === 'GET') {
