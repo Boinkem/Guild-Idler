@@ -1690,6 +1690,23 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Patch 0503 -- XP to every hero, through the real grantXp (levels,
+   *  stat points and the level cap all behave as in play). */
+  testAddXpAll(amount: number) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    for (const hero of this.state.heroes) HeroManager.grantXp(hero, amount);
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Patch 0503 -- Legendary Shards. */
+  testAddShards(amount: number) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.legendaryShards = Math.max(0, (this.state.legendaryShards ?? 0) + amount);
+    this.notify();
+    void this.saveNow();
+  }
+
   /**
    * Drops one random NOT-YET-LEARNED recipe scroll straight into the
    * stash -- direct request, "so I can test that process" (learning a

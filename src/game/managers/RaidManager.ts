@@ -239,19 +239,28 @@ export const RaidManager = {
     };
   },
 
-  /** Preview odds for one specific encounter, given a prospective party -- used by the UI before committing. */
-  previewEncounterSuccess(
-    state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, encounterId: string, now: number,
+  /**
+   * Patch 0503 -- one encounter's odds for a prospective party, broken into
+   * the parts the raid screen draws as a stacked bar. The same formula
+   * resolve() rolls: base - difficulty penalty + party bonus + elemental +
+   * raid modifier - missing-role penalty (+ the checkpoint retry bonus on
+   * the fight a return starts at), clamped to MIN/MAX_SUCCESS, then the
+   * Heroic+ missing-role cap.
+   */
+  encounterBreakdown(
+    state: GameState, heroes: Hero[], raidId: string, difficulty: RaidDifficulty, encounterId: string, now: number,
     fromCheckpoint = false,
-  ): number {
+  ): {
+    base: number; penalty: number; party: number; elemental: number; modifier: number;
+    roleMismatch: number; retry: number; cap: number | null; chance: number;
+  } | null {
     const raid = RAID_BY_ID[raidId];
     const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
-    if (!raid || !encounter) return 0;
-    const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
-    const bonus = RaidManager.partySuccessBonus(state, heroes, now, RaidManager.successBaselineLevel(raid, heroes));
+    if (!raid || !encounter) return null;
+    const party = RaidManager.partySuccessBonus(state, heroes, now, RaidManager.successBaselineLevel(raid, heroes));
     const diffCfg = RAID_DIFFICULTIES[difficulty];
     const elemental = RaidManager.elementalBonus(heroes, encounter);
-    const override = raid.successModifier ?? 0;
+    const modifier = raid.successModifier ?? 0;
     // Patch 0501 -- role needs scaled to this difficulty's party size.
     const roles = requiredRolesFor(raid, difficulty);
     const roleMismatch = RaidManager.roleMismatchPenalty(heroes, roles);
@@ -259,15 +268,34 @@ export const RaidManager = {
     // fight it returns to (resolve() applies the same).
     const cp = fromCheckpoint ? RaidManager.checkpoint(state, raidId, difficulty) : null;
     const retry = cp && raid.encounterIds[cp.encountersCleared] === encounterId ? RaidManager.retryBonus(cp) : 0;
-    const success = clamp(encounter.baseSuccess - diffCfg.successPenalty + bonus + elemental + override - roleMismatch + retry, MIN_SUCCESS, MAX_SUCCESS);
+    let chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + party + elemental + modifier - roleMismatch + retry, MIN_SUCCESS, MAX_SUCCESS);
     // Heroic/Legendary's role-mismatch ceiling applies AFTER the ordinary
     // clamp, only while the party is actually missing a required slot --
     // see RaidDifficultyConfig.roleMismatchCap. Normal has no cap
     // (undefined), so this is a no-op there regardless of party makeup.
-    if (diffCfg.roleMismatchCap != null && RaidManager.hasRoleMismatch(heroes, roles)) {
-      return Math.min(success, diffCfg.roleMismatchCap);
+    let cap: number | null = null;
+    if (diffCfg.roleMismatchCap != null && RaidManager.hasRoleMismatch(heroes, roles) && chance > diffCfg.roleMismatchCap) {
+      cap = diffCfg.roleMismatchCap;
+      chance = cap;
     }
-    return success;
+    return { base: encounter.baseSuccess, penalty: diffCfg.successPenalty, party, elemental, modifier, roleMismatch, retry, cap, chance };
+  },
+
+  /** Preview odds for one specific encounter, given a prospective party -- used by the UI before committing. */
+  previewEncounterSuccess(
+    state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, encounterId: string, now: number,
+    fromCheckpoint = false,
+  ): number {
+    const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
+    return RaidManager.encounterBreakdown(state, heroes, raidId, difficulty, encounterId, now, fromCheckpoint)?.chance ?? 0;
+  },
+
+  /** Patch 0503 -- one hero's own raid success contribution against a
+   *  raid (what they add to the party average), for the raid screen. */
+  heroContribution(state: GameState, hero: Hero, raidId: string, party: Hero[], now: number): number {
+    const raid = RAID_BY_ID[raidId];
+    if (!raid) return 0;
+    return RaidManager.partySuccessBonus(state, [hero], now, RaidManager.successBaselineLevel(raid, party.length ? party : [hero]));
   },
 
   /**

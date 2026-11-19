@@ -10552,3 +10552,53 @@ button.harvest-item:hover {
   margin: 6px 0 0; padding: 6px 10px; border-radius: var(--radius);
   border: 1px solid var(--brass); background: color-mix(in srgb, var(--brass) 10%, var(--panel-2));
 }
+
+/* Patch 0503 -- raid screen odds feedback (mockup: "Raid Screen: Odds
+   Feedback"): stacked per-fight bars, a full-clear headline that builds
+   from 0% per hero picked, party slots with each hero's contribution. */
+.raid-fight-odds { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.raid-fight-odds > b { min-width: 38px; text-align: right; font-family: var(--font-display); font-size: 15px; }
+.raid-fight-bar { position: relative; flex: 1; height: 12px; border-radius: 4px; overflow: hidden; background: var(--panel-3); }
+.raid-fight-bar .seg { position: absolute; top: 0; bottom: 0; transition: left 260ms ease, width 260ms ease; }
+.raid-fight-bar .own { background: color-mix(in srgb, var(--muted) 55%, var(--panel-3)); }
+.raid-fight-bar .party { background: var(--brass); }
+.raid-fight-bar .elem { background: var(--teal); }
+.raid-fight-bar .retry { background: var(--violet); }
+.raid-fight-bar .lost { background-image: repeating-linear-gradient(135deg, var(--blood) 0 4px, color-mix(in srgb, var(--blood) 45%, var(--panel)) 4px 8px); opacity: 0.9; }
+.raid-fight-bar .cap { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--blood); }
+.raid-odds-headline {
+  display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 10px 12px;
+  border: 1px solid var(--panel-3); border-radius: var(--radius); background: var(--panel-2);
+}
+.raid-odds-label { text-transform: uppercase; letter-spacing: 0.08em; }
+.raid-odds-value { font-family: var(--font-display); font-size: 32px; font-weight: 700; line-height: 1; }
+.raid-odds-delta { font-size: 13px; font-weight: 700; padding: 1px 8px; border-radius: 999px; animation: raid-odds-pop 600ms ease; }
+.raid-odds-delta.up { color: var(--moss); background: color-mix(in srgb, var(--moss) 18%, transparent); }
+.raid-odds-delta.down { color: var(--blood); background: color-mix(in srgb, var(--blood) 18%, transparent); }
+@keyframes raid-odds-pop { from { transform: scale(1.35); } to { transform: scale(1); } }
+.raid-odds-bar { position: relative; height: 14px; border-radius: 4px; overflow: hidden; background: var(--panel-3); }
+.raid-odds-bar .solid { position: absolute; top: 0; bottom: 0; left: 0; background: var(--brass); transition: width 320ms ease; }
+.raid-odds-bar .ghost {
+  position: absolute; top: 0; bottom: 0; transition: left 320ms ease, width 320ms ease;
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--brass) 45%, transparent) 0 4px, transparent 4px 8px);
+}
+.raid-odds-bar .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--panel); opacity: 0.8; }
+.raid-party-slots { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.raid-party-slot {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) 60px 46px; align-items: center; gap: 8px;
+  padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--panel-3); background: var(--panel-2);
+  font-family: var(--font-body); font-size: 13px; line-height: 1.25;
+}
+.raid-party-who { display: flex; flex-direction: column; min-width: 0; }
+.raid-party-note { font-size: 11px; color: var(--muted); }
+.raid-party-slot.lowest .raid-party-note { color: color-mix(in srgb, var(--blood) 70%, var(--parchment)); }
+.raid-party-slot > b { font-size: 13px; }
+.raid-party-slot.suggested { border-style: dashed; opacity: 0.6; }
+.raid-party-slot.lowest { border-color: var(--blood); background: color-mix(in srgb, var(--blood) 12%, var(--panel-2)); }
+.raid-party-slot > b { text-align: right; }
+.raid-party-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--parchment); }
+.raid-party-meter { height: 6px; border-radius: 3px; background: var(--panel-3); overflow: hidden; }
+.raid-party-meter > span { display: block; height: 100%; background: var(--brass); transition: width 260ms ease; }
+.raid-party-slot.lowest .raid-party-meter > span { background: var(--blood); }
+.raid-chip-bonus { margin-left: 6px; color: var(--brass); }
+.raid-whatif { margin: 8px 0 0; min-height: 1.4em; }

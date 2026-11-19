@@ -1134,7 +1134,7 @@ raid fight).
 
 ## Backlog
 
-### Raid rebalance -- in progress (0500 Sandbox support, 0501 balance, 0502 checkpoints built)
+### Raid rebalance -- built (0500 Sandbox support, 0501 balance, 0502 checkpoints, 0503 raid screen)
 Agreed 19 Nov 2026; full plan, calibrated values and sim results in the
 project doc `claude/raid-rebalance-plan.md`. Mockup: design canvas
 "Raid Screen: Odds Feedback".
@@ -1155,7 +1155,7 @@ project doc `claude/raid-rebalance-plan.md`. Mockup: design canvas
 - **3 -- built, patch 0502:** raid checkpoints (a wipe saves progress at the fight lost, return
   with a rebuilt party) + per-fight retry bonus (+5 per loss, up to +15).
   Save migration.
-- **4 -- next:** raid screen visuals to the mockup:
+- **4 -- built, patch 0503:** raid screen visuals to the mockup:
   - full-party preview with suggested fills;
   - a bar that builds per hero from 0%;
   - stacked per-fight bars;
@@ -40159,3 +40159,87 @@ Migration 77 adds an empty map; `createInitialState` seeds one.
   - an offline-resolved partial showed "2/3" in the away report;
   - no page errors.
 - `tsc --noEmit` clean.
+
+### Raid screen odds feedback, plus dev-server testing tools (patch 0503)
+```discord-update
+Dev Update | Raid Odds
+
+- Added a full-clear chance to the raid screen that builds up as you pick heroes, with a ▲/▼ change after each pick
+- Added a bar for each fight that shows where its odds come from: the fight itself, your party, elemental gear, the retry bonus, and what missing roles cost
+- Added each hero's contribution to the party list and hero buttons, with the lowest flagged so you know who to gear up first
+- Added a preview when you hover a hero, showing how adding, removing or swapping them would change the odds
+- Changed raid odds to always be for a full party: empty slots are filled with your best free heroes, and you can send with them in one click
+```
+
+Step 4 of the raid rebalance (see Backlog). Built to the "Raid Screen:
+Odds Feedback" mockup, inside the existing raid detail.
+
+**RaidManager:**
+- **`encounterBreakdown(state, heroes, raidId, difficulty, encounterId,
+  now, fromCheckpoint)`:** one fight's odds as parts { base, penalty,
+  party, elemental, modifier, roleMismatch, retry, cap, chance }, the
+  formula `resolve` rolls.
+  - `previewEncounterSuccess` is now a wrapper around it.
+  - The raid sim's independent breakdown still matches on every fight.
+- **`heroContribution(state, hero, raidId, party, now)`:** one hero's own
+  bonus (what they add to the party average).
+
+**Raid detail (RaidsPanel `RaidDetailModal`):**
+- **Projected party:** the picks plus the best idle heroes at the raid's
+  level (ranked by contribution) fill any empty slot. All odds are for
+  that sendable party. `previewHeroIds` used to be the first N idle heroes
+  in roster order until something was picked.
+- **Headline (`RaidOddsHeadline`):**
+  - Full clear (product of the remaining fights' odds) x picked / party
+    size, so it builds from 0% with nobody picked.
+  - A striped ghost shows the suggested heroes' share, ticks mark each
+    slot, and a ▲/▼ pop shows the change after every pick.
+  - Text: picks so far plus the odds with suggestions, or "About N runs to
+    a first clear" once full. It reads "Chance to finish the raid" on a
+    checkpoint return.
+- **Per fight (`FightOddsBar`, always visible in the encounter row):** a
+  stacked bar.
+  - Segments: the fight's own odds (base - difficulty + raid modifier,
+    grey), party (brass), elemental (teal) and retry bonus (violet).
+  - A striped red tail shows what missing roles or the role cap take,
+    with a cap marker.
+  - The tooltip lists every part. The old "Success X%" text is replaced;
+    elemental and time stay.
+- **Party slots:** each hero's contribution with a meter. Suggested heroes
+  are dashed and faded; the lowest pick is flagged red "Lowest: gear up
+  first".
+- **Hero buttons** show each hero's contribution. Hover or focus shows a
+  preview line ("Add / Remove / Swap in X: 13% -> 17% (+4.3)"); a full
+  party swaps out its lowest pick.
+- **Send button:** "Send with N suggested" fills the empty slots with the
+  suggestions, then confirms.
+- **Roles Required** now reads the projected party, so it matches the
+  odds (it used to read the picks alone).
+
+**Dev-server testing tools.** `TESTING_TOOLS_ENABLED` is now
+`FORCE_TESTING_TOOLS || import.meta.env.DEV`:
+- on automatically in `npm run dev`, off in every build (build, package,
+  demo), so nothing needs flipping before an upload;
+- read defensively so the DevTool's tsx sim scripts still import game
+  code;
+- opened from Settings, "···" at the bottom (existing).
+
+New buttons: "+1,000 / +10,000 / +100,000 XP to every hero"
+(`engine.testAddXpAll`, through the real `grantXp`) and "+5 / +50
+Legendary Shards" (`engine.testAddShards`). These sit with the existing
+gold, Renown, Scrap, mailbox, hero level, time skip, complete
+quest/raid, egg/pet and decoration tools.
+
+**Verified (game web build, headless Chrome, seeded level-20 save):**
+- **Frozen Wyrmkeep Heroic:**
+  - 0 picked showed 0.0% with the ghost at 26%;
+  - 3 picked showed 13% (▲ +4.3 each);
+  - hover "Add Archmage Coraline: 13% -> 17%";
+  - 6 picked showed 26%, "About 3.8 runs";
+  - "Send with 3 suggested" at 3 picks;
+  - roles met via the suggested Kobold.
+- **With a checkpoint:** "Chance to finish the raid", the fight 3 bar with
+  the violet retry segment, and the cleared fights unbarred.
+- **Testing tab in the dev server:** +10,000 XP took every hero from level
+  20 to 31.
+- No page errors; `tsc --noEmit` clean; the raid sim still runs.

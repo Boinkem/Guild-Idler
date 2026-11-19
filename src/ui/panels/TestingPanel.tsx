@@ -19,8 +19,8 @@ export function TestingPanel() {
     <>
       <h2>Testing Tools</h2>
       <p className="subtitle" style={{ color: 'var(--brass)' }}>
-        Not part of the real game. Set TESTING_TOOLS_ENABLED to false in src/game/testingTools.ts
-        before any build that isn't going to a tester.
+        Not part of the real game. On automatically in the dev server (npm run dev) and off in every
+        build. To force it on in a build, see FORCE_TESTING_TOOLS in src/game/testingTools.ts.
       </p>
 
       <div className="section-heading">Skip time</div>
@@ -57,6 +57,10 @@ export function TestingPanel() {
         <button onClick={() => engine.testAddScrap(100)}>+100 scrap</button>
         <button onClick={() => engine.testAddScrap(1000)}>+1,000 scrap</button>
         <button onClick={() => engine.testAddScrap(10000)}>+10,000 scrap</button>
+      </div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+        <button onClick={() => engine.testAddShards(5)}>+5 Legendary Shards</button>
+        <button onClick={() => engine.testAddShards(50)}>+50 Legendary Shards</button>
       </div>
 
       <div className="section-heading">Auction House mailbox</div>
@@ -100,6 +104,11 @@ export function TestingPanel() {
       <button onClick={() => engine.testAddRandomRecipe()}>Add unknown recipe scroll</button>
 
       <div className="section-heading">Heroes</div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <button onClick={() => engine.testAddXpAll(1000)}>+1,000 XP to every hero</button>
+        <button onClick={() => engine.testAddXpAll(10000)}>+10,000 XP to every hero</button>
+        <button onClick={() => engine.testAddXpAll(100000)}>+100,000 XP to every hero</button>
+      </div>
       {injured.length > 0 && (
         <button style={{ marginBottom: 10 }} onClick={() => engine.testHealAllInjuries()}>
           Heal all injuries ({injured.length})

@@ -18,6 +18,14 @@
 // Patch 0438 -- always off in the demo build: the demo is the first build
 // that goes out publicly, so it can never ship the Testing tab.
 // Patch 0443 -- off in the full game too, for the first public Steam
-// build. Flip back to `true` locally when you need the Testing tab again
-// (and back to `false` before the next upload).
-export const TESTING_TOOLS_ENABLED = false;
+// build.
+// Patch 0503 -- on automatically in the dev server (`npm run dev`, Vite's
+// import.meta.env.DEV) and off in every build (`npm run build`, package,
+// demo), so nothing has to be flipped before an upload. Settings shows the
+// tab's "..." button at the bottom when this is on. FORCE_TESTING_TOOLS
+// turns it on in a build too -- keep it false for anything a player gets.
+// Read defensively: the DevTool's sim scripts import game code under tsx,
+// where import.meta.env doesn't exist.
+const FORCE_TESTING_TOOLS = false;
+const IS_DEV_SERVER = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
+export const TESTING_TOOLS_ENABLED = FORCE_TESTING_TOOLS || IS_DEV_SERVER;

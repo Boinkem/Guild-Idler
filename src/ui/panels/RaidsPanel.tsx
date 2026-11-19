@@ -484,16 +484,22 @@ function RaidDetailModal({
   // in whichever raid's detail is opened first after the unlock.
   const diffSeen = useFirstSeen('raid-diff', RAID_DIFFICULTY_ORDER.filter(difficultyUnlocked));
 
-  const previewHeroIds = selectedHeroIds.length > 0
-    ? selectedHeroIds
-    : idleHeroes.slice(0, cfg?.partySize ?? 0).map((h) => h.id);
+  // Patch 0503 -- picks + suggested best idle heroes (see oddsFor below);
+  // was the first N idle heroes in roster order until something was picked.
+  const previewHeroIds = (() => {
+    if (!cfg) return [];
+    const picked = selectedHeroIds.slice(0, cfg.partySize);
+    const fill = idleHeroes
+      .filter((h) => h.level >= raid.reqLevel && !picked.includes(h.id))
+      .sort((a, b) => RaidManager.heroContribution(state, b, raid.id, [], now) - RaidManager.heroContribution(state, a, raid.id, [], now))
+      .slice(0, Math.max(0, cfg.partySize - picked.length))
+      .map((h) => h.id);
+    return [...picked, ...fill];
+  })();
   // Resolved once here rather than re-deriving per encounter below --
   // RaidManager.elementalBonus takes actual Hero objects, not ids, same
   // as the pre-existing `selectedHeroes` derivation further down this
   // component for the role-requirement check.
-  const previewHeroes = previewHeroIds
-    .map((id) => state.heroes.find((h) => h.id === id))
-    .filter((h): h is Hero => !!h);
   // Patch 0502 -- saved progress for this raid + difficulty. While one
   // exists the default action is to return to it; "Start over" runs the
   // whole raid again and drops it.
@@ -507,22 +513,72 @@ function RaidDetailModal({
     ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now, startEncounter)
     : null;
 
+  // ---- Patch 0503 -- odds feedback ----------------------------------
+  // The odds are always for a full, sendable party: your picks, then the
+  // best idle heroes you haven't picked filling any empty slot (shown as
+  // suggestions). The headline builds from 0%: each committed hero fills
+  // their share of the bar (full clear x picked / party size), the
+  // suggested heroes' share shows as a ghost. A raid stops at its first
+  // lost fight, so full clear = the product of the remaining fights' odds.
+  const eligibleIdle = idleHeroes.filter((h) => h.level >= raid.reqLevel);
+  const rankOf = (h: Hero) => RaidManager.heroContribution(state, h, raid.id, [], now);
+  const oddsFor = (pickedIds: string[]) => {
+    if (!difficulty || !cfg) return null;
+    const picked = pickedIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h).slice(0, cfg.partySize);
+    const suggested = eligibleIdle
+      .filter((h) => !pickedIds.includes(h.id))
+      .sort((a, b) => rankOf(b) - rankOf(a))
+      .slice(0, Math.max(0, cfg.partySize - picked.length));
+    const party = [...picked, ...suggested];
+    const full = party.length === cfg.partySize;
+    const fights = raid.encounterIds.slice(startEncounter).map((id) => ({
+      id, breakdown: party.length ? RaidManager.encounterBreakdown(state, party, raid.id, difficulty, id, now, resuming) : null,
+    }));
+    const fullClear = full ? fights.reduce((p, f) => p * ((f.breakdown?.chance ?? 0) / 100), 1) : 0;
+    return { picked, suggested, party, full, fights, fullClear, built: fullClear * (picked.length / cfg.partySize) };
+  };
+  const odds = oddsFor(selectedHeroIds);
+  const contributionOf = (h: Hero) => RaidManager.heroContribution(state, h, raid.id, odds?.party ?? [], now);
+  const [hoverHeroId, setHoverHeroId] = useState<string | null>(null);
+  // The "what would this change" target for a hero: remove if picked, add
+  // if there's room, else swap out the lowest-contribution pick.
+  const pickWith = (heroId: string): string[] => {
+    if (selectedHeroIds.includes(heroId)) return selectedHeroIds.filter((id) => id !== heroId);
+    if (!cfg || selectedHeroIds.length < cfg.partySize) return [...selectedHeroIds, heroId];
+    const weakest = selectedHeroIds
+      .map((id) => state.heroes.find((h) => h.id === id))
+      .filter((h): h is Hero => !!h)
+      .reduce((a, b) => (contributionOf(b) < contributionOf(a) ? b : a));
+    return selectedHeroIds.map((id) => (id === weakest.id ? heroId : id));
+  };
+  // ▲/▼ change after each pick.
+  const builtRef = useRef<number | null>(null);
+  const [builtDelta, setBuiltDelta] = useState<number | null>(null);
+  const built = odds?.built ?? 0;
+  useEffect(() => {
+    if (builtRef.current !== null && Math.abs(built - builtRef.current) > 0.0005) setBuiltDelta(built - builtRef.current);
+    builtRef.current = built;
+  }, [built]);
+
   const toggleHero = (heroId: string) => {
-    setSelectedHeroIds((current) => {
-      if (current.includes(heroId)) return current.filter((id) => id !== heroId);
-      if (cfg && current.length >= cfg.partySize) return current;
-      return [...current, heroId];
-    });
+    setSelectedHeroIds(pickWith(heroId));
   };
 
   const pickDifficulty = (d: RaidDifficulty) => {
     setDifficulty(d);
     setSelectedHeroIds([]);
     setStartOver(false);
+    builtRef.current = null;
+    setBuiltDelta(null);
   };
 
   const askToCommit = () => {
-    if (!difficulty || !cfg || selectedHeroIds.length !== cfg.partySize) return;
+    if (!difficulty || !cfg) return;
+    // Patch 0503 -- "Send with N suggested" fills the empty slots first.
+    if (selectedHeroIds.length !== cfg.partySize) {
+      if (!odds?.full) return;
+      setSelectedHeroIds(odds.party.map((h) => h.id));
+    }
     setConfirming(true);
   };
 
@@ -575,16 +631,10 @@ function RaidDetailModal({
                   if (!enc) return null;
                   // Patch 0502 -- fights already won on a saved run aren't fought again.
                   const clearedBefore = resuming && i < startEncounter;
-                  const encSuccess = difficulty && previewHeroIds.length > 0 && !clearedBefore
-                    ? RaidManager.previewEncounterSuccess(state, previewHeroIds, raid.id, difficulty, id, now, resuming)
-                    : null;
-                  // Broken out separately from encSuccess (which already
-                  // folds this in) purely so the player can see WHY the
-                  // number moved -- same RaidManager.elementalBonus the
-                  // actual roll uses, just surfaced rather than buried.
-                  const elemental = previewHeroes.length > 0
-                    ? RaidManager.elementalBonus(previewHeroes, enc)
-                    : 0;
+                  // Patch 0503 -- the fight's odds as parts (stacked bar below).
+                  const bd = !clearedBefore ? odds?.fights.find((f) => f.id === id)?.breakdown ?? null : null;
+                  const encSuccess = bd ? bd.chance : null;
+                  const elemental = bd ? bd.elemental : 0;
                   return (
                     <li key={id} className="raid-encounter-item">
                       {/* Collapsed by default (native <details>, no extra
@@ -603,15 +653,15 @@ function RaidDetailModal({
                           )}
                           {encSuccess !== null && (
                             <span className="tiny muted" style={{ marginLeft: 8 }}>
-                              Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
                               {elemental !== 0 && (
                                 <span className={elemental > 0 ? 'good' : 'bad'}>
-                                  {' '}({elemental > 0 ? '+' : ''}{elemental.toFixed(1)}% elemental)
+                                  {elemental > 0 ? '+' : ''}{elemental.toFixed(1)}% elemental ·{' '}
                                 </span>
                               )}
-                              {' · '}Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
+                              Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
                             </span>
                           )}
+                          {bd && <FightOddsBar bd={bd} difficultyLabel={difficulty ? RAID_DIFFICULTY_LABEL[difficulty] : ''} />}
                         </summary>
                         <p className="muted" style={{ marginTop: 4 }}>{enc.flavour}</p>
                         <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
@@ -671,18 +721,53 @@ function RaidDetailModal({
                       </button>
                     </div>
                   )}
+                  {odds && (
+                    <RaidOddsHeadline
+                      built={odds.built}
+                      fullClear={odds.fullClear}
+                      full={odds.full}
+                      pickedCount={odds.picked.length}
+                      partySize={cfg.partySize}
+                      delta={builtDelta}
+                      resuming={resuming}
+                    />
+                  )}
+                  {odds && odds.party.length > 0 && (
+                    <div className="raid-party-slots">
+                      {odds.party.map((h) => {
+                        const c = contributionOf(h);
+                        const lowest = Math.min(...odds.party.map(contributionOf));
+                        const isSuggested = odds.suggested.includes(h);
+                        const isLowest = c === lowest && odds.party.length > 1;
+                        return (
+                          <div key={h.id} className={`raid-party-slot ${isSuggested ? 'suggested' : ''} ${isLowest && !isSuggested ? 'lowest' : ''}`}>
+                            <RoleIcon role={HeroManager.activeRole(h)} size={12} />
+                            <span className="raid-party-who">
+                              <span className="raid-party-name">{h.name}</span>
+                              <span className="raid-party-note">
+                                {isSuggested ? 'Suggested' : isLowest ? 'Lowest: gear up first' : `Lv ${h.level}`}
+                              </span>
+                            </span>
+                            <span className="raid-party-meter"><span style={{ width: `${Math.max(0, Math.min(100, (c / 30) * 100))}%` }} /></span>
+                            <b className={c < 0 ? 'bad' : 'gold-text'}>{c >= 0 ? '+' : ''}{c.toFixed(1)}</b>
+                          </div>
+                        );
+                      })}
+                      <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+                        Each hero adds their bonus to the party average, so strong heroes carry weaker ones. Swap out the lowest to lift everyone.
+                      </p>
+                    </div>
+                  )}
                   {(() => {
                     // Patch 0501 -- role needs scaled to this difficulty's party
                     // size (requiredRolesFor), e.g. Requiem's Normal asks 1/1/1.
                     const roles = requiredRolesFor(raid, difficulty);
                     if (!roles || Object.keys(roles).length === 0) return null;
-                    // Deliberately reads the REAL selection (selectedHeroIds),
-                    // not previewHeroIds -- see patch 0144 note: a
-                    // requirement circle is a concrete met/unmet fact about
-                    // the party actually about to be sent, not a guess.
-                    const selectedHeroes = selectedHeroIds
-                      .map((id) => state.heroes.find((h) => h.id === id))
-                      .filter((h): h is Hero => !!h);
+                    // Patch 0503 -- reads the party about to be sent: the
+                    // picks plus the suggested heroes that "Send with N
+                    // suggested" adds (was the picks alone, patch 0144),
+                    // so it always agrees with the odds shown above.
+                    const selectedHeroes = odds?.party ?? [];
                     const counts = RaidManager.partyRoleCounts(selectedHeroes);
                     const penalty = RaidManager.roleMismatchPenalty(selectedHeroes, roles);
                     const mismatched = RaidManager.hasRoleMismatch(selectedHeroes, roles);
@@ -727,20 +812,44 @@ function RaidDetailModal({
                             className={`chip ${selected ? 'on' : ''}`}
                             disabled={!eligible}
                             onClick={() => toggleHero(h.id)}
+                            onMouseEnter={() => setHoverHeroId(h.id)}
+                            onMouseLeave={() => setHoverHeroId(null)}
+                            onFocus={() => setHoverHeroId(h.id)}
+                            onBlur={() => setHoverHeroId(null)}
                             title={eligible ? undefined : `Requires level ${raid.reqLevel}`}
                           >
                             <RoleIcon role={HeroManager.activeRole(h)} size={12} /> {h.name} · Lv {h.level}
+                            {eligible && <span className="tiny raid-chip-bonus">{(() => { const c = contributionOf(h); return `${c >= 0 ? '+' : ''}${c.toFixed(1)}`; })()}</span>}
                           </button>
                         );
                       })}
                     </div>
                   )}
+                  <RaidWhatIf
+                    text={(() => {
+                      if (!hoverHeroId || !odds) return null;
+                      const h = state.heroes.find((x) => x.id === hoverHeroId);
+                      if (!h || h.level < raid.reqLevel) return null;
+                      const next = oddsFor(pickWith(h.id));
+                      if (!next) return null;
+                      const verb = selectedHeroIds.includes(h.id) ? `Remove ${h.name}`
+                        : selectedHeroIds.length < cfg.partySize ? `Add ${h.name}`
+                          : `Swap in ${h.name}`;
+                      return { verb, from: odds.built, to: next.built };
+                    })()}
+                  />
                   <div className="row end" style={{ marginTop: 10, gap: 8 }}>
                     <span className="tiny muted" style={{ marginRight: 'auto' }}>
                       {selectedHeroIds.length}/{cfg.partySize} selected
                     </span>
-                    <button className="btn-primary" disabled={selectedHeroIds.length !== cfg.partySize} onClick={askToCommit}>
-                      {resuming ? `Return to ${nextFightName}` : 'Send the guild'}
+                    <button
+                      className="btn-primary"
+                      disabled={selectedHeroIds.length !== cfg.partySize && !odds?.full}
+                      onClick={askToCommit}
+                    >
+                      {selectedHeroIds.length < cfg.partySize && odds?.full
+                        ? `${resuming ? 'Return' : 'Send'} with ${cfg.partySize - selectedHeroIds.length} suggested`
+                        : resuming ? `Return to ${nextFightName}` : 'Send the guild'}
                     </button>
                   </div>
                 </div>
@@ -820,6 +929,85 @@ function RaidDetailModal({
         </div>
       )}
     </>
+  );
+}
+
+/* ------------------------------ odds feedback ------------------------------ */
+// Patch 0503 -- the raid screen's odds visuals (mockup: design canvas "Raid
+// Screen: Odds Feedback"). Every number comes from RaidManager.encounterBreakdown.
+
+type FightBreakdown = NonNullable<ReturnType<typeof RaidManager.encounterBreakdown>>;
+
+/** One fight's odds as a stacked bar: the fight's own odds (base -
+ *  difficulty + raid modifier), the party, elemental, the retry bonus,
+ *  and a striped tail for what missing roles or the role cap take away. */
+function FightOddsBar({ bd, difficultyLabel }: { bd: FightBreakdown; difficultyLabel: string }) {
+  const clamp95 = (v: number) => Math.max(0, Math.min(95, v));
+  const own = clamp95(bd.base - bd.penalty + bd.modifier);
+  const withParty = clamp95(own + bd.party);
+  const withElem = clamp95(withParty + bd.elemental);
+  const withRetry = clamp95(withElem + bd.retry);
+  const end = bd.chance;
+  const seg = (from: number, to: number) => ({ left: `${Math.min(from, end)}%`, width: `${Math.max(0, Math.min(to, end) - Math.min(from, end))}%` });
+  const lostFrom = Math.min(end, withRetry);
+  const fmt = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1).replace(/\.0$/, '')}`;
+  return (
+    <span className="raid-fight-odds" title={`Fight ${bd.base} · ${difficultyLabel} −${bd.penalty} · party ${fmt(bd.party)}${bd.elemental ? ` · elemental ${fmt(bd.elemental)}` : ''}${bd.modifier ? ` · raid ${fmt(bd.modifier)}` : ''}${bd.retry ? ` · retry ${fmt(bd.retry)}` : ''}${bd.roleMismatch ? ` · missing roles −${bd.roleMismatch}` : ''}${bd.cap != null ? ` · capped at ${bd.cap}%` : ''}`}>
+      <span className="raid-fight-bar">
+        <span className="seg own" style={seg(0, own)} />
+        <span className="seg party" style={seg(own, withParty)} />
+        <span className="seg elem" style={seg(withParty, withElem)} />
+        <span className="seg retry" style={seg(withElem, withRetry)} />
+        {withRetry > end && <span className="seg lost" style={{ left: `${lostFrom}%`, width: `${withRetry - lostFrom}%` }} />}
+        {bd.cap != null && <span className="cap" style={{ left: `${bd.cap}%` }} />}
+      </span>
+      <b className={bd.chance >= 60 ? 'good' : bd.chance >= 35 ? '' : 'bad'}>{Math.round(bd.chance)}%</b>
+    </span>
+  );
+}
+
+/** The headline: full-clear chance building from 0% as heroes are picked. */
+function RaidOddsHeadline({ built, fullClear, full, pickedCount, partySize, delta, resuming }: {
+  built: number; fullClear: number; full: boolean; pickedCount: number; partySize: number; delta: number | null; resuming: boolean;
+}) {
+  const pct = (v: number) => `${(v * 100).toFixed(v * 100 < 10 ? 1 : 0)}%`;
+  const runs = fullClear > 0 ? 1 / fullClear : Infinity;
+  const tone = pickedCount === 0 ? 'muted' : fullClear >= 0.5 ? 'good' : fullClear >= 0.25 ? 'gold-text' : 'bad';
+  return (
+    <div className="raid-odds-headline">
+      <div className="row" style={{ alignItems: 'baseline', gap: 10 }}>
+        <span className="tiny muted raid-odds-label">{resuming ? 'Chance to finish the raid' : 'Full clear chance'}</span>
+        {delta !== null && Math.abs(delta) >= 0.0005 && (
+          <span key={built} className={`raid-odds-delta ${delta > 0 ? 'up' : 'down'}`}>{delta > 0 ? '▲ +' : '▼ −'}{(Math.abs(delta) * 100).toFixed(1)}</span>
+        )}
+        <span style={{ marginLeft: 'auto' }} className={`raid-odds-value ${tone}`}>{pct(built)}</span>
+      </div>
+      <div className="raid-odds-bar" aria-hidden="true">
+        <span className="solid" style={{ width: `${built * 100}%` }} />
+        <span className="ghost" style={{ left: `${built * 100}%`, width: `${Math.max(0, fullClear - built) * 100}%` }} />
+        {Array.from({ length: partySize - 1 }, (_, i) => <span key={i} className="tick" style={{ left: `${((i + 1) / partySize) * 100}%` }} />)}
+      </div>
+      <div className="tiny muted">
+        {!full
+          ? 'Not enough idle heroes at this level to fill the party.'
+          : pickedCount < partySize
+            ? `${pickedCount}/${partySize} heroes picked. With the suggested heroes: ${pct(fullClear)}.`
+            : Number.isFinite(runs)
+              ? `About ${runs < 10 ? runs.toFixed(1) : Math.round(runs)} runs to a first clear. Fights you win still pay out, and a loss saves your progress.`
+              : 'Out of reach with this party.'}
+      </div>
+    </div>
+  );
+}
+
+/** Hover a hero: what picking (or dropping) them would do. */
+function RaidWhatIf({ text }: { text: { verb: string; from: number; to: number } | null }) {
+  if (!text) return <p className="tiny muted raid-whatif">Hover a hero to see what they would change.</p>;
+  const d = (text.to - text.from) * 100;
+  return (
+    <p className={`tiny raid-whatif ${d >= 0 ? 'good' : 'bad'}`}>
+      {text.verb}: {(text.from * 100).toFixed(0)}% → <b>{(text.to * 100).toFixed(0)}%</b> ({d >= 0 ? '+' : '−'}{Math.abs(d).toFixed(1)})
+    </p>
   );
 }
 
