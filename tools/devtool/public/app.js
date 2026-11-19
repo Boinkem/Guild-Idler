@@ -2670,15 +2670,24 @@ const patchState = {
 
 const sandboxState = {
   presets: [],
-  selectedPresets: new Set(['active']),
   tuningRows: [],
   overrides: [], // [{ id, value }]
   maxDays: 1095,
-  heroCountOverride: null, // null = use each preset's own default
   growRoster: false, // patch 0497 -- start with 1 hero and recruit as Tavern slots open
   running: false,
   results: null, // { [presetId]: { baseline: {...}, modified: {...} } }
   runError: null,
+  // Patch 0498 -- redesigned screens (Economy / Time to level / Raids).
+  view: 'economy',
+  preset: 'active', // one play style at a time (was a multi-select)
+  heroes: 4,
+  buyFacilities: true,
+  rangeFrom: 30,
+  rangeTo: 40,
+  dials: {}, // { tuningId: proposed value } for SANDBOX_DIALS
+  showRaw: false,
+  grid: null, // /api/sim/grid response
+  lastRun: null, // the scenario the shown results came from
 };
 
 /* --------------------------------- auction house --------------------------------- */
@@ -5202,7 +5211,7 @@ function renderCurveChart(baselinePts, modifiedPts, { yLabel, xLabel = 'Day' }) 
   return `
     <div class="sandbox-chart-block">
       <div class="tiny muted" style="margin-bottom:4px;">${escapeHtml(yLabel)} over ${escapeHtml(xLabel.toLowerCase())} &nbsp;
-        <span class="chart-legend-swatch chart-legend-baseline"></span>Baseline
+        <span class="chart-legend-swatch chart-legend-baseline"></span>Live
         &nbsp; <span class="chart-legend-swatch chart-legend-proposed"></span>Proposed
       </div>
       <svg viewBox="0 0 ${W} ${H}" class="sandbox-chart" role="img" aria-label="${escapeHtml(yLabel)} over ${escapeHtml(xLabel)}">
@@ -5316,159 +5325,441 @@ function sandboxComparisonTable(preset, pair) {
   `;
 }
 
-function renderSandbox() {
-  appEl.innerHTML = `
-    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Balance Sandbox</h2>
-    <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
-      Simulates a proposed tuning change against a play-style preset, side by side with the live
-      values already on disk -- nothing here touches the real JSON files. A quest-board-only,
-      expected-value approximation (same math balance.ts's own live burst cap already uses), not a
-      literal per-quest event simulation. See the sim engine's own header comment for the full list
-      of what Phase 1 does and doesn't model (no raids, gear, injuries, pets, or Renown/Prestige yet).
-    </p>
+/* Patch 0498 -- Balance Sandbox redesign, step 2 (Economy + Time to level).
+ * One scenario (play style, heroes, level range, roster growth, buying)
+ * and one set of proposed dials drive both screens; "Run live vs
+ * proposed" runs /api/sim/run (Economy) and /api/sim/grid (Time to level)
+ * together. Range numbers are totalled client-side from the engine's
+ * per-level record (runSim.ts perLevel / levelDays), so changing the level
+ * range re-totals without a rerun. The old results table lives on under
+ * "Full run details". Raids is step 3 (see guild-idler-status.md Backlog). */
 
-    <div class="section-heading">1. Play-style presets</div>
-    <div class="patch-list">
-      ${sandboxState.presets.map((p) => `
-        <label class="patch-item ${sandboxState.selectedPresets.has(p.id) ? 'selected' : ''}">
-          <input type="checkbox" name="presetPick" value="${escapeHtml(p.id)}" ${sandboxState.selectedPresets.has(p.id) ? 'checked' : ''} />
-          <div>
-            <div class="patch-name">${escapeHtml(p.label)}</div>
-            <div class="tiny muted">${escapeHtml(p.description)}</div>
-          </div>
+const SANDBOX_DIALS = [
+  { group: 'Rewards', id: 'economy.questGoldMultiplier', label: 'Quest gold ×', min: 0.5, max: 2, step: 0.05 },
+  { group: 'Rewards', id: 'economy.questXpMultiplier', label: 'Quest XP ×', min: 0.5, max: 2, step: 0.05 },
+  { group: 'Rewards', id: 'balance.goldFailureMultiplier', label: 'Gold kept on a failed quest', min: 0, max: 0.6, step: 0.01 },
+  { group: 'Rewards', id: 'balance.xpFailureMultiplier', label: 'XP kept on a failed quest', min: 0, max: 0.8, step: 0.01 },
+  { group: 'Levelling', id: 'progression.xpCurveExponent', label: 'XP curve exponent', min: 1, max: 1.4, step: 0.01 },
+  { group: 'Levelling', id: 'quest.rookieSuccessBonus', label: 'Rookie success bonus', min: 0, max: 40, step: 1 },
+  { group: 'Facilities', id: 'guild_facility.treasury.goldPerLevel', label: 'Treasury gold % / level', min: 0, max: 15, step: 0.5 },
+  { group: 'Facilities', id: 'guild_facility.library.xpPerLevel', label: 'Library XP % / level', min: 0, max: 15, step: 0.5 },
+];
+const SANDBOX_GRID_ROWS = [1, 2, 4, 7, 'grow'];
+const SANDBOX_GRID_LEVELS = [10, 20, 30, 40, 50, 55];
+const SANDBOX_BANDS = [[1, 10], [10, 20], [20, 30], [30, 40], [40, 50], [50, 55]];
+const SANDBOX_SAVE_KEY = 'guildbound.devtool.sandboxScenarios';
+
+function sandboxLiveValue(id) {
+  const row = tuningRowFor(id);
+  return row ? Number(row.value) : null;
+}
+
+/** Every proposed change as one tuning-id -> value map: dials that differ
+ *  from live, plus anything added through "Any tuning setting". */
+function sandboxProposedOverrides() {
+  const out = Object.fromEntries(sandboxState.overrides.map((o) => [o.id, o.value]));
+  for (const [id, v] of Object.entries(sandboxState.dials)) {
+    if (v !== null && v !== undefined && v !== sandboxLiveValue(id)) out[id] = v;
+  }
+  return out;
+}
+
+function sbxFmtNum(n) {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  return Math.round(n).toLocaleString();
+}
+function sbxFmtDays(d) {
+  if (d === null || d === undefined || !Number.isFinite(d)) return '—';
+  if (d < 1) return `${Math.max(1, Math.round(d * 24))}h`;
+  return `${d.toFixed(1)}d`;
+}
+/** Delta label + class. higherIsBetter decides whether up is green. */
+function sbxDelta(live, prop, { higherIsBetter, days = false }) {
+  if (live === null || prop === null || live === undefined || prop === undefined || !Number.isFinite(live) || !Number.isFinite(prop)) {
+    return { text: prop === null && live !== null ? 'Not reached' : '—', cls: 'flat' };
+  }
+  const diff = prop - live;
+  const pct = live !== 0 ? (diff / live) * 100 : 0;
+  if (Math.abs(pct) < 0.5) return { text: 'No change', cls: 'flat', pct: 0 };
+  const better = higherIsBetter ? diff > 0 : diff < 0;
+  const sign = diff > 0 ? '+' : '−';
+  const abs = Math.abs(diff);
+  const body = days ? (abs < 1 ? `${Math.max(1, Math.round(abs * 24))}h` : `${abs.toFixed(1)} days`) : sbxFmtNum(abs);
+  return { text: `${sign}${body} (${sign}${Math.abs(pct).toFixed(0)}%)`, cls: better ? 'good' : 'bad', pct };
+}
+
+/** Totals the engine's per-level record over [from, to). */
+function sbxRange(result, from, to) {
+  if (!result || !Array.isArray(result.perLevel)) return null;
+  let hours = 0; let gold = 0; let xp = 0;
+  for (let l = Math.max(1, from); l < Math.min(to, result.perLevel.length); l++) {
+    hours += result.perLevel[l].hours; gold += result.perLevel[l].gold; xp += result.perLevel[l].xp;
+  }
+  return {
+    goldPerHour: hours ? gold / hours : null,
+    xpPerHour: hours ? xp / hours : null,
+    days: hours ? hours / 24 : null,
+  };
+}
+
+function sbxCap(s) { return s ? s[0].toUpperCase() + s.slice(1) : '—'; }
+function sbxOk(variant) { return variant && variant.ok ? variant.result : null; }
+
+function sbxLoadSaved() {
+  try { return JSON.parse(localStorage.getItem(SANDBOX_SAVE_KEY) || '[]') || []; } catch { return []; }
+}
+function sbxStoreSaved(list) {
+  try { localStorage.setItem(SANDBOX_SAVE_KEY, JSON.stringify(list)); return true; } catch { return false; }
+}
+
+function renderSandboxSidebar() {
+  const s = sandboxState;
+  const groups = [...new Set(SANDBOX_DIALS.map((d) => d.group))];
+  const changedCount = Object.keys(sandboxProposedOverrides()).length;
+  const saved = sbxLoadSaved();
+  return `
+    <aside class="sbx-side">
+      <section class="sbx-panel">
+        <h3>Scenario</h3>
+        <div class="sbx-label">Play style</div>
+        <div class="sbx-seg" role="group" aria-label="Play style">
+          ${s.presets.map((p) => `<button type="button" data-sbx-preset="${escapeHtml(p.id)}" class="${s.preset === p.id ? 'on' : ''}" title="${escapeHtml(p.description)}">${escapeHtml(p.label)}</button>`).join('')}
+        </div>
+        <div class="sbx-two">
+          <label class="sbx-label">Heroes
+            <input type="number" id="sbxHeroes" min="1" max="20" value="${s.heroes}" ${s.growRoster ? 'disabled title="Grow the roster starts at 1 hero"' : ''} />
+          </label>
+          <label class="sbx-label">Level range
+            <span class="sbx-range"><input type="number" id="sbxFrom" min="1" max="54" value="${s.rangeFrom}" /> to <input type="number" id="sbxTo" min="2" max="55" value="${s.rangeTo}" /></span>
+          </label>
+        </div>
+        <label class="sbx-check"><input type="checkbox" id="sbxGrow" ${s.growRoster ? 'checked' : ''} /> Grow the roster (recruit as Tavern slots open)</label>
+        <label class="sbx-check"><input type="checkbox" id="sbxBuy" ${s.buyFacilities ? 'checked' : ''} /> Buy facilities and upgrades as gold allows</label>
+        <label class="sbx-label">Max sim days
+          <input type="number" id="sbxMaxDays" min="1" value="${s.maxDays}" />
         </label>
-      `).join('')}
-    </div>
+      </section>
 
-    <div class="section-heading">2. Proposed changes</div>
-    <p class="tiny muted">
-      Add any tuning registry value to override (xp/gold modifiers, facility costs, upgrade curves,
-      quest chances -- anything in the Tuning tab). The proposed run applies these on top of the live
-      values; the baseline run stays untouched for comparison.
-    </p>
-    <datalist id="tuningIdList">
-      ${sandboxState.tuningRows.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)} (current: ${t.value})</option>`).join('')}
-    </datalist>
-    <div class="row" style="gap: 8px; margin-bottom: 8px;">
-      <input type="text" id="overrideIdInput" list="tuningIdList" placeholder="Tuning id (e.g. balance.goldFailureMultiplier)"
-        style="flex:2; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <input type="number" id="overrideValueInput" placeholder="New value" step="any"
-        style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <button id="addOverrideBtn">+ Add</button>
-    </div>
-    ${sandboxState.overrides.length === 0
-      ? '<p class="tiny muted">No overrides added yet -- the proposed run will be identical to baseline.</p>'
-      : `<div class="list-input">${sandboxState.overrides.map((o) => {
+      <section class="sbx-panel">
+        <div class="sbx-row"><h3>Proposed dials</h3><span class="sbx-grow"></span>
+          <button type="button" id="sbxResetDials" class="sbx-small" ${changedCount ? '' : 'disabled'}>Reset to live</button></div>
+        ${groups.map((g) => `
+          <div class="sbx-dial-group">${escapeHtml(g)}</div>
+          ${SANDBOX_DIALS.filter((d) => d.group === g).map((d) => {
+            const live = sandboxLiveValue(d.id);
+            const val = s.dials[d.id] ?? live;
+            const changed = live !== null && val !== live;
+            return `
+              <div class="sbx-dial ${changed ? 'changed' : ''}">
+                <div class="sbx-row"><span class="sbx-dial-label">${escapeHtml(d.label)}</span><span class="sbx-grow"></span>
+                  <span class="muted tiny">live ${live ?? '?'}</span>
+                  <input type="number" class="sbx-dial-num" data-sbx-dial-num="${escapeHtml(d.id)}" step="${d.step}" value="${val ?? ''}" ${live === null ? 'disabled' : ''} /></div>
+                <input type="range" data-sbx-dial="${escapeHtml(d.id)}" min="${d.min}" max="${d.max}" step="${d.step}" value="${val ?? d.min}" ${live === null ? 'disabled' : ''} aria-label="${escapeHtml(d.label)}" />
+              </div>`;
+          }).join('')}
+        `).join('')}
+        <button type="button" id="sbxToggleRaw" class="sbx-dashed">${s.showRaw ? '− Hide' : '+'} Any tuning setting (${s.tuningRows.length})</button>
+        ${s.showRaw ? `
+          <datalist id="tuningIdList">
+            ${s.tuningRows.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)} (current: ${t.value})</option>`).join('')}
+          </datalist>
+          <div class="sbx-row">
+            <input type="text" id="overrideIdInput" list="tuningIdList" placeholder="Tuning id" class="sbx-grow" />
+            <input type="number" id="overrideValueInput" placeholder="Value" step="any" style="width:80px" />
+            <button id="addOverrideBtn" class="sbx-small">Add</button>
+          </div>` : ''}
+        ${s.overrides.map((o) => {
           const row = tuningRowFor(o.id);
-          return `
-          <div class="row">
-            <span class="tiny" style="flex:1;">
-              <b>${escapeHtml(o.id)}</b>${row ? ` — ${escapeHtml(row.label)}` : ' <span class="muted">(unknown id)</span>'}:
-              ${row ? escapeHtml(String(row.value)) : '?'} → <b>${escapeHtml(String(o.value))}</b>
-            </span>
-            <button class="remove" data-remove-override="${escapeHtml(o.id)}">✕</button>
-          </div>`;
-        }).join('')}</div>`}
+          return `<div class="sbx-row tiny"><span class="sbx-grow"><b>${escapeHtml(o.id)}</b> ${row ? escapeHtml(String(row.value)) : '<span class="muted">(unknown id)</span>'} → <b>${escapeHtml(String(o.value))}</b></span>
+            <button class="remove" data-remove-override="${escapeHtml(o.id)}" aria-label="Remove">✕</button></div>`;
+        }).join('')}
+      </section>
 
-    <div class="section-heading">3. Options</div>
-    <div class="field-row" style="margin-bottom: 10px;">
-      <div class="field">
-        <label>Max sim days (safety cap)</label>
-        <input type="number" id="maxDaysInput" min="1" value="${sandboxState.maxDays}" />
-        <div class="hint">The sim runs until every facility/upgrade is maxed and the hero hits level 55, or this cap -- whichever comes first. Raise it if a run keeps hitting the cap and you want to see further.</div>
+      <div class="sbx-row">
+        <button id="runSimBtn" class="primary sbx-grow sbx-run" ${s.running || !s.preset ? 'disabled' : ''}>${s.running ? 'Running…' : 'Run live vs proposed'}</button>
       </div>
-      <div class="field">
-        <label>Hero count override</label>
-        <input type="number" id="heroCountInput" min="1" placeholder="Use each preset's default" value="${sandboxState.heroCountOverride ?? ''}" />
-      </div>
-      <div class="field">
-        <label><input type="checkbox" id="growRosterInput" ${sandboxState.growRoster ? 'checked' : ''} /> Grow the roster</label>
-        <div class="hint">Start with 1 hero and recruit the cheapest class whenever a Tavern slot opens (ignores Hero count). Each hero levels on its own XP either way.</div>
-      </div>
-    </div>
+      <section class="sbx-panel">
+        <h3>Saved scenarios</h3>
+        <div class="sbx-row">
+          <input type="text" id="sbxSaveName" placeholder="Name (e.g. XP -10%)" class="sbx-grow" />
+          <button id="sbxSave" class="sbx-small">Save</button>
+        </div>
+        ${saved.length ? saved.map((sc, i) => `
+          <div class="sbx-row tiny"><span class="sbx-grow">${escapeHtml(sc.name)} <span class="muted">· ${escapeHtml(sc.summary || '')}</span></span>
+            <button class="sbx-small" data-sbx-load="${i}">Load</button>
+            <button class="remove" data-sbx-delete="${i}" aria-label="Delete">✕</button></div>`).join('')
+          : '<div class="tiny muted">Saves the scenario and dials on this computer, to load again later.</div>'}
+      </section>
+    </aside>`;
+}
 
-    <button id="runSimBtn" class="primary" ${sandboxState.selectedPresets.size === 0 ? 'disabled' : ''}>
-      ${sandboxState.running ? 'Running…' : 'Run Simulation'}
-    </button>
-    <div id="sandboxRunError"></div>
+function renderSandboxEconomy() {
+  const s = sandboxState;
+  const pair = s.results?.[s.lastRun?.preset];
+  if (!pair) return '<div class="sbx-panel sbx-empty">Set a scenario and dials, then run live vs proposed.</div>';
+  const b = sbxOk(pair.baseline);
+  const m = sbxOk(pair.modified);
+  const from = s.rangeFrom;
+  const to = s.rangeTo;
+  const rb = sbxRange(b, from, to);
+  const rm = sbxRange(m, from, to);
+  const card = (label, live, prop, fmt, opts) => {
+    const d = sbxDelta(live, prop, opts);
+    return `<div class="sbx-card"><span class="sbx-card-label">${escapeHtml(label)}</span>
+      <div class="sbx-card-vals"><span class="muted">${fmt(live)}</span><span class="muted">→</span><b>${fmt(prop)}</b></div>
+      <span class="sbx-delta ${d.cls}">${escapeHtml(d.text)}</span></div>`;
+  };
+  const cards = [
+    card(`Gold / hr · L${from}–${to} (guild)`, rb?.goldPerHour ?? null, rm?.goldPerHour ?? null, sbxFmtNum, { higherIsBetter: true }),
+    card(`XP / hr · L${from}–${to} (one hero)`, rb?.xpPerHour ?? null, rm?.xpPerHour ?? null, sbxFmtNum, { higherIsBetter: true }),
+    card(`Time to level ${to}`, b?.levelDays?.[to] ?? null, m?.levelDays?.[to] ?? null, sbxFmtDays, { higherIsBetter: false, days: true }),
+    s.lastRun.buyFacilities
+      ? card('Guild fully built', b?.fullyBuiltDay ?? null, m?.fullyBuiltDay ?? null, sbxFmtDays, { higherIsBetter: false, days: true })
+      : card(`Days in L${from}–${to}`, rb?.days ?? null, rm?.days ?? null, sbxFmtDays, { higherIsBetter: false, days: true }),
+  ];
+  const curve = (r) => (r?.levelDays || []).map((d, l) => (d === null || l < 1 ? null : { x: d, y: l })).filter(Boolean);
+  const chart = renderCurveChart(curve(b), curve(m), { yLabel: 'Lead hero level' });
+  const bandRows = SANDBOX_BANDS.map(([lo, hi], i) => {
+    const xb = sbxRange(b, lo, hi);
+    const xm = sbxRange(m, lo, hi);
+    const inRange = lo < to && hi > from;
+    const cell = (lv, pv, fmt, opts) => {
+      const d = sbxDelta(lv, pv, opts);
+      return `${fmt(lv)} → <b>${fmt(pv)}</b> <span class="sbx-delta ${d.cls}">${d.cls === 'flat' ? '' : `${d.pct > 0 ? '+' : '−'}${Math.abs(d.pct).toFixed(0)}%`}</span>`;
+    };
+    const tierB = b?.bands?.[i]?.bestTier;
+    const tierM = m?.bands?.[i]?.bestTier;
+    return `<tr class="${inRange ? 'sbx-band-hl' : ''}">
+      <td>${lo}–${hi}</td>
+      <td>${cell(xb?.goldPerHour ?? null, xm?.goldPerHour ?? null, sbxFmtNum, { higherIsBetter: true })}</td>
+      <td>${cell(xb?.xpPerHour ?? null, xm?.xpPerHour ?? null, sbxFmtNum, { higherIsBetter: true })}</td>
+      <td>${cell(xb?.days ?? null, xm?.days ?? null, sbxFmtDays, { higherIsBetter: false, days: true })}</td>
+      <td class="muted">${escapeHtml(sbxCap(tierB))}${tierM && tierM !== tierB ? ` → ${escapeHtml(sbxCap(tierM))}` : ''}</td>
+    </tr>`;
+  }).join('');
+  const preset = s.presets.find((p) => p.id === s.lastRun.preset);
+  return `
+    <div class="sbx-cards">${cards.join('')}</div>
+    <section class="sbx-panel">${chart || '<span class="muted">No level data.</span>'}</section>
+    <section class="sbx-panel sbx-flush">
+      <table>
+        <thead><tr><th>Level band</th><th>Gold / hr (guild)</th><th>XP / hr (one hero)</th><th>Days in band</th><th>Usual best difficulty</th></tr></thead>
+        <tbody>${bandRows}</tbody>
+      </table>
+    </section>
+    <p class="tiny muted">${escapeHtml(sbxRunCaption())} Gold is the whole guild's; XP and levels follow the lead (first) hero. Quest board only: no raids, chains, harvest, gear or pets yet.</p>
+    <details class="sbx-details"><summary>Full run details</summary>${preset ? sandboxComparisonTable(preset, pair) : ''}</details>
+    ${sbxFailures(pair)}`;
+}
 
-    <div id="sandboxResults">
-      ${sandboxState.results
-        ? Object.entries(sandboxState.results).map(([presetId, pair]) => {
-            const preset = sandboxState.presets.find((p) => p.id === presetId);
-            return preset ? sandboxComparisonTable(preset, pair) : '';
-          }).join('')
-        : ''}
-    </div>
-  `;
+function sbxRunCaption() {
+  const r = sandboxState.lastRun;
+  if (!r) return '';
+  const preset = sandboxState.presets.find((p) => p.id === r.preset);
+  const changes = Object.entries(r.overrides).map(([id, v]) => `${SANDBOX_DIALS.find((d) => d.id === id)?.label ?? id} ${v}`);
+  return `Ran: ${preset?.label ?? r.preset} play, ${r.growRoster ? 'growing roster' : `${r.heroes} hero${r.heroes === 1 ? '' : 'es'}`}, ${r.buyFacilities ? 'buying facilities' : 'no facility buying'}; proposed = ${changes.length ? changes.join(', ') : 'same as live'}.`;
+}
 
-  appEl.querySelectorAll('input[name="presetPick"]').forEach((input) => {
-    input.onchange = () => {
-      if (input.checked) sandboxState.selectedPresets.add(input.value);
-      else sandboxState.selectedPresets.delete(input.value);
-      renderSandbox();
+function sbxFailures(pair) {
+  return ['baseline', 'modified'].map((k) => (pair?.[k] && pair[k].ok === false
+    ? `<div class="patch-result bad"><div class="patch-result-label">${k === 'baseline' ? 'Live' : 'Proposed'} run failed</div><pre>${escapeHtml(pair[k].error || '')}</pre></div>` : '')).join('');
+}
+
+function sbxGridModel() {
+  const g = sandboxState.grid;
+  const b = sbxOk(g?.baseline)?.grid || [];
+  const m = sbxOk(g?.modified)?.grid || [];
+  return SANDBOX_GRID_ROWS.map((hc) => {
+    const rb = b.find((x) => x.heroCount === hc);
+    const rm = m.find((x) => x.heroCount === hc);
+    const label = hc === 'grow' ? `Growing roster (1→${rb?.finalHeroes ?? '?'})` : `${hc} hero${hc === 1 ? '' : 'es'}`;
+    return {
+      label,
+      cells: SANDBOX_GRID_LEVELS.map((lvl) => {
+        const live = rb?.levelDays?.[lvl] ?? null;
+        const prop = rm?.levelDays?.[lvl] ?? null;
+        return { lvl, live, prop, d: sbxDelta(live, prop, { higherIsBetter: false, days: true }) };
+      }),
     };
   });
+}
 
-  document.getElementById('addOverrideBtn').onclick = () => {
-    const idInput = document.getElementById('overrideIdInput');
-    const valueInput = document.getElementById('overrideValueInput');
-    const id = idInput.value.trim();
-    const value = parseFloat(valueInput.value);
-    if (!id || Number.isNaN(value)) {
-      alert('Enter a tuning id and a numeric value.');
-      return;
+function renderSandboxTimeToLevel() {
+  const g = sandboxState.grid;
+  if (!g) return '<div class="sbx-panel sbx-empty">Set a scenario and dials, then run live vs proposed.</div>';
+  const rows = sbxGridModel();
+  const shade = (d) => {
+    if (!d || d.cls === 'flat' || d.pct === undefined) return '';
+    const a = Math.abs(d.pct);
+    const step = a >= 10 ? 3 : a >= 5 ? 2 : 1;
+    return `sbx-shade-${d.cls === 'bad' ? 'later' : 'sooner'}-${step}`;
+  };
+  const all = rows.flatMap((r) => r.cells.map((c) => ({ ...c, row: r.label }))).filter((c) => c.live !== null && c.prop !== null);
+  const byAbs = [...all].sort((x, y) => Math.abs(y.prop - y.live) - Math.abs(x.prop - x.live));
+  const describe = (c) => (c ? `${c.row} to level ${c.lvl}: ${c.d.cls === 'flat' ? 'no change' : c.d.text}` : '—');
+  return `
+    <section class="sbx-panel">
+      <div class="sbx-row"><h3>Days until the lead hero reaches each level</h3><span class="sbx-grow"></span>
+        <span class="tiny muted">each cell: live → proposed · every hero levels on its own XP</span></div>
+      <table class="sbx-ttl">
+        <thead><tr><th>Heroes</th>${SANDBOX_GRID_LEVELS.map((l) => `<th>Level ${l}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map((r) => `<tr><th scope="row">${escapeHtml(r.label)}</th>${r.cells.map((c) => `
+          <td class="${shade(c.d)}"><div class="tiny muted">${sbxFmtDays(c.live)} →</div><div class="sbx-ttl-val">${sbxFmtDays(c.prop)}</div>
+            <div class="tiny sbx-delta ${c.d.cls}">${c.d.cls === 'flat' ? (c.prop === null ? 'Not reached' : 'No change') : escapeHtml(c.d.text)}</div></td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="sbx-row tiny muted sbx-legend">
+        <span>Shade:</span>
+        <span><i class="sbx-sw sbx-shade-later-1"></i>later, under 5%</span>
+        <span><i class="sbx-sw sbx-shade-later-2"></i>5–10%</span>
+        <span><i class="sbx-sw sbx-shade-later-3"></i>over 10%</span>
+        <span><i class="sbx-sw sbx-shade-sooner-3"></i>sooner</span>
+        <span class="sbx-grow"></span>
+        <span>Fixed rosters start with every hero at level 1 (ignores Tavern slots); the growing roster recruits as slots open.</span>
+      </div>
+    </section>
+    <div class="sbx-cards sbx-cards-3">
+      <div class="sbx-card"><span class="sbx-card-label">Biggest change</span><b>${escapeHtml(describe(byAbs[0]))}</b></div>
+      <div class="sbx-card"><span class="sbx-card-label">Smallest change</span><b>${escapeHtml(describe(byAbs[byAbs.length - 1]))}</b></div>
+      <div class="sbx-card"><span class="sbx-card-label">Export</span>
+        <div class="sbx-row"><button id="sbxCopyGrid" class="sbx-small">Copy table</button><span id="sbxCopyMsg" class="tiny muted"></span></div></div>
+    </div>
+    <p class="tiny muted">${escapeHtml(sbxRunCaption())}</p>
+    ${sbxFailures(g)}`;
+}
+
+function renderSandboxRaids() {
+  return `<div class="sbx-panel sbx-empty">
+    <h3>Raid tuning -- coming next (step 3)</h3>
+    <p class="tiny muted">Pick a raid, difficulty and party (with gear presets), run it many times and see per-encounter odds,
+    full-clear chance, where runs end and runs to a first clear, plus an every-raid × difficulty grid.
+    It will use RaidManager's own success maths. See the Balance Sandbox entry in guild-idler-status.md's Backlog.</p>
+  </div>`;
+}
+
+function renderSandbox() {
+  const s = sandboxState;
+  const view = s.view;
+  appEl.innerHTML = `
+    <div class="sbx-head">
+      <h2>Balance Sandbox</h2>
+      <span class="tiny muted">Live values on disk vs your proposed dials. Nothing here touches the real JSON files.</span>
+      <span class="sbx-grow"></span>
+      <div class="sbx-tabs" role="tablist" aria-label="Sandbox view">
+        ${[['economy', 'Economy'], ['time', 'Time to level'], ['raids', 'Raids']].map(([id, label]) =>
+          `<button type="button" role="tab" aria-selected="${view === id}" class="${view === id ? 'on' : ''}" data-sbx-view="${id}">${label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="sbx-layout">
+      ${renderSandboxSidebar()}
+      <section class="sbx-main">
+        <div id="sandboxRunError">${s.runError ? `<div class="patch-result bad"><div class="patch-result-label">Simulation failed</div><pre>${escapeHtml(s.runError)}</pre></div>` : ''}</div>
+        ${view === 'economy' ? renderSandboxEconomy() : view === 'time' ? renderSandboxTimeToLevel() : renderSandboxRaids()}
+      </section>
+    </div>`;
+
+  appEl.querySelectorAll('[data-sbx-view]').forEach((btn) => { btn.onclick = () => { s.view = btn.dataset.sbxView; renderSandbox(); }; });
+  appEl.querySelectorAll('[data-sbx-preset]').forEach((btn) => { btn.onclick = () => { s.preset = btn.dataset.sbxPreset; renderSandbox(); }; });
+  const intIn = (id, fn) => { const el = document.getElementById(id); if (el) el.onchange = () => { fn(parseInt(el.value, 10)); renderSandbox(); }; };
+  intIn('sbxHeroes', (v) => { s.heroes = Number.isFinite(v) && v > 0 ? Math.min(20, v) : 1; });
+  intIn('sbxFrom', (v) => { s.rangeFrom = Math.max(1, Math.min(54, Number.isFinite(v) ? v : 1)); if (s.rangeTo <= s.rangeFrom) s.rangeTo = s.rangeFrom + 1; });
+  intIn('sbxTo', (v) => { s.rangeTo = Math.max(2, Math.min(55, Number.isFinite(v) ? v : 55)); if (s.rangeFrom >= s.rangeTo) s.rangeFrom = s.rangeTo - 1; });
+  intIn('sbxMaxDays', (v) => { s.maxDays = Number.isFinite(v) && v > 0 ? v : 1095; });
+  document.getElementById('sbxGrow').onchange = (e) => { s.growRoster = e.target.checked; renderSandbox(); };
+  document.getElementById('sbxBuy').onchange = (e) => { s.buyFacilities = e.target.checked; renderSandbox(); };
+
+  const setDial = (id, raw) => {
+    const v = parseFloat(raw);
+    if (!Number.isFinite(v)) return;
+    s.dials[id] = Math.round(v * 1000) / 1000;
+  };
+  appEl.querySelectorAll('[data-sbx-dial]').forEach((el) => {
+    // Live label update while dragging; full render on release.
+    el.oninput = () => {
+      const num = appEl.querySelector(`[data-sbx-dial-num="${CSS.escape(el.dataset.sbxDial)}"]`);
+      if (num) num.value = el.value;
+    };
+    el.onchange = () => { setDial(el.dataset.sbxDial, el.value); renderSandbox(); };
+  });
+  appEl.querySelectorAll('[data-sbx-dial-num]').forEach((el) => { el.onchange = () => { setDial(el.dataset.sbxDialNum, el.value); renderSandbox(); }; });
+  const reset = document.getElementById('sbxResetDials');
+  if (reset) reset.onclick = () => { s.dials = {}; s.overrides = []; renderSandbox(); };
+  document.getElementById('sbxToggleRaw').onclick = () => { s.showRaw = !s.showRaw; renderSandbox(); };
+
+  const addBtn = document.getElementById('addOverrideBtn');
+  if (addBtn) addBtn.onclick = () => {
+    const id = document.getElementById('overrideIdInput').value.trim();
+    const value = parseFloat(document.getElementById('overrideValueInput').value);
+    if (!id || Number.isNaN(value)) { setStatus('Enter a tuning id and a number.', 'err'); return; }
+    if (SANDBOX_DIALS.some((d) => d.id === id)) s.dials[id] = value;
+    else {
+      const existing = s.overrides.find((o) => o.id === id);
+      if (existing) existing.value = value; else s.overrides.push({ id, value });
     }
-    const existing = sandboxState.overrides.find((o) => o.id === id);
-    if (existing) existing.value = value;
-    else sandboxState.overrides.push({ id, value });
     renderSandbox();
   };
-
   appEl.querySelectorAll('[data-remove-override]').forEach((btn) => {
+    btn.onclick = () => { s.overrides = s.overrides.filter((o) => o.id !== btn.dataset.removeOverride); renderSandbox(); };
+  });
+
+  document.getElementById('sbxSave').onclick = () => {
+    const list = sbxLoadSaved();
+    const name = document.getElementById('sbxSaveName').value.trim() || `Scenario ${list.length + 1}`;
+    const changes = Object.entries(sandboxProposedOverrides());
+    list.push({
+      name,
+      summary: `${s.presets.find((p) => p.id === s.preset)?.label ?? s.preset}, ${s.growRoster ? 'growing' : `${s.heroes}h`}, ${changes.length} change${changes.length === 1 ? '' : 's'}`,
+      scenario: { preset: s.preset, heroes: s.heroes, growRoster: s.growRoster, buyFacilities: s.buyFacilities, rangeFrom: s.rangeFrom, rangeTo: s.rangeTo, maxDays: s.maxDays, dials: { ...s.dials }, overrides: s.overrides.map((o) => ({ ...o })) },
+    });
+    if (!sbxStoreSaved(list)) setStatus('Could not save (browser storage unavailable).', 'err');
+    renderSandbox();
+  };
+  appEl.querySelectorAll('[data-sbx-load]').forEach((btn) => {
     btn.onclick = () => {
-      sandboxState.overrides = sandboxState.overrides.filter((o) => o.id !== btn.dataset.removeOverride);
+      const sc = sbxLoadSaved()[Number(btn.dataset.sbxLoad)]?.scenario;
+      if (!sc) return;
+      Object.assign(s, { ...sc, dials: { ...(sc.dials || {}) }, overrides: (sc.overrides || []).map((o) => ({ ...o })) });
       renderSandbox();
     };
   });
+  appEl.querySelectorAll('[data-sbx-delete]').forEach((btn) => {
+    btn.onclick = () => { const list = sbxLoadSaved(); list.splice(Number(btn.dataset.sbxDelete), 1); sbxStoreSaved(list); renderSandbox(); };
+  });
 
-  document.getElementById('maxDaysInput').onchange = (e) => {
-    sandboxState.maxDays = Math.max(1, parseInt(e.target.value, 10) || 1095);
-  };
-  document.getElementById('growRosterInput').onchange = (e) => { sandboxState.growRoster = e.target.checked; };
-  document.getElementById('heroCountInput').onchange = (e) => {
-    const v = parseInt(e.target.value, 10);
-    sandboxState.heroCountOverride = Number.isFinite(v) && v > 0 ? v : null;
+  const copy = document.getElementById('sbxCopyGrid');
+  if (copy) copy.onclick = async () => {
+    const rows = sbxGridModel();
+    const tsv = [['Heroes', ...SANDBOX_GRID_LEVELS.map((l) => `Level ${l} live`), ...SANDBOX_GRID_LEVELS.map((l) => `Level ${l} proposed`)].join('\t'),
+      ...rows.map((r) => [r.label, ...r.cells.map((c) => c.live ?? ''), ...r.cells.map((c) => c.prop ?? '')].join('\t'))].join('\n');
+    const msg = document.getElementById('sbxCopyMsg');
+    try { await navigator.clipboard.writeText(tsv); msg.textContent = 'Copied (tab-separated, days).'; } catch { msg.textContent = 'Clipboard blocked by the browser.'; }
   };
 
   const runSimBtn = document.getElementById('runSimBtn');
   if (runSimBtn) runSimBtn.onclick = async () => {
-    sandboxState.running = true;
-    sandboxState.runError = null;
+    s.running = true;
+    s.runError = null;
     renderSandbox();
+    const overrides = sandboxProposedOverrides();
+    const run = { preset: s.preset, heroes: s.heroes, growRoster: s.growRoster, buyFacilities: s.buyFacilities, overrides };
     try {
-      const overridesObj = Object.fromEntries(sandboxState.overrides.map((o) => [o.id, o.value]));
-      const { results } = await api('/api/sim/run', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          presetIds: [...sandboxState.selectedPresets],
-          overrides: overridesObj,
-          maxDays: sandboxState.maxDays,
-          heroCountOverride: sandboxState.heroCountOverride ?? undefined,
-          growRoster: sandboxState.growRoster,
-          sampleEveryDays: Math.max(1, Math.round(sandboxState.maxDays / 60)),
-        }),
-      });
-      sandboxState.results = results;
+      const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const [econ, grid] = await Promise.all([
+        api('/api/sim/run', json({
+          presetIds: [s.preset], overrides, maxDays: s.maxDays,
+          heroCountOverride: s.heroes, growRoster: s.growRoster, buyFacilities: s.buyFacilities,
+          sampleEveryDays: Math.max(1, Math.round(s.maxDays / 60)),
+        })),
+        api('/api/sim/grid', json({ presetId: s.preset, overrides, maxDays: s.maxDays, heroCounts: SANDBOX_GRID_ROWS, buyFacilities: s.buyFacilities })),
+      ]);
+      s.results = econ.results;
+      s.grid = grid;
+      s.lastRun = run;
     } catch (err) {
-      sandboxState.runError = err.message;
+      s.runError = err.message;
     }
-    sandboxState.running = false;
+    s.running = false;
     renderSandbox();
-    if (sandboxState.runError) {
-      document.getElementById('sandboxRunError').innerHTML =
-        `<div class="patch-result bad"><div class="patch-result-label">Simulation failed</div><pre>${escapeHtml(sandboxState.runError)}</pre></div>`;
-    }
   };
 }
 

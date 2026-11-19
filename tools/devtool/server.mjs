@@ -4578,6 +4578,8 @@ const server = http.createServer(async (req, res) => {
     // Patch 0497 -- runSim.ts has supported a growing roster since patch
     // 0217, but nothing ever passed this through.
     const growRoster = body.growRoster === true;
+    // Patch 0498 -- false = never buy facilities/upgrades.
+    const buyFacilities = body.buyFacilities !== false;
 
     // Baseline (empty overrides) and modified (the proposed draft) are two
     // fully separate process spawns per preset -- see runSim.ts's own header
@@ -4585,12 +4587,45 @@ const server = http.createServer(async (req, res) => {
     const results = {};
     await Promise.all(selected.map(async (preset) => {
       const [baseline, modified] = await Promise.all([
-        runSimVariant({ preset, heroCountOverride, overrides: {}, maxDays, sampleEveryDays, growRoster }),
-        runSimVariant({ preset, heroCountOverride, overrides, maxDays, sampleEveryDays, growRoster }),
+        runSimVariant({ preset, heroCountOverride, overrides: {}, maxDays, sampleEveryDays, growRoster, buyFacilities }),
+        runSimVariant({ preset, heroCountOverride, overrides, maxDays, sampleEveryDays, growRoster, buyFacilities }),
       ]);
       results[preset.id] = { baseline, modified };
     }));
     return json(res, 200, { results });
+  }
+
+  // Patch 0498 -- Balance Sandbox "Time to level" grid: the day the lead
+  // hero reaches each level, per roster size, live vs proposed. One sim
+  // process per variant (runSim.ts's grid mode runs every roster size in
+  // that process -- the overrides are the same, so isolation still holds).
+  if (url.pathname === '/api/sim/grid' && req.method === 'POST') {
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      return json(res, 400, { error: 'Malformed JSON in request body.' });
+    }
+    let presets;
+    try {
+      presets = await readSimPresets();
+    } catch (err) {
+      return json(res, 500, { error: `Could not read sim presets: ${err.message}` });
+    }
+    const preset = presets.find((p) => p.id === body.presetId);
+    if (!preset) return json(res, 400, { error: 'No valid presetId given.' });
+    const overrides = body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides)
+      ? body.overrides : {};
+    const heroCounts = (Array.isArray(body.heroCounts) ? body.heroCounts : [1, 2, 4, 7, 'grow'])
+      .filter((h) => h === 'grow' || (Number.isInteger(h) && h > 0 && h <= 20)).slice(0, 10);
+    if (heroCounts.length === 0) return json(res, 400, { error: 'No valid heroCounts given.' });
+    const maxDays = Number.isFinite(body.maxDays) && body.maxDays > 0 ? body.maxDays : 1095;
+    const buyFacilities = body.buyFacilities !== false;
+    const [baseline, modified] = await Promise.all([
+      runSimVariant({ preset, overrides: {}, maxDays, sampleEveryDays: 30, heroCounts, buyFacilities }),
+      runSimVariant({ preset, overrides, maxDays, sampleEveryDays: 30, heroCounts, buyFacilities }),
+    ]);
+    return json(res, 200, { baseline, modified });
   }
 
   if (url.pathname === '/api/version' && req.method === 'GET') {

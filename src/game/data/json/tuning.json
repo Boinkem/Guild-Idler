@@ -4130,6 +4130,26 @@
     "description": "Same shape as economy.goldSoftCapDecay. Calibrated so a fully min-maxed level-55 hero (461 raw pre-cap) lands ~3x xp instead of ~5.6x uncapped."
   },
   {
+    "id": "economy.questGoldMultiplier",
+    "label": "Quest gold: overall multiplier",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0.1,
+    "max": 5,
+    "description": "Scales the gold every standard quest-board offer rolls (after the level curve and difficulty multiplier, before hero bonuses). 1 = unchanged. Also scales balance.expectedRatePerHour, so the Balance Sandbox and the Trade Route gold/hr target follow it. Story chain stages, raids and chain completion bonuses are not affected. Added in patch 0498 as the Sandbox's 'Quest gold x' dial."
+  },
+  {
+    "id": "economy.questXpMultiplier",
+    "label": "Quest XP: overall multiplier",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 0.1,
+    "max": 5,
+    "description": "Same as economy.questGoldMultiplier, for quest-board XP. 1 = unchanged. Added in patch 0498 as the Sandbox's 'Quest XP x' dial."
+  },
+  {
     "id": "economy.questGoldBreakLevel1",
     "label": "Quest gold curve: breakpoint 1 level",
     "category": "economy",

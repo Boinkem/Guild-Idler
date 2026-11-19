@@ -485,8 +485,10 @@ export const QuestManager = {
     // premium never speeds up levelling.
     const levelsOver = Math.max(0, reqLevel - topLevel);
     const overLevelGoldPct = levelsOver * Tuning.get('quest.overLevelGoldPremiumPct');
-    const goldBaseline = questGoldBaseline(reqLevel) * cfg.rewardMultiplier * (1 + overLevelGoldPct / 100);
-    const xpBaseline = questXpBaseline(reqLevel) * cfg.rewardMultiplier;
+    // Patch 0498 -- overall quest-board gold/xp dials (1 = unchanged),
+    // mirrored in balance.expectedRatePerHour for the Balance Sandbox.
+    const goldBaseline = questGoldBaseline(reqLevel) * cfg.rewardMultiplier * (1 + overLevelGoldPct / 100) * Tuning.get('economy.questGoldMultiplier');
+    const xpBaseline = questXpBaseline(reqLevel) * cfg.rewardMultiplier * Tuning.get('economy.questXpMultiplier');
     // Scrap for the risk: levels over x per-level amount x tier step
     // (Easy 1, Normal 2 ... Legendary 5). Early Scrap otherwise only comes
     // from breaking down gear, the "scrap starving" half of the report.

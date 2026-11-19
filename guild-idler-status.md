@@ -1134,12 +1134,12 @@ raid fight).
 
 ## Backlog
 
-### Balance Sandbox redesign -- in progress (0497 engine v2 built)
+### Balance Sandbox redesign -- in progress (0497 engine v2, 0498 Economy + Time to level built)
 Agreed 19 Nov 2026; mocked up on the Design canvas "Balance Sandbox
 Redesign" (Economy, Time to level, Raid Tuning: one raid / every raid).
 - **1 -- built, patch 0497:** engine fixes (per-hero xp, purchases feed
   income, storage cap, success mods, level cap) + new outputs.
-- **2 -- next:** the Economy and Time to level screens: scenario (play
+- **2 -- built, patch 0498:** the Economy and Time to level screens: scenario (play
   style, heroes, level range, grow roster, buy facilities), grouped dials
   over the raw tuning box, live -> proposed headline cards with deltas
   (gold/hr and xp/hr for a level range, time to a level, guild fully
@@ -1147,7 +1147,7 @@ Redesign" (Economy, Time to level, Raid Tuning: one raid / every raid).
   saved scenarios. New real tuning knobs `economy.questGoldMultiplier` /
   `economy.questXpMultiplier` (default 1, read by QuestManager rewards and
   balance.expectedRatePerHour) so a dial tested here ships as-is.
-- **3 -- later:** Raid Tuning: raid + difficulty + party builder (class,
+- **3 -- next:** Raid Tuning: raid + difficulty + party builder (class,
   level, role) with gear presets (fresh / expected / raid drops / best in
   slot), N runs, per-encounter odds, full-clear %, where runs end, runs to
   first clear, verdict vs an intended band (Easy 50%+ / Normal 25-50 /
@@ -39671,3 +39671,79 @@ from git for comparison, numbers above) and through `/api/sim/run` with
 first hero to 55, 75.7 -> 88.0 days; AFK loses ~48k gold to the storage
 cap live. Headless Chrome on the Sandbox tab: checkbox, override, run, new
 rows render, no page errors. `node --check` on both DevTool files.
+
+### DevTool: Balance Sandbox Economy + Time to level screens, quest gold/XP dials (patch 0498)
+```discord-update
+Dev Update | Balance Sandbox
+
+- Added two overall dials for quest gold and quest XP (both left at 1, so nothing changes in game yet)
+- Changed the dev tools' balance simulator into two screens, Economy and Time to level, so balance changes can be tested before they ship
+```
+
+Step 2 of the Balance Sandbox redesign (see Backlog), built to the agreed
+"Balance Sandbox Redesign" mockup.
+
+**Game: two new real tuning knobs** (`economy` category, both `1`, so no
+behaviour change on ship):
+- `economy.questGoldMultiplier` / `economy.questXpMultiplier` scale the
+  gold / xp every standard quest-board offer rolls
+  (`QuestManager.generateOffer`, after the level curve, difficulty and
+  over-level premium, before hero bonuses) and, identically,
+  `balance.expectedRatePerHour`. So a dial tested in the Sandbox ships
+  as-is, and `HarvestManager.sellGoldPerHourTarget` (Trade Route cap,
+  built on that rate) follows the gold dial too. Story chain stages,
+  raids and chain completion bonuses are deliberately untouched.
+
+**Engine** (`tools/devtool/sim/runSim.ts`): the v2 loop is now one
+`simulate(heroCount, growRoster)` function, plus:
+- `perLevel` (lead hero, per level: hours, whole-guild gold, that hero's
+  xp) and `levelDays` (day any hero first reached each level), so any
+  level range is totalled client-side without a rerun.
+- `buyFacilities: false` (never buy facilities/upgrades) and
+  `fullyBuiltDay` (day the last level was bought; `allSpentDay` was only
+  the run's end day).
+- Grid mode: `heroCounts: [1, 2, 4, 7, 'grow']` runs each roster in one
+  process and returns `{ grid }`. Overrides are identical across the grid,
+  so the one-variant-per-process isolation rule still holds.
+
+**Server:** `/api/sim/run` passes `buyFacilities`; new `POST
+/api/sim/grid` ({presetId, overrides, heroCounts, maxDays, buyFacilities}
+-> {baseline, modified}, one process each, about 2s).
+
+**Sandbox tab** (`app.js` `renderSandbox` rewritten, `.sbx-*` styles):
+- Tabs: Economy / Time to level / Raids (Raids is a step 3 placeholder).
+- Sidebar shared by both screens. Scenario: play style (Active / Casual /
+  AFK), heroes, level range, grow roster, buy facilities, max days.
+  Proposed dials (slider + number, live value beside each, changed ones
+  highlighted, Reset to live) are grouped:
+  - Rewards: quest gold x, quest XP x, gold / XP kept on a failed quest.
+  - Levelling: XP curve exponent, rookie success bonus.
+  - Facilities: Treasury gold % / level, Library XP % / level.
+
+  "+ Any tuning setting" keeps the old free-form override box. Saved
+  scenarios (name, Load, Delete) live in this browser's localStorage.
+- One "Run live vs proposed" button runs both screens' sims together.
+- Economy: four cards (guild gold/hr and one hero's xp/hr across the
+  level range, time to the range's top level, guild fully built, or days
+  in range when not buying), each live -> proposed with a coloured delta.
+  Below them: a lead-hero level-over-time chart (live vs proposed), a
+  band table (1-10 ... 50-55, range bands highlighted, with gold/hr,
+  xp/hr, days and usual best difficulty), a one-line "what ran" caption,
+  and the old full results table under "Full run details".
+- Time to level: a hero count x level grid (1 / 2 / 4 / 7 / growing roster
+  x levels 10-55). Each cell shows live -> proposed, the delta, and a shade
+  (later / sooner, by size). Biggest and smallest change cards, and Copy
+  table (TSV of days). 7 is the Tavern ceiling without Renown.
+- The old multi-preset picker and `heroCountOverride` state are gone (one
+  play style at a time).
+
+**Verified:**
+- Engine direct: grid 1/2/4/7/grow; level-range totals; no-buy mode (L55
+  at 85.5d vs 73.8d with buying, ~515k gold lost to the cap); `questXpMultiplier`
+  0.9 moves a solo hero's level 55 from 76.4 to 84.7 days.
+- `/api/sim/grid` over HTTP.
+- Headless Chrome: set Quest XP x 0.9, ran it, both screens rendered and
+  matched the engine (XP/hr L30-40 70 -> 64, -10%; time to 40 +3.6 days;
+  every grid cell about +11%), saved a scenario, opened Raids, no page
+  errors.
+- `node --check` on both DevTool files; `tsc --noEmit` clean.

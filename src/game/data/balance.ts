@@ -61,9 +61,10 @@ export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp', 
   // QuestManager.generateOffer actually rolls against. The old
   // xpMin/xpMax base range (BASE_XP_MIN/MAX) is no longer part of the
   // standard-offer xp roll either, only questXpBaseline is.
+  // Patch 0498 -- same overall dials QuestManager.generateOffer applies.
   const avgReward = kind === 'gold'
-    ? questGoldBaseline(level) * cfg.rewardMultiplier
-    : questXpBaseline(level) * cfg.rewardMultiplier;
+    ? questGoldBaseline(level) * cfg.rewardMultiplier * Tuning.get('economy.questGoldMultiplier')
+    : questXpBaseline(level) * cfg.rewardMultiplier * Tuning.get('economy.questXpMultiplier');
   const failureMultiplier = kind === 'gold' ? GOLD_FAILURE_MULTIPLIER : XP_FAILURE_MULTIPLIER;
   const expectedReward = successRate * avgReward + (1 - successRate) * failureMultiplier * avgReward;
   return expectedReward / avgDurationHours;
