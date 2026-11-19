@@ -224,6 +224,7 @@ export function createInitialState(now = Date.now()): GameState {
     raidLog: [],
     completedRaidDifficulties: [],
     raidClearsByDifficulty: {},
+    raidCheckpoints: {},
     notifications: [],
     notificationsSeenId: null,
     tabAcknowledged: {},
@@ -1614,6 +1615,8 @@ const MIGRATIONS: Record<number, Migration> = {
   // at 0, the next upload overwrites whatever Steam was holding from an
   // older save with this guild's real Guild Power.
   76: (save) => ({ ...save, version: 77, leaderboardBest: 0 }),
+  // Patch 0502 -- raid checkpoints. No saved progress on older saves.
+  77: (save) => ({ ...save, version: 78, raidCheckpoints: (save.raidCheckpoints as object | undefined) ?? {} }),
 };
 
 /** What every pre-0474 guild paid for the one-off Guild Charter

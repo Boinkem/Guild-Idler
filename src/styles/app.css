@@ -10529,3 +10529,26 @@ button.harvest-item:hover {
 .realm-banner.realm-banner-over { opacity: 0.72; border-color: #3d3350; background: color-mix(in srgb, #15111f 88%, transparent); box-shadow: none; }
 .realm-banner.realm-banner-over:hover { opacity: 0.95; }
 .realm-banner-over .realm-mini-bar i { filter: saturate(0.4); }
+
+/* Patch 0502 -- raid checkpoints: saved-progress note in the raid detail,
+   retry-bonus chip on the fight returned to, card badge, result line. */
+.raid-checkpoint-note {
+  display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px 10px;
+  border: 1px solid var(--brass); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--brass) 12%, var(--panel-2));
+}
+.raid-checkpoint-note > span { flex: 1; }
+.raid-checkpoint-note.off { border-color: var(--blood); background: color-mix(in srgb, var(--blood) 12%, var(--panel-2)); }
+.raid-retry-chip {
+  white-space: nowrap;
+  padding: 1px 7px; border-radius: 999px; color: var(--parchment);
+  background: color-mix(in srgb, var(--violet) 40%, var(--panel-2)); border: 1px solid var(--violet);
+}
+.raid-checkpoint-badge {
+  padding: 1px 6px; border-radius: 999px; border: 1px solid var(--brass); color: var(--brass);
+  background: color-mix(in srgb, var(--brass) 10%, transparent); white-space: nowrap;
+}
+.rfx-checkpoint {
+  margin: 6px 0 0; padding: 6px 10px; border-radius: var(--radius);
+  border: 1px solid var(--brass); background: color-mix(in srgb, var(--brass) 10%, var(--panel-2));
+}

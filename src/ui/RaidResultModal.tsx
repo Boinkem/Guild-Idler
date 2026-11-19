@@ -176,6 +176,12 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
     onViewLore();
     handleDismiss();
   };
+  // Patch 0502 -- open this raid's detail at this difficulty, checkpoint ready.
+  const prepareReturn = () => {
+    engine.requestTab('raids', `raid:${result.raidId}:${result.difficulty}`);
+    onViewLore();
+    handleDismiss();
+  };
 
   const outcome = result.fullClear ? 'clear' : cleared > 0 ? 'partial' : 'wiped';
   let dmgIndex = 0;
@@ -207,6 +213,8 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
 
         <div className="rfx-ladder">
           {encounterNames.map((name, i) => {
+            // Patch 0502 -- fights won on an earlier run (checkpoint return).
+            const earlier = i < (result.startedAtEncounter ?? 0);
             const state = i < cleared ? 'won' : i === cleared ? 'lost' : 'skipped';
             const when = state === 'skipped' ? T_LOST : encAt[i];
             return (
@@ -214,7 +222,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
                 <EncounterSkull />
                 <span className="rfx-en">Encounter {i + 1}</span>
                 <span className="rfx-bn">{name}</span>
-                {state !== 'skipped' && <span className="rfx-stamp">{state === 'won' ? 'Defeated' : 'Fell back'}</span>}
+                {state !== 'skipped' && <span className="rfx-stamp">{earlier ? 'Cleared before' : state === 'won' ? 'Defeated' : 'Fell back'}</span>}
                 {state === 'won' && <span className="rfx-slash" />}
                 {state === 'lost' && (
                   <svg className="rfx-crack" viewBox="0 0 560 40" preserveAspectRatio="none" aria-hidden="true">
@@ -233,6 +241,17 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
               ? `Cleared ${cleared} of ${result.totalEncounters} encounters before the party had to fall back.`
               : 'The party was turned back at the first encounter.'}
         </p>
+        {/* Patch 0502 -- the run's progress is saved: come back for the fight
+            the party fell back at, with any party. */}
+        {result.checkpointSaved && (
+          <p className="small rfx-checkpoint" style={at(T_SUM)}>
+            <b>Progress saved.</b>{' '}
+            {result.checkpointSaved.nextEncounter > 0
+              ? `Return to ${encounterNames[result.checkpointSaved.nextEncounter]} whenever you're ready; the fights you won stay won.`
+              : `Try ${encounterNames[0]} again whenever you're ready.`}
+            {result.checkpointSaved.retryBonus > 0 ? ` +${result.checkpointSaved.retryBonus}% on your next try there.` : ''}
+          </p>
+        )}
 
         {hasLoot && (
           <div className="rfx-lootrow">
@@ -346,7 +365,10 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
 
         <div className="row end rfx-actions" style={at(T_DONE, { marginTop: 12, gap: 8 })}>
           <button className="btn-ghost" onClick={handleDismiss} disabled={dismissing}>Close</button>
-          <button className="btn-primary" onClick={viewLore} disabled={dismissing}>View in Lore</button>
+          <button className={result.checkpointSaved ? 'btn-ghost' : 'btn-primary'} onClick={viewLore} disabled={dismissing}>View in Lore</button>
+          {result.checkpointSaved && (
+            <button className="btn-primary" onClick={prepareReturn} disabled={dismissing}>Prepare to return</button>
+          )}
         </div>
 
         {dismissing && (

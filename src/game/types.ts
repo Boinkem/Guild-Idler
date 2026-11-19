@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 77;
+export const SAVE_VERSION = 78;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1783,10 +1783,36 @@ export interface ActiveRaid {
    * independently against (its own baseSuccess - difficulty penalty + this).
    */
   partySuccessBonus: number;
+  /** Patch 0502 -- a return from a checkpoint: the encounter index this run
+   *  starts at (earlier ones were already won), the retry bonus added to
+   *  that first fight, and raid time already spent on earlier runs (so a
+   *  clear's Renown still counts the whole raid). All absent on a fresh run. */
+  startEncounter?: number;
+  retryBonus?: number;
+  priorElapsedMs?: number;
   /** Patch 0484 -- a Raider's Charm armed at launch. 'seek': x2 chance on
    *  raid items never found; 'boost': +25% on every roll (raid complete).
    *  Mode is fixed at launch, as the confirm screen showed it. */
   charm?: 'seek' | 'boost';
+}
+
+/**
+ * Patch 0502 -- raid checkpoint. A failed run saves where the party fell
+ * back (one per raid + difficulty, GameState.raidCheckpoints, keyed
+ * `${raidId}:${difficulty}`). Returning runs only the remaining fights, with
+ * any party, and adds raid.retryBonusPerLoss per loss on that fight (up to
+ * raid.retryBonusCap). A full clear or a fresh start ("Start over") clears it.
+ */
+export interface RaidCheckpoint {
+  raidId: string;
+  difficulty: RaidDifficulty;
+  /** Fights already won -- also the index of the fight to return to. */
+  encountersCleared: number;
+  /** Runs lost on that fight in a row (drives the retry bonus). */
+  losses: number;
+  /** Raid time spent across the runs so far, for the clear's Renown. */
+  elapsedMs: number;
+  savedAt: number;
 }
 
 export interface RaidLootDrop {
@@ -1850,6 +1876,12 @@ export interface RaidResult {
   tombstoneStyleUnlocked?: string;
   /** Patch 0415 -- per-class skins this clear earned for the first time
    *  (see classSkins.earnFromRaidClear), announced once by engine.ts. */
+  /** Patch 0502 -- set when this run returned from a checkpoint: the
+   *  encounter index it started at (earlier fights were won before). */
+  startedAtEncounter?: number;
+  /** Patch 0502 -- set when the run failed: the saved checkpoint (the fight
+   *  to return to) and the retry bonus the next try there gets. */
+  checkpointSaved?: { nextEncounter: number; retryBonus: number };
   classSkinsEarned?: { skinId: string; heroClass: string }[];
   /** Heroes whose own health damage this run dropped to 0, flipping them
    *  to 'fallen' -- a subset of `injuries` above (a heroId can appear in
@@ -2500,6 +2532,8 @@ export interface GameState {
    * gate, never removed afterward.
    */
   raidClearsByDifficulty: Record<string, RaidDifficulty[]>;
+  /** Patch 0502 -- saved raid progress, see RaidCheckpoint. */
+  raidCheckpoints: Record<string, RaidCheckpoint>;
 
   upgrades: Record<string, number>;
   guild: Record<GuildFacility, number>;

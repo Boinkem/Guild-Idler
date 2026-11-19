@@ -1,5 +1,5 @@
 import {
-  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
+  ActiveRaid, GameState, Hero, Modifiers, RaidCheckpoint, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
 } from '../types';
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, requiredRolesFor, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
 import { renownForRaidClear, TOMBSTONE_STYLES } from '../data/progression';
@@ -28,6 +28,32 @@ import { wardForRaid } from '../data/realmThreat';
 export const RAIDERS_CHARM_ID = 'raiders_charm';
 
 export const RaidManager = {
+  /* ------------------------------ checkpoints ------------------------------ */
+  // Patch 0502 -- see RaidCheckpoint in types.ts.
+  checkpointKey(raidId: string, difficulty: RaidDifficulty): string {
+    return `${raidId}:${difficulty}`;
+  },
+
+  checkpoint(state: GameState, raidId: string, difficulty: RaidDifficulty): RaidCheckpoint | null {
+    return state.raidCheckpoints?.[RaidManager.checkpointKey(raidId, difficulty)] ?? null;
+  },
+
+  /** Every saved checkpoint for one raid, any difficulty (raid card badge). */
+  checkpointsForRaid(state: GameState, raidId: string): RaidCheckpoint[] {
+    return Object.values(state.raidCheckpoints ?? {}).filter((c) => c.raidId === raidId);
+  },
+
+  /** Success added to the fight a checkpoint returns to. */
+  retryBonus(checkpoint: RaidCheckpoint | null): number {
+    if (!checkpoint) return 0;
+    return Math.min(Tuning.get('raid.retryBonusCap'), checkpoint.losses * Tuning.get('raid.retryBonusPerLoss'));
+  },
+
+  /** "Start over" -- drops the saved progress for this raid + difficulty. */
+  clearCheckpoint(state: GameState, raidId: string, difficulty: RaidDifficulty): void {
+    if (state.raidCheckpoints) delete state.raidCheckpoints[RaidManager.checkpointKey(raidId, difficulty)];
+  },
+
   /**
    * Average elemental contribution across the party for one specific
    * encounter -- recomputed fresh per encounter (unlike partySuccessBonus,
@@ -216,6 +242,7 @@ export const RaidManager = {
   /** Preview odds for one specific encounter, given a prospective party -- used by the UI before committing. */
   previewEncounterSuccess(
     state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, encounterId: string, now: number,
+    fromCheckpoint = false,
   ): number {
     const raid = RAID_BY_ID[raidId];
     const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
@@ -228,7 +255,11 @@ export const RaidManager = {
     // Patch 0501 -- role needs scaled to this difficulty's party size.
     const roles = requiredRolesFor(raid, difficulty);
     const roleMismatch = RaidManager.roleMismatchPenalty(heroes, roles);
-    const success = clamp(encounter.baseSuccess - diffCfg.successPenalty + bonus + elemental + override - roleMismatch, MIN_SUCCESS, MAX_SUCCESS);
+    // Patch 0502 -- returning from a checkpoint adds the retry bonus to the
+    // fight it returns to (resolve() applies the same).
+    const cp = fromCheckpoint ? RaidManager.checkpoint(state, raidId, difficulty) : null;
+    const retry = cp && raid.encounterIds[cp.encountersCleared] === encounterId ? RaidManager.retryBonus(cp) : 0;
+    const success = clamp(encounter.baseSuccess - diffCfg.successPenalty + bonus + elemental + override - roleMismatch + retry, MIN_SUCCESS, MAX_SUCCESS);
     // Heroic/Legendary's role-mismatch ceiling applies AFTER the ordinary
     // clamp, only while the party is actually missing a required slot --
     // see RaidDifficultyConfig.roleMismatchCap. Normal has no cap
@@ -245,13 +276,14 @@ export const RaidManager = {
    * longer, independent of party build), then the party's own speed
    * contribution (personal only, see partyEconomyMods) on top.
    */
-  previewDuration(state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, now: number): number {
+  previewDuration(state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, now: number, startEncounter = 0): number {
     const raid = RAID_BY_ID[raidId];
     if (!raid) return 0;
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
     const speed = RaidManager.partyEconomyMods(state, heroes, now).speed;
     const factor = clamp(1 - speed / 100, 0.25, 1.75);
-    const total = raid.encounterIds.reduce((sum, id) => sum + (RAID_ENCOUNTER_BY_ID[id]?.duration ?? 0), 0);
+    // Patch 0502 -- a checkpoint return only runs the remaining fights.
+    const total = raid.encounterIds.slice(startEncounter).reduce((sum, id) => sum + (RAID_ENCOUNTER_BY_ID[id]?.duration ?? 0), 0);
     const tierScaled = total * RAID_DIFFICULTIES[difficulty].durationMultiplier;
     return Math.max(MINUTE, Math.floor(tierScaled * factor));
   },
@@ -348,6 +380,7 @@ export const RaidManager = {
 
   start(
     state: GameState, raidId: string, difficulty: RaidDifficulty, heroIds: string[], now: number, armCharm = false,
+    resume = false,
   ): { raid?: ActiveRaid; error?: string } {
     const check = RaidManager.canStart(state, raidId, difficulty, heroIds);
     if (!check.ok) return { error: check.error };
@@ -359,14 +392,19 @@ export const RaidManager = {
     const raidDef = RAID_BY_ID[raidId]!;
     const roleMismatch = RaidManager.roleMismatchPenalty(heroes, requiredRolesFor(raidDef, difficulty));
     const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, RaidManager.successBaselineLevel(raidDef, heroes)) - roleMismatch;
-    const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now);
+    // Patch 0502 -- return from the checkpoint, or start over (which drops it).
+    const cp = resume ? RaidManager.checkpoint(state, raidId, difficulty) : null;
+    if (!resume) RaidManager.clearCheckpoint(state, raidId, difficulty);
+    const startEncounter = cp ? Math.min(cp.encountersCleared, raidDef.encounterIds.length - 1) : 0;
+    const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now, startEncounter);
 
     const active: ActiveRaid = {
       raidId, difficulty, heroIds,
       startedAt: now,
       endsAt: now + duration,
-      currentEncounter: 0,
+      currentEncounter: startEncounter,
       partySuccessBonus,
+      ...(cp ? { startEncounter, retryBonus: RaidManager.retryBonus(cp), priorElapsedMs: cp.elapsedMs } : {}),
       ...(armCharm ? { charm: RaidManager.charmMode(state, raidId) } : {}),
     };
     if (armCharm) {
@@ -436,7 +474,10 @@ export const RaidManager = {
     // partySuccessBonus above already establish.
     const globalMods = ModifierManager.global(state);
 
-    let encountersCleared = 0;
+    // Patch 0502 -- a checkpoint return starts at startEncounter; the fights
+    // before it were won on an earlier run and pay nothing again.
+    const startEncounter = active.startEncounter ?? 0;
+    let encountersCleared = startEncounter;
     let gold = 0;
     let xp = 0;
     const loot: RaidLootDrop[] = [];
@@ -444,12 +485,13 @@ export const RaidManager = {
     const heroesLeveledUp: NonNullable<RaidResult['heroesLeveledUp']> = [];
     const encounterIds = raid?.encounterIds ?? [];
 
-    for (const encounterId of encounterIds) {
+    for (const [offset, encounterId] of encounterIds.slice(startEncounter).entries()) {
       const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
       if (!encounter) continue; // devtool data drift safety -- an unknown id is skipped, not a crash
+      const retry = offset === 0 ? (active.retryBonus ?? 0) : 0;
       const elemental = RaidManager.elementalBonus(heroes, encounter);
       const override = raid?.successModifier ?? 0;
-      const rawChance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental + override, MIN_SUCCESS, MAX_SUCCESS);
+      const rawChance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental + override + retry, MIN_SUCCESS, MAX_SUCCESS);
       // Same Heroic/Legendary role-mismatch ceiling as previewEncounterSuccess,
       // applied identically here so the actual roll never has better odds
       // than what the party saw in the preview -- see
@@ -553,6 +595,28 @@ export const RaidManager = {
     }
 
     const fullClear = encounterIds.length > 0 && encountersCleared === encounterIds.length;
+    // Patch 0502 -- checkpoint. A full clear drops it; a failure saves the
+    // fight the party fell back at. Losses count up only while the party
+    // keeps falling at the same fight (a fresh start already cleared it).
+    const runElapsedMs = Math.max(0, resolvedAt - active.startedAt);
+    const totalElapsedMs = (active.priorElapsedMs ?? 0) + runElapsedMs;
+    let checkpointSaved: RaidResult['checkpointSaved'];
+    if (!state.raidCheckpoints) state.raidCheckpoints = {};
+    if (fullClear) {
+      RaidManager.clearCheckpoint(state, active.raidId, active.difficulty);
+    } else if (encounterIds.length > 0) {
+      const prev = RaidManager.checkpoint(state, active.raidId, active.difficulty);
+      const saved: RaidCheckpoint = {
+        raidId: active.raidId,
+        difficulty: active.difficulty,
+        encountersCleared,
+        losses: prev && prev.encountersCleared === encountersCleared ? prev.losses + 1 : 1,
+        elapsedMs: totalElapsedMs,
+        savedAt: resolvedAt,
+      };
+      state.raidCheckpoints[RaidManager.checkpointKey(active.raidId, active.difficulty)] = saved;
+      checkpointSaved = { nextEncounter: encountersCleared, retryBonus: RaidManager.retryBonus(saved) };
+    }
     // Patch 0477 -- Ward toward the realm event (see QuestManager.resolve's
     // own call). One amount for the whole run: full on a full clear, half
     // otherwise.
@@ -607,7 +671,8 @@ export const RaidManager = {
     // "pays for whatever this tier's config says," should that config
     // ever decouple from the real committed roster.
     if (fullClear) {
-      const clearDurationMs = resolvedAt - active.startedAt;
+      // Patch 0502 -- the whole raid's time, across checkpoint returns.
+      const clearDurationMs = totalElapsedMs;
       const renownGained = renownForRaidClear(active.difficulty, heroes.length, clearDurationMs);
       if (renownGained > 0) state.renown += renownGained;
     }
@@ -792,6 +857,8 @@ export const RaidManager = {
       heroesLeveledUp: heroesLeveledUp.length > 0 ? heroesLeveledUp : undefined,
       tombstoneStyleUnlocked,
       classSkinsEarned: classSkinsEarned.length > 0 ? classSkinsEarned : undefined,
+      ...(startEncounter > 0 ? { startedAtEncounter: startEncounter } : {}),
+      ...(checkpointSaved ? { checkpointSaved } : {}),
     };
 
     state.raidLog.unshift(result);

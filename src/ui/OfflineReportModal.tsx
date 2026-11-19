@@ -168,7 +168,8 @@ function raidRow(raid: RaidResult): LedgerRow {
     stamp: raid.fullClear
       ? { text: 'Full clear', cls: 'clear' }
       : raid.encountersCleared > 0
-        ? { text: `${raid.encountersCleared}/${raid.totalEncounters}`, cls: 'part' }
+        // Patch 0502 -- the run's progress is saved (checkpoint).
+        ? { text: `${raid.encountersCleared}/${raid.totalEncounters}${raid.checkpointSaved ? ' · saved' : ''}`, cls: 'part' }
         : { text: 'Turned back', cls: 'fail' },
     gold: raid.gold,
     xp: raid.xp,

@@ -3801,6 +3801,26 @@
     "description": "Additional gold per hero level, added to the base stat reset cost -- a respec on a high-level hero undoes more invested points, priced accordingly."
   },
   {
+    "id": "raid.retryBonusPerLoss",
+    "label": "Raid checkpoint: retry bonus per loss",
+    "category": "raid",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "max": 30,
+    "description": "Patch 0502. Success added to the fight a raid checkpoint returns to, per run lost on that fight in a row (capped by raid.retryBonusCap). Resets when the raid is cleared or started over."
+  },
+  {
+    "id": "raid.retryBonusCap",
+    "label": "Raid checkpoint: retry bonus cap",
+    "category": "raid",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 60,
+    "description": "Patch 0502. Most success raid.retryBonusPerLoss can add to one fight."
+  },
+  {
     "id": "raid.weakestHeroWeight",
     "label": "Raid party: weight of the weakest hero",
     "category": "raid",

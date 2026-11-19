@@ -461,13 +461,17 @@ function SetProgressLine({ raidId, compact = false }: { raidId: string; compact?
  * selection resets each time it's reopened.
  */
 function RaidDetailModal({
-  raidId, onClose, onShowItem,
-}: { raidId: string; onClose: () => void; onShowItem: (defId: string) => void }) {
+  raidId, onClose, onShowItem, initialDifficulty = null,
+}: {
+  raidId: string; onClose: () => void; onShowItem: (defId: string) => void;
+  /** Patch 0502 -- opened from a raid result's "Return" button. */
+  initialDifficulty?: RaidDifficulty | null;
+}) {
   const engine = useEngine();
   const now = useNow();
   const state = engine.state;
   const raid = RAIDS.find((r) => r.id === raidId)!;
-  const [difficulty, setDifficulty] = useState<RaidDifficulty | null>(null);
+  const [difficulty, setDifficulty] = useState<RaidDifficulty | null>(initialDifficulty);
   const [selectedHeroIds, setSelectedHeroIds] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
 
@@ -490,8 +494,17 @@ function RaidDetailModal({
   const previewHeroes = previewHeroIds
     .map((id) => state.heroes.find((h) => h.id === id))
     .filter((h): h is Hero => !!h);
+  // Patch 0502 -- saved progress for this raid + difficulty. While one
+  // exists the default action is to return to it; "Start over" runs the
+  // whole raid again and drops it.
+  const checkpoint = difficulty ? RaidManager.checkpoint(state, raid.id, difficulty) : null;
+  const [startOver, setStartOver] = useState(false);
+  const resuming = !!checkpoint && !startOver;
+  const startEncounter = resuming ? checkpoint.encountersCleared : 0;
+  const retryBonus = resuming ? RaidManager.retryBonus(checkpoint) : 0;
+  const nextFightName = checkpoint ? RAID_ENCOUNTER_BY_ID[raid.encounterIds[checkpoint.encountersCleared]]?.name ?? 'the next fight' : '';
   const previewDuration = difficulty && previewHeroIds.length > 0
-    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now)
+    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now, startEncounter)
     : null;
 
   const toggleHero = (heroId: string) => {
@@ -505,6 +518,7 @@ function RaidDetailModal({
   const pickDifficulty = (d: RaidDifficulty) => {
     setDifficulty(d);
     setSelectedHeroIds([]);
+    setStartOver(false);
   };
 
   const askToCommit = () => {
@@ -527,7 +541,7 @@ function RaidDetailModal({
   useEffect(() => () => window.clearTimeout(marchTimer.current), []);
   const commitNow = () => {
     if (!difficulty) return;
-    engine.startRaid(raid.id, difficulty, selectedHeroIds, armCharm && canArm);
+    engine.startRaid(raid.id, difficulty, selectedHeroIds, armCharm && canArm, resuming);
     if (fxMs(1)) lastRaidCommitAt = Date.now();
     setConfirming(false);
     onClose();
@@ -559,8 +573,10 @@ function RaidDetailModal({
                 {raid.encounterIds.map((id, i) => {
                   const enc = RAID_ENCOUNTER_BY_ID[id];
                   if (!enc) return null;
-                  const encSuccess = difficulty && previewHeroIds.length > 0
-                    ? RaidManager.previewEncounterSuccess(state, previewHeroIds, raid.id, difficulty, id, now)
+                  // Patch 0502 -- fights already won on a saved run aren't fought again.
+                  const clearedBefore = resuming && i < startEncounter;
+                  const encSuccess = difficulty && previewHeroIds.length > 0 && !clearedBefore
+                    ? RaidManager.previewEncounterSuccess(state, previewHeroIds, raid.id, difficulty, id, now, resuming)
                     : null;
                   // Broken out separately from encSuccess (which already
                   // folds this in) purely so the player can see WHY the
@@ -579,8 +595,12 @@ function RaidDetailModal({
                        *  text and loot only show once expanded. */}
                       <details>
                         <summary>
-                          <b>{i + 1}. {enc.name}</b>
+                          <b className={clearedBefore ? 'muted' : undefined}>{i + 1}. {enc.name}</b>
                           <EncounterElementTags encounter={enc} />
+                          {clearedBefore && <span className="tiny good" style={{ marginLeft: 8 }}>✓ Cleared on an earlier run</span>}
+                          {resuming && i === startEncounter && retryBonus > 0 && (
+                            <span className="tiny raid-retry-chip" style={{ marginLeft: 8 }}>+{retryBonus}% retry bonus</span>
+                          )}
                           {encSuccess !== null && (
                             <span className="tiny muted" style={{ marginLeft: 8 }}>
                               Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
@@ -603,7 +623,7 @@ function RaidDetailModal({
 
               {previewDuration !== null && (
                 <p className="tiny muted" style={{ marginTop: 8 }}>
-                  Total time (this party): <b>{formatDuration(previewDuration)}</b>
+                  {resuming ? 'Time for the remaining fights' : 'Total time'} (this party): <b>{formatDuration(previewDuration)}</b>
                 </p>
               )}
 
@@ -636,6 +656,21 @@ function RaidDetailModal({
                     Requires exactly {cfg.partySize} heroes at level {raid.reqLevel}+. Rewards ×{cfg.rewardMultiplier},
                     {' '}{cfg.successPenalty}% harder odds per encounter than Normal.
                   </p>
+                  {checkpoint && (
+                    <div className={`raid-checkpoint-note ${startOver ? 'off' : ''}`}>
+                      {startOver ? (
+                        <span className="small">Starting over from the first fight. The saved progress ({checkpoint.encountersCleared} of {raid.encounterIds.length} cleared) will be lost when you send the party.</span>
+                      ) : (
+                        <span className="small">
+                          <b>Progress saved:</b> {checkpoint.encountersCleared} of {raid.encounterIds.length} cleared. The party returns to <b>{nextFightName}</b>
+                          {retryBonus > 0 ? <> with a <b>+{retryBonus}%</b> retry bonus</> : null}. Any heroes can go.
+                        </span>
+                      )}
+                      <button className="btn-ghost" style={{ padding: "3px 10px", fontSize: 12, whiteSpace: "nowrap" }} onClick={() => setStartOver(!startOver)}>
+                        {startOver ? 'Keep my progress' : 'Start over'}
+                      </button>
+                    </div>
+                  )}
                   {(() => {
                     // Patch 0501 -- role needs scaled to this difficulty's party
                     // size (requiredRolesFor), e.g. Requiem's Normal asks 1/1/1.
@@ -705,7 +740,7 @@ function RaidDetailModal({
                       {selectedHeroIds.length}/{cfg.partySize} selected
                     </span>
                     <button className="btn-primary" disabled={selectedHeroIds.length !== cfg.partySize} onClick={askToCommit}>
-                      Send the guild
+                      {resuming ? `Return to ${nextFightName}` : 'Send the guild'}
                     </button>
                   </div>
                 </div>
@@ -745,9 +780,11 @@ function RaidDetailModal({
                 </>
               )}
             </div>
-            <h3>Send the guild?</h3>
+            <h3>{resuming ? `Return to ${nextFightName}?` : 'Send the guild?'}</h3>
             <p className="small muted" style={{ marginTop: 0 }}>
               {raid.name}, {RAID_DIFFICULTY_LABEL[difficulty]}
+              {resuming ? ` · fight ${startEncounter + 1} of ${raid.encounterIds.length}${retryBonus > 0 ? ` · +${retryBonus}% retry bonus` : ''}` : ''}
+              {!resuming && checkpoint ? ' · starting over' : ''}
             </p>
             <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
               {selectedHeroIds.map((id) => {
@@ -791,16 +828,20 @@ function RaidDetailModal({
  * expanding inline. Locked raids stay a plain, non-interactive card.
  */
 function RaidCard({
-  raidId, onShowItem, opening = -1, isNew = false, onOpened, freshClears = [],
+  raidId, onShowItem, opening = -1, isNew = false, onOpened, freshClears = [], autoOpen = null,
 }: {
   raidId: string; onShowItem: (defId: string) => void;
+  /** Patch 0502 -- open this raid's detail at this difficulty on mount
+   *  (a raid result's "Return" button). */
+  autoOpen?: RaidDifficulty | null;
   /** Patch 0465 -- stagger slot of this card's first-seen opening, -1 for none. */
   opening?: number; isNew?: boolean; onOpened?: () => void; freshClears?: RaidDifficulty[];
 }) {
   const state = useEngine().state;
   const raid = RAIDS.find((r) => r.id === raidId)!;
   const unlocked = isRaidUnlocked(raidId, state.completedRaids, state.completedChains);
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(!!autoOpen);
+  const checkpoints = RaidManager.checkpointsForRaid(state, raidId);
 
   if (!unlocked) {
     const lockReason = raidLockReason(raidId, state.completedRaids, state.completedChains)
@@ -857,6 +898,11 @@ function RaidCard({
           <div className="raid-card-meta">
             <span className="tiny gold-text">Lv {raid.reqLevel}</span>
             <RaidClearBadges raidId={raid.id} fresh={freshClears} />
+            {checkpoints.map((cp) => (
+              <span key={cp.difficulty} className="tiny raid-checkpoint-badge" title="Progress saved: return to the next fight from the raid's detail">
+                {RAID_DIFFICULTY_LABEL[cp.difficulty]} {cp.encountersCleared}/{raid.encounterIds.length} saved
+              </span>
+            ))}
           </div>
           <SetProgressLine raidId={raid.id} compact />
         </div>
@@ -864,7 +910,7 @@ function RaidCard({
         {isNew && <span className="rfo-ribbon">New raid</span>}
       </div>
       {showModal && (
-        <RaidDetailModal raidId={raidId} onClose={() => setShowModal(false)} onShowItem={onShowItem} />
+        <RaidDetailModal raidId={raidId} onClose={() => setShowModal(false)} onShowItem={onShowItem} initialDifficulty={autoOpen} />
       )}
     </>
   );
@@ -973,6 +1019,16 @@ export function RaidsPanel() {
   const { settings } = useSettings();
   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
   const [itemDetail, setItemDetail] = useState<string | null>(null);
+  // Patch 0502 -- a raid result's "Return" button asks for this tab with a
+  // 'raid:<raidId>:<difficulty>' highlight: open that raid's detail at that
+  // difficulty. Read in the initialiser, consumed in an effect (StrictMode-safe).
+  const [returnTo] = useState<{ raidId: string; difficulty: RaidDifficulty } | null>(() => {
+    const id = engine.requestedHighlightId;
+    if (!id?.startsWith('raid:')) return null;
+    const [, raidId, difficulty] = id.split(':');
+    return RAID_DIFFICULTY_ORDER.includes(difficulty as RaidDifficulty) ? { raidId, difficulty: difficulty as RaidDifficulty } : null;
+  });
+  useEffect(() => { if (returnTo) engine.consumeRequestedHighlight(); }, [engine, returnTo]);
   const setTotals = useRaidSetTotals(state);
   // Patch 0465 -- first-seen moments for the list. Nothing counts as
   // "seen" until the Raid Charter's bought and the list actually shows.
@@ -1044,6 +1100,7 @@ export function RaidsPanel() {
             isNew={raidSeen.isNew(r.id)}
             onOpened={() => raidSeen.open(r.id)}
             freshClears={RAID_DIFFICULTY_ORDER.filter((d) => clearSeen.fresh(`${r.id}|${d}`))}
+            autoOpen={returnTo?.raidId === r.id ? returnTo.difficulty : null}
           />
         ))}
       </div>

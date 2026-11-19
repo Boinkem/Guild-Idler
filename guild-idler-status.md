@@ -1134,7 +1134,7 @@ raid fight).
 
 ## Backlog
 
-### Raid rebalance -- in progress (0500 Sandbox support, 0501 balance built)
+### Raid rebalance -- in progress (0500 Sandbox support, 0501 balance, 0502 checkpoints built)
 Agreed 19 Nov 2026; full plan, calibrated values and sim results in the
 project doc `claude/raid-rebalance-plan.md`. Mockup: design canvas
 "Raid Screen: Odds Feedback".
@@ -1152,10 +1152,10 @@ project doc `claude/raid-rebalance-plan.md`. Mockup: design canvas
   - raid drop power 3 / 5.5 / 8.5;
   - per-raid encounter bases;
   - raid set bonus success cuts.
-- **3 -- next:** raid checkpoints (a wipe saves progress at the fight lost, return
+- **3 -- built, patch 0502:** raid checkpoints (a wipe saves progress at the fight lost, return
   with a rebuilt party) + per-fight retry bonus (+5 per loss, up to +15).
   Save migration.
-- **4:** raid screen visuals to the mockup:
+- **4 -- next:** raid screen visuals to the mockup:
   - full-party preview with suggested fills;
   - a bar that builds per hero from 0%;
   - stacked per-fight bars;
@@ -40066,4 +40066,96 @@ reward.
 **Verified:**
 - The raid sim ladder on the shipped data reproduces the plan (above).
 - `requiredRolesFor` gives Requiem Normal 1/1/1; Heroic+ are unchanged.
+- `tsc --noEmit` clean.
+
+### Raid checkpoints: return to the fight you lost, with a retry bonus (patch 0502)
+```discord-update
+Dev Update | Raid Checkpoints
+
+- Added raid checkpoints: when a raid fails, your progress is saved at the fight the party fell back at
+- Added a way to return to that fight with any party you like, so you can swap heroes, gear and roles for the boss that stopped you
+- Added a retry bonus: each loss on the same fight gives +5% on your next try there, up to +15%
+- Added a "Prepare to return" button to the raid result, and a saved-progress badge on raid cards
+```
+
+Step 3 of the raid rebalance (see Backlog / `claude/raid-rebalance-plan.md`).
+
+**Save:** `SAVE_VERSION` 77 -> 78. New `GameState.raidCheckpoints:
+Record<"raidId:difficulty", RaidCheckpoint>`, where `RaidCheckpoint` is
+{ raidId, difficulty, encountersCleared, losses, elapsedMs, savedAt }.
+Migration 77 adds an empty map; `createInitialState` seeds one.
+
+**`ActiveRaid`** gains optional `startEncounter`, `retryBonus` and
+`priorElapsedMs` (absent on a fresh run). **`RaidResult`** gains
+`startedAtEncounter` and `checkpointSaved` { nextEncounter, retryBonus }.
+
+**Tuning:**
+- `raid.retryBonusPerLoss` 5;
+- `raid.retryBonusCap` 15.
+
+**RaidManager:**
+- **Helpers:** `checkpointKey`, `checkpoint`, `checkpointsForRaid`,
+  `retryBonus` (min(cap, losses x perLoss)) and `clearCheckpoint`.
+- **`start(..., resume)`:**
+  - resume=true returns from the checkpoint: it starts at
+    `encountersCleared`, carries the retry bonus and earlier elapsed time,
+    and the duration covers only the remaining fights
+    (`previewDuration(..., startEncounter)`).
+  - resume=false is a fresh start and clears any checkpoint ("Start over").
+  - The party bonus is computed for whoever goes, so any heroes can return.
+- **`resolve`:**
+  - The loop runs from `startEncounter`. Earlier fights are not
+    re-fought, re-paid or re-worn.
+  - The retry bonus is added to the first fight of a return.
+  - A full clear drops the checkpoint. A failure saves one: `losses`
+    counts up while the party keeps falling at the same fight and resets
+    to 1 at a new one, and `elapsedMs` accumulates.
+  - A clear's Renown uses the whole raid's time across returns.
+  - Clear credit (completedRaids, difficulties, titles, skins, shards,
+    recipe) is unchanged and goes to the finishing party.
+- **`previewEncounterSuccess(..., fromCheckpoint)`** adds the retry bonus
+  on the fight the checkpoint returns to.
+
+**Engine:** `startRaid(..., armCharm, resume)`. The toast reads "returns to
+<fight>" on a return.
+
+**UI:**
+- **Raid detail, with a checkpoint:**
+  - a brass "Progress saved: 2 of 3 cleared. The party returns to <fight>
+    with a +X% retry bonus" note, with a "Start over" toggle;
+  - cleared fights greyed with "✓ Cleared on an earlier run" and no odds;
+  - a "+X% retry bonus" chip on the returned-to fight;
+  - time counts only the remaining fights;
+  - the send button and confirm title read "Return to <fight>".
+- **Raid card:** a "<Difficulty> 2/3 saved" badge.
+- **Raid result:**
+  - fights won earlier are stamped "Cleared before";
+  - a "Progress saved" line names the fight to return to and the next
+    retry bonus;
+  - a "Prepare to return" button opens the Raids tab with that raid's
+    detail at that difficulty. It goes through `requestTab('raids',
+    'raid:<id>:<difficulty>')`; RaidsPanel reads the highlight in an
+    initialiser and consumes it in an effect, StrictMode-safe.
+- **Offline report:** a partial raid's stamp reads "2/3 · saved".
+
+**Sandbox:** the raid sim's checkpoint maths defaults to the new tuning.
+
+**Verified:**
+- **Headless, real `RaidManager`** (Frozen Wyrmkeep Heroic with a harsh
+  penalty so it fails):
+  - run 1 won 2 of 3 and saved {2 cleared, 1 loss, 8.5h};
+  - returns started at fight 3, took only that fight's 3.8h, paid only
+    that fight, and had retry +5 -> +10 -> +15 (capped);
+  - the 4th try cleared it and dropped the checkpoint;
+  - elapsed time summed to 16h.
+- **Migration:** a v77 save loads with `raidCheckpoints` {}.
+- **Game in headless Chrome** (web build, seeded save):
+  - the raid detail with a checkpoint showed the note, the cleared fights,
+    the retry chip and odds, the remaining time and "Return to The Frozen
+    Wyrm";
+  - a raid resolving live failed at fight 3: the result showed the
+    progress line, and "Prepare to return" opened the raid detail at Heroic
+    with the checkpoint;
+  - an offline-resolved partial showed "2/3" in the away report;
+  - no page errors.
 - `tsc --noEmit` clean.

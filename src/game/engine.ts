@@ -46,7 +46,7 @@ import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpFor
 import { canWearSkin, isClassSkinEarned, isClassSkinOwned, classSkinKey, classSkinLockReason, backfillFromRaidLog } from './classSkins';
 import { HERO_CLASSES as CLASS_DEFS } from './data/progression';
 import { EQUIPMENT_BY_ID, itemDef, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
-import { RAID_BY_ID } from './data/raids';
+import { RAID_BY_ID, RAID_ENCOUNTER_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
 import { canAttune, describeAttunement, heroSignature, rollAttunement } from './data/attunement';
 import { rerollDay, rerollsUsedToday } from './data/reroll';
@@ -3038,11 +3038,17 @@ export class GameEngine {
    * deliberate, noticed commitment, not something that should ever start
    * without the player choosing it.
    */
-  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[], armCharm = false) {
-    const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now(), armCharm);
+  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[], armCharm = false, resume = false) {
+    // Patch 0502 -- resume = return from the saved checkpoint; otherwise a
+    // fresh start, which clears any checkpoint for this raid + difficulty.
+    const { raid: active, error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now(), armCharm, resume);
     if (error) return this.say(error);
     playSound('depart');
-    this.say(`The guild marches on ${RAID_BY_ID[raidId]?.name ?? 'the raid'}. ${heroIds.length} strong.`, 'raids');
+    const raidDef = RAID_BY_ID[raidId];
+    const from = active?.startEncounter ? RAID_ENCOUNTER_BY_ID[raidDef?.encounterIds[active.startEncounter] ?? '']?.name : null;
+    this.say(from
+      ? `The guild returns to ${raidDef?.name ?? 'the raid'} to face ${from}. ${heroIds.length} strong.`
+      : `The guild marches on ${raidDef?.name ?? 'the raid'}. ${heroIds.length} strong.`, 'raids');
     void this.saveNow();
   }
 

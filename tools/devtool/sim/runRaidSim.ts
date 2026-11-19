@@ -367,8 +367,9 @@ async function main() {
     // its own; every loss on it adds retryStep (up to retryCap). Expected
     // attempts per fight, and expected fights fought to a first clear
     // with and without checkpoints (no retry bonus without).
-    const retryStep = input.retryStep ?? 5;
-    const retryCap = input.retryCap ?? 15;
+    // Patch 0502 -- defaults are the game's own raid.retryBonus* tuning.
+    const retryStep = input.retryStep ?? Tuning.get('raid.retryBonusPerLoss');
+    const retryCap = input.retryCap ?? Tuning.get('raid.retryBonusCap');
     const attemptsFor = (chance: number) => {
       let expected = 0; let notYet = 1;
       for (let k = 0; k < 200 && notYet > 1e-9; k++) {
