@@ -4575,6 +4575,9 @@ const server = http.createServer(async (req, res) => {
     const maxDays = Number.isFinite(body.maxDays) && body.maxDays > 0 ? body.maxDays : 1095;
     const sampleEveryDays = Number.isFinite(body.sampleEveryDays) && body.sampleEveryDays > 0 ? body.sampleEveryDays : 14;
     const heroCountOverride = Number.isFinite(body.heroCountOverride) ? body.heroCountOverride : undefined;
+    // Patch 0497 -- runSim.ts has supported a growing roster since patch
+    // 0217, but nothing ever passed this through.
+    const growRoster = body.growRoster === true;
 
     // Baseline (empty overrides) and modified (the proposed draft) are two
     // fully separate process spawns per preset -- see runSim.ts's own header
@@ -4582,8 +4585,8 @@ const server = http.createServer(async (req, res) => {
     const results = {};
     await Promise.all(selected.map(async (preset) => {
       const [baseline, modified] = await Promise.all([
-        runSimVariant({ preset, heroCountOverride, overrides: {}, maxDays, sampleEveryDays }),
-        runSimVariant({ preset, heroCountOverride, overrides, maxDays, sampleEveryDays }),
+        runSimVariant({ preset, heroCountOverride, overrides: {}, maxDays, sampleEveryDays, growRoster }),
+        runSimVariant({ preset, heroCountOverride, overrides, maxDays, sampleEveryDays, growRoster }),
       ]);
       results[preset.id] = { baseline, modified };
     }));

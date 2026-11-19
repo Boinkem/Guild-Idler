@@ -2675,6 +2675,7 @@ const sandboxState = {
   overrides: [], // [{ id, value }]
   maxDays: 1095,
   heroCountOverride: null, // null = use each preset's own default
+  growRoster: false, // patch 0497 -- start with 1 hero and recruit as Tavern slots open
   running: false,
   results: null, // { [presetId]: { baseline: {...}, modified: {...} } }
   runError: null,
@@ -5227,6 +5228,15 @@ function sandboxComparisonTable(preset, pair) {
     ['Final level', metricCell(b, (r) => r.finalLevel), metricCell(m, (r) => r.finalLevel)],
     ['Final gold (unspent)', metricCell(b, (r) => r.finalGold), metricCell(m, (r) => r.finalGold)],
   ];
+  // Patch 0497 -- engine v2 outputs (per-hero levels, milestones, storage cap).
+  const v2 = (r) => r?.ok && r.result?.engineVersion >= 2;
+  if (v2(b) || v2(m)) {
+    const ms = Object.keys((b?.result || m?.result).milestones || {});
+    const dayCell = (r, lvl) => (v2(r) ? (r.result.milestones[lvl]?.first ?? '—') + (r.result.milestones[lvl]?.first != null ? 'd' : '') : '—');
+    for (const lvl of ms) rows.push([`Time to level ${lvl} (first hero)`, dayCell(b, lvl), dayCell(m, lvl)]);
+    rows.push(['Heroes at the end (levels)', metricCell(b, (r) => (r.heroLevels || []).join(', ')), metricCell(m, (r) => (r.heroLevels || []).join(', '))]);
+    rows.push(['Gold lost to the storage cap', metricCell(b, (r) => r.goldLostToCap ?? 0), metricCell(m, (r) => r.goldLostToCap ?? 0)]);
+  }
 
   // Only rows where at least one variant actually completed something --
   // most facilities/upgrades stay null in a bounded run and listing every
@@ -5371,6 +5381,10 @@ function renderSandbox() {
         <label>Hero count override</label>
         <input type="number" id="heroCountInput" min="1" placeholder="Use each preset's default" value="${sandboxState.heroCountOverride ?? ''}" />
       </div>
+      <div class="field">
+        <label><input type="checkbox" id="growRosterInput" ${sandboxState.growRoster ? 'checked' : ''} /> Grow the roster</label>
+        <div class="hint">Start with 1 hero and recruit the cheapest class whenever a Tavern slot opens (ignores Hero count). Each hero levels on its own XP either way.</div>
+      </div>
     </div>
 
     <button id="runSimBtn" class="primary" ${sandboxState.selectedPresets.size === 0 ? 'disabled' : ''}>
@@ -5421,6 +5435,7 @@ function renderSandbox() {
   document.getElementById('maxDaysInput').onchange = (e) => {
     sandboxState.maxDays = Math.max(1, parseInt(e.target.value, 10) || 1095);
   };
+  document.getElementById('growRosterInput').onchange = (e) => { sandboxState.growRoster = e.target.checked; };
   document.getElementById('heroCountInput').onchange = (e) => {
     const v = parseInt(e.target.value, 10);
     sandboxState.heroCountOverride = Number.isFinite(v) && v > 0 ? v : null;
@@ -5440,6 +5455,7 @@ function renderSandbox() {
           overrides: overridesObj,
           maxDays: sandboxState.maxDays,
           heroCountOverride: sandboxState.heroCountOverride ?? undefined,
+          growRoster: sandboxState.growRoster,
           sampleEveryDays: Math.max(1, Math.round(sandboxState.maxDays / 60)),
         }),
       });

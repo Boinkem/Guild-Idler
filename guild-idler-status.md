@@ -1134,6 +1134,32 @@ raid fight).
 
 ## Backlog
 
+### Balance Sandbox redesign -- in progress (0497 engine v2 built)
+Agreed 19 Nov 2026; mocked up on the Design canvas "Balance Sandbox
+Redesign" (Economy, Time to level, Raid Tuning: one raid / every raid).
+- **1 -- built, patch 0497:** engine fixes (per-hero xp, purchases feed
+  income, storage cap, success mods, level cap) + new outputs.
+- **2 -- next:** the Economy and Time to level screens: scenario (play
+  style, heroes, level range, grow roster, buy facilities), grouped dials
+  over the raw tuning box, live -> proposed headline cards with deltas
+  (gold/hr and xp/hr for a level range, time to a level, guild fully
+  built), level-band table, overlaid charts, hero-count x milestone grid,
+  saved scenarios. New real tuning knobs `economy.questGoldMultiplier` /
+  `economy.questXpMultiplier` (default 1, read by QuestManager rewards and
+  balance.expectedRatePerHour) so a dial tested here ships as-is.
+- **3 -- later:** Raid Tuning: raid + difficulty + party builder (class,
+  level, role) with gear presets (fresh / expected / raid drops / best in
+  slot), N runs, per-encounter odds, full-clear %, where runs end, runs to
+  first clear, verdict vs an intended band (Easy 50%+ / Normal 25-50 /
+  Hard 10-25 / Brutal 2-10 / out of reach), "why" breakdown, and an
+  every-raid x difficulty grid. Must use RaidManager's real functions.
+  Found while mocking up (real data): six of eight raids have identical
+  70/60/50 encounters, Silence the Loom (1 encounter) clears ~65% on
+  Normal, and Mythic / Legendary need a party bonus of ~+28 / ~+48 for
+  even a 5% full clear.
+- Later still: contracts, story chains, raids, harvest, commissions and
+  spending (net gold/hr), injuries/downtime, pets, Renown/Prestige.
+
 ### Raid loot rework -- done (0486 DevTool, 0487 Patch A, 0488 Patch B, 0496 Patch C)
 Agreed with the owner (18 Nov 2026), split into three patches:
 - **A -- built, patch 0487:** raid gear raid-only (28 items flagged),
@@ -39590,3 +39616,58 @@ general pool 20/20/20/20/20, both sets 9 pieces in 9 distinct slots,
 bonuses at 3/6/9, no duplicate ids, 18 sets total; Kettle Helm / Sundering
 Maul / The Long Patience roll stats through `instantiate`, and a Free
 Company piece keeps its authored stats. Not played in game.
+
+### DevTool: Balance Sandbox engine v2 -- per-hero XP, purchases feed income, gold cap (patch 0497)
+```discord-update
+Dev Update | Changes
+
+- Fixed the dev tools' balance simulator, which made bigger guilds level far too fast and ignored guild upgrades
+```
+
+Step 1 of the Balance Sandbox redesign (see Backlog). An assessment of
+`tools/devtool/sim/runSim.ts` found its numbers wrong in ways that hit the
+exact questions it's meant to answer (gold/hr at a level range, time to
+level with N heroes):
+
+- **All heroes' XP went into one shared level**, so N heroes levelled N
+  times too fast, and **levels had no cap** (heroes finished at 129).
+  Old engine, Active, 4 heroes: level 55 by day 25. Engine v2: day 73.8
+  (solo: 76.4 -- more heroes only help through earlier facilities).
+- **Purchases never changed income.** Treasury / Library / Barracks /
+  upgrades were bought but every rate stayed at base.
+- **Gold storage was ignored** (real players sit at 10k until Treasury).
+- **Success was the tier's base only.**
+
+**Engine v2** (`main()` rewritten; same input, every old output key kept so
+the current page still works):
+- Each hero has its own level and xp, capped at `MAX_HERO_LEVEL`; growing
+  roster recruits start at level 1. Each hero runs its own best-gold tier
+  (same unlock rule as `balance.bestUnlockedTier`, Legendary from 25).
+- Bonuses come from the game's own code on a stand-in state rebuilt after
+  each purchase: `ModifierManager.upgradeMods` + `guildMods`, gold / xp
+  through `softCap` with the `economy.*SoftCap*` tuning, speed scaling
+  duration inside the 0.25x-1.75x clamp, success = tier base + success
+  mods + `QuestManager.rookieBonus`, clamped to `MIN/MAX_SUCCESS`.
+- `ModifierManager.goldStorage` caps the purse; overflow counted in
+  `goldLostToCap`. Items costing more than storage can hold are skipped
+  rather than blocking the list forever (`capBlocked` lists any left).
+  Hero slots from `ModifierManager.heroSlots`.
+- New outputs: `milestones` (day the first / every hero reaches 10, 20,
+  30, 40, 50, 55), `bands` (1-10 ... 50-55: days in band, guild gold/hr,
+  one hero's xp/hr, usual best difficulty; band ends at max level),
+  `heroLevels`, `goldStorage`, `goldLostToCap`, `capBlocked`, `finalMods`,
+  `engineVersion: 2`.
+- Header comment updated with what v2 models and what it still doesn't
+  (hero stats, gear, sets, pets, renown; raids, chains, harvest, etc.).
+
+**Plumbing:** `growRoster` (supported by the engine since 0217) is now
+passed by `/api/sim/run` and has a "Grow the roster" checkbox in Options.
+The results table gains "Time to level N (first hero)" rows, "Heroes at the
+end (levels)" and "Gold lost to the storage cap" when a run is engine v2.
+
+**Verified:** ran the engine directly (1 vs 4 heroes, and the old engine
+from git for comparison, numbers above) and through `/api/sim/run` with
+`progression.xpCurveExponent` 1.15 -> 1.20 and a growing roster: Active
+first hero to 55, 75.7 -> 88.0 days; AFK loses ~48k gold to the storage
+cap live. Headless Chrome on the Sandbox tab: checkbox, override, run, new
+rows render, no page errors. `node --check` on both DevTool files.

@@ -31,6 +31,26 @@
  * is small; a proper model would need per-offer RNG this expected-value
  * sim deliberately doesn't do anywhere else either.
  *
+ * Engine v2 (patch 0497) -- now modelled, all through the game's own code:
+ *  - Each hero has their own level and xp (before, every hero's xp was
+ *    poured into one shared level, so N heroes levelled N times too fast),
+ *    capped at MAX_HERO_LEVEL (before, levels ran past it, e.g. 129).
+ *    Recruits (growRoster) start at level 1.
+ *  - Facilities and upgrades bought feed back into income straight away:
+ *    ModifierManager.upgradeMods/guildMods on a stand-in state, gold/xp
+ *    through the economy soft caps, speed scaling duration inside the
+ *    game's 0.25x-1.75x clamp, success = tier base + success mods +
+ *    QuestManager.rookieBonus, clamped to MIN/MAX_SUCCESS.
+ *  - Gold storage (ModifierManager.goldStorage): income over the cap is
+ *    lost (goldLostToCap), and an item costing more than storage can hold
+ *    is skipped instead of blocking the spend list forever (capBlocked).
+ *  - Outputs milestones (day the first / every hero reaches 10..55),
+ *    per-level-band gold/hr (guild) and xp/hr (one hero) with days spent
+ *    and the usual best difficulty, heroLevels, finalMods.
+ *
+ * Still NOT modelled (flagged rather than silently approximated):
+ *  - Hero stats, gear, sets, pets, renown perks (only guild-wide mods).
+ *
  * Phase 1 scope, explicitly NOT modeled (flagged rather than silently
  * approximated):
  *  - Renown / Prestige / retirement. Renown perk tier2 curves are real gold
@@ -42,10 +62,7 @@
  *    is quest-board-only, computed the same expected-value way balance.ts's
  *    own live burst-cap math already does (success-rate-weighted average of
  *    a tier's reward range), not a literal per-quest event simulation.
- *  - Multiple heroes are modeled as `heroCount` identical, same-level
- *    earners rather than a real roster with staggered levels -- a
- *    reasonable approximation for aggregate gold/xp *rate*, not for
- *    anything roster-composition-specific.
+ *  - (Fixed in v2: heroes no longer share one level; see above.)
  *  - Hero stat allocation, gear, sets, mods of any kind. `previewSuccess`'s
  *    real per-hero success formula is not called; DIFFICULTIES' own
  *    baseSuccess is used directly, the same simplification balance.ts's
@@ -109,212 +126,174 @@ async function main() {
   // place before this line runs.
   const balance = await import('../../../src/game/data/balance');
   const progression = await import('../../../src/game/data/progression');
+  // Patch 0497 -- the game's own bonus maths, so the sim can't drift from
+  // it: facility/upgrade mods (ModifierManager), soft caps (softCap), the
+  // rookie success top-up (QuestManager.rookieBonus) and the success clamp.
+  const { ModifierManager } = await import('../../../src/game/managers/ModifierManager');
+  const { QuestManager, MIN_SUCCESS, MAX_SUCCESS } = await import('../../../src/game/managers/QuestManager');
+  const { softCap, clamp } = await import('../../../src/game/util');
+  const { Tuning } = await import('../../../src/game/data/tuning');
 
   const heroCount = input.heroCountOverride ?? input.preset.heroCount;
   const maxDays = input.maxDays;
   const sampleEveryDays = Math.max(1, input.sampleEveryDays || 5);
-
-  // --------------------------------------------------- dynamic roster growth --
-  // Patch 0217 addition: recruiting is now modeled as part of the spend
-  // policy itself, not a fixed heroCount input, when `growRoster` is set --
-  // starts at 1 hero, recruits another whenever a slot is open (Tavern's
-  // own heroSlotsPerLevel, base 1 -- Renown's Extra Banner perk excluded,
-  // same Phase 1 scope reasoning as everywhere else Renown is skipped in
-  // this file) AND gold is available, always the CHEAPEST currently-
-  // recruitable class (RECRUIT_COST) -- a rational choice under this sim's
-  // own "every hero is an identical, same-level earner" simplification
-  // (see file header), since a class's own flavor/mods aren't modeled at
-  // all here, only raw headcount multiplying the income rate. Recruiting
-  // is checked BEFORE the facility/upgrade spend loop each tick, ahead of
-  // it in priority -- more heroes compounds every future tick's income,
-  // unlike a one-time facility level, so a rational player grows the
-  // economy first.
-  //
-  // Original version of this comment claimed Tavern and recruiting
-  // "naturally alternate" without needing to reorder anything -- checked
-  // directly and that was wrong: Tavern sits 5th in GUILD_FACILITIES'
-  // declared order, behind Treasury specifically, which is priced as the
-  // single biggest sink in the game. Under the plain declared order, the
-  // sim gets stuck saving toward Treasury indefinitely and NEVER reaches
-  // Tavern, so roster growth never happens at all -- confirmed directly
-  // (a full run stalls at 1 hero even across an 800-day safety window).
-  // A realistic player pursuing growth rushes the facility that
-  // compounds every future tick's income before a single enormous
-  // one-time sink, the same reasoning that already puts recruiting ahead
-  // of ordinary facility spend above -- so growRoster mode reorders
-  // Tavern to the front of the facility priority list specifically (see
-  // spendList below), leaving every other facility/upgrade in its normal
-  // declared order.
   const growRoster = input.growRoster === true;
-  let liveHeroCount = growRoster ? 1 : heroCount;
-  // One of every hero (patch 0219) -- recruiting can't repeat a class, so
-  // this sim needs to track which classes are already "recruited" and
-  // stop offering them, same real constraint GuildManager.recruit now
-  // enforces in the live game. With exactly 9 classes total, roster growth
-  // naturally caps at 9 regardless of how many Tavern/Extra Banner slots
-  // exist beyond that -- rosterCap below reflects this.
-  const recruitedClasses = new Set<string>(['adventurer']); // HeroManager.create's starting class, see file's own preset assumption below
+  const MAX_LEVEL = progression.MAX_HERO_LEVEL;
+
+  // --------------------------------------------------------------- roster --
+  // Patch 0497: every hero has their OWN level and xp. Before, every
+  // hero's xp was poured into one shared level, so N heroes levelled N
+  // times too fast. Gold still pools into the guild purse.
+  type SimHero = { level: number; xp: number };
+  const heroes: SimHero[] = Array.from({ length: growRoster ? 1 : heroCount }, () => ({ level: 1, xp: 0 }));
+  const recruitedClasses = new Set<string>(['adventurer']); // HeroManager.create's starting class
   const allClasses = Object.keys(progression.RECRUIT_COST);
-  const cheapestUnrecruitedCost = () => {
-    const remaining = allClasses.filter((c) => !recruitedClasses.has(c));
-    return remaining.length > 0 ? Math.min(...remaining.map((c) => progression.RECRUIT_COST[c as keyof typeof progression.RECRUIT_COST])) : Infinity;
-  };
-  const cheapestUnrecruitedClass = () => {
-    const remaining = allClasses.filter((c) => !recruitedClasses.has(c));
-    return remaining.reduce((best, c) => (
-      progression.RECRUIT_COST[c as keyof typeof progression.RECRUIT_COST]
-        < progression.RECRUIT_COST[best as keyof typeof progression.RECRUIT_COST] ? c : best
-    ), remaining[0]);
-  };
-  const rosterCap = () => Math.min(
-    allClasses.length,
-    progression.GUILD_BY_ID.tavern
-      ? 1 + (levels['tavern'] ?? 0) * (progression.GUILD_BY_ID.tavern.heroSlotsPerLevel ?? 0)
-      : 1,
-  );
+  const recruitCost = (c: string) => progression.RECRUIT_COST[c as keyof typeof progression.RECRUIT_COST];
+  const cheapestUnrecruited = () => allClasses.filter((c) => !recruitedClasses.has(c))
+    .reduce<string | null>((best, c) => (best === null || recruitCost(c) < recruitCost(best) ? c : best), null);
   const recruitLog: { day: number; heroCount: number }[] = [];
 
-  // ------------------------------------------------------------ spend list --
-  // Fixed priority order: every Guild Facility to its maxLevel, then every
-  // gold-tier Upgrade to its maxLevel, in the order each is declared in its
-  // own file. A real player's priorities vary; this is a single deterministic
-  // policy so pre/post comparisons are apples-to-apples, not a claim that
-  // it's the only reasonable spend order. Renown Perks excluded -- see the
-  // file-level comment on Phase 1 scope.
-  type SpendItem = {
-    kind: 'facility' | 'upgrade';
-    id: string;
-    label: string;
-    maxLevel: number;
-    costAt: (level: number) => number;
-  };
+  // ---------------------------------------------------------- spend list --
+  type SpendItem = { kind: 'facility' | 'upgrade'; id: string; label: string; maxLevel: number; costAt: (level: number) => number };
   const orderedFacilities = growRoster
     ? [...progression.GUILD_FACILITIES].sort((a, b) => (a.id === 'tavern' ? -1 : b.id === 'tavern' ? 1 : 0))
     : progression.GUILD_FACILITIES;
   const spendList: SpendItem[] = [
-    ...orderedFacilities.map((f): SpendItem => ({
-      kind: 'facility', id: f.id, label: f.name, maxLevel: f.maxLevel,
-      costAt: (level: number) => progression.guildCost(f, level),
-    })),
-    ...progression.UPGRADES.map((u): SpendItem => ({
-      kind: 'upgrade', id: u.id, label: u.name, maxLevel: u.maxLevel,
-      costAt: (level: number) => progression.upgradeCost(u, level),
-    })),
+    ...orderedFacilities.map((f): SpendItem => ({ kind: 'facility', id: f.id, label: f.name, maxLevel: f.maxLevel, costAt: (level: number) => progression.guildCost(f, level) })),
+    ...progression.UPGRADES.map((u): SpendItem => ({ kind: 'upgrade', id: u.id, label: u.name, maxLevel: u.maxLevel, costAt: (level: number) => progression.upgradeCost(u, level) })),
   ];
   const levels: Record<string, number> = {};
-  for (const item of spendList) levels[item.id] = 0;
   const completionDay: Record<string, number | null> = {};
-  for (const item of spendList) completionDay[item.id] = null;
+  for (const item of spendList) { levels[item.id] = 0; completionDay[item.id] = null; }
 
-  // ------------------------------------------------------------- sim loop --
+  // A stand-in GameState holding only what ModifierManager reads for
+  // guild-wide bonuses and gold storage. Rebuilt from `levels` on each
+  // purchase, so every facility/upgrade bought feeds straight into income
+  // (patch 0497 -- before, purchases never changed any rate).
+  const guildState = () => {
+    const guild: Record<string, number> = {};
+    const upgrades: Record<string, number> = {};
+    for (const item of spendList) if (levels[item.id] > 0) (item.kind === 'facility' ? guild : upgrades)[item.id] = levels[item.id];
+    return { guild, upgrades, renownPerks: {} } as unknown as Parameters<typeof ModifierManager.goldStorage>[0];
+  };
+  let gState = guildState();
+  let mods = { ...ModifierManager.upgradeMods(gState), ...{} } as Record<string, number>;
+  const refreshMods = () => {
+    gState = guildState();
+    const u = ModifierManager.upgradeMods(gState) as Record<string, number>;
+    const g = ModifierManager.guildMods(gState) as Record<string, number>;
+    mods = {};
+    for (const src of [u, g]) for (const [k, v] of Object.entries(src)) mods[k] = (mods[k] ?? 0) + (v ?? 0);
+  };
+  refreshMods();
+  const storage = () => ModifierManager.goldStorage(gState);
+  const rosterCap = () => Math.min(allClasses.length, ModifierManager.heroSlots(gState));
+
+  // ------------------------------------------------------------ income --
+  /** Expected gold/xp per hour for one hero at `level`, with the guild's
+   *  current bonuses applied the way QuestManager does: success = tier
+   *  base + success mods + rookie top-up, clamped; duration scaled by
+   *  speed (0.25x-1.75x); gold/xp through the economy soft caps. Hero
+   *  stats, gear, pets and renown are still not modelled. */
+  const rateFor = (tierId: string, level: number) => {
+    const cfg = DIFFICULTIES[tierId as keyof typeof DIFFICULTIES];
+    const success = clamp(cfg.baseSuccess + (mods.success ?? 0) + QuestManager.rookieBonus(level), MIN_SUCCESS, MAX_SUCCESS);
+    const factor = clamp(1 - (mods.speed ?? 0) / 100, 0.25, 1.75);
+    const tuned: DifficultyConfig = { ...cfg, baseSuccess: success, minDuration: cfg.minDuration * factor, maxDuration: cfg.maxDuration * factor };
+    const goldMult = 1 + softCap(mods.gold ?? 0, Tuning.get('economy.goldSoftCapThreshold'), Tuning.get('economy.goldSoftCapDecay')) / 100;
+    const xpMult = 1 + softCap(mods.xp ?? 0, Tuning.get('economy.xpSoftCapThreshold'), Tuning.get('economy.xpSoftCapDecay')) / 100;
+    return {
+      gold: balance.expectedRatePerHour(tuned, 'gold', level) * goldMult,
+      xp: balance.expectedRatePerHour(tuned, 'xp', level) * xpMult,
+      avgDurationMinutes: (tuned.minDuration + tuned.maxDuration) / 2 / MINUTE,
+    };
+  };
+  /** Same unlock rule as balance.bestUnlockedTier (level + 2 >= the
+   *  tier's referenceLevel), Legendary from level 25 as before. Picks the
+   *  best gold/hr of those -- the "Active" play style. */
+  const pickTier = (level: number) => {
+    const eligible = DIFFICULTY_ORDER.filter((d) => (d === 'easy' || level + 2 >= DIFFICULTIES[d].referenceLevel) && (d !== 'legendary' || level >= 25));
+    return eligible.reduce((best, id) => (rateFor(id, level).gold > rateFor(best, level).gold ? id : best), eligible[0]);
+  };
+
+  // -------------------------------------------------------- bookkeeping --
+  const MILESTONES = [10, 20, 30, 40, 50, 55].filter((l) => l <= MAX_LEVEL);
+  const milestones: Record<number, { first: number | null; all: number | null }> = {};
+  for (const m of MILESTONES) milestones[m] = { first: null, all: null };
+  const BANDS: [number, number][] = [[1, 10], [10, 20], [20, 30], [30, 40], [40, 50], [50, MAX_LEVEL]];
+  const bandAcc = BANDS.map(() => ({ hours: 0, gold: 0, xp: 0, heroHours: 0, tiers: {} as Record<string, number> }));
+  // Upper bound exclusive: a hero at max level has left the last band
+  // (time spent sitting at max level isn't time "in" 50-55).
+  const bandOf = (level: number) => BANDS.findIndex(([lo, hi]) => level >= lo && level < hi);
+
   let day = 0;
-  let level = 1;
-  let xp = 0;
   let gold = 0;
+  let goldLostToCap = 0;
   let hitSafetyCap = false;
-
   const checkInHours = input.preset.checkInMinutes / 60;
-  const levelCurve: { day: number; level: number }[] = [];
-  // Gold curve tracks the same (unspent) balance finalGold reports, sampled
-  // at the same cadence as levelCurve -- a single sample point already
-  // existed for level, this just adds the equivalent for gold so "gold gain
-  // over time" can be charted the same way "time to level" already can.
+  const levelCurve: { day: number; level: number; avgLevel: number }[] = [];
   const goldCurve: { day: number; gold: number }[] = [];
-  // Every individual facility/upgrade purchase (one entry per level bought,
-  // not just the day an item finally maxes out -- completionDay/
-  // facilityCompletionDays above only capture the latter). Lets the Sandbox
-  // tab chart *cumulative purchases over time*, not just per-item finish
-  // lines.
   const purchaseLog: { day: number; id: string; kind: 'facility' | 'upgrade'; level: number }[] = [];
   const tierFirstSeen: Record<string, { day: number; level: number }> = {};
   let lastSampleDay = -Infinity;
 
+  const topLevel = () => Math.max(...heroes.map((h) => h.level));
   const allSpent = () => spendList.every((item) => levels[item.id] >= item.maxLevel);
-  // Completion for a roster-growth run targets full facility/upgrade
-  // spend AND a maxed-out roster (every Tavern-granted slot filled) --
-  // hero level is tracked and reported but deliberately not part of this
-  // run's own completion condition, since the actual ask was "how long
-  // to buy everything," not "how long to hit 55" (already answered
-  // separately, see the previous patch's own simulation).
-  const rosterMaxed = () => !growRoster || liveHeroCount >= rosterCap();
+  const rosterMaxed = () => !growRoster || heroes.length >= rosterCap();
+  const allMaxLevel = () => heroes.every((h) => h.level >= MAX_LEVEL);
 
   while (day < maxDays) {
-    if (allSpent() && rosterMaxed()) break; // completion condition
+    if (allSpent() && rosterMaxed() && allMaxLevel()) break;
 
-    // Every difficulty is available at any level now (patch 0214 --
-    // reqLevel rolls near hero.level regardless of tier), so "which tier"
-    // is a pure pick-the-best-rate optimization now, not an unlock
-    // question the way bestUnlockedTier's old reqLevel-gated logic
-    // modeled. Picks whichever tier's expectedRatePerHour (gold) is
-    // highest AT THE HERO'S CURRENT LEVEL -- both the tier choice and the
-    // rate itself now track live `level`, neither pinned to a fixed
-    // referenceLevel the way this loop read before patch 0217's fix (see
-    // expectedRatePerHour's own comment for why that was wrong here).
-    // Legendary excluded below level 25, matching quest_reqlevel.
-    // legendaryLevelFloor -- this sim doesn't model the Enchanted Seal
-    // unlock at all (Phase 1 scope, see file header), so treating
-    // Legendary as unavailable below the level floor is the closer
-    // approximation of the two.
-    const eligibleTiers = DIFFICULTY_ORDER.filter((d) => d !== 'legendary' || level >= 25);
-    const tier = eligibleTiers.reduce((best, id) => (
-      balance.expectedRatePerHour(DIFFICULTIES[id], 'gold', level)
-        > balance.expectedRatePerHour(DIFFICULTIES[best], 'gold', level) ? id : best
-    ), eligibleTiers[0]);
-    if (!tierFirstSeen[tier]) tierFirstSeen[tier] = { day, level };
-    const cfg: DifficultyConfig = DIFFICULTIES[tier];
+    // Income: each hero runs its own best tier at its own level.
+    let tickGold = 0;
+    const band = bandOf(heroes[0].level);
+    for (const h of heroes) {
+      const tier = pickTier(h.level);
+      if (!tierFirstSeen[tier]) tierFirstSeen[tier] = { day, level: h.level };
+      const r = rateFor(tier, h.level);
+      const uptime = input.preset.checkInMinutes <= r.avgDurationMinutes ? 1 : Math.min(1, r.avgDurationMinutes / input.preset.checkInMinutes);
+      const g = r.gold * uptime * checkInHours;
+      const x = r.xp * uptime * checkInHours;
+      tickGold += g;
+      if (h === heroes[0] && band >= 0) {
+        bandAcc[band].xp += x;
+        bandAcc[band].tiers[tier] = (bandAcc[band].tiers[tier] ?? 0) + 1;
+      }
+      if (h.level < MAX_LEVEL) {
+        h.xp += x;
+        while (h.level < MAX_LEVEL && h.xp >= progression.xpForLevel(h.level)) {
+          h.xp -= progression.xpForLevel(h.level);
+          h.level += 1;
+        }
+      }
+    }
+    if (band >= 0) { bandAcc[band].hours += checkInHours; bandAcc[band].gold += tickGold; }
 
-    const avgDurationMinutes = (cfg.minDuration + cfg.maxDuration) / 2 / MINUTE;
-    // Idle-time approximation: if the check-in interval is longer than the
-    // quest itself typically takes, the hero sits idle for the remainder
-    // until the next check-in (Casual/AFK's whole reason for earning less
-    // per day than Active at the same level) -- see file-level comment,
-    // this is a deliberate expected-value simplification, not literal
-    // per-quest event scheduling.
-    const uptimeFactor = input.preset.checkInMinutes <= avgDurationMinutes
-      ? 1
-      : Math.min(1, avgDurationMinutes / input.preset.checkInMinutes);
+    // Gold storage cap (patch 0497): anything over storage is lost, as in game.
+    const cap = storage();
+    const room = Math.max(0, cap - gold);
+    if (tickGold > room) goldLostToCap += tickGold - room;
+    gold = Math.min(cap, gold + tickGold);
 
-    const goldPerHour = balance.expectedRatePerHour(cfg, 'gold', level);
-    const xpPerHour = balance.expectedRatePerHour(cfg, 'xp', level);
-
-    const goldGain = goldPerHour * liveHeroCount * uptimeFactor * checkInHours;
-    const xpGain = xpPerHour * liveHeroCount * uptimeFactor * checkInHours;
-
-    gold += goldGain;
-    xp += xpGain;
-    while (xp >= progression.xpForLevel(level)) {
-      xp -= progression.xpForLevel(level);
-      level += 1;
+    if (growRoster && heroes.length < rosterCap()) {
+      const cls = cheapestUnrecruited();
+      if (cls && gold >= recruitCost(cls)) {
+        gold -= recruitCost(cls);
+        recruitedClasses.add(cls);
+        heroes.push({ level: 1, xp: 0 });
+        recruitLog.push({ day: Math.round(day), heroCount: heroes.length });
+      }
     }
 
-    // Recruiting -- highest priority, checked before the facility/upgrade
-    // spend loop below (see the file-level comment on why: more heroes
-    // compounds every future tick's income). Only fires when growRoster
-    // is on, a slot is actually open, and gold covers the cheapest
-    // currently-recruitable (not-yet-recruited) class. "One of every
-    // hero" (patch 0219) means the cheapest option changes over time as
-    // classes get used up -- recomputed fresh each tick, not cached.
-    if (growRoster && liveHeroCount < rosterCap() && gold >= cheapestUnrecruitedCost()) {
-      const cls = cheapestUnrecruitedClass();
-      gold -= progression.RECRUIT_COST[cls as keyof typeof progression.RECRUIT_COST];
-      recruitedClasses.add(cls);
-      liveHeroCount += 1;
-      recruitLog.push({ day: Math.round(day), heroCount: liveHeroCount });
-    }
-
-    // Immediate spend, strictly in priority order: gold always goes toward
-    // whichever incomplete item is highest-priority first. Deliberately NOT
-    // "buy anything currently affordable, anywhere in the list" -- that
-    // greedy variant was tried first and let cheap, low-priority items
-    // (a handful of gold each) perpetually intercept every small income
-    // trickle before it could ever bank up toward an expensive early-
-    // priority item, so high-cost facilities never finished even after the
-    // full multi-year safety window. This sequential version instead saves
-    // gold entirely toward the current priority target and only advances to
-    // the next item once it's fully maxed -- confirmed by rerunning after
-    // the fix that core facilities now complete in a realistic timeframe.
-    while (true) {
-      const next = spendList.find((item) => levels[item.id] < item.maxLevel);
+    // Spend in list order. An item that costs more than storage can ever
+    // hold right now is skipped (it would block everything behind it
+    // forever) -- Treasury, which raises storage, is still bought in turn.
+    let bought = true;
+    while (bought) {
+      bought = false;
+      const capNow = storage();
+      const next = spendList.find((item) => levels[item.id] < item.maxLevel && item.costAt(levels[item.id]) <= capNow);
       if (!next) break;
       const cost = next.costAt(levels[next.id]);
       if (gold < cost) break;
@@ -322,25 +301,23 @@ async function main() {
       levels[next.id] += 1;
       purchaseLog.push({ day: Math.round(day), id: next.id, kind: next.kind, level: levels[next.id] });
       if (levels[next.id] >= next.maxLevel) completionDay[next.id] = Math.round(day);
+      refreshMods();
+      bought = true;
     }
 
     day += checkInHours / 24;
+    for (const m of MILESTONES) {
+      if (milestones[m].first === null && heroes.some((h) => h.level >= m)) milestones[m].first = Math.round(day * 10) / 10;
+      if (milestones[m].all === null && (!growRoster || heroes.length >= rosterCap()) && heroes.every((h) => h.level >= m)) milestones[m].all = Math.round(day * 10) / 10;
+    }
     if (day - lastSampleDay >= sampleEveryDays) {
-      levelCurve.push({ day: Math.round(day), level });
+      levelCurve.push({ day: Math.round(day), level: topLevel(), avgLevel: Math.round((heroes.reduce((s, h) => s + h.level, 0) / heroes.length) * 10) / 10 });
       goldCurve.push({ day: Math.round(day), gold: Math.round(gold) });
       lastSampleDay = day;
     }
   }
-
   if (day >= maxDays) hitSafetyCap = true;
 
-  // ---------------------------------------------------- tier rate summary --
-  // Snapshot of each tier's OWN reference-level rate (a fixed, level-
-  // independent baseline for comparing tiers against each other), not a
-  // tracked hero's live rate -- the sim loop above already reports the
-  // real, level-tracked income via levelCurve/goldPerHour. See
-  // expectedRatePerHour's own comment for the referenceLevel-vs-atLevel
-  // distinction.
   const tierRates: Record<string, unknown> = {};
   for (const id of DIFFICULTY_ORDER) {
     const cfg = DIFFICULTIES[id];
@@ -351,30 +328,48 @@ async function main() {
       xpPerHour: Math.round(balance.expectedRatePerHour(cfg, 'xp') * 100) / 100,
     };
   }
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const bands = BANDS.map(([lo, hi], i) => {
+    const a = bandAcc[i];
+    const topTier = Object.entries(a.tiers).sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+    return {
+      band: `${lo}-${hi}`,
+      days: a.hours ? round1(a.hours / 24) : null,
+      // Whole-guild gold per hour while the first hero is in this band;
+      // xp per hour is one hero's.
+      goldPerHour: a.hours ? Math.round(a.gold / a.hours) : null,
+      xpPerHourPerHero: a.hours ? Math.round(a.xp / a.hours) : null,
+      bestTier: topTier,
+    };
+  });
+  const capBlocked = spendList.filter((i) => levels[i.id] < i.maxLevel && i.costAt(levels[i.id]) > storage()).map((i) => i.id);
 
   const result = {
+    engineVersion: 2,
     preset: input.preset.id,
-    heroCount: liveHeroCount,
+    heroCount: heroes.length,
     growRoster,
     recruitLog,
     days: Math.round(day),
     hitSafetyCap,
     completed: !hitSafetyCap,
-    finalLevel: level,
+    finalLevel: topLevel(),
+    heroLevels: heroes.map((h) => h.level),
     finalGold: Math.round(gold),
+    goldStorage: storage(),
+    goldLostToCap: Math.round(goldLostToCap),
+    capBlocked,
+    milestones,
+    bands,
     levelCurve,
     goldCurve,
     purchaseLog,
-    facilityCompletionDays: Object.fromEntries(
-      spendList.filter((i) => i.kind === 'facility').map((i) => [i.id, completionDay[i.id]]),
-    ),
-    upgradeCompletionDays: Object.fromEntries(
-      spendList.filter((i) => i.kind === 'upgrade').map((i) => [i.id, completionDay[i.id]]),
-    ),
+    facilityCompletionDays: Object.fromEntries(spendList.filter((i) => i.kind === 'facility').map((i) => [i.id, completionDay[i.id]])),
+    upgradeCompletionDays: Object.fromEntries(spendList.filter((i) => i.kind === 'upgrade').map((i) => [i.id, completionDay[i.id]])),
     allSpentDay: allSpent() ? Math.round(day) : null,
+    finalMods: mods,
     tierRates,
   };
-
   process.stdout.write(JSON.stringify(result));
 }
 
