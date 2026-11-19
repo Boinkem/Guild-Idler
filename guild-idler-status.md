@@ -39377,3 +39377,61 @@ dummy copies of the real `release-demo/` listing (1.6.0 ... 1.8.5, with
 blockmaps, `latest.yml`, `builder-debug.yml`, `win-unpacked/`) plus a
 `release/` with 1.8.9 / 1.8.10 / 1.9.0: kept 1.8.5 + 1.8.4 and 1.9.0 +
 1.8.10, deleted the rest, left the other files alone.
+
+### DevTool: Patches page rebuilt as Auto / Manual (patch 0492)
+```discord-update
+Dev Update | Changes
+
+- Changed the dev tools' patching page into two tabs, Auto and Manual, with settings and the how-to guide tucked away behind buttons
+```
+
+Direct request, mocked up first on a Design canvas ("DevTool Patches
+Redesign", including a coverage map of where every old control went). The
+page was three panes (Patch flow 1-5, Build & Ship 6-11, Ship it) with long
+notes under every button. Now (`tools/devtool/public/app.js`, `style.css`,
+`server.mjs`):
+
+- **Status bar** on top: dev server Start/Stop, branch → upstream, last
+  commit, Clean / "Uncommitted changes ▾" (opens the list), Tidy patch
+  files, Refresh. Guide and Settings buttons beside the title.
+- **Auto tab** (`#cycleFlow`, same ids as Ship it): patch to apply
+  (pre-selects the **oldest** patch in the root, lowest number first, so a
+  run never skips one a newer patch needs; any can be picked), commit
+  message, version bump as buttons (Patch/Minor/Major/Skip, backed by the
+  same hidden `#shipBumpSelect`), Discord + "announce every patch after" +
+  Preview. Actions: **Patch** (new: preflight → apply → build → commit →
+  bump → push → Discord if ticked, no Steam) and **Patch & Upload** with a
+  Game / Demo / Both selector (= the old Ship game/demo/both). Patch set to
+  None turns the button into **Release** (= the old Release only buttons).
+  "Waiting in the root folder" list on the side. The run checklist is
+  grouped into Patch / Upload · game / Upload · demo / Announce columns
+  with a progress bar; output, Retry, Revert patch, Dismiss unchanged.
+- **Manual tab**: the ten steps in a numbered list (Select, Check, Apply,
+  Build, Commit, Version, Push, Package, Steam upload, Discord post), one
+  step on screen at a time with Back / Next and a ? that opens the Guide
+  at that step's topic. Build sits before Commit and Version after it
+  (`npm version` makes its own commit + tag and refuses a dirty tree), the
+  same order Auto uses. All steps stay mounted (hidden), so every existing
+  handler still finds its element; a step ticks once its last result this
+  session succeeded (a MutationObserver on the pane). Set exact version,
+  Simulate in Sandbox and Clean up old installers live in their steps.
+- **Settings drawer**: every Steam field (username, ContentBuilder, game
+  and demo App/Depot IDs, branches, keep installers, Save) and the Discord
+  webhook + status. **Guide** modal: Auto or Manual?, The 10 steps,
+  Versions and tags, Steam publishing, Discord updates, When something
+  fails -- the old on-page notes, reorganised, plus the app.asar lock fix.
+- **Removed**: "Copy latest build to Google Drive" (no longer used) --
+  button and its page handler. The server route
+  (`/api/patches/copy-build`) is left in place, unused.
+- **Server**: `parseShipOptions` accepts `mode: 'patch'` (needs a patch
+  file; `targets: []`, so no package/scripts/upload steps), and pre-flight
+  says "No Steam upload (Patch)" instead of listing branches.
+
+**Verified:** `node --check` on both DevTool files; every
+`getElementById` in the Patches wiring resolves to a rendered id (scripted
+cross-check). Headless Chrome: Auto (oldest of two dummy patches
+pre-selected; None swaps to Release and disables Patch), Manual step 8 →
+Next → step 9, a step's ? opens the Guide on Steam publishing, Settings
+drawer -- no page errors. `POST /api/ship/start {mode:'patch'}` builds
+preflight/apply/build/commit/bump/push only, and is refused without a
+patch file.

@@ -3856,7 +3856,7 @@ async function runShipStep(job, step) {
       if (problems.length) return fail(problems.join('\n\n'));
       const shipping = o.mode === 'release' ? ` Releasing v${await readPackageVersion()} at ${gs.lastCommit}.` : '';
       const liveOn = o.targets.map((t) => `${t === 'demo' ? 'demo' : 'game'} -> ${setLiveBranch(steamTargetIds(cfg, t).branch) || 'upload only'}`).join(', ');
-      return { ok: true, stdout: `Branch ${gs.branch} -> ${gs.upstream}. Set live on: ${liveOn}.${shipping} All checks passed.`, stderr: '' };
+      return { ok: true, stdout: `Branch ${gs.branch} -> ${gs.upstream}. ${o.targets.length ? `Set live on: ${liveOn}.` : 'No Steam upload (Patch).'}${shipping} All checks passed.`, stderr: '' };
     }
     case 'apply': {
       const resolved = await resolvePatchPath(o.patch);
@@ -3959,6 +3959,19 @@ function shipJobView() {
 }
 
 function parseShipOptions(body) {
+  // Patch 0492 -- Patch (Auto tab): apply -> build -> commit -> bump ->
+  // push (-> Discord), no package or upload. Needs a patch to apply.
+  if (body.mode === 'patch') {
+    const patch = typeof body.patch === 'string' && body.patch.trim() ? body.patch.trim() : null;
+    if (!patch) return { error: 'Patch needs a patch file to apply.' };
+    const bump = BUMP_LEVELS.includes(body.bump) ? body.bump : null;
+    if (!bump) return { error: 'bump must be patch, minor, major, or none.' };
+    const commitMessage = typeof body.commitMessage === 'string' && body.commitMessage.trim()
+      ? body.commitMessage.trim()
+      : `Apply ${patch.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')}`;
+    const announceFrom = typeof body.announceFrom === 'string' && /^\d{1,5}$/.test(body.announceFrom.trim()) ? body.announceFrom.trim() : null;
+    return { opts: { mode: 'patch', target: 'none', targets: [], bump, patch, commitMessage, discord: !!body.discord, announceFrom } };
+  }
   const target = Object.keys(SHIP_TARGETS).includes(body.target) ? body.target : null;
   if (!target) return { error: 'target must be game, demo, or both.' };
   // Patch 0450 -- Release: package + scripts + upload (+ Discord) only.

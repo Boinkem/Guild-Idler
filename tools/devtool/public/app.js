@@ -2649,6 +2649,12 @@ const patchState = {
   // Patch 0448 -- third pane, the one-click "Ship it" cycle. Takes
   // priority over shipView when true.
   cycleView: false,
+  // Patch 0492 -- the Patches page is now two tabs (Auto / Manual), with
+  // Manual showing one numbered step at a time, plus a Settings drawer
+  // (Steam + Discord) and a Guide. shipView/cycleView above are no longer
+  // read; kept so nothing that still sets them breaks.
+  tab: 'auto', manualStep: 1, settingsOpen: false, guideTopic: null,
+  shipTarget: 'both', shipBump: 'patch',
   ship: { job: null, shipState: { lastAnnouncedPatch: null } },
   shipPollTimer: null,
   // Highest patch number the current Discord draft covers -- recorded as
@@ -3253,80 +3259,110 @@ function shipCommitMessageFor(name) {
   return name ? 'Apply ' + name.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ') : '';
 }
 
+/** Patch 0492 -- the patch Auto pre-selects: the OLDEST one waiting in the
+ *  project root (lowest patch number, then oldest file), so a run can't
+ *  skip a patch a newer one depends on. Any other can be picked. */
+function defaultShipPatch() {
+  if (patchState.selected && !patchState.applied) return patchState.selected;
+  const root = patchState.files.filter((f) => f.dir === '.');
+  if (!root.length) return '';
+  const num = (f) => { const m = /^(\d+)/.exec(f.name); return m ? Number(m[1]) : Infinity; };
+  return [...root].sort((x, y) => num(x) - num(y) || x.mtime - y.mtime)[0].name;
+}
+
 function renderShipCycle() {
   if (patchState.ship.unavailable) {
-    return `<div class="devtool-note" style="margin-top:18px;">Ship it needs the DevTool server restarted after
-      applying patch 0448 -- close the DevTool and start it again (a page refresh isn't enough).</div>`;
+    return `<div class="devtool-note">Auto needs the DevTool server restarted after applying patch 0448 --
+      close the DevTool and start it again (a page refresh isn't enough).</div>`;
   }
   const busy = !!patchState.ship.job?.running;
-  const defaultPatch = patchState.selected && !patchState.applied ? patchState.selected : '';
+  const dis = busy ? 'disabled' : '';
+  const defaultPatch = defaultShipPatch();
   const branch = patchState.steam?.branch || 'internal';
+  const demoBranch = patchState.steam?.demoBranch || 'none';
   const last = patchState.ship.shipState?.lastAnnouncedPatch || '';
+  const tgt = patchState.shipTarget;
+  const bumpLabel = (l) => (l === 'none' ? 'Skip' : `${l[0].toUpperCase() + l.slice(1)} · ${escapeHtml(nextVersion(patchState.version, l))}`);
+  const liveName = (b) => (b === 'none' || b === 'default' ? 'upload only' : b);
   return `
-    <div class="section-heading" style="margin-top:18px;">Ship it</div>
-    <p class="tiny muted">
-      Runs the whole cycle in one go, stopping at the first step that fails:
-      <b>pre-flight → apply → build → commit → bump version → push (with tags) → package →
-      generate build scripts → upload to Steam → Discord</b>. Build runs before commit so a broken
-      patch never gets committed or pushed. Already applied patches by hand? Leave the patch on
-      <i>None</i> and it ships whatever's committed. Takes a while -- packaging and uploading are
-      the slow parts. You can leave this page and come back; closing the DevTool stops the run.
-    </p>
+    <div class="pt-auto">
+      <section class="pt-card">
+        <h3 class="pt-h">What goes out</h3>
+        <div class="pt-grid2">
+          <label class="pt-field">Patch to apply first
+            <select id="shipPatchSelect" ${dis}>
+              <option value="">None -- release what's already pushed</option>
+              ${patchState.files.map((f) => `<option value="${escapeHtml(f.name)}" ${f.name === defaultPatch ? 'selected' : ''}>${escapeHtml(f.name)}${f.dir !== '.' ? ` (${escapeHtml(f.dir)})` : ''}</option>`).join('')}
+            </select>
+          </label>
+          <label class="pt-field" id="shipCommitRow" ${defaultPatch ? '' : 'hidden'}>Commit message
+            <input type="text" id="shipCommitMsg" value="${escapeHtml(shipCommitMessageFor(defaultPatch))}" ${dis} />
+          </label>
+        </div>
 
-    <div class="ship-form">
-      <label>Patch to apply first
-        <select id="shipPatchSelect" ${busy ? 'disabled' : ''}>
-          <option value="">None -- ship what's already committed</option>
-          ${patchState.files.map((f) => `<option value="${escapeHtml(f.name)}" ${f.name === defaultPatch ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('')}
-        </select>
-      </label>
-      <label id="shipCommitRow" ${defaultPatch ? '' : 'hidden'}>Commit message
-        <input type="text" id="shipCommitMsg" value="${escapeHtml(shipCommitMessageFor(defaultPatch))}" ${busy ? 'disabled' : ''} />
-      </label>
-      <label>Version bump
-        <select id="shipBumpSelect" ${busy ? 'disabled' : ''}>
-          ${['patch', 'minor', 'major', 'none'].map((l) => `<option value="${l}">${l === 'none' ? `Skip (stay on ${escapeHtml(patchState.version || '?')})` : `${l[0].toUpperCase() + l.slice(1)}: ${escapeHtml(patchState.version || '?')} → ${escapeHtml(nextVersion(patchState.version, l))}`}</option>`).join('')}
-        </select>
-      </label>
-      <label class="ship-check">
-        <input type="checkbox" id="shipDiscordCheck" ${patchState.discordConfigured ? 'checked' : 'disabled'} ${busy ? 'disabled' : ''} />
-        Post a Discord update at the end ${patchState.discordConfigured ? '' : '<span class="muted">(save a webhook in step 11 first)</span>'}
-      </label>
-      <label id="shipAnnounceRow">Announce every patch after
-        <span class="row" style="gap:6px;">
-          <input type="text" id="shipAnnounceFrom" value="${escapeHtml(last)}" placeholder="${last ? '' : 'e.g. 0446'}" style="width:90px;" ${busy ? 'disabled' : ''} />
-          <button id="shipNotesPreviewBtn" type="button">Preview update</button>
-        </span>
-        <span class="tiny muted">${last ? `Patch ${escapeHtml(last)} was the last one announced, so this covers everything since. ` : 'Nothing announced through the DevTool yet -- leave blank to post just the newest patch. '}Multiple patches merge into one post, grouped Added / Changed / Fixed.</span>
-      </label>
-      <div id="shipNotesPreview"></div>
-      <p class="tiny ${branch === 'default' ? 'bad' : 'muted'}" style="margin:2px 0 0;">
-        Sets live on: game <b>${escapeHtml(branch)}</b>, demo <b>${escapeHtml(patchState.steam?.demoBranch || 'none')}</b>.
-        ${branch === 'default' || branch === 'none' ? ' Game uploads only -- set it live yourself in Steamworks (steamcmd can\'t set default live).' : ''}
-        ${branch === 'internal' ? ' Players won\'t see the game build until you promote it on Steamworks, but the Discord post goes out now.' : ''}
-        Change them in Build &amp; Ship, step 7.5.
-      </p>
-    </div>
+        <div class="pt-field" id="shipBumpRow" ${defaultPatch ? '' : 'hidden'}>Version bump
+          <select id="shipBumpSelect" hidden>
+            ${['patch', 'minor', 'major', 'none'].map((l) => `<option value="${l}" ${l === patchState.shipBump ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <div class="pt-seg" role="group" aria-label="Version bump">
+            ${['patch', 'minor', 'major', 'none'].map((l) => `<button type="button" class="pt-segbtn ${l === patchState.shipBump ? 'on' : ''}" data-ship-bump="${l}" aria-pressed="${l === patchState.shipBump}" ${dis}>${l === 'patch' ? `Patch · ${escapeHtml(patchState.version || '?')} → ${escapeHtml(nextVersion(patchState.version, 'patch'))}` : bumpLabel(l)}</button>`).join('')}
+          </div>
+        </div>
 
-    <div class="row" style="gap:6px; margin-top:10px;">
-      <button class="primary" data-ship-target="game" ${busy ? 'disabled' : ''}><i class="ph ph-rocket-launch"></i> Ship game</button>
-      <button class="primary" data-ship-target="demo" ${busy ? 'disabled' : ''}><i class="ph ph-rocket-launch"></i> Ship demo</button>
-      <button class="primary" data-ship-target="both" ${busy ? 'disabled' : ''}><i class="ph ph-rocket-launch"></i> Ship both</button>
-    </div>
-    <p class="tiny muted" style="margin-top:4px;">Ship both applies, builds, commits, bumps and pushes once, then packages and uploads the game and the demo.</p>
+        <div class="pt-subcard">
+          <label class="pt-check">
+            <input type="checkbox" id="shipDiscordCheck" ${patchState.discordConfigured ? 'checked' : 'disabled'} ${dis} />
+            Post a Discord update at the end ${patchState.discordConfigured ? '' : '<span class="muted">(save a webhook in Settings first)</span>'}
+          </label>
+          <div id="shipAnnounceRow" class="pt-row pt-indent">
+            <label class="pt-inline">Announce every patch after
+              <input type="text" id="shipAnnounceFrom" value="${escapeHtml(last)}" placeholder="${last ? '' : 'e.g. 0446'}" style="width:80px;" ${dis} />
+            </label>
+            <button id="shipNotesPreviewBtn" type="button">Preview update</button>
+            <span class="tiny muted">${last ? `Patch ${escapeHtml(last)} was the last one announced.` : 'Nothing announced yet -- blank posts just the newest patch.'} Several patches merge into one post.</span>
+          </div>
+          <div id="shipNotesPreview"></div>
+        </div>
 
-    <div class="section-heading" style="margin-top:16px;">Release only</div>
-    <p class="tiny muted">
-      Already applied, committed and pushed (Patch flow steps 1-5)? These do just the Steam half:
-      <b>pre-flight → package (includes the build) → generate build scripts → upload → Discord</b>.
-      Ships v${escapeHtml(patchState.version || '?')} exactly as it is -- no apply, commit, version bump or push.
-      Pre-flight stops if anything is uncommitted or not pushed yet, so what goes to Steam always matches GitHub.
-      Uses the Discord settings above.
-    </p>
-    <div class="row" style="gap:6px; margin-top:6px;">
-      <button class="primary" data-release-target="game" ${busy ? 'disabled' : ''}><i class="ph ph-cloud-arrow-up"></i> Release game</button>
-      <button class="primary" data-release-target="demo" ${busy ? 'disabled' : ''}><i class="ph ph-cloud-arrow-up"></i> Release demo</button>
-      <button class="primary" data-release-target="both" ${busy ? 'disabled' : ''}><i class="ph ph-cloud-arrow-up"></i> Release both</button>
+        <div class="pt-divider"></div>
+
+        <div class="pt-grid2">
+          <div class="pt-action">
+            <button type="button" id="shipPatchOnlyBtn" class="pt-big" ${defaultPatch ? '' : 'disabled'} ${dis}><i class="ph ph-git-branch"></i> Patch</button>
+            <span class="tiny muted">Check → Apply → Build → Commit → Version → Push → Discord (if ticked). Nothing goes to Steam.</span>
+          </div>
+          <div class="pt-action pt-action-main">
+            <div class="pt-row" style="gap:8px; flex-wrap:nowrap;">
+              <button type="button" class="pt-big pt-primary" id="shipUploadBtn" data-ship-target="${tgt}" ${defaultPatch ? '' : 'hidden'} ${dis}><i class="ph ph-cloud-arrow-up"></i> Patch &amp; Upload</button>
+              <button type="button" class="pt-big pt-primary" id="shipReleaseBtn" data-release-target="${tgt}" ${defaultPatch ? 'hidden' : ''} ${dis}><i class="ph ph-cloud-arrow-up"></i> Release</button>
+              <div class="pt-seg pt-seg-tall" role="group" aria-label="Upload target">
+                ${['game', 'demo', 'both'].map((t) => `<button type="button" class="pt-segbtn ${t === tgt ? 'on' : ''}" data-ship-to="${t}" aria-pressed="${t === tgt}" ${dis}>${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}
+              </div>
+            </div>
+            <span class="tiny muted" id="shipUploadHint">${defaultPatch
+              ? 'Everything in Patch, then Package → Build scripts → Upload to Steam.'
+              : `Package → Build scripts → Upload v${escapeHtml(patchState.version || '?')} exactly as pushed -- no apply, commit, bump or push. Stops if anything isn't pushed yet.`}</span>
+          </div>
+        </div>
+
+        <p class="tiny ${branch === 'default' ? 'bad' : 'muted'}" style="margin:0;">
+          Sets live on: game <b>${escapeHtml(liveName(branch))}</b>, demo <b>${escapeHtml(liveName(demoBranch))}</b>.
+          ${branch === 'internal' ? 'Players won\'t see the game build until you promote it on Steamworks, but the Discord post goes out now. ' : ''}
+          Change in <a href="#" data-open-settings>Settings</a>.
+        </p>
+      </section>
+
+      <aside class="pt-side">
+        <section class="pt-card">
+          <h3 class="pt-h">Waiting in the root folder <span class="muted">${patchState.files.length}</span></h3>
+          ${patchState.files.length ? patchState.files.map((f) => `
+            <div class="pt-file ${f.name === defaultPatch ? 'on' : ''}">
+              <div>${escapeHtml(f.name)}</div>
+              <div class="tiny muted">${f.dir === '.' ? 'project root' : escapeHtml(f.dir)} · ${formatBytes(f.size)} · ${formatWhen(f.mtime)}</div>
+            </div>`).join('') : '<p class="tiny muted" style="margin:0;">No .patch files waiting. Drop one in the project root and Refresh.</p>'}
+          ${patchState.files.length > 1 ? '<p class="tiny muted" style="margin:0;">Auto picks the oldest first, so nothing gets skipped.</p>' : ''}
+        </section>
+      </aside>
     </div>
 
     <div id="shipJob">${renderShipJob()}</div>`;
@@ -3347,28 +3383,54 @@ function renderShipJob() {
   const icon = { pending: '<span class="muted">○</span>', running: '<span class="ship-spin">◌</span>', ok: '<span class="good">✓</span>', warn: '<span style="color: var(--brass);">⚠</span>', failed: '<span class="bad">✗</span>' };
   const warned = job.steps.some((s) => s.state === 'warn');
   const target = { game: 'game', demo: 'demo', both: 'game + demo' }[job.opts.target];
-  const status = job.running ? 'Running…' : job.done ? (warned ? 'Done -- with warnings (see ⚠).' : 'Done -- everything shipped.') : `Stopped at: ${escapeHtml(job.steps.find((s) => s.id === job.failedStep)?.label || job.failedStep)}`;
+  const title = job.opts.mode === 'release' ? `Release ${target}` : job.opts.mode === 'patch' ? 'Patch' : `Patch &amp; Upload · ${target}`;
   const failed = job.steps.find((s) => s.state === 'failed');
+  const doneCount = job.steps.filter((s) => s.state === 'ok' || s.state === 'warn').length;
+  const status = job.running ? 'Running…' : job.done ? (warned ? 'Done, with warnings (see ⚠)' : 'Done') : `Stopped at ${escapeHtml(failed?.label || job.failedStep)}`;
+  // Patch 0492 -- grouped into columns: Patch / Upload game / Upload demo / Announce.
+  const groupOf = (s) => (s.id.startsWith('package:') || s.id.startsWith('scripts:') || s.id.startsWith('upload:')
+    ? (s.id.endsWith(':demo') ? 'Upload · demo' : 'Upload · game')
+    : s.id === 'discord' ? 'Announce' : 'Patch');
+  const groups = [];
+  for (const st of job.steps) {
+    const g = groupOf(st);
+    let grp = groups.find((x) => x.name === g);
+    if (!grp) groups.push(grp = { name: g, steps: [] });
+    grp.steps.push(st);
+  }
+  const pct = (n) => Math.round((n / Math.max(1, job.steps.length)) * 100);
   return `
-    <div class="ship-job ${job.done ? 'good' : job.failedStep ? 'bad' : ''}">
-      <div class="spread"><b>${job.opts.mode === 'release' ? 'Release' : 'Ship'} ${escapeHtml(target)}${job.opts.patch ? ` -- ${escapeHtml(job.opts.patch)}` : ''}</b><span class="tiny">${status}</span></div>
-      <ol class="ship-steps">
-        ${job.steps.map((s) => `
-          <li class="ship-step ${s.state}">
-            ${icon[s.state] || ''}<span>${escapeHtml(s.label)}</span><span class="tiny muted">${formatStepTime(s)}</span>
-            ${s.state === 'warn' && s.result?.warning ? `<div class="tiny ship-step-warning">${escapeHtml(s.result.warning)}</div>` : ''}
-            ${(s.state === 'ok' || s.state === 'warn') && s.result && (s.result.stdout || s.result.stderr) ? `<details><summary class="tiny muted">output</summary><pre>${escapeHtml([s.result.stdout, s.result.stderr].filter(Boolean).join('\n').trim())}</pre></details>` : ''}
-          </li>`).join('')}
-      </ol>
+    <section class="pt-card pt-job ${job.done ? 'good' : job.failedStep ? 'bad' : ''}">
+      <div class="pt-row">
+        <h3 class="pt-h" style="margin:0;">${title}${job.opts.patch ? ` <span class="muted" style="font-weight:400;">${escapeHtml(job.opts.patch)}</span>` : ''}</h3>
+        <span class="pt-pill ${job.done ? 'good' : job.failedStep ? 'bad' : ''}">${status}</span>
+        <span style="flex:1"></span>
+        <span class="tiny muted">${doneCount} of ${job.steps.length} steps</span>
+      </div>
+      <div class="pt-progress"><span class="ok" style="width:${pct(doneCount)}%"></span>${failed ? `<span class="bad" style="width:${pct(1)}%"></span>` : ''}</div>
+      <div class="pt-jobgrid">
+        ${groups.map((g) => `
+          <div class="pt-jobcol ${g.steps.some((x) => x.state === 'failed') ? 'bad' : ''}">
+            <div class="pt-jobcol-h">${escapeHtml(g.name)}</div>
+            <ol class="ship-steps">
+              ${g.steps.map((st) => `
+                <li class="ship-step ${st.state}">
+                  ${icon[st.state] || ''}<span>${escapeHtml(st.label)}</span><span class="tiny muted">${formatStepTime(st)}</span>
+                  ${st.state === 'warn' && st.result?.warning ? `<div class="tiny ship-step-warning">${escapeHtml(st.result.warning)}</div>` : ''}
+                  ${(st.state === 'ok' || st.state === 'warn') && st.result && (st.result.stdout || st.result.stderr) ? `<details><summary class="tiny muted">output</summary><pre>${escapeHtml([st.result.stdout, st.result.stderr].filter(Boolean).join('\n').trim())}</pre></details>` : ''}
+                </li>`).join('')}
+            </ol>
+          </div>`).join('')}
+      </div>
       ${failed ? resultBlock(failed.result, failed.label) : ''}
       ${!job.running && job.failedStep && job.pushed ? '<p class="tiny" style="color: var(--brass);">The commit and version tag are already pushed to GitHub, so those can\'t be undone from here. Fix the problem and Retry carries on from the failed step.</p>' : ''}
       ${!job.running && job.failedStep && job.canRevert ? '<p class="tiny muted">Nothing has been committed yet. Revert patch puts every file back the way it was before Apply.</p>' : ''}
-      ${!job.running ? `<div class="row" style="gap:6px; margin-top:8px;">
+      ${!job.running ? `<div class="row" style="gap:6px;">
         ${job.failedStep ? '<button id="shipRetryBtn" class="primary">Retry from failed step</button>' : ''}
         ${job.canRevert ? '<button id="shipRevertBtn">Revert patch</button>' : ''}
         <button id="shipDismissBtn">${job.done ? 'Clear' : 'Dismiss'}</button>
       </div>` : ''}
-    </div>`;
+    </section>`;
 }
 
 function refreshShipJobView() {
@@ -3378,10 +3440,11 @@ function refreshShipJobView() {
   wireShipJobButtons();
   // Ship buttons/inputs lock while running and unlock when it stops.
   const busy = !!patchState.ship.job?.running;
-  document.querySelectorAll('#cycleFlow [data-ship-target], #cycleFlow [data-release-target], #cycleFlow select, #cycleFlow input').forEach((e) => {
+  document.querySelectorAll('#cycleFlow [data-ship-target], #cycleFlow [data-release-target], #cycleFlow select, #cycleFlow input, #cycleFlow [data-ship-bump], #cycleFlow [data-ship-to], #shipPatchOnlyBtn').forEach((e) => {
     if (e.id === 'shipDiscordCheck' && !patchState.discordConfigured) return;
     e.disabled = busy;
   });
+  syncShipPatchUi();
 }
 
 function startShipPolling() {
@@ -3440,13 +3503,50 @@ function wireShipJobButtons() {
   };
 }
 
+/** Set by wireShipCycle; re-applies the patch-dependent Auto controls
+ *  (also after a run finishes and refreshShipJobView unlocks them). */
+let syncShipPatchUi = () => {};
+
 function wireShipCycle() {
   const patchSelect = document.getElementById('shipPatchSelect');
   if (!patchSelect) return;
-  patchSelect.onchange = () => {
-    document.getElementById('shipCommitRow').hidden = !patchSelect.value;
-    document.getElementById('shipCommitMsg').value = shipCommitMessageFor(patchSelect.value);
+  // Patch 0492 -- a patch picked: Patch / Patch & Upload. None: Release
+  // (the old "Release only" buttons), and no commit message or bump.
+  syncShipPatchUi = () => {
+    const has = !!patchSelect.value;
+    const busy = !!patchState.ship.job?.running;
+    document.getElementById('shipCommitRow').hidden = !has;
+    document.getElementById('shipBumpRow').hidden = !has;
+    document.getElementById('shipUploadBtn').hidden = !has;
+    document.getElementById('shipReleaseBtn').hidden = has;
+    document.getElementById('shipPatchOnlyBtn').disabled = busy || !has;
+    document.getElementById('shipUploadHint').textContent = has
+      ? 'Everything in Patch, then Package → Build scripts → Upload to Steam.'
+      : `Package → Build scripts → Upload v${patchState.version || '?'} exactly as pushed -- no apply, commit, bump or push. Stops if anything isn't pushed yet.`;
   };
+  patchSelect.onchange = () => {
+    document.getElementById('shipCommitMsg').value = shipCommitMessageFor(patchSelect.value);
+    syncShipPatchUi();
+  };
+  document.querySelectorAll('#cycleFlow [data-ship-bump]').forEach((btn) => {
+    btn.onclick = () => {
+      patchState.shipBump = btn.dataset.shipBump;
+      document.getElementById('shipBumpSelect').value = patchState.shipBump;
+      document.querySelectorAll('#cycleFlow [data-ship-bump]').forEach((b) => {
+        const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+      });
+    };
+  });
+  document.querySelectorAll('#cycleFlow [data-ship-to]').forEach((btn) => {
+    btn.onclick = () => {
+      patchState.shipTarget = btn.dataset.shipTo;
+      document.getElementById('shipUploadBtn').dataset.shipTarget = patchState.shipTarget;
+      document.getElementById('shipReleaseBtn').dataset.releaseTarget = patchState.shipTarget;
+      document.querySelectorAll('#cycleFlow [data-ship-to]').forEach((b) => {
+        const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+      });
+    };
+  });
   const discordCheck = document.getElementById('shipDiscordCheck');
   const announceRow = document.getElementById('shipAnnounceRow');
   const syncAnnounce = () => { announceRow.hidden = !discordCheck.checked; };
@@ -3461,6 +3561,38 @@ function wireShipCycle() {
       ? `<div class="patch-result good"><div class="patch-result-label">${escapeHtml(notes.title)} -- covers ${escapeHtml(notes.patches.join(', '))}${notes.missing.length ? ` (no discord-update block for ${escapeHtml(notes.missing.join(', '))})` : ''}</div><pre>${escapeHtml(notes.text)}</pre>
          <div class="tiny muted">Patches you apply in this run are included too -- the post is built from guild-idler-status.md right before it's sent. With a version bump, the header also gets the new version number.</div></div>`
       : `<div class="patch-result bad"><div class="patch-result-label">${escapeHtml(notes.error || 'Could not build the update.')}</div></div>`;
+  };
+
+  // Patch 0492 -- Patch: apply through push (+ Discord), no Steam.
+  document.getElementById('shipPatchOnlyBtn').onclick = async () => {
+    const patch = patchSelect.value;
+    if (!patch) return;
+    const bump = document.getElementById('shipBumpSelect').value;
+    const discord = discordCheck.checked;
+    const announceFrom = document.getElementById('shipAnnounceFrom').value.trim();
+    const commitMessage = document.getElementById('shipCommitMsg').value.trim();
+    const lines = [
+      `Patch ${patch}?`,
+      '',
+      `Commit: "${commitMessage}"`,
+      `Version: ${bump === 'none' ? `stays ${patchState.version}` : `${patchState.version} -> ${nextVersion(patchState.version, bump)}`}`,
+      `Push to: ${patchState.gitStatus?.upstream || '(no upstream -- pre-flight will stop)'}`,
+      'Steam: nothing uploaded',
+      `Discord: ${discord ? `post update for every patch after ${announceFrom || '(newest only)'}` : 'no post'}`,
+    ];
+    if (!confirm(lines.join('\n'))) return;
+    try {
+      const started = await api('/api/ship/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'patch', target: 'both', patch, bump, discord, announceFrom, commitMessage }),
+      });
+      patchState.ship = { ...patchState.ship, ...started };
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    refreshShipJobView();
+    startShipPolling();
   };
 
   document.querySelectorAll('#cycleFlow [data-ship-target]').forEach((btn) => {
@@ -3535,355 +3667,350 @@ function wireShipCycle() {
   wireShipJobButtons();
 }
 
+/* ------------------------------- patches shell (0492) ----------------- */
+// Patch 0492 -- Patches page: Auto / Manual tabs. Manual is the same ten
+// buttons as before, one numbered step on screen at a time (every step
+// stays mounted, just hidden, so each handler still finds its element).
+// Steam + Discord settings live in a drawer, the long notes in a Guide.
+
+const MANUAL_STEPS = [
+  { label: 'Select', sub: 'pick a .patch file', guide: 'steps', lede: 'Pick the patch to work on. Applied patches move to patches/applied/.' },
+  { label: 'Check', sub: 'dry run', guide: 'steps', lede: 'Confirms the patch would apply cleanly, without changing anything yet.' },
+  { label: 'Apply', sub: 'changes files on disk', guide: 'steps', lede: 'Actually modifies files. Enabled after a successful Check.' },
+  { label: 'Build', sub: 'tsc + vite', guide: 'steps', lede: 'Runs npm run build, before committing, so a broken patch never gets committed. Takes about a minute.' },
+  { label: 'Commit', sub: 'stage everything', guide: 'steps', lede: 'Stages everything and commits it.' },
+  { label: 'Version', sub: 'bump or set exact', guide: 'versions', lede: 'Bumps the release number with its own commit and git tag. Needs everything committed first. Do it once per release, not per patch.' },
+  { label: 'Push', sub: 'with tags', guide: 'steps', lede: 'Sends committed history (and tags) to the upstream branch. Pushes whatever is committed, from here or elsewhere.' },
+  { label: 'Package', sub: 'game and/or demo', guide: 'steps', lede: 'Builds the game into release/ and the demo into release-demo/. Steam uploads read win-unpacked/ from these. Takes a few minutes.' },
+  { label: 'Steam upload', sub: 'build scripts + upload', guide: 'steam', lede: 'Generate writes the VDF scripts (no network, safe to repeat). Upload runs steamcmd against what Generate last wrote.' },
+  { label: 'Discord post', sub: 'dev update', guide: 'discord', lede: 'Posts a dev update to your updates channel through the saved webhook.' },
+];
+
+const GUIDE_TOPICS = [
+  { id: 'auto-manual', label: 'Auto or Manual?', html: () => `
+    <h4>Auto</h4>
+    <p><b>Patch</b> runs Check → Apply → Build → Commit → Version → Push (→ Discord, if ticked) in one go, stopping at the first step that fails. Nothing goes to Steam.</p>
+    <p><b>Patch &amp; Upload</b> does all of that, then Package → Build scripts → Upload for the game, the demo or both. Build runs before Commit, so a broken patch is never committed or pushed.</p>
+    <p>Set the patch to <b>None</b> and the button becomes <b>Release</b>: package and upload the version exactly as it's pushed, with no apply, commit, bump or push. Pre-flight stops if anything is uncommitted or not pushed, so what goes to Steam always matches GitHub.</p>
+    <p>Auto pre-selects the oldest patch waiting in the root folder, so nothing gets skipped. You can leave the page while it runs; closing the DevTool stops the run. A failed run can be retried from the failed step, or reverted if nothing was committed yet.</p>
+    <h4>Manual</h4>
+    <p>The same steps as single buttons, one at a time. Use it to check things step by step, re-run one step, or set an exact version.</p>
+    <h4>Dev server</h4>
+    <p>Start runs Vite + Electron in the background and returns straight away. Stop kills the whole process tree.</p>` },
+  { id: 'steps', label: 'The 10 steps', html: () => `<ol>${MANUAL_STEPS.map((st) => `<li><b>${st.label}</b> -- ${st.lede}</li>`).join('')}</ol>
+    <p>Patch file names (<code>0491-name.patch</code>) only identify a batch of changes. The version (step 6) is the real release number.</p>` },
+  { id: 'versions', label: 'Versions and tags', html: () => `
+    <p>Current version <b>${escapeHtml(patchState.version || '?')}</b>. A bump creates a git commit and tag (e.g. <code>v${escapeHtml(patchState.version || '0.0.0')}</code>) in one step, so everything must be committed first.</p>
+    <p><b>Patch</b> for bug fixes, <b>Minor</b> for new features, <b>Major</b> for breaking or big changes.</p>
+    <p><b>Set exact version</b> sets any version directly, e.g. resetting a dev-cycle number to a real launch version like <code>1.0.0</code>. It doesn't need to be higher than the current one; existing tags are left alone.</p>` },
+  { id: 'steam', label: 'Steam publishing', html: () => `
+    <h4>One-time setup</h4>
+    <ol>
+      <li>Install the Steamworks SDK, and from a real terminal run <code>steamcmd +login &lt;your username&gt;</code> once. It asks for your password and a Steam Guard code, then caches the login on this PC. Nothing here stores a password.</li>
+      <li>Fill in Settings › Steam (App IDs, Depot IDs, the SDK's <code>ContentBuilder</code> folder, the branch each upload goes live on) and Save.</li>
+    </ol>
+    <h4>Each release</h4>
+    <ol>
+      <li><b>Package</b> first. Generate and Upload work off <code>win-unpacked/</code>, the unpacked game electron-builder makes, not the installer.</li>
+      <li><b>Generate build scripts</b> writes the VDF files SteamPipe reads. Pure file-write, safe to repeat.</li>
+      <li><b>Upload</b> runs <code>steamcmd</code> against what Generate last wrote, to the branch in Settings. It can take a while for a full depot.</li>
+    </ol>
+    <h4>Branches and promoting</h4>
+    <p>One App ID and Depot ID cover <b>internal</b> (Dev Comp), <b>beta</b> (Beta Testing) and <b>default</b> (Store). The demo is its own app with its own branch list; a new app only has <code>default</code> until a build is live there.</p>
+    <p>This tool never promotes builds. Upload to internal and test it, then on Steamworks' Builds page set that same build live on beta, and later default. No re-upload needed.</p>
+    <p>A brand-new branch can't be created until <b>default</b> has had a real build set live once. A very first upload that fails with a bare "Failure" is usually this: set the build live on default once on Steamworks, then retry.</p>
+    <h4>Launch options (once)</h4>
+    <p>Executable is <code>&lt;ProductName&gt;.exe</code> (<code>build.productName</code> in package.json) at the depot root, not inside <code>win-unpacked/</code>. It never changes between releases.</p>` },
+  { id: 'discord', label: 'Discord updates', html: () => `
+    <p>The webhook URL is saved locally (<code>tools/devtool/discord.config.json</code>, gitignored) and only ever sent to Discord.</p>
+    <p>Updates are built from each patch's <code>discord-update</code> block in guild-idler-status.md. Several patches merge into one post grouped Added / Changed / Fixed. "Announce every patch after" (Auto) and "Fill since last announced" (Manual) both start after the last patch posted from here.</p>` },
+  { id: 'trouble', label: 'When something fails', html: () => `
+    <p><b>Upload asks for Steam Guard:</b> the cached login expired. Run <code>steamcmd +login &lt;username&gt;</code> in a terminal again, then retry.</p>
+    <p><b>Package: "app.asar ... being used by another process":</b> something still has <code>release\\win-unpacked</code> open -- usually a copy of the game started from there, a leftover app-builder.exe, or Defender scanning. Close it (or restart) and Retry from the failed step.</p>
+    <p><b>Push fails with no upstream:</b> run <code>git push -u origin &lt;branch&gt;</code> once from a terminal.</p>
+    <p>After a run has pushed, the commit and tag can't be undone here. Fix the problem and Retry carries on from the failed step with the same version.</p>` },
+];
+
+function wirePatchesShell() {
+  document.querySelectorAll('[data-ptab]').forEach((btn) => {
+    btn.onclick = () => {
+      patchState.tab = btn.dataset.ptab;
+      document.getElementById('cycleFlow').hidden = patchState.tab !== 'auto';
+      document.getElementById('manualFlow').hidden = patchState.tab !== 'manual';
+      document.querySelectorAll('[data-ptab]').forEach((b) => {
+        const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on));
+      });
+    };
+  });
+  const goStep = (n) => {
+    patchState.manualStep = n;
+    document.querySelectorAll('[data-mpanel]').forEach((el) => { el.hidden = Number(el.dataset.mpanel) !== n; });
+    document.querySelectorAll('.pt-stepper [data-mgo]').forEach((b) => {
+      const on = Number(b.dataset.mgo) === n;
+      b.classList.toggle('on', on);
+      if (on) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    });
+  };
+  document.querySelectorAll('[data-mgo]').forEach((btn) => { btn.onclick = () => goStep(Number(btn.dataset.mgo)); });
+
+  // A step shows a tick once its last result in this session succeeded
+  // (any .patch-result.good inside its panel; a newer failure clears it).
+  const markTicks = () => {
+    document.querySelectorAll('[data-mpanel]').forEach((panel) => {
+      const n = panel.dataset.mpanel;
+      const results = panel.querySelectorAll('.patch-result');
+      const lastResult = results[results.length - 1];
+      let ok = !!lastResult && lastResult.classList.contains('good');
+      if (n === '1') ok = !!patchState.selected;
+      const num = document.querySelector(`[data-mnum="${n}"]`);
+      if (num) { num.classList.toggle('done', ok); num.textContent = ok ? '✓' : n; }
+    });
+  };
+  markTicks();
+  const manual = document.getElementById('manualFlow');
+  if (manual) new MutationObserver(markTicks).observe(manual, { childList: true, subtree: true });
+
+  const setSettings = (open) => {
+    patchState.settingsOpen = open;
+    document.querySelector('.pt-drawer').hidden = !open;
+    document.querySelector('[data-close-settings].pt-scrim').hidden = !open;
+  };
+  document.querySelectorAll('[data-open-settings]').forEach((el) => { el.onclick = (e) => { e.preventDefault(); setSettings(true); }; });
+  document.querySelectorAll('[data-close-settings]').forEach((el) => { el.onclick = () => setSettings(false); });
+
+  const setGuide = (topic) => {
+    patchState.guideTopic = topic;
+    const g = document.querySelector('.pt-guide');
+    g.hidden = !topic;
+    document.querySelector('[data-close-guide].pt-scrim').hidden = !topic;
+    if (!topic) return;
+    const t = GUIDE_TOPICS.find((x) => x.id === topic) || GUIDE_TOPICS[0];
+    g.querySelector('.pt-guide-text').innerHTML = t.html();
+    g.querySelectorAll('.pt-guide-nav [data-guide]').forEach((b) => b.classList.toggle('on', b.dataset.guide === t.id));
+  };
+  document.querySelectorAll('[data-guide]').forEach((el) => { el.onclick = (e) => { e.preventDefault(); setGuide(el.dataset.guide); }; });
+  document.querySelectorAll('[data-close-guide]').forEach((el) => { el.onclick = () => setGuide(null); });
+
+  const dirtyBtn = document.getElementById('ptDirtyToggle');
+  if (dirtyBtn) dirtyBtn.onclick = () => { const l = document.getElementById('ptDirtyList'); l.hidden = !l.hidden; };
+}
+
 function renderPatches() {
   const gs = patchState.gitStatus;
   const sel = patchState.selected;
 
+  const inp = 'style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;"';
+  const steps = MANUAL_STEPS;
+  const cur = Math.min(Math.max(patchState.manualStep || 1, 1), steps.length);
+  const stepPanel = (n, body) => `<div class="pt-step" data-mpanel="${n}" ${n === cur ? '' : 'hidden'}>
+      <div class="pt-row">
+        <span class="tiny muted">Step ${n} of ${steps.length}</span>
+        <h3 class="pt-h" style="margin:0; font-size:15px;">${steps[n - 1].label}</h3>
+        <span style="flex:1"></span>
+        <button type="button" class="pt-help" data-guide="${steps[n - 1].guide}" aria-label="What this step does" title="What this step does">?</button>
+      </div>
+      <p class="tiny muted pt-lede">${steps[n - 1].lede}</p>
+      ${body}
+      <div class="pt-divider"></div>
+      <div class="pt-row">
+        ${n > 1 ? `<button type="button" data-mgo="${n - 1}">← ${steps[n - 2].label}</button>` : ''}
+        <span style="flex:1"></span>
+        <span class="tiny muted">Every step can be run on its own, in any order.</span>
+        ${n < steps.length ? `<button type="button" class="primary" data-mgo="${n + 1}">Next: ${steps[n].label} →</button>` : ''}
+      </div>
+    </div>`;
+
   appEl.innerHTML = `
-    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Apply a Patch</h2>
-    <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
-      Runs the same git/npm commands you'd type by hand, one confirmed step at a time. Each button only
-      does the one thing it says — except <b>Ship it</b>, which runs them all in order on purpose.
-    </p>
-
-    <div class="patch-git-status">
-      <div class="spread">
-        <span><b>Dev server:</b> ${patchState.devRunning ? '🟢 running' : '⚪ stopped'}</span>
-        <span class="row" style="gap:6px;">
-          <button id="devStartBtn" ${patchState.devRunning ? 'disabled' : ''}>Start (npm run dev)</button>
-          <button id="devStopBtn" ${!patchState.devRunning ? 'disabled' : ''}>Stop</button>
-        </span>
-      </div>
-      <p class="tiny muted" style="margin: 6px 0 0;">
-        Starts Vite + Electron in the background and returns immediately — this page doesn't wait for
-        it to exit, since it isn't supposed to. Stop kills the whole process tree, not just the shell.
-      </p>
+    <div class="pt-head">
+      <h2 class="pt-title">Patches</h2>
+      <span class="tiny muted">v${escapeHtml(patchState.version || '?')}${patchState.tags?.length ? ` · recent tags ${patchState.tags.slice(0, 3).map(escapeHtml).join(', ')}` : ''}</span>
+      <span style="flex:1"></span>
+      <button type="button" data-guide="auto-manual"><i class="ph ph-question"></i> Guide</button>
+      <button type="button" data-open-settings><i class="ph ph-gear"></i> Settings</button>
     </div>
 
-    <div class="patch-git-status ${gs?.clean ? 'clean' : 'dirty'}" style="margin-top:10px;">
-      <div class="spread">
-        <span><b>Branch:</b> ${escapeHtml(gs?.branch || '?')} &nbsp; <b>Last commit:</b> ${escapeHtml(gs?.lastCommit || '?')}</span>
-        <span class="row" style="gap:6px;">
-          <button id="tidyPatchesBtn" title="Moves applied .patch files to patches/applied/ and stops git tracking patch files">Tidy patch files</button>
-          <button id="refreshStatusBtn">Refresh</button>
-        </span>
-      </div>
-      <div id="tidyResult"></div>
-      <div class="tiny muted" style="margin-top:4px;">
-        ${gs?.upstream
-          ? `Pushes to <b>${escapeHtml(gs.upstream)}</b>.`
-          : `No upstream tracking branch configured — Push will fail until one is set (e.g. <code>git push -u origin ${escapeHtml(gs?.branch || 'main')}</code> once from a terminal).`}
-      </div>
-      ${gs?.clean
-        ? '<div class="tiny" style="margin-top:6px;">Working tree is clean.</div>'
-        : `<div class="tiny" style="margin-top:6px; color: var(--brass);">Uncommitted changes present — review before applying a patch on top:</div>
-           <pre style="margin-top:4px;">${escapeHtml(gs?.statusText || '')}</pre>`}
+    <div class="pt-status ${gs?.clean ? 'clean' : 'dirty'}">
+      <span class="pt-dot ${patchState.devRunning ? 'on' : ''}"></span><span>Dev server ${patchState.devRunning ? 'running' : 'stopped'}</span>
+      <button id="devStartBtn" ${patchState.devRunning ? 'hidden' : ''} title="Starts Vite + Electron in the background (npm run dev)">Start</button>
+      <button id="devStopBtn" ${!patchState.devRunning ? 'hidden' : ''} title="Stops the whole process tree">Stop</button>
+      <span class="pt-sep"></span>
+      <span><b>${escapeHtml(gs?.branch || '?')}</b>${gs?.upstream ? ` → ${escapeHtml(gs.upstream)}` : ' <span class="bad">no upstream</span>'}</span>
+      <span class="muted pt-ellip">Last commit: ${escapeHtml(gs?.lastCommit || '?')}</span>
+      ${gs?.clean ? '<span class="good">Clean</span>' : '<button type="button" id="ptDirtyToggle" class="pt-dirty">Uncommitted changes ▾</button>'}
+      <span style="flex:1"></span>
+      <button id="tidyPatchesBtn" title="Moves applied .patch files to patches/applied/ and stops git tracking patch files">Tidy patch files</button>
+      <button id="refreshStatusBtn">Refresh</button>
+    </div>
+    ${gs?.upstream ? '' : `<p class="tiny bad" style="margin:6px 0 0;">No upstream branch -- Push fails until one is set (<code>git push -u origin ${escapeHtml(gs?.branch || 'main')}</code> once from a terminal).</p>`}
+    ${gs?.clean ? '' : `<pre id="ptDirtyList" class="pt-dirtylist" hidden>${escapeHtml(gs?.statusText || '')}</pre>`}
+    <div id="tidyResult"></div>
+
+    <div class="pt-tabs" role="tablist" aria-label="Patch mode">
+      <button type="button" role="tab" data-ptab="auto" aria-selected="${patchState.tab === 'auto'}" class="${patchState.tab === 'auto' ? 'on' : ''}">Auto</button>
+      <button type="button" role="tab" data-ptab="manual" aria-selected="${patchState.tab === 'manual'}" class="${patchState.tab === 'manual' ? 'on' : ''}">Manual</button>
     </div>
 
-    <div class="patch-nav">
-      <button id="patchFlowNavBtn" class="${!patchState.cycleView && !patchState.shipView ? 'active' : ''}"><i class="ph ph-git-diff"></i>Patch flow<span class="patch-nav-sub">steps 1-5</span></button>
-      <button id="shipFlowNavBtn" class="${!patchState.cycleView && patchState.shipView ? 'active' : ''}"><i class="ph ph-package"></i>Build &amp; Ship<span class="patch-nav-sub">steps 6-11</span></button>
-      <button id="cycleFlowNavBtn" class="${patchState.cycleView ? 'active' : ''}"><i class="ph ph-rocket-launch"></i>Ship it<span class="patch-nav-sub">all steps, one click</span></button>
-    </div>
+    <div id="cycleFlow" ${patchState.tab === 'auto' ? '' : 'hidden'}>${renderShipCycle()}</div>
 
-    <div id="cycleFlow" ${patchState.cycleView ? '' : 'hidden'}>${renderShipCycle()}</div>
-
-    <div id="patchFlow" ${patchState.cycleView || patchState.shipView ? 'hidden' : ''}>
-    <div class="section-heading" style="margin-top:18px;">1. Select a patch</div>
-    ${patchState.files.length === 0
-      ? '<p class="tiny muted">No .patch files waiting to be applied. Drop one in the project root and hit Refresh. (Applied ones live in patches/applied/.)</p>'
-      : `<div class="patch-list">${patchState.files.map((f) => `
-          <label class="patch-item ${sel === f.name ? 'selected' : ''}">
-            <input type="radio" name="patchfile" value="${escapeHtml(f.name)}" ${sel === f.name ? 'checked' : ''} />
-            <div>
-              <div class="patch-name">${escapeHtml(f.name)}</div>
-              <div class="tiny muted">${f.dir === '.' ? 'project root' : f.dir} · ${formatBytes(f.size)} · ${formatWhen(f.mtime)}</div>
-            </div>
-          </label>
-        `).join('')}</div>`}
-    ${patchState.files.length > 0 ? `
-      <div class="row" style="margin: 8px 0 0; align-items: center; gap: 8px;">
-        <button id="simulateShortcutBtn" ${!sel ? 'disabled' : ''}>Simulate in Sandbox</button>
-        <span class="tiny muted">Jumps to the Balance Sandbox tab to check this patch's impact before applying it. Doesn't read the patch's contents -- re-enter any tuning values by hand once there.</span>
-      </div>` : ''}
-
-    <div class="section-heading">2. Check</div>
-    <p class="tiny muted">Dry run — confirms the patch would apply cleanly without changing anything yet.</p>
-    <button id="checkBtn" class="primary" ${!sel ? 'disabled' : ''}>Check patch</button>
-    <div id="checkResult"></div>
-
-    <div class="section-heading">3. Apply</div>
-    <p class="tiny muted">Actually modifies files on disk. Only enabled after a successful check.</p>
-    <button id="applyBtn" class="primary" ${!patchState.checked ? 'disabled' : ''}>Apply patch</button>
-    <div id="applyResult"></div>
-
-    <div class="section-heading">4. Commit</div>
-    <p class="tiny muted">Stages everything and commits. Only enabled after a successful apply.</p>
-    <div class="row" style="gap: 8px; margin-bottom: 8px;">
-      <input type="text" id="commitMsg" placeholder="Commit message"
-        value="${sel ? escapeHtml('Apply ' + sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')) : ''}"
-        style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <button id="commitBtn" class="primary" ${gs?.clean !== false ? 'disabled' : ''}>Commit</button>
-    </div>
-    <div id="commitResult"></div>
-
-    <div class="section-heading">5. Push</div>
-    <p class="tiny muted">
-      Sends committed history to the upstream branch shown above. Doesn't require having just
-      applied a patch this session — it pushes whatever's already committed, so it's also the
-      right button after committing something outside this flow entirely.
-    </p>
-    <button id="pushBtn">Push</button>
-    <div id="pushResult"></div>
-
-    </div>
-
-    <div id="shipFlow" ${!patchState.cycleView && patchState.shipView ? '' : 'hidden'}>
-    <div class="section-heading" style="margin-top:18px;">6. Build</div>
-    <p class="tiny muted">Runs <code>npm run build</code> to confirm nothing is broken. Can take a minute.</p>
-    <button id="buildBtn">Run build</button>
-    <div id="buildResult"></div>
-
-    <div class="section-heading">7. Package into an installer</div>
-    <p class="tiny muted">
-      Runs <code>npm run package</code> — produces installers/unpacked builds in <code>release/</code>.
-      This is what you'd upload to Steam or hand to playtesters. Can take several minutes the first time.
-      <b>Package demo</b> runs <code>npm run package:demo</code> instead — the Steam demo build
-      ("Guildbound Demo"), written to its own <code>release-demo/</code> so it never touches the full game's.
-    </p>
-    <div class="row" style="gap:6px;">
-      <button id="packageBtn">Run package</button>
-      <button id="packageDemoBtn">Package demo</button>
-    </div>
-    <div id="packageResult"></div>
-    <div id="packageDemoResult"></div>
-
-    <p class="tiny muted" style="margin-top:10px;">
-      Copies the newest <code>.exe</code> in <code>release/</code> to
-      <code>C:\Custom Apps\GuildBound Executables</code> — that folder is watched by Google Drive, so
-      anything landing there becomes shareable automatically, no separate upload step. Manual on
-      purpose: run Package above first and confirm it's the build you actually want shared, since this
-      will overwrite whatever's already sitting in that folder.
-    </p>
-    <button id="copyBuildBtn">Copy latest build to Google Drive folder</button>
-    <div id="copyBuildResult"></div>
-    <p class="tiny muted" style="margin-top:10px;">
-      Each Package keeps the newest <b>${escapeHtml(String(patchState.steam.keepInstallers ?? 2))}</b> installer version(s)
-      in <code>release/</code> and <code>release-demo/</code> and deletes older Setup <code>.exe</code> + <code>.blockmap</code> files
-      (set under 7.5, 0 = keep all). Steam keeps every build you upload, and every version is a git tag.
-    </p>
-    <button id="pruneInstallersBtn">Clean up old installers now</button>
-    <div id="pruneInstallersResult"></div>
-
-    <div class="section-heading" style="margin-top:18px;">7.5. Configure Steam upload</div>
-    <div class="devtool-note">
-      <b>How Steam publishing works here, step by step:</b>
-      <ol>
-        <li><b>One-time setup, outside this tool:</b> install the Steamworks SDK, and from a real
-          terminal run <code>steamcmd +login &lt;your username&gt;</code> once. It'll prompt for your
-          password and a Steam Guard code, then caches that login on this machine — nothing below
-          asks for a password because of this.</li>
-        <li><b>Fill in the config below</b> (App ID, Depot ID, the SDK's <code>ContentBuilder</code>
-          folder, and which branch this upload targets) and hit <b>Save Steam config</b>. One App
-          ID/Depot ID covers all three real branches — <b>internal</b> (Dev Comp), <b>beta</b> (Beta
-          Testing), <b>default</b> (Store/live) — you're just picking which one THIS upload goes to.</li>
-        <li><b>Step 7, Package</b> (above) first, if you haven't already for this batch — Generate/
-          Upload below both work off <code>release/win-unpacked/</code>, the actual unpacked game
-          electron-builder produces alongside the installer (not the installer itself — see the
-          note further down on why).</li>
-        <li><b>Generate build scripts</b> (step 10, below) writes the VDF files SteamPipe reads. Pure
-          file-write, no network call — safe to click as many times as you want while dialing in
-          config above.</li>
-        <li><b>Upload to Steam</b> (step 10, below) is the one that actually talks to Steam — it runs
-          <code>steamcmd</code> against whatever Generate last wrote, targeting the branch selected
-          above. This can take a while for a full depot; the button stays disabled and says
-          "Uploading…" until it returns.</li>
-        <li><b>Steamworks' own quirk, learned the hard way:</b> a brand-new branch (like
-          <b>internal</b>) can't actually be created — via steamcmd <em>or</em> the Steamworks web
-          UI — until the <b>default</b> branch already has at least one real build set on it.
-          Targeting a not-yet-existing branch before that will fail at the commit step with a bare
-          "Failure", no other explanation. If your very first-ever upload fails this way, set that
-          same build live on <b>default</b> once via Steamworks' Builds page first, then retry.</li>
-        <li><b>Promote on Steamworks' own site, not here.</b> This tool never auto-promotes a build
-          across branches. Typical flow: upload to <b>internal</b> and test it yourself first, then
-          once happy, use Steamworks' Builds page to set that exact same build live on <b>beta</b> for
-          testers, then later on <b>default</b> for the public — no need to re-run Upload for each
-          promotion, SteamPipe promotes an existing build without re-uploading.</li>
+    <div id="manualFlow" class="pt-manual" ${patchState.tab === 'manual' ? '' : 'hidden'}>
+      <ol class="pt-stepper">
+        ${steps.map((st, i) => `<li><button type="button" data-mgo="${i + 1}" class="${i + 1 === cur ? 'on' : ''}" ${i + 1 === cur ? 'aria-current="step"' : ''}>
+          <span class="pt-num" data-mnum="${i + 1}">${i + 1}</span>
+          <span class="pt-stepname"><span>${st.label}</span><span class="tiny muted">${st.sub}</span></span>
+        </button></li>`).join('')}
       </ol>
-      If Upload comes back complaining about a Steam Guard prompt, your cached login from step 1 has
-      expired — re-run <code>steamcmd +login &lt;username&gt;</code> from a terminal and try again.
-      <br /><br />
-      <b>Steamworks' Launch Options, one-time setup:</b> Executable should be
-      <code>&lt;ProductName&gt;.exe</code> (whatever <code>build.productName</code> is in
-      <code>package.json</code>) — sitting at the depot's own root, not inside a
-      <code>win-unpacked/</code> path. This is stable across every future release (unlike the
-      installer's own version-stamped filename), so it only needs setting once, ever.
+      <section class="pt-card pt-stepbody">
+        ${stepPanel(1, `
+          ${patchState.files.length === 0
+            ? '<p class="tiny muted">No .patch files waiting to be applied. Drop one in the project root and hit Refresh. (Applied ones live in patches/applied/.)</p>'
+            : `<div class="patch-list">${patchState.files.map((f) => `
+                <label class="patch-item ${sel === f.name ? 'selected' : ''}">
+                  <input type="radio" name="patchfile" value="${escapeHtml(f.name)}" ${sel === f.name ? 'checked' : ''} />
+                  <div>
+                    <div class="patch-name">${escapeHtml(f.name)}</div>
+                    <div class="tiny muted">${f.dir === '.' ? 'project root' : f.dir} · ${formatBytes(f.size)} · ${formatWhen(f.mtime)}</div>
+                  </div>
+                </label>`).join('')}</div>`}
+          ${patchState.files.length > 0 ? `
+            <div class="pt-row" style="margin-top:8px;">
+              <button id="simulateShortcutBtn" ${!sel ? 'disabled' : ''}>Simulate in Sandbox</button>
+              <span class="tiny muted">Opens the Balance Sandbox to check this patch's impact first (re-enter tuning values by hand there).</span>
+            </div>` : ''}`)}
+        ${stepPanel(2, `<button id="checkBtn" class="primary" ${!sel ? 'disabled' : ''}>Check patch</button><div id="checkResult"></div>`)}
+        ${stepPanel(3, `<button id="applyBtn" class="primary" ${!patchState.checked ? 'disabled' : ''}>Apply patch</button><div id="applyResult"></div>`)}
+        ${stepPanel(4, `<button id="buildBtn" class="primary">Run build</button><div id="buildResult"></div>`)}
+        ${stepPanel(5, `
+          <div class="pt-row" style="flex-wrap:nowrap;">
+            <input type="text" id="commitMsg" placeholder="Commit message"
+              value="${sel ? escapeHtml('Apply ' + sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')) : ''}"
+              style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+            <button id="commitBtn" class="primary" ${gs?.clean !== false ? 'disabled' : ''}>Commit</button>
+          </div>
+          <div id="commitResult"></div>`)}
+        ${stepPanel(6, `
+          <p class="tiny muted" style="margin:0;">Current version <b>${escapeHtml(patchState.version || '?')}</b>${patchState.tags?.length ? ` · recent tags ${patchState.tags.map(escapeHtml).join(', ')}` : ''}.</p>
+          <div class="pt-row">
+            <button id="bumpPatchBtn" class="primary">Patch · ${escapeHtml(nextVersion(patchState.version, 'patch'))} (bug fixes)</button>
+            <button id="bumpMinorBtn">Minor · ${escapeHtml(nextVersion(patchState.version, 'minor'))} (new features)</button>
+            <button id="bumpMajorBtn">Major · ${escapeHtml(nextVersion(patchState.version, 'major'))} (breaking/big)</button>
+          </div>
+          <div id="versionResult"></div>
+          <div class="pt-row">
+            <label class="tiny muted pt-inline">Or set an exact version
+              <input type="text" id="exactVersionInput" placeholder="1.0.0" style="width:110px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+            </label>
+            <button id="setVersionBtn">Set exact version</button>
+          </div>
+          <div id="setVersionResult"></div>`)}
+        ${stepPanel(7, `<button id="pushBtn" class="primary">Push</button><div id="pushResult"></div>`)}
+        ${stepPanel(8, `
+          <div class="pt-grid2">
+            <div class="pt-subcard"><b>Game</b> <span class="tiny muted">release/</span>
+              <button id="packageBtn" class="primary" style="width:100%; margin-top:8px;">Package game</button>
+              <div id="packageResult"></div></div>
+            <div class="pt-subcard"><b>Demo</b> <span class="tiny muted">release-demo/</span>
+              <button id="packageDemoBtn" class="primary" style="width:100%; margin-top:8px;">Package demo</button>
+              <div id="packageDemoResult"></div></div>
+          </div>
+          <div class="pt-subcard pt-row">
+            <span class="tiny">Old installers: keeps the newest <b>${escapeHtml(String(patchState.steam.keepInstallers ?? 2))}</b> after each package.</span>
+            <a href="#" class="tiny" data-open-settings>Change in Settings</a>
+            <span style="flex:1"></span>
+            <button id="pruneInstallersBtn">Clean up now</button>
+          </div>
+          <div id="pruneInstallersResult"></div>`)}
+        ${stepPanel(9, `
+          <div class="pt-grid2">
+            <div class="pt-subcard"><b>Game</b> <span class="tiny muted">live on ${escapeHtml(patchState.steam.branch || 'internal')}</span>
+              <div class="pt-row" style="margin-top:8px;"><button id="steamGenerateBtn">Generate build scripts</button><button id="steamUploadBtn" class="primary">Upload to Steam</button></div>
+              <div id="steamGenerateResult"></div><div id="steamUploadResult"></div></div>
+            <div class="pt-subcard"><b>Demo</b> <span class="tiny muted">live on ${escapeHtml(patchState.steam.demoBranch || 'none')}</span>
+              <div class="pt-row" style="margin-top:8px;"><button id="steamGenerateDemoBtn">Generate demo build scripts</button><button id="steamUploadDemoBtn" class="primary">Upload demo to Steam</button></div>
+              <div id="steamGenerateDemoResult"></div><div id="steamUploadDemoResult"></div></div>
+          </div>
+          <p class="tiny muted" style="margin:0;">IDs, branches and the ContentBuilder folder are in <a href="#" data-open-settings>Settings</a>.</p>`)}
+        ${stepPanel(10, `
+          <p class="tiny muted" style="margin:0;">Webhook: ${patchState.discordConfigured ? `🟢 ${escapeHtml(patchState.discordPreview)}` : '⚪ not set -- add it in <a href="#" data-open-settings>Settings</a>'}</p>
+          <textarea id="discordMessageInput" rows="6"
+            placeholder="What changed in this update? (fill from the selected patch below)"
+            style="width:100%; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px; box-sizing: border-box; font-family: inherit;">${escapeHtml(patchState.discordDraft)}</textarea>
+          <div class="pt-row">
+            <button id="discordFillBtn" ${!sel ? 'disabled' : ''}>Fill from selected patch</button>
+            <button id="discordFillSinceBtn" title="Merges every patch logged since the last one announced into one update">Fill since last announced${patchState.ship.shipState?.lastAnnouncedPatch ? ` (after ${escapeHtml(patchState.ship.shipState.lastAnnouncedPatch)})` : ''}</button>
+            <span style="flex:1"></span>
+            <button id="discordPostBtn" class="primary" ${!patchState.discordConfigured ? 'disabled' : ''}>Post to Discord</button>
+          </div>
+          <p id="discordContinuity" class="tiny muted" style="margin: 0;"></p>
+          <div id="discordResult"></div>`)}
+      </section>
     </div>
-    <p class="tiny muted">
-      Saved locally (<code>tools/devtool/steam.config.json</code>, gitignored). No password is stored
-      here — <code>steamcmd</code> caches your login after you run <code>steamcmd +login &lt;username&gt;</code>
-      once from a real terminal (it'll prompt for your password and Steam Guard code that one time).
-      The Upload step below reuses that cached session.
-    </p>
-    <p class="tiny muted">
-      One App ID and Depot ID cover all three Steam packages (Store, Beta Testing, Dev Comp) — they
-      all point at the same depot, just on different branches. Pick which branch this upload targets
-      below; there's no separate "create a branch" step in Steamworks — targeting a branch name here
-      that doesn't exist yet is what creates it, the first time you actually upload to it.
-    </p>
-    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
-      <input type="text" id="steamUsernameInput" placeholder="Steam builder account username"
-        value="${escapeHtml(patchState.steam.username)}"
-        style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <input type="text" id="steamAppIdInput" placeholder="App ID"
-        value="${escapeHtml(patchState.steam.appId)}"
-        style="flex: 1 1 100px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <input type="text" id="steamDepotIdInput" placeholder="Depot ID (Windows)"
-        value="${escapeHtml(patchState.steam.depotId)}"
-        style="flex: 1 1 140px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-    </div>
-    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
-      <input type="text" id="steamDemoAppIdInput" placeholder="Demo App ID (its own app in Steamworks)"
-        value="${escapeHtml(patchState.steam.demoAppId || '')}"
-        style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <input type="text" id="steamDemoDepotIdInput" placeholder="Demo Depot ID (Windows)"
-        value="${escapeHtml(patchState.steam.demoDepotId || '')}"
-        style="flex: 1 1 220px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-    </div>
-    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
-      <input type="text" id="steamContentBuilderInput" placeholder="Path to Steamworks SDK's ContentBuilder folder"
-        value="${escapeHtml(patchState.steam.contentBuilderDir)}"
-        style="flex: 2 1 320px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-    </div>
-    <div class="row" style="gap: 8px; margin-bottom: 6px; flex-wrap: wrap; align-items: center;">
-      <label class="tiny muted" style="display:flex; flex-direction:column; gap:3px; flex: 1 1 220px;">Game: set live on branch
-        <input type="text" id="steamBranchInput" list="steamBranchOptions" value="${escapeHtml(patchState.steam.branch || 'internal')}"
-          style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      </label>
-      <label class="tiny muted" style="display:flex; flex-direction:column; gap:3px; flex: 1 1 220px;">Demo: set live on branch
-        <input type="text" id="steamDemoBranchInput" list="steamBranchOptions" value="${escapeHtml(patchState.steam.demoBranch || 'none')}"
-          style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      </label>
-      <datalist id="steamBranchOptions">
-        <option value="internal">Dev Comp</option>
-        <option value="beta">Beta Testing</option>
-        <option value="none">Upload only -- set live yourself in Steamworks</option>
-        <option value="default">Store (steamcmd can't set this live -- same as none)</option>
-      </datalist>
-      <label class="tiny muted" style="display:flex; flex-direction:column; gap:3px; flex: 0 1 170px;" title="After each Package, older Setup installers (and their .blockmap) are deleted from release/ and release-demo/. Steam keeps every uploaded build, and every version is a git tag.">Keep installers (newest)
-        <input type="number" id="steamKeepInstallersInput" min="0" max="50" value="${escapeHtml(String(patchState.steam.keepInstallers ?? 2))}"
-          style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      </label>
-      <button id="steamConfigSaveBtn" style="align-self:flex-end;">Save Steam config</button>
-    </div>
-    <p class="tiny muted" style="margin:0 0 6px;">
-      Branch names must match Steamworks exactly (case-sensitive), per app -- the demo has its own branch list,
-      and a new app only has <code>default</code> until a build is live there. If Steam refuses to set a build live,
-      the upload still counts and you get a ⚠ warning instead of a failure. <code>none</code> or <code>default</code>
-      uploads only.
-    </p>
-    <div id="steamConfigResult"></div>
 
-    <div class="section-heading">8. Tag a release version</div>
-    <p class="tiny muted">
-      Current version: <b>${escapeHtml(patchState.version || '?')}</b>.
-      ${patchState.tags?.length ? `Recent tags: ${patchState.tags.map(escapeHtml).join(', ')}.` : 'No tags yet.'}
-      This is separate from the <code>000N-name.patch</code> filenames, which just identify a batch of
-      changes between us — a version bump is the real release number, and creates a git commit + tag
-      (e.g. <code>v${escapeHtml(patchState.version || '0.0.0')}</code> → next patch bump) in one step.
-      Do this once you're happy with everything above, not per-patch.
-    </p>
-    <div class="row" style="gap:6px;">
-      <button id="bumpMajorBtn">Bump major (breaking/big)</button>
-      <button id="bumpMinorBtn">Bump minor (new features)</button>
-      <button id="bumpPatchBtn">Bump patch (bug fixes)</button>
-    </div>
-    <div id="versionResult"></div>
+    <div class="pt-scrim" data-close-settings ${patchState.settingsOpen ? '' : 'hidden'}></div>
+    <aside class="pt-drawer" aria-label="Patch settings" ${patchState.settingsOpen ? '' : 'hidden'}>
+      <div class="pt-row">
+        <h3 class="pt-h" style="margin:0; font-size:15px;">Settings</h3>
+        <span class="tiny muted">saved on this PC only</span>
+        <span style="flex:1"></span>
+        <button type="button" data-close-settings aria-label="Close settings">✕</button>
+      </div>
+      <section class="pt-drawsec">
+        <div class="pt-row"><b>Steam</b><span class="tiny muted">tools/devtool/steam.config.json</span><span style="flex:1"></span><a href="#" class="tiny" data-guide="steam">How Steam publishing works</a></div>
+        <label class="pt-field">Builder account username
+          <input type="text" id="steamUsernameInput" placeholder="Steam builder account username" value="${escapeHtml(patchState.steam.username)}" ${inp} /></label>
+        <label class="pt-field">Steamworks SDK ContentBuilder folder
+          <input type="text" id="steamContentBuilderInput" placeholder="Path to Steamworks SDK's ContentBuilder folder" value="${escapeHtml(patchState.steam.contentBuilderDir)}" ${inp} /></label>
+        <div class="pt-grid2">
+          <fieldset class="pt-fieldset"><legend>Game</legend>
+            <label class="pt-field">App ID<input type="text" id="steamAppIdInput" placeholder="App ID" value="${escapeHtml(patchState.steam.appId)}" ${inp} /></label>
+            <label class="pt-field">Depot ID (Windows)<input type="text" id="steamDepotIdInput" placeholder="Depot ID (Windows)" value="${escapeHtml(patchState.steam.depotId)}" ${inp} /></label>
+            <label class="pt-field">Set live on branch<input type="text" id="steamBranchInput" list="steamBranchOptions" value="${escapeHtml(patchState.steam.branch || 'internal')}" ${inp} /></label>
+          </fieldset>
+          <fieldset class="pt-fieldset"><legend>Demo</legend>
+            <label class="pt-field">Demo App ID<input type="text" id="steamDemoAppIdInput" placeholder="Demo App ID" value="${escapeHtml(patchState.steam.demoAppId || '')}" ${inp} /></label>
+            <label class="pt-field">Demo Depot ID<input type="text" id="steamDemoDepotIdInput" placeholder="Demo Depot ID (Windows)" value="${escapeHtml(patchState.steam.demoDepotId || '')}" ${inp} /></label>
+            <label class="pt-field">Set live on branch<input type="text" id="steamDemoBranchInput" list="steamBranchOptions" value="${escapeHtml(patchState.steam.demoBranch || 'none')}" ${inp} /></label>
+          </fieldset>
+        </div>
+        <datalist id="steamBranchOptions">
+          <option value="internal">Dev Comp</option>
+          <option value="beta">Beta Testing</option>
+          <option value="none">Upload only -- set live yourself in Steamworks</option>
+          <option value="default">Store (steamcmd can't set this live -- same as none)</option>
+        </datalist>
+        <p class="tiny muted" style="margin:0;">Branch names must match Steamworks exactly (case-sensitive), per app. <code>none</code> or <code>default</code> uploads only. If Steam refuses to set a build live, the upload still counts and you get a ⚠ warning.</p>
+        <div class="pt-row">
+          <label class="pt-inline">Keep the newest
+            <input type="number" id="steamKeepInstallersInput" min="0" max="50" value="${escapeHtml(String(patchState.steam.keepInstallers ?? 2))}" style="width:64px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+            installers (0 = all)</label>
+          <span style="flex:1"></span>
+          <button id="steamConfigSaveBtn" class="primary">Save Steam</button>
+        </div>
+        <div id="steamConfigResult"></div>
+      </section>
+      <section class="pt-drawsec">
+        <div class="pt-row"><b>Discord</b><span class="tiny muted">tools/devtool/discord.config.json</span><span style="flex:1"></span>
+          <span class="tiny">${patchState.discordConfigured ? `🟢 ${escapeHtml(patchState.discordPreview)}` : '⚪ not configured yet'}</span></div>
+        <div class="pt-row" style="flex-wrap:nowrap;">
+          <input type="password" id="discordWebhookInput" placeholder="https://discord.com/api/webhooks/..." style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+          <button id="discordSaveBtn">Save webhook</button>
+        </div>
+      </section>
+    </aside>
 
-    <p class="tiny muted" style="margin-top:10px;">
-      Or set an exact version directly — e.g. resetting a dev-cycle version like
-      <code>${escapeHtml(patchState.version || '0.0.0')}</code> down to a real launch version like
-      <code>1.0.0</code>. This doesn't need to be higher than the current version; existing tags are
-      left alone either way. Do this once, right before your first real release upload.
-    </p>
-    <div class="row" style="gap:6px;">
-      <input type="text" id="exactVersionInput" placeholder="1.0.0"
-        style="width:120px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <button id="setVersionBtn">Set exact version</button>
-    </div>
-    <div id="setVersionResult"></div>
-
-    <div class="section-heading" style="margin-top:18px;">10. Upload to Steam</div>
-    <p class="tiny muted">
-      Two separate steps on purpose: Generate writes VDF scripts only — no network call, safe to run
-      repeatedly while you dial in the config above. Upload actually runs <code>steamcmd</code> against
-      whatever was last generated, targeting the branch selected above (defaults to <b>Dev Comp —
-      internal</b>, never Store/live, unless you changed it). Uses the newest installer in
-      <code>release/</code> — run Package (step 7) first if you haven't already for this batch.
-      Typical flow: upload to <b>internal</b> first and test it yourself, then once you're happy, use
-      Steamworks' own Builds page to set that exact same build live on <b>beta</b> for testers, then
-      later on <b>default</b> for the public release — no need to re-run Upload for each promotion.
-    </p>
-    <div class="row" style="gap:6px;">
-      <button id="steamGenerateBtn">Generate build scripts</button>
-      <button id="steamUploadBtn" class="primary">Upload to Steam</button>
-    </div>
-    <div id="steamGenerateResult"></div>
-    <div id="steamUploadResult"></div>
-    <p class="tiny muted" style="margin-top:10px;">
-      <b>Demo</b> (patch 0439) — same steps for the demo's own app, from <code>release-demo/</code>.
-      Run <b>Package demo</b> in step 7 first (Run package only builds the full game), and fill
-      in the Demo App ID / Depot ID above. Uses the demo's own branch setting (default: upload only).
-    </p>
-    <div class="row" style="gap:6px;">
-      <button id="steamGenerateDemoBtn">Generate demo build scripts</button>
-      <button id="steamUploadDemoBtn" class="primary">Upload demo to Steam</button>
-    </div>
-    <div id="steamGenerateDemoResult"></div>
-    <div id="steamUploadDemoResult"></div>
-
-    <div class="section-heading" style="margin-top:18px;">11. Post a dev update to Discord</div>
-    <p class="tiny muted">
-      Sends a message to your updates channel via a Discord webhook. The webhook URL is saved
-      locally (<code>tools/devtool/discord.config.json</code>, gitignored) and never leaves this
-      machine except in the request to Discord itself.
-    </p>
-    <div class="row" style="gap: 8px; margin-bottom: 8px;">
-      <input type="password" id="discordWebhookInput" placeholder="https://discord.com/api/webhooks/..."
-        style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <button id="discordSaveBtn">Save webhook</button>
-    </div>
-    <p class="tiny muted">
-      Status: ${patchState.discordConfigured ? `🟢 ${escapeHtml(patchState.discordPreview)}` : '⚪ not configured yet'}
-    </p>
-    <textarea id="discordMessageInput" rows="4"
-      placeholder="What changed in this update? (pre-fill from the selected patch below)"
-      style="width:100%; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px; box-sizing: border-box; font-family: inherit;">${escapeHtml(patchState.discordDraft)}</textarea>
-    <div class="row" style="gap:6px; margin-top:8px;">
-      <button id="discordFillBtn" ${!sel ? 'disabled' : ''}>Fill from selected patch</button>
-      <button id="discordFillSinceBtn" title="Merges every patch logged since the last one announced into one update">Fill since last announced${patchState.ship.shipState?.lastAnnouncedPatch ? ` (after ${escapeHtml(patchState.ship.shipState.lastAnnouncedPatch)})` : ''}</button>
-      <button id="discordPostBtn" class="primary" ${!patchState.discordConfigured ? 'disabled' : ''}>Post to Discord</button>
-    </div>
-    <p id="discordContinuity" class="tiny muted" style="margin: 4px 0 0;"></p>
-    <div id="discordResult"></div>
+    <div class="pt-scrim" data-close-guide ${patchState.guideTopic ? '' : 'hidden'}></div>
+    <div class="pt-guide" role="dialog" aria-label="Patches guide" ${patchState.guideTopic ? '' : 'hidden'}>
+      <div class="pt-row pt-guide-head">
+        <h3 class="pt-h" style="margin:0; font-size:15px;">Patches guide</h3>
+        <span style="flex:1"></span>
+        <button type="button" data-close-guide aria-label="Close guide">✕</button>
+      </div>
+      <div class="pt-guide-body">
+        <nav class="pt-guide-nav">${GUIDE_TOPICS.map((t) => `<button type="button" data-guide="${t.id}" class="${t.id === patchState.guideTopic ? 'on' : ''}">${t.label}</button>`).join('')}</nav>
+        <article class="pt-guide-text">${(GUIDE_TOPICS.find((t) => t.id === patchState.guideTopic) || GUIDE_TOPICS[0]).html()}</article>
+      </div>
     </div>
   `;
-
-  // Both panes stay mounted -- this only flips which is visible, so every
-  // handler wired further down still finds its element either way.
-  const setPatchPane = (pane) => {
-    patchState.cycleView = pane === 'cycle';
-    if (pane !== 'cycle') patchState.shipView = pane === 'ship';
-    document.getElementById('patchFlow').hidden = pane !== 'patch';
-    document.getElementById('shipFlow').hidden = pane !== 'ship';
-    document.getElementById('cycleFlow').hidden = pane !== 'cycle';
-    document.getElementById('patchFlowNavBtn').classList.toggle('active', pane === 'patch');
-    document.getElementById('shipFlowNavBtn').classList.toggle('active', pane === 'ship');
-    document.getElementById('cycleFlowNavBtn').classList.toggle('active', pane === 'cycle');
-  };
-  document.getElementById('patchFlowNavBtn').onclick = () => setPatchPane('patch');
-  document.getElementById('shipFlowNavBtn').onclick = () => setPatchPane('ship');
-  document.getElementById('cycleFlowNavBtn').onclick = () => setPatchPane('cycle');
+  wirePatchesShell();
   wireShipCycle();
 
   document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
@@ -4054,18 +4181,6 @@ function renderPatches() {
     document.getElementById('pruneInstallersResult').innerHTML = resultBlock(result, 'Clean up');
   };
 
-  const copyBuildBtn = document.getElementById('copyBuildBtn');
-  if (copyBuildBtn) copyBuildBtn.onclick = async () => {
-    if (!confirm('Copy the newest release/ installer to C:\\Custom Apps\\GuildBound Executables? This overwrites whatever is already there.')) return;
-    copyBuildBtn.disabled = true;
-    copyBuildBtn.textContent = 'Copying…';
-    const result = await api('/api/patches/copy-build', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-    });
-    copyBuildBtn.disabled = false;
-    copyBuildBtn.textContent = 'Copy latest build to Google Drive folder';
-    document.getElementById('copyBuildResult').innerHTML = resultBlock(result, 'Copy build');
-  };
 
   const steamConfigSaveBtn = document.getElementById('steamConfigSaveBtn');
   if (steamConfigSaveBtn) steamConfigSaveBtn.onclick = async () => {
