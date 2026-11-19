@@ -36,6 +36,8 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 // in-process.
 const SIM_DIR = path.join(__dirname, 'sim');
 const SIM_SCRIPT = path.join(SIM_DIR, 'runSim.ts');
+// Patch 0499 -- Balance Sandbox Raid Tuning worker.
+const RAID_SIM_SCRIPT = path.join(SIM_DIR, 'runRaidSim.ts');
 const SIM_PRESETS_PATH = path.join(SIM_DIR, 'presets.json');
 // Pixel-art item icons, organised into subfolders by category (weapons,
 // armor, shields, etc.) -- lives in the main project's own public/ folder,
@@ -2047,7 +2049,7 @@ async function readSimPresets() {
  *  fresh tsx process. Never throws -- failures come back as {ok:false} data,
  *  same convention run() above uses, so a bad override or a sim crash shows
  *  up in the Sandbox tab's result panel rather than as a 500. */
-function runSimVariant(payload) {
+function runSimVariant(payload, script = SIM_SCRIPT) {
   return new Promise((resolve) => {
     let child;
     try {
@@ -2064,7 +2066,7 @@ function runSimVariant(payload) {
       // component to worry about.
       const useShell = process.platform === 'win32';
       const exe = useShell ? `"${TSX_BIN}"` : TSX_BIN;
-      const scriptArg = useShell ? `"${SIM_SCRIPT}"` : SIM_SCRIPT;
+      const scriptArg = useShell ? `"${script}"` : script;
       child = spawn(exe, [scriptArg], { cwd: ROOT, timeout: SIM_TIMEOUT_MS, shell: useShell });
     } catch (err) {
       resolve({ ok: false, error: String(err.message ?? err) });
@@ -4624,6 +4626,37 @@ const server = http.createServer(async (req, res) => {
     const [baseline, modified] = await Promise.all([
       runSimVariant({ preset, overrides: {}, maxDays, sampleEveryDays: 30, heroCounts, buyFacilities }),
       runSimVariant({ preset, overrides, maxDays, sampleEveryDays: 30, heroCounts, buyFacilities }),
+    ]);
+    return json(res, 200, { baseline, modified });
+  }
+
+  // Patch 0499 -- Balance Sandbox Raid Tuning. mode 'meta' runs once (live
+  // data for the UI); 'one' / 'all' run live and proposed as two separate
+  // processes, same isolation rule as /api/sim/run.
+  if (url.pathname === '/api/sim/raid' && req.method === 'POST') {
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      return json(res, 400, { error: 'Malformed JSON in request body.' });
+    }
+    const mode = body.mode === 'meta' || body.mode === 'all' ? body.mode : 'one';
+    if (mode === 'meta') return json(res, 200, await runSimVariant({ mode: 'meta' }, RAID_SIM_SCRIPT));
+    const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+    const common = {
+      mode,
+      raidId: typeof body.raidId === 'string' ? body.raidId : undefined,
+      difficulty: typeof body.difficulty === 'string' ? body.difficulty : undefined,
+      party: Array.isArray(body.party) ? body.party.slice(0, 12) : undefined,
+      levelOffset: Number.isFinite(body.levelOffset) ? body.levelOffset : 0,
+      gear: typeof body.gear === 'string' ? body.gear : undefined,
+      statMode: typeof body.statMode === 'string' ? body.statMode : undefined,
+      guildMaxed: body.guildMaxed === true,
+      runs: Number.isFinite(body.runs) ? body.runs : 100,
+    };
+    const [baseline, modified] = await Promise.all([
+      runSimVariant({ ...common, overrides: {}, dataOverrides: {} }, RAID_SIM_SCRIPT),
+      runSimVariant({ ...common, overrides: isObj(body.overrides) ? body.overrides : {}, dataOverrides: isObj(body.dataOverrides) ? body.dataOverrides : {} }, RAID_SIM_SCRIPT),
     ]);
     return json(res, 200, { baseline, modified });
   }

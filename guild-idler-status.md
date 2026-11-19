@@ -1134,7 +1134,7 @@ raid fight).
 
 ## Backlog
 
-### Balance Sandbox redesign -- in progress (0497 engine v2, 0498 Economy + Time to level built)
+### Balance Sandbox redesign -- built (0497 engine v2, 0498 Economy + Time to level, 0499 Raid Tuning)
 Agreed 19 Nov 2026; mocked up on the Design canvas "Balance Sandbox
 Redesign" (Economy, Time to level, Raid Tuning: one raid / every raid).
 - **1 -- built, patch 0497:** engine fixes (per-hero xp, purchases feed
@@ -1147,7 +1147,7 @@ Redesign" (Economy, Time to level, Raid Tuning: one raid / every raid).
   saved scenarios. New real tuning knobs `economy.questGoldMultiplier` /
   `economy.questXpMultiplier` (default 1, read by QuestManager rewards and
   balance.expectedRatePerHour) so a dial tested here ships as-is.
-- **3 -- next:** Raid Tuning: raid + difficulty + party builder (class,
+- **3 -- built, patch 0499:** Raid Tuning: raid + difficulty + party builder (class,
   level, role) with gear presets (fresh / expected / raid drops / best in
   slot), N runs, per-encounter odds, full-clear %, where runs end, runs to
   first clear, verdict vs an intended band (Easy 50%+ / Normal 25-50 /
@@ -1158,7 +1158,19 @@ Redesign" (Economy, Time to level, Raid Tuning: one raid / every raid).
   Normal, and Mythic / Legendary need a party bonus of ~+28 / ~+48 for
   even a 5% full clear.
 - Later still: contracts, story chains, raids, harvest, commissions and
-  spending (net gold/hr), injuries/downtime, pets, Renown/Prestige.
+  spending (net gold/hr), injuries/downtime, pets, Renown/Prestige; raid
+  loot/gold/xp/duration and elemental gear in Raid Tuning.
+- **Raid balance findings from 0499 (not yet acted on):**
+  - Requiem for the Last God needs 2 melee + 2 ranged + 2 caster (6) but
+    a Normal party holds 3, so Normal always pays the missing-role penalty
+    (25% full clear with quest Epics vs 44-49% for the 70/60/50 raids).
+  - Raid set gear dwarfs quest gear: a level-18 party in Normal Frozen
+    Wyrmkeep drops has a party bonus of ~+56, against ~+13 for quest Epics
+    at the same level. With the tier-below drops, Heroic is "Easy" (50%+)
+    on 6 of 8 raids, 4 of them at the 85.7% ceiling (95% x 3). Mythic/Legendary
+    Requiem reach the same ceiling.
+  - With quest gear only, Mythic is under 2% and Legendary ~0% on every
+    3-encounter raid.
 
 ### Raid loot rework -- done (0486 DevTool, 0487 Patch A, 0488 Patch B, 0496 Patch C)
 Agreed with the owner (18 Nov 2026), split into three patches:
@@ -39747,3 +39759,100 @@ behaviour change on ship):
   every grid cell about +11%), saved a scenario, opened Raids, no page
   errors.
 - `node --check` on both DevTool files; `tsc --noEmit` clean.
+
+### DevTool: Balance Sandbox Raid Tuning -- one raid and every raid, odds from the real raid maths (patch 0499)
+```discord-update
+Dev Update | Balance Sandbox
+
+- Added raid tuning to the dev tools' balance simulator: pick a raid, difficulty, party and gear, and see each fight's odds, the full-clear chance and how many runs a clear takes, before and after a change
+- Added an every-raid view that shows each raid and difficulty's clear chance, and flags any that land outside their intended difficulty
+```
+
+Step 3 of the Balance Sandbox redesign (see Backlog), built to the agreed
+mockup's Raid Tuning screens. No game code changes.
+
+**Engine** (new `tools/devtool/sim/runRaidSim.ts`, own fresh tsx process
+per variant like runSim.ts, since `data/raids.ts` reads raid_difficulty
+tuning into `RAID_DIFFICULTIES` at import):
+- Odds are the game's own. The party is real Hero objects in a real
+  GameState (`createInitialState`, `HeroManager.create` +
+  `baselineStats` at the chosen level, stat points spent per the
+  chosen mode, trained roles via `hero.role`). Each encounter's chance is
+  `RaidManager.previewEncounterSuccess`, the number the raid screen shows
+  and `resolve` rolls. The "why" breakdown is rebuilt from RaidManager's
+  own parts (base, difficulty penalty, `partySuccessBonus`, elemental,
+  raid modifier, role penalty, clamp, role cap) and checked against it
+  (`breakdownMatches`; every case tested matched).
+- Run stats are exact, not sampled: a raid stops at the first failed
+  encounter and each chance is fixed once the party is locked, so full
+  clear = product of chances, "lost at encounter i" is exact, and over N
+  runs P(at least one clear) = 1 - (1 - p)^N, with average and median
+  runs to a first clear.
+- Gear presets, through `EquipmentManager.instantiate` (seeded):
+  - fresh (no gear);
+  - quest Rares / Epics / Legendaries at the hero's level: each slot's
+    blank procedural template, falling back a rarity when a slot has none;
+  - this raid's drops from the difficulty below ("going in", Normal gets
+    quest Epics);
+  - this difficulty's own drops ("farming").
+
+  Raid drops are rolled as `resolve` rolls them (raid-level item, party-level
+  scaling, the tier's source tag and rarity floor), one per slot, so set
+  bonuses apply; slots without a raid drop get quest Epics.
+- Options: stat points (spread evenly / all Strength / unspent), guild
+  fully built (every facility and upgrade maxed), auto-party level offset.
+  Auto party: meets the raid's role needs first (trains a hero into a
+  role when there aren't enough native classes), then the strongest
+  remaining classes, distinct classes as in game.
+- Proposed changes: any tuning override, plus in-memory raid data edits
+  (`dataOverrides.encounters[id].baseSuccess`,
+  `dataOverrides.raids[id].successModifier`) -- never written to disk.
+- Modes: `meta` (raids, encounters, classes, difficulties), `one`,
+  `all` (every raid x difficulty, auto party at the raid's level).
+  `rolesExceedParty` flags a difficulty whose party can't hold the
+  raid's role minimums.
+- Not modelled: pets, Renown, hero renown, attunements, elemental weapons
+  and resists (presets roll none), consumables, Raider's Charm, health and
+  injuries; loot, gold, xp and duration aren't reported.
+
+**Server:** `POST /api/sim/raid` (meta runs once; one/all run live and
+proposed as two processes, about 1s). `runSimVariant` takes the script path.
+
+**Sandbox Raids tab** (`app.js`, `.raid-*` styles), with its own sidebar:
+- **One raid / Every raid** toggle.
+- **Raid and difficulty:** a raid picker showing its role needs, and
+  difficulty buttons showing each party size.
+- **Party:** each hero's role, class and level are editable, with
+  "Auto-fill" and "Set every level". The party is auto-built on the first
+  run, then editable.
+- **Gear and build:** gear preset, stat points, auto level offset, runs,
+  and "guild fully built".
+- **Proposed changes:** the difficulty penalties, penalty per missing
+  role, and role-mismatch caps, plus the selected raid's modifier and
+  encounter bases. Live values are shown and changes highlighted, with
+  Reset. Edits carry over to Every raid.
+- **One raid results:**
+  - Cards: full clear (live -> proposed, points delta), runs to first
+    clear (average, median, chance within N runs), and verdict vs the
+    intended band.
+  - Per-encounter chance bars, live vs proposed, and where runs end.
+  - "Why" for the hardest encounter, and a party table marking the
+    weakest hero.
+  - A red notice when the raid's role needs exceed the party size.
+- **Every raid results:** a raid x difficulty grid of full clear, live ->
+  proposed, shaded by band (Easy 50%+ / Normal 25-50 / Hard 10-25 /
+  Brutal 2-10 / Out of reach under 2):
+  - ⚠ when a cell is outside the intended band; the intended bands are
+    editable (default Normal / Hard / Brutal / Brutal).
+  - ⚑ when role needs exceed the party size.
+  - Hovering a cell shows its party, party bonus and per-encounter odds.
+  - Auto findings: identical raids, the easiest and hardest Normal, and
+    role needs bigger than the party. Findings are in the Backlog entry.
+
+**Verified:** engine direct in every mode and gear preset (the grids
+above); `/api/sim/raid` with a tuning override (Heroic penalty 20 -> 25:
+Frozen Wyrmkeep Heroic 11.3% -> 9.3% with quest Rares) and an encounter
+edit together; headless Chrome: picked raid + Heroic, changed the penalty,
+simulated, edited a hero's role and re-ran, switched to Every raid with
+tier-below drops, no page errors. `node --check` both DevTool files;
+`tsc --noEmit` clean.

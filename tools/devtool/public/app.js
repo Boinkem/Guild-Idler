@@ -5628,13 +5628,416 @@ function renderSandboxTimeToLevel() {
     ${sbxFailures(g)}`;
 }
 
+/* Patch 0499 -- Balance Sandbox Raid Tuning (step 3). Odds come from
+ * tools/devtool/sim/runRaidSim.ts, which builds real heroes and asks
+ * RaidManager.previewEncounterSuccess, so they match the game exactly.
+ * Run stats are exact (a raid stops at the first failed encounter), not
+ * sampled. Own sidebar: raid, difficulty, party, gear, proposed changes. */
+
+const RAID_TUNING_DIALS = [
+  { id: 'raid_difficulty.heroic.successPenalty', label: 'Heroic success penalty' },
+  { id: 'raid_difficulty.mythic.successPenalty', label: 'Mythic success penalty' },
+  { id: 'raid_difficulty.legendary.successPenalty', label: 'Legendary success penalty' },
+  { id: 'raid.roleMismatchPenaltyPerSlot', label: 'Penalty per missing role' },
+  { id: 'raid_difficulty.heroic.roleMismatchCap', label: 'Heroic cap when roles missing' },
+  { id: 'raid_difficulty.mythic.roleMismatchCap', label: 'Mythic cap when roles missing' },
+  { id: 'raid_difficulty.legendary.roleMismatchCap', label: 'Legendary cap when roles missing' },
+];
+const RAID_GEAR_PRESETS = [
+  ['none', 'Fresh (no gear)'],
+  ['quest-rare', 'Quest Rares at their level'],
+  ['quest-epic', 'Quest Epics at their level'],
+  ['quest-legendary', 'Quest Legendaries at their level'],
+  ['raid-below', 'This raid\'s drops, tier below'],
+  ['raid-same', 'This raid\'s drops, this tier'],
+];
+const RAID_BANDS = [
+  { id: 'Easy', min: 50, cls: 'easy' },
+  { id: 'Normal', min: 25, cls: 'normal' },
+  { id: 'Hard', min: 10, cls: 'hard' },
+  { id: 'Brutal', min: 2, cls: 'brutal' },
+  { id: 'Out of reach', min: -1, cls: 'out' },
+];
+const RAID_ROLES = ['melee', 'ranged', 'caster'];
+
+if (!sandboxState.raid) {
+  sandboxState.raid = {
+    meta: null, mode: 'one', raidId: null, difficulty: 'normal', party: null,
+    gear: 'quest-epic', statMode: 'even', guildMaxed: false, levelOffset: 0, runs: 20,
+    dials: {}, enc: {}, mods: {},
+    intended: { normal: 'Normal', heroic: 'Hard', mythic: 'Brutal', legendary: 'Brutal' },
+    one: null, all: null, lastRun: null, running: false, error: null,
+  };
+}
+
+function raidBandOf(pct) { return RAID_BANDS.find((b) => pct >= b.min) || RAID_BANDS[RAID_BANDS.length - 1]; }
+function raidPct(p) { return p === null || p === undefined ? '—' : `${(p * 100).toFixed(p < 0.01 && p > 0 ? 2 : 1)}%`; }
+function raidCap(s) { return s ? s[0].toUpperCase() + s.slice(1) : ''; }
+
+function raidMetaRaid(id) { return sandboxState.raid.meta?.raids.find((r) => r.id === id) || null; }
+function raidMetaDiff(id) { return sandboxState.raid.meta?.difficulties.find((d) => d.id === id) || null; }
+function raidClassName(id) { return sandboxState.raid.meta?.classes.find((c) => c.id === id)?.name || id; }
+
+/** Proposed tuning + raid data edits, only where they differ from live. */
+function raidProposed() {
+  const r = sandboxState.raid;
+  const overrides = {};
+  for (const [id, v] of Object.entries(r.dials)) if (Number.isFinite(v) && v !== sandboxLiveValue(id)) overrides[id] = v;
+  const encounters = {};
+  const raids = {};
+  for (const raid of r.meta?.raids || []) {
+    if (Number.isFinite(r.mods[raid.id]) && r.mods[raid.id] !== raid.successModifier) raids[raid.id] = { successModifier: r.mods[raid.id] };
+    for (const e of raid.encounters) if (Number.isFinite(r.enc[e.id]) && r.enc[e.id] !== e.baseSuccess) encounters[e.id] = { baseSuccess: r.enc[e.id] };
+  }
+  return { overrides, dataOverrides: { encounters, raids } };
+}
+function raidChangeList() {
+  const r = sandboxState.raid;
+  const { overrides, dataOverrides } = raidProposed();
+  const out = Object.entries(overrides).map(([id, v]) => `${RAID_TUNING_DIALS.find((d) => d.id === id)?.label ?? id} ${sandboxLiveValue(id)} → ${v}`);
+  for (const [id, p] of Object.entries(dataOverrides.raids)) out.push(`${raidMetaRaid(id)?.name ?? id} modifier ${raidMetaRaid(id)?.successModifier} → ${p.successModifier}`);
+  for (const raid of r.meta?.raids || []) for (const e of raid.encounters) {
+    if (dataOverrides.encounters[e.id]) out.push(`${e.name} base ${e.baseSuccess} → ${dataOverrides.encounters[e.id].baseSuccess}`);
+  }
+  return out;
+}
+
+function renderRaidSidebar() {
+  const r = sandboxState.raid;
+  const raid = raidMetaRaid(r.raidId);
+  const diff = raidMetaDiff(r.difficulty);
+  const roleNeed = (rr) => Object.entries(rr || {}).filter(([, n]) => n).map(([role, n]) => `${n} ${role}`).join(', ');
+  const changes = raidChangeList();
+  const num = (attr, id, live, val, step = 1) => `<input type="number" ${attr}="${escapeHtml(id)}" step="${step}" value="${val ?? live ?? ''}" class="sbx-dial-num ${val !== undefined && val !== live ? 'changed' : ''}" />`;
+  return `
+    <aside class="sbx-side">
+      <section class="sbx-panel">
+        <div class="sbx-seg" role="group" aria-label="Raid view">
+          <button type="button" data-raid-mode="one" class="${r.mode === 'one' ? 'on' : ''}">One raid</button>
+          <button type="button" data-raid-mode="all" class="${r.mode === 'all' ? 'on' : ''}">Every raid</button>
+        </div>
+        ${r.mode === 'one' ? `
+          <label class="sbx-label">Raid
+            <select id="raidPick" class="sbx-select">
+              ${(r.meta?.raids || []).map((x) => `<option value="${escapeHtml(x.id)}" ${x.id === r.raidId ? 'selected' : ''}>${escapeHtml(x.name)} · lvl ${x.reqLevel}</option>`).join('')}
+            </select>
+            <span class="tiny muted">${raid ? `${raid.encounters.length} encounter${raid.encounters.length === 1 ? '' : 's'}${roleNeed(raid.requiredRoles) ? ` · needs ${escapeHtml(roleNeed(raid.requiredRoles))}` : ' · no role needs'}` : ''}</span>
+          </label>
+          <div class="sbx-label">Difficulty
+            <div class="sbx-seg" role="group" aria-label="Difficulty">
+              ${(r.meta?.difficulties || []).map((d) => `<button type="button" data-raid-diff="${d.id}" class="${d.id === r.difficulty ? 'on' : ''}">${escapeHtml(d.label)} · ${d.partySize}</button>`).join('')}
+            </div>
+          </div>` : `
+          <p class="tiny muted">Every raid × difficulty, each with an auto-built full party at the raid's own level (plus the offset below), meeting its role needs where the party size allows.</p>`}
+      </section>
+
+      ${r.mode === 'one' ? `
+      <section class="sbx-panel">
+        <div class="sbx-row"><h3>Party</h3><span class="tiny muted">${diff ? `${diff.partySize} heroes` : ''}</span><span class="sbx-grow"></span>
+          <button type="button" id="raidAutoParty" class="sbx-small">Auto-fill</button></div>
+        ${r.party ? `
+          ${r.party.map((p, i) => `
+            <div class="sbx-row raid-hero">
+              <select data-raid-role="${i}" class="sbx-select raid-role raid-role-${p.role}" aria-label="Role">
+                ${RAID_ROLES.map((role) => `<option value="${role}" ${role === p.role ? 'selected' : ''}>${raidCap(role)}</option>`).join('')}
+              </select>
+              <select data-raid-class="${i}" class="sbx-select sbx-grow" aria-label="Class">
+                ${(r.meta?.classes || []).map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === p.heroClass ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+              </select>
+              <input type="number" data-raid-level="${i}" min="1" max="${r.meta?.maxLevel ?? 55}" value="${p.level}" class="raid-lvl" aria-label="Level" />
+            </div>`).join('')}
+          <div class="sbx-row"><span class="tiny muted">Set every level to</span>
+            <input type="number" id="raidAllLevel" min="1" max="${r.meta?.maxLevel ?? 55}" value="${r.party[0]?.level ?? ''}" class="raid-lvl" />
+            <button type="button" id="raidAllLevelBtn" class="sbx-small">Set</button></div>`
+          : `<div class="tiny muted">Auto: a full party at the raid's level${r.levelOffset ? ` ${r.levelOffset > 0 ? '+' : ''}${r.levelOffset}` : ''}, meeting its role needs. Simulate once to edit each hero.</div>`}
+      </section>` : ''}
+
+      <section class="sbx-panel">
+        <h3>Gear and build</h3>
+        <label class="sbx-label">Gear everyone with
+          <select id="raidGear" class="sbx-select">
+            ${RAID_GEAR_PRESETS.map(([id, label]) => `<option value="${id}" ${id === r.gear ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+          </select></label>
+        <label class="sbx-label">Stat points
+          <select id="raidStats" class="sbx-select">
+            ${[['even', 'Spread evenly'], ['strength', 'All into Strength'], ['unspent', 'Unspent']].map(([id, label]) => `<option value="${id}" ${id === r.statMode ? 'selected' : ''}>${label}</option>`).join('')}
+          </select></label>
+        <div class="sbx-two">
+          <label class="sbx-label">Auto party level ±
+            <input type="number" id="raidOffset" min="-20" max="30" value="${r.levelOffset}" /></label>
+          <label class="sbx-label">Runs
+            <input type="number" id="raidRuns" min="1" max="100000" value="${r.runs}" /></label>
+        </div>
+        <label class="sbx-check"><input type="checkbox" id="raidGuild" ${r.guildMaxed ? 'checked' : ''} /> Guild fully built (Barracks, upgrades)</label>
+      </section>
+
+      <section class="sbx-panel">
+        <div class="sbx-row"><h3>Proposed changes</h3><span class="sbx-grow"></span>
+          <button type="button" id="raidReset" class="sbx-small" ${changes.length ? '' : 'disabled'}>Reset to live</button></div>
+        <div class="sbx-dial-group">Difficulty (tuning)</div>
+        ${RAID_TUNING_DIALS.map((d) => {
+          const live = sandboxLiveValue(d.id);
+          const val = r.dials[d.id];
+          return `<div class="sbx-row sbx-dial ${val !== undefined && val !== live ? 'changed' : ''}"><span class="sbx-dial-label sbx-grow">${escapeHtml(d.label)}</span>
+            <span class="muted tiny">live ${live ?? '?'}</span>${num('data-raid-dial', d.id, live, val)}</div>`;
+        }).join('')}
+        ${r.mode === 'one' && raid ? `
+          <div class="sbx-dial-group">${escapeHtml(raid.name)} (raid data)</div>
+          <div class="sbx-row sbx-dial ${r.mods[raid.id] !== undefined && r.mods[raid.id] !== raid.successModifier ? 'changed' : ''}"><span class="sbx-dial-label sbx-grow">Raid success modifier</span>
+            <span class="muted tiny">live ${raid.successModifier}</span>${num('data-raid-mod', raid.id, raid.successModifier, r.mods[raid.id])}</div>
+          ${raid.encounters.map((e) => `<div class="sbx-row sbx-dial ${r.enc[e.id] !== undefined && r.enc[e.id] !== e.baseSuccess ? 'changed' : ''}"><span class="sbx-dial-label sbx-grow">${escapeHtml(e.name)} base</span>
+            <span class="muted tiny">live ${e.baseSuccess}</span>${num('data-raid-enc', e.id, e.baseSuccess, r.enc[e.id])}</div>`).join('')}`
+          : `<div class="tiny muted">Encounter and raid-modifier edits are made in One raid and carry over here.</div>`}
+        ${changes.length ? `<div class="tiny muted">${changes.length} change${changes.length === 1 ? '' : 's'}: ${escapeHtml(changes.join('; '))}</div>` : ''}
+      </section>
+
+      ${r.mode === 'all' ? `
+      <section class="sbx-panel">
+        <h3>Intended difficulty</h3>
+        ${(r.meta?.difficulties || []).map((d) => `<div class="sbx-row"><span class="sbx-grow">${escapeHtml(d.label)}</span>
+          <select data-raid-intent="${d.id}" class="sbx-select">${RAID_BANDS.map((b) => `<option ${r.intended[d.id] === b.id ? 'selected' : ''}>${b.id}</option>`).join('')}</select></div>`).join('')}
+        <div class="tiny muted">Bands by full-clear chance: Easy 50%+, Normal 25–50, Hard 10–25, Brutal 2–10, Out of reach under 2.</div>
+      </section>` : ''}
+
+      <button id="raidRunBtn" class="primary sbx-run" ${r.running || !r.meta ? 'disabled' : ''}>${r.running ? 'Simulating…' : 'Simulate live vs proposed'}</button>
+    </aside>`;
+}
+
+function raidBar(pct, cls) { return `<div class="raid-bar"><span class="${cls}" style="width:${Math.max(0, Math.min(100, pct)).toFixed(1)}%"></span></div>`; }
+
+function renderRaidOne() {
+  const r = sandboxState.raid;
+  if (!r.one) return '<div class="sbx-panel sbx-empty">Pick a raid, difficulty and party, then simulate.</div>';
+  const b = sbxOk(r.one.baseline);
+  const m = sbxOk(r.one.modified);
+  if (!b || !m) return sbxFailures(r.one);
+  const ptsDelta = (live, prop) => {
+    const d = (prop - live) * 100;
+    if (Math.abs(d) < 0.05) return { text: 'No change', cls: 'flat' };
+    return { text: `${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(1)} points`, cls: d > 0 ? 'good' : 'bad' };
+  };
+  const runsFmt = (v) => (v === null || v === undefined ? 'Never' : v < 10 ? v.toFixed(1) : Math.round(v).toLocaleString());
+  const fc = ptsDelta(b.fullClear, m.fullClear);
+  const intended = r.intended[m.difficulty];
+  const bandB = raidBandOf(b.fullClear * 100);
+  const bandM = raidBandOf(m.fullClear * 100);
+  const runs = m.runs;
+  const hardest = [...m.encounters].sort((x, y) => x.chance - y.chance)[0];
+  const bd = hardest?.breakdown;
+  const sign = (v) => (Math.abs(v) < 0.05 ? '0' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1).replace(/\.0$/, '')}`);
+  const whyRows = bd ? [
+    ['Encounter base', bd.base, 'flat'],
+    [`${raidCap(m.difficulty)} penalty`, bd.difficultyPenalty, bd.difficultyPenalty < 0 ? 'bad' : 'flat'],
+    [`Party bonus (weakest hero counts most)`, bd.partyBonus, bd.partyBonus >= 0 ? 'good' : 'bad'],
+    ['Elemental (party average)', bd.elemental, bd.elemental > 0 ? 'good' : 'flat'],
+    ['Raid modifier', bd.raidModifier, bd.raidModifier < 0 ? 'bad' : bd.raidModifier > 0 ? 'good' : 'flat'],
+    ['Missing roles', bd.roleMismatch, bd.roleMismatch < 0 ? 'bad' : 'flat'],
+  ] : [];
+  const weakest = Math.min(...m.heroes.map((h) => h.contribution));
+  const needs = Object.entries(m.requiredRoles || {}).filter(([, n]) => n);
+  return `
+    <div class="sbx-cards sbx-cards-3">
+      <div class="sbx-card"><span class="sbx-card-label">Full clear per run</span>
+        <div class="sbx-card-vals"><span class="muted">${raidPct(b.fullClear)}</span><span class="muted">→</span><b>${raidPct(m.fullClear)}</b></div>
+        <span class="sbx-delta ${fc.cls}">${fc.text}</span></div>
+      <div class="sbx-card"><span class="sbx-card-label">Runs to first clear (average)</span>
+        <div class="sbx-card-vals"><span class="muted">${runsFmt(b.expectedRunsToFirstClear)}</span><span class="muted">→</span><b>${runsFmt(m.expectedRunsToFirstClear)}</b></div>
+        <span class="sbx-delta flat">Half of parties clear within ${m.medianRunsToFirstClear ?? '∞'} run${m.medianRunsToFirstClear === 1 ? '' : 's'} (live ${b.medianRunsToFirstClear ?? '∞'}). In ${runs} run${runs === 1 ? '' : 's'}: ${raidPct(m.atLeastOneClear)} chance of a clear (live ${raidPct(b.atLeastOneClear)}).</span></div>
+      <div class="sbx-card"><span class="sbx-card-label">Verdict vs intended</span>
+        <div class="sbx-row"><span class="tiny muted">Intended</span><b>${escapeHtml(intended)}</b><span class="tiny muted">· sim says</span>
+          <span class="raid-pill raid-band-${bandM.cls}">${escapeHtml(bandM.id)}${bandM.id === intended ? ' ✓' : ' ⚠'}</span></div>
+        <span class="sbx-delta flat">Live: ${escapeHtml(bandB.id)}. Change the intended band in Every raid.</span></div>
+    </div>
+
+    ${m.rolesExceedParty ? `<div class="patch-result bad"><div class="patch-result-label">This difficulty can never meet the raid's role needs</div>
+      <div class="tiny">${escapeHtml(m.raidName)} needs ${needs.map(([role, n]) => `${n} ${role}`).join(', ')} (${needs.reduce((a, [, n]) => a + n, 0)} heroes) but a ${raidCap(m.difficulty)} party holds ${m.partySize}, so every run pays the missing-role penalty.</div></div>` : ''}
+
+    <section class="sbx-panel">
+      <div class="sbx-row"><h3>Per encounter: chance to win</h3><span class="sbx-grow"></span>
+        <span class="tiny muted"><i class="sbx-sw raid-live"></i>Live <i class="sbx-sw raid-prop"></i>Proposed</span></div>
+      ${m.encounters.map((e, i) => {
+        const be = b.encounters[i];
+        return `<div class="raid-enc">
+          <span>${escapeHtml(e.name)}<span class="tiny muted raid-enc-note">base ${be?.breakdown.base ?? '?'}${e.breakdown.base !== be?.breakdown.base ? ` → ${e.breakdown.base}` : ''}${e.breakdown.roleCap != null ? ` · capped at ${e.breakdown.roleCap} (roles)` : ''}${e.breakdownMatches ? '' : ' · ⚠ breakdown differs from game'}</span></span>
+          <div>${raidBar(be?.chance ?? 0, 'raid-live')}${raidBar(e.chance, 'raid-prop')}</div>
+          <span class="raid-num"><span class="muted">${(be?.chance ?? 0).toFixed(1)}%</span> → <b>${e.chance.toFixed(1)}%</b></span>
+        </div>`;
+      }).join('')}
+    </section>
+
+    <div class="raid-split">
+      <section class="sbx-panel">
+        <h3>Where runs end</h3>
+        ${[...m.ends.map((e, i) => ({ label: `Lost at ${e.name}`, live: b.ends[i]?.lostHere ?? 0, prop: e.lostHere, cls: 'raid-lost' })),
+          { label: 'Full clear', live: b.fullClear, prop: m.fullClear, cls: 'raid-clear' }].map((x) => `
+          <div class="raid-enc">
+            <span class="tiny">${escapeHtml(x.label)}</span>
+            <div>${raidBar(x.live * 100, `${x.cls} raid-faded`)}${raidBar(x.prop * 100, x.cls)}</div>
+            <span class="raid-num"><span class="muted">${raidPct(x.live)}</span> → <b>${raidPct(x.prop)}</b></span>
+          </div>`).join('')}
+      </section>
+      <section class="sbx-panel">
+        <h3>Why: ${escapeHtml(hardest?.name ?? '')} (hardest, proposed)</h3>
+        ${whyRows.map(([k, v, cls]) => `<div class="sbx-row raid-why"><span class="sbx-grow">${escapeHtml(k)}</span><b class="sbx-delta ${cls}">${k === 'Encounter base' ? v : sign(v)}</b></div>`).join('')}
+        ${bd?.clampedTo != null ? `<div class="sbx-row raid-why"><span class="sbx-grow">Clamped to the 5–95% limits</span><b>${bd.clampedTo}</b></div>` : ''}
+        ${bd?.roleCap != null ? `<div class="sbx-row raid-why"><span class="sbx-grow">Capped while roles are missing</span><b>${bd.roleCap}</b></div>` : ''}
+        <div class="sbx-row raid-why raid-why-total"><span class="sbx-grow">Chance to win</span><b>${hardest ? hardest.chance.toFixed(1) : '—'}%</b></div>
+      </section>
+    </div>
+
+    <section class="sbx-panel sbx-flush">
+      <table>
+        <thead><tr><th>Hero</th><th>Role</th><th>Level</th><th>Gear score</th><th>Own success bonus</th></tr></thead>
+        <tbody>${m.heroes.map((h) => `<tr class="${h.contribution === weakest ? 'raid-weakest' : ''}">
+          <td>${escapeHtml(raidClassName(h.heroClass))}${h.contribution === weakest ? ' <span class="tiny muted">(weakest: sets the floor)</span>' : ''}</td>
+          <td>${raidCap(h.role)}</td><td>${h.level}</td><td>${h.gearScore}</td><td>${sign(h.contribution)}</td></tr>`).join('')}</tbody>
+      </table>
+    </section>
+    <p class="tiny muted">${escapeHtml(raidRunCaption())} Party bonus ${sign(b.partyBonus)} live, ${sign(m.partyBonus)} proposed. Odds are RaidManager's own; run numbers are exact, not sampled. Not modelled: pets, Renown, elemental gear, consumables, Raider's Charm, injuries.</p>`;
+}
+
+function raidRunCaption() {
+  const l = sandboxState.raid.lastRun;
+  if (!l) return '';
+  const gear = RAID_GEAR_PRESETS.find(([id]) => id === l.gear)?.[1] ?? l.gear;
+  return `Ran: ${gear}, stat points ${l.statMode}, guild ${l.guildMaxed ? 'fully built' : 'unbuilt'}${l.levelOffset ? `, auto level ${l.levelOffset > 0 ? '+' : ''}${l.levelOffset}` : ''}; proposed = ${l.changes.length ? l.changes.join('; ') : 'same as live'}.`;
+}
+
+function raidAllFindings(grid) {
+  const out = [];
+  const sig = (row) => `${row.baseSuccesses.join('/')}|${row.successModifier}`;
+  const groups = {};
+  for (const row of grid) (groups[sig(row)] ??= []).push(row);
+  const biggest = Object.values(groups).sort((a, b) => b.length - a.length)[0];
+  if (biggest && biggest.length > 1) {
+    out.push({ title: `${biggest.length} of ${grid.length} raids play identically`, text: `Their encounters are all ${biggest[0].baseSuccesses.join(' / ')}% base (modifier ${biggest[0].successModifier}), so at their own level none is harder than another: ${biggest.map((r) => r.raidName).join(', ')}.` });
+  }
+  const normal = grid.map((r) => ({ r, p: r.cells[0]?.fullClear ?? 0 })).sort((a, b) => b.p - a.p);
+  if (normal.length > 1) out.push({ title: `Easiest: ${normal[0].r.raidName}`, text: `${raidPct(normal[0].p)} Normal full clear (${normal[0].r.encounters} encounter${normal[0].r.encounters === 1 ? '' : 's'}). Hardest Normal: ${normal[normal.length - 1].r.raidName} at ${raidPct(normal[normal.length - 1].p)}.` });
+  const exceed = [];
+  for (const row of grid) for (const c of row.cells) if (c.rolesExceedParty) exceed.push(`${row.raidName} on ${raidCap(c.difficulty)}`);
+  if (exceed.length) out.push({ title: 'Role needs bigger than the party', text: `${exceed.join(', ')}: the raid needs more heroes for its roles than the party holds, so it always pays the missing-role penalty.` });
+  return out;
+}
+
+function renderRaidAll() {
+  const r = sandboxState.raid;
+  if (!r.all) return '<div class="sbx-panel sbx-empty">Pick a gear preset, then simulate every raid.</div>';
+  const b = sbxOk(r.all.baseline);
+  const m = sbxOk(r.all.modified);
+  if (!b || !m) return sbxFailures(r.all);
+  const diffs = r.meta?.difficulties || [];
+  const findings = raidAllFindings(m.grid);
+  return `
+    <section class="sbx-panel">
+      <div class="sbx-row"><h3>Full-clear chance per run</h3><span class="sbx-grow"></span>
+        <span class="tiny muted">live → proposed · ⚠ = proposed is outside the band you intended · ⚑ = role needs exceed party size</span></div>
+      <table class="sbx-ttl raid-grid">
+        <thead><tr><th>Raid</th>${diffs.map((d) => `<th>${escapeHtml(d.label)}<span class="tiny muted raid-th-sub">intended ${escapeHtml(r.intended[d.id])} · ${d.partySize} heroes</span></th>`).join('')}</tr></thead>
+        <tbody>${m.grid.map((row, ri) => `<tr><th scope="row">${escapeHtml(row.raidName)}<span class="tiny muted raid-th-sub">lvl ${row.reqLevel} · ${row.encounters} fight${row.encounters === 1 ? '' : 's'} · ${row.baseSuccesses.join('/')}${row.successModifier ? ` (${row.successModifier > 0 ? '+' : ''}${row.successModifier})` : ''}</span></th>
+          ${row.cells.map((c, ci) => {
+            const live = b.grid[ri]?.cells[ci]?.fullClear ?? null;
+            const band = raidBandOf(c.fullClear * 100);
+            const off = band.id !== r.intended[c.difficulty];
+            return `<td class="raid-band-${band.cls}" title="Party: ${escapeHtml(c.party.map(raidClassName).join(', '))} · bonus ${c.partyBonus.toFixed(1)} · encounters ${c.chances.map((x) => x.toFixed(0)).join('/')}%">
+              <div class="tiny muted">${raidPct(live)} →</div>
+              <div><span class="sbx-ttl-val">${raidPct(c.fullClear)}</span> <span class="tiny">${escapeHtml(band.id)}</span> ${off ? '<span class="raid-flag">⚠</span>' : ''}${c.rolesExceedParty ? ' <span class="raid-flag" title="Role needs exceed party size">⚑</span>' : ''}</div>
+            </td>`;
+          }).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="sbx-row tiny muted sbx-legend">
+        ${RAID_BANDS.map((bd) => `<span><i class="sbx-sw raid-band-${bd.cls}"></i>${bd.id}${bd.min >= 0 ? ` ${bd.min}%+` : ' under 2%'}</span>`).join('')}
+        <span class="sbx-grow"></span><span>Hover a cell for its party and per-encounter odds.</span>
+      </div>
+    </section>
+    <div class="sbx-cards sbx-cards-3">${findings.map((f) => `<div class="sbx-card"><span class="sbx-card-label">Finding</span><b>${escapeHtml(f.title)}</b><span class="tiny muted">${escapeHtml(f.text)}</span></div>`).join('')}</div>
+    <p class="tiny muted">${escapeHtml(raidRunCaption())} Odds are RaidManager's own.</p>`;
+}
+
+async function ensureRaidMeta() {
+  const r = sandboxState.raid;
+  if (r.meta || r.loadingMeta) return;
+  r.loadingMeta = true;
+  try {
+    const res = await api('/api/sim/raid', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'meta' }) });
+    if (!res.ok) throw new Error(res.error || 'Could not load raid data');
+    r.meta = res.result;
+    r.raidId = r.raidId || r.meta.raids[0]?.id;
+  } catch (err) {
+    r.error = err.message;
+  }
+  r.loadingMeta = false;
+  if (sandboxState.view === 'raids') renderSandbox();
+}
+
 function renderSandboxRaids() {
-  return `<div class="sbx-panel sbx-empty">
-    <h3>Raid tuning -- coming next (step 3)</h3>
-    <p class="tiny muted">Pick a raid, difficulty and party (with gear presets), run it many times and see per-encounter odds,
-    full-clear chance, where runs end and runs to a first clear, plus an every-raid × difficulty grid.
-    It will use RaidManager's own success maths. See the Balance Sandbox entry in guild-idler-status.md's Backlog.</p>
-  </div>`;
+  const r = sandboxState.raid;
+  if (!r.meta) { ensureRaidMeta(); return `<div class="sbx-panel sbx-empty">${r.error ? escapeHtml(r.error) : 'Loading raid data…'}</div>`; }
+  return `${r.error ? `<div class="patch-result bad"><div class="patch-result-label">Raid simulation failed</div><pre>${escapeHtml(r.error)}</pre></div>` : ''}
+    ${r.mode === 'one' ? renderRaidOne() : renderRaidAll()}`;
+}
+
+function bindRaidSidebar() {
+  const r = sandboxState.raid;
+  const rerender = () => renderSandbox();
+  appEl.querySelectorAll('[data-raid-mode]').forEach((btn) => { btn.onclick = () => { r.mode = btn.dataset.raidMode; rerender(); }; });
+  appEl.querySelectorAll('[data-raid-diff]').forEach((btn) => { btn.onclick = () => { r.difficulty = btn.dataset.raidDiff; r.party = null; r.one = null; rerender(); }; });
+  const pick = document.getElementById('raidPick');
+  if (pick) pick.onchange = () => { r.raidId = pick.value; r.party = null; r.one = null; rerender(); };
+  const auto = document.getElementById('raidAutoParty');
+  if (auto) auto.onclick = () => { r.party = null; rerender(); };
+  const intOf = (v) => parseInt(v, 10);
+  appEl.querySelectorAll('[data-raid-role]').forEach((el) => { el.onchange = () => { r.party[Number(el.dataset.raidRole)].role = el.value; rerender(); }; });
+  appEl.querySelectorAll('[data-raid-class]').forEach((el) => { el.onchange = () => { r.party[Number(el.dataset.raidClass)].heroClass = el.value; rerender(); }; });
+  appEl.querySelectorAll('[data-raid-level]').forEach((el) => {
+    el.onchange = () => { const v = intOf(el.value); if (Number.isFinite(v)) r.party[Number(el.dataset.raidLevel)].level = Math.max(1, Math.min(r.meta.maxLevel, v)); rerender(); };
+  });
+  const allBtn = document.getElementById('raidAllLevelBtn');
+  if (allBtn) allBtn.onclick = () => {
+    const v = intOf(document.getElementById('raidAllLevel').value);
+    if (Number.isFinite(v)) for (const p of r.party) p.level = Math.max(1, Math.min(r.meta.maxLevel, v));
+    rerender();
+  };
+  document.getElementById('raidGear').onchange = (e) => { r.gear = e.target.value; rerender(); };
+  document.getElementById('raidStats').onchange = (e) => { r.statMode = e.target.value; rerender(); };
+  document.getElementById('raidOffset').onchange = (e) => { const v = intOf(e.target.value); r.levelOffset = Number.isFinite(v) ? v : 0; rerender(); };
+  document.getElementById('raidRuns').onchange = (e) => { const v = intOf(e.target.value); r.runs = Number.isFinite(v) && v > 0 ? v : 20; rerender(); };
+  document.getElementById('raidGuild').onchange = (e) => { r.guildMaxed = e.target.checked; rerender(); };
+  const numIn = (attr, store) => appEl.querySelectorAll(`[${attr}]`).forEach((el) => {
+    el.onchange = () => { const v = parseFloat(el.value); const key = el.getAttribute(attr); if (Number.isFinite(v)) store[key] = v; else delete store[key]; rerender(); };
+  });
+  numIn('data-raid-dial', r.dials);
+  numIn('data-raid-mod', r.mods);
+  numIn('data-raid-enc', r.enc);
+  const reset = document.getElementById('raidReset');
+  if (reset) reset.onclick = () => { r.dials = {}; r.mods = {}; r.enc = {}; rerender(); };
+  appEl.querySelectorAll('[data-raid-intent]').forEach((el) => { el.onchange = () => { r.intended[el.dataset.raidIntent] = el.value; rerender(); }; });
+
+  const run = document.getElementById('raidRunBtn');
+  if (run) run.onclick = async () => {
+    r.running = true;
+    r.error = null;
+    rerender();
+    const { overrides, dataOverrides } = raidProposed();
+    const body = {
+      mode: r.mode, raidId: r.raidId, difficulty: r.difficulty, party: r.mode === 'one' ? (r.party || undefined) : undefined,
+      levelOffset: r.levelOffset, gear: r.gear, statMode: r.statMode, guildMaxed: r.guildMaxed, runs: r.runs, overrides, dataOverrides,
+    };
+    try {
+      const res = await api('/api/sim/raid', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (r.mode === 'one') {
+        r.one = res;
+        const used = sbxOk(res.modified)?.party;
+        if (!r.party && used) r.party = used.map((p) => ({ ...p }));
+      } else r.all = res;
+      r.lastRun = { gear: r.gear, statMode: r.statMode, guildMaxed: r.guildMaxed, levelOffset: r.levelOffset, changes: raidChangeList() };
+    } catch (err) {
+      r.error = err.message;
+    }
+    r.running = false;
+    rerender();
+  };
 }
 
 function renderSandbox() {
@@ -5651,7 +6054,7 @@ function renderSandbox() {
       </div>
     </div>
     <div class="sbx-layout">
-      ${renderSandboxSidebar()}
+      ${view === 'raids' ? renderRaidSidebar() : renderSandboxSidebar()}
       <section class="sbx-main">
         <div id="sandboxRunError">${s.runError ? `<div class="patch-result bad"><div class="patch-result-label">Simulation failed</div><pre>${escapeHtml(s.runError)}</pre></div>` : ''}</div>
         ${view === 'economy' ? renderSandboxEconomy() : view === 'time' ? renderSandboxTimeToLevel() : renderSandboxRaids()}
@@ -5659,6 +6062,8 @@ function renderSandbox() {
     </div>`;
 
   appEl.querySelectorAll('[data-sbx-view]').forEach((btn) => { btn.onclick = () => { s.view = btn.dataset.sbxView; renderSandbox(); }; });
+  // Patch 0499 -- the Raids view has its own sidebar and bindings.
+  if (view === 'raids') { if (s.raid.meta) bindRaidSidebar(); return; }
   appEl.querySelectorAll('[data-sbx-preset]').forEach((btn) => { btn.onclick = () => { s.preset = btn.dataset.sbxPreset; renderSandbox(); }; });
   const intIn = (id, fn) => { const el = document.getElementById(id); if (el) el.onchange = () => { fn(parseInt(el.value, 10)); renderSandbox(); }; };
   intIn('sbxHeroes', (v) => { s.heroes = Number.isFinite(v) && v > 0 ? Math.min(20, v) : 1; });
