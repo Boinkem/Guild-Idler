@@ -39462,3 +39462,33 @@ too (`patch-0453-over-level-rewards` → "Apply over level rewards", not
 **Verified:** `node --check` on both files. Ran `/api/patches/tidy` against
 dummy copies of three real root names plus `0499-not-applied-yet.patch`:
 moved the three to `patches/applied/`, left 0499 in place.
+
+### DevTool: live status bar under the Auto buttons; Discord unticked by default (patch 0494)
+```discord-update
+Dev Update | Changes
+
+- Added a live progress bar under the dev tools' Patch buttons
+- Changed the dev tools to not post to Discord unless you tick it
+```
+
+Two direct requests on the Patches page's Auto tab (patch 0492).
+
+**Live status bar** (`renderShipLiveBar`, `tools/devtool/public/app.js`),
+right under Patch / Patch & Upload, so a run can be followed without
+scrolling to the checklist: run title (Patch / Patch & Upload · target /
+Release), "Step k of N · <current step>", elapsed time, and an 8px bar
+(done steps green, the running step an animated purple stripe, a failed
+step red; stripes off under `prefers-reduced-motion`). Done: "Done · N of N
+steps". Stopped: "Stopped at step k of N · <step>" plus a "Details ↓" link
+that scrolls to the full checklist. `role="status"` / `aria-live="polite"`.
+Redrawn on every 2s poll through `refreshShipJobView`, from the same job
+data as the checklist.
+
+**Discord unticked by default:** "Post a Discord update at the end" no
+longer starts ticked when a webhook is saved; tick it per run. The
+"announce every patch after" row stays hidden until it's ticked, as before.
+
+**Verified:** `node --check`. Headless Chrome with a faked running job and
+a faked stopped job: checkbox starts unticked, bar shows step 7 of 12
+"Package game" with the stripe while running and the buttons locked, red
+segment and Details link when stopped; no page errors.

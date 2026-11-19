@@ -3313,7 +3313,7 @@ function renderShipCycle() {
 
         <div class="pt-subcard">
           <label class="pt-check">
-            <input type="checkbox" id="shipDiscordCheck" ${patchState.discordConfigured ? 'checked' : 'disabled'} ${dis} />
+            <input type="checkbox" id="shipDiscordCheck" ${patchState.discordConfigured ? '' : 'disabled'} ${dis} />
             Post a Discord update at the end ${patchState.discordConfigured ? '' : '<span class="muted">(save a webhook in Settings first)</span>'}
           </label>
           <div id="shipAnnounceRow" class="pt-row pt-indent">
@@ -3346,6 +3346,7 @@ function renderShipCycle() {
               : `Package → Build scripts → Upload v${escapeHtml(patchState.version || '?')} exactly as pushed -- no apply, commit, bump or push. Stops if anything isn't pushed yet.`}</span>
           </div>
         </div>
+        <div id="shipLiveBar">${renderShipLiveBar()}</div>
 
         <p class="tiny ${branch === 'default' ? 'bad' : 'muted'}" style="margin:0;">
           Sets live on: game <b>${escapeHtml(liveName(branch))}</b>, demo <b>${escapeHtml(liveName(demoBranch))}</b>.
@@ -3375,6 +3376,41 @@ function formatStepTime(step) {
   const ms = (step.endedAt || Date.now()) - step.startedAt;
   const s = Math.round(ms / 1000);
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+}
+
+/** Patch 0493 -- the status bar under the Auto buttons: what's running
+ *  right now, step k of N, elapsed time and a progress bar, so the run
+ *  can be followed without scrolling to the checklist below. Refreshed on
+ *  every poll (refreshShipJobView). */
+function renderShipLiveBar() {
+  const job = patchState.ship.job;
+  if (!job) return '';
+  const total = job.steps.length || 1;
+  const done = job.steps.filter((x) => x.state === 'ok' || x.state === 'warn').length;
+  const running = job.steps.find((x) => x.state === 'running');
+  const failed = job.steps.find((x) => x.state === 'failed');
+  const target = { game: 'game', demo: 'demo', both: 'game + demo' }[job.opts.target];
+  const title = job.opts.mode === 'release' ? `Release ${target}` : job.opts.mode === 'patch' ? 'Patch' : `Patch &amp; Upload · ${target}`;
+  const elapsed = formatStepTime({ startedAt: job.startedAt, endedAt: job.running ? null : (job.finishedAt || Date.now()) });
+  let cls = 'run';
+  let text = running ? `Step ${done + 1} of ${total} · ${escapeHtml(running.label)}` : 'Starting…';
+  if (!job.running && job.done) { cls = 'good'; text = `Done · ${total} of ${total} steps`; }
+  else if (!job.running && failed) { cls = 'bad'; text = `Stopped at step ${done + 1} of ${total} · ${escapeHtml(failed.label)}`; }
+  const pct = Math.round(((job.done ? total : done) / total) * 100);
+  const runPct = job.running && running ? Math.round((1 / total) * 100) : 0;
+  const badPct = !job.running && failed ? Math.round((1 / total) * 100) : 0;
+  return `
+    <div class="pt-livebar ${cls}" role="status" aria-live="polite">
+      <div class="pt-row" style="gap:10px;">
+        ${job.running ? '<span class="ship-spin" aria-hidden="true">◌</span>' : cls === 'good' ? '<span class="good" aria-hidden="true">✓</span>' : '<span class="bad" aria-hidden="true">✗</span>'}
+        <b>${title}</b>
+        <span class="pt-livebar-step">${text}</span>
+        <span style="flex:1"></span>
+        <span class="tiny muted">${elapsed}</span>
+        ${!job.running ? '<a href="#shipJob" class="tiny" data-ship-details>Details ↓</a>' : ''}
+      </div>
+      <div class="pt-progress pt-progress-lg"><span class="ok" style="width:${pct}%"></span>${runPct ? `<span class="running" style="width:${runPct}%"></span>` : ''}${badPct ? `<span class="bad" style="width:${badPct}%"></span>` : ''}</div>
+    </div>`;
 }
 
 function renderShipJob() {
@@ -3435,11 +3471,20 @@ function renderShipJob() {
     </section>`;
 }
 
+function wireShipLiveBar() {
+  document.querySelectorAll('[data-ship-details]').forEach((a) => {
+    a.onclick = (e) => { e.preventDefault(); document.getElementById('shipJob')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  });
+}
+
 function refreshShipJobView() {
   const el = document.getElementById('shipJob');
   if (!el) return;
   el.innerHTML = renderShipJob();
   wireShipJobButtons();
+  const bar = document.getElementById('shipLiveBar');
+  if (bar) bar.innerHTML = renderShipLiveBar();
+  wireShipLiveBar();
   // Ship buttons/inputs lock while running and unlock when it stops.
   const busy = !!patchState.ship.job?.running;
   document.querySelectorAll('#cycleFlow [data-ship-target], #cycleFlow [data-release-target], #cycleFlow select, #cycleFlow input, #cycleFlow [data-ship-bump], #cycleFlow [data-ship-to], #shipPatchOnlyBtn').forEach((e) => {
@@ -4014,6 +4059,7 @@ function renderPatches() {
   `;
   wirePatchesShell();
   wireShipCycle();
+  wireShipLiveBar();
 
   document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
 

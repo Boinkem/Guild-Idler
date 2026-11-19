@@ -1270,3 +1270,16 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .pt-guide-text h4:first-child { margin-top: 0; }
 .pt-guide-text p, .pt-guide-text ol { margin: 0 0 8px; }
 [hidden] { display: none !important; }
+
+/* Patch 0493 -- live status bar under the Auto buttons (renderShipLiveBar). */
+.pt-livebar { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--brass-dim); background: var(--bg); }
+.pt-livebar.good { border-color: color-mix(in srgb, var(--good) 45%, var(--panel3)); }
+.pt-livebar.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--panel3)); }
+.pt-livebar-step { color: var(--text); }
+.pt-progress-lg { height: 8px; border-radius: 4px; }
+.pt-progress .running {
+  background: repeating-linear-gradient(135deg, var(--brass) 0 6px, color-mix(in srgb, var(--brass) 45%, transparent) 6px 12px);
+  background-size: 17px 17px; animation: pt-stripes 0.8s linear infinite;
+}
+@keyframes pt-stripes { to { background-position: 17px 0; } }
+@media (prefers-reduced-motion: reduce) { .pt-progress .running { animation: none; } }
