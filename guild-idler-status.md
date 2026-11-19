@@ -40272,3 +40272,38 @@ upload it.
   and the Steam game can be open at the same time.
 - **Browser dev** (`npm run dev:web`) was already separate (localStorage
   on localhost).
+
+### Fix: raid screen odds no longer creep every second (patch 0505)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the raid screen's odds and hero numbers ticking up and down by themselves while heroes heal
+```
+
+Reported with a screen recording right after patch 0503. With nothing
+clicked:
+- hero contributions crept (Thallow +9.9 -> +10.2, Thistle -3.4 -> -3.7);
+- full clear moved 54% -> 55%;
+- the ▲ +0.1 pop showed constantly.
+
+**Cause:**
+- A hero's raid bonus includes their health (`HeroManager.healthMods`:
+  success lost per missing health %), and pet bonuses move with time.
+- Idle heroes heal by writing `hero.health` every tick.
+- `RaidDetailModal` recomputed the odds every second (`useNow`), and the
+  ▲/▼ effect treated any change as a pick.
+
+**Fix (`RaidsPanel.tsx` `RaidDetailModal`):**
+- **Snapshot:** the odds read `oddsNow` plus a `structuredClone` of the
+  state taken at that moment (`snap` / `snapHero`), not the live clock and
+  heroes.
+- **When it refreshes:** when the detail opens, on every pick, removal or
+  swap, on a difficulty change, and every 30 s, so healing still shows
+  gradually.
+- **The ▲/▼ pop** is set by the pick itself (before vs after) and replayed
+  with a `deltaKey`, so time passing never fires it.
+
+**Verified (web build, headless Chrome):** three heroes at 5% health,
+healing. The headline and every contribution held identical values for 6
+s (before: they changed each second). The normal flow is unchanged: 0%
+-> 13% -> 26% with ▲ +4.3 per pick, and hover previews work. `tsc` clean.

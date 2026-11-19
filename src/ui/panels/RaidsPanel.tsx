@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { backgroundSrc } from '../../game/settings';
@@ -484,6 +484,21 @@ function RaidDetailModal({
   // in whichever raid's detail is opened first after the unlock.
   const diffSeen = useFirstSeen('raid-diff', RAID_DIFFICULTY_ORDER.filter(difficultyUnlocked));
 
+  // Patch 0505 -- the odds use a time snapshot, not the per-second clock.
+  // A hero's raid bonus includes their health (and pet bonuses move with
+  // time), so idle heroes healing made every number creep each second and
+  // the ▲/▼ pop fire on its own. The snapshot refreshes on every pick or
+  // difficulty change, and every 30s so healing still shows.
+  const [oddsNow, setOddsNow] = useState(now);
+  useEffect(() => {
+    const t = window.setInterval(() => setOddsNow(Date.now()), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
+  // Healing writes hero.health directly every tick, so the snapshot has to
+  // hold the heroes (and pets) as they were at oddsNow, not just the time.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const snap = useMemo(() => structuredClone(state), [oddsNow]);
+  const snapHero = (h: Hero) => snap.heroes.find((x) => x.id === h.id) ?? h;
   // Patch 0503 -- picks + suggested best idle heroes (see oddsFor below);
   // was the first N idle heroes in roster order until something was picked.
   const previewHeroIds = (() => {
@@ -491,7 +506,7 @@ function RaidDetailModal({
     const picked = selectedHeroIds.slice(0, cfg.partySize);
     const fill = idleHeroes
       .filter((h) => h.level >= raid.reqLevel && !picked.includes(h.id))
-      .sort((a, b) => RaidManager.heroContribution(state, b, raid.id, [], now) - RaidManager.heroContribution(state, a, raid.id, [], now))
+      .sort((a, b) => RaidManager.heroContribution(snap, snapHero(b), raid.id, [], oddsNow) - RaidManager.heroContribution(snap, snapHero(a), raid.id, [], oddsNow))
       .slice(0, Math.max(0, cfg.partySize - picked.length))
       .map((h) => h.id);
     return [...picked, ...fill];
@@ -521,7 +536,7 @@ function RaidDetailModal({
   // suggested heroes' share shows as a ghost. A raid stops at its first
   // lost fight, so full clear = the product of the remaining fights' odds.
   const eligibleIdle = idleHeroes.filter((h) => h.level >= raid.reqLevel);
-  const rankOf = (h: Hero) => RaidManager.heroContribution(state, h, raid.id, [], now);
+  const rankOf = (h: Hero) => RaidManager.heroContribution(snap, snapHero(h), raid.id, [], oddsNow);
   const oddsFor = (pickedIds: string[]) => {
     if (!difficulty || !cfg) return null;
     const picked = pickedIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h).slice(0, cfg.partySize);
@@ -532,13 +547,13 @@ function RaidDetailModal({
     const party = [...picked, ...suggested];
     const full = party.length === cfg.partySize;
     const fights = raid.encounterIds.slice(startEncounter).map((id) => ({
-      id, breakdown: party.length ? RaidManager.encounterBreakdown(state, party, raid.id, difficulty, id, now, resuming) : null,
+      id, breakdown: party.length ? RaidManager.encounterBreakdown(snap, party.map(snapHero), raid.id, difficulty, id, oddsNow, resuming) : null,
     }));
     const fullClear = full ? fights.reduce((p, f) => p * ((f.breakdown?.chance ?? 0) / 100), 1) : 0;
     return { picked, suggested, party, full, fights, fullClear, built: fullClear * (picked.length / cfg.partySize) };
   };
   const odds = oddsFor(selectedHeroIds);
-  const contributionOf = (h: Hero) => RaidManager.heroContribution(state, h, raid.id, odds?.party ?? [], now);
+  const contributionOf = (h: Hero) => RaidManager.heroContribution(snap, snapHero(h), raid.id, (odds?.party ?? []).map(snapHero), oddsNow);
   const [hoverHeroId, setHoverHeroId] = useState<string | null>(null);
   // The "what would this change" target for a hero: remove if picked, add
   // if there's room, else swap out the lowest-contribution pick.
@@ -551,25 +566,27 @@ function RaidDetailModal({
       .reduce((a, b) => (contributionOf(b) < contributionOf(a) ? b : a));
     return selectedHeroIds.map((id) => (id === weakest.id ? heroId : id));
   };
-  // ▲/▼ change after each pick.
-  const builtRef = useRef<number | null>(null);
+  // ▲/▼ change after each pick -- set by the pick itself (patch 0505),
+  // never by time passing. `deltaKey` replays the pop animation.
   const [builtDelta, setBuiltDelta] = useState<number | null>(null);
-  const built = odds?.built ?? 0;
-  useEffect(() => {
-    if (builtRef.current !== null && Math.abs(built - builtRef.current) > 0.0005) setBuiltDelta(built - builtRef.current);
-    builtRef.current = built;
-  }, [built]);
+  const [deltaKey, setDeltaKey] = useState(0);
 
   const toggleHero = (heroId: string) => {
-    setSelectedHeroIds(pickWith(heroId));
+    const next = pickWith(heroId);
+    const before = odds?.built ?? 0;
+    const after = oddsFor(next)?.built ?? 0;
+    setSelectedHeroIds(next);
+    setOddsNow(Date.now());
+    setBuiltDelta(Math.abs(after - before) >= 0.0005 ? after - before : null);
+    setDeltaKey((k) => k + 1);
   };
 
   const pickDifficulty = (d: RaidDifficulty) => {
     setDifficulty(d);
     setSelectedHeroIds([]);
     setStartOver(false);
-    builtRef.current = null;
     setBuiltDelta(null);
+    setOddsNow(Date.now());
   };
 
   const askToCommit = () => {
@@ -729,6 +746,7 @@ function RaidDetailModal({
                       pickedCount={odds.picked.length}
                       partySize={cfg.partySize}
                       delta={builtDelta}
+                      deltaKey={deltaKey}
                       resuming={resuming}
                     />
                   )}
@@ -967,8 +985,8 @@ function FightOddsBar({ bd, difficultyLabel }: { bd: FightBreakdown; difficultyL
 }
 
 /** The headline: full-clear chance building from 0% as heroes are picked. */
-function RaidOddsHeadline({ built, fullClear, full, pickedCount, partySize, delta, resuming }: {
-  built: number; fullClear: number; full: boolean; pickedCount: number; partySize: number; delta: number | null; resuming: boolean;
+function RaidOddsHeadline({ built, fullClear, full, pickedCount, partySize, delta, deltaKey, resuming }: {
+  built: number; fullClear: number; full: boolean; pickedCount: number; partySize: number; delta: number | null; deltaKey: number; resuming: boolean;
 }) {
   const pct = (v: number) => `${(v * 100).toFixed(v * 100 < 10 ? 1 : 0)}%`;
   const runs = fullClear > 0 ? 1 / fullClear : Infinity;
@@ -978,7 +996,7 @@ function RaidOddsHeadline({ built, fullClear, full, pickedCount, partySize, delt
       <div className="row" style={{ alignItems: 'baseline', gap: 10 }}>
         <span className="tiny muted raid-odds-label">{resuming ? 'Chance to finish the raid' : 'Full clear chance'}</span>
         {delta !== null && Math.abs(delta) >= 0.0005 && (
-          <span key={built} className={`raid-odds-delta ${delta > 0 ? 'up' : 'down'}`}>{delta > 0 ? '▲ +' : '▼ −'}{(Math.abs(delta) * 100).toFixed(1)}</span>
+          <span key={deltaKey} className={`raid-odds-delta ${delta > 0 ? 'up' : 'down'}`}>{delta > 0 ? '▲ +' : '▼ −'}{(Math.abs(delta) * 100).toFixed(1)}</span>
         )}
         <span style={{ marginLeft: 'auto' }} className={`raid-odds-value ${tone}`}>{pct(built)}</span>
       </div>
