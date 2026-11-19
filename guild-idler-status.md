@@ -1134,6 +1134,35 @@ raid fight).
 
 ## Backlog
 
+### Raid rebalance -- in progress (0500 Sandbox support built)
+Agreed 19 Nov 2026; full plan, calibrated values and sim results in the
+project doc `claude/raid-rebalance-plan.md`. Mockup: design canvas
+"Raid Screen: Odds Feedback".
+- **Ladder:** gear from the tier below a difficulty gives ~70% full clear;
+  each difficulty higher drops a rung: 70 / 50 / 35 / 20. Quest gear
+  counts as the tier below Normal.
+- **Carries:** the party raid bonus becomes the average of the heroes
+  (`raid.weakestHeroWeight` 0) instead of weakest hero + 0.2 x the rest.
+- **Stats stay the raid engine.** Gear Score display: later.
+- **1 -- built, patch 0500:** Sandbox Raid Tuning v2.
+- **2 -- next:** raid balance:
+  - party averaging, and role needs scaled to the party size
+    (Requiem Normal);
+  - penalties Heroic 12 / Mythic 22 / Legendary 33;
+  - raid drop power 3 / 5.5 / 8.5;
+  - per-raid encounter bases;
+  - raid set bonus success cuts.
+- **3:** raid checkpoints (a wipe saves progress at the fight lost, return
+  with a rebuilt party) + per-fight retry bonus (+5 per loss, up to +15).
+  Save migration.
+- **4:** raid screen visuals to the mockup:
+  - full-party preview with suggested fills;
+  - a bar that builds per hero from 0%;
+  - stacked per-fight bars;
+  - per-hero contribution with the weakest flagged;
+  - hover swap previews;
+  - result + return screens.
+
 ### Balance Sandbox redesign -- built (0497 engine v2, 0498 Economy + Time to level, 0499 Raid Tuning)
 Agreed 19 Nov 2026; mocked up on the Design canvas "Balance Sandbox
 Redesign" (Economy, Time to level, Raid Tuning: one raid / every raid).
@@ -39856,3 +39885,74 @@ edit together; headless Chrome: picked raid + Heroic, changed the penalty,
 simulated, edited a hero's role and re-ran, switched to Every raid with
 tier-below drops, no page errors. `node --check` both DevTool files;
 `tsc --noEmit` clean.
+
+### DevTool: Balance Sandbox Raid Tuning v2 -- ladder view, typical guild, checkpoint timing (patch 0500)
+```discord-update
+Dev Update | Balance Sandbox
+
+- Added a raid ladder check to the dev tools' balance simulator, showing every raid's clear chance for each gear tier and difficulty against the intended difficulty curve
+- Added raid set bonus editing, a typical-guild setting and checkpoint timing to the raid simulator
+```
+
+Step 1 of the raid rebalance (see Backlog and `claude/raid-rebalance-plan.md`).
+No gameplay change: the one game-code change ships at its current value.
+
+**Game (no behaviour change):** new tuning `raid.weakestHeroWeight` (raid
+category, **1**). `RaidManager.partySuccessBonus` now returns
+`w x (weakest + 0.2 x rest average) + (1 - w) x average of every hero`, so
+at 1 it is exactly the old weakest-link rule. It exists now so the Sandbox
+can test the agreed carry rule (0 = plain average); patch 2 of the
+rebalance sets it to 0.
+
+**Raid sim** (`tools/devtool/sim/runRaidSim.ts`):
+- **`guild`:** `none` / `typical` / `max`. Typical sets each facility and
+  upgrade to floor(max x min(0.5, raid level / 60)), the calibration
+  baseline. `guildMaxed` is still accepted.
+- **New gear presets:**
+  - `quest-hard-set`: Hard-quest Epics, Hard tag x1.15, plus the best
+    quest/shop set the hero's level allows.
+  - `raid-fixed-<tier>`: that tier's own drops at any difficulty.
+
+  `raid-below` / `raid-same` now fill non-raid slots with
+  `quest-hard-set` gear (was quest Epics). The default preset is
+  `quest-hard-set`.
+- **`dataOverrides.sets`:** setId -> { pieceCount: success } replaces a set
+  tier's success bonus in memory; other set effects are kept. `meta` now
+  lists each raid's sets with their tiers.
+- **Checkpoint maths** on every result:
+  - `checkpoint.fightsToClear`: each fight retried on its own, +`retryStep`
+    (5) per loss up to `retryCap` (15);
+  - `fightsToClearNoCheckpoint`: whole runs.
+- **`ladder` mode:** every raid x gear tier (quest, Normal / Heroic / Mythic
+  drops) x difficulty, auto party at the raid's level.
+
+**Server:** `/api/sim/raid` accepts mode `ladder` and passes `guild`,
+`retryStep`, `retryCap`.
+
+**Raids tab:**
+- **Third mode, Ladder:** a card per raid, gear tier x difficulty.
+  - Each cell shows live -> proposed full clear against its target,
+    coloured green within 7 points, amber within 15, red further.
+  - Cells where the gear is already at that tier are greyed.
+  - The targets are editable (default 70 / 50 / 35 / 20), and a header
+    card counts the cells on target.
+- **Guild select** replaces the "fully built" checkbox (default Typical).
+- **New dials:**
+  - **Party:** "Weakest hero weight".
+  - **Raid drops:** Heroic / Mythic / Legendary "drop power x". Each sets
+    both `raid_dedicated.<tier>Multiplier` and
+    `loot_procedural.raid<Tier>BudgetMultiplier`.
+- **One raid:** the selected raid's set bonus tiers are editable, the
+  edits carry into Every raid and Ladder, and the runs card adds fights to
+  a first clear with and without checkpoints.
+
+**Verified:**
+- `/api/sim/raid` ladder with the calibrated package reproduces
+  the plan doc's numbers. The quest row is 70-74 / 49-52 / 32-34 / 19-20 on
+  every 3-fight raid. Requiem Normal sits at 30% until the role-scaling fix
+  in patch 2.
+- Headless Chrome:
+  - One raid with a set-tier edit and weight 0;
+  - Ladder with the penalty and drop-power dials;
+  - no page errors.
+- `tsc --noEmit` clean; `node --check` on both DevTool files.

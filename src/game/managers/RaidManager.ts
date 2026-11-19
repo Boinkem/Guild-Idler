@@ -123,7 +123,10 @@ export const RaidManager = {
     const weakest = contributions[0];
     const rest = contributions.slice(1);
     const restAvg = rest.length > 0 ? rest.reduce((sum, v) => sum + v, 0) / rest.length : 0;
-    return weakest + restAvg * 0.2;
+    const weakestLink = weakest + restAvg * 0.2;
+    const average = contributions.reduce((sum, v) => sum + v, 0) / contributions.length;
+    const w = clamp(Tuning.get('raid.weakestHeroWeight'), 0, 1);
+    return w * weakestLink + (1 - w) * average;
   },
 
   /** How many heroes in this party are currently active in each role --

@@ -3801,6 +3801,16 @@
     "description": "Additional gold per hero level, added to the base stat reset cost -- a respec on a high-level hero undoes more invested points, priced accordingly."
   },
   {
+    "id": "raid.weakestHeroWeight",
+    "label": "Raid party: weight of the weakest hero",
+    "category": "raid",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 1,
+    "description": "How much a raid party's success bonus leans on its weakest hero. 0 = plain average of every hero's contribution (strong heroes carry weaker ones). 1 = the old weakest-link rule (weakest hero + 0.2 x the rest's average). Values between blend the two. Added in patch 0500 at 1 (no change); the raid rebalance moves it to 0."
+  },
+  {
     "id": "raid.roleMismatchPenaltyPerSlot",
     "label": "Raids: role mismatch penalty per unmet slot",
     "category": "raid_upgrades",

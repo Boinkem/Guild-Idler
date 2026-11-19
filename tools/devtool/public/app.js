@@ -5642,14 +5642,37 @@ const RAID_TUNING_DIALS = [
   { id: 'raid_difficulty.heroic.roleMismatchCap', label: 'Heroic cap when roles missing' },
   { id: 'raid_difficulty.mythic.roleMismatchCap', label: 'Mythic cap when roles missing' },
   { id: 'raid_difficulty.legendary.roleMismatchCap', label: 'Legendary cap when roles missing' },
+  // Patch 0500 -- carry rule and raid drop power. A drop-power dial sets
+  // both tuning ids that scale that tier's raid drops (hand-authored and
+  // procedural) to the same value.
+  { id: 'raid.weakestHeroWeight', label: 'Weakest hero weight (1 floor, 0 average)', step: 0.05, group: 'Party' },
+  { id: 'raid_dedicated.heroicMultiplier', also: ['loot_procedural.raidHeroicBudgetMultiplier'], label: 'Heroic drop power ×', step: 0.1, group: 'Raid drops' },
+  { id: 'raid_dedicated.mythicMultiplier', also: ['loot_procedural.raidMythicBudgetMultiplier'], label: 'Mythic drop power ×', step: 0.1, group: 'Raid drops' },
+  { id: 'raid_dedicated.legendaryMultiplier', also: ['loot_procedural.raidLegendaryBudgetMultiplier'], label: 'Legendary drop power ×', step: 0.1, group: 'Raid drops' },
 ];
 const RAID_GEAR_PRESETS = [
   ['none', 'Fresh (no gear)'],
   ['quest-rare', 'Quest Rares at their level'],
   ['quest-epic', 'Quest Epics at their level'],
   ['quest-legendary', 'Quest Legendaries at their level'],
+  ['quest-hard-set', 'Hard-quest Epics + quest set'],
   ['raid-below', 'This raid\'s drops, tier below'],
   ['raid-same', 'This raid\'s drops, this tier'],
+  ['raid-fixed-normal', 'This raid\'s Normal drops'],
+  ['raid-fixed-heroic', 'This raid\'s Heroic drops'],
+  ['raid-fixed-mythic', 'This raid\'s Mythic drops'],
+  ['raid-fixed-legendary', 'This raid\'s Legendary drops'],
+];
+const RAID_GUILD_MODES = [
+  ['none', 'Unbuilt'],
+  ['typical', 'Typical for the raid level'],
+  ['max', 'Fully built'],
+];
+const RAID_LADDER_ROWS = [
+  ['quest-hard-set', 'Quest gear'],
+  ['raid-fixed-normal', 'Normal drops'],
+  ['raid-fixed-heroic', 'Heroic drops'],
+  ['raid-fixed-mythic', 'Mythic drops'],
 ];
 const RAID_BANDS = [
   { id: 'Easy', min: 50, cls: 'easy' },
@@ -5663,8 +5686,9 @@ const RAID_ROLES = ['melee', 'ranged', 'caster'];
 if (!sandboxState.raid) {
   sandboxState.raid = {
     meta: null, mode: 'one', raidId: null, difficulty: 'normal', party: null,
-    gear: 'quest-epic', statMode: 'even', guildMaxed: false, levelOffset: 0, runs: 20,
-    dials: {}, enc: {}, mods: {},
+    gear: 'quest-hard-set', statMode: 'even', guild: 'typical', levelOffset: 0, runs: 20,
+    dials: {}, enc: {}, mods: {}, sets: {},
+    ladder: null, targets: [70, 50, 35, 20],
     intended: { normal: 'Normal', heroic: 'Hard', mythic: 'Brutal', legendary: 'Brutal' },
     one: null, all: null, lastRun: null, running: false, error: null,
   };
@@ -5682,19 +5706,41 @@ function raidClassName(id) { return sandboxState.raid.meta?.classes.find((c) => 
 function raidProposed() {
   const r = sandboxState.raid;
   const overrides = {};
-  for (const [id, v] of Object.entries(r.dials)) if (Number.isFinite(v) && v !== sandboxLiveValue(id)) overrides[id] = v;
+  for (const [id, v] of Object.entries(r.dials)) {
+    if (!Number.isFinite(v) || v === sandboxLiveValue(id)) continue;
+    overrides[id] = v;
+    for (const also of RAID_TUNING_DIALS.find((d) => d.id === id)?.also ?? []) overrides[also] = v;
+  }
   const encounters = {};
   const raids = {};
   for (const raid of r.meta?.raids || []) {
     if (Number.isFinite(r.mods[raid.id]) && r.mods[raid.id] !== raid.successModifier) raids[raid.id] = { successModifier: r.mods[raid.id] };
     for (const e of raid.encounters) if (Number.isFinite(r.enc[e.id]) && r.enc[e.id] !== e.baseSuccess) encounters[e.id] = { baseSuccess: r.enc[e.id] };
   }
-  return { overrides, dataOverrides: { encounters, raids } };
+  const sets = {};
+  for (const set of raidAllSets()) {
+    for (const t of set.tiers) {
+      const v = r.sets[`${set.id}:${t.count}`];
+      if (Number.isFinite(v) && v !== t.success) (sets[set.id] ??= {})[t.count] = v;
+    }
+  }
+  return { overrides, dataOverrides: { encounters, raids, sets } };
+}
+/** Every set any raid drops, once each (patch 0500). */
+function raidAllSets() {
+  const seen = new Map();
+  for (const raid of sandboxState.raid.meta?.raids || []) for (const set of raid.sets || []) seen.set(set.id, set);
+  return [...seen.values()];
 }
 function raidChangeList() {
   const r = sandboxState.raid;
   const { overrides, dataOverrides } = raidProposed();
-  const out = Object.entries(overrides).map(([id, v]) => `${RAID_TUNING_DIALS.find((d) => d.id === id)?.label ?? id} ${sandboxLiveValue(id)} → ${v}`);
+  const linked = new Set(RAID_TUNING_DIALS.flatMap((d) => d.also ?? []));
+  const out = Object.entries(overrides).filter(([id]) => !linked.has(id)).map(([id, v]) => `${RAID_TUNING_DIALS.find((d) => d.id === id)?.label ?? id} ${sandboxLiveValue(id)} → ${v}`);
+  for (const [setId, tiers] of Object.entries(dataOverrides.sets)) {
+    const set = raidAllSets().find((x) => x.id === setId);
+    out.push(`${set?.name ?? setId} ${Object.entries(tiers).map(([c, v]) => `(${c}) ${set?.tiers.find((t) => String(t.count) === c)?.success} → ${v}`).join(' ')}`);
+  }
   for (const [id, p] of Object.entries(dataOverrides.raids)) out.push(`${raidMetaRaid(id)?.name ?? id} modifier ${raidMetaRaid(id)?.successModifier} → ${p.successModifier}`);
   for (const raid of r.meta?.raids || []) for (const e of raid.encounters) {
     if (dataOverrides.encounters[e.id]) out.push(`${e.name} base ${e.baseSuccess} → ${dataOverrides.encounters[e.id].baseSuccess}`);
@@ -5715,6 +5761,7 @@ function renderRaidSidebar() {
         <div class="sbx-seg" role="group" aria-label="Raid view">
           <button type="button" data-raid-mode="one" class="${r.mode === 'one' ? 'on' : ''}">One raid</button>
           <button type="button" data-raid-mode="all" class="${r.mode === 'all' ? 'on' : ''}">Every raid</button>
+          <button type="button" data-raid-mode="ladder" class="${r.mode === 'ladder' ? 'on' : ''}">Ladder</button>
         </div>
         ${r.mode === 'one' ? `
           <label class="sbx-label">Raid
@@ -5728,7 +5775,9 @@ function renderRaidSidebar() {
               ${(r.meta?.difficulties || []).map((d) => `<button type="button" data-raid-diff="${d.id}" class="${d.id === r.difficulty ? 'on' : ''}">${escapeHtml(d.label)} · ${d.partySize}</button>`).join('')}
             </div>
           </div>` : `
-          <p class="tiny muted">Every raid × difficulty, each with an auto-built full party at the raid's own level (plus the offset below), meeting its role needs where the party size allows.</p>`}
+          <p class="tiny muted">${r.mode === 'ladder'
+            ? 'Every raid × gear tier × difficulty against the agreed ladder: gear one tier below a difficulty ~70%, then one rung per difficulty above. Auto party at the raid\'s level; the gear preset below is ignored.'
+            : 'Every raid × difficulty, each with an auto-built full party at the raid\'s own level (plus the offset below), meeting its role needs where the party size allows.'}</p>`}
       </section>
 
       ${r.mode === 'one' ? `
@@ -5768,26 +5817,38 @@ function renderRaidSidebar() {
           <label class="sbx-label">Runs
             <input type="number" id="raidRuns" min="1" max="100000" value="${r.runs}" /></label>
         </div>
-        <label class="sbx-check"><input type="checkbox" id="raidGuild" ${r.guildMaxed ? 'checked' : ''} /> Guild fully built (Barracks, upgrades)</label>
+        <label class="sbx-label">Guild facilities and upgrades
+          <select id="raidGuild" class="sbx-select">
+            ${RAID_GUILD_MODES.map(([id, label]) => `<option value="${id}" ${id === r.guild ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+          </select>
+          <span class="tiny muted">Typical = each facility and upgrade at raid level ÷ 60 of its max (half at most), the calibration baseline.</span></label>
       </section>
 
       <section class="sbx-panel">
         <div class="sbx-row"><h3>Proposed changes</h3><span class="sbx-grow"></span>
           <button type="button" id="raidReset" class="sbx-small" ${changes.length ? '' : 'disabled'}>Reset to live</button></div>
-        <div class="sbx-dial-group">Difficulty (tuning)</div>
-        ${RAID_TUNING_DIALS.map((d) => {
-          const live = sandboxLiveValue(d.id);
-          const val = r.dials[d.id];
-          return `<div class="sbx-row sbx-dial ${val !== undefined && val !== live ? 'changed' : ''}"><span class="sbx-dial-label sbx-grow">${escapeHtml(d.label)}</span>
-            <span class="muted tiny">live ${live ?? '?'}</span>${num('data-raid-dial', d.id, live, val)}</div>`;
-        }).join('')}
+        ${[...new Set(RAID_TUNING_DIALS.map((d) => d.group || 'Difficulty'))].map((g) => `
+          <div class="sbx-dial-group">${escapeHtml(g)}</div>
+          ${RAID_TUNING_DIALS.filter((d) => (d.group || 'Difficulty') === g).map((d) => {
+            const live = sandboxLiveValue(d.id);
+            const val = r.dials[d.id];
+            return `<div class="sbx-row sbx-dial ${val !== undefined && val !== live ? 'changed' : ''}"><span class="sbx-dial-label sbx-grow">${escapeHtml(d.label)}</span>
+              <span class="muted tiny">live ${live ?? '?'}</span>${num('data-raid-dial', d.id, live, val, d.step ?? 1)}</div>`;
+          }).join('')}`).join('')}
         ${r.mode === 'one' && raid ? `
           <div class="sbx-dial-group">${escapeHtml(raid.name)} (raid data)</div>
           <div class="sbx-row sbx-dial ${r.mods[raid.id] !== undefined && r.mods[raid.id] !== raid.successModifier ? 'changed' : ''}"><span class="sbx-dial-label sbx-grow">Raid success modifier</span>
             <span class="muted tiny">live ${raid.successModifier}</span>${num('data-raid-mod', raid.id, raid.successModifier, r.mods[raid.id])}</div>
           ${raid.encounters.map((e) => `<div class="sbx-row sbx-dial ${r.enc[e.id] !== undefined && r.enc[e.id] !== e.baseSuccess ? 'changed' : ''}"><span class="sbx-dial-label sbx-grow">${escapeHtml(e.name)} base</span>
-            <span class="muted tiny">live ${e.baseSuccess}</span>${num('data-raid-enc', e.id, e.baseSuccess, r.enc[e.id])}</div>`).join('')}`
-          : `<div class="tiny muted">Encounter and raid-modifier edits are made in One raid and carry over here.</div>`}
+            <span class="muted tiny">live ${e.baseSuccess}</span>${num('data-raid-enc', e.id, e.baseSuccess, r.enc[e.id])}</div>`).join('')}
+          ${(raid.sets || []).map((set) => `
+            <div class="sbx-dial-group">${escapeHtml(set.name)} · success bonus (${set.pieces} pieces)</div>
+            ${set.tiers.map((t) => {
+              const key = `${set.id}:${t.count}`;
+              return `<div class="sbx-row sbx-dial ${r.sets[key] !== undefined && r.sets[key] !== t.success ? 'changed' : ''}"><span class="sbx-dial-label sbx-grow">${t.count} pieces</span>
+                <span class="muted tiny">live ${t.success}</span>${num('data-raid-set', key, t.success, r.sets[key])}</div>`;
+            }).join('')}`).join('')}`
+          : `<div class="tiny muted">Encounter, raid-modifier and set-bonus edits are made in One raid and carry over here.</div>`}
         ${changes.length ? `<div class="tiny muted">${changes.length} change${changes.length === 1 ? '' : 's'}: ${escapeHtml(changes.join('; '))}</div>` : ''}
       </section>
 
@@ -5797,6 +5858,14 @@ function renderRaidSidebar() {
         ${(r.meta?.difficulties || []).map((d) => `<div class="sbx-row"><span class="sbx-grow">${escapeHtml(d.label)}</span>
           <select data-raid-intent="${d.id}" class="sbx-select">${RAID_BANDS.map((b) => `<option ${r.intended[d.id] === b.id ? 'selected' : ''}>${b.id}</option>`).join('')}</select></div>`).join('')}
         <div class="tiny muted">Bands by full-clear chance: Easy 50%+, Normal 25–50, Hard 10–25, Brutal 2–10, Out of reach under 2.</div>
+      </section>` : ''}
+
+      ${r.mode === 'ladder' ? `
+      <section class="sbx-panel">
+        <h3>Ladder targets</h3>
+        ${['Gear from the tier below', 'One difficulty higher', 'Two higher', 'Three higher'].map((label, i) => `<div class="sbx-row"><span class="sbx-grow">${label}</span>
+          <input type="number" data-raid-target="${i}" min="0" max="100" value="${r.targets[i]}" class="sbx-dial-num" /> %</div>`).join('')}
+        <div class="tiny muted">Full-clear chance per run. Quest gear counts as the tier below Normal.</div>
       </section>` : ''}
 
       <button id="raidRunBtn" class="primary sbx-run" ${r.running || !r.meta ? 'disabled' : ''}>${r.running ? 'Simulating…' : 'Simulate live vs proposed'}</button>
@@ -5842,7 +5911,7 @@ function renderRaidOne() {
         <span class="sbx-delta ${fc.cls}">${fc.text}</span></div>
       <div class="sbx-card"><span class="sbx-card-label">Runs to first clear (average)</span>
         <div class="sbx-card-vals"><span class="muted">${runsFmt(b.expectedRunsToFirstClear)}</span><span class="muted">→</span><b>${runsFmt(m.expectedRunsToFirstClear)}</b></div>
-        <span class="sbx-delta flat">Half of parties clear within ${m.medianRunsToFirstClear ?? '∞'} run${m.medianRunsToFirstClear === 1 ? '' : 's'} (live ${b.medianRunsToFirstClear ?? '∞'}). In ${runs} run${runs === 1 ? '' : 's'}: ${raidPct(m.atLeastOneClear)} chance of a clear (live ${raidPct(b.atLeastOneClear)}).</span></div>
+        <span class="sbx-delta flat">Half of parties clear within ${m.medianRunsToFirstClear ?? '∞'} run${m.medianRunsToFirstClear === 1 ? '' : 's'} (live ${b.medianRunsToFirstClear ?? '∞'}). In ${runs} run${runs === 1 ? '' : 's'}: ${raidPct(m.atLeastOneClear)} chance of a clear (live ${raidPct(b.atLeastOneClear)}).${m.checkpoint ? ` With checkpoints a first clear takes ~${m.checkpoint.fightsToClear.toFixed(1)} fights (live ${b.checkpoint?.fightsToClear.toFixed(1) ?? '—'}), against ~${m.checkpoint.fightsToClearNoCheckpoint?.toFixed(1) ?? '∞'} without.` : ''}</span></div>
       <div class="sbx-card"><span class="sbx-card-label">Verdict vs intended</span>
         <div class="sbx-row"><span class="tiny muted">Intended</span><b>${escapeHtml(intended)}</b><span class="tiny muted">· sim says</span>
           <span class="raid-pill raid-band-${bandM.cls}">${escapeHtml(bandM.id)}${bandM.id === intended ? ' ✓' : ' ⚠'}</span></div>
@@ -5900,7 +5969,8 @@ function raidRunCaption() {
   const l = sandboxState.raid.lastRun;
   if (!l) return '';
   const gear = RAID_GEAR_PRESETS.find(([id]) => id === l.gear)?.[1] ?? l.gear;
-  return `Ran: ${gear}, stat points ${l.statMode}, guild ${l.guildMaxed ? 'fully built' : 'unbuilt'}${l.levelOffset ? `, auto level ${l.levelOffset > 0 ? '+' : ''}${l.levelOffset}` : ''}; proposed = ${l.changes.length ? l.changes.join('; ') : 'same as live'}.`;
+  const guild = RAID_GUILD_MODES.find(([id]) => id === l.guild)?.[1]?.toLowerCase() ?? l.guild;
+  return `Ran: ${l.mode === 'ladder' ? 'ladder (quest gear and each tier\'s drops)' : gear}, stat points ${l.statMode}, guild ${guild}${l.levelOffset ? `, auto level ${l.levelOffset > 0 ? '+' : ''}${l.levelOffset}` : ''}; proposed = ${l.changes.length ? l.changes.join('; ') : 'same as live'}.`;
 }
 
 function raidAllFindings(grid) {
@@ -5975,7 +6045,55 @@ function renderSandboxRaids() {
   const r = sandboxState.raid;
   if (!r.meta) { ensureRaidMeta(); return `<div class="sbx-panel sbx-empty">${r.error ? escapeHtml(r.error) : 'Loading raid data…'}</div>`; }
   return `${r.error ? `<div class="patch-result bad"><div class="patch-result-label">Raid simulation failed</div><pre>${escapeHtml(r.error)}</pre></div>` : ''}
-    ${r.mode === 'one' ? renderRaidOne() : renderRaidAll()}`;
+    ${r.mode === 'one' ? renderRaidOne() : r.mode === 'ladder' ? renderRaidLadder() : renderRaidAll()}`;
+}
+
+/** Patch 0500 -- every raid x gear tier x difficulty vs the agreed ladder
+ *  (claude/raid-rebalance-plan.md): gear from the tier below a difficulty
+ *  ~targets[0], each difficulty higher one rung down. Cells where the gear
+ *  is already at or above the difficulty's own tier are shown greyed. */
+function renderRaidLadder() {
+  const r = sandboxState.raid;
+  if (!r.ladder) return '<div class="sbx-panel sbx-empty">Simulate to check every raid against the ladder.</div>';
+  const b = sbxOk(r.ladder.baseline);
+  const m = sbxOk(r.ladder.modified);
+  if (!b || !m) return sbxFailures(r.ladder);
+  const diffs = r.meta?.difficulties || [];
+  const fit = (pct, target) => {
+    const miss = Math.abs(pct - target);
+    return miss <= 7 ? 'on' : miss <= 15 ? 'near' : 'off';
+  };
+  let on = 0; let total = 0; let liveOn = 0;
+  const blocks = m.ladder.map((raid, ri) => {
+    const live = b.ladder[ri];
+    const rows = raid.rows.map((row, gi) => `<tr><th scope="row">${escapeHtml(RAID_LADDER_ROWS[gi]?.[1] ?? row.gear)}</th>${row.cells.map((c, di) => {
+      const lc = live?.rows[gi]?.cells[di];
+      const step = di - gi;
+      if (step < 0) return `<td class="raid-ladder-over"><span class="tiny muted">${raidPct(c.fullClear)}</span></td>`;
+      const target = r.targets[Math.min(step, r.targets.length - 1)];
+      const f = fit(c.fullClear * 100, target);
+      total += 1; if (f === 'on') on += 1;
+      if (lc && fit(lc.fullClear * 100, target) === 'on') liveOn += 1;
+      return `<td class="raid-ladder-${f}" title="Target ${target}% · party bonus ${c.partyBonus.toFixed(1)}${c.checkpoint ? ` · ~${c.checkpoint.fightsToClear.toFixed(1)} fights to a first clear with checkpoints` : ''}">
+        <div class="tiny muted">${lc ? raidPct(lc.fullClear) : '—'} →</div><b>${raidPct(c.fullClear)}</b> <span class="tiny muted">/ ${target}</span>${c.mismatched ? ' <span class="raid-flag" title="Roles not met">⚑</span>' : ''}</td>`;
+    }).join('')}</tr>`).join('');
+    return `<section class="sbx-panel raid-ladder-card">
+      <div class="sbx-row"><h3>${escapeHtml(raid.raidName)}</h3><span class="tiny muted">lvl ${raid.reqLevel} · ${raid.encounters} fight${raid.encounters === 1 ? '' : 's'}</span></div>
+      <table class="sbx-ttl raid-ladder">
+        <thead><tr><th>Gear</th>${diffs.map((d) => `<th>${escapeHtml(d.label)}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </section>`;
+  }).join('');
+  return `
+    <div class="sbx-cards sbx-cards-3">
+      <div class="sbx-card"><span class="sbx-card-label">Cells on target (±7 points)</span>
+        <div class="sbx-card-vals"><span class="muted">${liveOn}</span><span class="muted">→</span><b>${on}</b><span class="muted">of ${total}</span></div></div>
+      <div class="sbx-card"><span class="sbx-card-label">Targets</span><b>${r.targets.join(' / ')}%</b><span class="tiny muted">tier-below gear, then each difficulty higher</span></div>
+      <div class="sbx-card"><span class="sbx-card-label">Reading a cell</span><span class="tiny muted">live → proposed full clear, / target. Green within 7 points, amber within 15, red further. Grey: gear already at that tier. Hover for party bonus and checkpoint fights.</span></div>
+    </div>
+    <div class="raid-ladder-grid">${blocks}</div>
+    <p class="tiny muted">${escapeHtml(raidRunCaption())} Odds are RaidManager's own.</p>`;
 }
 
 function bindRaidSidebar() {
@@ -6003,15 +6121,19 @@ function bindRaidSidebar() {
   document.getElementById('raidStats').onchange = (e) => { r.statMode = e.target.value; rerender(); };
   document.getElementById('raidOffset').onchange = (e) => { const v = intOf(e.target.value); r.levelOffset = Number.isFinite(v) ? v : 0; rerender(); };
   document.getElementById('raidRuns').onchange = (e) => { const v = intOf(e.target.value); r.runs = Number.isFinite(v) && v > 0 ? v : 20; rerender(); };
-  document.getElementById('raidGuild').onchange = (e) => { r.guildMaxed = e.target.checked; rerender(); };
+  document.getElementById('raidGuild').onchange = (e) => { r.guild = e.target.value; rerender(); };
   const numIn = (attr, store) => appEl.querySelectorAll(`[${attr}]`).forEach((el) => {
     el.onchange = () => { const v = parseFloat(el.value); const key = el.getAttribute(attr); if (Number.isFinite(v)) store[key] = v; else delete store[key]; rerender(); };
   });
   numIn('data-raid-dial', r.dials);
   numIn('data-raid-mod', r.mods);
   numIn('data-raid-enc', r.enc);
+  numIn('data-raid-set', r.sets);
+  appEl.querySelectorAll('[data-raid-target]').forEach((el) => {
+    el.onchange = () => { const v = parseFloat(el.value); if (Number.isFinite(v)) r.targets[Number(el.dataset.raidTarget)] = v; rerender(); };
+  });
   const reset = document.getElementById('raidReset');
-  if (reset) reset.onclick = () => { r.dials = {}; r.mods = {}; r.enc = {}; rerender(); };
+  if (reset) reset.onclick = () => { r.dials = {}; r.mods = {}; r.enc = {}; r.sets = {}; rerender(); };
   appEl.querySelectorAll('[data-raid-intent]').forEach((el) => { el.onchange = () => { r.intended[el.dataset.raidIntent] = el.value; rerender(); }; });
 
   const run = document.getElementById('raidRunBtn');
@@ -6022,7 +6144,7 @@ function bindRaidSidebar() {
     const { overrides, dataOverrides } = raidProposed();
     const body = {
       mode: r.mode, raidId: r.raidId, difficulty: r.difficulty, party: r.mode === 'one' ? (r.party || undefined) : undefined,
-      levelOffset: r.levelOffset, gear: r.gear, statMode: r.statMode, guildMaxed: r.guildMaxed, runs: r.runs, overrides, dataOverrides,
+      levelOffset: r.levelOffset, gear: r.gear, statMode: r.statMode, guild: r.guild, runs: r.runs, overrides, dataOverrides,
     };
     try {
       const res = await api('/api/sim/raid', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -6030,8 +6152,9 @@ function bindRaidSidebar() {
         r.one = res;
         const used = sbxOk(res.modified)?.party;
         if (!r.party && used) r.party = used.map((p) => ({ ...p }));
-      } else r.all = res;
-      r.lastRun = { gear: r.gear, statMode: r.statMode, guildMaxed: r.guildMaxed, levelOffset: r.levelOffset, changes: raidChangeList() };
+      } else if (r.mode === 'ladder') r.ladder = res;
+      else r.all = res;
+      r.lastRun = { mode: r.mode, gear: r.gear, statMode: r.statMode, guild: r.guild, levelOffset: r.levelOffset, changes: raidChangeList() };
     } catch (err) {
       r.error = err.message;
     }

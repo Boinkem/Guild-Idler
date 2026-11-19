@@ -26,27 +26,42 @@
  * weapons/resists (gear presets roll none), consumables, Raider's Charm,
  * injuries/health. Loot, gold, xp and duration are not reported.
  *
+ * Patch 0500 (Raid Tuning v2): guild 'none' / 'typical' (facilities and
+ * upgrades at min(0.5, raid level / 60) of max -- the calibration
+ * baseline in claude/raid-rebalance-plan.md) / 'max'; gear presets
+ * 'quest-hard-set' (Hard-quest Epics + the best quest set for the level)
+ * and 'raid-fixed-<tier>' (that tier's own drops at any difficulty);
+ * set-bonus success edits (dataOverrides.sets); checkpoint maths
+ * (fights to a first clear, each fight retried on its own with
+ * retryStep per loss up to retryCap); and 'ladder' mode.
+ *
  * Modes (input.mode):
  *  - 'meta'  -> raids, encounters, classes, difficulties (for the UI).
  *  - 'one'   -> one raid + difficulty with a given (or auto-built) party.
  *  - 'all'   -> every raid x difficulty, each with an auto-built party at
  *               the raid's own level (+ levelOffset).
+ *  - 'ladder'-> every raid x gear tier (quest, Normal..Mythic drops) x
+ *               difficulty, for the agreed 70/50/35/20 ladder.
  */
 
 import { TUNING_BY_ID } from '../../../src/game/data/tuning';
 
 type Role = 'melee' | 'ranged' | 'caster';
-type GearPreset = 'none' | 'quest-rare' | 'quest-epic' | 'quest-legendary' | 'raid-below' | 'raid-same';
+type GearPreset = 'none' | 'quest-rare' | 'quest-epic' | 'quest-legendary' | 'quest-hard-set'
+  | 'raid-below' | 'raid-same' | 'raid-fixed-normal' | 'raid-fixed-heroic' | 'raid-fixed-mythic' | 'raid-fixed-legendary';
 type StatMode = 'unspent' | 'even' | 'strength';
 type PartySlot = { heroClass: string; level: number; role?: Role };
 
 type RaidInput = {
-  mode: 'meta' | 'one' | 'all';
+  mode: 'meta' | 'one' | 'all' | 'ladder';
   overrides?: Record<string, number>;
   /** Proposed raid data edits, applied in memory only. */
   dataOverrides?: {
     encounters?: Record<string, { baseSuccess?: number }>;
     raids?: Record<string, { successModifier?: number }>;
+    /** setId -> { pieceCount: success } -- replaces that set tier's
+     *  success bonus (patch 0500); other set effects are kept. */
+    sets?: Record<string, Record<string, number>>;
   };
   raidId?: string;
   difficulty?: string;
@@ -57,6 +72,12 @@ type RaidInput = {
   statMode?: StatMode;
   /** true = every guild facility and upgrade at max level. */
   guildMaxed?: boolean;
+  /** 'typical' = facilities/upgrades at min(0.5, reqLevel/60) of max
+   *  (wins over guildMaxed); 'none' / 'max' as named. */
+  guild?: 'none' | 'typical' | 'max';
+  /** Per-fight retry bonus for checkpoint maths: +step per loss, up to cap. */
+  retryStep?: number;
+  retryCap?: number;
   runs?: number;
 };
 
@@ -85,7 +106,7 @@ async function main() {
   const { EquipmentManager } = await import('../../../src/game/managers/EquipmentManager');
   const { createInitialState } = await import('../../../src/game/managers/SaveManager');
   const { HERO_CLASSES, GUILD_FACILITIES, UPGRADES, MAX_HERO_LEVEL } = await import('../../../src/game/data/progression');
-  const { EQUIPMENT, EQUIP_SLOTS, EQUIPMENT_BY_ID } = await import('../../../src/game/data/equipment');
+  const { EQUIPMENT, EQUIP_SLOTS, EQUIPMENT_BY_ID, ITEM_SETS, SET_BY_ID } = await import('../../../src/game/data/equipment');
   const { isProceduralTemplate } = await import('../../../src/game/data/proceduralLoot');
   const { MIN_SUCCESS, MAX_SUCCESS } = await import('../../../src/game/managers/QuestManager');
   const { createRng } = await import('../../../src/game/rng');
@@ -105,13 +126,49 @@ async function main() {
     if (raid && Number.isFinite(patch.successModifier)) raid.successModifier = patch.successModifier as number;
   }
 
+  for (const [setId, tiers] of Object.entries(input.dataOverrides?.sets ?? {})) {
+    const set = SET_BY_ID[setId];
+    if (!set) continue;
+    for (const b of set.bonuses) if (Number.isFinite(tiers[String(b.count)])) b.mods = { ...b.mods, success: tiers[String(b.count)] };
+  }
+  // Quest/shop sets (no piece is a raid drop, chain reward or craft) --
+  // what a quest-only guild can complete.
+  const raidLootIds = new Set<string>();
+  for (const enc of Object.values(RAID_ENCOUNTER_BY_ID)) for (const k of ['loot', 'lootHeroic', 'lootMythic', 'lootLegendary'] as const) {
+    for (const e of ((enc as Record<string, unknown>)[k] as string[] | undefined) ?? []) { const p = parseLootEntry(e); if (p) raidLootIds.add(p.defId); }
+  }
+  const questSets = ITEM_SETS.filter((set) => {
+    const pieces = EQUIPMENT.filter((d) => d.setId === set.id);
+    return pieces.length > 0 && pieces.every((d) => !raidLootIds.has(d.id) && !d.raidExclusive && !d.craftable && !(d as { chainExclusive?: boolean }).chainExclusive);
+  }).map((set) => ({ set, pieces: EQUIPMENT.filter((d) => d.setId === set.id), level: Math.max(...EQUIPMENT.filter((d) => d.setId === set.id).map((d) => d.reqLevel)) }));
+
   const playableClasses = Object.entries(HERO_CLASSES)
     .filter(([, c]) => !(c as { requiresDlc?: unknown }).requiresDlc)
     .map(([id, c]) => ({ id, name: (c as { name?: string }).name ?? id, role: ((c as { role?: Role }).role ?? 'melee') as Role, tier: (c as { tier?: number }).tier ?? 0 }));
 
+  /** The set(s) a raid's loot belongs to (patch 0500), for set-bonus edits. */
+  const raidSets = (raidId: string) => {
+    const ids = new Set<string>();
+    for (const encId of RAID_BY_ID[raidId]?.encounterIds ?? []) {
+      const enc = RAID_ENCOUNTER_BY_ID[encId] as Record<string, unknown> | undefined;
+      for (const k of ['loot', 'lootHeroic', 'lootMythic', 'lootLegendary']) {
+        for (const e of (enc?.[k] as string[] | undefined) ?? []) {
+          const p = parseLootEntry(e);
+          const setId = p && EQUIPMENT_BY_ID[p.defId]?.setId;
+          if (setId && SET_BY_ID[setId]) ids.add(setId);
+        }
+      }
+    }
+    return [...ids].map((id) => ({
+      id, name: SET_BY_ID[id].name, pieces: EQUIPMENT.filter((d) => d.setId === id).length,
+      tiers: SET_BY_ID[id].bonuses.map((b) => ({ count: b.count, success: b.mods.success ?? 0 })),
+    }));
+  };
+
   if (input.mode === 'meta') {
     process.stdout.write(JSON.stringify({
       raids: RAIDS.map((r) => ({
+        sets: raidSets(r.id),
         id: r.id, name: r.name, reqLevel: r.reqLevel, successModifier: r.successModifier ?? 0,
         requiredRoles: r.requiredRoles ?? {},
         encounters: r.encounterIds.map((id) => ({ id, name: RAID_ENCOUNTER_BY_ID[id]?.name ?? id, baseSuccess: RAID_ENCOUNTER_BY_ID[id]?.baseSuccess ?? null })),
@@ -127,18 +184,20 @@ async function main() {
     return;
   }
 
-  const gear: GearPreset = input.gear ?? 'quest-rare';
+  let gear: GearPreset = input.gear ?? 'quest-hard-set';
   const statMode: StatMode = input.statMode ?? 'even';
   const runs = Math.max(1, Math.min(1_000_000, Math.floor(input.runs ?? 100)));
   const now = Date.UTC(2026, 0, 1);
 
   // ------------------------------------------------------------ state --
-  const baseState = () => {
+  const guildMode = input.guild ?? (input.guildMaxed ? 'max' : 'none');
+  const baseState = (reqLevel: number) => {
     const state = createInitialState(now);
     state.heroes = [];
-    if (input.guildMaxed) {
-      for (const f of GUILD_FACILITIES) state.guild[f.id] = f.maxLevel;
-      for (const u of UPGRADES) state.upgrades[u.id] = u.maxLevel;
+    const frac = guildMode === 'max' ? 1 : guildMode === 'typical' ? Math.min(0.5, reqLevel / 60) : 0;
+    if (frac > 0) {
+      for (const f of GUILD_FACILITIES) state.guild[f.id] = Math.floor(f.maxLevel * frac);
+      for (const u of UPGRADES) state.upgrades[u.id] = Math.floor(u.maxLevel * frac);
     }
     return state;
   };
@@ -154,6 +213,15 @@ async function main() {
    *  the hero's level exactly as a quest drop would be (seeded, so runs
    *  are repeatable). */
   const questItem = (slot: string, preset: string, level: number, seed: string) => {
+    if (preset === 'quest-hard-set') {
+      // Hard-quest Epics (Hard tag, x1.15 budget) in every slot, then the
+      // best quest set the hero's level allows over them.
+      const set = [...questSets].filter((q) => q.level <= level).sort((a, b) => b.level - a.level)[0];
+      const piece = set?.pieces.find((d) => d.slot === slot);
+      if (piece) return EquipmentManager.instantiate(piece.id, { itemLevel: level, sourceTag: 'hard', rng: createRng(seed), heroLevel: level });
+      const def = EQUIPMENT.find((d) => d.slot === slot && d.rarity === 'epic' && isProceduralTemplate(d) && !d.raidExclusive && !d.craftable);
+      return def ? EquipmentManager.instantiate(def.id, { itemLevel: level, sourceTag: 'hard', rng: createRng(seed), heroLevel: level }) : null;
+    }
     for (const rarity of RARITY_FALLBACK[preset] ?? []) {
       const def = EQUIPMENT.find((d) => d.slot === slot && d.rarity === rarity && isProceduralTemplate(d)
         && !d.raidExclusive && !d.craftable && !(d as { chainExclusive?: boolean }).chainExclusive && d.reqLevel <= level);
@@ -200,7 +268,7 @@ async function main() {
       // 'raid-below' = this raid's drops from the difficulty below (what a
       // party realistically wears going in; Normal has none, so quest
       // Epics); 'raid-same' = this difficulty's own drops (farming).
-      const dropTier = gear === 'raid-same' ? difficulty
+      const dropTier = (gear as string).startsWith('raid-fixed-') ? (gear as string).slice(11) : gear === 'raid-same' ? difficulty
         : gear === 'raid-below' ? RAID_DIFFICULTY_ORDER[RAID_DIFFICULTY_ORDER.indexOf(difficulty as never) - 1] : undefined;
       const raidSlots = dropTier ? raidDropsBySlot(raidId, dropTier) : {};
       const raid = RAID_BY_ID[raidId];
@@ -212,7 +280,7 @@ async function main() {
             rng: createRng(`raidsim:${index}:${s}`), heroLevel: partyLevel, rarityFloor: RAID_DIFFICULTIES[dropTier as never]?.rarityFloor,
           });
         } else {
-          item = questItem(s, gear.startsWith('raid-') ? 'quest-epic' : gear, level, `raidsim:${index}:${s}`);
+          item = questItem(s, (gear as string).startsWith('raid-') ? 'quest-hard-set' : gear, level, `raidsim:${index}:${s}`);
         }
         if (item) hero.equipment[s] = item;
       }
@@ -255,7 +323,7 @@ async function main() {
     const raid = RAID_BY_ID[raidId];
     const diffCfg = RAID_DIFFICULTIES[difficulty as never];
     if (!raid || !diffCfg) throw new Error(`Unknown raid/difficulty: ${raidId}/${difficulty}`);
-    const state = baseState();
+    const state = baseState(raid.reqLevel);
     const avgLevel = Math.round(partySlots.reduce((s, p) => s + p.level, 0) / Math.max(1, partySlots.length));
     const heroes = partySlots.map((p, i) => buildHero(p, i, raidId, difficulty, avgLevel));
     state.heroes = heroes;
@@ -295,6 +363,26 @@ async function main() {
       return { encounterId: e.id, name: e.name, lostHere: lost };
     });
     const fullClear = reach;
+    // Checkpoint maths (patch 0500 calibration): each fight is retried on
+    // its own; every loss on it adds retryStep (up to retryCap). Expected
+    // attempts per fight, and expected fights fought to a first clear
+    // with and without checkpoints (no retry bonus without).
+    const retryStep = input.retryStep ?? 5;
+    const retryCap = input.retryCap ?? 15;
+    const attemptsFor = (chance: number) => {
+      let expected = 0; let notYet = 1;
+      for (let k = 0; k < 200 && notYet > 1e-9; k++) {
+        const p = Math.min(MAX_SUCCESS, chance + Math.min(retryCap, retryStep * k)) / 100;
+        expected += (k + 1) * notYet * p;
+        notYet *= 1 - p;
+      }
+      return expected;
+    };
+    const fightsPerRun = encounters.reduce((acc, e, i) => acc + encounters.slice(0, i).reduce((p, x) => p * x.chance / 100, 1), 0);
+    const checkpoint = {
+      fightsToClear: encounters.reduce((acc, e) => acc + attemptsFor(e.chance), 0),
+      fightsToClearNoCheckpoint: fullClear > 0 ? fightsPerRun / fullClear : null,
+    };
     const runsStats = {
       runs,
       atLeastOneClear: 1 - Math.pow(1 - fullClear, runs),
@@ -316,7 +404,7 @@ async function main() {
       // True when the raid's role minimums need more heroes than this
       // difficulty's party holds -- that difficulty can never meet them.
       rolesExceedParty: Object.values(raid.requiredRoles ?? {}).reduce((a: number, b) => a + (b ?? 0), 0) > diffCfg.partySize,
-      baselineLevel, encounters, ends, fullClear, ...runsStats,
+      baselineLevel, encounters, ends, fullClear, checkpoint, ...runsStats,
     };
   };
 
@@ -327,7 +415,31 @@ async function main() {
     const raidId = input.raidId ?? RAIDS[0].id;
     const difficulty = input.difficulty ?? 'normal';
     const party = Array.isArray(input.party) && input.party.length ? input.party : autoParty(raidId, difficulty, levelFor(raidId));
-    process.stdout.write(JSON.stringify({ engine: 'raid-v1', gear, statMode, guildMaxed: !!input.guildMaxed, ...evaluate(raidId, difficulty, party) }));
+    process.stdout.write(JSON.stringify({ engine: 'raid-v2', gear, statMode, guild: guildMode, ...evaluate(raidId, difficulty, party) }));
+    return;
+  }
+
+  if (input.mode === 'ladder') {
+    // Patch 0500 -- the agreed raid ladder check: each raid x gear tier
+    // (quest gear, then each tier's own raid drops) x difficulty, auto
+    // party at the raid's level. Target: gear one tier below a difficulty
+    // ~70% full clear, one rung per difficulty above (see
+    // claude/raid-rebalance-plan.md).
+    const tiers: GearPreset[] = ['quest-hard-set', 'raid-fixed-normal', 'raid-fixed-heroic', 'raid-fixed-mythic'];
+    const ladder = RAIDS.map((r) => ({
+      raidId: r.id, raidName: r.name, reqLevel: r.reqLevel, encounters: r.encounterIds.length,
+      rows: tiers.map((t) => {
+        gear = t;
+        return {
+          gear: t,
+          cells: RAID_DIFFICULTY_ORDER.map((d) => {
+            const res = evaluate(r.id, d, autoParty(r.id, d, levelFor(r.id)));
+            return { difficulty: d, fullClear: res.fullClear, partyBonus: res.partyBonus, mismatched: res.mismatched, checkpoint: res.checkpoint };
+          }),
+        };
+      }),
+    }));
+    process.stdout.write(JSON.stringify({ engine: 'raid-v2', guild: guildMode, statMode, levelOffset, ladder }));
     return;
   }
 
@@ -340,12 +452,12 @@ async function main() {
       const res = evaluate(r.id, d, autoParty(r.id, d, levelFor(r.id)));
       return {
         difficulty: d, fullClear: res.fullClear, partyBonus: res.partyBonus, mismatched: res.mismatched, rolesExceedParty: res.rolesExceedParty,
-        chances: res.encounters.map((e) => e.chance), expectedRunsToFirstClear: res.expectedRunsToFirstClear,
+        chances: res.encounters.map((e) => e.chance), expectedRunsToFirstClear: res.expectedRunsToFirstClear, checkpoint: res.checkpoint,
         party: res.party.map((p) => p.heroClass),
       };
     }),
   }));
-  process.stdout.write(JSON.stringify({ engine: 'raid-v1', gear, statMode, guildMaxed: !!input.guildMaxed, levelOffset, grid }));
+  process.stdout.write(JSON.stringify({ engine: 'raid-v2', gear, statMode, guild: guildMode, levelOffset, grid }));
 }
 
 main().catch((err) => {

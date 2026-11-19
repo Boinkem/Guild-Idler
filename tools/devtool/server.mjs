@@ -4640,7 +4640,8 @@ const server = http.createServer(async (req, res) => {
     } catch {
       return json(res, 400, { error: 'Malformed JSON in request body.' });
     }
-    const mode = body.mode === 'meta' || body.mode === 'all' ? body.mode : 'one';
+    // Patch 0500 -- + 'ladder' (every raid x gear tier x difficulty).
+    const mode = ['meta', 'all', 'ladder'].includes(body.mode) ? body.mode : 'one';
     if (mode === 'meta') return json(res, 200, await runSimVariant({ mode: 'meta' }, RAID_SIM_SCRIPT));
     const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
     const common = {
@@ -4652,6 +4653,9 @@ const server = http.createServer(async (req, res) => {
       gear: typeof body.gear === 'string' ? body.gear : undefined,
       statMode: typeof body.statMode === 'string' ? body.statMode : undefined,
       guildMaxed: body.guildMaxed === true,
+      guild: ['none', 'typical', 'max'].includes(body.guild) ? body.guild : undefined,
+      retryStep: Number.isFinite(body.retryStep) ? body.retryStep : undefined,
+      retryCap: Number.isFinite(body.retryCap) ? body.retryCap : undefined,
       runs: Number.isFinite(body.runs) ? body.runs : 100,
     };
     const [baseline, modified] = await Promise.all([
