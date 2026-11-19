@@ -1,4 +1,4 @@
-import { RaidDef, RaidDifficulty, RaidDifficultyConfig, RaidEncounterDef, Rarity } from '../types';
+import { RaidDef, RaidDifficulty, RaidDifficultyConfig, RaidEncounterDef, Rarity, Role } from '../types';
 import { Tuning } from './tuning';
 import { RARITY_ORDER } from '../util';
 import { QUEST_CHAINS } from './quests';
@@ -118,6 +118,30 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
 };
 
 export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic', 'legendary'];
+
+/**
+ * Patch 0501 -- a raid's role minimums for one difficulty. When a raid
+ * needs more heroes for its roles than that difficulty's party holds
+ * (Requiem for the Last God: 2 melee + 2 ranged + 2 caster against
+ * Normal's 3), each role's need is scaled down to fit (at least 1 per
+ * role), so a full party can always meet it. Before this, Requiem's
+ * Normal could never meet its roles and paid the missing-role penalty
+ * on every run. Every raid role check goes through this.
+ */
+export function requiredRolesFor(
+  raid: { requiredRoles?: Partial<Record<Role, number>> } | undefined,
+  difficulty: RaidDifficulty,
+): Partial<Record<Role, number>> | undefined {
+  const need = raid?.requiredRoles;
+  if (!need) return need;
+  const size = RAID_DIFFICULTIES[difficulty]?.partySize ?? 0;
+  const entries = (Object.entries(need) as [Role, number][]).filter(([, n]) => n > 0);
+  const total = entries.reduce((sum, [, n]) => sum + n, 0);
+  if (total <= size || entries.length === 0) return need;
+  const scaled: Partial<Record<Role, number>> = {};
+  for (const [role, n] of entries) scaled[role] = Math.max(1, Math.floor((n * size) / total));
+  return scaled;
+}
 
 /**
  * Player-facing display label per raid difficulty. As of patch 0166 the

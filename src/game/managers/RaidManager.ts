@@ -1,7 +1,7 @@
 import {
   ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
 } from '../types';
-import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
+import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, requiredRolesFor, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
 import { renownForRaidClear, TOMBSTONE_STYLES } from '../data/progression';
 import { Tuning } from '../data/tuning';
 import { armouryWearCut, heroSignature } from '../data/attunement';
@@ -225,13 +225,15 @@ export const RaidManager = {
     const diffCfg = RAID_DIFFICULTIES[difficulty];
     const elemental = RaidManager.elementalBonus(heroes, encounter);
     const override = raid.successModifier ?? 0;
-    const roleMismatch = RaidManager.roleMismatchPenalty(heroes, raid.requiredRoles);
+    // Patch 0501 -- role needs scaled to this difficulty's party size.
+    const roles = requiredRolesFor(raid, difficulty);
+    const roleMismatch = RaidManager.roleMismatchPenalty(heroes, roles);
     const success = clamp(encounter.baseSuccess - diffCfg.successPenalty + bonus + elemental + override - roleMismatch, MIN_SUCCESS, MAX_SUCCESS);
     // Heroic/Legendary's role-mismatch ceiling applies AFTER the ordinary
     // clamp, only while the party is actually missing a required slot --
     // see RaidDifficultyConfig.roleMismatchCap. Normal has no cap
     // (undefined), so this is a no-op there regardless of party makeup.
-    if (diffCfg.roleMismatchCap != null && RaidManager.hasRoleMismatch(heroes, raid.requiredRoles)) {
+    if (diffCfg.roleMismatchCap != null && RaidManager.hasRoleMismatch(heroes, roles)) {
       return Math.min(success, diffCfg.roleMismatchCap);
     }
     return success;
@@ -355,7 +357,7 @@ export const RaidManager = {
 
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
     const raidDef = RAID_BY_ID[raidId]!;
-    const roleMismatch = RaidManager.roleMismatchPenalty(heroes, raidDef.requiredRoles);
+    const roleMismatch = RaidManager.roleMismatchPenalty(heroes, requiredRolesFor(raidDef, difficulty));
     const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, RaidManager.successBaselineLevel(raidDef, heroes)) - roleMismatch;
     const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now);
 
@@ -399,7 +401,7 @@ export const RaidManager = {
     // (which already has roleMismatchPenalty folded in from start()) --
     // every encounter in the loop below reuses this single result rather
     // than re-deriving it per encounter.
-    const roleMismatched = RaidManager.hasRoleMismatch(heroes, raid?.requiredRoles);
+    const roleMismatched = RaidManager.hasRoleMismatch(heroes, requiredRolesFor(raid, active.difficulty));
     // Patch 0258 (Dedicated Reward Level Scaling) -- the level a
     // hand-authored Set-piece drop scales against. Party average,
     // rounded, not each hero's own individual level: loot lands in the

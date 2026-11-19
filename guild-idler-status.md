@@ -1134,7 +1134,7 @@ raid fight).
 
 ## Backlog
 
-### Raid rebalance -- in progress (0500 Sandbox support built)
+### Raid rebalance -- in progress (0500 Sandbox support, 0501 balance built)
 Agreed 19 Nov 2026; full plan, calibrated values and sim results in the
 project doc `claude/raid-rebalance-plan.md`. Mockup: design canvas
 "Raid Screen: Odds Feedback".
@@ -1145,14 +1145,14 @@ project doc `claude/raid-rebalance-plan.md`. Mockup: design canvas
   (`raid.weakestHeroWeight` 0) instead of weakest hero + 0.2 x the rest.
 - **Stats stay the raid engine.** Gear Score display: later.
 - **1 -- built, patch 0500:** Sandbox Raid Tuning v2.
-- **2 -- next:** raid balance:
+- **2 -- built, patch 0501:** raid balance:
   - party averaging, and role needs scaled to the party size
     (Requiem Normal);
   - penalties Heroic 12 / Mythic 22 / Legendary 33;
   - raid drop power 3 / 5.5 / 8.5;
   - per-raid encounter bases;
   - raid set bonus success cuts.
-- **3:** raid checkpoints (a wipe saves progress at the fight lost, return
+- **3 -- next:** raid checkpoints (a wipe saves progress at the fight lost, return
   with a rebuilt party) + per-fight retry bonus (+5 per loss, up to +15).
   Save migration.
 - **4:** raid screen visuals to the mockup:
@@ -39956,3 +39956,114 @@ rebalance sets it to 0.
   - Ladder with the penalty and drop-power dials;
   - no page errors.
 - `tsc --noEmit` clean; `node --check` on both DevTool files.
+
+### Raid rebalance: odds ladder, carries, Requiem roles, set and drop-power retune (patch 0501)
+```discord-update
+Dev Update | Raid Rebalance
+
+- Changed raid odds to follow a clear ladder: gear from the tier below a difficulty now gives about a 70% clear, then 50%, 35% and 20% for each difficulty above
+- Changed raid parties so stronger heroes can carry weaker ones: the party's strength is now the average of everyone, not held down by its weakest member
+- Changed Heroic, Mythic and Legendary raids to be much less punishing, and gave each tier of raid gear a bigger step up
+- Changed raid set bonuses to sit closer to quest sets, so they no longer trivialise the next difficulty
+- Fixed Requiem for the Last God on Normal asking for more roles than a Normal party can hold
+```
+
+Step 2 of the raid rebalance (Backlog; plan, calibration and sim results in
+`claude/raid-rebalance-plan.md`). Calibrated in the Balance Sandbox
+(patch 0500) against a "typical guild": facilities and upgrades at
+min(0.5, raid level / 60) of max.
+
+**Carries.** `raid.weakestHeroWeight` 1 -> **0**. `RaidManager.partySuccessBonus`
+is now the plain average of every hero's contribution. Before, it was the
+weakest hero + 0.2 x the rest's average, so one unprepared hero in six cost
+~15 points; now ~2.5.
+
+**Role needs fit the party.** New `requiredRolesFor(raid, difficulty)`
+(data/raids.ts): when a raid's role minimums need more heroes than the
+difficulty's party holds, each role is scaled down to fit (min 1). Used
+by:
+- `previewEncounterSuccess`, `start` and `resolve`;
+- the raid screen's role circles;
+- the raid sim's auto party.
+
+Requiem (2/2/2) on Normal (3 heroes) now asks 1/1/1; before, it always
+paid the missing-role penalty.
+
+**Tuning:**
+
+| Setting | Before | After |
+|---|---|---|
+| raid_difficulty.heroic / mythic / legendary.successPenalty | 20 / 50 / 70 | 12 / 22 / 33 |
+| raid_dedicated.heroic/mythic/legendaryMultiplier and loot_procedural.raid*BudgetMultiplier | 1.5 / 2.2 / 3.0 | 3 / 5.5 / 8.5 |
+
+The mythic multiplier's devtool max rose to fit.
+
+**Encounter base success** (each raid's fights shift together):
+
+| Raid | Before | After |
+|---|---|---|
+| Blackford | 70/60/50 | 84/74/64 |
+| Wyrmkeep | 70/60/50 | 82/72/62 |
+| Bonewrought | 70/60/50 | 82/72/62 |
+| What Got Out | 70/60/50 | 80/70/60 |
+| Black Dragon Nest | 70/60/50 | 58/48/38 |
+| House of Bones | 70/55/45 | 60/45/35 |
+| Silence the Loom | 65 | 31 |
+| Requiem | 70/60/50 | 40/30/20 |
+
+Early raids rise because there is no quest set between levels 10 and 30.
+Level 30+ raids fall because quest guilds there wear Free Company /
+Wayfinder.
+
+**Raid set success** (full set; smaller tiers scaled; other set effects
+unchanged; `ITEM_SETS` in data/equipment.ts):
+
+| Set | Before | After |
+|---|---|---|
+| Blackford | 9 | 20 |
+| Wyrmkeep | 26 | 6 |
+| Bonewrought | 18 | 13 |
+| What Got Out | 30 | 4 |
+| Cinderfang | 28 | 13 |
+| Grimward | 34 | 9 |
+| Loom | 28 | 12 |
+| Requiem | 45 | 19 |
+
+Set bonuses also apply on quests, so raid-set wearers lose some quest
+success there too. Requiem's set is also the last_god chain's capstone
+reward.
+
+**Results** (Sandbox Ladder, typical guild, auto party):
+- **Quest gear on every 3-fight raid:** Normal 71-74%, Heroic 49-52%,
+  Mythic 32-34%, Legendary 19-20%.
+- **Gear from the tier below (target 70%):**
+  - Normal drops into Heroic: 66-77%.
+  - Heroic drops into Mythic: 57-86%.
+  - Mythic drops into Legendary: 45-86%.
+
+  The spread is each raid's loot strength: Bonewrought's helps least;
+  What Got Out, House of Bones and Requiem's most.
+- **Silence the Loom** (one fight): 70 / 58 / 47 / 36.
+- **Guild:** an unbuilt guild sits about a rung lower (quest gear Normal
+  59-70%), a fully built one about a rung higher (78-86%).
+- 58 of 80 ladder cells are within 7 points of target, against 7 before.
+
+**Notes for later patches:**
+- Raid gear stats are fixed when dropped. The steeper drop power applies
+  to new drops only; existing raid gear keeps its stats, but every
+  Heroic+ penalty fell, so odds still rise for everyone.
+- Drop power also raises Luck/Wisdom on raid gear, so quest income rises
+  for raid-geared heroes (hero gold multiplier, same basis):
+
+  | Gear | Before | After |
+  |---|---|---|
+  | Heroic drops, Dragon Nest | x1.51 | x1.58 |
+  | Legendary drops, Dragon Nest | x1.58 | x1.76 |
+  | Legendary drops, Requiem | x2.48 | x2.86 |
+
+  Normal drops are unchanged. Watch it in the Economy tab.
+
+**Verified:**
+- The raid sim ladder on the shipped data reproduces the plan (above).
+- `requiredRolesFor` gives Requiem Normal 1/1/1; Heroic+ are unchanged.
+- `tsc --noEmit` clean.

@@ -113,7 +113,7 @@ async function main() {
   const { clamp } = await import('../../../src/game/util');
   const { Tuning } = await import('../../../src/game/data/tuning');
 
-  const { RAIDS, RAID_BY_ID, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_LABEL, lootForDifficulty, parseLootEntry } = raids;
+  const { RAIDS, RAID_BY_ID, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_LABEL, lootForDifficulty, parseLootEntry, requiredRolesFor } = raids;
 
   // Proposed data edits, in memory only (the defs are plain objects read
   // at call time by RaidManager).
@@ -293,7 +293,7 @@ async function main() {
    *  the strongest remaining classes. Distinct classes, as in game. */
   const autoParty = (raidId: string, difficulty: string, level: number): PartySlot[] => {
     const size = RAID_DIFFICULTIES[difficulty as never]?.partySize ?? 3;
-    const need = { ...(RAID_BY_ID[raidId]?.requiredRoles ?? {}) } as Partial<Record<Role, number>>;
+    const need = { ...(requiredRolesFor(RAID_BY_ID[raidId], difficulty as never) ?? {}) } as Partial<Record<Role, number>>;
     const strength = (id: string) => {
       const c = HERO_CLASSES[id] as { mods?: { success?: number }; growth?: { strength?: number } };
       return (c.mods?.success ?? 0) + (c.growth?.strength ?? 0) * 6;
@@ -400,10 +400,10 @@ async function main() {
     return {
       raidId, raidName: raid.name, difficulty, partySize: diffCfg.partySize,
       party: partySlots, heroes: heroRows, partyBonus, roleMismatch, mismatched, roleCounts,
-      requiredRoles: raid.requiredRoles ?? {}, roleMismatchCap: diffCfg.roleMismatchCap ?? null,
+      requiredRoles: requiredRolesFor(raid, difficulty as never) ?? {}, roleMismatchCap: diffCfg.roleMismatchCap ?? null,
       // True when the raid's role minimums need more heroes than this
       // difficulty's party holds -- that difficulty can never meet them.
-      rolesExceedParty: Object.values(raid.requiredRoles ?? {}).reduce((a: number, b) => a + (b ?? 0), 0) > diffCfg.partySize,
+      rolesExceedParty: Object.values(requiredRolesFor(raid, difficulty as never) ?? {}).reduce((a: number, b) => a + (b ?? 0), 0) > diffCfg.partySize,
       baselineLevel, encounters, ends, fullClear, checkpoint, ...runsStats,
     };
   };

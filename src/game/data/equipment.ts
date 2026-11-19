@@ -245,6 +245,11 @@ export function itemDef(item: { defId?: string; rarity?: unknown } | null | unde
  * digit success, since one uncommon set used to carry a level-5 hero to
  * 95% on Easy and 70% on Epic.
  */
+// Patch 0501 -- raid set success bonuses cut to roughly quest-set size
+// (raid rebalance, see guild-idler-status.md / claude/raid-rebalance-plan.md):
+// a raid's gear now steps one ladder rung per tier through its stats
+// (raid_dedicated multipliers), not a +26..+45 flat set bonus. Blackford's
+// weak gear gets a larger set instead. Other set effects unchanged.
 export const ITEM_SETS: ItemSet[] = [
   {
     id: 'dragon_slayer',
@@ -307,9 +312,9 @@ export const ITEM_SETS: ItemSet[] = [
       'requiem_signet', 'requiem_grips', 'requiem_striders',
     ],
     bonuses: [
-      { count: 2, mods: { success: 16, injuryResist: 20 }, label: 'Requiem Begun' },
-      { count: 4, mods: { success: 28, gold: 40, loot: 20, injuryResist: 30 }, label: "Requiem-Bearer's Due" },
-      { count: 7, mods: { success: 45, gold: 70, loot: 40, injuryResist: 45, xp: 50, speed: 20 }, label: 'What Is Left of It' },
+      { count: 2, mods: { success: 7, injuryResist: 20 }, label: 'Requiem Begun' },
+      { count: 4, mods: { success: 12, gold: 40, loot: 20, injuryResist: 30 }, label: "Requiem-Bearer's Due" },
+      { count: 7, mods: { success: 19, gold: 70, loot: 40, injuryResist: 45, xp: 50, speed: 20 }, label: 'What Is Left of It' },
     ],
   },
   // Three parallel early/mid-game material-tier sets, one per rarity rung
@@ -407,9 +412,9 @@ export const ITEM_SETS: ItemSet[] = [
     name: 'Blackford Garrison Set',
     pieces: ['knights_blade', 'iron_helm', 'chainmail', 'work_gloves', 'ranger_boots', 'tollkeepers_signet', 'mourning_locket'],
     bonuses: [
-      { count: 2, mods: { success: 3, injuryResist: 6 }, label: 'Garrison Standard' },
-      { count: 4, mods: { success: 6, injuryResist: 12, gold: 6 }, label: 'Held the Wall' },
-      { count: 6, mods: { success: 9, injuryResist: 18, gold: 10, speed: 8 }, label: 'Siege Veteran' },
+      { count: 2, mods: { success: 7, injuryResist: 6 }, label: 'Garrison Standard' },
+      { count: 4, mods: { success: 13, injuryResist: 12, gold: 6 }, label: 'Held the Wall' },
+      { count: 6, mods: { success: 20, injuryResist: 18, gold: 10, speed: 8 }, label: 'Siege Veteran' },
     ],
   },
   {
@@ -417,8 +422,8 @@ export const ITEM_SETS: ItemSet[] = [
     name: 'Bonewrought Vault Set',
     pieces: ['gravewatchers_band', 'choir_mask', 'silenced_bell'],
     bonuses: [
-      { count: 2, mods: { success: 10, injuryResist: 12 }, label: 'Vault-Touched' },
-      { count: 3, mods: { success: 18, injuryResist: 22, gold: 12 }, label: 'Choir Silenced' },
+      { count: 2, mods: { success: 8, injuryResist: 12 }, label: 'Vault-Touched' },
+      { count: 3, mods: { success: 13, injuryResist: 22, gold: 12 }, label: 'Choir Silenced' },
     ],
   },
   {
@@ -426,9 +431,9 @@ export const ITEM_SETS: ItemSet[] = [
     name: 'Frozen Wyrmkeep Set',
     pieces: ['frostfang_claw', 'keepers_warded_charm', 'frostwalker_treads', 'frozen_maw_shield'],
     bonuses: [
-      { count: 2, mods: { success: 10, speed: 10 }, label: 'Frostbitten' },
-      { count: 3, mods: { success: 18, speed: 16, injuryResist: 10 }, label: "Keeper's Ward" },
-      { count: 4, mods: { success: 26, speed: 22, injuryResist: 16, gold: 12 }, label: 'Wyrmkeep Thawed' },
+      { count: 2, mods: { success: 3, speed: 10 }, label: 'Frostbitten' },
+      { count: 3, mods: { success: 5, speed: 16, injuryResist: 10 }, label: "Keeper's Ward" },
+      { count: 4, mods: { success: 6, speed: 22, injuryResist: 16, gold: 12 }, label: 'Wyrmkeep Thawed' },
     ],
   },
   {
@@ -436,9 +441,9 @@ export const ITEM_SETS: ItemSet[] = [
     name: 'What Got Out Set',
     pieces: ['cinder_ash_grip', 'loyalists_brand', 'cornered_fang', 'desperate_ends_crown'],
     bonuses: [
-      { count: 2, mods: { success: 12, gold: 14 }, label: 'Trail Gone Cold' },
-      { count: 3, mods: { success: 20, gold: 24, loot: 8 }, label: 'The Last Loyal' },
-      { count: 4, mods: { success: 30, gold: 34, loot: 14, injuryResist: 12 }, label: 'Cornered' },
+      { count: 2, mods: { success: 2, gold: 14 }, label: 'Trail Gone Cold' },
+      { count: 3, mods: { success: 3, gold: 24, loot: 8 }, label: 'The Last Loyal' },
+      { count: 4, mods: { success: 4, gold: 34, loot: 14, injuryResist: 12 }, label: 'Cornered' },
     ],
   },
   // Three new raids -- Black Dragon Nest, House of Bones, Silence the Loom
@@ -449,9 +454,9 @@ export const ITEM_SETS: ItemSet[] = [
     name: 'Cinderfang Set',
     pieces: ['cinderfang_gauntlets', 'wyrmwardens_cloak', 'scaleknit_boots', 'brood_fang_dagger', 'blackscale_helm', 'broodmothers_crown'],
     bonuses: [
-      { count: 2, mods: { success: 10, injuryResist: 10 }, label: 'Nest-Touched' },
-      { count: 4, mods: { success: 18, injuryResist: 18, gold: 12 }, label: 'Ridge-Scorched' },
-      { count: 6, mods: { success: 28, injuryResist: 26, gold: 20, loot: 12 }, label: 'The Nest Is Ash' },
+      { count: 2, mods: { success: 4, injuryResist: 10 }, label: 'Nest-Touched' },
+      { count: 4, mods: { success: 9, injuryResist: 18, gold: 12 }, label: 'Ridge-Scorched' },
+      { count: 6, mods: { success: 13, injuryResist: 26, gold: 20, loot: 12 }, label: 'The Nest Is Ash' },
     ],
   },
   {
@@ -459,9 +464,9 @@ export const ITEM_SETS: ItemSet[] = [
     name: 'Grimward Set',
     pieces: ['sewn_maw_greataxe', 'stitched_hide_vest', 'phylactery_shard_ring', 'unbinding_gauntlets', 'lichbound_diadem', 'grimward_amulet'],
     bonuses: [
-      { count: 2, mods: { success: 12, injuryResist: 14 }, label: 'Ossuary-Marked' },
-      { count: 4, mods: { success: 22, injuryResist: 24, xp: 16 }, label: 'Phylactery Broken' },
-      { count: 6, mods: { success: 34, injuryResist: 32, xp: 26, gold: 16 }, label: 'The Ritual Ended' },
+      { count: 2, mods: { success: 3, injuryResist: 14 }, label: 'Ossuary-Marked' },
+      { count: 4, mods: { success: 6, injuryResist: 24, xp: 16 }, label: 'Phylactery Broken' },
+      { count: 6, mods: { success: 9, injuryResist: 32, xp: 26, gold: 16 }, label: 'The Ritual Ended' },
     ],
   },
   {
@@ -469,8 +474,8 @@ export const ITEM_SETS: ItemSet[] = [
     name: "The Loom's Set",
     pieces: ['woven_mind_circlet', 'unraveling_cloak', 'threadcutter'],
     bonuses: [
-      { count: 2, mods: { success: 16, xp: 18 }, label: 'One Thread Cut' },
-      { count: 3, mods: { success: 28, xp: 30, speed: 14, gold: 18 }, label: 'Unraveled' },
+      { count: 2, mods: { success: 7, xp: 18 }, label: 'One Thread Cut' },
+      { count: 3, mods: { success: 12, xp: 30, speed: 14, gold: 18 }, label: 'Unraveled' },
     ],
   },
   // Two new craft-only sets -- direct request, filling two real gaps

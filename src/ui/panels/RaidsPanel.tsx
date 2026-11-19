@@ -8,7 +8,7 @@ import { Tuning } from '../../game/data/tuning';
 import { HeroManager } from '../../game/managers/HeroManager';
 import {
   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON_DEFS, raidDifficultyIconSrc, RAID_DIFFICULTY_LABEL,
-  isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
+  isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty, requiredRolesFor,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID, SET_BY_ID, itemDef, rarityRaiseFor } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
@@ -636,7 +636,11 @@ function RaidDetailModal({
                     Requires exactly {cfg.partySize} heroes at level {raid.reqLevel}+. Rewards ×{cfg.rewardMultiplier},
                     {' '}{cfg.successPenalty}% harder odds per encounter than Normal.
                   </p>
-                  {raid.requiredRoles && Object.keys(raid.requiredRoles).length > 0 && (() => {
+                  {(() => {
+                    // Patch 0501 -- role needs scaled to this difficulty's party
+                    // size (requiredRolesFor), e.g. Requiem's Normal asks 1/1/1.
+                    const roles = requiredRolesFor(raid, difficulty);
+                    if (!roles || Object.keys(roles).length === 0) return null;
                     // Deliberately reads the REAL selection (selectedHeroIds),
                     // not previewHeroIds -- see patch 0144 note: a
                     // requirement circle is a concrete met/unmet fact about
@@ -645,12 +649,12 @@ function RaidDetailModal({
                       .map((id) => state.heroes.find((h) => h.id === id))
                       .filter((h): h is Hero => !!h);
                     const counts = RaidManager.partyRoleCounts(selectedHeroes);
-                    const penalty = RaidManager.roleMismatchPenalty(selectedHeroes, raid.requiredRoles);
-                    const mismatched = RaidManager.hasRoleMismatch(selectedHeroes, raid.requiredRoles);
+                    const penalty = RaidManager.roleMismatchPenalty(selectedHeroes, roles);
+                    const mismatched = RaidManager.hasRoleMismatch(selectedHeroes, roles);
                     const cap = cfg.roleMismatchCap;
-                    const metCount = (Object.entries(raid.requiredRoles) as [Role, number][])
+                    const metCount = (Object.entries(roles) as [Role, number][])
                       .filter(([role, needed]) => counts[role] >= needed).length;
-                    const totalRoles = Object.keys(raid.requiredRoles).length;
+                    const totalRoles = Object.keys(roles).length;
                     return (
                       <div style={{ marginTop: 6, marginBottom: 6 }}>
                         <div className="section-heading" style={{ margin: '10px 0 6px' }}>Roles Required</div>
@@ -658,7 +662,7 @@ function RaidDetailModal({
                           {metCount}/{totalRoles} met
                         </p>
                         <div className="row" style={{ gap: 8 }}>
-                          {(Object.entries(raid.requiredRoles) as [Role, number][]).map(([role, needed]) => (
+                          {(Object.entries(roles) as [Role, number][]).map(([role, needed]) => (
                             <RoleRequirementCircle key={role} role={role} needed={needed} have={counts[role]} />
                           ))}
                         </div>
