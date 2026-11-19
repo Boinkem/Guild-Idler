@@ -361,6 +361,30 @@ export const ITEM_SETS: ItemSet[] = [
       { count: 9, mods: { gold: 32, loot: 16, speed: 16, success: 7, injuryResist: 8 }, label: 'Nobody Saw a Thing' },
     ],
   },
+  // Patch 0496 -- the Epic and Legendary rungs of the general-pool set
+  // ladder (Leather common -> Steel uncommon -> Cutpurse rare -> these).
+  // Quest / shop drops, never raid-only. Bonus numbers are starting points
+  // for the Balance Sandbox, not locked.
+  {
+    id: 'free_company',
+    name: 'Free Company Set',
+    pieces: ['free_company_sword', 'free_company_sallet', 'free_company_gambeson', 'free_company_heater', 'free_company_gauntlets', 'free_company_boots', 'free_company_signet', 'free_company_token', 'free_company_colours'],
+    bonuses: [
+      { count: 3, mods: { success: 4, xp: 8 }, label: 'Sellswords' },
+      { count: 6, mods: { success: 8, xp: 14, injuryResist: 10 }, label: 'Under Contract' },
+      { count: 9, mods: { success: 12, xp: 20, injuryResist: 16, speed: 12 }, label: 'The Company Marches' },
+    ],
+  },
+  {
+    id: 'wayfinder',
+    name: "Wayfinder's Set",
+    pieces: ['wayfinders_sabre', 'wayfinders_hood', 'wayfinders_longcoat', 'wayfinders_ward', 'wayfinders_grips', 'wayfinders_roadboots', 'wayfinders_compass_ring', 'wayfinders_lodestone', 'wayfinders_cloak'],
+    bonuses: [
+      { count: 3, mods: { success: 5, loot: 8 }, label: 'Old Roads' },
+      { count: 6, mods: { success: 10, loot: 16, gold: 15 }, label: 'Every Map Drawn' },
+      { count: 9, mods: { success: 15, loot: 24, gold: 25, speed: 15 }, label: 'Been Everywhere' },
+    ],
+  },
   // One set per raid, assembled entirely from that raid's own existing
   // drop pool rather than new items -- requiem (above) was the only raid
   // that had this treatment before now; Blackford Keep/Bonewrought
