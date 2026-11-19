@@ -39338,3 +39338,42 @@ Nov 8:00 PM to Wed 25 Nov 8:00 AM, `test-2026-11-17-copy`), no page
 errors. **Not run here** (no Postgres/server in this sandbox): the new
 admin route and the server-event cards' "Players see" lines and "Result
 shown until…" button, and the finished banner against a real event.
+
+### DevTool: clean up old installers after each Package (patch 0491)
+```discord-update
+Dev Update | Changes
+
+- Changed the dev tools to clear out old build installers after each package, keeping the newest two
+```
+
+Direct request: `release/` and `release-demo/` kept every
+`<Product> Setup X.Y.Z.exe` (~400 MB each) and its `.exe.blockmap` forever,
+8 demo versions = ~3.2 GB and growing. None are needed: the Steam upload
+uses `win-unpacked/` and Steam keeps every uploaded build (roll back in
+Steamworks -> SteamPipe -> Builds), every release is a git tag, the game
+has no auto-updater (so `.blockmap` / `latest.yml` are unused), and the
+Google Drive copy (`copyLatestBuild`) only takes the newest installer.
+
+**`tools/devtool/server.mjs`:** `pruneOldInstallers(dir, keep)` keeps the
+newest `keep` versions (semver order, so 1.8.10 > 1.8.9) and deletes older
+installers + blockmaps. Only names matching `... Setup X.Y.Z.exe` /
+`.exe.blockmap` are touched; `win-unpacked/`, `latest.yml`,
+`builder-debug.yml` and anything else stay. A file it can't delete (in
+use) is listed in the output, never fatal. `withInstallerCleanup` runs it
+after every **successful** Package (the Ship flow's Package game / Package
+demo steps and the manual Package / Package demo buttons), for that
+target's folder only, and appends a line like "release-demo/: deleted 12
+old files, freed 4,8xx MB. Kept 1.8.6, 1.8.5." to the step output. A failed
+clean-up never fails the package step. New `POST
+/api/patches/prune-installers` cleans both folders on demand.
+
+**Setting:** `keepInstallers` in `steam.config.json` (default 2, 0 = keep
+everything, max 50), new "Keep installers (newest)" field next to the
+Steam branch fields under 7.5. **Button:** "Clean up old installers now"
+under the Google Drive copy (confirms first, then reports per folder).
+
+**Verified:** `node --check` on both DevTool files. Ran the route against
+dummy copies of the real `release-demo/` listing (1.6.0 ... 1.8.5, with
+blockmaps, `latest.yml`, `builder-debug.yml`, `win-unpacked/`) plus a
+`release/` with 1.8.9 / 1.8.10 / 1.9.0: kept 1.8.5 + 1.8.4 and 1.9.0 +
+1.8.10, deleted the rest, left the other files alone.

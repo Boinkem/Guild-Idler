@@ -2844,9 +2844,12 @@ async function readSteamConfig() {
       // every demo upload end in "Failed to commit build". 'none' = upload
       // only (set it live yourself on Steamworks).
       demoBranch: typeof parsed.demoBranch === 'string' && parsed.demoBranch ? parsed.demoBranch : 'none',
+      // Patch 0491 -- how many installer versions to keep in release/ and
+      // release-demo/ after each Package (0 = keep everything).
+      keepInstallers: parseKeepInstallers(parsed.keepInstallers),
     };
   } catch {
-    return { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal', demoBranch: 'none' };
+    return { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal', demoBranch: 'none', keepInstallers: DEFAULT_KEEP_INSTALLERS };
   }
 }
 
@@ -3272,6 +3275,86 @@ async function uploadedManifestSince(cfg, depotId, sinceMs) {
  * unpacked folder (testers without Steam access need something they can
  * just double-click and run, not a folder of loose files).
  */
+/* ------------------------------------------ old installer clean-up --- */
+// Patch 0491. Every Package run leaves a new "<Product> Setup X.Y.Z.exe"
+// (~400 MB) plus its .exe.blockmap in release/ (game) or release-demo/
+// (demo), and nothing ever removed the old ones. None of them are needed:
+// Steam uploads win-unpacked/ and keeps every uploaded build itself
+// (roll back in Steamworks -> SteamPipe -> Builds), every release is a git
+// tag that can be rebuilt, the game doesn't auto-update (so .blockmap /
+// latest.yml are unused), and copyLatestBuild() only ever takes the newest
+// installer. So after each successful Package the newest N versions are
+// kept and older installers + their blockmaps are deleted. Only files
+// named exactly "... Setup X.Y.Z.exe" / ".exe.blockmap" are touched --
+// win-unpacked/, latest.yml, builder-debug.yml and anything else stay.
+
+const DEFAULT_KEEP_INSTALLERS = 2;
+function parseKeepInstallers(v) {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n >= 0 && n <= 50 ? n : DEFAULT_KEEP_INSTALLERS;
+}
+
+const INSTALLER_RE = /^(.+) Setup (\d+)\.(\d+)\.(\d+)\.exe(\.blockmap)?$/i;
+
+/** Deletes all but the newest `keep` installer versions in `dir`.
+ *  keep 0 = do nothing. Never throws: a missing folder or a file that
+ *  can't be deleted (in use) is reported, not fatal. */
+async function pruneOldInstallers(dir, keep) {
+  const label = path.basename(dir);
+  if (!(keep > 0)) return { label, deleted: [], kept: [], failed: [], freedBytes: 0, skipped: 'keep set to 0 (keep everything)' };
+  let entries;
+  try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return { label, deleted: [], kept: [], failed: [], freedBytes: 0, skipped: 'no such folder' }; }
+  const byVersion = new Map(); // "1.8.5" -> { parts: [1,8,5], files: [...] }
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const m = entry.name.match(INSTALLER_RE);
+    if (!m) continue;
+    const key = `${m[2]}.${m[3]}.${m[4]}`;
+    if (!byVersion.has(key)) byVersion.set(key, { key, parts: [Number(m[2]), Number(m[3]), Number(m[4])], files: [] });
+    byVersion.get(key).files.push(entry.name);
+  }
+  const versions = [...byVersion.values()].sort((a, b) => b.parts[0] - a.parts[0] || b.parts[1] - a.parts[1] || b.parts[2] - a.parts[2]);
+  const kept = versions.slice(0, keep).map((v) => v.key);
+  const deleted = []; const failed = []; let freedBytes = 0;
+  for (const v of versions.slice(keep)) {
+    for (const name of v.files) {
+      const full = path.join(dir, name);
+      try {
+        const st = await fs.stat(full);
+        await fs.unlink(full);
+        freedBytes += st.size;
+        deleted.push(name);
+      } catch (err) {
+        failed.push(`${name} (${err.code || err.message})`);
+      }
+    }
+  }
+  return { label, deleted, kept, failed, freedBytes };
+}
+
+function pruneSummary(r) {
+  if (r.skipped) return `${r.label}/: clean-up skipped -- ${r.skipped}.`;
+  const mb = (r.freedBytes / 1024 / 1024).toFixed(0);
+  const lines = [r.deleted.length
+    ? `${r.label}/: deleted ${r.deleted.length} old file${r.deleted.length === 1 ? '' : 's'}, freed ${mb} MB. Kept ${r.kept.join(', ')}.`
+    : `${r.label}/: nothing to clean up${r.kept.length ? ` (kept ${r.kept.join(', ')})` : ''}.`];
+  if (r.failed.length) lines.push(`  Couldn't delete (in use?): ${r.failed.join(', ')}`);
+  return lines.join('\n');
+}
+
+/** Runs the clean-up after a successful Package and appends what it did to
+ *  that step's output. A failed clean-up never fails the package step. */
+async function withInstallerCleanup(result, target) {
+  if (!result?.ok) return result;
+  try {
+    const cfg = await readSteamConfig();
+    const r = await pruneOldInstallers(target === 'demo' ? RELEASE_DEMO_DIR : RELEASE_DIR, cfg.keepInstallers);
+    return { ...result, stdout: `${result.stdout || ''}\n\n${pruneSummary(r)}` };
+  } catch (err) {
+    return { ...result, stdout: `${result.stdout || ''}\n\nOld installer clean-up failed: ${err.message || err}` };
+  }
+}
+
 async function findLatestReleaseFile() {
   let entries;
   try {
@@ -3810,7 +3893,7 @@ async function runShipStep(job, step) {
       return r;
     }
     case 'package':
-      return runNpm(['run', target === 'demo' ? 'package:demo' : 'package'], PACKAGE_TIMEOUT_MS);
+      return withInstallerCleanup(await runNpm(['run', target === 'demo' ? 'package:demo' : 'package'], PACKAGE_TIMEOUT_MS), target);
     case 'scripts':
       return generateSteamBuildScripts(target);
     case 'upload':
@@ -4158,7 +4241,15 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/patches/package' && req.method === 'POST') {
     const result = await runNpm(['run', 'package'], PACKAGE_TIMEOUT_MS);
-    return json(res, 200, result);
+    return json(res, 200, await withInstallerCleanup(result, 'full'));
+  }
+
+  // Patch 0491 -- clean up both release folders on demand.
+  if (url.pathname === '/api/patches/prune-installers' && req.method === 'POST') {
+    const cfg = await readSteamConfig();
+    const keep = cfg.keepInstallers;
+    const results = [await pruneOldInstallers(RELEASE_DIR, keep), await pruneOldInstallers(RELEASE_DEMO_DIR, keep)];
+    return json(res, 200, { ok: results.every((r) => !r.failed.length), stdout: results.map(pruneSummary).join('\n'), stderr: '' });
   }
 
   // Patch 0445 -- the Steam demo build (package.json's package:demo:
@@ -4167,7 +4258,7 @@ const server = http.createServer(async (req, res) => {
   // scripts" / "Upload demo to Steam" then read from.
   if (url.pathname === '/api/patches/package-demo' && req.method === 'POST') {
     const result = await runNpm(['run', 'package:demo'], PACKAGE_TIMEOUT_MS);
-    return json(res, 200, result);
+    return json(res, 200, await withInstallerCleanup(result, 'demo'));
   }
 
   if (url.pathname === '/api/patches/copy-build' && req.method === 'POST') {
@@ -4245,6 +4336,7 @@ const server = http.createServer(async (req, res) => {
       contentBuilderDir: typeof body.contentBuilderDir === 'string' ? body.contentBuilderDir.trim() : '',
       branch: typeof body.branch === 'string' && body.branch.trim() ? body.branch.trim() : 'internal',
       demoBranch: typeof body.demoBranch === 'string' && body.demoBranch.trim() ? body.demoBranch.trim() : 'none',
+      keepInstallers: parseKeepInstallers(body.keepInstallers),
     };
     await writeSteamConfig(cfg);
     return json(res, 200, { ok: true, ...cfg });

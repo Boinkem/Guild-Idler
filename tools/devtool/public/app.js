@@ -2638,7 +2638,7 @@ init().catch((err) => setStatus(err.message, 'err'));
 const patchState = {
   files: [], gitStatus: null, selected: null, checked: false, applied: false,
   discordConfigured: false, discordPreview: '', discordDraft: '',
-  steam: { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal', demoBranch: 'none' },
+  steam: { username: '', appId: '', depotId: '', demoAppId: '', demoDepotId: '', contentBuilderDir: '', branch: 'internal', demoBranch: 'none', keepInstallers: 2 },
   // Patches tab now splits into two panes (patch 0331 redesign) -- Patch
   // flow (steps 1-5) and Build & Ship (steps 6-11), toggled by the two
   // nav buttons rendered in renderPatches. false = Patch flow shown,
@@ -3667,6 +3667,13 @@ function renderPatches() {
     </p>
     <button id="copyBuildBtn">Copy latest build to Google Drive folder</button>
     <div id="copyBuildResult"></div>
+    <p class="tiny muted" style="margin-top:10px;">
+      Each Package keeps the newest <b>${escapeHtml(String(patchState.steam.keepInstallers ?? 2))}</b> installer version(s)
+      in <code>release/</code> and <code>release-demo/</code> and deletes older Setup <code>.exe</code> + <code>.blockmap</code> files
+      (set under 7.5, 0 = keep all). Steam keeps every build you upload, and every version is a git tag.
+    </p>
+    <button id="pruneInstallersBtn">Clean up old installers now</button>
+    <div id="pruneInstallersResult"></div>
 
     <div class="section-heading" style="margin-top:18px;">7.5. Configure Steam upload</div>
     <div class="devtool-note">
@@ -3763,6 +3770,10 @@ function renderPatches() {
         <option value="none">Upload only -- set live yourself in Steamworks</option>
         <option value="default">Store (steamcmd can't set this live -- same as none)</option>
       </datalist>
+      <label class="tiny muted" style="display:flex; flex-direction:column; gap:3px; flex: 0 1 170px;" title="After each Package, older Setup installers (and their .blockmap) are deleted from release/ and release-demo/. Steam keeps every uploaded build, and every version is a git tag.">Keep installers (newest)
+        <input type="number" id="steamKeepInstallersInput" min="0" max="50" value="${escapeHtml(String(patchState.steam.keepInstallers ?? 2))}"
+          style="background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      </label>
       <button id="steamConfigSaveBtn" style="align-self:flex-end;">Save Steam config</button>
     </div>
     <p class="tiny muted" style="margin:0 0 6px;">
@@ -4029,6 +4040,20 @@ function renderPatches() {
   if (packageDemoBtn) packageDemoBtn.onclick = () => runPackage(
     packageDemoBtn, '/api/patches/package-demo', 'Package demo', 'Packaging demo… (this can take several minutes)', 'packageDemoResult', 'Package demo');
 
+  // Patch 0491 -- manual clean-up of old installers in both release folders.
+  const pruneBtn = document.getElementById('pruneInstallersBtn');
+  if (pruneBtn) pruneBtn.onclick = async () => {
+    const keep = patchState.steam.keepInstallers ?? 2;
+    if (!keep) { document.getElementById('pruneInstallersResult').innerHTML = resultBlock({ ok: true, stdout: 'Keep installers is 0 (keep everything) -- nothing deleted.', stderr: '' }, 'Clean up'); return; }
+    if (!confirm(`Delete every Setup installer (and its .blockmap) in release/ and release-demo/ except the newest ${keep} version(s)? This can't be undone.`)) return;
+    pruneBtn.disabled = true;
+    pruneBtn.textContent = 'Cleaning up…';
+    const result = await api('/api/patches/prune-installers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    pruneBtn.disabled = false;
+    pruneBtn.textContent = 'Clean up old installers now';
+    document.getElementById('pruneInstallersResult').innerHTML = resultBlock(result, 'Clean up');
+  };
+
   const copyBuildBtn = document.getElementById('copyBuildBtn');
   if (copyBuildBtn) copyBuildBtn.onclick = async () => {
     if (!confirm('Copy the newest release/ installer to C:\\Custom Apps\\GuildBound Executables? This overwrites whatever is already there.')) return;
@@ -4055,13 +4080,14 @@ function renderPatches() {
       contentBuilderDir: document.getElementById('steamContentBuilderInput').value.trim(),
       branch: document.getElementById('steamBranchInput').value.trim(),
       demoBranch: document.getElementById('steamDemoBranchInput').value.trim(),
+      keepInstallers: Number(document.getElementById('steamKeepInstallersInput').value),
     };
     try {
       const result = await api('/api/steam/config', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cfg),
       });
-      patchState.steam = { username: result.username, appId: result.appId, depotId: result.depotId, demoAppId: result.demoAppId, demoDepotId: result.demoDepotId, contentBuilderDir: result.contentBuilderDir, branch: result.branch, demoBranch: result.demoBranch };
+      patchState.steam = { username: result.username, appId: result.appId, depotId: result.depotId, demoAppId: result.demoAppId, demoDepotId: result.demoDepotId, contentBuilderDir: result.contentBuilderDir, branch: result.branch, demoBranch: result.demoBranch, keepInstallers: result.keepInstallers };
       document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: true, stdout: 'Saved.', stderr: '' }, 'Steam config');
     } catch (err) {
       document.getElementById('steamConfigResult').innerHTML = resultBlock({ ok: false, stdout: '', stderr: err.message || String(err) }, 'Steam config');
