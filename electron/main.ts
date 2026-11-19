@@ -42,7 +42,14 @@ const IS_DEMO = typeof __GUILDBOUND_DEMO__ !== 'undefined' && __GUILDBOUND_DEMO_
 // so a demo save and a full-game save can never overwrite each other on
 // a machine that has both installed. (Patch 0476: demo progress DOES carry
 // over since patch 0439 -- see importDemoSave below.)
-app.setName(IS_DEMO ? 'guildbound-demo' : 'guildbound');
+// Patch 0504 -- an unpackaged run (`npm run dev`, `npm start`) gets its own
+// folder too ('guildbound-dev', or 'guildbound-demo-dev' for dev:demo), so
+// dev testing -- the Testing tab's gold/xp/time skips, newer save versions
+// -- can never touch the real Steam save in 'guildbound'. It starts fresh:
+// nothing is copied in (see IS_DEV_RUN in the two migrations below).
+// Packaged/Steam builds are unchanged.
+const IS_DEV_RUN = !app.isPackaged;
+app.setName(`${IS_DEMO ? 'guildbound-demo' : 'guildbound'}${IS_DEV_RUN ? '-dev' : ''}`);
 
 /**
  * Single-instance lock -- nothing previously stopped a player launching a
@@ -413,7 +420,8 @@ async function migrateLegacySaveFolder() {
   // Patch 0438 -- never in the demo: the demo has never been called
   // little-knight, and copying an old full-game save into a fresh demo
   // folder would hand a demo player a full-game guild.
-  if (IS_DEMO) return;
+  // Patch 0504 -- nor in a dev run: its save folder starts fresh.
+  if (IS_DEMO || IS_DEV_RUN) return;
   const newSave = savePath();
   try {
     await fs.access(newSave);
@@ -461,7 +469,8 @@ async function migrateLegacySaveFolder() {
  * storage, so this finds the demo save on the same PC, not another one.
  */
 async function importDemoSave() {
-  if (IS_DEMO) return;
+  // Patch 0504 -- a dev run's save folder starts fresh.
+  if (IS_DEMO || IS_DEV_RUN) return;
   const newSave = savePath();
   try {
     await fs.access(newSave);

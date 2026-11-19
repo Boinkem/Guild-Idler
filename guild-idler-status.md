@@ -40243,3 +40243,32 @@ quest/raid, egg/pet and decoration tools.
 - **Testing tab in the dev server:** +10,000 XP took every hero from level
   20 to 31.
 - No page errors; `tsc --noEmit` clean; the raid sim still runs.
+
+### Dev runs use their own save folder (patch 0504)
+```discord-update
+Dev Update | Changes
+
+- Changed development builds to keep their own save, so testing can never touch a real Steam save
+```
+
+Found after patch 0503 turned the Testing tab on in `npm run dev`. The
+dev Electron app named itself `guildbound`, same as the Steam build, so
+both used `%APPDATA%/guildbound/guildbound-save.json` (and the settings
+file). Testing-tab gold/xp/time skips, and a newer dev `SAVE_VERSION`, went
+straight into the player's real Steam save; Steam Cloud could also
+upload it.
+
+**`electron/main.ts`:**
+- **Folder name:** `IS_DEV_RUN = !app.isPackaged`, and
+  `app.setName(... + (IS_DEV_RUN ? '-dev' : ''))`.
+  - `npm run dev` / `npm start` -> `%APPDATA%/guildbound-dev`;
+  - `dev:demo` -> `guildbound-demo-dev`.
+  - Packaged / Steam builds keep `guildbound` / `guildbound-demo`
+    (compiled check: `setName(\`guildbound${!isPackaged ? "-dev" : ""}\`)`).
+- **Starts fresh:** `migrateLegacySaveFolder` (old little-knight save)
+  and `importDemoSave` (demo -> full) both skip dev runs, so nothing is
+  copied in.
+- **Side effect:** the single-instance lock is per folder, so a dev run
+  and the Steam game can be open at the same time.
+- **Browser dev** (`npm run dev:web`) was already separate (localStorage
+  on localhost).
