@@ -39435,3 +39435,30 @@ Next → step 9, a step's ? opens the Guide on Steam publishing, Settings
 drawer -- no page errors. `POST /api/ship/start {mode:'patch'}` builds
 preflight/apply/build/commit/bump/push only, and is refused without a
 patch file.
+
+### Bug Fix: Tidy patch files skipped "patch-NNNN-name.patch" files (patch 0493)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the dev tools' "Tidy patch files" leaving older patch files behind in the project folder
+```
+
+Direct report: Tidy patch files moved nothing out of root. Root held 31
+files, `patch-0453-over-level-rewards.patch` through
+`patch-0485-bug-report-security.patch`, all named with a `patch-` prefix.
+`archiveAppliedPatches` (`tools/devtool/server.mjs`) only recognised
+`/^(\d{3,5})-/` ("0486-name.patch", the style used since 0486), so every
+prefixed file counted as "not applied yet" and stayed. It now uses
+`extractPatchNumber`, the tolerant parse "Fill from selected patch" has
+used since patch 0221 (leading digits, then `patch[-_]?NNNN` anywhere).
+Same rule as before otherwise: anything numbered at or below the newest
+`(patch NNNN)` heading in guild-idler-status.md moves to `patches/applied/`.
+
+Also: the Auto tab's oldest-first pick (`defaultShipPatch`, app.js) parses
+both styles, and the default commit message strips a `patch-NNNN-` prefix
+too (`patch-0453-over-level-rewards` → "Apply over level rewards", not
+"Apply patch 0453 over level rewards"), in the 5 places that build it.
+
+**Verified:** `node --check` on both files. Ran `/api/patches/tidy` against
+dummy copies of three real root names plus `0499-not-applied-yet.patch`:
+moved the three to `patches/applied/`, left 0499 in place.

@@ -3256,7 +3256,7 @@ function nextVersion(version, level) {
 }
 
 function shipCommitMessageFor(name) {
-  return name ? 'Apply ' + name.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ') : '';
+  return name ? 'Apply ' + name.replace(/\.patch$/, '').replace(/^(?:patch[-_]?)?\d+[-_]/i, '').replace(/-/g, ' ') : '';
 }
 
 /** Patch 0492 -- the patch Auto pre-selects: the OLDEST one waiting in the
@@ -3266,7 +3266,9 @@ function defaultShipPatch() {
   if (patchState.selected && !patchState.applied) return patchState.selected;
   const root = patchState.files.filter((f) => f.dir === '.');
   if (!root.length) return '';
-  const num = (f) => { const m = /^(\d+)/.exec(f.name); return m ? Number(m[1]) : Infinity; };
+  // Same naming styles extractPatchNumber (server.mjs) accepts:
+  // "0491-name", "patch-0453-name", "patch_0453", "...-patch-0453".
+  const num = (f) => { const m = /^(\d{3,5})[-_]/.exec(f.name) || /patch[-_]?(\d{3,5})/i.exec(f.name); return m ? Number(m[1]) : Infinity; };
   return [...root].sort((x, y) => num(x) - num(y) || x.mtime - y.mtime)[0].name;
 }
 
@@ -3882,7 +3884,7 @@ function renderPatches() {
         ${stepPanel(5, `
           <div class="pt-row" style="flex-wrap:nowrap;">
             <input type="text" id="commitMsg" placeholder="Commit message"
-              value="${sel ? escapeHtml('Apply ' + sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')) : ''}"
+              value="${sel ? escapeHtml('Apply ' + sel.replace(/\.patch$/, '').replace(/^(?:patch[-_]?)?\d+[-_]/i, '').replace(/-/g, ' ')) : ''}"
               style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
             <button id="commitBtn" class="primary" ${gs?.clean !== false ? 'disabled' : ''}>Commit</button>
           </div>
@@ -4358,7 +4360,7 @@ function renderPatches() {
         // No ```discord-update block on this entry (an older patch, or one
         // written before this convention existed) -- fall back to a plain
         // title derived from the filename, same as before this feature.
-        const name = sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ');
+        const name = sel.replace(/\.patch$/, '').replace(/^(?:patch[-_]?)?\d+[-_]/i, '').replace(/-/g, ' ');
         messageInput.value = `**${name}**\n\nSee the full changelog in guild-idler-status.md.`;
       }
       patchState.discordDraft = messageInput.value;

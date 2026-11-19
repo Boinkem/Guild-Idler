@@ -2205,8 +2205,11 @@ async function archiveAppliedPatches() {
   const kept = [];
   if (!newest) return { moved, kept, newest };
   for (const f of await listPatchFiles()) {
-    const m = /^(\d{3,5})-/.exec(f.name);
-    if (!m || parseInt(m[1], 10) > newest) { kept.push(f.name); continue; }
+    // Patch 0493 -- same tolerant parse as "Fill from selected patch"
+    // (extractPatchNumber): the old /^(\d{3,5})-/ only matched
+    // "0486-name.patch", so every "patch-0453-name.patch" was left in root.
+    const num = extractPatchNumber(f.name);
+    if (!num || parseInt(num, 10) > newest) { kept.push(f.name); continue; }
     await fs.mkdir(PATCH_ARCHIVE_DIR, { recursive: true });
     let to = path.join(PATCH_ARCHIVE_DIR, f.name);
     try { await fs.access(to); to = path.join(PATCH_ARCHIVE_DIR, f.name.replace(/\.patch$/, `-${Date.now()}.patch`)); } catch { /* free */ }
@@ -3968,7 +3971,7 @@ function parseShipOptions(body) {
     if (!bump) return { error: 'bump must be patch, minor, major, or none.' };
     const commitMessage = typeof body.commitMessage === 'string' && body.commitMessage.trim()
       ? body.commitMessage.trim()
-      : `Apply ${patch.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')}`;
+      : `Apply ${patch.replace(/\.patch$/, '').replace(/^(?:patch[-_]?)?\d+[-_]/i, '').replace(/-/g, ' ')}`;
     const announceFrom = typeof body.announceFrom === 'string' && /^\d{1,5}$/.test(body.announceFrom.trim()) ? body.announceFrom.trim() : null;
     return { opts: { mode: 'patch', target: 'none', targets: [], bump, patch, commitMessage, discord: !!body.discord, announceFrom } };
   }
@@ -3985,7 +3988,7 @@ function parseShipOptions(body) {
   const patch = typeof body.patch === 'string' && body.patch.trim() ? body.patch.trim() : null;
   const commitMessage = typeof body.commitMessage === 'string' && body.commitMessage.trim()
     ? body.commitMessage.trim()
-    : (patch ? `Apply ${patch.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')}` : '');
+    : (patch ? `Apply ${patch.replace(/\.patch$/, '').replace(/^(?:patch[-_]?)?\d+[-_]/i, '').replace(/-/g, ' ')}` : '');
   const announceFrom = typeof body.announceFrom === 'string' && /^\d{1,5}$/.test(body.announceFrom.trim()) ? body.announceFrom.trim() : null;
   return { opts: { target, targets: SHIP_TARGETS[target], bump, patch, commitMessage, discord: !!body.discord, announceFrom } };
 }
