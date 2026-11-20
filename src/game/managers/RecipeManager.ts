@@ -1,7 +1,18 @@
 import { ALWAYS_KNOWN_RECIPE_IDS, RECIPE_SCROLLS, RECIPE_SCROLL_BY_ID, scrollSellValue } from '../data/recipeScrolls';
-import { RecipeScrollDef, GameState } from '../types';
-import { Rng } from '../rng';
+import { RecipeScrollDef, GameState, VendorId, CraftingRecipeDef } from '../types';
+import { Rng, createRng } from '../rng';
 import { ModifierManager } from './ModifierManager';
+import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
+import { Tuning } from '../data/tuning';
+import { rerollDay } from '../data/reroll';
+
+/** Patch 0506 -- which vendor's Recipe Shelf a recipe category sits on.
+ *  Same split the vendors' own crafting buttons use (charms moved to the
+ *  Alchemist in patch 0347). */
+const SHELF_VENDOR_BY_CATEGORY: Record<CraftingRecipeDef['category'], VendorId> = {
+  gear: 'blacksmith', consumable: 'alchemist', charm: 'alchemist', enchant: 'enchanter', gem: 'enchanter',
+};
+const SHELF_VENDORS: VendorId[] = ['blacksmith', 'alchemist', 'enchanter'];
 
 /**
  * Patch 0357 -- WoW-style recipe drop/learn system, direct request.
@@ -104,8 +115,92 @@ export const RecipeManager = {
    */
   eligibleDrops(state: GameState, contentLevel: number): RecipeScrollDef[] {
     return RECIPE_SCROLLS.filter(
-      (def) => def.reqLevel <= contentLevel && !RecipeManager.isKnown(state, def.recipeId),
+      // Patch 0506 -- shelfOnly (Mythic) recipes never drop.
+      (def) => !def.shelfOnly && def.reqLevel <= contentLevel && !RecipeManager.isKnown(state, def.recipeId),
     );
+  },
+
+  /* ------------------------------ Recipe Shelf ------------------------------ */
+  // Patch 0506 -- each vendor sells unknown recipes for gold (a late-game
+  // gold sink, and a guaranteed route to a recipe the drop table hides).
+  // Rolled once per rerollDay and stored (GameState.recipeShelf) so the
+  // offer doesn't reshuffle as heroes level or recipes are learned during
+  // the day. Buying learns the recipe on the spot.
+
+  shelfVendor(def: RecipeScrollDef): VendorId | null {
+    const recipe = CRAFTING_RECIPE_BY_ID[def.recipeId];
+    return recipe ? SHELF_VENDOR_BY_CATEGORY[recipe.category] : null;
+  },
+
+  /** Gold price of a shelf recipe -- see recipeShelf.* in tuning.json.
+   *  Rounded to the nearest 100. */
+  shelfPrice(def: RecipeScrollDef): number {
+    if (def.shelfOnly) return Tuning.get('recipeShelf.mythicPrice');
+    const raw = Tuning.get('recipeShelf.basePrice')
+      * Tuning.get(`recipeShelf.rarityMult.${def.rarity}`)
+      * (1 + def.reqLevel / Math.max(1, Tuning.get('recipeShelf.levelDivisor')));
+    return Math.round(raw / 100) * 100;
+  },
+
+  /** The Alchemist level that shows the Mythic slot. */
+  mythicSlotOpen(state: GameState): boolean {
+    return (state.vendorLevels.alchemist ?? 0) >= Tuning.get('recipeShelf.mythicVendorLevel');
+  },
+
+  /** Rolls today's shelves if the stored ones are from an earlier day (or
+   *  were never rolled). Returns whether anything changed. Called from
+   *  GameEngine.refreshWorld. Eligibility: unknown, not shelfOnly,
+   *  reqLevel <= the guild's top hero level. The Mythic slot picks from
+   *  the unknown shelfOnly recipes (shown only once the Alchemist is at
+   *  recipeShelf.mythicVendorLevel). */
+  ensureShelf(state: GameState, now: number): boolean {
+    const day = rerollDay(now);
+    if (state.recipeShelf && state.recipeShelf.day === day) return false;
+    const rng = createRng(`recipe-shelf:${day}:${state.createdAt}`);
+    const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
+    const slots = Math.max(0, Math.floor(Tuning.get('recipeShelf.slots')));
+    const offers = {} as Record<VendorId, string[]>;
+    for (const vendor of SHELF_VENDORS) {
+      const pool = RECIPE_SCROLLS.filter((d) => !d.shelfOnly && d.reqLevel <= topLevel
+        && !RecipeManager.isKnown(state, d.recipeId) && RecipeManager.shelfVendor(d) === vendor);
+      offers[vendor] = rng.shuffle(pool).slice(0, slots).map((d) => d.id);
+    }
+    const mythicPool = RECIPE_SCROLLS.filter((d) => d.shelfOnly && !RecipeManager.isKnown(state, d.recipeId));
+    const mythic = mythicPool.length > 0 ? rng.pick(mythicPool).id : null;
+    state.recipeShelf = { day, offers, mythic };
+    return true;
+  },
+
+  /** Null if `scrollId` can be bought from today's shelf right now, else
+   *  why not (player-facing). */
+  shelfBlocker(state: GameState, scrollId: string, now: number): string | null {
+    const def = RECIPE_SCROLL_BY_ID[scrollId];
+    if (!def) return 'Unknown recipe.';
+    const shelf = state.recipeShelf;
+    if (!shelf || shelf.day !== rerollDay(now)) return 'The shelf is being restocked.';
+    const vendor = RecipeManager.shelfVendor(def);
+    const onShelf = (vendor && shelf.offers[vendor]?.includes(scrollId)) || shelf.mythic === scrollId;
+    if (!onShelf) return 'Not on the shelf today.';
+    if (RecipeManager.isKnown(state, def.recipeId)) return 'Already learned.';
+    if (shelf.mythic === scrollId && !RecipeManager.mythicSlotOpen(state)) {
+      return `The Alchemist sells Mythic recipes from level ${Tuning.get('recipeShelf.mythicVendorLevel')}.`;
+    }
+    const price = RecipeManager.shelfPrice(def);
+    if (price > ModifierManager.goldStorage(state)) return 'Costs more than the Treasury can hold -- upgrade the Treasury first.';
+    if (state.gold < price) return 'Not enough gold.';
+    return null;
+  },
+
+  /** Buys and learns a shelf recipe. Returns an error string or null. */
+  buyFromShelf(state: GameState, scrollId: string, now: number): string | null {
+    const blocked = RecipeManager.shelfBlocker(state, scrollId, now);
+    if (blocked) return blocked;
+    const def = RECIPE_SCROLL_BY_ID[scrollId]!;
+    const price = RecipeManager.shelfPrice(def);
+    state.gold -= price;
+    state.stats.goldSpent += price;
+    state.unlockedRecipes.push(def.recipeId);
+    return null;
   },
 
   /** Picks one random eligible scroll for a drop roll to grant -- unweighted

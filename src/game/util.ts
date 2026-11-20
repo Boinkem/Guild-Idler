@@ -59,6 +59,10 @@ export const RARITY_COLOR: Record<Rarity, string> = {
   legendary: '#d9a441',
 };
 
+/** Patch 0506 -- Mythic items (ConsumableDef.mythic) are legendary rarity
+ *  underneath; this is their own pill/accent colour on top. */
+export const MYTHIC_COLOR = '#e8506e';
+
 /** Full-bleed banner art for each rarity tier, shown behind item cards and
  *  their detail modals (see .rarity-banner / .modal-banner in app.css).
  *  Files live in public/rarity-banners/ -- ship all five alongside this.

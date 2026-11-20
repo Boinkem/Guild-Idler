@@ -1,11 +1,11 @@
 import { Tuning } from '../data/tuning';
-import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, GemTier, MaterialId, Modifiers, Stats } from '../types';
+import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, GemTier, MaterialId, Modifiers, RareMaterialId, Stats } from '../types';
 import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
 import { CONSUMABLE_BY_ID } from '../data/items';
 import { EquipmentManager } from './EquipmentManager';
 import { InventoryManager } from './InventoryManager';
 import { ModifierManager } from './ModifierManager';
-import { MATERIAL_BY_ID } from '../data/materials';
+import { MATERIAL_BY_ID, RARE_MATERIAL_BY_ID } from '../data/materials';
 import { MOD_LABEL } from '../util';
 import { itemDef } from '../data/equipment';
 import { isProceduralTemplate, rollProceduralItem } from '../data/proceduralLoot';
@@ -44,7 +44,24 @@ export const CraftingManager = {
         return { ok: false, reason: `Not enough ${MATERIAL_BY_ID[materialId].name.toLowerCase()}.` };
       }
     }
+    // Patch 0506 -- Mythic recipes also take rare materials and Shards.
+    for (const [rareId, amount] of Object.entries(recipe.rareMaterialCost ?? {}) as [RareMaterialId, number][]) {
+      if ((state.rareMaterials?.[rareId] ?? 0) < amount) {
+        return { ok: false, reason: `Not enough ${RARE_MATERIAL_BY_ID[rareId].name}.` };
+      }
+    }
+    if ((recipe.shardCost ?? 0) > (state.legendaryShards ?? 0)) return { ok: false, reason: 'Not enough Legendary Shards.' };
     return { ok: true };
+  },
+
+  /** Patch 0506 -- spends a recipe's rare materials and Shards (the
+   *  gold/scrap/regular-material spend stays inline in each craft
+   *  function, unchanged). Only ever called after affordability() passed. */
+  spendExtras(state: GameState, recipe: CraftingRecipeDef): void {
+    for (const [rareId, amount] of Object.entries(recipe.rareMaterialCost ?? {}) as [RareMaterialId, number][]) {
+      state.rareMaterials = { ...state.rareMaterials, [rareId]: (state.rareMaterials?.[rareId] ?? 0) - amount };
+    }
+    if (recipe.shardCost) state.legendaryShards = (state.legendaryShards ?? 0) - recipe.shardCost;
   },
 
   /**
@@ -83,6 +100,7 @@ export const CraftingManager = {
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }
+    CraftingManager.spendExtras(state, recipe);
     return null;
   },
 
@@ -174,6 +192,7 @@ export const CraftingManager = {
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }
+    CraftingManager.spendExtras(state, recipe);
     state.stash.push(item);
     return null;
   },
@@ -245,6 +264,7 @@ export const CraftingManager = {
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }
+    CraftingManager.spendExtras(state, recipe);
     InventoryManager.add(state, resultId, 1);
     return null;
   },
@@ -281,6 +301,7 @@ export const CraftingManager = {
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }
+    CraftingManager.spendExtras(state, recipe);
     return null;
   },
 

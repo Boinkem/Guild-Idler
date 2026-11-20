@@ -1,5 +1,6 @@
-import { GameState, MaterialId } from '../types';
-import { NODE_ORDER } from '../data/materials';
+import { GameState, MaterialId, RareMaterialId } from '../types';
+import { NODE_ORDER, RARE_BY_NODE, RARE_MATERIAL_BY_ID, MATERIAL_BY_ID } from '../data/materials';
+import { rerollDay } from '../data/reroll';
 import { ModifierManager } from './ModifierManager';
 import { DEMO_LOCK_ERROR, demoRankLocked } from '../demo';
 import {
@@ -104,7 +105,7 @@ export const HarvestManager = {
    * or the warehouse is already full), and whether it was a bonus glint,
    * for the UI's collect-particle feedback.
    */
-  catch(state: GameState, nodeId: MaterialId, now: number): { gained: number; bonus: boolean } {
+  catch(state: GameState, nodeId: MaterialId, now: number): { gained: number; bonus: boolean; rare?: RareMaterialId; rareGained?: number } {
     const node = state.harvestNodes[nodeId];
     if (!node.pending || now >= node.pending.expiresAt) return { gained: 0, bonus: false };
     const base = HarvestManager.baseYield(state, nodeId);
@@ -115,7 +116,70 @@ export const HarvestManager = {
     state.materials[nodeId] += gained;
     node.pending = null;
     node.nextSpawnAt = now + HarvestManager.spawnIntervalMs(state, nodeId);
+    // Patch 0506 -- rare material roll, manual catches only (this function
+    // is never called by the Overseer -- its rescue lives in ensureSpawns
+    // and offlineAutoHarvest). Rolled even when the Warehouse is full: the
+    // rare stock has its own cap, so a full Warehouse shouldn't cost the
+    // player a find.
+    const chance = HarvestManager.rareChancePercent(state, nodeId);
+    if (chance > 0 && Math.random() * 100 < chance) {
+      const rare = RARE_BY_NODE[nodeId];
+      const rareGained = HarvestManager.addRare(state, rare, Tuning.get('harvest.rare.yieldPerFind'));
+      if (rareGained > 0) return { gained, bonus, rare, rareGained };
+    }
     return { gained, bonus };
+  },
+
+  /** Patch 0506 -- % chance a manual catch at this node also turns up its
+   *  rare material: 0 below harvest.rare.minToolLevel, then
+   *  (toolLevel - min + 1) x harvest.rare.chancePerToolLevel. */
+  rareChancePercent(state: GameState, nodeId: MaterialId): number {
+    const toolLevel = state.harvestTools[nodeId] ?? 0;
+    const min = Tuning.get('harvest.rare.minToolLevel');
+    if (toolLevel < min) return 0;
+    return (toolLevel - min + 1) * Tuning.get('harvest.rare.chancePerToolLevel');
+  },
+
+  rareCapacity(): number {
+    return Tuning.get('harvest.rare.capacity');
+  },
+
+  /** Adds up to `amount` of a rare material, respecting its own cap.
+   *  Returns how much actually landed. Shared by the manual catch above
+   *  and RaidManager's clear reward. */
+  addRare(state: GameState, id: RareMaterialId, amount: number): number {
+    const have = state.rareMaterials?.[id] ?? 0;
+    const gained = Math.max(0, Math.min(amount, HarvestManager.rareCapacity() - have));
+    if (gained > 0) state.rareMaterials = { ...state.rareMaterials, [id]: have + gained };
+    return gained;
+  },
+
+  /** Patch 0506 -- Trade Route Bulk Crate: how many crates are still
+   *  allowed today (harvest.bulkCrate.perDay, reset with rerollDay). */
+  bulkCratesLeftToday(state: GameState, now: number): number {
+    const used = state.bulkCrateDay === rerollDay(now) ? (state.bulkCratesToday ?? 0) : 0;
+    return Math.max(0, Tuning.get('harvest.bulkCrate.perDay') - used);
+  },
+
+  /** Trades harvest.bulkCrate.materialCost of ONE regular material for
+   *  harvest.bulkCrate.shardReward Legendary Shards. Needs the Trade Route.
+   *  The late-game home for surplus materials: gold is plentiful by then,
+   *  Shards aren't. */
+  sellBulkCrate(state: GameState, materialId: MaterialId, now = Date.now()): string | null {
+    if (!state.tradeRouteUnlocked) return 'The Trade Route hasn\u2019t been opened yet.';
+    if (HarvestManager.bulkCratesLeftToday(state, now) <= 0) return 'The trader has taken all the crates they want today -- back tomorrow.';
+    const cost = Tuning.get('harvest.bulkCrate.materialCost');
+    if ((state.materials[materialId] ?? 0) < cost) return `A crate needs ${cost} ${MATERIAL_BY_ID[materialId].name}.`;
+    const day = rerollDay(now);
+    state.materials[materialId] -= cost;
+    state.legendaryShards = (state.legendaryShards ?? 0) + Tuning.get('harvest.bulkCrate.shardReward');
+    state.bulkCratesToday = state.bulkCrateDay === day ? (state.bulkCratesToday ?? 0) + 1 : 1;
+    state.bulkCrateDay = day;
+    return null;
+  },
+
+  rareName(id: RareMaterialId): string {
+    return RARE_MATERIAL_BY_ID[id].name;
   },
 
   /**
@@ -299,7 +363,13 @@ export const HarvestManager = {
     if (rescueChance <= 0 || elapsedMs <= 0) return gains;
     const cap = HarvestManager.capacity(state);
     for (const nodeId of NODE_ORDER) {
-      const interval = HarvestManager.spawnIntervalMs(state, nodeId);
+      // Patch 0506 fix -- an unattended spawn sits out its whole despawn
+      // window before the Overseer's rescue roll, and only then does the
+      // next spawn timer start (see ensureSpawns), so one unattended
+      // cycle is interval + despawnWindowMs, not interval alone. Dividing
+      // by interval alone credited ~2.2x what leaving the game open and
+      // idle actually earns at the 10s spawn floor.
+      const interval = HarvestManager.spawnIntervalMs(state, nodeId) + Tuning.get('harvest.despawnWindowMs');
       const expectedCycles = elapsedMs / interval;
       const raw = expectedCycles * rescueChance * HarvestManager.baseYield(state, nodeId);
       const gained = Math.max(0, Math.min(raw, cap - state.materials[nodeId]));

@@ -23,6 +23,7 @@ import { useFirstSeen } from '../firstSeen';
 import { ambPhase } from '../ambient';
 import { at } from '../resultFx';
 import { formatDuration, describeMods, describeStats, RARITY_COLOR } from '../../game/util';
+import { InventoryManager } from '../../game/managers/InventoryManager';
 import { goToGuildHallPurchase } from '../PrereqLink';
 
 // Single-letter fallback badge (used only if the icon art at
@@ -524,8 +525,13 @@ function RaidDetailModal({
   const startEncounter = resuming ? checkpoint.encountersCleared : 0;
   const retryBonus = resuming ? RaidManager.retryBonus(checkpoint) : 0;
   const nextFightName = checkpoint ? RAID_ENCOUNTER_BY_ID[raid.encounterIds[checkpoint.encountersCleared]]?.name ?? 'the next fight' : '';
+  // Patch 0506 -- a Mythic raid flask chosen on the confirm screen. Held
+  // up here so the odds and duration shown above already include it.
+  const [flaskPick, setFlaskPick] = useState<string | null>(null);
+  const ownedFlasks = RaidManager.ownedFlasks(state);
+  const flaskId = flaskPick && ownedFlasks.some((f) => f.id === flaskPick) ? flaskPick : undefined;
   const previewDuration = difficulty && previewHeroIds.length > 0
-    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now, startEncounter)
+    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now, startEncounter, flaskId)
     : null;
 
   // ---- Patch 0503 -- odds feedback ----------------------------------
@@ -547,7 +553,7 @@ function RaidDetailModal({
     const party = [...picked, ...suggested];
     const full = party.length === cfg.partySize;
     const fights = raid.encounterIds.slice(startEncounter).map((id) => ({
-      id, breakdown: party.length ? RaidManager.encounterBreakdown(snap, party.map(snapHero), raid.id, difficulty, id, oddsNow, resuming) : null,
+      id, breakdown: party.length ? RaidManager.encounterBreakdown(snap, party.map(snapHero), raid.id, difficulty, id, oddsNow, resuming, flaskId) : null,
     }));
     const fullClear = full ? fights.reduce((p, f) => p * ((f.breakdown?.chance ?? 0) / 100), 1) : 0;
     return { picked, suggested, party, full, fights, fullClear, built: fullClear * (picked.length / cfg.partySize) };
@@ -614,7 +620,7 @@ function RaidDetailModal({
   useEffect(() => () => window.clearTimeout(marchTimer.current), []);
   const commitNow = () => {
     if (!difficulty) return;
-    engine.startRaid(raid.id, difficulty, selectedHeroIds, armCharm && canArm, resuming);
+    engine.startRaid(raid.id, difficulty, selectedHeroIds, armCharm && canArm, resuming, flaskId);
     if (fxMs(1)) lastRaidCommitAt = Date.now();
     setConfirming(false);
     onClose();
@@ -938,6 +944,35 @@ function RaidDetailModal({
                   </span>
                 </span>
               </label>
+            )}
+            {/* Patch 0506 -- Mythic raid flasks: one per raid, spent win or
+                lose. The odds/duration on the raid screen update with the pick. */}
+            {ownedFlasks.length > 0 && (
+              <div className={`raid-flask-row ${flaskId ? 'on' : ''}`}>
+                <b>Mythic raid flask</b> <span className="tiny muted">(one per raid, used up win or lose)</span>
+                <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
+                  <button className={`chip ${!flaskId ? 'on' : ''}`} disabled={marching} onClick={() => setFlaskPick(null)}>None</button>
+                  {ownedFlasks.map((f) => {
+                    const def = InventoryManager.resolveDef(state, f.id);
+                    return (
+                      <button
+                        key={f.id}
+                        className={`chip raid-flask-chip ${flaskId === f.id ? 'on' : ''}`}
+                        disabled={marching}
+                        title={def?.description}
+                        onClick={() => setFlaskPick(f.id)}
+                      >
+                        {f.name} ×{f.count}
+                      </button>
+                    );
+                  })}
+                </div>
+                {flaskId && previewDuration !== null && (
+                  <span className="tiny" style={{ display: 'block', marginTop: 4 }}>
+                    {InventoryManager.resolveDef(state, flaskId)?.description.split(' Armed')[0]} Raid time: {formatDuration(previewDuration)}.
+                  </span>
+                )}
+              </div>
             )}
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setConfirming(false)} disabled={marching}>Cancel</button>

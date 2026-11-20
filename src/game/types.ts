@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 78;
+export const SAVE_VERSION = 79;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -50,6 +50,16 @@ export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'b
  * full design this and everything below it implements.
  */
 export type MaterialId = 'ore' | 'timber' | 'herbs' | 'fish';
+
+/**
+ * Patch 0506 -- one rare material per Harvest node (Quarry -> Starsilver,
+ * Woodyard -> Heartwood, Herb Garden -> Moonpetal, Provisions Dock ->
+ * Ambergris). Only a MANUAL catch at a high tool level (harvest.rare.*)
+ * or a Heroic+ raid clear (raid.rareMaterials.*) turns one up -- the
+ * Overseer never does. Stored in GameState.rareMaterials, capped on their
+ * own (harvest.rare.capacity), not in the Warehouse. Spent by Mythic recipes.
+ */
+export type RareMaterialId = 'starsilver' | 'heartwood' | 'moonpetal' | 'ambergris';
 
 /**
  * Plain string rather than a closed union, same reasoning as HeroSkin --
@@ -220,6 +230,11 @@ export interface ConsumableDef {
    * variant can never show up for sale at its own reference `cost`.
    */
   craftable?: boolean;
+  /** Patch 0506 -- a Mythic item: legendary rarity underneath (so every
+   *  Record<Rarity> map keeps working) with its own "Mythic" banner in the
+   *  UI. Mythic recipes are sold only from the Alchemist's Mythic shelf
+   *  slot, never dropped. */
+  mythic?: boolean;
   effect: {
     success?: number;
     gold?: number;
@@ -323,6 +338,30 @@ export interface ConsumableDef {
     lootWeightMultiplier?: number;
     /** Patch 0484 -- Raider's Charm: armed at raid launch, not equipped. */
     raidCharm?: boolean;
+    /**
+     * Patch 0506 -- "Long Road" items (and the chain-type Mythics). Only
+     * used on chain stages -- skipped (kept in the slot) on a contract.
+     * Once used on a chain stage it becomes a buff on that hero
+     * (Hero.chainBuffs) and applies free to every later stage of the SAME
+     * chain that hero runs, until the chain ends. See
+     * QuestManager.effectiveLoadout.
+     */
+    chainLasting?: boolean;
+    /** Patch 0506 -- Fated Draught: the next chain stage this hero runs
+     *  always succeeds (ActiveQuest.guaranteedSuccess, ignores the 95%
+     *  cap). Chain stages only, single use. */
+    fatedStage?: boolean;
+    /** Patch 0506 -- Scholar's Ink: extra XP %, multiplied in AFTER the XP
+     *  soft cap (so it isn't eaten by it the way a plain `xp` bonus is). */
+    mythicXpPct?: number;
+    /** Patch 0506 -- Mythic raid flasks, armed at raid launch (one per
+     *  raid, next to the Raider's Charm), never equipped on a hero.
+     *  raidSpeedPct: raid duration cut, applied after the party speed
+     *  clamp. raidSuccess: flat points on every encounter roll.
+     *  raidNoWear: the party's gear takes no wear on the raid. */
+    raidSpeedPct?: number;
+    raidSuccess?: number;
+    raidNoWear?: boolean;
   };
 }
 
@@ -800,6 +839,14 @@ export interface Hero {
    */
   equippedConsumables?: string[];
   /**
+   * Patch 0506 -- chain-lasting consumables (ConsumableDef.effect.
+   * chainLasting) this hero has already used on a chain, keyed by
+   * chainBuffKey (chainId, or chainId::replayDifficulty). Applied free to
+   * every later stage of that chain the hero runs; cleared when the chain
+   * ends (QuestManager.pruneChainBuffs). Optional, defaults to none.
+   */
+  chainBuffs?: Record<string, string[]>;
+  /**
    * Whether this hero has already spent their one-time free Treat --
    * every hero's very first injury cure is free, on the guild,
    * regardless of Physician's Charity's daily allowance (see
@@ -1079,6 +1126,9 @@ export interface ActiveQuest {
   injuryImmune: boolean;
   consumables: string[];
   guaranteedGoodEvent: boolean;
+  /** Patch 0506 -- a Fated Draught was used on this chain stage: the
+   *  success roll is skipped and the stage always succeeds. */
+  guaranteedSuccess?: boolean;
   /**
    * Percentage reduction applied to Health damage on THIS quest only,
    * from a Guardian's Retainer-style loadout consumable -- baked in at
@@ -1794,6 +1844,10 @@ export interface ActiveRaid {
    *  raid items never found; 'boost': +25% on every roll (raid complete).
    *  Mode is fixed at launch, as the confirm screen showed it. */
   charm?: 'seek' | 'boost';
+  /** Patch 0506 -- the Mythic raid flask (consumable id) armed at launch,
+   *  already spent from inventory. See ConsumableDef.effect.raidSpeedPct/
+   *  raidSuccess/raidNoWear. */
+  flaskId?: string;
 }
 
 /**
@@ -1853,6 +1907,11 @@ export interface RaidResult {
   /** Patch 0454 -- Legendary Shards paid for a full Heroic/Mythic/
    *  Legendary clear. Already credited by RaidManager.resolve(). */
   shardsGained?: number;
+  /** Patch 0506 -- rare Harvest materials paid for a full Heroic+ clear.
+   *  Already credited. */
+  rareMaterialsGained?: Partial<Record<RareMaterialId, number>>;
+  /** Patch 0506 -- the Mythic raid flask armed for this run, if any. */
+  flaskUsed?: string;
   injuries: { heroId: string; heroName: string; injury: Injury }[];
   resolvedAt: number;
   /** Set if this was a full clear and the raid carries a title that at
@@ -2970,6 +3029,20 @@ export interface GameState {
   /* ------------------------- Harvest/Gathering ------------------------- */
   /** Current stock of each material, capped by warehouseCapacity(). */
   materials: Record<MaterialId, number>;
+  /** Patch 0506 -- rare materials, capped each by harvest.rare.capacity
+   *  (not the Warehouse). See RareMaterialId. */
+  rareMaterials: Record<RareMaterialId, number>;
+  /** Patch 0506 -- Trade Route Bulk Crate: the rerollDay of the last
+   *  crate sold and how many sold that day (harvest.bulkCrate.perDay). */
+  bulkCrateDay: number;
+  bulkCratesToday: number;
+  /**
+   * Patch 0506 -- each vendor's Recipe Shelf for the current rerollDay:
+   * the scroll ids on offer (rolled once per day, see RecipeShelfManager)
+   * plus the Alchemist's Mythic slot. Buying one learns the recipe at once
+   * and leaves it on the shelf marked learned. null until first rolled.
+   */
+  recipeShelf: { day: number; offers: Record<VendorId, string[]>; mythic: string | null } | null;
   /** Current stock of each curio, keyed by CurioDef.id -- open-ended (any
    *  string key), unlike `materials` (a fixed 4-key Record). No capacity
    *  cap the way materials/warehouseCapacity has -- curios are pure
@@ -3629,6 +3702,10 @@ export interface CraftingRecipeDef {
    *  would mean an output that costs no scrap at all, which defeats the
    *  point of the scrapping loop. */
   scrapCost?: number;
+  /** Patch 0506 -- Mythic recipes: rare Harvest materials (GameState.
+   *  rareMaterials) and Legendary Shards on top of gold/materials. */
+  rareMaterialCost?: Partial<Record<RareMaterialId, number>>;
+  shardCost?: number;
   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */
   resultDefId?: string;
   /** `gear` recipes only -- the eligible mod pool the player picks from. */
@@ -3808,6 +3885,9 @@ export interface RecipeScrollDef {
   recipeId: string;
   reqLevel: number;
   rarity: Rarity;
+  /** Patch 0506 -- never drops; only sold from a vendor's Recipe Shelf
+   *  (the Mythic recipes). */
+  shelfOnly?: boolean;
 }
 
 /**

@@ -19,15 +19,19 @@ import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
 import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity, Stats } from '../../game/types';
 import {
-  describeMods, describeStats, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, DAY, HOUR
+  describeMods, describeStats, formatDuration, formatGold, MYTHIC_COLOR, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, DAY, HOUR
 } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
-import { ItemIcon, ConsumableIcon } from '../icons';
+import { ItemIcon, ConsumableIcon, RecipeIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
 import { ambPhase } from '../ambient';
 import { buyWithFx, LevelRoll, rowBeatClass, SealStamp, shownValue, STAY_BEATS, usePurchaseBeats } from '../purchaseFx';
 import type { BeatTiming } from '../purchaseFx';
 import { CraftingStation } from '../CraftingStation';
+import { RecipeManager } from '../../game/managers/RecipeManager';
+import { RECIPE_SCROLL_BY_ID } from '../../game/data/recipeScrolls';
+import { CRAFTING_RECIPE_BY_ID } from '../../game/data/craftingRecipes';
+import { Tuning } from '../../game/data/tuning';
 import { EnhanceStation } from '../EnhanceStation';
 import { WeaponEnchantStation } from '../WeaponEnchantStation';
 import { ArmourInfusionStation } from '../ArmourInfusionStation';
@@ -448,6 +452,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
 
       {/* Patch 0455 -- the vendor's daily commission. */}
       <CommissionCard vendorId={vendorId} vendorName={vendorDef.name} now={now} />
+      {/* Patch 0506 -- the vendor's daily Recipe Shelf. */}
+      <RecipeShelfCard vendorId={vendorId} vendorName={vendorDef.name} now={now} />
 
       <div className="section-heading">Upgrades</div>
       <div className="upgrade-row-list">
@@ -568,6 +574,87 @@ function CommissionCard({ vendorId, vendorName, now }: { vendorId: VendorId; ven
           ? <span className="tiny muted">New order in {hoursLeft}h</span>
           : blocker && <span className="tiny muted">{blocker}</span>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Patch 0506 -- Recipe Shelf. Each vendor offers a few recipes the guild
+ * hasn't learned (rolled once a day, RecipeManager.ensureShelf), sold for
+ * gold -- a late-game gold sink and a sure route to a recipe the drops
+ * keep missing. Buying learns it on the spot. The Alchemist adds one
+ * Mythic recipe once it reaches recipeShelf.mythicVendorLevel.
+ */
+function RecipeShelfCard({ vendorId, vendorName, now }: { vendorId: VendorId; vendorName: string; now: number }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const shelf = state.recipeShelf;
+  if (!shelf || shelf.day !== rerollDay(now)) return null;
+  const ids = shelf.offers[vendorId] ?? [];
+  const mythicId = vendorId === 'alchemist' ? shelf.mythic : null;
+  const msLeft = (rerollDay(now) + 1) * DAY - now;
+  const hoursLeft = Math.max(1, Math.ceil(msLeft / HOUR));
+  return (
+    <div className="card recipe-shelf-card">
+      <div className="commission-head">
+        <span className="card-title">Recipe Shelf</span>
+        <span className="tiny muted">New shelf in {hoursLeft}h</span>
+      </div>
+      <p className="tiny muted" style={{ margin: 0 }}>
+        Recipes {vendorName} can teach that the guild hasn't learned yet, for gold. Buying one learns it straight away.
+      </p>
+      {ids.length === 0 && !mythicId && (
+        <p className="tiny muted" style={{ margin: 0 }}>Nothing new to teach at your heroes' level today.</p>
+      )}
+      <div className="recipe-shelf-list">
+        {ids.map((id) => <RecipeShelfRow key={id} scrollId={id} now={now} />)}
+        {mythicId && (
+          RecipeManager.mythicSlotOpen(state)
+            ? <RecipeShelfRow scrollId={mythicId} now={now} mythic />
+            : (
+              <div className="recipe-shelf-row mythic locked">
+                <span className="recipe-shelf-name">🔒 Mythic recipe</span>
+                <span className="tiny muted">Level {vendorName} to {Tuning.get('recipeShelf.mythicVendorLevel')} to open the Mythic slot.</span>
+              </div>
+            )
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecipeShelfRow({ scrollId, now, mythic = false }: { scrollId: string; now: number; mythic?: boolean }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const def = RECIPE_SCROLL_BY_ID[scrollId];
+  const recipe = def ? CRAFTING_RECIPE_BY_ID[def.recipeId] : undefined;
+  if (!def || !recipe) return null;
+  const known = RecipeManager.isKnown(state, def.recipeId);
+  const price = RecipeManager.shelfPrice(def);
+  const blocker = known ? null : RecipeManager.shelfBlocker(state, scrollId, now);
+  const result = recipe.resultConsumableId ? CONSUMABLE_BY_ID[recipe.resultConsumableId] : undefined;
+  return (
+    <div className={`recipe-shelf-row ${mythic ? 'mythic' : ''} ${known ? 'known' : ''}`} title={recipe.description}>
+      <RecipeIcon icon={recipe.icon} category={recipe.category} size={32} />
+      <div className="recipe-shelf-body">
+        <span className="recipe-shelf-name" style={{ color: mythic ? MYTHIC_COLOR : RARITY_COLOR[def.rarity] }}>{recipe.name}</span>
+        <span className="tiny muted">
+          {mythic ? 'Mythic' : def.rarity} recipe · level {def.reqLevel}
+          {result?.effect.chainLasting ? ' · lasts the whole chain' : ''}
+        </span>
+      </div>
+      {known ? (
+        <span className="tiny good">Learned ✓</span>
+      ) : (
+        <button
+          className="btn-primary"
+          disabled={!!blocker}
+          title={blocker ?? `Learn ${recipe.name} for ${formatGold(price)} gold`}
+          onClick={() => engine.buyShelfRecipe(scrollId)}
+        >
+          Learn · ◆ {formatGold(price)}
+        </button>
+      )}
     </div>
   );
 }

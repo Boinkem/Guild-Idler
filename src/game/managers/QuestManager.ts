@@ -892,7 +892,10 @@ export const QuestManager = {
   successBreakdown(
     state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
   ): { success: number; rookie: number } {
-    const loadout = InventoryManager.loadoutEffects(state, consumables);
+    // Patch 0506 -- what this hero would actually carry on THIS offer:
+    // chain buffs already earned on the chain, plus equipped items (minus
+    // chain-only ones on a contract). See effectiveLoadout.
+    const loadout = InventoryManager.loadoutEffects(state, QuestManager.effectiveLoadout(state, hero, offer, consumables).all);
     const classDef = HERO_CLASSES[hero.heroClass];
     // Every chain stage now carries its own authored tag (see
     // ChainStageDef.tag / chainOffer) rather than the old hardcoded
@@ -949,7 +952,70 @@ export const QuestManager = {
       MIN_SUCCESS,
       MAX_SUCCESS,
     );
+    // Patch 0506 -- Fated Draught: a guaranteed chain stage, shown as 100%
+    // (resolve() skips the roll via ActiveQuest.guaranteedSuccess).
+    if (offer.chain && loadout.fatedStage) return { success: 100, rookie };
     return { success, rookie };
+  },
+
+  /** Patch 0506 -- Hero.chainBuffs key for a chain offer: the chain id, or
+   *  chainId::difficulty for a replay (a replay and a first clear of the
+   *  same chain are separate runs). */
+  chainBuffKey(chain: NonNullable<QuestOffer['chain']>): string {
+    return chain.replay ? `${chain.chainId}::${chain.replay}` : chain.chainId;
+  },
+
+  /**
+   * Patch 0506 -- splits a hero's equipped consumables into what THIS
+   * offer actually uses and what stays in the slot, and adds any chain
+   * buffs the hero already carries on this chain:
+   *  - Chain-only items (Long Road line, chain Mythics, Fated Draught --
+   *    InventoryManager.isChainOnly) are skipped on a contract: kept,
+   *    not spent.
+   *  - On a chain stage, existing buffs use their slots first; equipped
+   *    items fill whatever slots are left and the rest stay equipped.
+   * `all` (buffs + used) is the real loadout -- what successBreakdown,
+   * previewLoot and start() all read, so the preview always matches.
+   */
+  effectiveLoadout(
+    state: GameState, hero: Hero, offer: QuestOffer, equipped: string[],
+  ): { key: string | null; buffs: string[]; used: string[]; kept: string[]; all: string[] } {
+    const key = offer.chain ? QuestManager.chainBuffKey(offer.chain) : null;
+    const buffs = key ? (hero.chainBuffs?.[key] ?? []).filter((id) => InventoryManager.resolveDef(state, id) !== undefined) : [];
+    let free = Math.max(0, ModifierManager.consumableSlots(state) - buffs.length);
+    const used: string[] = [];
+    const kept: string[] = [];
+    for (const id of equipped) {
+      const def = InventoryManager.resolveDef(state, id);
+      if (!def) continue;
+      if (!offer.chain && InventoryManager.isChainOnly(def)) { kept.push(id); continue; }
+      if (free > 0) { used.push(id); free -= 1; } else kept.push(id);
+    }
+    return { key, buffs, used, kept, all: [...buffs, ...used] };
+  },
+
+  /**
+   * Patch 0506 -- drops chain buffs whose chain has ended for that hero:
+   * a first-clear key survives while the chain is in state.activeChains
+   * or a quest on it is still out; a replay key while that hero's replay
+   * of it is active or a quest on it is still out. Called at the end of
+   * every resolve().
+   */
+  pruneChainBuffs(state: GameState): void {
+    for (const hero of state.heroes) {
+      if (!hero.chainBuffs) continue;
+      const next: Record<string, string[]> = {};
+      for (const [key, ids] of Object.entries(hero.chainBuffs)) {
+        if (ids.length === 0) continue;
+        const [chainId, replay] = key.split('::');
+        const inFlight = state.activeQuests.some((q) => q.heroId === hero.id && q.offer.chain && QuestManager.chainBuffKey(q.offer.chain) === key);
+        const live = replay
+          ? state.activeChainReplays.some((r) => r.heroId === hero.id && r.chainId === chainId && r.difficulty === replay)
+          : state.activeChains.some((c) => c.chainId === chainId);
+        if (inFlight || live) next[key] = ids;
+      }
+      hero.chainBuffs = Object.keys(next).length > 0 ? next : undefined;
+    }
   },
 
   /**
@@ -1126,7 +1192,10 @@ export const QuestManager = {
     consumables = consumables.filter((id) => InventoryManager.resolveDef(state, id) !== undefined);
     if (hero.equippedConsumables) hero.equippedConsumables = [...consumables];
 
-    const loadout = InventoryManager.loadoutEffects(state, consumables);
+    // Patch 0506 -- chain buffs + what's actually spent this send. See
+    // effectiveLoadout.
+    const effective = QuestManager.effectiveLoadout(state, hero, offer, consumables);
+    const loadout = InventoryManager.loadoutEffects(state, effective.all);
     const classDef = HERO_CLASSES[hero.heroClass];
     const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
     const mods = sumMods(
@@ -1151,11 +1220,14 @@ export const QuestManager = {
       // this was calibrated against (612 raw gold / 461 raw xp on a fully
       // min-maxed level-55 hero, uncapped -> ~5x/~3x capped).
       goldMultiplier: 1 + softCap(mods.gold, Tuning.get('economy.goldSoftCapThreshold'), Tuning.get('economy.goldSoftCapDecay')) / 100,
-      xpMultiplier: 1 + softCap(mods.xp, Tuning.get('economy.xpSoftCapThreshold'), Tuning.get('economy.xpSoftCapDecay')) / 100,
+      // Patch 0506 -- Scholar's Ink multiplies in after the soft cap.
+      xpMultiplier: (1 + softCap(mods.xp, Tuning.get('economy.xpSoftCapThreshold'), Tuning.get('economy.xpSoftCapDecay')) / 100)
+        * (1 + loadout.mythicXpPct / 100),
       lootBonus: mods.loot,
       injuryResist: mods.injuryResist,
       injuryImmune: loadout.preventInjury,
-      consumables,
+      consumables: effective.all,
+      ...(offer.chain && loadout.fatedStage ? { guaranteedSuccess: true } : {}),
       guaranteedGoodEvent: loadout.guaranteedGoodEvent,
       healthDamageReduction: loadout.healthDamageReduction,
     };
@@ -1176,8 +1248,27 @@ export const QuestManager = {
     // guild still has another one; fails and clears that slot back to
     // empty exactly when it doesn't, matching the old reconciliation's
     // own end result one quest later rather than one quest earlier.
+    //
+    // Patch 0506 -- only what this send actually USED is let go of (see
+    // effectiveLoadout): anything skipped (a chain-only item on a
+    // contract, or an item with no free slot because chain buffs fill
+    // them) stays equipped untouched. Chain-lasting items used on a chain
+    // stage become a buff on this hero instead; neither they nor a Fated
+    // Draught are re-reserved -- a pricey crafted item shouldn't quietly
+    // auto-spend a second copy on the next send.
+    if (effective.key) {
+      const lasting = effective.used.filter((id) => InventoryManager.resolveDef(state, id)?.effect.chainLasting);
+      if (lasting.length > 0) {
+        hero.chainBuffs = { ...(hero.chainBuffs ?? {}), [effective.key]: [...effective.buffs, ...lasting] };
+      }
+    }
     if (hero.equippedConsumables) {
-      hero.equippedConsumables = consumables.filter((id) => InventoryManager.remove(state, id));
+      const reReserved = effective.used.filter((id) => {
+        const def = InventoryManager.resolveDef(state, id);
+        if (def && InventoryManager.isChainOnly(def)) return false;
+        return InventoryManager.remove(state, id);
+      });
+      hero.equippedConsumables = [...effective.kept, ...reReserved];
     }
     hero.status = 'questing';
     hero.activeQuestId = quest.id;
@@ -1223,7 +1314,9 @@ export const QuestManager = {
 
     const events = EventManager.roll(quest, rng);
     const finalSuccess = clamp(quest.finalSuccess + events.successDelta, MIN_SUCCESS, MAX_SUCCESS);
-    const success = isTutorialQuest || rng.chance(finalSuccess);
+    // Patch 0506 -- Fated Draught: no roll at all, same short-circuit shape
+    // as the tutorial quest just above.
+    const success = isTutorialQuest || !!quest.guaranteedSuccess || rng.chance(finalSuccess);
 
     // Bad luck protection's own streak counter (patch 0295) -- reset to 0
     // on any success, incremented on any fail, regardless of whether
@@ -1783,6 +1876,12 @@ export const QuestManager = {
         } else {
           activeReplay.stage = 0;
           activeReplay.resetCount += 1;
+          // Patch 0506 -- a reset run starts over, so do its chain buffs.
+          const buffKey = QuestManager.chainBuffKey(quest.offer.chain);
+          if (hero?.chainBuffs?.[buffKey]) {
+            const { [buffKey]: _dropped, ...rest } = hero.chainBuffs;
+            hero.chainBuffs = Object.keys(rest).length > 0 ? rest : undefined;
+          }
         }
         chainReplayAdvanced = { chainId, stage: canRecover ? stage : 0, totalStages, completed: false, reset: !canRecover, dedicatedItemDropped: false };
       }
@@ -1874,6 +1973,8 @@ export const QuestManager = {
     }
 
     state.activeQuests = state.activeQuests.filter((q) => q.id !== quest.id);
+    // Patch 0506 -- drop chain buffs for chains that just ended.
+    QuestManager.pruneChainBuffs(state);
 
     const result: QuestResult = {
       questId: quest.id,
@@ -1928,7 +2029,7 @@ export const QuestManager = {
   previewLoot(
     state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
   ): { name: string; rarity: Rarity; chance: number }[] {
-    const loadout = InventoryManager.loadoutEffects(state, consumables);
+    const loadout = InventoryManager.loadoutEffects(state, QuestManager.effectiveLoadout(state, hero, offer, consumables).all);
     const mods = sumMods(HeroManager.heroMods(state, hero, now), ModifierManager.global(state), loadout.mods);
     const lootChance = DIFFICULTIES[offer.difficulty].lootChance + mods.loot;
     // Mirrors resolve()'s own two-stage math exactly -- see the comment

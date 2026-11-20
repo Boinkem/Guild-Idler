@@ -404,7 +404,7 @@
     "icon": "potions/Potion_10.png",
     "craftable": true,
     "effect": {
-      "success": 3
+      "success": 4
     }
   },
   {
@@ -430,21 +430,21 @@
     "icon": "food/Food_36.png",
     "craftable": true,
     "effect": {
-      "success": 1,
-      "gold": 5
+      "success": 2,
+      "gold": 8
     }
   },
   {
     "id": "herbal_tonic_item",
     "name": "Herbal Tonic",
-    "description": "The Herb Garden’s own cure-all, brewed in-house rather than bought off a vendor's shelf. Craft-only -- not sold at the Alchemist's stall.",
+    "description": "The Herb Garden’s own cure-all, brewed in-house -- stronger than the shop's Healing Potion. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 25,
     "rarity": "common",
     "glyph": "❤",
     "icon": "potions/Potion_10.png",
     "craftable": true,
     "effect": {
-      "success": 1
+      "success": 2
     }
   },
   {
@@ -457,7 +457,7 @@
     "icon": "food/Food_01.png",
     "craftable": true,
     "effect": {
-      "gold": 45
+      "gold": 80
     }
   },
   {
@@ -470,8 +470,8 @@
     "icon": "food/Food_20.png",
     "craftable": true,
     "effect": {
-      "success": 2,
-      "gold": 18
+      "success": 3,
+      "gold": 30
     }
   },
   {
@@ -498,7 +498,7 @@
     "icon": "crafting/Crafting_30.png",
     "craftable": true,
     "effect": {
-      "gold": 170
+      "gold": 290
     }
   },
   {
@@ -511,7 +511,7 @@
     "icon": "misc/Misc_75.png",
     "craftable": true,
     "effect": {
-      "gold": 340
+      "gold": 430
     }
   },
   {
@@ -525,7 +525,7 @@
     "craftable": true,
     "effect": {
       "lootWeightStat": "luck",
-      "lootWeightMultiplier": 2
+      "lootWeightMultiplier": 2.5
     }
   },
   {
@@ -539,7 +539,7 @@
     "craftable": true,
     "effect": {
       "lootWeightStat": "wisdom",
-      "lootWeightMultiplier": 2
+      "lootWeightMultiplier": 2.5
     }
   },
   {
@@ -551,7 +551,10 @@
     "glyph": "♦",
     "icon": "misc/Misc_24.png",
     "craftable": true,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 8
+    }
   },
   {
     "id": "fortune_weave_xp",
@@ -562,29 +565,38 @@
     "glyph": "✦",
     "icon": "misc/Misc_24_hue2.png",
     "craftable": true,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "wisdom",
+      "lootWeightMultiplier": 8
+    }
   },
   {
     "id": "windfall_sigil_gold",
     "name": "Windfall Sigil (Gold)",
-    "description": "The strongest pull toward coin the Enchanter's bench can manage. Craft-only -- not sold at the Alchemist's stall.",
+    "description": "The strongest pull toward coin the bench can manage. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 220,
     "rarity": "epic",
     "glyph": "♦",
     "icon": "misc/Misc_25.png",
     "craftable": true,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 16
+    }
   },
   {
     "id": "windfall_sigil_xp",
     "name": "Windfall Sigil (Insight)",
-    "description": "The strongest pull toward understanding the Enchanter's bench can manage. Craft-only -- not sold at the Alchemist's stall.",
+    "description": "The strongest pull toward understanding the bench can manage. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 220,
     "rarity": "epic",
     "glyph": "✦",
     "icon": "misc/Misc_25_hue1.png",
     "craftable": true,
-    "effect": {}
+    "effect": {
+      "lootWeightStat": "wisdom",
+      "lootWeightMultiplier": 16
+    }
   },
   {
     "id": "raiders_charm",
@@ -597,6 +609,165 @@
     "craftable": true,
     "effect": {
       "raidCharm": true
+    }
+  },
+  {
+    "id": "wayfarers_flask",
+    "name": "Wayfarer's Flask",
+    "description": "A stoppered flask for a long walk. +3% success. Lasts the whole chain: used on a chain stage, it stays with that hero for every later stage of the same chain they run. Only used on chain stages. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 120,
+    "rarity": "uncommon",
+    "glyph": "⚗",
+    "icon": "potions/Potion_43.png",
+    "craftable": true,
+    "effect": {
+      "success": 3,
+      "chainLasting": true
+    }
+  },
+  {
+    "id": "road_wardens_tonic",
+    "name": "Road-Warden's Tonic",
+    "description": "What the old road-wardens drank before a night patrol. +5% success, +10 injury resist. Lasts the whole chain: used on a chain stage, it stays with that hero for every later stage of the same chain they run. Only used on chain stages. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 300,
+    "rarity": "rare",
+    "glyph": "⚗",
+    "icon": "potions/Potion_47.png",
+    "craftable": true,
+    "effect": {
+      "success": 5,
+      "injuryResist": 10,
+      "chainLasting": true
+    }
+  },
+  {
+    "id": "caravan_purse",
+    "name": "Caravan Purse",
+    "description": "A merchant's purse, never quite empty. +150% gold. Lasts the whole chain: used on a chain stage, it stays with that hero for every later stage of the same chain they run. Only used on chain stages. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 350,
+    "rarity": "rare",
+    "glyph": "◆",
+    "icon": "misc/Misc_35.png",
+    "craftable": true,
+    "effect": {
+      "gold": 150,
+      "chainLasting": true
+    }
+  },
+  {
+    "id": "long_road_elixir",
+    "name": "Long Road Elixir",
+    "description": "Brewed slow, drunk slower. +8% success. Lasts the whole chain: used on a chain stage, it stays with that hero for every later stage of the same chain they run. Only used on chain stages. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 650,
+    "rarity": "epic",
+    "glyph": "⚗",
+    "icon": "potions/Potion_40.png",
+    "craftable": true,
+    "effect": {
+      "success": 8,
+      "chainLasting": true
+    }
+  },
+  {
+    "id": "pathfinders_charm",
+    "name": "Pathfinder's Charm",
+    "description": "Points the way to the good finds. Loot rolls lean hard toward Luck (x10). Lasts the whole chain: used on a chain stage, it stays with that hero for every later stage of the same chain they run. Only used on chain stages. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 500,
+    "rarity": "epic",
+    "glyph": "♦",
+    "icon": "misc/Misc_34.png",
+    "craftable": true,
+    "effect": {
+      "lootWeightStat": "luck",
+      "lootWeightMultiplier": 10,
+      "chainLasting": true
+    }
+  },
+  {
+    "id": "fated_draught",
+    "name": "Fated Draught",
+    "description": "Mythic. The next chain stage this hero runs always succeeds. Only used on chain stages. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 90000,
+    "rarity": "legendary",
+    "mythic": true,
+    "glyph": "✦",
+    "icon": "potions/Potion_44.png",
+    "craftable": true,
+    "effect": {
+      "fatedStage": true
+    }
+  },
+  {
+    "id": "unbroken_oath",
+    "name": "Unbroken Oath",
+    "description": "Mythic. No injuries and no Health damage for the whole chain. Lasts the whole chain: used on a chain stage, it stays with that hero for every later stage of the same chain they run. Only used on chain stages. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 90000,
+    "rarity": "legendary",
+    "mythic": true,
+    "glyph": "✦",
+    "icon": "potions/Potion_46.png",
+    "craftable": true,
+    "effect": {
+      "preventInjury": true,
+      "healthDamageReduction": 100,
+      "chainLasting": true
+    }
+  },
+  {
+    "id": "scholars_ink",
+    "name": "Scholar's Ink",
+    "description": "Mythic. +50% XP for the whole chain, on top of every other XP bonus. Lasts the whole chain: used on a chain stage, it stays with that hero for every later stage of the same chain they run. Only used on chain stages. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 90000,
+    "rarity": "legendary",
+    "mythic": true,
+    "glyph": "✦",
+    "icon": "misc/Misc_58.png",
+    "craftable": true,
+    "effect": {
+      "mythicXpPct": 50,
+      "chainLasting": true
+    }
+  },
+  {
+    "id": "bloodlust_tonic",
+    "name": "Bloodlust Tonic",
+    "description": "Mythic raid flask. The raid finishes 20% faster, on top of the party's own speed. Armed when a raid sets out, used up win or lose. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 90000,
+    "rarity": "legendary",
+    "mythic": true,
+    "glyph": "✦",
+    "icon": "misc/Misc_27.png",
+    "craftable": true,
+    "effect": {
+      "raidSpeedPct": 20
+    }
+  },
+  {
+    "id": "warlords_banner",
+    "name": "Warlord's Banner",
+    "description": "Mythic raid flask. +10% success on every raid fight. Armed when a raid sets out, used up win or lose. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 90000,
+    "rarity": "legendary",
+    "mythic": true,
+    "glyph": "✦",
+    "icon": "misc/Misc_45.png",
+    "craftable": true,
+    "effect": {
+      "raidSuccess": 10
+    }
+  },
+  {
+    "id": "stoneskin_phial",
+    "name": "Stoneskin Phial",
+    "description": "Mythic raid flask. The party's gear takes no wear on the raid. Armed when a raid sets out, used up win or lose. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 90000,
+    "rarity": "legendary",
+    "mythic": true,
+    "glyph": "✦",
+    "icon": "potions/Potion_41.png",
+    "craftable": true,
+    "effect": {
+      "raidNoWear": true
     }
   }
 ]

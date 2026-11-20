@@ -9,6 +9,8 @@ import {
   HeroTab, ChainQuestBanner, chainIconSrc, Offer,
 } from './QuestPanel';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+import { InventoryManager } from '../../game/managers/InventoryManager';
+import { chainBuffNamesFor } from '../ChainBuffs';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_TIER_BY_ID, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain, chainReplayBandPercent } from '../../game/data/chainReplay';
 import { scaleDedicatedItem } from '../../game/data/proceduralLoot';
@@ -285,6 +287,12 @@ function ChainRow({
           )}
           <span className="tiny">{Math.round(chance)}% success</span>
           <span className="tiny gold-text">{formatGold(offer.rewardGold)} gold</span>
+          {/* Patch 0506 -- chain-lasting buffs this hero already carries here. */}
+          {chainBuffNamesFor(hero, offer, (id) => InventoryManager.resolveDef(state, id)?.name).length > 0 && (
+            <span className="tag chain-buff-tag" title={chainBuffNamesFor(hero, offer, (id) => InventoryManager.resolveDef(state, id)?.name).join(', ')}>
+              ✦ Chain buff
+            </span>
+          )}
         </div>
       </div>
       <span className="raid-card-chevron" aria-hidden="true">›</span>
@@ -336,6 +344,11 @@ function ChainDetailModal({
           </div>
         )}
         <p className="card-flavour">{chain ? `${chain.description} ${offer.flavour}` : offer.flavour}</p>
+        {chainBuffNamesFor(hero, offer, (id) => InventoryManager.resolveDef(state, id)?.name).length > 0 && (
+          <p className="tiny chain-buff-note" style={{ margin: '0 0 6px' }}>
+            ✦ {hero.name} carries {chainBuffNamesFor(hero, offer, (id) => InventoryManager.resolveDef(state, id)?.name).join(', ')} on this chain -- already counted in the odds.
+          </p>
+        )}
 
         {levelGap > 0 && (
           <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>

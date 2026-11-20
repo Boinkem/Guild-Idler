@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
-import { MATERIALS, MATERIAL_BY_ID, NODE_ORDER, harvestIconFor } from '../../game/data/materials';
+import { MATERIALS, MATERIAL_BY_ID, NODE_ORDER, RARE_BY_NODE, RARE_MATERIAL_BY_ID, RARE_ORDER, harvestIconFor } from '../../game/data/materials';
 import {
   HARVEST_TOOL_BY_NODE, OVERSEER_UPGRADE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
   harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseUpgradeCost,
@@ -11,7 +11,8 @@ import { HarvestManager } from '../../game/managers/HarvestManager';
 import { demoRankLocked, requestDemoWall } from '../../game/demo';
 import { Tuning } from '../../game/data/tuning';
 import { MaterialId } from '../../game/types';
-import { formatDuration, formatGold, formatMaterial } from '../../game/util';
+import { formatDuration, formatGold, formatMaterial, MYTHIC_COLOR } from '../../game/util';
+import { MaterialIcon, ShardMark } from '../icons';
 import { isTabUnread } from '../../game/attention';
 import { Ring } from './DashboardPanel';
 import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
@@ -495,7 +496,13 @@ function ToolUpgradeRow({ nodeId }: { nodeId: MaterialId }) {
   // Patch 0424 -- the 0420 row beats (coins into the button, level roll,
   // shine; a wax seal on the last level) instead of the old pulse/max flash.
   const beat = usePurchaseBeats([{ id: nodeId, value: level, max: tool.maxLevel }], STAY_BEATS)[nodeId];
-  const effectText = `+${tool.yieldBonusPerLevel} yield and a faster respawn per level`;
+  // Patch 0506 -- from harvest.rare.minToolLevel a manual catch can also
+  // turn up this node's rare material; say so on the row.
+  const rareChance = HarvestManager.rareChancePercent(state, nodeId);
+  const rareName = RARE_MATERIAL_BY_ID[RARE_BY_NODE[nodeId]].name;
+  const rareMin = Tuning.get('harvest.rare.minToolLevel');
+  const effectText = `+${tool.yieldBonusPerLevel} yield and a faster respawn per level`
+    + (rareChance > 0 ? ` · ${rareChance}% ${rareName} per hand catch` : ` · ${rareName} finds from Lv ${rareMin}`);
   const pctFill = Math.min(100, (level / tool.maxLevel) * 100);
   const buyLabel = maxed ? 'Fully upgraded' : locked ? '🔒 Full game' : `Upgrade · ${formatGold(cost ?? 0)}`;
   return (
@@ -613,6 +620,7 @@ function WarehouseTab() {
             </div>
           );
         })}
+        <RareStock />
         <button
           className="btn-yellow"
           style={{ marginTop: 8 }}
@@ -770,6 +778,80 @@ function TradeRouteCard() {
             onClick={() => engine.sellMaterial(m.id, 10)}
           >
             Sell 10 {m.name}
+          </button>
+        ))}
+      </div>
+      <BulkCrateRow now={now} />
+    </div>
+  );
+}
+
+/**
+ * Patch 0506 -- rare materials: their own small stock (not the Warehouse
+ * cap), found only by catching by hand at a high tool level or as a
+ * Heroic+ raid clear reward. Spent on Mythic recipes.
+ */
+function RareStock() {
+  const engine = useEngine();
+  const state = engine.state;
+  const cap = HarvestManager.rareCapacity();
+  const any = RARE_ORDER.some((id) => (state.rareMaterials?.[id] ?? 0) > 0);
+  const anyTool = NODE_ORDER.some((n) => HarvestManager.rareChancePercent(state, n) > 0);
+  return (
+    <div className="harvest-rare-stock">
+      <div className="spread" style={{ alignItems: 'baseline' }}>
+        <span className="tiny" style={{ color: MYTHIC_COLOR, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Rare materials</span>
+        <span className="tiny muted">{cap} cap each</span>
+      </div>
+      <div className="row wrap" style={{ gap: 10, alignItems: 'center' }}>
+        {RARE_ORDER.map((id) => {
+          const def = RARE_MATERIAL_BY_ID[id];
+          const have = state.rareMaterials?.[id] ?? 0;
+          return (
+            <span key={id} className={`harvest-rare-chip ${have > 0 ? 'has' : ''}`} title={`${def.name} -- ${def.description}`}>
+              <MaterialIcon icon={def.icon} glyph={def.glyph} size={20} />
+              <span className="tiny">{def.name}</span>
+              <b className="tiny">{have}/{cap}</b>
+            </span>
+          );
+        })}
+      </div>
+      {!any && (
+        <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+          {anyTool
+            ? 'Catch by hand in the Fields for a chance at one. Heroic and harder raid clears pay them too.'
+            : `Found by hand once a node's tool reaches level ${Tuning.get('harvest.rare.minToolLevel')}, or from Heroic and harder raid clears. Used for Mythic recipes.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Patch 0506 -- Bulk Crate: a big stack of one material for a Legendary
+ *  Shard, once a day. Where surplus goes once gold stops mattering. */
+function BulkCrateRow({ now }: { now: number }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const cost = Tuning.get('harvest.bulkCrate.materialCost');
+  const shards = Tuning.get('harvest.bulkCrate.shardReward');
+  const left = HarvestManager.bulkCratesLeftToday(state, now);
+  return (
+    <div className="harvest-bulk-crate">
+      <p className="tiny muted" style={{ margin: '10px 0 6px' }}>
+        <b style={{ color: 'var(--parchment)' }}>Bulk Crate</b> -- {cost} of one material for {shards} Legendary Shard{shards === 1 ? '' : 's'}.
+        {left > 0 ? ` ${left} left today.` : ' The trader wants no more crates today.'}
+      </p>
+      <div className="row wrap" style={{ gap: 6 }}>
+        {MATERIALS.map((m) => (
+          <button
+            key={m.id}
+            className="btn-ghost"
+            style={{ minHeight: 26 }}
+            disabled={left <= 0 || state.materials[m.id] < cost}
+            title={state.materials[m.id] < cost ? `Needs ${cost} ${m.name}` : undefined}
+            onClick={() => engine.sellBulkCrate(m.id)}
+          >
+            Crate of {m.name} <ShardMark size={12} />
           </button>
         ))}
       </div>

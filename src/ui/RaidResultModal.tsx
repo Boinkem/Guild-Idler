@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { GameEngine } from '../game/engine';
-import { RaidResult } from '../game/types';
+import { RaidResult, RareMaterialId } from '../game/types';
 import { RAID_BY_ID, RAID_DIFFICULTY_LABEL, RAID_ENCOUNTER_BY_ID, raidDifficultyIconSrc } from '../game/data/raids';
 import { itemDef } from '../game/data/equipment';
 import { ItemIcon } from './icons';
@@ -10,7 +10,8 @@ import { at, useDelayedCount } from './resultFx';
 import { useEngine } from './useEngine';
 import { playSound } from '../game/sound';
 import { RarityPill } from './RarityPill';
-import { formatGold, RARITY_COLOR } from '../game/util';
+import { formatGold, MYTHIC_COLOR, RARITY_COLOR } from '../game/util';
+import { RARE_MATERIAL_BY_ID } from '../game/data/materials';
 import { measureFlyOffset } from './flyTarget';
 import { RECIPE_SCROLL_BY_ID } from '../game/data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from '../game/data/craftingRecipes';
@@ -135,7 +136,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
   t += 400;
   const T_DMG = t;
   const dmgCount = (result.heroesFallen?.length ?? 0) + (result.petsFallen?.length ?? 0) + result.injuries.length;
-  if (dmgCount > 0 || result.eggsFound?.length || result.recipeScrollGained || result.shardsGained || result.tombstoneStyleUnlocked) t += 160 * Math.min(dmgCount, 4) + 240;
+  if (dmgCount > 0 || result.eggsFound?.length || result.recipeScrollGained || result.shardsGained || result.rareMaterialsGained || result.tombstoneStyleUnlocked) t += 160 * Math.min(dmgCount, 4) + 240;
   if (result.tombstoneStyleUnlocked) t += 600;
   const T_DONE = t + 300;
 
@@ -299,7 +300,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
 
         {/* Also-found extras -- same shape QuestResultModal's own
             "Also found" section already uses. */}
-        {!!(result.eggsFound?.length || result.recipeScrollGained || result.shardsGained || result.tombstoneStyleUnlocked) && (
+        {!!(result.eggsFound?.length || result.recipeScrollGained || result.shardsGained || result.rareMaterialsGained || result.tombstoneStyleUnlocked) && (
           <div className="rfx-late" style={at(T_DMG)}>
             <div className="section-heading">Also found</div>
             {/* Patch 0465 -- the first-clear tombstone style used to be a
@@ -321,6 +322,13 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
             {result.shardsGained ? (
               <div className="small" style={{ marginBottom: 2, color: '#d9a441' }}>+{shardLabel(result.shardsGained)}</div>
             ) : null}
+            {/* Patch 0506 -- rare Harvest materials from a Heroic+ clear. */}
+            {result.rareMaterialsGained && (
+              <div className="small" style={{ marginBottom: 2, color: MYTHIC_COLOR }}>
+                +{(Object.entries(result.rareMaterialsGained) as [RareMaterialId, number][])
+                  .map(([id, n]) => `${n} ${RARE_MATERIAL_BY_ID[id]?.name ?? id}`).join(', ')}
+              </div>
+            )}
             {result.eggsFound?.map((egg, i) => (
               <div key={i} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
                 <span className="small" style={{ color: RARITY_COLOR[egg.rarity] }}>A {egg.rarity} egg</span>

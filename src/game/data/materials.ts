@@ -1,4 +1,4 @@
-import { MaterialId } from '../types';
+import { MaterialId, RareMaterialId } from '../types';
 
 /**
  * One entry per Harvest/Gathering node -- see guild-idler-status.md's
@@ -88,3 +88,45 @@ export function harvestIconFor(materialId: MaterialId, spawnedAt: number): strin
  */
 export const FEEDABLE_MATERIALS: MaterialDef[] = MATERIALS.filter((m) => m.id === 'herbs' || m.id === 'fish');
 
+/**
+ * Patch 0506 -- rare materials, one per node. Kept in code rather than
+ * materials.json (a fixed 4-entry DevTool table with its own picker/
+ * schema) since there are exactly four and nothing about them is meant
+ * to be retuned by hand -- the drop rates live in tuning (harvest.rare.*,
+ * raid.rareMaterials.*). See RareMaterialId in types.ts.
+ */
+export interface RareMaterialDef {
+  id: RareMaterialId;
+  name: string;
+  /** The ordinary node this turns up at. */
+  nodeId: MaterialId;
+  description: string;
+  glyph: string;
+  icon: string;
+}
+
+export const RARE_MATERIALS: RareMaterialDef[] = [
+  { id: 'starsilver', name: 'Starsilver', nodeId: 'ore', glyph: '✧', icon: 'crafting/Crafting_08.png',
+    description: 'A seam of pale metal that catches light it shouldn\u2019t. Only a heavy pick at the Quarry ever finds it.' },
+  { id: 'heartwood', name: 'Heartwood', nodeId: 'timber', glyph: '✧', icon: 'crafting/Crafting_79.png',
+    description: 'The dark, iron-hard core of a very old tree. The Woodyard turns some up once in a long while.' },
+  { id: 'moonpetal', name: 'Moonpetal', nodeId: 'herbs', glyph: '✧', icon: 'crafting/Crafting_105.png',
+    description: 'A night-blooming herb that only opens for a careful hand in the Herb Garden.' },
+  { id: 'ambergris', name: 'Ambergris', nodeId: 'fish', glyph: '✧', icon: 'crafting/Crafting_15.png',
+    description: 'Waxy, sea-scented and worth a fortune -- now and then it washes up at the Provisions Dock.' },
+];
+
+export const RARE_MATERIAL_BY_ID: Record<RareMaterialId, RareMaterialDef> = Object.fromEntries(
+  RARE_MATERIALS.map((m) => [m.id, m]),
+) as Record<RareMaterialId, RareMaterialDef>;
+
+export const RARE_ORDER: RareMaterialId[] = ['starsilver', 'heartwood', 'moonpetal', 'ambergris'];
+
+/** The rare material a given ordinary node can turn up. */
+export const RARE_BY_NODE: Record<MaterialId, RareMaterialId> = {
+  ore: 'starsilver', timber: 'heartwood', herbs: 'moonpetal', fish: 'ambergris',
+};
+
+export function emptyRareMaterials(): Record<RareMaterialId, number> {
+  return { starsilver: 0, heartwood: 0, moonpetal: 0, ambergris: 0 };
+}

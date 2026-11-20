@@ -7,17 +7,18 @@ import { CraftingManager } from '../game/managers/CraftingManager';
 import { RecipeManager } from '../game/managers/RecipeManager';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
-import { MATERIAL_BY_ID } from '../game/data/materials';
+import { RECIPE_SCROLL_BY_RECIPE_ID } from '../game/data/recipeScrolls';
+import { MATERIAL_BY_ID, RARE_MATERIAL_BY_ID } from '../game/data/materials';
 import { EQUIPMENT_BY_ID } from '../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../game/data/items';
 import { backgroundSrc } from '../game/settings';
 import {
-  CraftingRecipeDef, EquipmentDef, EquipmentItem, GameState, MaterialId, Modifiers, Rarity, Stats,
+  CraftingRecipeDef, EquipmentDef, EquipmentItem, GameState, MaterialId, Modifiers, Rarity, RareMaterialId, Stats,
 } from '../game/types';
 import {
-  describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP, STAT_EFFECT_TOOLTIP,
+  describeMods, describeStats, formatGold, MOD_LABEL, MYTHIC_COLOR, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP, STAT_EFFECT_TOOLTIP,
 } from '../game/util';
-import { RecipeIcon, ItemIcon, MaterialIcon, StatIcon } from './icons';
+import { RecipeIcon, ItemIcon, MaterialIcon, ShardMark, StatIcon } from './icons';
 import { RarityPill } from './RarityPill';
 
 type Category = CraftingRecipeDef['category'];
@@ -73,6 +74,10 @@ function consumableEffectTags(recipe: CraftingRecipeDef): string[] {
   if (effect?.lootWeightStat === 'luck') tags.push('luck');
   if (effect?.lootWeightStat === 'wisdom') tags.push('insight');
   if (effect?.peddlerCounterReduction) tags.push('peddler');
+  // Patch 0506 -- the chain-lasting line, raid flasks and Mythics.
+  if (effect?.chainLasting || effect?.fatedStage) tags.push('chain');
+  if (effect?.raidSpeedPct || effect?.raidSuccess || effect?.raidNoWear || effect?.raidCharm) tags.push('raid');
+  if (def?.mythic) tags.push('mythic');
   if ((recipe.modOptions as string[] | undefined)?.includes('injuryResist')) tags.push('injury');
   return tags;
 }
@@ -89,6 +94,9 @@ const CONSUMABLE_EFFECT_TABS = [
   { id: 'insight', label: 'Insight' },
   { id: 'injury', label: 'Injury resist' },
   { id: 'peddler', label: 'Peddler' },
+  { id: 'chain', label: 'Whole chain' },
+  { id: 'raid', label: 'Raid' },
+  { id: 'mythic', label: 'Mythic' },
 ];
 
 /**
@@ -270,7 +278,8 @@ const FORGE_MS = { full: { reveal: 950, total: 2300 }, quick: { reveal: 380, tot
 
 function forgeInfoFor(category: Category, recipe: CraftingRecipeDef): ForgeInfo {
   const gearDef = recipe.resultDefId ? EQUIPMENT_BY_ID[recipe.resultDefId] : undefined;
-  const color = gearDef ? RARITY_COLOR[gearDef.rarity]
+  const mythic = recipe.resultConsumableId ? CONSUMABLE_BY_ID[recipe.resultConsumableId]?.mythic : false;
+  const color = mythic ? MYTHIC_COLOR : gearDef ? RARITY_COLOR[gearDef.rarity]
     : category === 'enchant' ? 'var(--violet)'
       : category === 'gem' ? 'var(--sky)' : 'var(--moss)';
   return {
@@ -789,6 +798,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         {!!r.scrapCost && (
           <span className={`tiny ${state.scrap < r.scrapCost ? 'bad' : 'good'}`}>⚙ {state.scrap}/{r.scrapCost}</span>
         )}
+        <ExtraCostBadges recipe={r} size={16} />
         <span className={`tiny ${state.gold < CraftingManager.goldCost(state, r) ? 'bad' : 'good'}`}>
           {'\u25c6'} {formatGold(state.gold)}/{formatGold(CraftingManager.goldCost(state, r))}
         </span>
@@ -827,14 +837,14 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     : isConsumableLike
       ? recipes.map((r) => ({
         key: r.id, label: r.name,
-        sublabel: RecipeManager.isKnown(state, r.id) ? materialBadges(r) : '🔒 Recipe not yet learned',
+        sublabel: RecipeManager.isKnown(state, r.id) ? materialBadges(r) : lockedLabel(r.id),
         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
         tags: consumableEffectTags(r),
         disabled: !RecipeManager.isKnown(state, r.id),
       }))
       : recipes.map((r) => ({
         key: r.id, label: r.name,
-        sublabel: RecipeManager.isKnown(state, r.id) ? r.description : '🔒 Recipe not yet learned',
+        sublabel: RecipeManager.isKnown(state, r.id) ? r.description : lockedLabel(r.id),
         disabled: !RecipeManager.isKnown(state, r.id),
         icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
         tags: category === 'gear' ? gearSlotTags(r) : undefined,
@@ -1056,6 +1066,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
                   ⚙ {state.scrap}/{recipe.scrapCost}
                 </span>
               )}
+              <ExtraCostBadges recipe={recipe} size={20} />
               <span className={`tiny ${state.gold < CraftingManager.goldCost(state, recipe) ? 'bad' : 'good'}`}>
                 ◆ {formatGold(state.gold)}/{formatGold(CraftingManager.goldCost(state, recipe))}
               </span>
@@ -1176,7 +1187,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           title="Choose what to apply"
           options={recipes.map((r) => ({
             key: r.id, label: r.name,
-            sublabel: RecipeManager.isKnown(state, r.id) ? r.description : '🔒 Recipe not yet learned',
+            sublabel: RecipeManager.isKnown(state, r.id) ? r.description : lockedLabel(r.id),
             disabled: !RecipeManager.isKnown(state, r.id),
             icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
           }))}
@@ -1214,4 +1225,45 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       )}
     </div>
   );
+}
+
+/**
+ * Patch 0506 -- the extra costs a Mythic recipe carries on top of gold,
+ * Scrap and regular materials: rare Harvest materials (GameState.
+ * rareMaterials) and Legendary Shards. Same have/need, red/green
+ * convention as the regular material badges. Renders nothing for a recipe
+ * with neither.
+ */
+function ExtraCostBadges({ recipe, size }: { recipe: CraftingRecipeDef; size: number }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const rare = Object.entries(recipe.rareMaterialCost ?? {}) as [RareMaterialId, number][];
+  if (rare.length === 0 && !recipe.shardCost) return null;
+  return (
+    <>
+      {rare.map(([id, need]) => {
+        const def = RARE_MATERIAL_BY_ID[id];
+        const have = state.rareMaterials?.[id] ?? 0;
+        return (
+          <span key={id} className="row" style={{ gap: 3, alignItems: 'center' }} title={`${def.name} (rare): have ${have}, need ${need}`}>
+            <MaterialIcon icon={def.icon} glyph={def.glyph} size={size} />
+            <span className={`tiny ${have < need ? 'bad' : 'good'}`}>{have}/{need}</span>
+          </span>
+        );
+      })}
+      {!!recipe.shardCost && (
+        <span className={`tiny ${(state.legendaryShards ?? 0) < recipe.shardCost ? 'bad' : 'good'}`} title="Legendary Shards">
+          <ShardMark size={size - 4} /> {state.legendaryShards ?? 0}/{recipe.shardCost}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Patch 0506 -- what a locked recipe row says: Mythic recipes never drop,
+ *  so point at where they're sold instead. */
+function lockedLabel(recipeId: string): string {
+  return RECIPE_SCROLL_BY_RECIPE_ID[recipeId]?.shelfOnly
+    ? '🔒 Mythic recipe -- sold on the Alchemist\u2019s Recipe Shelf'
+    : '🔒 Recipe not yet learned -- drops, or a vendor\u2019s Recipe Shelf';
 }

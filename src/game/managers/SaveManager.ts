@@ -5,7 +5,7 @@ import { AchievementManager } from './AchievementManager';
 import { GUILD_GUIDE_STEP_IDS, UPGRADES, UPGRADE_BY_ID, upgradeCost, vendorUpgrades } from '../data/progression';
 import { BARD_TRACKS } from '../data/bard';
 import { ACHIEVEMENT_BY_ID } from '../data/achievements';
-import { NODE_ORDER } from '../data/materials';
+import { NODE_ORDER, emptyRareMaterials } from '../data/materials';
 import { ENTRY_SCOPES } from '../data/entryScopes';
 import { Tuning } from '../data/tuning';
 import { PeddlerManager } from './PeddlerManager';
@@ -244,6 +244,11 @@ export function createInitialState(now = Date.now()): GameState {
     pendingChainDiscovery: false,
     pendingHeroTierUpId: null,
     materials: emptyMaterials(),
+    // Patch 0506 -- rare materials, Bulk Crate counter, Recipe Shelf.
+    rareMaterials: emptyRareMaterials(),
+    bulkCrateDay: -1,
+    bulkCratesToday: 0,
+    recipeShelf: null,
     curios: {},
     // Patch 0357, WoW-style recipe drop/learn system -- a brand-new
     // guild starts with nothing but the lowest tier of every gated
@@ -1617,6 +1622,17 @@ const MIGRATIONS: Record<number, Migration> = {
   76: (save) => ({ ...save, version: 77, leaderboardBest: 0 }),
   // Patch 0502 -- raid checkpoints. No saved progress on older saves.
   77: (save) => ({ ...save, version: 78, raidCheckpoints: (save.raidCheckpoints as object | undefined) ?? {} }),
+  // Patch 0506 -- rare materials, the Trade Route Bulk Crate counter and
+  // the vendors' Recipe Shelf. Hero.chainBuffs / ActiveQuest.
+  // guaranteedSuccess / ActiveRaid.flaskId are optional and need nothing.
+  78: (save) => ({
+    ...save,
+    version: 79,
+    rareMaterials: { ...emptyRareMaterials(), ...((save.rareMaterials as object | undefined) ?? {}) },
+    bulkCrateDay: (save.bulkCrateDay as number | undefined) ?? -1,
+    bulkCratesToday: (save.bulkCratesToday as number | undefined) ?? 0,
+    recipeShelf: (save.recipeShelf as GameState['recipeShelf'] | undefined) ?? null,
+  }),
 };
 
 /** What every pre-0474 guild paid for the one-off Guild Charter

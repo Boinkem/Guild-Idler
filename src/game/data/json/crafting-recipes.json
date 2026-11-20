@@ -3167,5 +3167,229 @@
     "modValue": 0,
     "statsToPick": 0,
     "statValue": 0
+  },
+  {
+    "id": "craft_wayfarers_flask",
+    "name": "Wayfarer's Flask",
+    "description": "A flask for the whole road, not just the next mile.",
+    "category": "consumable",
+    "icon": "potions/Potion_43.png",
+    "materialCost": {
+      "herbs": 20,
+      "fish": 20
+    },
+    "goldCost": 60,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 7,
+    "resultConsumableId": "wayfarers_flask"
+  },
+  {
+    "id": "craft_road_wardens_tonic",
+    "name": "Road-Warden's Tonic",
+    "description": "An old patrol recipe -- keeps a hero sharp and whole from the first stage to the last.",
+    "category": "consumable",
+    "icon": "potions/Potion_47.png",
+    "materialCost": {
+      "herbs": 50,
+      "fish": 30,
+      "ore": 10
+    },
+    "goldCost": 180,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 20,
+    "resultConsumableId": "road_wardens_tonic"
+  },
+  {
+    "id": "craft_caravan_purse",
+    "name": "Caravan Purse",
+    "description": "Stitched and weighted the way the caravan-masters do it.",
+    "category": "consumable",
+    "icon": "misc/Misc_35.png",
+    "materialCost": {
+      "fish": 60,
+      "ore": 30
+    },
+    "goldCost": 200,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 22,
+    "resultConsumableId": "caravan_purse"
+  },
+  {
+    "id": "craft_long_road_elixir",
+    "name": "Long Road Elixir",
+    "description": "The Alchemist's slowest brew, made for the longest journeys.",
+    "category": "consumable",
+    "icon": "potions/Potion_40.png",
+    "materialCost": {
+      "herbs": 90,
+      "fish": 50,
+      "ore": 20
+    },
+    "goldCost": 400,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 44,
+    "resultConsumableId": "long_road_elixir"
+  },
+  {
+    "id": "craft_pathfinders_charm",
+    "name": "Pathfinder's Charm",
+    "description": "Carved to pull every find on the road toward Luck.",
+    "category": "charm",
+    "icon": "misc/Misc_34.png",
+    "materialCost": {
+      "ore": 60,
+      "herbs": 40
+    },
+    "goldCost": 300,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 33,
+    "resultConsumableId": "pathfinders_charm"
+  },
+  {
+    "id": "craft_fated_draught",
+    "name": "Fated Draught",
+    "description": "Mythic. Bottled certainty -- the next chain stage simply goes right.",
+    "category": "consumable",
+    "icon": "potions/Potion_44.png",
+    "materialCost": {
+      "herbs": 300,
+      "fish": 300
+    },
+    "goldCost": 60000,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 0,
+    "resultConsumableId": "fated_draught",
+    "rareMaterialCost": {
+      "moonpetal": 15
+    },
+    "shardCost": 3
+  },
+  {
+    "id": "craft_unbroken_oath",
+    "name": "Unbroken Oath",
+    "description": "Mythic. Sworn over starsilver; nothing on the road leaves a mark.",
+    "category": "consumable",
+    "icon": "potions/Potion_46.png",
+    "materialCost": {
+      "ore": 300,
+      "herbs": 300
+    },
+    "goldCost": 60000,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 0,
+    "resultConsumableId": "unbroken_oath",
+    "rareMaterialCost": {
+      "starsilver": 15
+    },
+    "shardCost": 3
+  },
+  {
+    "id": "craft_scholars_ink",
+    "name": "Scholar's Ink",
+    "description": "Mythic. Every lesson of the chain, written down and kept.",
+    "category": "charm",
+    "icon": "misc/Misc_58.png",
+    "materialCost": {
+      "timber": 300,
+      "herbs": 300
+    },
+    "goldCost": 60000,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 0,
+    "resultConsumableId": "scholars_ink",
+    "rareMaterialCost": {
+      "heartwood": 15
+    },
+    "shardCost": 3
+  },
+  {
+    "id": "craft_bloodlust_tonic",
+    "name": "Bloodlust Tonic",
+    "description": "Mythic. The raid can't end fast enough.",
+    "category": "consumable",
+    "icon": "misc/Misc_27.png",
+    "materialCost": {
+      "fish": 300,
+      "herbs": 300
+    },
+    "goldCost": 60000,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 0,
+    "resultConsumableId": "bloodlust_tonic",
+    "rareMaterialCost": {
+      "ambergris": 15
+    },
+    "shardCost": 3
+  },
+  {
+    "id": "craft_warlords_banner",
+    "name": "Warlord's Banner",
+    "description": "Mythic. Raised at the head of the column; the whole party fights harder under it.",
+    "category": "charm",
+    "icon": "misc/Misc_45.png",
+    "materialCost": {
+      "ore": 300,
+      "timber": 300
+    },
+    "goldCost": 60000,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 0,
+    "resultConsumableId": "warlords_banner",
+    "rareMaterialCost": {
+      "starsilver": 15
+    },
+    "shardCost": 3
+  },
+  {
+    "id": "craft_stoneskin_phial",
+    "name": "Stoneskin Phial",
+    "description": "Mythic. One sip and steel stops wearing.",
+    "category": "consumable",
+    "icon": "potions/Potion_41.png",
+    "materialCost": {
+      "ore": 300,
+      "fish": 300
+    },
+    "goldCost": 60000,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "scrapCost": 0,
+    "resultConsumableId": "stoneskin_phial",
+    "rareMaterialCost": {
+      "heartwood": 15
+    },
+    "shardCost": 3
   }
 ]

@@ -712,5 +712,71 @@
     "recipeId": "craft_guildmade_talisman_t5",
     "reqLevel": 40,
     "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_road_wardens_tonic",
+    "recipeId": "craft_road_wardens_tonic",
+    "reqLevel": 22,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_caravan_purse",
+    "recipeId": "craft_caravan_purse",
+    "reqLevel": 25,
+    "rarity": "rare"
+  },
+  {
+    "id": "scroll_craft_long_road_elixir",
+    "recipeId": "craft_long_road_elixir",
+    "reqLevel": 35,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_pathfinders_charm",
+    "recipeId": "craft_pathfinders_charm",
+    "reqLevel": 38,
+    "rarity": "epic"
+  },
+  {
+    "id": "scroll_craft_fated_draught",
+    "recipeId": "craft_fated_draught",
+    "reqLevel": 40,
+    "rarity": "legendary",
+    "shelfOnly": true
+  },
+  {
+    "id": "scroll_craft_unbroken_oath",
+    "recipeId": "craft_unbroken_oath",
+    "reqLevel": 40,
+    "rarity": "legendary",
+    "shelfOnly": true
+  },
+  {
+    "id": "scroll_craft_scholars_ink",
+    "recipeId": "craft_scholars_ink",
+    "reqLevel": 40,
+    "rarity": "legendary",
+    "shelfOnly": true
+  },
+  {
+    "id": "scroll_craft_bloodlust_tonic",
+    "recipeId": "craft_bloodlust_tonic",
+    "reqLevel": 40,
+    "rarity": "legendary",
+    "shelfOnly": true
+  },
+  {
+    "id": "scroll_craft_warlords_banner",
+    "recipeId": "craft_warlords_banner",
+    "reqLevel": 40,
+    "rarity": "legendary",
+    "shelfOnly": true
+  },
+  {
+    "id": "scroll_craft_stoneskin_phial",
+    "recipeId": "craft_stoneskin_phial",
+    "reqLevel": 40,
+    "rarity": "legendary",
+    "shelfOnly": true
   }
 ]

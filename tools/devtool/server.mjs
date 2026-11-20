@@ -834,6 +834,8 @@ const SCHEMAS = {
       // Charm "Weave"/"Sigil" line, etc.) that should never appear in the
       // Alchemist's ordinary shop rotation. Also missing until this pass.
       craftable: { type: 'boolean', required: false },
+      // Patch 0506 -- Mythic item (legendary rarity underneath, own banner).
+      mythic: { type: 'boolean', required: false },
       effect: { type: 'effect', required: true },
     },
   },
@@ -1381,6 +1383,9 @@ const SCHEMAS = {
       icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
       materialCost: { type: 'materials', required: true },
       goldCost: { type: 'number', required: true },
+      // Patch 0506 -- Mythic recipes: rare Harvest materials + Legendary Shards.
+      rareMaterialCost: { type: 'rareMaterials', required: false },
+      shardCost: { type: 'number', required: false },
       // gem only -- Scrap is its own standalone currency (GameState.scrap),
       // not a MaterialId, so it can't fit into materialCost above.
       scrapCost: { type: 'number', required: false },
@@ -1545,9 +1550,13 @@ const EFFECT_KEYS = [
   // effect value, so it's validated separately below rather than via the
   // generic numeric-field path every other EFFECT_KEYS entry uses.
   'lootWeightStat', 'lootWeightMultiplier',
+  // Patch 0506 -- chain-lasting line, Fated Draught, Scholar's Ink, raid flasks.
+  'chainLasting', 'fatedStage', 'mythicXpPct', 'raidSpeedPct', 'raidSuccess', 'raidNoWear',
 ];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
+// Patch 0506 -- RareMaterialId (types.ts).
+const RARE_MATERIAL_KEYS = ['starsilver', 'heartwood', 'moonpetal', 'ambergris'];
 const RARITY_KEYS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 const CHAIN_STAGE_TAGS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
 // Same 6 values as CHAIN_STAGE_TAGS above (both are just QuestTag's full
@@ -1649,6 +1658,10 @@ function validateEntry(schema, entry, index) {
       case 'materials':
         if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
         else for (const k of Object.keys(value)) if (!MATERIAL_KEYS.includes(k)) errors.push(`entry ${index}: unknown material "${k}"`);
+        break;
+      case 'rareMaterials':
+        if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
+        else for (const k of Object.keys(value)) if (!RARE_MATERIAL_KEYS.includes(k)) errors.push(`entry ${index}: unknown rare material "${k}"`);
         break;
       case 'modKeyList':
         // Patch 0255 (all-stats rework, see guild-idler-status.md):

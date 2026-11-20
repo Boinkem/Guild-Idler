@@ -22,7 +22,7 @@ import { scrollSellValue } from '../../game/data/recipeScrolls';
 import { rerollsUsedToday } from '../../game/data/reroll';
 import {
   describeMods, describeStats, formatGold, RARITY_BANNER, CURIO_BANNER, EMPTY_SLOT_BANNER,
-  RARITY_COLOR, MAIN_STAT_TOOLTIP,
+  RARITY_COLOR, MAIN_STAT_TOOLTIP, MYTHIC_COLOR,
 } from '../../game/util';
 import { ItemIcon, ConsumableIcon, CurioIcon, RecipeIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
@@ -38,12 +38,21 @@ import { HeroPowerPortrait } from '../heroAura';
 import { HERO_CLASSES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { heroStatusInfo } from '../HeroStatusBar';
+import { ChainBuffList } from '../ChainBuffs';
 import { formatDuration } from '../../game/util';
 import { heroPortraitSrc, heroPortraitStyle } from './HeroesPanel';
 
 const SLOTS = EQUIP_SLOTS;
 
-export function RarityPill({ rarity }: { rarity: Rarity }) {
+export function RarityPill({ rarity, mythic }: { rarity: Rarity; mythic?: boolean }) {
+  // Patch 0506 -- Mythic consumables show "mythic" in their own colour.
+  if (mythic) {
+    return (
+      <span className="rarity-pill rarity-pill-mythic" style={{ color: MYTHIC_COLOR, borderColor: MYTHIC_COLOR }}>
+        mythic
+      </span>
+    );
+  }
   return (
     <span className="rarity-pill" style={{ color: RARITY_COLOR[rarity], borderColor: RARITY_COLOR[rarity] }}>
       {rarity}
@@ -647,7 +656,7 @@ function ConsumableInfoCard({
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
             <div className="item-card-meta-row">
-              <RarityPill rarity={def.rarity} />
+              <RarityPill rarity={def.rarity} mythic={def.mythic} />
               <ConsumablePill />
               <span className="tiny muted">×{count}</span>
             </div>
@@ -667,7 +676,7 @@ function ConsumableInfoCard({
                 <div className="tiny muted">Owned ×{count}</div>
               </div>
             </div>
-            <RarityPill rarity={def.rarity} />
+            <RarityPill rarity={def.rarity} mythic={def.mythic} />
             <ConsumablePill />
             <div className="tiny muted" style={{ marginTop: 6 }}>{def.description}</div>
             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
@@ -753,7 +762,7 @@ function ConsumableSlotCard({
             <div className="item-card-body">
               <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</div>
               <div className="item-card-meta-row">
-                <RarityPill rarity={def.rarity} />
+                <RarityPill rarity={def.rarity} mythic={def.mythic} />
                 <ConsumablePill />
                 <span className="tiny muted">on {hero.name}</span>
               </div>
@@ -773,7 +782,7 @@ function ConsumableSlotCard({
                   <div className="tiny muted">Equipped on {hero.name}</div>
                 </div>
               </div>
-              <RarityPill rarity={def.rarity} />
+              <RarityPill rarity={def.rarity} mythic={def.mythic} />
               <ConsumablePill />
               <div className="tiny muted" style={{ marginTop: 6 }}>{def.description}</div>
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
@@ -1590,6 +1599,8 @@ export function EquipmentPanel() {
           );
         })}
       </div>
+      {/* Patch 0506 -- chain-lasting buffs this hero carries. */}
+      <ChainBuffList hero={hero} />
 
       <div className="section-heading">Consumables</div>
       <p className="tiny muted subtitle" style={{ marginTop: -6, marginBottom: 6 }}>

@@ -856,6 +856,7 @@ function fieldControl(spec, key, value) {
   if (spec.type === 'mods') return kvGrid(id, MOD_KEYS, value ?? {}, 'number', MOD_FIELD_INFO);
   if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number', STAT_FIELD_INFO);
   if (spec.type === 'materials') return kvGrid(id, MATERIAL_KEYS, value ?? {}, 'number');
+  if (spec.type === 'rareMaterials') return kvGrid(id, RARE_MATERIAL_KEYS, value ?? {}, 'number'); // patch 0506
   if (spec.type === 'roleFlavors') return kvGrid(id, ROLE_KEYS, value ?? {}, 'text');
   // roleDescriptions holds a full sentence per role, not a short display
   // name like roleFlavors -- 'textarea' kind gets each row a proper
@@ -1001,15 +1002,23 @@ const QUEST_TAG_KEYS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'def
 // roleFlavors (hero-classes) and roleRequirements (raids).
 const ROLE_KEYS = ['melee', 'ranged', 'caster'];
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
+const RARE_MATERIAL_KEYS = ['starsilver', 'heartwood', 'moonpetal', 'ambergris']; // patch 0506
 const EFFECT_KEYS = [
   'success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability',
   'health', 'restoreHealth', 'healthDamageReduction', 'revivalDiscount',
   'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
   'preventInjury', 'guaranteedGoodEvent', 'healInjury',
   'raidCharm', // patch 0484
+  // Patch 0506 -- these two were missing here (server.mjs had them), so
+  // saving any Fortune/Lucky charm through this editor silently dropped
+  // its loot weighting -- the likely way Fortune Weave and Windfall Sigil
+  // ended up with empty effects.
+  'lootWeightStat', 'lootWeightMultiplier',
+  // Patch 0506 -- chain-lasting line, Fated Draught, Scholar's Ink, raid flasks.
+  'chainLasting', 'fatedStage', 'mythicXpPct', 'raidSpeedPct', 'raidSuccess', 'raidNoWear',
 ];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
-const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury', 'raidCharm']);
+const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury', 'raidCharm', 'chainLasting', 'fatedStage', 'raidNoWear']);
 // guaranteedLoot is eventEffects' one non-numeric, non-boolean key -- a
 // Rarity string, not a percentage or flat amount. Kept as its own named
 // set (rather than generalizing kvGrid to an arbitrary per-key type map,
@@ -1018,7 +1027,7 @@ const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury',
 // below instead of falling through to a plain number input, which is
 // what it did before this fix -- typing into that number input saved a
 // garbage number where a rarity string belonged.
-const ENUM_KV_KEYS = { guaranteedLoot: RARITY_KEYS };
+const ENUM_KV_KEYS = { guaranteedLoot: RARITY_KEYS, lootWeightStat: STAT_KEYS };
 
 /**
  * Short unit tags + full descriptions shown alongside every kv-grid field
@@ -1091,6 +1100,14 @@ const EFFECT_FIELD_INFO = {
   raidCharm: { unit: 'bool', title: "Raider's Charm (patch 0484): armed when a raid sets out, not equipped on a hero." },
   guaranteedGoodEvent: { unit: 'bool', title: 'Forces the quest event roll (if any fires) to land positive.' },
   healInjury: { unit: 'bool', title: "Clears the hero's current injury immediately on use." },
+  lootWeightStat: { unit: 'stat', title: 'Fortune/Lucky charms: which stat procedural loot rolls lean toward.' },
+  lootWeightMultiplier: { unit: 'x', title: 'Fortune/Lucky charms: weight of lootWeightStat vs 1 for every other stat (999 = every slot).' },
+  chainLasting: { unit: 'bool', title: 'Patch 0506: chain stages only; once used it stays on that hero for every later stage of the same chain.' },
+  fatedStage: { unit: 'bool', title: 'Patch 0506: Fated Draught -- the next chain stage this hero runs always succeeds.' },
+  mythicXpPct: { unit: '%', title: "Patch 0506: Scholar's Ink -- extra XP %, applied after the XP soft cap." },
+  raidSpeedPct: { unit: '%', title: 'Patch 0506: raid flask -- raid time cut, after the party speed clamp.' },
+  raidSuccess: { unit: 'pts', title: 'Patch 0506: raid flask -- flat success points on every raid fight.' },
+  raidNoWear: { unit: 'bool', title: 'Patch 0506: raid flask -- no gear wear on the raid.' },
 };
 const EVENT_EFFECT_FIELD_INFO = {
   success: { unit: 'pts', title: 'Percentage points added to the success roll for this quest.' },
@@ -2461,7 +2478,7 @@ function readField(spec, key) {
   if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList' || spec.type === 'elementList') {
     return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
   }
-  if (['mods', 'stats', 'materials', 'roleRequirements', 'effect', 'eventEffects'].includes(spec.type)) {
+  if (['mods', 'stats', 'materials', 'rareMaterials', 'roleRequirements', 'effect', 'eventEffects'].includes(spec.type)) {
     const out = {};
     el.querySelectorAll('[data-kv]').forEach((input) => {
       const k = input.dataset.kv;

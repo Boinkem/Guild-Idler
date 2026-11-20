@@ -840,6 +840,16 @@ deliberately below both manual clicking and a Gathering Bounty at every
 tier (see "Tiered Auto-Harvest: the Overseer upgrade (patch 0235)" at the
 end of this file).
 
+**Late-game crafting overhaul (patch 0506).** Crafted consumables now sit
+above the same-rarity shop potion; a chain-lasting "Long Road" line; six
+Mythic recipes (Fated Draught, Unbroken Oath, Scholar's Ink, Bloodlust
+Tonic, Warlord's Banner, Stoneskin Phial); a daily Recipe Shelf at every
+vendor (gold sink); rare materials (Starsilver/Heartwood/Moonpetal/
+Ambergris) from hand catches at tool level 5+ and Heroic+ raid clears; a
+Trade Route Bulk Crate (500 of one material -> 1 Legendary Shard, once a
+day). See "Crafting & Harvest overhaul (patch 0506)" at the end of this
+file and `claude/crafting-economy-overhaul-plan.md` in the project.
+
 **Harvest unlock + Gathering Bounty -- built.** Two related additions:
 - **`the_first_haul`** (reqLevel 1, 2 short stages, ~75min total, title
   "Provisioner") is a small one-time intro chain, same shape as
@@ -40307,3 +40317,154 @@ clicked:
 healing. The headline and every contribution held identical values for 6
 s (before: they changed each second). The normal flow is unchanged: 0%
 -> 13% -> 26% with ▲ +4.3 per pick, and hover previews work. `tsc` clean.
+
+### Crafting & Harvest overhaul: chain potions, Mythic recipes, Recipe Shelf, rare materials (patch 0506)
+```discord-update
+Dev Update | Crafting & Harvest Overhaul
+
+- Changed crafted potions and charms to beat the shop potion of the same rarity, so the bench is finally worth using late
+- Added the Long Road line -- crafted potions that last a whole chain: use one on a chain stage and it stays with that hero for every later stage
+- Added six Mythic recipes: Fated Draught (the next chain stage always succeeds), Unbroken Oath (no injuries or Health loss for the whole chain), Scholar's Ink (+50% chain XP), and three raid flasks -- Bloodlust Tonic (raids 20% faster), Warlord's Banner (+10% raid success) and Stoneskin Phial (no gear wear)
+- Added a Recipe Shelf to every vendor: five unknown recipes a day for gold, plus a Mythic recipe at the Alchemist once it's fully levelled
+- Added rare materials -- Starsilver, Heartwood, Moonpetal and Ambergris -- found by catching by hand at tool level 5+, and paid by Heroic and harder raid clears
+- Added the Bulk Crate at the Trade Route: trade 500 of one material for a Legendary Shard, once a day
+- Fixed Fortune Weave and Windfall Sigil doing nothing when equipped
+- Fixed the Overseer gathering about twice as much while you were away as it does while the game is open
+```
+
+Owner-approved plan (assessment + decisions, 20 Nov):
+`claude/crafting-economy-overhaul-plan.md` in the project. The problem:
+late game, gold and materials are both effectively unlimited, crafted
+consumables were deliberately "cheaper but a notch weaker" (worthless once
+gold stops mattering -- per-slot power is the only thing that counts with
+3 slots), materials outran every sink ~20x, and Trade Route caps selling
+at about one roster-hour of ungeared quest gold.
+
+**1. Crafted consumables above the shop (`consumables.json`).** Gold and
+material costs unchanged; one per stage as before. Herbal Tonic +2,
+Trail Rations +2/+8%, Forager's Bundle +80% gold, Alchemist's Reserve +4,
+Meal On The Go +3/+30%, Prospector's Cache +290%, Dragon's Hoard +430%,
+Lucky Charm x2.5, Fortune Weave x8, Windfall Sigil x16 (Phoenix Ember and
+Warband Feast already beat their shop rung). Descriptions of the two
+Windfall Sigils no longer say "Enchanter" (charms are Alchemist since 0347).
+
+**Fortune Weave / Windfall Sigil bug.** Both shipped `effect: {}`, so they
+weren't loadout effects and did nothing. Likely root cause, fixed too: the
+DevTool editor's `EFFECT_KEYS` (`tools/devtool/public/app.js`) never had
+`lootWeightStat`/`lootWeightMultiplier` (the server list did), so saving
+any charm through the DevTool dropped its loot weighting. Both keys are in
+the editor now; `lootWeightStat` renders as a stat `<select>`
+(`ENUM_KV_KEYS`).
+
+**2. Long Road line -- chain-lasting consumables.** New
+`ConsumableDef.effect.chainLasting`. Items: Wayfarer's Flask (U, always
+known, +3), Road-Warden's Tonic (R, scroll 22, +5/+10 injury resist),
+Caravan Purse (R, 25, +150% gold), Long Road Elixir (E, 35, +8),
+Pathfinder's Charm (E, 38, Luck loot x10, a charm). Rules
+(`QuestManager.effectiveLoadout` / `start` / `pruneChainBuffs`):
+- Chain-only (`InventoryManager.isChainOnly`: chainLasting or fatedStage):
+  skipped -- left in the slot, not spent -- on an ordinary contract.
+- Used on a chain stage -> `Hero.chainBuffs[chainBuffKey]` (key = chainId,
+  or `chainId::difficulty` for a replay). Every later stage of that chain
+  the SAME hero runs gets it free. Buffs take their slots first; equipped
+  items fill what's left, the rest stay equipped unspent.
+- Chain-only items are never re-reserved from stock after use, and
+  `fillEmptyConsumableSlots` (auto-fill / Equip best) never picks Mythics
+  or chain-only items ("priciest first" would grab a 90k Mythic).
+- Cleared by `pruneChainBuffs` at the end of every `resolve()` once the
+  chain is no longer in `activeChains` (first clear) / that hero's
+  `activeChainReplays` (replay) and no quest on it is out; a replay reset
+  drops its buff directly. Failed-stage retries keep it.
+- `successBreakdown` and `previewLoot` read the effective loadout, so the
+  quest cards' odds include buffs. UI: "Chain buffs" list under the
+  hero's Consumable Slots (`ChainBuffs.tsx`), "✦ Chain buff" tag on the
+  Story Quests chain card and a line in its detail.
+
+**3. Mythic recipes.** `ConsumableDef.mythic` (legendary rarity underneath
+-- no new `Rarity` value, every `Record<Rarity>` map keeps working; own
+pill colour `MYTHIC_COLOR`, "mythic" `RarityPill` variant in both pill
+components). Recipes cost 60k gold + 300 each of two materials + 15 of one
+rare material + 3 Shards (`CraftingRecipeDef.rareMaterialCost`/`shardCost`,
+checked in `CraftingManager.affordability`, spent by `spendExtras` in all
+four craft paths). Scrolls are `shelfOnly` -- never dropped
+(`RecipeManager.eligibleDrops`).
+- **Fated Draught** (`effect.fatedStage`): the next chain stage this hero
+  runs always succeeds -- `ActiveQuest.guaranteedSuccess`, `resolve()`
+  skips the roll (same short-circuit as the tutorial quest); the preview
+  shows 100%. Chain-only, single use.
+- **Unbroken Oath**: `preventInjury` + `healthDamageReduction: 100`,
+  chain-lasting -- no new code path.
+- **Scholar's Ink** (`effect.mythicXpPct: 50`): multiplied into
+  `ActiveQuest.xpMultiplier` AFTER the XP soft cap, chain-lasting.
+- **Raid flasks** (`raidSpeedPct`/`raidSuccess`/`raidNoWear`;
+  `InventoryManager.isRaidFlask`, not equippable): picked on the raid
+  confirm screen next to the Raider's Charm, one per raid, spent win or
+  lose (`ActiveRaid.flaskId`, `RaidResult.flaskUsed`). Bloodlust's 20% cut
+  is applied after the party speed clamp in `previewDuration`. Warlord's
+  Banner adds to `partySuccessBonus` at start and to `encounterBreakdown`
+  (new `flaskId` param, new `flask` field) so the raid screen's odds
+  match. Stoneskin skips `applyWear` in `resolve()`.
+
+**4. Recipe Shelf (`RecipeManager.ensureShelf` / `shelfPrice` /
+`buyFromShelf`; `RecipeShelfCard` in `VendorsPanel.tsx`).** Rolled once
+per `rerollDay` (seeded on day + `createdAt`, stored in
+`GameState.recipeShelf`, rolled from `refreshWorld`): per vendor,
+`recipeShelf.slots` (5) unknown, non-shelfOnly scrolls with reqLevel <=
+top hero level, by recipe category (gear -> Blacksmith; consumable/charm
+-> Alchemist; enchant/gem -> Enchanter), plus one Mythic scroll shown on
+the Alchemist's shelf once it's at `recipeShelf.mythicVendorLevel` (3 --
+the Alchemist's max; the plan said 4, but the Alchemist only has 3
+levels). Price = 5,000 x rarity (C1/U2/R5/E12/L16) x (1 + reqLevel/25),
+rounded to 100: Alchemist's Reserve 16k, Phoenix Ember 55k, Dragon's Hoard
+156k, Masterwork/Heirloom VI 240k; Mythic 250k flat. Blocked if the price
+is over the Treasury cap (310k at level 20). Buying learns the recipe at
+once and the row shows "Learned ✓". No vendor Rep from shelf purchases.
+Locked recipe rows in the Crafting Station now say where to get them.
+
+**5. Rare materials (`RareMaterialId`, `RARE_MATERIALS` in
+`data/materials.ts`, `GameState.rareMaterials`).** One per node. Manual
+`HarvestManager.catch` only (never the Overseer, live or offline): from
+`harvest.rare.minToolLevel` (5), (tool - 4) x 2% per catch -> 2/4/6/8%,
+rolled even with the Warehouse full. Raid full clears pay
+`raid.rareMaterials.*` (Heroic 1 / Mythic 2 / Legendary 3) random rares
+(`RaidResult.rareMaterialsGained`). Own cap, `harvest.rare.capacity` (100
+each). Shown in the Warehouse card; the tool rows show the chance.
+
+**6. Bulk Crate (`HarvestManager.sellBulkCrate`).** Trade Route: 500 of one
+material -> 1 Legendary Shard, `harvest.bulkCrate.perDay` (1) per
+`rerollDay` (`GameState.bulkCrateDay` / `bulkCratesToday`). Gold selling
+unchanged.
+
+**7. Offline Overseer fix (`offlineAutoHarvest`).** An unattended cycle is
+`spawnInterval + despawnWindowMs` (the spawn waits out its 12 s window
+before the rescue roll and the next timer starts), not `spawnInterval`
+alone -- the old formula credited ~2.2x the live idle rate at the 10 s
+floor. Maxed tools + Overseer 3 now give ~1,043/hr per node offline, the
+same as leaving the game open.
+
+**Save:** `SAVE_VERSION` 79; migration 78 adds `rareMaterials`,
+`bulkCrateDay`, `bulkCratesToday`, `recipeShelf`. `Hero.chainBuffs`,
+`ActiveQuest.guaranteedSuccess`, `ActiveRaid.flaskId` are optional.
+
+**Tuning (all new, DevTool-editable):** `harvest.rare.*`,
+`harvest.bulkCrate.*`, `raid.rareMaterials.*`, `recipeShelf.*`. DevTool
+schemas: consumables `mythic`; crafting-recipes `rareMaterialCost` (new
+`rareMaterials` type, server + editor) and `shardCost`; new effect keys
+`chainLasting`, `fatedStage`, `mythicXpPct`, `raidSpeedPct`,
+`raidSuccess`, `raidNoWear`.
+
+**Verified:** `npx tsc --noEmit` and `vite build --config
+vite.web.config.ts` clean; `node --check` on both DevTool files. A tsx
+script against the real managers (198 checks): data integrity (every new
+item/recipe/scroll resolves), shelf rolling/stability/pricing/buying and
+the Mythic gate, rare catch + chance table, offline rate, Bulk Crate daily
+limit, Mythic craft gates and spend, the full chain-buff lifecycle on a
+real 3+ stage chain (contract skips chain-only items, Fated shows 100% and
+succeeds, buff stored, not re-reserved, counted in stage-2 odds -- 60.5% ->
+68.5% with a Long Road Elixir -- cleared when the chain completes),
+Bloodlust 20% / Banner +10 / flask spent on start and reported on the
+result, save round trip and v78 migration. Headless Chrome on the web
+build with a late-game save: Blacksmith/Alchemist Recipe Shelf (incl. the
+Mythic row), Warehouse rare stock, tool-row rare chance, Bulk Crate row,
+Chain buffs list and the "mythic" pill. Not checked: the raid confirm
+screen's flask picker in a browser, the Electron app.

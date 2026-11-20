@@ -6337,5 +6337,205 @@
     "min": 0,
     "max": 20,
     "description": "How many legendary gems an Enchanter commission gives (patch 0455)."
+  },
+  {
+    "id": "harvest.rare.minToolLevel",
+    "label": "Rare materials: tool level needed",
+    "category": "harvest",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "max": 8,
+    "description": "Patch 0506 -- A node can turn up its rare material (Starsilver/Heartwood/Moonpetal/Ambergris) on a MANUAL catch once its tool reaches this level. The Overseer never catches rare materials."
+  },
+  {
+    "id": "harvest.rare.chancePerToolLevel",
+    "label": "Rare materials: chance per tool level (%)",
+    "category": "harvest",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 100,
+    "description": "Patch 0506 -- Chance per manual catch = (tool level - minToolLevel + 1) x this. Defaults give 2/4/6/8% at tool levels 5-8."
+  },
+  {
+    "id": "harvest.rare.yieldPerFind",
+    "label": "Rare materials: amount per find",
+    "category": "harvest",
+    "value": 1,
+    "default": 1,
+    "min": 1,
+    "max": 20,
+    "description": "Patch 0506 -- Rare materials gained when a manual catch turns one up."
+  },
+  {
+    "id": "harvest.rare.capacity",
+    "label": "Rare materials: storage cap (each)",
+    "category": "harvest",
+    "value": 100,
+    "default": 100,
+    "min": 1,
+    "description": "Patch 0506 -- Separate from the Warehouse; each rare material caps here on its own."
+  },
+  {
+    "id": "harvest.bulkCrate.materialCost",
+    "label": "Bulk Crate: materials per crate",
+    "category": "harvest",
+    "value": 500,
+    "default": 500,
+    "min": 1,
+    "description": "Patch 0506 -- Trade Route Bulk Crate -- this many of ONE regular material buys the crate."
+  },
+  {
+    "id": "harvest.bulkCrate.shardReward",
+    "label": "Bulk Crate: Legendary Shards per crate",
+    "category": "harvest",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "Patch 0506 -- Legendary Shards paid for one Bulk Crate."
+  },
+  {
+    "id": "harvest.bulkCrate.perDay",
+    "label": "Bulk Crate: crates per day",
+    "category": "harvest",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 20,
+    "description": "Patch 0506 -- How many Bulk Crates the trader takes per day (resets with the daily vendor reset)."
+  },
+  {
+    "id": "raid.rareMaterials.normal",
+    "label": "Raid: rare materials per full clear, Normal",
+    "category": "raid",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 50,
+    "description": "Patch 0506 -- Random rare Harvest materials (Starsilver/Heartwood/Moonpetal/Ambergris) paid for a full clear at this difficulty. Capped by harvest.rare.capacity."
+  },
+  {
+    "id": "raid.rareMaterials.heroic",
+    "label": "Raid: rare materials per full clear, Heroic",
+    "category": "raid",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 50,
+    "description": "Patch 0506 -- Random rare Harvest materials (Starsilver/Heartwood/Moonpetal/Ambergris) paid for a full clear at this difficulty. Capped by harvest.rare.capacity."
+  },
+  {
+    "id": "raid.rareMaterials.mythic",
+    "label": "Raid: rare materials per full clear, Mythic",
+    "category": "raid",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 50,
+    "description": "Patch 0506 -- Random rare Harvest materials (Starsilver/Heartwood/Moonpetal/Ambergris) paid for a full clear at this difficulty. Capped by harvest.rare.capacity."
+  },
+  {
+    "id": "raid.rareMaterials.legendary",
+    "label": "Raid: rare materials per full clear, Legendary",
+    "category": "raid",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 50,
+    "description": "Patch 0506 -- Random rare Harvest materials (Starsilver/Heartwood/Moonpetal/Ambergris) paid for a full clear at this difficulty. Capped by harvest.rare.capacity."
+  },
+  {
+    "id": "recipeShelf.slots",
+    "label": "Recipe Shelf: scrolls per vendor",
+    "category": "shop",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "max": 12,
+    "description": "Patch 0506 -- How many unknown recipes each vendor puts on its Recipe Shelf each day."
+  },
+  {
+    "id": "recipeShelf.basePrice",
+    "label": "Recipe Shelf: base price",
+    "category": "shop",
+    "value": 5000,
+    "default": 5000,
+    "min": 0,
+    "description": "Patch 0506 -- Price = basePrice x rarity multiplier x (1 + scroll reqLevel / levelDivisor)."
+  },
+  {
+    "id": "recipeShelf.levelDivisor",
+    "label": "Recipe Shelf: level divisor",
+    "category": "shop",
+    "value": 25,
+    "default": 25,
+    "min": 1,
+    "description": "Patch 0506 -- See recipeShelf.basePrice. Bigger = level matters less."
+  },
+  {
+    "id": "recipeShelf.rarityMult.common",
+    "label": "Recipe Shelf: common multiplier",
+    "category": "shop",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Patch 0506 -- See recipeShelf.basePrice."
+  },
+  {
+    "id": "recipeShelf.rarityMult.uncommon",
+    "label": "Recipe Shelf: uncommon multiplier",
+    "category": "shop",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "description": "Patch 0506 -- See recipeShelf.basePrice."
+  },
+  {
+    "id": "recipeShelf.rarityMult.rare",
+    "label": "Recipe Shelf: rare multiplier",
+    "category": "shop",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "description": "Patch 0506 -- See recipeShelf.basePrice."
+  },
+  {
+    "id": "recipeShelf.rarityMult.epic",
+    "label": "Recipe Shelf: epic multiplier",
+    "category": "shop",
+    "value": 12,
+    "default": 12,
+    "min": 0,
+    "description": "Patch 0506 -- See recipeShelf.basePrice."
+  },
+  {
+    "id": "recipeShelf.rarityMult.legendary",
+    "label": "Recipe Shelf: legendary multiplier",
+    "category": "shop",
+    "value": 16,
+    "default": 16,
+    "min": 0,
+    "description": "Patch 0506 -- See recipeShelf.basePrice."
+  },
+  {
+    "id": "recipeShelf.mythicPrice",
+    "label": "Recipe Shelf: Mythic recipe price",
+    "category": "shop",
+    "value": 250000,
+    "default": 250000,
+    "min": 0,
+    "description": "Patch 0506 -- Flat price of a Mythic recipe on the Alchemist's Mythic shelf slot. Keep under the Treasury storage cap (310k at level 20)."
+  },
+  {
+    "id": "recipeShelf.mythicVendorLevel",
+    "label": "Recipe Shelf: Mythic slot vendor level",
+    "category": "shop",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 10,
+    "description": "Patch 0506 -- Alchemist level that opens the Mythic shelf slot. The Alchemist tops out at level 3, so 3 = fully levelled."
   }
 ]

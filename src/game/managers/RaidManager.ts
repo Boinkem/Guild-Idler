@@ -23,6 +23,9 @@ import { RecipeManager } from './RecipeManager';
 import { raidRecipeDropChance } from '../data/recipeScrolls';
 import { RealmThreatManager } from './RealmThreatManager';
 import { wardForRaid } from '../data/realmThreat';
+import { InventoryManager } from './InventoryManager';
+import { HarvestManager } from './HarvestManager';
+import { RARE_ORDER } from '../data/materials';
 
 /** Patch 0484 -- the Raider's Charm consumable's id. */
 export const RAIDERS_CHARM_ID = 'raiders_charm';
@@ -249,10 +252,10 @@ export const RaidManager = {
    */
   encounterBreakdown(
     state: GameState, heroes: Hero[], raidId: string, difficulty: RaidDifficulty, encounterId: string, now: number,
-    fromCheckpoint = false,
+    fromCheckpoint = false, flaskId?: string,
   ): {
     base: number; penalty: number; party: number; elemental: number; modifier: number;
-    roleMismatch: number; retry: number; cap: number | null; chance: number;
+    roleMismatch: number; retry: number; flask: number; cap: number | null; chance: number;
   } | null {
     const raid = RAID_BY_ID[raidId];
     const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
@@ -268,7 +271,10 @@ export const RaidManager = {
     // fight it returns to (resolve() applies the same).
     const cp = fromCheckpoint ? RaidManager.checkpoint(state, raidId, difficulty) : null;
     const retry = cp && raid.encounterIds[cp.encountersCleared] === encounterId ? RaidManager.retryBonus(cp) : 0;
-    let chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + party + elemental + modifier - roleMismatch + retry, MIN_SUCCESS, MAX_SUCCESS);
+    // Patch 0506 -- a Warlord's Banner armed for this run (start() folds the
+    // same amount into ActiveRaid.partySuccessBonus, so resolve() agrees).
+    const flask = RaidManager.flaskSuccess(state, flaskId);
+    let chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + party + elemental + modifier - roleMismatch + retry + flask, MIN_SUCCESS, MAX_SUCCESS);
     // Heroic/Legendary's role-mismatch ceiling applies AFTER the ordinary
     // clamp, only while the party is actually missing a required slot --
     // see RaidDifficultyConfig.roleMismatchCap. Normal has no cap
@@ -278,7 +284,7 @@ export const RaidManager = {
       cap = diffCfg.roleMismatchCap;
       chance = cap;
     }
-    return { base: encounter.baseSuccess, penalty: diffCfg.successPenalty, party, elemental, modifier, roleMismatch, retry, cap, chance };
+    return { base: encounter.baseSuccess, penalty: diffCfg.successPenalty, party, elemental, modifier, roleMismatch, retry, flask, cap, chance };
   },
 
   /** Preview odds for one specific encounter, given a prospective party -- used by the UI before committing. */
@@ -304,7 +310,32 @@ export const RaidManager = {
    * longer, independent of party build), then the party's own speed
    * contribution (personal only, see partyEconomyMods) on top.
    */
-  previewDuration(state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, now: number, startEncounter = 0): number {
+  /* ------------------------- Mythic raid flasks ------------------------- */
+  // Patch 0506 -- Bloodlust Tonic / Warlord's Banner / Stoneskin Phial.
+  // One per raid, armed at launch next to the Raider's Charm, spent win or
+  // lose. Never equipped on a hero (InventoryManager.isRaidFlask).
+
+  /** Raid flasks the guild has in stock right now. */
+  ownedFlasks(state: GameState): { id: string; name: string; count: number }[] {
+    return InventoryManager.owned(state)
+      .filter(({ def }) => InventoryManager.isRaidFlask(def))
+      .map(({ def, count }) => ({ id: def.id, name: def.name, count }));
+  },
+
+  flaskSuccess(state: GameState, flaskId?: string): number {
+    if (!flaskId) return 0;
+    return InventoryManager.resolveDef(state, flaskId)?.effect.raidSuccess ?? 0;
+  },
+
+  flaskSpeedPct(state: GameState, flaskId?: string): number {
+    if (!flaskId) return 0;
+    return InventoryManager.resolveDef(state, flaskId)?.effect.raidSpeedPct ?? 0;
+  },
+
+  previewDuration(
+    state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, now: number, startEncounter = 0,
+    flaskId?: string,
+  ): number {
     const raid = RAID_BY_ID[raidId];
     if (!raid) return 0;
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
@@ -313,7 +344,10 @@ export const RaidManager = {
     // Patch 0502 -- a checkpoint return only runs the remaining fights.
     const total = raid.encounterIds.slice(startEncounter).reduce((sum, id) => sum + (RAID_ENCOUNTER_BY_ID[id]?.duration ?? 0), 0);
     const tierScaled = total * RAID_DIFFICULTIES[difficulty].durationMultiplier;
-    return Math.max(MINUTE, Math.floor(tierScaled * factor));
+    // Patch 0506 -- Bloodlust Tonic cuts AFTER the party's own speed clamp,
+    // so it still helps a party already at the 0.25x floor.
+    const flaskCut = clamp(1 - RaidManager.flaskSpeedPct(state, flaskId) / 100, 0.1, 1);
+    return Math.max(MINUTE, Math.floor(tierScaled * factor * flaskCut));
   },
 
   /** Validates a prospective raid commit without side effects. */
@@ -408,10 +442,15 @@ export const RaidManager = {
 
   start(
     state: GameState, raidId: string, difficulty: RaidDifficulty, heroIds: string[], now: number, armCharm = false,
-    resume = false,
+    resume = false, flaskId?: string,
   ): { raid?: ActiveRaid; error?: string } {
     const check = RaidManager.canStart(state, raidId, difficulty, heroIds);
     if (!check.ok) return { error: check.error };
+    if (flaskId) {
+      const flaskDef = InventoryManager.resolveDef(state, flaskId);
+      if (!flaskDef || !InventoryManager.isRaidFlask(flaskDef)) return { error: 'That isn\u2019t a raid flask.' };
+      if ((state.inventory[flaskId] ?? 0) < 1) return { error: `You don't have a ${flaskDef.name}.` };
+    }
     const charmShards = armCharm ? RaidManager.charmShardCost(difficulty) : 0;
     if (armCharm && (state.inventory[RAIDERS_CHARM_ID] ?? 0) < 1) return { error: "You don't have a Raider's Charm." };
     if ((state.legendaryShards ?? 0) < charmShards) return { error: 'Not enough Legendary Shards to arm the charm.' };
@@ -419,12 +458,13 @@ export const RaidManager = {
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
     const raidDef = RAID_BY_ID[raidId]!;
     const roleMismatch = RaidManager.roleMismatchPenalty(heroes, requiredRolesFor(raidDef, difficulty));
-    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, RaidManager.successBaselineLevel(raidDef, heroes)) - roleMismatch;
+    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, RaidManager.successBaselineLevel(raidDef, heroes)) - roleMismatch
+      + RaidManager.flaskSuccess(state, flaskId);
     // Patch 0502 -- return from the checkpoint, or start over (which drops it).
     const cp = resume ? RaidManager.checkpoint(state, raidId, difficulty) : null;
     if (!resume) RaidManager.clearCheckpoint(state, raidId, difficulty);
     const startEncounter = cp ? Math.min(cp.encountersCleared, raidDef.encounterIds.length - 1) : 0;
-    const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now, startEncounter);
+    const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now, startEncounter, flaskId);
 
     const active: ActiveRaid = {
       raidId, difficulty, heroIds,
@@ -434,7 +474,9 @@ export const RaidManager = {
       partySuccessBonus,
       ...(cp ? { startEncounter, retryBonus: RaidManager.retryBonus(cp), priorElapsedMs: cp.elapsedMs } : {}),
       ...(armCharm ? { charm: RaidManager.charmMode(state, raidId) } : {}),
+      ...(flaskId ? { flaskId } : {}),
     };
+    if (flaskId) state.inventory[flaskId] = (state.inventory[flaskId] ?? 0) - 1;
     if (armCharm) {
       state.inventory[RAIDERS_CHARM_ID] = (state.inventory[RAIDERS_CHARM_ID] ?? 0) - 1;
       state.legendaryShards = (state.legendaryShards ?? 0) - charmShards;
@@ -545,7 +587,9 @@ export const RaidManager = {
       // line, so every application here already represents an actual
       // clear, not a loss.
       const wear = 3 + DIFFICULTY_ORDER.indexOf(questDifficulty) * 2;
-      for (const hero of heroes) EquipmentManager.applyWear(hero, wear, globalMods.durability ?? 0, armouryWearCut(state));
+      // Patch 0506 -- Stoneskin Phial: no wear at all on this run.
+      const noWear = !!(active.flaskId && InventoryManager.resolveDef(state, active.flaskId)?.effect.raidNoWear);
+      if (!noWear) for (const hero of heroes) EquipmentManager.applyWear(hero, wear, globalMods.durability ?? 0, armouryWearCut(state));
       // Soft-capped the same way QuestManager's own goldMultiplier/
       // xpMultiplier are (patch 0214) -- same shared softCap() helper, so
       // there's one formula for both instead of two that can drift.
@@ -735,6 +779,16 @@ export const RaidManager = {
       shardsGained = shardReward;
     }
 
+    // Patch 0506 -- rare Harvest materials for a full Heroic+ clear
+    // (raid.rareMaterials.*), random type each, capped per material.
+    let rareMaterialsGained: RaidResult['rareMaterialsGained'];
+    const rareCount = fullClear ? Tuning.get(`raid.rareMaterials.${active.difficulty}`) : 0;
+    for (let i = 0; i < rareCount; i += 1) {
+      const rareId = rng.pick(RARE_ORDER);
+      const got = HarvestManager.addRare(state, rareId, 1);
+      if (got > 0) rareMaterialsGained = { ...(rareMaterialsGained ?? {}), [rareId]: (rareMaterialsGained?.[rareId] ?? 0) + got };
+    }
+
     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
       state.completedRaids.push(raid.id);
     }
@@ -872,6 +926,8 @@ export const RaidManager = {
       ...(active.charm ? { charm: active.charm } : {}),
       recipeScrollGained,
       shardsGained,
+      rareMaterialsGained,
+      ...(active.flaskId ? { flaskUsed: active.flaskId } : {}),
       gold,
       xp,
       loot,

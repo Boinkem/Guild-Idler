@@ -75,6 +75,8 @@ export const ALWAYS_KNOWN_RECIPE_IDS: string[] = [
   // Patch 0484 -- known from the start (RecipeManager.isKnown also checks
   // this list, so existing saves get it too).
   'craft_raiders_charm',
+  // Patch 0506 -- the bottom rung of the chain-lasting "Long Road" line.
+  'craft_wayfarers_flask',
   // Patch 0362 -- Guildmade's own tier I (level 1) is now the Gear
   // category's lowest tier, same "the bottom rung of any tiered family
   // is free" rule every other category (Gems/Sigils/Charms/

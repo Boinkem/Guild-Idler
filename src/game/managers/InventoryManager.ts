@@ -96,7 +96,21 @@ export const InventoryManager = {
     // with an empty `effect: {}` (see consumables.json, same patch) --
     // fixing only one half would have left the other still broken.
     return !!(e.success || e.gold || e.xp || e.loot || e.injuryResist || e.speed
-      || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction || e.lootWeightStat);
+      || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction || e.lootWeightStat
+      || e.fatedStage || e.mythicXpPct);
+  },
+
+  /** Patch 0506 -- only used on chain stages (kept in its slot, unspent, on
+   *  an ordinary contract): the chain-lasting "Long Road" line, the
+   *  chain-type Mythics, and Fated Draught. */
+  isChainOnly(def: ConsumableDef): boolean {
+    return !!(def.effect.chainLasting || def.effect.fatedStage);
+  },
+
+  /** Patch 0506 -- a Mythic raid flask (armed at raid launch, like the
+   *  Raider's Charm, never equipped on a hero). */
+  isRaidFlask(def: ConsumableDef): boolean {
+    return !!(def.effect.raidSpeedPct || def.effect.raidSuccess || def.effect.raidNoWear);
   },
 
   /** Everything with stock > 0 -- both the static shop catalogue and any
@@ -145,6 +159,10 @@ export const InventoryManager = {
     healthDamageReduction: number;
     lootWeightStat?: keyof Stats;
     lootWeightMultiplier?: number;
+    /** Patch 0506 -- Fated Draught in the loadout. */
+    fatedStage: boolean;
+    /** Patch 0506 -- Scholar's Ink, applied after the XP soft cap. */
+    mythicXpPct: number;
   } {
     let success = 0;
     let gold = 0;
@@ -155,6 +173,8 @@ export const InventoryManager = {
     let preventInjury = false;
     let guaranteedGoodEvent = false;
     let healthDamageReduction = 0;
+    let fatedStage = false;
+    let mythicXpPct = 0;
     // Fortune Charms (patch 0215) -- only one weighted stat can apply per
     // roll, so if multiple charms somehow end up equipped at once the
     // strongest weight wins rather than trying to combine them (combining
@@ -174,6 +194,8 @@ export const InventoryManager = {
       preventInjury ||= !!def.effect.preventInjury;
       guaranteedGoodEvent ||= !!def.effect.guaranteedGoodEvent;
       healthDamageReduction += def.effect.healthDamageReduction ?? 0;
+      fatedStage ||= !!def.effect.fatedStage;
+      mythicXpPct += def.effect.mythicXpPct ?? 0;
       if (def.effect.lootWeightStat && (def.effect.lootWeightMultiplier ?? 0) > lootWeightMultiplier) {
         lootWeightStat = def.effect.lootWeightStat;
         lootWeightMultiplier = def.effect.lootWeightMultiplier ?? 0;
@@ -186,6 +208,8 @@ export const InventoryManager = {
       healthDamageReduction: Math.min(100, healthDamageReduction),
       lootWeightStat,
       lootWeightMultiplier: lootWeightStat ? lootWeightMultiplier : undefined,
+      fatedStage,
+      mythicXpPct,
     };
   },
 };

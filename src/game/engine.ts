@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, CommissionReward, ChainReplayDifficulty, DiceFace, DlcGrantNotice, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats, VendorId } from './types';
+import { ActiveQuest, AutoChainTactics, CommissionReward, ChainReplayDifficulty, DiceFace, DlcGrantNotice, DiceRollResult, ElementType, EquipmentItem, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MailboxEntry, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, RareMaterialId, Role, Stats, VendorId } from './types';
 import { createRng, uid, uuidv4 } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -15,6 +15,7 @@ import { CurioManager } from './managers/CurioManager';
 import { RecipeManager } from './managers/RecipeManager';
 import { RECIPE_SCROLL_BY_ID, RECIPE_SCROLLS } from './data/recipeScrolls';
 import { CRAFTING_RECIPE_BY_ID } from './data/craftingRecipes';
+import { MATERIAL_BY_ID } from './data/materials';
 import { GuildHallDecorManager } from './managers/GuildHallDecorManager';
 import { GUILD_HALL_DECORATIONS, GUILD_HALL_DECOR_ENABLED } from './data/guildHallDecor';
 import { DlcManager, FOUNDER_PACK_ID } from './managers/DlcManager';
@@ -1381,6 +1382,8 @@ export class GameEngine {
       changed = true;
     }
     if (HarvestManager.ensureSpawns(this.state, now)) changed = true;
+    // Patch 0506 -- the vendors' daily Recipe Shelf.
+    if (RecipeManager.ensureShelf(this.state, now)) changed = true;
     // Grimsby leaves if ignored -- same "the world doesn't pause just
     // because you're not looking at it" tick as Harvest's own despawn
     // timer just above. Fires even during offline catch-up (refreshWorld
@@ -3030,7 +3033,10 @@ export class GameEngine {
       // Raider's Charm, Pet Treats and the Beckoning Charm used to be
       // picked up here too, priciest first).
       const available = InventoryManager.owned(this.state)
-        .filter(({ def }) => InventoryManager.isLoadoutEffect(def))
+        // Patch 0506 -- never auto-equips Mythics or chain-only items
+        // ("priciest first" would otherwise grab a 90k Mythic before
+        // anything else); those are always a deliberate pick.
+        .filter(({ def }) => InventoryManager.isLoadoutEffect(def) && !def.mythic && !InventoryManager.isChainOnly(def))
         .sort((a, b) => b.def.cost - a.def.cost);
       if (available.length === 0) break;
       const defId = available[0].def.id;
@@ -3055,10 +3061,11 @@ export class GameEngine {
    * deliberate, noticed commitment, not something that should ever start
    * without the player choosing it.
    */
-  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[], armCharm = false, resume = false) {
+  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[], armCharm = false, resume = false, flaskId?: string) {
     // Patch 0502 -- resume = return from the saved checkpoint; otherwise a
     // fresh start, which clears any checkpoint for this raid + difficulty.
-    const { raid: active, error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now(), armCharm, resume);
+    // Patch 0506 -- flaskId: a Mythic raid flask armed for this run.
+    const { raid: active, error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now(), armCharm, resume, flaskId);
     if (error) return this.say(error);
     playSound('depart');
     const raidDef = RAID_BY_ID[raidId];
@@ -4319,14 +4326,40 @@ export class GameEngine {
   }
 
   /** Catches whatever's pending at a node, if anything -- returns what was gained for the UI's particle feedback. */
-  catchMaterial(nodeId: MaterialId): { gained: number; bonus: boolean } {
+  catchMaterial(nodeId: MaterialId): { gained: number; bonus: boolean; rare?: RareMaterialId; rareGained?: number } {
     const result = HarvestManager.catch(this.state, nodeId, Date.now());
-    if (result.gained > 0) {
+    // Patch 0506 -- a rare find is worth a line in the log even when the
+    // Warehouse was full and the ordinary catch gained nothing.
+    if (result.rare && result.rareGained) {
+      this.say(`A rare find at the ${MATERIAL_BY_ID[nodeId].nodeName}: +${result.rareGained} ${HarvestManager.rareName(result.rare)}!`);
+    }
+    if (result.gained > 0 || result.rareGained) {
       playSound('collect');
       this.notify();
       void this.saveNow();
     }
     return result;
+  }
+
+  /** Patch 0506 -- Trade Route Bulk Crate (materials -> Legendary Shards). */
+  sellBulkCrate(materialId: MaterialId) {
+    const error = HarvestManager.sellBulkCrate(this.state, materialId);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say(`The trader takes the crate of ${MATERIAL_BY_ID[materialId].name}: +${Tuning.get('harvest.bulkCrate.shardReward')} Legendary Shard.`);
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Patch 0506 -- buys and learns a recipe from a vendor's Recipe Shelf. */
+  buyShelfRecipe(scrollId: string) {
+    const error = RecipeManager.buyFromShelf(this.state, scrollId, Date.now());
+    if (error) return this.say(error);
+    const recipe = CRAFTING_RECIPE_BY_ID[RECIPE_SCROLL_BY_ID[scrollId]?.recipeId ?? ''];
+    playSound('purchase');
+    this.say(`Recipe learned: ${recipe?.name ?? 'a new recipe'}.`);
+    this.notify();
+    void this.saveNow();
   }
 
   sellMaterial(materialId: MaterialId, amount: number) {
