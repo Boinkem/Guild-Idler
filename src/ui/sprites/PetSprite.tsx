@@ -169,6 +169,47 @@ function useManifest(species: string): Manifest | null {
   return manifest;
 }
 
+/**
+ * Patch 0508 -- the real frame count of a strip, read off the PNG itself
+ * (naturalWidth / frameW) rather than trusted from manifest.json alone.
+ * Direct report: the equipped Rooftail looked like it was running
+ * non-stop while its hero stood still. Its idle.png had been regenerated
+ * as the trimmed 6-frame replacement (192px wide, see import_pets.py's
+ * RED_PANDA spec), but the local manifest.json still said idle: 8. The
+ * background-size below is built from the manifest count, so the 6-frame
+ * strip got stretched across 8 slots -- every "frame" became a 24px slice
+ * cutting the panda mid-body, and stepping through those slices read as
+ * the pet darting back and forth. The manifest is a gitignored, locally
+ * generated file that can drift from the art beside it (a hand-copied
+ * replacement strip, an --only run against a different --src), so the
+ * strip's own width is the source of truth whenever it disagrees.
+ * Cached per URL; null until the image has loaded (the manifest count is
+ * used meanwhile, same as before this existed).
+ */
+const sheetFrameCache = new Map<string, number>();
+const warnedSheetMismatch = new Set<string>();
+
+function useSheetFrames(url: string | null, frameW: number): number | null {
+  const [frames, setFrames] = useState<number | null>(url ? sheetFrameCache.get(url) ?? null : null);
+  useEffect(() => {
+    if (!url || frameW <= 0) { setFrames(null); return; }
+    const cached = sheetFrameCache.get(url);
+    if (cached !== undefined) { setFrames(cached); return; }
+    setFrames(null);
+    let live = true;
+    const img = new Image();
+    img.onload = () => {
+      const count = Math.floor(img.naturalWidth / frameW);
+      if (count >= 1) sheetFrameCache.set(url, count);
+      if (live) setFrames(count >= 1 ? count : null);
+    };
+    img.onerror = () => { if (live) setFrames(null); };
+    img.src = url;
+    return () => { live = false; };
+  }, [url, frameW]);
+  return frames;
+}
+
 /** Falls back to whichever animation the species actually has, same
  *  "nearest available" resolution HeroSprite already does for classes with
  *  a smaller animation set than the samurai's full ten. Kept symmetric on
@@ -235,7 +276,17 @@ export function PetSprite({
     [char, animation],
   );
 
-  const frames = (resolved && char?.animations[resolved]) ?? 1;
+  const url = char && resolved ? `${char.basePath ?? './pets'}/${species}/${rarity}/${resolved}.png` : null;
+  const manifestFrames = (resolved && char?.animations[resolved]) ?? 1;
+  const sheetFrames = useSheetFrames(url, char?.frameW ?? 0);
+  // Patch 0508 -- the PNG's own width wins over a stale manifest count
+  // (see useSheetFrames). Warned once per strip so the drift still gets
+  // noticed and the manifest regenerated, rather than silently papered over.
+  if (url && sheetFrames !== null && sheetFrames !== manifestFrames && !warnedSheetMismatch.has(url)) {
+    warnedSheetMismatch.add(url);
+    console.warn(`[PetSprite] ${url}: manifest.json says ${manifestFrames} frames, strip has ${sheetFrames}. Using ${sheetFrames}; re-run tools/import_pets.py to fix the manifest.`);
+  }
+  const frames = sheetFrames ?? manifestFrames;
   const rate = fps ?? (resolved ? DEFAULT_FPS[resolved] : undefined) ?? 8;
   const [index, setIndex] = useState(0);
   const doneRef = useRef(false);
@@ -269,7 +320,10 @@ export function PetSprite({
   }
 
   const scale = (height / char.frameH) * displayScale;
-  const url = `${char.basePath ?? './pets'}/${species}/${rarity}/${resolved}.png`;
+  // frames can shrink after the strip loads (see useSheetFrames) while
+  // index is still mid-loop on the manifest count -- wrap rather than
+  // render an empty slot past the strip's real end for one tick.
+  const frameIndex = index % frames;
   // XOR, not OR/AND -- a reversed-facing species should flip exactly when
   // a normal species WOULDN'T, and vice versa, not simply flip more often.
   // Same logic as HeroSprite's effectiveFlip.
@@ -288,7 +342,7 @@ export function PetSprite({
     height: char.frameH * scale,
     backgroundImage: `url(${url})`,
     backgroundSize: `${char.frameW * frames * scale}px ${char.frameH * scale}px`,
-    backgroundPosition: `-${index * char.frameW * scale}px 0`,
+    backgroundPosition: `-${frameIndex * char.frameW * scale}px 0`,
     backgroundRepeat: 'no-repeat',
     imageRendering: 'pixelated',
     transform: transforms.length > 0 ? transforms.join(' ') : undefined,

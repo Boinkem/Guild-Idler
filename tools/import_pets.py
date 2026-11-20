@@ -185,7 +185,10 @@ RED_PANDA = PetSpec(
         # anim_files with a corrected, already-trimmed 6-frame
         # replacement rather than patched in place, so the original sheet
         # file itself never needs re-touching.
-        'idle2': (1, 0, 8),
+        # Patch 0508 -- trimmed 8 -> 6, same 2-blank-trailing-frames
+        # problem as the original idle row (frames 6-7 have zero opaque
+        # pixels in every rarity's idle2.png; frames 0-5 ~145 each).
+        'idle2': (1, 0, 6),
         'movement': (2, 0, 8),
         'sleep': (6, 0, 8),
     },

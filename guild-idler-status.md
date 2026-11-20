@@ -40554,3 +40554,57 @@ listed in Modifiers), Heroic (6 compact slots, −12% per fight, +5% loot,
 Mythic party with real portraits for every class, the checkpoint-return
 state in a browser, the Electron app.
 
+### Rooftail idle no longer looks like it's running (patch 0508)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the Rooftail pet looking like it was running non-stop while your hero stood idle
+- Fixed pets in general playing a garbled animation if their art and frame data ever fall out of step
+```
+
+Direct report (with a clip): the equipped Rooftail looked like it was
+running constantly beside an idle hero. It wasn't in its movement state --
+IdleView asked for `idle` correctly. The clip showed the panda cut apart
+mid-body (tail and head in separate pieces, sliding sideways), which is a
+frame-slicing problem, not an animation-choice one.
+
+**Cause.** Rooftail's `idle.png` is the trimmed 6-frame replacement strip
+from the earlier "blinking out" fix (192 px wide, `Red-Panda-idle-fixed.png`
+in `tools/import_pets.py`). The owner's local `public/pets/manifest.json`
+still said `idle: 8` -- the strip and the manifest had drifted (the idle
+PNGs are newer than every other Rooftail file, so they were most likely
+copied in without the manifest entry being regenerated). `PetSprite` builds
+`background-size` from the manifest count, so a 6-frame strip was stretched
+over 8 slots: every step showed a 24 px slice of a 32 px frame, and stepping
+through those slices read as the pet darting about.
+
+**Fix (`src/ui/sprites/PetSprite.tsx`).**
+- New `useSheetFrames(url, frameW)`: loads the strip once, reads
+  `naturalWidth / frameW`, caches it per URL. Once known it overrides the
+  manifest count (the manifest is still used until the image loads).
+  Mismatches log one `console.warn` per strip naming the manifest and real
+  counts and saying to re-run `import_pets.py`, so drift is still noticed.
+- The strip URL is now computed before the early returns so the hook runs
+  every render (hook order unchanged otherwise).
+- `backgroundPosition` uses `index % frames`, so a count that shrinks
+  mid-loop never shows an empty slot.
+- Applies to every species and DLC pets (same `basePath` URL), not just
+  Rooftail. HeroSprite/GrimsbySprite untouched -- no report there.
+
+**`tools/import_pets.py`.** Rooftail's `idle2` row trimmed 8 -> 6: the same
+2 blank trailing frames the original idle row had (checked: frames 0-5 ~145
+opaque px, frames 6-7 zero, in the shipped `idle2.png`). `idle2` isn't
+played by IdleView today, so no visible change yet; it stops the blink if it
+ever is. Note the local `common/` tier has no `idle2.png` at all -- only
+uncommon and up do.
+
+**Local follow-up (art is gitignored, so not in this patch).** Regenerate
+with `python3 tools/import_pets.py --src <raw sheets> --out public/pets
+--only rooftail`, or hand-edit `public/pets/manifest.json` to `"idle": 6`
+(and `"idle2": 6` after the re-run). The code fix makes the pet render
+correctly either way; this just silences the warning.
+
+**Checked.** `tsc --noEmit` clean; `import_pets.py` parses. Diagnosis read
+off the clip's frames, the local manifest entry and the local Rooftail PNGs
+(all five tiers' `idle.png` 192x32). Not checked: the game running in a
+browser or Electron after the patch.
