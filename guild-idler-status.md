@@ -40468,3 +40468,89 @@ build with a late-game save: Blacksmith/Alchemist Recipe Shelf (incl. the
 Mythic row), Warehouse rare stock, tool-row rare chance, Bulk Crate row,
 Chain buffs list and the "mythic" pill. Not checked: the raid confirm
 screen's flask picker in a browser, the Electron app.
+
+### Raid launch screen rebuilt: difficulty tiles, Power roster, build-up odds bar (patch 0507)
+```discord-update
+Dev Update | Raid Screen
+
+- Changed the raid screen to focus on running the raid: pick a difficulty, build the party, see the odds, send
+- Added difficulty tiles showing party size, odds penalty, rewards and Shards for every tier at a glance
+- Added a hero roster with each hero's raid Power and how much they'd raise or lower your full-clear chance
+- Changed the full-clear bar to fill hero by hero as you pick them -- stronger heroes fill a bigger slice
+- Changed every bonus and penalty on the run (difficulty, party Power, roles, elements, flasks) into one Modifiers list
+- Moved the Raider's Charm and Mythic flasks onto the raid screen, and the story, loot and set pieces behind one link
+```
+
+Owner request: the raid detail was too cluttered (big story text, large
+encounter cards); the focus should be picking heroes, their odds and the
+run's modifiers. Designed first on a canvas ("Raid screen redesign",
+owner-approved, real game art), then built. Same power system as before:
+a hero's number is `RaidManager.heroContribution` (labelled **Power**, no
+"+" or "%" -- a mock-up showing it as "(22%)" read as a success chance, so
+it stays a plain stat). No game-rule changes; UI only.
+
+**`RaidDetailModal` (RaidsPanel.tsx), rebuilt top to bottom:**
+- **Header**: the raid's banner (`RaidBanner`, class `rl-header-art`) as a
+  tinted strip with name, level, fight count, the selected difficulty
+  badge, and one "Story, loot & set pieces (n/m found)" toggle. The toggle
+  opens the description, each fight's flavour + `LootPreview`, and
+  `SetProgressLine`.
+- **Difficulty tiles** (`DifficultyTile`, replaces `DifficultyCircle`):
+  icon art, party size, odds penalty, reward ×, Shards
+  (`raidShardReward`); ✓ when cleared before; locked tiles keep the
+  "Unlock →" jump (Legendary: "Clear Mythic first"); the 0465 first-open
+  flourish plays on the tile. The modal now opens on Normal (or the
+  result's "Return" difficulty) instead of nothing selected.
+- **Left**: "Party n/size" with the role needs (icon, green/red against
+  the party about to be sent), Fill best / Clear; the checkpoint note
+  (0502) unchanged; party slots (3 per row, compact at 6/9) with portrait,
+  role, level and Power, suggested heroes dashed, the lowest pick outlined
+  red; then the roster -- idle heroes ranked by Power, each showing Power
+  and **▲▼ = the change to the full-clear chance** if they join or swap in
+  for the weakest pick (`oddsFor(pickWith(id))`, the 0503 model; one
+  decimal under 10%). Under-level heroes and heroes out questing show
+  greyed. Replaces the chip row, the hover "what if" line and
+  `RoleRequirementCircle`.
+- **Right**: the full-clear card -- headline + the 0505 ▲/▼ pop, then the
+  new `RaidBuildBar`, then one compact row per fight (name, element tags,
+  the existing `FightOddsBar` with its breakdown tooltip, time; fights
+  won on an earlier run show ✓). **Modifiers**: difficulty penalty, party
+  Power average (the breakdown's `party` points), role mix (penalty /
+  cap), elemental by fight, raid modifier, retry bonus, loot bonus, flask,
+  charm -- green helps, red hurts. **Bring along**: Raider's Charm and
+  Mythic flasks moved here from the confirm screen (the odds and time
+  above already include the flask). **Send bar**: time, gold estimate
+  (remaining fights' `rewardGold` × reward multiplier, before gold
+  bonuses), Shards / rare materials, and the same Send / "Send with N
+  suggested" / "Return to …" button.
+- **Confirm screen**: unchanged march animation; now also shows the
+  full-clear % and what's being brought, instead of the charm/flask
+  controls.
+
+**Build-up bar (`oddsFor` → `slices`/`built`).** The projected full clear
+(picks + suggested fill) is split between the party: an equal share each,
+tilted by Power relative to the party's average -- 10 Power above average
+= 1.5× share, 10 below = 0.5×, never under 0.25×. Committed heroes are
+solid slices (initial on the slice, hover for the %), suggested ones
+striped; the headline = the solid slices. Full party = the real full-clear
+chance; a better-geared swap grows the whole bar and its own slice.
+Relative rather than raw Power so a fresh roster (Power near or below 0)
+still builds in sensible steps -- caught in testing, where raw weights
+gave two picked heroes 12% of a 36% bar. The ▲▼ numbers stay the exact
+"what this changes" figure; the bar is the readable picture.
+
+**Removed** (unused after the rebuild): `DifficultyCircle`,
+`RoleRequirementCircle`, `RaidOddsHeadline`, `RaidWhatIf`. Their CSS is
+left in place (orphaned, same convention as before). New CSS: the `rl-*`
+block at the end of app.css; `--rl-c` = the selected difficulty's colour.
+
+**Verified:** `tsc --noEmit` and the web build clean. Headless Chrome on
+the web build with the local art and a test guild (10 heroes, Normal +
+Heroic cleared, charm and flasks held): Normal empty (0%, three striped
+suggested slices, 44% projected), one pick (16%, ▲ +15.9), full party
+(44%, lowest pick outlined), Bloodlust picked (time 7h 30m → 6h 0m,
+listed in Modifiers), Heroic (6 compact slots, −12% per fight, +5% loot,
++1 Shard · +1 rare mat), the confirm screen. Not checked: a 9-hero
+Mythic party with real portraits for every class, the checkpoint-return
+state in a browser, the Electron app.
+

@@ -13,7 +13,9 @@ import {
 import { EQUIPMENT_BY_ID, SET_BY_ID, itemDef, rarityRaiseFor } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
 import { RaidDifficulty, RaidEncounterDef, RaidDef, ElementType, Hero, Role } from '../../game/types';
-import { ROLE_BY_ID } from '../../game/data/progression';
+import { HERO_CLASSES, ROLE_BY_ID } from '../../game/data/progression';
+import { raidShardReward } from '../../game/data/shards';
+import { heroPortraitSrc, heroPortraitStyle } from './HeroesPanel';
 import { RoleIcon } from '../RoleIcon';
 import { RarityPill } from '../RarityPill';
 import { RaidPartySprites } from '../sprites/RaidPartySprites';
@@ -22,7 +24,7 @@ import { fxMs } from '../purchaseFx';
 import { useFirstSeen } from '../firstSeen';
 import { ambPhase } from '../ambient';
 import { at } from '../resultFx';
-import { formatDuration, describeMods, describeStats, RARITY_COLOR } from '../../game/util';
+import { formatDuration, formatGold, describeMods, describeStats, RARITY_COLOR } from '../../game/util';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { goToGuildHallPurchase } from '../PrereqLink';
 
@@ -258,158 +260,6 @@ function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => v
   );
 }
 
-function DifficultyCircle({
-  difficulty, active, unlocked, cleared, opening = false, onClick,
-}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; cleared?: boolean; opening?: boolean; onClick: () => void }) {
-  const engine = useEngine();
-  const color = DIFFICULTY_COLOR[difficulty];
-  const [imgFailed, setImgFailed] = useState(false);
-  const iconDef = RAID_DIFFICULTY_ICON_DEFS[difficulty];
-  return (
-    <div
-      className={`raid-diff-circle-wrap ${opening ? 'fx-diff-open' : ''}`}
-      style={opening ? ({ '--rdo-c': color } as CSSProperties) : undefined}
-    >
-      {/* Own position:relative wrapper, not the shared .raid-diff-circle-wrap
-       *  (that also holds the label/unlock-link below, which shouldn't be
-       *  where an edge-anchored badge measures from) -- same reasoning
-       *  the checkmark below needs the button's own overflow:hidden
-       *  circle out of its way, so it lives as this box's sibling, not
-       *  the button's child. */}
-      <div style={{ position: 'relative', width: 64, height: 64 }}>
-        <button
-          className={`raid-diff-circle ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
-          style={{
-            borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined,
-            opacity: unlocked ? 1 : 0.4,
-          }}
-          onClick={onClick}
-          disabled={!unlocked}
-          title={unlocked
-            ? `${RAID_DIFFICULTY_LABEL[difficulty]} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes${cleared ? ' -- cleared before' : ''}`
-            : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
-        >
-        {!imgFailed ? (
-          // Patch 0302: was <img object-fit:contain> at 70% -- a square
-          // source PNG shown whole (letterboxed) inside a round button
-          // reads as "the square is showing through the circle," the
-          // exact bug reported. background-image + cover fills the full
-          // circle and lets the button's own border-radius:50% clip it,
-          // same "crop to fill, focus point picks what's centered" shape
-          // RaidBanner (just above in this file) already uses for
-          // raid banners/icons -- focusX/focusY/scale default to
-          // 50/50/100 (dead-center, no zoom) so this looks like a
-          // reasonable center-crop even before anyone touches the new
-          // DevTool adjuster.
-          <div
-            aria-hidden="true"
-            style={{
-              width: '100%', height: '100%', borderRadius: '50%',
-              backgroundImage: `url(${raidDifficultyIconSrc(difficulty)})`,
-              backgroundPosition: `${iconDef?.icon?.focusX ?? 50}% ${iconDef?.icon?.focusY ?? 50}%`,
-              backgroundSize: iconDef?.icon?.scale && iconDef.icon.scale !== 100 ? `${iconDef.icon.scale}%` : 'cover',
-            }}
-          >
-            {/* A background-image never fires onError, unlike <img> --
-                a 1x1 transparent img sharing the exact same src is the
-                simplest way to keep the existing "fall back to the
-                letter label if the file's missing" behavior working. */}
-            <img
-              src={raidDifficultyIconSrc(difficulty)}
-              alt=""
-              onError={() => setImgFailed(true)}
-              style={{ width: 1, height: 1, opacity: 0, position: 'absolute' }}
-            />
-          </div>
-        ) : (
-          DIFFICULTY_LABEL[difficulty]
-        )}
-        </button>
-        {/* Patch 0465 -- first view after this tier became available:
-         *  the padlock rattles and pops off, the ring ignites in the
-         *  tier's colour and sparks fly. See .fx-diff-open in app.css. */}
-        {opening && (
-          <span className="rdo-fx" aria-hidden="true">
-            <span className="rdo-halo" />
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <span key={i} className="rdo-spark" style={{ transform: `rotate(${i * 60}deg)` }}><i /></span>
-            ))}
-            <span className="rdo-lock"><span className="rdo-shackle" /><span className="rdo-body" /></span>
-          </span>
-        )}
-        {/* Cleared-before tracker (patch 0303) -- same green check
-         *  overlay treatment RoleRequirementCircle uses for "this slot is
-         *  met," answering a different question here: has this raid been
-         *  full-cleared at this exact difficulty at least once. Only
-         *  shown while unlocked -- a locked tier can't have been cleared. */}
-        {unlocked && cleared && (
-          <span
-            className="good"
-            style={{ position: 'absolute', top: -2, right: -2, fontSize: '0.8rem', lineHeight: 1, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.6))' }}
-            aria-hidden="true"
-          >✓</span>
-        )}
-      </div>
-      {/* Name printed below the circle rather than only living in its
-       *  title tooltip -- direct request: a player shouldn't have to
-       *  hover each circle to know which tier is which. */}
-      <span className="tiny" style={{ color: unlocked ? color : 'var(--muted)', fontWeight: 700 }}>
-        {RAID_DIFFICULTY_LABEL[difficulty]}
-      </span>
-      {/* The circle itself is disabled while locked, so a player can't
-       *  discover "which upgrade" beyond the title tooltip on hover --
-       *  this link jumps straight to the Guild Hall and spotlights the
-       *  exact upgrade card, same "jump to and highlight the requirement"
-       *  treatment HeroesPanel's locked recruit cards already got
-       *  (patch 0179). */}
-      {!unlocked && difficulty !== 'legendary' && (
-        <button
-          className="btn-ghost"
-          style={{ fontSize: '0.5625rem', padding: '1px 4px', minHeight: 0 }}
-          onClick={() => goToGuildHallPurchase(engine, DIFFICULTY_UNLOCK_ID[difficulty], `${RAID_DIFFICULTY_LABEL[difficulty]} raids`)}
-          title={`Go to the Guild Hall -- ${DIFFICULTY_UNLOCK_LABEL[difficulty]}`}
-        >
-          Unlock →
-        </button>
-      )}
-    </div>
-  );
-}
-
-/**
- * One per role present in a raid's requiredRoles -- same bordered-icon-
- * button shape as DifficultyCircle above, plus a green check overlay once
- * the *currently selected* party meets that slot. Icon rendering itself
- * delegates to the shared RoleIcon component (patch 0141) rather than its
- * own onError logic, so this and each hero's card badge always agree on
- * what "the melee icon" actually is. Doesn't block committing if unmet --
- * raids don't hard-gate on anything else today either, this is a warning
- * (paired with the mismatch-penalty note next to it) not a lock, same
- * reasoning as the rest of the "Raid role requirements" section of
- * guild-idler-status.md's hero-roles backlog entry.
- */
-function RoleRequirementCircle({ role, needed, have }: { role: Role; needed: number; have: number }) {
-  const def = ROLE_BY_ID[role];
-  const met = have >= needed;
-  return (
-    <div
-      className="raid-diff-circle"
-      style={{ borderColor: met ? 'var(--moss)' : 'var(--brass)', color: 'var(--brass)', position: 'relative' }}
-      title={`${def?.name ?? role} ×${needed} -- ${have}/${needed} in the current selection${met ? ' (met)' : ' (missing)'}`}
-    >
-      <RoleIcon role={role} size={40} />
-      <span className="tiny" style={{ position: 'absolute', bottom: -2, right: -2 }}>×{needed}</span>
-      {met && (
-        <span
-          className="good"
-          style={{ position: 'absolute', top: -4, left: -4, fontSize: '0.7rem', lineHeight: 1 }}
-          aria-hidden="true"
-        >✓</span>
-      )}
-    </div>
-  );
-}
-
 /**
  * The raid's own equipment set (see RAID_SET_ID) and how much of it the
  * player has discovered so far -- "how many the player has unlocked so
@@ -457,9 +307,92 @@ function SetProgressLine({ raidId, compact = false }: { raidId: string; compact?
   );
 }
 
+/** Patch 0507 -- one difficulty tile on the raid launch screen: icon,
+ *  party size, odds penalty, reward multiplier and Shards, with the same
+ *  unlock / cleared / first-opening states the old DifficultyCircle had. */
+function DifficultyTile({
+  difficulty, active, unlocked, cleared, opening = false, onClick,
+}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; cleared?: boolean; opening?: boolean; onClick: () => void }) {
+  const engine = useEngine();
+  const color = DIFFICULTY_COLOR[difficulty];
+  const cfg = RAID_DIFFICULTIES[difficulty];
+  const iconDef = RAID_DIFFICULTY_ICON_DEFS[difficulty];
+  const shards = raidShardReward(difficulty);
+  return (
+    <div className={`rl-diff ${active ? 'on' : ''} ${unlocked ? '' : 'locked'} ${opening ? 'fx-diff-open' : ''}`} style={{ '--rl-c': color } as CSSProperties}>
+      <button
+        className="rl-diff-btn"
+        onClick={onClick}
+        disabled={!unlocked}
+        aria-pressed={active}
+        title={unlocked ? undefined : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]}${difficulty === 'legendary' ? '' : ' upgrade'}`}
+      >
+        <span
+          className="rl-diff-icon"
+          aria-hidden="true"
+          style={{
+            backgroundImage: `url(${raidDifficultyIconSrc(difficulty)})`,
+            backgroundPosition: `${iconDef?.icon?.focusX ?? 50}% ${iconDef?.icon?.focusY ?? 50}%`,
+            backgroundSize: iconDef?.icon?.scale && iconDef.icon.scale !== 100 ? `${iconDef.icon.scale}%` : 'cover',
+          }}
+        >
+          {DIFFICULTY_LABEL[difficulty]}
+        </span>
+        <span className="rl-diff-text">
+          <span className="rl-diff-name">{RAID_DIFFICULTY_LABEL[difficulty]}{cleared && unlocked ? <span className="good" aria-label="cleared before"> ✓</span> : null}</span>
+          <span className="tiny">{cfg.partySize} heroes · {cfg.successPenalty ? `−${cfg.successPenalty}%` : 'base'} odds</span>
+          <span className="tiny muted">×{cfg.rewardMultiplier} rewards{shards ? ` · ${shards} Shard${shards === 1 ? '' : 's'}` : ''}</span>
+        </span>
+      </button>
+      {!unlocked && (difficulty === 'legendary'
+        ? <span className="rl-diff-lock tiny">Clear Mythic first</span>
+        : (
+          <button
+            className="rl-diff-lock btn-ghost"
+            onClick={() => goToGuildHallPurchase(engine, DIFFICULTY_UNLOCK_ID[difficulty], `${RAID_DIFFICULTY_LABEL[difficulty]} raids`)}
+            title={`Go to the Guild Hall -- ${DIFFICULTY_UNLOCK_LABEL[difficulty]}`}
+          >
+            Unlock →
+          </button>
+        ))}
+    </div>
+  );
+}
+
+/** Patch 0507 -- the full-clear bar, built up hero by hero. The party's
+ *  full-clear chance (picks + suggested fill) is split between the heroes
+ *  in proportion to their Power: committed heroes are solid slices,
+ *  suggested ones striped. Sum of the solid slices = the headline. */
+function RaidBuildBar({ slices }: { slices: { id: string; name: string; share: number; committed: boolean }[] }) {
+  const committed = slices.filter((s) => s.committed);
+  const ghosts = slices.filter((s) => !s.committed);
+  return (
+    <div className="rl-build-bar" role="img" aria-label={`Full clear built ${Math.round(committed.reduce((a, s) => a + s.share, 0) * 100)}%`}>
+      {[...committed, ...ghosts].map((s, i) => (
+        <span
+          key={s.id}
+          className={`rl-slice ${s.committed ? `c${i % 4}` : 'ghost'}`}
+          style={{ width: `${s.share * 100}%` }}
+          title={`${s.name}: ${(s.share * 100).toFixed(1)}% of the full clear${s.committed ? '' : ' (suggested)'}`}
+        >
+          {s.share >= 0.06 ? s.name[0] : ''}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /**
  * The full raid detail -- unmounts entirely on close, so difficulty/party
  * selection resets each time it's reopened.
+ *
+ * Patch 0507 -- rebuilt around running the raid (owner-approved design,
+ * "Raid screen redesign" canvas): difficulty tiles up top; party slots and
+ * a ranked roster on the left (each hero's Power, the existing
+ * heroContribution number, and ▲▼ = the change to the full clear if they
+ * join or swap in); on the right the full-clear bar built from 0% hero by
+ * hero, one row per fight, every modifier in one list, the charm/flask and
+ * the send bar. Story text, set pieces and loot moved behind one toggle.
  */
 function RaidDetailModal({
   raidId, onClose, onShowItem, initialDifficulty = null,
@@ -472,75 +405,56 @@ function RaidDetailModal({
   const now = useNow();
   const state = engine.state;
   const raid = RAIDS.find((r) => r.id === raidId)!;
-  const [difficulty, setDifficulty] = useState<RaidDifficulty | null>(initialDifficulty);
-  const [selectedHeroIds, setSelectedHeroIds] = useState<string[]>([]);
-  const [confirming, setConfirming] = useState(false);
-
-  const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
-  const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
   const difficultyUnlocked = (d: RaidDifficulty) => (d === 'legendary'
     ? state.completedRaidDifficulties.includes('mythic')
     : ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d]));
+  const [difficulty, setDifficulty] = useState<RaidDifficulty | null>(initialDifficulty ?? (difficultyUnlocked('normal') ? 'normal' : null));
+  const [selectedHeroIds, setSelectedHeroIds] = useState<string[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [showStory, setShowStory] = useState(false);
+
+  const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
+  const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
   // Patch 0465 -- difficulty tiers are guild-wide, so the opening plays
   // in whichever raid's detail is opened first after the unlock.
   const diffSeen = useFirstSeen('raid-diff', RAID_DIFFICULTY_ORDER.filter(difficultyUnlocked));
 
-  // Patch 0505 -- the odds use a time snapshot, not the per-second clock.
-  // A hero's raid bonus includes their health (and pet bonuses move with
-  // time), so idle heroes healing made every number creep each second and
-  // the ▲/▼ pop fire on its own. The snapshot refreshes on every pick or
-  // difficulty change, and every 30s so healing still shows.
+  // Patch 0505 -- the odds use a time snapshot, not the per-second clock
+  // (healing heroes and pets moved every number each second). Refreshed on
+  // every pick or difficulty change, and every 30s.
   const [oddsNow, setOddsNow] = useState(now);
   useEffect(() => {
     const t = window.setInterval(() => setOddsNow(Date.now()), 30_000);
     return () => window.clearInterval(t);
   }, []);
-  // Healing writes hero.health directly every tick, so the snapshot has to
-  // hold the heroes (and pets) as they were at oddsNow, not just the time.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const snap = useMemo(() => structuredClone(state), [oddsNow]);
   const snapHero = (h: Hero) => snap.heroes.find((x) => x.id === h.id) ?? h;
-  // Patch 0503 -- picks + suggested best idle heroes (see oddsFor below);
-  // was the first N idle heroes in roster order until something was picked.
-  const previewHeroIds = (() => {
-    if (!cfg) return [];
-    const picked = selectedHeroIds.slice(0, cfg.partySize);
-    const fill = idleHeroes
-      .filter((h) => h.level >= raid.reqLevel && !picked.includes(h.id))
-      .sort((a, b) => RaidManager.heroContribution(snap, snapHero(b), raid.id, [], oddsNow) - RaidManager.heroContribution(snap, snapHero(a), raid.id, [], oddsNow))
-      .slice(0, Math.max(0, cfg.partySize - picked.length))
-      .map((h) => h.id);
-    return [...picked, ...fill];
-  })();
-  // Resolved once here rather than re-deriving per encounter below --
-  // RaidManager.elementalBonus takes actual Hero objects, not ids, same
-  // as the pre-existing `selectedHeroes` derivation further down this
-  // component for the role-requirement check.
-  // Patch 0502 -- saved progress for this raid + difficulty. While one
-  // exists the default action is to return to it; "Start over" runs the
-  // whole raid again and drops it.
+
+  // Patch 0502 -- saved progress for this raid + difficulty.
   const checkpoint = difficulty ? RaidManager.checkpoint(state, raid.id, difficulty) : null;
   const [startOver, setStartOver] = useState(false);
   const resuming = !!checkpoint && !startOver;
   const startEncounter = resuming ? checkpoint.encountersCleared : 0;
   const retryBonus = resuming ? RaidManager.retryBonus(checkpoint) : 0;
   const nextFightName = checkpoint ? RAID_ENCOUNTER_BY_ID[raid.encounterIds[checkpoint.encountersCleared]]?.name ?? 'the next fight' : '';
-  // Patch 0506 -- a Mythic raid flask chosen on the confirm screen. Held
-  // up here so the odds and duration shown above already include it.
+  // Patch 0506 -- Mythic raid flask, chosen on this screen now.
   const [flaskPick, setFlaskPick] = useState<string | null>(null);
   const ownedFlasks = RaidManager.ownedFlasks(state);
   const flaskId = flaskPick && ownedFlasks.some((f) => f.id === flaskPick) ? flaskPick : undefined;
-  const previewDuration = difficulty && previewHeroIds.length > 0
-    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now, startEncounter, flaskId)
-    : null;
+  // Patch 0484 -- Raider's Charm, armed on this screen now.
+  const [armCharm, setArmCharm] = useState(false);
+  const charmsHeld = state.inventory[RAIDERS_CHARM_ID] ?? 0;
+  const charmShards = difficulty ? RaidManager.charmShardCost(difficulty) : 0;
+  const charmMode = RaidManager.charmMode(state, raid.id);
+  const charmMissing = RaidManager.undiscoveredRaidLoot(state, raid.id).length;
+  const canArm = charmsHeld > 0 && (state.legendaryShards ?? 0) >= charmShards;
+  const charmOn = armCharm && canArm;
 
-  // ---- Patch 0503 -- odds feedback ----------------------------------
-  // The odds are always for a full, sendable party: your picks, then the
-  // best idle heroes you haven't picked filling any empty slot (shown as
-  // suggestions). The headline builds from 0%: each committed hero fills
-  // their share of the bar (full clear x picked / party size), the
-  // suggested heroes' share shows as a ghost. A raid stops at its first
-  // lost fight, so full clear = the product of the remaining fights' odds.
+  // ---- Odds (patch 0503's model, power-weighted build-up in 0507) -----
+  // Always for a full, sendable party: the picks, then the best idle
+  // heroes not picked filling any empty slot (suggested). A raid stops at
+  // its first lost fight, so full clear = the product of the fights' odds.
   const eligibleIdle = idleHeroes.filter((h) => h.level >= raid.reqLevel);
   const rankOf = (h: Hero) => RaidManager.heroContribution(snap, snapHero(h), raid.id, [], oddsNow);
   const oddsFor = (pickedIds: string[]) => {
@@ -556,29 +470,35 @@ function RaidDetailModal({
       id, breakdown: party.length ? RaidManager.encounterBreakdown(snap, party.map(snapHero), raid.id, difficulty, id, oddsNow, resuming, flaskId) : null,
     }));
     const fullClear = full ? fights.reduce((p, f) => p * ((f.breakdown?.chance ?? 0) / 100), 1) : 0;
-    return { picked, suggested, party, full, fights, fullClear, built: fullClear * (picked.length / cfg.partySize) };
+    // Power-weighted slices: an equal share each, tilted by how far a
+    // hero's Power sits above or below the party average (10 Power above
+    // average = 1.5x share, 10 below = 0.5x, never under 0.25x). Relative
+    // rather than raw Power, so a fresh roster whose Power is all near or
+    // below 0 still builds in sensible steps. `built` = committed slices.
+    const power = party.map((h) => RaidManager.heroContribution(snap, snapHero(h), raid.id, party.map(snapHero), oddsNow));
+    const avgPower = power.reduce((a, b) => a + b, 0) / Math.max(1, power.length);
+    const weights = power.map((p) => Math.max(0.25, 1 + (p - avgPower) / 20));
+    const wSum = weights.reduce((a, b) => a + b, 0) || 1;
+    const slices = party.map((h, i) => ({ id: h.id, name: h.name, share: fullClear * (weights[i] / wSum), committed: picked.includes(h) }));
+    const built = slices.filter((s) => s.committed).reduce((a, s) => a + s.share, 0);
+    return { picked, suggested, party, full, fights, fullClear, built, slices, power };
   };
   const odds = oddsFor(selectedHeroIds);
-  const contributionOf = (h: Hero) => RaidManager.heroContribution(snap, snapHero(h), raid.id, (odds?.party ?? []).map(snapHero), oddsNow);
-  const [hoverHeroId, setHoverHeroId] = useState<string | null>(null);
-  // The "what would this change" target for a hero: remove if picked, add
-  // if there's room, else swap out the lowest-contribution pick.
+  const powerOf = (h: Hero) => RaidManager.heroContribution(snap, snapHero(h), raid.id, (odds?.party ?? []).map(snapHero), oddsNow);
+  // Remove if picked, add if there's room, else swap out the lowest pick.
   const pickWith = (heroId: string): string[] => {
     if (selectedHeroIds.includes(heroId)) return selectedHeroIds.filter((id) => id !== heroId);
     if (!cfg || selectedHeroIds.length < cfg.partySize) return [...selectedHeroIds, heroId];
     const weakest = selectedHeroIds
       .map((id) => state.heroes.find((h) => h.id === id))
       .filter((h): h is Hero => !!h)
-      .reduce((a, b) => (contributionOf(b) < contributionOf(a) ? b : a));
+      .reduce((a, b) => (powerOf(b) < powerOf(a) ? b : a));
     return selectedHeroIds.map((id) => (id === weakest.id ? heroId : id));
   };
-  // ▲/▼ change after each pick -- set by the pick itself (patch 0505),
-  // never by time passing. `deltaKey` replays the pop animation.
+  // ▲/▼ pop on the headline -- set by the pick itself (patch 0505).
   const [builtDelta, setBuiltDelta] = useState<number | null>(null);
   const [deltaKey, setDeltaKey] = useState(0);
-
-  const toggleHero = (heroId: string) => {
-    const next = pickWith(heroId);
+  const commitPicks = (next: string[]) => {
     const before = odds?.built ?? 0;
     const after = oddsFor(next)?.built ?? 0;
     setSelectedHeroIds(next);
@@ -586,6 +506,8 @@ function RaidDetailModal({
     setBuiltDelta(Math.abs(after - before) >= 0.0005 ? after - before : null);
     setDeltaKey((k) => k + 1);
   };
+  const toggleHero = (heroId: string) => commitPicks(pickWith(heroId));
+  const fillBest = () => { if (odds) commitPicks(odds.party.map((h) => h.id)); };
 
   const pickDifficulty = (d: RaidDifficulty) => {
     setDifficulty(d);
@@ -605,22 +527,14 @@ function RaidDetailModal({
     setConfirming(true);
   };
 
-  // Patch 0425 -- the party files into the dungeon one by one, the
-  // portcullis slams down behind them, and only then is the raid
-  // committed. Straight through with motion off.
+  // Patch 0425 -- the party files into the dungeon one by one, then the
+  // raid is committed. Straight through with motion off.
   const [marching, setMarching] = useState(false);
-  // Patch 0484 -- Raider's Charm, armed from the confirm screen.
-  const [armCharm, setArmCharm] = useState(false);
-  const charmsHeld = state.inventory[RAIDERS_CHARM_ID] ?? 0;
-  const charmShards = difficulty ? RaidManager.charmShardCost(difficulty) : 0;
-  const charmMode = RaidManager.charmMode(state, raid.id);
-  const charmMissing = RaidManager.undiscoveredRaidLoot(state, raid.id).length;
-  const canArm = charmsHeld > 0 && (state.legendaryShards ?? 0) >= charmShards;
   const marchTimer = useRef<number>();
   useEffect(() => () => window.clearTimeout(marchTimer.current), []);
   const commitNow = () => {
     if (!difficulty) return;
-    engine.startRaid(raid.id, difficulty, selectedHeroIds, armCharm && canArm, resuming, flaskId);
+    engine.startRaid(raid.id, difficulty, selectedHeroIds, charmOn, resuming, flaskId);
     if (fxMs(1)) lastRaidCommitAt = Date.now();
     setConfirming(false);
     onClose();
@@ -634,256 +548,366 @@ function RaidDetailModal({
   };
   const gateAt = 1150 + selectedHeroIds.length * 140;
 
+  // ---- derived display values --------------------------------------
+  const previewIds = odds?.party.map((h) => h.id) ?? [];
+  const previewDuration = difficulty && previewIds.length > 0
+    ? RaidManager.previewDuration(state, previewIds, raid.id, difficulty, now, startEncounter, flaskId)
+    : null;
+  const roles = difficulty ? requiredRolesFor(raid, difficulty) : undefined;
+  const roleEntries = roles ? (Object.entries(roles) as [Role, number][]).filter(([, n]) => n > 0) : [];
+  const roleCounts = RaidManager.partyRoleCounts(odds?.party ?? []);
+  const rolePenalty = roles ? RaidManager.roleMismatchPenalty(odds?.party ?? [], roles) : 0;
+  const roleMismatch = roles ? RaidManager.hasRoleMismatch(odds?.party ?? [], roles) : false;
+  const firstBd = odds?.fights.find((f) => f.breakdown)?.breakdown ?? null;
+  const elementalFights = (odds?.fights ?? [])
+    .map((f, i) => ({ n: startEncounter + i + 1, v: f.breakdown?.elemental ?? 0 }))
+    .filter((f) => f.v !== 0);
+  const remainingIds = raid.encounterIds.slice(startEncounter);
+  const goldEstimate = cfg ? Math.round(remainingIds.reduce((s, id) => s + (RAID_ENCOUNTER_BY_ID[id]?.rewardGold ?? 0), 0) * cfg.rewardMultiplier) : 0;
+  const shardReward = difficulty ? raidShardReward(difficulty) : 0;
+  const rareReward = difficulty ? Tuning.get(`raid.rareMaterials.${difficulty}`) : 0;
+  const missing = cfg ? cfg.partySize - selectedHeroIds.length : 0;
+  const pctText = (v: number) => `${(v * 100).toFixed(v * 100 < 10 && v > 0 ? 1 : 0)}%`;
+  const signed = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1).replace(/\.0$/, '')}`;
+  const tone = !odds || odds.picked.length === 0 ? '' : odds.fullClear >= 0.5 ? 'good' : odds.fullClear >= 0.25 ? 'gold-text' : 'bad';
+  const lowestPicked = odds && odds.picked.length === cfg?.partySize
+    ? odds.picked.reduce((a, b) => (powerOf(b) < powerOf(a) ? b : a)) : null;
+
+  type ModRow = { label: string; value: string; good: boolean };
+  const mods: ModRow[] = [];
+  if (difficulty && cfg && firstBd) {
+    mods.push({ label: `${RAID_DIFFICULTY_LABEL[difficulty]} difficulty`, value: cfg.successPenalty ? `−${cfg.successPenalty}% per fight` : '±0', good: !cfg.successPenalty });
+    mods.push({ label: `Party Power (average of ${odds?.party.length ?? 0})`, value: `${signed(firstBd.party)} per fight`, good: firstBd.party >= 0 });
+    if (roleEntries.length > 0) {
+      mods.push(roleMismatch
+        ? { label: 'Role mix not covered', value: cfg.roleMismatchCap != null ? `−${rolePenalty}%, capped at ${cfg.roleMismatchCap}%` : `−${rolePenalty}% per fight`, good: false }
+        : { label: 'Role mix covered', value: 'met', good: true });
+    }
+    if (elementalFights.length > 0) {
+      const total = elementalFights.reduce((a, f) => a + f.v, 0);
+      mods.push({ label: total >= 0 ? 'Elemental match' : 'Elemental mismatch', value: elementalFights.map((f) => `${signed(f.v)} on ${f.n}`).join(', '), good: total >= 0 });
+    }
+    if (firstBd.modifier) mods.push({ label: 'This raid', value: `${signed(firstBd.modifier)} per fight`, good: firstBd.modifier > 0 });
+    if (resuming && retryBonus > 0) mods.push({ label: `Retry bonus on ${nextFightName}`, value: `+${retryBonus}%`, good: true });
+    if (cfg.lootBonus) mods.push({ label: 'Loot bonus', value: `+${cfg.lootBonus}% drop chance`, good: true });
+    if (flaskId) {
+      const fd = InventoryManager.resolveDef(state, flaskId);
+      const e = fd?.effect;
+      mods.push({ label: fd?.name ?? 'Raid flask', value: e?.raidSuccess ? `+${e.raidSuccess}% per fight` : e?.raidSpeedPct ? `${e.raidSpeedPct}% faster` : 'no gear wear', good: true });
+    }
+    if (charmOn) mods.push({ label: "Raider's Charm", value: charmMode === 'seek' ? `×${Tuning.get('economy.raidCharmSeekMultiplier')} on unfound items` : `+${Tuning.get('economy.raidCharmBoostPct')}% on every drop`, good: true });
+  }
+
+  const setId = RAID_SET_ID[raid.id];
+  const set = setId ? SET_BY_ID[setId] : undefined;
+  const setFound = set ? set.pieces.filter((p) => state.discoveredItems.includes(p)).length : 0;
+  const portraitOf = (h: Hero) => ({ backgroundImage: `url(${heroPortraitSrc(h.heroClass, HERO_CLASSES[h.heroClass]?.portrait)})`, ...heroPortraitStyle(HERO_CLASSES[h.heroClass]?.portrait) });
+  const compact = (cfg?.partySize ?? 3) > 3;
+  const busyHeroes = state.heroes.filter((h) => h.status === 'questing');
+  const rosterHeroes = [...idleHeroes].sort((a, b) => {
+    const ea = a.level >= raid.reqLevel ? 0 : 1;
+    const eb = b.level >= raid.reqLevel ? 0 : 1;
+    return ea - eb || rankOf(b) - rankOf(a);
+  });
+
   return (
     <>
       <div className="overlay" onClick={onClose}>
-        <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
-          <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-detail-banner" />
-          <div className="spread">
-            <span className="card-title hero-card-name">{raid.name}</span>
-            <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+        <div className="modal raid-detail-modal rl" style={difficulty ? ({ '--rl-c': DIFFICULTY_COLOR[difficulty] } as CSSProperties) : undefined} onClick={(e) => e.stopPropagation()}>
+          {/* Header: banner strip, name, story toggle */}
+          <div className="rl-header">
+            <RaidBanner raidId={raid.id} banner={raid.banner} className="rl-header-art" />
+            <div className="rl-header-shade" aria-hidden="true" />
+            <div className="rl-header-text">
+              <div className="row" style={{ alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <span className="card-title hero-card-name rl-title">{raid.name}</span>
+                <span className="tiny">Lv {raid.reqLevel}+ · {raid.encounterIds.length} fights</span>
+                {difficulty && <span className="rl-diff-badge">{RAID_DIFFICULTY_LABEL[difficulty]}</span>}
+              </div>
+              <button className="rl-link" onClick={() => setShowStory(!showStory)} aria-expanded={showStory}>
+                {showStory ? 'Hide story & loot' : `Story, loot & set pieces${set ? ` (${setFound}/${set.pieces.length} found)` : ''}`}
+              </button>
+            </div>
+            <button className="rl-close" onClick={onClose} aria-label="Close">✕</button>
           </div>
-          <p className="card-flavour">{raid.description}</p>
 
-          <div className="raid-detail-columns">
-            <div>
-              <div className="section-heading">Encounters</div>
-              <ol className="raid-encounter-list">
-                {raid.encounterIds.map((id, i) => {
-                  const enc = RAID_ENCOUNTER_BY_ID[id];
-                  if (!enc) return null;
-                  // Patch 0502 -- fights already won on a saved run aren't fought again.
-                  const clearedBefore = resuming && i < startEncounter;
-                  // Patch 0503 -- the fight's odds as parts (stacked bar below).
-                  const bd = !clearedBefore ? odds?.fights.find((f) => f.id === id)?.breakdown ?? null : null;
-                  const encSuccess = bd ? bd.chance : null;
-                  const elemental = bd ? bd.elemental : 0;
-                  return (
-                    <li key={id} className="raid-encounter-item">
-                      {/* Collapsed by default (native <details>, no extra
-                       *  state to manage) -- the encounter list was the
-                       *  single biggest contributor to this modal needing
-                       *  to scroll by default. Name + odds/time stay
-                       *  visible in the summary row either way; flavour
-                       *  text and loot only show once expanded. */}
-                      <details>
-                        <summary>
-                          <b className={clearedBefore ? 'muted' : undefined}>{i + 1}. {enc.name}</b>
-                          <EncounterElementTags encounter={enc} />
-                          {clearedBefore && <span className="tiny good" style={{ marginLeft: 8 }}>✓ Cleared on an earlier run</span>}
-                          {resuming && i === startEncounter && retryBonus > 0 && (
-                            <span className="tiny raid-retry-chip" style={{ marginLeft: 8 }}>+{retryBonus}% retry bonus</span>
-                          )}
-                          {encSuccess !== null && (
-                            <span className="tiny muted" style={{ marginLeft: 8 }}>
-                              {elemental !== 0 && (
-                                <span className={elemental > 0 ? 'good' : 'bad'}>
-                                  {elemental > 0 ? '+' : ''}{elemental.toFixed(1)}% elemental ·{' '}
-                                </span>
-                              )}
-                              Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
-                            </span>
-                          )}
-                          {bd && <FightOddsBar bd={bd} difficultyLabel={difficulty ? RAID_DIFFICULTY_LABEL[difficulty] : ''} />}
-                        </summary>
-                        <p className="muted" style={{ marginTop: 4 }}>{enc.flavour}</p>
-                        <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
-                      </details>
-                    </li>
-                  );
-                })}
-              </ol>
-
-              {previewDuration !== null && (
-                <p className="tiny muted" style={{ marginTop: 8 }}>
-                  {resuming ? 'Time for the remaining fights' : 'Total time'} (this party): <b>{formatDuration(previewDuration)}</b>
-                </p>
-              )}
-
-              {/* Moved here from directly under the description -- reads
-               *  as part of "what this run gets you" alongside encounters
-               *  and total time, rather than competing with the raid's
-               *  flavour text for the same spot at the top. */}
+          {showStory && (
+            <div className="rl-story">
+              <p className="card-flavour" style={{ marginTop: 0 }}>{raid.description}</p>
+              {raid.encounterIds.map((id, i) => {
+                const enc = RAID_ENCOUNTER_BY_ID[id];
+                if (!enc) return null;
+                return (
+                  <div key={id} className="rl-story-fight">
+                    <b>{i + 1}. {enc.name}</b>
+                    <p className="tiny muted" style={{ margin: '2px 0 0' }}>{enc.flavour}</p>
+                    <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
+                  </div>
+                );
+              })}
               <SetProgressLine raidId={raid.id} />
             </div>
+          )}
 
-            <div>
-              <div className="section-heading">Difficulty</div>
-              <div className="row" style={{ gap: 10 }}>
-                {RAID_DIFFICULTY_ORDER.map((d) => (
-                  <DifficultyCircle
-                    key={d}
-                    difficulty={d}
-                    active={difficulty === d}
-                    unlocked={difficultyUnlocked(d)}
-                    cleared={(state.raidClearsByDifficulty[raid.id] ?? []).includes(d)}
-                    opening={diffSeen.fresh(d)}
-                    onClick={() => pickDifficulty(d)}
-                  />
-                ))}
-              </div>
+          {/* Difficulty tiles */}
+          <div className="rl-diffs" role="group" aria-label="Difficulty">
+            {RAID_DIFFICULTY_ORDER.map((d) => (
+              <DifficultyTile
+                key={d}
+                difficulty={d}
+                active={difficulty === d}
+                unlocked={difficultyUnlocked(d)}
+                cleared={(state.raidClearsByDifficulty[raid.id] ?? []).includes(d)}
+                opening={diffSeen.fresh(d)}
+                onClick={() => pickDifficulty(d)}
+              />
+            ))}
+          </div>
 
-              {difficulty && cfg && (
-                <div style={{ marginTop: 10 }}>
-                  <p className="tiny muted">
-                    Requires exactly {cfg.partySize} heroes at level {raid.reqLevel}+. Rewards ×{cfg.rewardMultiplier},
-                    {' '}{cfg.successPenalty}% harder odds per encounter than Normal.
-                  </p>
-                  {checkpoint && (
-                    <div className={`raid-checkpoint-note ${startOver ? 'off' : ''}`}>
-                      {startOver ? (
-                        <span className="small">Starting over from the first fight. The saved progress ({checkpoint.encountersCleared} of {raid.encounterIds.length} cleared) will be lost when you send the party.</span>
-                      ) : (
-                        <span className="small">
-                          <b>Progress saved:</b> {checkpoint.encountersCleared} of {raid.encounterIds.length} cleared. The party returns to <b>{nextFightName}</b>
-                          {retryBonus > 0 ? <> with a <b>+{retryBonus}%</b> retry bonus</> : null}. Any heroes can go.
-                        </span>
-                      )}
-                      <button className="btn-ghost" style={{ padding: "3px 10px", fontSize: 12, whiteSpace: "nowrap" }} onClick={() => setStartOver(!startOver)}>
-                        {startOver ? 'Keep my progress' : 'Start over'}
-                      </button>
-                    </div>
-                  )}
-                  {odds && (
-                    <RaidOddsHeadline
-                      built={odds.built}
-                      fullClear={odds.fullClear}
-                      full={odds.full}
-                      pickedCount={odds.picked.length}
-                      partySize={cfg.partySize}
-                      delta={builtDelta}
-                      deltaKey={deltaKey}
-                      resuming={resuming}
-                    />
-                  )}
-                  {odds && odds.party.length > 0 && (
-                    <div className="raid-party-slots">
-                      {odds.party.map((h) => {
-                        const c = contributionOf(h);
-                        const lowest = Math.min(...odds.party.map(contributionOf));
-                        const isSuggested = odds.suggested.includes(h);
-                        const isLowest = c === lowest && odds.party.length > 1;
-                        return (
-                          <div key={h.id} className={`raid-party-slot ${isSuggested ? 'suggested' : ''} ${isLowest && !isSuggested ? 'lowest' : ''}`}>
-                            <RoleIcon role={HeroManager.activeRole(h)} size={12} />
-                            <span className="raid-party-who">
-                              <span className="raid-party-name">{h.name}</span>
-                              <span className="raid-party-note">
-                                {isSuggested ? 'Suggested' : isLowest ? 'Lowest: gear up first' : `Lv ${h.level}`}
-                              </span>
-                            </span>
-                            <span className="raid-party-meter"><span style={{ width: `${Math.max(0, Math.min(100, (c / 30) * 100))}%` }} /></span>
-                            <b className={c < 0 ? 'bad' : 'gold-text'}>{c >= 0 ? '+' : ''}{c.toFixed(1)}</b>
-                          </div>
-                        );
-                      })}
-                      <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-                        Each hero adds their bonus to the party average, so strong heroes carry weaker ones. Swap out the lowest to lift everyone.
-                      </p>
-                    </div>
-                  )}
-                  {(() => {
-                    // Patch 0501 -- role needs scaled to this difficulty's party
-                    // size (requiredRolesFor), e.g. Requiem's Normal asks 1/1/1.
-                    const roles = requiredRolesFor(raid, difficulty);
-                    if (!roles || Object.keys(roles).length === 0) return null;
-                    // Patch 0503 -- reads the party about to be sent: the
-                    // picks plus the suggested heroes that "Send with N
-                    // suggested" adds (was the picks alone, patch 0144),
-                    // so it always agrees with the odds shown above.
-                    const selectedHeroes = odds?.party ?? [];
-                    const counts = RaidManager.partyRoleCounts(selectedHeroes);
-                    const penalty = RaidManager.roleMismatchPenalty(selectedHeroes, roles);
-                    const mismatched = RaidManager.hasRoleMismatch(selectedHeroes, roles);
-                    const cap = cfg.roleMismatchCap;
-                    const metCount = (Object.entries(roles) as [Role, number][])
-                      .filter(([role, needed]) => counts[role] >= needed).length;
-                    const totalRoles = Object.keys(roles).length;
-                    return (
-                      <div style={{ marginTop: 6, marginBottom: 6 }}>
-                        <div className="section-heading" style={{ margin: '10px 0 6px' }}>Roles Required</div>
-                        <p className="tiny muted" style={{ margin: '0 0 6px' }}>
-                          {metCount}/{totalRoles} met
-                        </p>
-                        <div className="row" style={{ gap: 8 }}>
-                          {(Object.entries(roles) as [Role, number][]).map(([role, needed]) => (
-                            <RoleRequirementCircle key={role} role={role} needed={needed} have={counts[role]} />
-                          ))}
-                        </div>
-                        {penalty > 0 && (
-                          <p className="tiny bad" style={{ marginTop: 4 }}>
-                            Role mix unmet -- {'-'}{penalty}% success this run until it's covered.
-                          </p>
-                        )}
-                        {mismatched && cap != null && (
-                          <p className="tiny bad" style={{ marginTop: 2 }}>
-                            Success can't rise above {cap}% at {RAID_DIFFICULTY_LABEL[difficulty]} while unmet, no matter how strong the party is.
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  {idleHeroes.length === 0 ? (
-                    <p className="small muted">Every hero is already out. Nobody's free to send.</p>
-                  ) : (
-                    <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
-                      {idleHeroes.map((h) => {
-                        const selected = selectedHeroIds.includes(h.id);
-                        const eligible = h.level >= raid.reqLevel;
-                        return (
-                          <button
-                            key={h.id}
-                            className={`chip ${selected ? 'on' : ''}`}
-                            disabled={!eligible}
-                            onClick={() => toggleHero(h.id)}
-                            onMouseEnter={() => setHoverHeroId(h.id)}
-                            onMouseLeave={() => setHoverHeroId(null)}
-                            onFocus={() => setHoverHeroId(h.id)}
-                            onBlur={() => setHoverHeroId(null)}
-                            title={eligible ? undefined : `Requires level ${raid.reqLevel}`}
-                          >
-                            <RoleIcon role={HeroManager.activeRole(h)} size={12} /> {h.name} · Lv {h.level}
-                            {eligible && <span className="tiny raid-chip-bonus">{(() => { const c = contributionOf(h); return `${c >= 0 ? '+' : ''}${c.toFixed(1)}`; })()}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <RaidWhatIf
-                    text={(() => {
-                      if (!hoverHeroId || !odds) return null;
-                      const h = state.heroes.find((x) => x.id === hoverHeroId);
-                      if (!h || h.level < raid.reqLevel) return null;
-                      const next = oddsFor(pickWith(h.id));
-                      if (!next) return null;
-                      const verb = selectedHeroIds.includes(h.id) ? `Remove ${h.name}`
-                        : selectedHeroIds.length < cfg.partySize ? `Add ${h.name}`
-                          : `Swap in ${h.name}`;
-                      return { verb, from: odds.built, to: next.built };
-                    })()}
-                  />
-                  <div className="row end" style={{ marginTop: 10, gap: 8 }}>
-                    <span className="tiny muted" style={{ marginRight: 'auto' }}>
-                      {selectedHeroIds.length}/{cfg.partySize} selected
-                    </span>
-                    <button
-                      className="btn-primary"
-                      disabled={selectedHeroIds.length !== cfg.partySize && !odds?.full}
-                      onClick={askToCommit}
-                    >
-                      {selectedHeroIds.length < cfg.partySize && odds?.full
-                        ? `${resuming ? 'Return' : 'Send'} with ${cfg.partySize - selectedHeroIds.length} suggested`
-                        : resuming ? `Return to ${nextFightName}` : 'Send the guild'}
-                    </button>
+          {!difficulty || !cfg ? (
+            <p className="small muted" style={{ padding: '16px 20px' }}>Pick a difficulty to choose a party.</p>
+          ) : (
+            <div className="rl-body">
+              {/* LEFT: party + roster */}
+              <div className="rl-left">
+                <div className="rl-head-row">
+                  <div className="row" style={{ alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                    <span className="section-heading rl-h">Party {selectedHeroIds.length}/{cfg.partySize}</span>
+                    {roleEntries.length > 0 && (
+                      <span className="tiny muted row" style={{ alignItems: 'center', gap: 4 }}>
+                        Needs
+                        {roleEntries.map(([role, n]) => (
+                          <span key={role} className={`rl-role-need ${roleCounts[role] >= n ? 'good' : 'bad'}`} title={`${ROLE_BY_ID[role]?.name ?? role}: ${roleCounts[role]}/${n} in this party`}>
+                            <RoleIcon role={role} size={14} /> {n} {ROLE_BY_ID[role]?.name ?? role}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                  <div className="row" style={{ gap: 6 }}>
+                    <button className="btn-ghost rl-small-btn" onClick={fillBest} disabled={!odds || selectedHeroIds.length === cfg.partySize || !odds.full}>Fill best</button>
+                    <button className="btn-ghost rl-small-btn" onClick={() => commitPicks([])} disabled={selectedHeroIds.length === 0}>Clear</button>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
 
-          <div className="row end" style={{ marginTop: 14 }}>
-            <button className="btn-primary" onClick={onClose}>Close</button>
-          </div>
+                {checkpoint && (
+                  <div className={`raid-checkpoint-note ${startOver ? 'off' : ''}`}>
+                    {startOver ? (
+                      <span className="small">Starting over from the first fight. The saved progress ({checkpoint.encountersCleared} of {raid.encounterIds.length} cleared) will be lost when you send the party.</span>
+                    ) : (
+                      <span className="small">
+                        <b>Progress saved:</b> {checkpoint.encountersCleared} of {raid.encounterIds.length} cleared. The party returns to <b>{nextFightName}</b>
+                        {retryBonus > 0 ? <> with a <b>+{retryBonus}%</b> retry bonus</> : null}. Any heroes can go.
+                      </span>
+                    )}
+                    <button className="btn-ghost" style={{ padding: '3px 10px', fontSize: 12, whiteSpace: 'nowrap' }} onClick={() => { setStartOver(!startOver); setOddsNow(Date.now()); }}>
+                      {startOver ? 'Keep my progress' : 'Start over'}
+                    </button>
+                  </div>
+                )}
+
+                <div className={`rl-slots ${compact ? 'compact' : ''}`}>
+                  {Array.from({ length: cfg.partySize }, (_, i) => {
+                    const h = odds?.party[i];
+                    if (!h) return <div key={`e${i}`} className="rl-slot empty">Empty slot</div>;
+                    const suggested = !selectedHeroIds.includes(h.id);
+                    const p = powerOf(h);
+                    const lowest = lowestPicked?.id === h.id;
+                    return (
+                      <button
+                        key={h.id}
+                        className={`rl-slot ${suggested ? 'suggested' : ''} ${lowest ? 'lowest' : ''}`}
+                        onClick={() => toggleHero(h.id)}
+                        aria-label={suggested ? `Lock in suggested ${h.name}` : `Remove ${h.name}`}
+                      >
+                        <span className="rl-portrait" aria-hidden="true" style={portraitOf(h)} />
+                        <span className="rl-who">
+                          <span className="rl-name">{h.name}</span>
+                          <span className="tiny muted rl-meta"><RoleIcon role={HeroManager.activeRole(h)} size={12} /> Lv {h.level}</span>
+                        </span>
+                        <span className={`rl-power ${p < 0 ? 'bad' : ''}`} title="Raid Power: how far this hero is above a typical hero of this raid's level. The party's average is added to every fight.">Power {p.toFixed(0)}</span>
+                        {!compact && (suggested || lowest) && (
+                          <span className={`rl-slot-tag tiny ${lowest ? 'bad' : 'muted'}`}>{suggested ? 'Suggested -- tap to lock in' : 'Lowest -- swap to lift the odds'}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="rl-head-row" style={{ marginTop: 4 }}>
+                  <span className="section-heading rl-h">Available heroes</span>
+                  <span className="tiny muted">Best first · Power = raid strength · ▲▼ = change to full clear</span>
+                </div>
+                {idleHeroes.length === 0 ? (
+                  <p className="small muted">Every hero is already out. Nobody's free to send.</p>
+                ) : (
+                  <div className="rl-roster">
+                    {rosterHeroes.map((h) => {
+                      const picked = selectedHeroIds.includes(h.id);
+                      const eligible = h.level >= raid.reqLevel;
+                      let deltaText = '';
+                      let deltaCls = 'muted';
+                      if (!eligible) deltaText = `needs Lv ${raid.reqLevel}`;
+                      else if (picked) { deltaText = 'in party'; deltaCls = 'rl-in'; }
+                      else if (odds) {
+                        const next = oddsFor(pickWith(h.id));
+                        const d = next ? (next.fullClear - odds.fullClear) * 100 : 0;
+                        const shown = Math.abs(d) < 10 ? d.toFixed(1) : d.toFixed(0);
+                        deltaText = Math.abs(d) < 0.05 ? '±0%' : d > 0 ? `▲ +${shown}%` : `▼ ${shown}%`;
+                        deltaCls = Math.abs(d) < 0.05 ? 'muted' : d > 0 ? 'good' : 'bad';
+                      }
+                      return (
+                        <button
+                          key={h.id}
+                          className={`rl-hero ${picked ? 'on' : ''}`}
+                          disabled={!eligible}
+                          aria-pressed={picked}
+                          onClick={() => toggleHero(h.id)}
+                        >
+                          <span className="rl-portrait sm" aria-hidden="true" style={portraitOf(h)} />
+                          <span className="rl-who">
+                            <span className="rl-name"><RoleIcon role={HeroManager.activeRole(h)} size={12} /> {h.name}</span>
+                            <span className="tiny muted rl-meta">{HERO_CLASSES[h.heroClass]?.name ?? h.heroClass} · Lv {h.level}</span>
+                          </span>
+                          <span className="rl-hero-nums">
+                            {eligible && <span className="rl-power">Power {powerOf(h).toFixed(0)}</span>}
+                            <span className={`tiny rl-delta ${deltaCls}`}>{deltaText}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {busyHeroes.map((h) => (
+                      <div key={h.id} className="rl-hero busy">
+                        <span className="rl-portrait sm" aria-hidden="true" style={portraitOf(h)} />
+                        <span className="rl-who">
+                          <span className="rl-name">{h.name}</span>
+                          <span className="tiny muted rl-meta">Out on a quest</span>
+                        </span>
+                        <span className="tiny muted">busy</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* RIGHT: odds, modifiers, extras, send */}
+              <div className="rl-right">
+                <div className="rl-odds">
+                  <div className="row" style={{ alignItems: 'flex-end', gap: 8 }}>
+                    <span className="rl-odds-label">
+                      <span className="tiny muted" style={{ letterSpacing: '0.14em', textTransform: 'uppercase' }}>{resuming ? 'Chance to finish' : 'Full clear'}</span>
+                      <span className="tiny muted">{odds && odds.picked.length < cfg.partySize ? `${odds.picked.length} of ${cfg.partySize} heroes picked` : 'Stops at the first lost fight'}</span>
+                    </span>
+                    {builtDelta !== null && Math.abs(builtDelta) >= 0.0005 && (
+                      <span key={deltaKey} className={`raid-odds-delta ${builtDelta > 0 ? 'up' : 'down'}`}>{builtDelta > 0 ? '▲ +' : '▼ −'}{(Math.abs(builtDelta) * 100).toFixed(1)}</span>
+                    )}
+                    <span className={`rl-odds-value ${tone}`}>{pctText(odds?.built ?? 0)}</span>
+                  </div>
+                  {odds && <RaidBuildBar slices={odds.slices} />}
+                  <span className="tiny muted">
+                    {!odds?.full
+                      ? 'Not enough idle heroes at this level to fill the party.'
+                      : odds.picked.length < cfg.partySize
+                        ? `${pctText(odds.built)} locked in · ${pctText(odds.fullClear)} once ${cfg.partySize - odds.picked.length} more join (striped = suggested)`
+                        : 'Each slice is one hero -- stronger Power, bigger slice.'}
+                  </span>
+                  <div className="rl-fights">
+                    {raid.encounterIds.map((id, i) => {
+                      const enc = RAID_ENCOUNTER_BY_ID[id];
+                      if (!enc) return null;
+                      const clearedBefore = resuming && i < startEncounter;
+                      const bd = !clearedBefore ? odds?.fights.find((f) => f.id === id)?.breakdown ?? null : null;
+                      return (
+                        <div key={id} className={`rl-fight ${clearedBefore ? 'done' : ''}`}>
+                          <span className="tiny muted">{i + 1}</span>
+                          <span className="rl-fight-main">
+                            <b className="rl-fight-name">{enc.name}</b>
+                            <span className="rl-fight-tags"><EncounterElementTags encounter={enc} /></span>
+                            {clearedBefore
+                              ? <span className="tiny good">✓ Cleared on an earlier run</span>
+                              : bd && <FightOddsBar bd={bd} difficultyLabel={RAID_DIFFICULTY_LABEL[difficulty]} />}
+                          </span>
+                          <span className="tiny muted rl-fight-time">{clearedBefore ? '' : formatDuration(enc.duration * cfg.durationMultiplier)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {mods.length > 0 && (
+                  <div className="rl-section">
+                    <span className="section-heading rl-h">Modifiers</span>
+                    {mods.map((m) => (
+                      <div key={m.label} className="rl-mod">
+                        <span>{m.label}</span>
+                        <b className={m.good ? 'good' : 'bad'}>{m.value}</b>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(charmsHeld > 0 || ownedFlasks.length > 0) && (
+                  <div className="rl-section">
+                    <span className="section-heading rl-h">Bring along</span>
+                    <div className="row wrap" style={{ gap: 6 }}>
+                      {charmsHeld > 0 && (
+                        <button
+                          className={`chip rl-pill ${charmOn ? 'on' : ''}`}
+                          disabled={!canArm}
+                          aria-pressed={charmOn}
+                          onClick={() => setArmCharm(!armCharm)}
+                          title={canArm
+                            ? (charmMode === 'seek'
+                              ? `${charmMissing} item${charmMissing === 1 ? '' : 's'} here you've never found: x${Tuning.get('economy.raidCharmSeekMultiplier')} chance. Used up win or lose.`
+                              : `Raid complete: +${Tuning.get('economy.raidCharmBoostPct')}% chance on every drop. Used up win or lose.`)
+                            : `Needs ${charmShards} Legendary Shard${charmShards === 1 ? '' : 's'} to arm`}
+                        >
+                          Raider&apos;s Charm ×{charmsHeld}{charmShards > 0 ? ` · ${charmShards} Shard${charmShards === 1 ? '' : 's'}` : ''}
+                        </button>
+                      )}
+                      {ownedFlasks.length > 0 && (
+                        <>
+                          <button className={`chip rl-pill ${!flaskId ? 'on' : ''}`} onClick={() => setFlaskPick(null)}>No flask</button>
+                          {ownedFlasks.map((f) => (
+                            <button
+                              key={f.id}
+                              className={`chip rl-pill raid-flask-chip ${flaskId === f.id ? 'on' : ''}`}
+                              aria-pressed={flaskId === f.id}
+                              title={InventoryManager.resolveDef(state, f.id)?.description}
+                              onClick={() => setFlaskPick(f.id)}
+                            >
+                              {f.name} ×{f.count}
+                            </button>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rl-send">
+                  <div className="row wrap tiny muted" style={{ gap: 14 }}>
+                    {previewDuration !== null && <span>{resuming ? 'Time left' : 'Time'} <b className="rl-strong">{formatDuration(previewDuration)}</b></span>}
+                    <span>Pays <b className="gold-text">◆ {formatGold(goldEstimate)}</b></span>
+                    {(shardReward > 0 || rareReward > 0) && (
+                      <span className="rl-extra">
+                        {[shardReward ? `+${shardReward} Shard${shardReward === 1 ? '' : 's'}` : '', rareReward ? `+${rareReward} rare mat${rareReward === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    className="btn-primary rl-send-btn"
+                    disabled={selectedHeroIds.length !== cfg.partySize && !odds?.full}
+                    onClick={askToCommit}
+                  >
+                    {missing > 0 && odds?.full
+                      ? `${resuming ? 'Return' : 'Send'} with ${missing} suggested`
+                      : resuming ? `Return to ${nextFightName}` : 'Send the guild'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -918,6 +942,7 @@ function RaidDetailModal({
               {raid.name}, {RAID_DIFFICULTY_LABEL[difficulty]}
               {resuming ? ` · fight ${startEncounter + 1} of ${raid.encounterIds.length}${retryBonus > 0 ? ` · +${retryBonus}% retry bonus` : ''}` : ''}
               {!resuming && checkpoint ? ' · starting over' : ''}
+              {odds ? ` · ${pctText(odds.fullClear)} ${resuming ? 'to finish' : 'full clear'}` : ''}
             </p>
             <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
               {selectedHeroIds.map((id) => {
@@ -925,55 +950,14 @@ function RaidDetailModal({
                 return h ? <span key={id} className="chip on">{h.name} · Lv {h.level}</span> : null;
               })}
             </div>
+            {(charmOn || flaskId) && (
+              <p className="small" style={{ margin: '0 0 6px' }}>
+                Bringing: {[charmOn ? "Raider's Charm" : '', flaskId ? InventoryManager.resolveDef(state, flaskId)?.name ?? '' : ''].filter(Boolean).join(' and ')} (used up win or lose).
+              </p>
+            )}
             <p className="small bad" style={{ margin: '0 0 4px' }}>
               The whole party is committed until the raid resolves. There's no early retreat.
             </p>
-            {/* Patch 0484 -- Raider's Charm. Shown whenever the guild holds
-                one; the line says which way it would work on this raid. */}
-            {charmsHeld > 0 && (
-              <label className={`raid-charm-row ${armCharm && canArm ? 'on' : ''}`} title={canArm ? undefined : `Needs ${charmShards} Legendary Shard${charmShards === 1 ? '' : 's'} to arm`}>
-                <input type="checkbox" checked={armCharm && canArm} disabled={!canArm || marching} onChange={(e) => setArmCharm(e.target.checked)} />
-                <span>
-                  <b>Arm a Raider&apos;s Charm</b> <span className="tiny muted">({charmsHeld} held{charmShards > 0 ? ` · costs ${charmShards} Shard${charmShards === 1 ? '' : 's'}` : ''})</span>
-                  <br />
-                  <span className="tiny">
-                    {charmMode === 'seek'
-                      ? `${charmMissing} item${charmMissing === 1 ? '' : 's'} here you've never found: x${Tuning.get('economy.raidCharmSeekMultiplier')} chance on ${charmMissing === 1 ? 'it' : 'those'}.`
-                      : `Raid complete: +${Tuning.get('economy.raidCharmBoostPct')}% chance on every drop.`}
-                    {' '}Used up win or lose.
-                  </span>
-                </span>
-              </label>
-            )}
-            {/* Patch 0506 -- Mythic raid flasks: one per raid, spent win or
-                lose. The odds/duration on the raid screen update with the pick. */}
-            {ownedFlasks.length > 0 && (
-              <div className={`raid-flask-row ${flaskId ? 'on' : ''}`}>
-                <b>Mythic raid flask</b> <span className="tiny muted">(one per raid, used up win or lose)</span>
-                <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
-                  <button className={`chip ${!flaskId ? 'on' : ''}`} disabled={marching} onClick={() => setFlaskPick(null)}>None</button>
-                  {ownedFlasks.map((f) => {
-                    const def = InventoryManager.resolveDef(state, f.id);
-                    return (
-                      <button
-                        key={f.id}
-                        className={`chip raid-flask-chip ${flaskId === f.id ? 'on' : ''}`}
-                        disabled={marching}
-                        title={def?.description}
-                        onClick={() => setFlaskPick(f.id)}
-                      >
-                        {f.name} ×{f.count}
-                      </button>
-                    );
-                  })}
-                </div>
-                {flaskId && previewDuration !== null && (
-                  <span className="tiny" style={{ display: 'block', marginTop: 4 }}>
-                    {InventoryManager.resolveDef(state, flaskId)?.description.split(' Armed')[0]} Raid time: {formatDuration(previewDuration)}.
-                  </span>
-                )}
-              </div>
-            )}
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setConfirming(false)} disabled={marching}>Cancel</button>
               <button className="btn-primary" onClick={confirmCommit} disabled={marching}>Send them</button>
@@ -1016,51 +1000,6 @@ function FightOddsBar({ bd, difficultyLabel }: { bd: FightBreakdown; difficultyL
       </span>
       <b className={bd.chance >= 60 ? 'good' : bd.chance >= 35 ? '' : 'bad'}>{Math.round(bd.chance)}%</b>
     </span>
-  );
-}
-
-/** The headline: full-clear chance building from 0% as heroes are picked. */
-function RaidOddsHeadline({ built, fullClear, full, pickedCount, partySize, delta, deltaKey, resuming }: {
-  built: number; fullClear: number; full: boolean; pickedCount: number; partySize: number; delta: number | null; deltaKey: number; resuming: boolean;
-}) {
-  const pct = (v: number) => `${(v * 100).toFixed(v * 100 < 10 ? 1 : 0)}%`;
-  const runs = fullClear > 0 ? 1 / fullClear : Infinity;
-  const tone = pickedCount === 0 ? 'muted' : fullClear >= 0.5 ? 'good' : fullClear >= 0.25 ? 'gold-text' : 'bad';
-  return (
-    <div className="raid-odds-headline">
-      <div className="row" style={{ alignItems: 'baseline', gap: 10 }}>
-        <span className="tiny muted raid-odds-label">{resuming ? 'Chance to finish the raid' : 'Full clear chance'}</span>
-        {delta !== null && Math.abs(delta) >= 0.0005 && (
-          <span key={deltaKey} className={`raid-odds-delta ${delta > 0 ? 'up' : 'down'}`}>{delta > 0 ? '▲ +' : '▼ −'}{(Math.abs(delta) * 100).toFixed(1)}</span>
-        )}
-        <span style={{ marginLeft: 'auto' }} className={`raid-odds-value ${tone}`}>{pct(built)}</span>
-      </div>
-      <div className="raid-odds-bar" aria-hidden="true">
-        <span className="solid" style={{ width: `${built * 100}%` }} />
-        <span className="ghost" style={{ left: `${built * 100}%`, width: `${Math.max(0, fullClear - built) * 100}%` }} />
-        {Array.from({ length: partySize - 1 }, (_, i) => <span key={i} className="tick" style={{ left: `${((i + 1) / partySize) * 100}%` }} />)}
-      </div>
-      <div className="tiny muted">
-        {!full
-          ? 'Not enough idle heroes at this level to fill the party.'
-          : pickedCount < partySize
-            ? `${pickedCount}/${partySize} heroes picked. With the suggested heroes: ${pct(fullClear)}.`
-            : Number.isFinite(runs)
-              ? `About ${runs < 10 ? runs.toFixed(1) : Math.round(runs)} runs to a first clear. Fights you win still pay out, and a loss saves your progress.`
-              : 'Out of reach with this party.'}
-      </div>
-    </div>
-  );
-}
-
-/** Hover a hero: what picking (or dropping) them would do. */
-function RaidWhatIf({ text }: { text: { verb: string; from: number; to: number } | null }) {
-  if (!text) return <p className="tiny muted raid-whatif">Hover a hero to see what they would change.</p>;
-  const d = (text.to - text.from) * 100;
-  return (
-    <p className={`tiny raid-whatif ${d >= 0 ? 'good' : 'bad'}`}>
-      {text.verb}: {(text.from * 100).toFixed(0)}% → <b>{(text.to * 100).toFixed(0)}%</b> ({d >= 0 ? '+' : '−'}{Math.abs(d).toFixed(1)})
-    </p>
   );
 }
 
